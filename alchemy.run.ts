@@ -1,5 +1,5 @@
 import alchemy from "alchemy";
-import { D1Database, Vite } from "alchemy/cloudflare";
+import { D1Database, KVNamespace, Vite } from "alchemy/cloudflare";
 import { CloudflareStateStore } from "alchemy/state";
 
 const project = "commissary";
@@ -24,6 +24,10 @@ const db = await D1Database("db", {
   migrationsDir: "./drizzle",
 });
 
+const authKv = await KVNamespace("auth-kv");
+
+const kv = await KVNamespace("kv");
+
 export const webapp = await Vite("webapp", {
   command: "bun run build",
   main: "./src/server/index.ts",
@@ -32,8 +36,11 @@ export const webapp = await Vite("webapp", {
     html_handling: "auto-trailing-slash",
     not_found_handling: "single-page-application",
   },
+  compatibilityFlags: ["nodejs_compat"],
   bindings: {
     DB: db,
+    AUTH_KV: authKv,
+    KV: kv,
   },
   dev: {
     command: "bun run dev",
