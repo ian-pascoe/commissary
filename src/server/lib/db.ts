@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/d1";
 import type { Context } from "hono";
-import * as schema from "~/drizzle/schema";
+import * as schema from "~/drizzle/remote/schema";
 import type { Env } from "~/types/hono";
 import { c } from "../utils/context";
 import { env } from "../utils/env";

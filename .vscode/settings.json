@@ -20,5 +20,9 @@
   "typescript.enablePromptUseWorkspaceTsdk": true,
   "typescript.tsdk": "node_modules/typescript/lib",
   "typescript.experimental.expandableHover": true,
-  "typescript.experimental.useTsgo": false
+  "typescript.experimental.useTsgo": false,
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer"
+  },
+  "cSpell.words": ["tauri"]
 }

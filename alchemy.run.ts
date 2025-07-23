@@ -1,5 +1,5 @@
 import alchemy from "alchemy";
-import { D1Database, KVNamespace, Vite } from "alchemy/cloudflare";
+import { D1Database, KVNamespace, Worker } from "alchemy/cloudflare";
 import { CloudflareStateStore } from "alchemy/state";
 
 const project = "commissary";
@@ -18,38 +18,38 @@ const domain = dev
   ? "localhost:3000"
   : app.stage === "production"
     ? baseDomain
-    : `${app.stage}.${baseDomain}`;
+    : app.stage === "development"
+      ? `dev.${baseDomain}`
+      : `${app.stage}.dev.${baseDomain}`;
 
 const db = await D1Database("db", {
-  migrationsDir: "./drizzle",
+  migrationsDir: "./drizzle/remote/migrations",
 });
 
 const authKv = await KVNamespace("auth-kv");
 
 const kv = await KVNamespace("kv");
 
-export const webapp = await Vite("webapp", {
-  command: "bun run build",
-  main: "./src/server/index.ts",
-  assets: {
-    dist: "./dist",
-    html_handling: "auto-trailing-slash",
-    not_found_handling: "single-page-application",
-  },
+const apiDomain = `api.${domain}`;
+const apiUrl = dev ? `http://${apiDomain}` : `https://${apiDomain}`;
+export const api = await Worker("api", {
+  entrypoint: "./src/server/index.ts",
   compatibilityFlags: ["nodejs_compat"],
   bindings: {
     DB: db,
     AUTH_KV: authKv,
     KV: kv,
+    DOMAIN: domain,
+    API_URL: apiUrl,
   },
   dev: {
-    command: "bun run dev",
+    port: 8080,
   },
-  domains: [domain],
+  domains: [apiDomain],
 });
 
 console.log({
-  "Web App URL": webapp.url,
+  "API URL": apiUrl,
 });
 
 await app.finalize();

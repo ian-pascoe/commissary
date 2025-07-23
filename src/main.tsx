@@ -3,19 +3,21 @@ import { createRouter, RouterProvider } from "@tanstack/react-router";
 import ReactDOM from "react-dom/client";
 import { routeTree } from "./routeTree.gen";
 import "./styles/global.css";
+import { initDb } from "./lib/database";
 
 const queryClient = new QueryClient();
+const db = await initDb();
 
 // Create a new router instance
 const router = createRouter({
   routeTree,
   context: {
     queryClient,
+    db,
   },
   defaultPreload: "intent",
   scrollRestoration: true,
   defaultStructuralSharing: true,
-  defaultPreloadStaleTime: 0,
   Wrap: function WrapComponent({ children }) {
     return (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
