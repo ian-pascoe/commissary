@@ -13,6 +13,7 @@ CREATE TABLE `messages` (
 	`conversationId` text NOT NULL,
 	`role` text NOT NULL,
 	`parts` text NOT NULL,
+	`metadata` text,
 	FOREIGN KEY (`conversationId`) REFERENCES `conversations`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint

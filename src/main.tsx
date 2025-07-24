@@ -3,26 +3,38 @@ import { createRouter, RouterProvider } from "@tanstack/react-router";
 import ReactDOM from "react-dom/client";
 import { routeTree } from "./routeTree.gen";
 import "./styles/global.css";
-import { initDb } from "./lib/database";
+import { createClient } from "@openauthjs/openauth/client";
+import { DefaultError } from "./components/default-error";
+import { DefaultLoading } from "./components/default-loading";
+import { ThemeProvider } from "./contexts/theme";
 
 const queryClient = new QueryClient();
-const db = await initDb();
+const authClient = createClient({
+  clientID: "commissary-app",
+  issuer: `${import.meta.env.VITE_API_URL}/auth`,
+});
 
 // Create a new router instance
 const router = createRouter({
   routeTree,
   context: {
     queryClient,
-    db,
+    authClient,
   },
   defaultPreload: "intent",
   scrollRestoration: true,
   defaultStructuralSharing: true,
   Wrap: function WrapComponent({ children }) {
     return (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      <ThemeProvider>
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      </ThemeProvider>
     );
   },
+  defaultPendingComponent: DefaultLoading,
+  defaultErrorComponent: DefaultError,
 });
 
 // Register the router instance for type safety

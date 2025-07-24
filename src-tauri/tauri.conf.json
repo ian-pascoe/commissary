@@ -34,5 +34,18 @@
       "icons/icon.ico"
     ],
     "resources": ["migrations/*.sql"]
+  },
+  "plugins": {
+    "deep-link": {
+      "mobile": [
+        {
+          "host": "commissary.dev",
+          "scheme": ["com.spiritledsoftware.commissary"]
+        }
+      ],
+      "desktop": {
+        "schemes": ["com.spiritledsoftware.commissary"]
+      }
+    }
   }
 }

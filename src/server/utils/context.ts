@@ -1,5 +1,5 @@
 import { getContext } from "hono/context-storage";
-import type { Env } from "~/types/hono";
+import type { Env } from "~/server/types/hono";
 
 export const c = () => {
   return getContext<Env>();

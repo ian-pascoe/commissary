@@ -28,6 +28,12 @@
           "level": "error",
           "fix": "safe"
         }
+      },
+      "nursery": {
+        "useSortedClasses": {
+          "level": "warn",
+          "fix": "safe"
+        }
       }
     }
   },
@@ -36,6 +42,8 @@
       "quoteStyle": "double"
     }
   },
+  "html": { "formatter": { "enabled": true } },
+  "css": { "formatter": { "enabled": true } },
   "assist": {
     "enabled": true,
     "actions": {

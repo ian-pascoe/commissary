@@ -1,4 +1,4 @@
-import { resolve, resourceDir } from "@tauri-apps/api/path";
+import { BaseDirectory, join } from "@tauri-apps/api/path";
 import { readDir, readTextFile } from "@tauri-apps/plugin-fs";
 import type Database from "@tauri-apps/plugin-sql";
 
@@ -11,9 +11,14 @@ export type ProxyMigrator = (migrationQueries: string[]) => Promise<void>;
  * @returns A promise that resolves when the migrations are complete.
  */
 export async function migrate(sqlite: Database) {
-  const resourceDirPath = await resourceDir();
-  const migrationsDirPath = await resolve(resourceDirPath, "migrations");
-  const migrationsDirFiles = await readDir(migrationsDirPath);
+  console.log("Running migrations...");
+
+  console.log("Reading migrations from the 'migrations' directory...");
+  const migrationsDirFiles = await readDir("migrations", {
+    baseDir: BaseDirectory.Resource,
+  });
+  console.log(`Found ${migrationsDirFiles.length} migration files.`);
+
   let migrationsFiles = migrationsDirFiles.filter(
     (file) => file.isFile && file.name.endsWith(".sql"),
   );
@@ -30,6 +35,7 @@ export async function migrate(sqlite: Database) {
     return 0;
   });
 
+  console.log("Creating migrations table if it does not exist...");
   await sqlite.execute(
     /*sql*/ `
 		  CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
@@ -54,11 +60,10 @@ export async function migrate(sqlite: Database) {
       });
 
     if (hash && hasBeenRun(hash) === undefined) {
-      const migrationPath = await resolve(
-        migrationsDirPath,
-        migrationFile.name,
+      const sql = await readTextFile(
+        await join("migrations", migrationFile.name),
+        { baseDir: BaseDirectory.Resource },
       );
-      const sql = await readTextFile(migrationPath);
 
       sqlite.execute(sql, []);
       sqlite.execute(
@@ -68,7 +73,7 @@ export async function migrate(sqlite: Database) {
     }
   }
 
-  console.info("Migrations complete");
+  console.log("Migrations complete");
 
   return Promise.resolve();
 }

@@ -1,6 +1,6 @@
-import type { webapp } from "../../alchemy.run";
+import type { api } from "~/alchemy.run";
 
-export type WorkerEnv = typeof webapp.Env;
+export type WorkerEnv = typeof api.Env;
 
 declare module "cloudflare:workers" {
   namespace Cloudflare {

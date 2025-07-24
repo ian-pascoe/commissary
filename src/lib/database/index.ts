@@ -1,17 +1,31 @@
-import Database from "@tauri-apps/plugin-sql";
+import SQL from "@tauri-apps/plugin-sql";
 import { drizzle, type SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
 import * as schema from "~/drizzle/local/schema";
+import { migrate } from "./migrate";
 import { createBatchProxy, createProxy } from "./proxy";
 
-const cachedDb: SqliteRemoteDatabase<typeof schema> | null = null;
+let cachedDb: SqliteRemoteDatabase<typeof schema> | null = null;
 
 export const initDb = async () => {
-  const sqlite = await Database.load("sqlite:sqlite.db");
-  let db: SqliteRemoteDatabase<typeof schema> | null = cachedDb;
-  if (!db) {
-    db = drizzle<typeof schema>(createProxy(sqlite), createBatchProxy(sqlite), {
-      schema,
-    });
+  if (cachedDb) {
+    return cachedDb;
   }
-  return db;
+
+  console.log("Initializing local database...");
+
+  const sqlite = await SQL.load("sqlite:sqlite.db");
+  const db = drizzle<typeof schema>(
+    createProxy(sqlite),
+    createBatchProxy(sqlite),
+    {
+      schema,
+    },
+  );
+  await migrate(sqlite);
+  cachedDb = db;
+
+  console.log("Local database initialized successfully");
+  return cachedDb;
 };
+
+export type Database = Awaited<ReturnType<typeof initDb>>;

@@ -48,6 +48,16 @@ export const api = await Worker("api", {
   domains: [apiDomain],
 });
 
+if (dev) {
+  Bun.spawn({
+    cmd: ["tauri", "dev"],
+    env: {
+      ...process.env,
+      VITE_API_URL: apiUrl,
+    },
+  });
+}
+
 console.log({
   "API URL": apiUrl,
 });
