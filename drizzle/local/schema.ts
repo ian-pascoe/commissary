@@ -1,12 +1,15 @@
+import type { UIMessage } from "ai";
 import { relations } from "drizzle-orm";
 import { index, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { baseModel } from "../utils/base-model";
 import { json } from "../utils/json";
+import { syncModel } from "../utils/sync-model";
 
 export const conversations = sqliteTable(
   "conversations",
   {
     ...baseModel("conv_"),
+    ...syncModel,
 
     title: text().notNull(),
   },
@@ -20,6 +23,7 @@ export const messages = sqliteTable(
   "messages",
   {
     ...baseModel("msg_"),
+    ...syncModel,
     conversationId: text()
       .notNull()
       .references(() => conversations.id, {
@@ -27,7 +31,7 @@ export const messages = sqliteTable(
       }),
 
     role: text({ enum: ["system", "user", "assistant"] }).notNull(),
-    parts: json().notNull(),
+    parts: json().$type<UIMessage["parts"]>().notNull(),
     metadata: json(),
   },
   (t) => [index("messages_conversation_id_idx").on(t.conversationId)],

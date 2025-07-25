@@ -4,7 +4,7 @@ import {
   createUpdateSchema,
 } from "drizzle-zod";
 import type * as z from "zod";
-import { users } from "~/drizzle/remote/schema";
+import { users } from "~~/drizzle/remote/schema";
 
 export const User = createSelectSchema(users);
 export type User = z.infer<typeof User>;

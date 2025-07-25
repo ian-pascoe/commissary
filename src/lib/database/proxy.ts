@@ -10,17 +10,11 @@ export function createProxy(sqlite: Database): RemoteCallback {
     let results = [];
 
     // If the query is a SELECT, use the select method
-    if (isSelectQuery(sql)) {
-      rows = await sqlite.select(sql, params).catch((e) => {
-        console.error("SQL Error:", e);
-        return [];
-      });
+    if (isSelectQuery(sql) || hasReturning(sql)) {
+      rows = await sqlite.select(sql, params);
     } else {
       // Otherwise, use the execute method
-      rows = await sqlite.execute(sql, params).catch((e) => {
-        console.error("SQL Error:", e);
-        return [];
-      });
+      await sqlite.execute(sql, params);
       return { rows: [] };
     }
 
@@ -37,10 +31,20 @@ export function createProxy(sqlite: Database): RemoteCallback {
 
 export function createBatchProxy(sqlite: Database): AsyncBatchRemoteCallback {
   return async (queries) => {
-    return await Promise.all(
+    return await Promise.allSettled(
       queries.map(async ({ sql, params, method }) => {
         const proxy = createProxy(sqlite);
         return await proxy(sql, params, method);
+      }),
+    ).then((results) =>
+      results.map((result) => {
+        if (result.status === "fulfilled") {
+          return result.value;
+        } else {
+          throw new Error(
+            `Batch query failed: ${result.reason.message || result.reason}`,
+          );
+        }
       }),
     );
   };
@@ -54,4 +58,9 @@ export function createBatchProxy(sqlite: Database): AsyncBatchRemoteCallback {
 function isSelectQuery(sql: string): boolean {
   const selectRegex = /^\s*SELECT\b/i;
   return selectRegex.test(sql);
+}
+
+function hasReturning(sql: string): boolean {
+  const returningRegex = /\bRETURNING\b/i;
+  return returningRegex.test(sql);
 }

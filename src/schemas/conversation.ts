@@ -4,9 +4,14 @@ import {
   createUpdateSchema,
 } from "drizzle-zod";
 import type * as z from "zod";
-import { conversations } from "~/drizzle/remote/schema";
+import { conversations } from "~~/drizzle/remote/schema";
+import { Timestamp } from "./utils/timestamp";
 
-export const Conversation = createSelectSchema(conversations).partial({
+export const Conversation = createSelectSchema(conversations, {
+  createdAt: Timestamp,
+  updatedAt: Timestamp,
+  lastSyncedAt: Timestamp.nullish(),
+}).partial({
   userId: true,
 });
 export type Conversation = z.infer<typeof Conversation>;

@@ -1,12 +1,12 @@
 import SQL from "@tauri-apps/plugin-sql";
 import { drizzle, type SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
-import * as schema from "~/drizzle/local/schema";
+import * as schema from "~~/drizzle/local/schema";
 import { migrate } from "./migrate";
 import { createBatchProxy, createProxy } from "./proxy";
 
 let cachedDb: SqliteRemoteDatabase<typeof schema> | null = null;
 
-export const initDb = async () => {
+export const initLocalDb = async () => {
   if (cachedDb) {
     return cachedDb;
   }
@@ -28,4 +28,4 @@ export const initDb = async () => {
   return cachedDb;
 };
 
-export type Database = Awaited<ReturnType<typeof initDb>>;
+export type LocalDatabase = Awaited<ReturnType<typeof initLocalDb>>;

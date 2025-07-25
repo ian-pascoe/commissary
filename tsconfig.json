@@ -28,7 +28,8 @@
 
     "types": ["@types/bun", "@cloudflare/workers-types", "vite/client"],
     "paths": {
-      "~/*": ["./src/*", "./*"]
+      "~/*": ["./src/*"],
+      "~~/*": ["./*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],

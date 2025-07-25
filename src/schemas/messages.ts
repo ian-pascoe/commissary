@@ -5,11 +5,15 @@ import {
   createUpdateSchema,
 } from "drizzle-zod";
 import * as z from "zod";
-import { messages } from "~/drizzle/remote/schema";
+import { messages } from "~~/drizzle/remote/schema";
+import { Timestamp } from "./utils/timestamp";
 
 const MessageParts = z.custom<UIMessage["parts"]>();
 
-export const Message: z.ZodType<UIMessage> = createSelectSchema(messages, {
+export const Message = createSelectSchema(messages, {
+  createdAt: Timestamp,
+  updatedAt: Timestamp,
+  lastSyncedAt: Timestamp.nullish(),
   parts: MessageParts,
 }).partial({
   userId: true,

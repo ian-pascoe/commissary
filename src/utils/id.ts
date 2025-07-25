@@ -5,5 +5,5 @@ const cuid = init({
 });
 
 export const createId = (prefix?: string) => {
-  return prefix ? `${prefix}_${cuid()}` : cuid();
+  return prefix ? `${prefix}${cuid()}` : cuid();
 };

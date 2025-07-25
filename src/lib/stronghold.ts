@@ -78,3 +78,5 @@ export const initStronghold = async () => {
   console.log("Stronghold initialized successfully");
   return cachedStronghold;
 };
+
+export type StrongholdInterface = ReturnType<typeof initStronghold>;

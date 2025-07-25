@@ -8,3 +8,5 @@ export const initCache = (c: Context<Env>) => {
 };
 
 export const cache = (ctx = c()) => ctx.get("cache");
+
+export type Cache = ReturnType<typeof initCache>;

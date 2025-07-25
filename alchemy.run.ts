@@ -14,9 +14,8 @@ const app = await alchemy(project, {
 });
 
 const dev = app.local;
-const domain = dev
-  ? "localhost:3000"
-  : app.stage === "production"
+const domain =
+  app.stage === "production"
     ? baseDomain
     : app.stage === "development"
       ? `dev.${baseDomain}`
@@ -26,12 +25,15 @@ const db = await D1Database("db", {
   migrationsDir: "./drizzle/remote/migrations",
 });
 
-const authKv = await KVNamespace("auth-kv");
+const authKv = await KVNamespace("auth-kv", {});
 
-const kv = await KVNamespace("kv");
+const kv = await KVNamespace("kv", {});
 
 const apiDomain = `api.${domain}`;
-const apiUrl = dev ? `http://${apiDomain}` : `https://${apiDomain}`;
+const apiUrl = dev ? "http://localhost:8080" : `https://${apiDomain}`;
+const appDomain = `app.${domain}`;
+const appUrl = dev ? "http://localhost:3000" : `https://${appDomain}`;
+
 export const api = await Worker("api", {
   entrypoint: "./src/server/index.ts",
   compatibilityFlags: ["nodejs_compat"],
@@ -41,6 +43,8 @@ export const api = await Worker("api", {
     KV: kv,
     DOMAIN: domain,
     API_URL: apiUrl,
+    APP_URL: appUrl,
+    GOOGLE_API_KEY: alchemy.secret(process.env.GOOGLE_API_KEY),
   },
   dev: {
     port: 8080,
@@ -54,6 +58,7 @@ if (dev) {
     env: {
       ...process.env,
       VITE_API_URL: apiUrl,
+      VITE_APP_URL: appUrl,
     },
   });
 }

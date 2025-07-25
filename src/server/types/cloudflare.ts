@@ -1,4 +1,4 @@
-import type { api } from "~/alchemy.run";
+import type { api } from "~~/alchemy.run";
 
 export type WorkerEnv = typeof api.Env;
 

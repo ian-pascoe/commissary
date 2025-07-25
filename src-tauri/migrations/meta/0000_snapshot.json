@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "0d9693c1-bf86-4bae-a2a2-0fcdda9ba84d",
+  "id": "7471c308-0bf7-4474-82fd-2992d27fb2d6",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "conversations": {
@@ -39,7 +39,9 @@
       "indexes": {
         "conversations_title_idx": {
           "name": "conversations_title_idx",
-          "columns": ["title"],
+          "columns": [
+            "title"
+          ],
           "isUnique": false
         }
       },
@@ -104,7 +106,9 @@
       "indexes": {
         "messages_conversation_id_idx": {
           "name": "messages_conversation_id_idx",
-          "columns": ["conversationId"],
+          "columns": [
+            "conversationId"
+          ],
           "isUnique": false
         }
       },
@@ -113,8 +117,12 @@
           "name": "messages_conversationId_conversations_id_fk",
           "tableFrom": "messages",
           "tableTo": "conversations",
-          "columnsFrom": ["conversationId"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "conversationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
