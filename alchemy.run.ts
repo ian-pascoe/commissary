@@ -45,23 +45,13 @@ export const api = await Worker("api", {
     API_URL: apiUrl,
     APP_URL: appUrl,
     GOOGLE_API_KEY: alchemy.secret(process.env.GOOGLE_API_KEY),
+    OPENAI_API_KEY: alchemy.secret(process.env.OPENAI_API_KEY),
   },
   dev: {
     port: 8080,
   },
   domains: [apiDomain],
 });
-
-if (dev) {
-  Bun.spawn({
-    cmd: ["tauri", "dev"],
-    env: {
-      ...process.env,
-      VITE_API_URL: apiUrl,
-      VITE_APP_URL: appUrl,
-    },
-  });
-}
 
 console.log({
   "API URL": apiUrl,

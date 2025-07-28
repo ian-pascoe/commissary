@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1753377874235,
-      "tag": "0000_elite_excalibur",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1753448172701,
-      "tag": "0001_absent_gladiator",
+      "when": 1753454047534,
+      "tag": "0000_last_nemesis",
       "breakpoints": true
     }
   ]

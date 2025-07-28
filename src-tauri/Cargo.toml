@@ -30,3 +30,7 @@ tauri-plugin-http = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-store = "2"
+tauri-plugin-dialog = "2"
+
+[profile.dev.package.scrypt]
+opt-level = 3

@@ -1,22 +1,31 @@
 import { useChat } from "@ai-sdk/react";
+import { useQueryClient } from "@tanstack/react-query";
+import { open } from "@tauri-apps/plugin-dialog";
+import { readFile } from "@tauri-apps/plugin-fs";
 import { fetch } from "@tauri-apps/plugin-http";
-import {
-  type ChatOnFinishCallback,
-  DefaultChatTransport,
-  type UIMessage,
-} from "ai";
-import { GlobeIcon, MicIcon, PlusIcon } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
-import { useMessages } from "~/hooks/use-conversations";
-import { useMessageMutation } from "~/hooks/use-data-mutations";
-import { useSync, useSyncStats } from "~/hooks/use-sync";
-import { models } from "~/lib/models";
+import { DefaultChatTransport, type UIMessage } from "ai";
+import { merge } from "es-toolkit";
+import { GlobeIcon, PlusIcon } from "lucide-react";
+import mime from "mime";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useGeneralStore } from "~/hooks/use-general-store";
+import { useLocalDb } from "~/hooks/use-local-db";
+import { useProviders } from "~/hooks/use-providers";
+import { useStrongholdStore } from "~/hooks/use-stronghold";
+import { providers } from "~/lib/providers";
+import { queryKeys } from "~/lib/query-keys";
+import { cn } from "~/lib/utils";
 import type { Conversation } from "~/schemas/conversation";
 import type { Message } from "~/schemas/messages";
-import type { ModelId } from "~/schemas/model";
+import { LocalChatTransport } from "~/utils/local-chat-transport";
+import {
+  conversations as conversationsTable,
+  messages as messagesTable,
+} from "~~/drizzle/local/schema";
 import {
   AIConversation,
   AIConversationContent,
+  AIConversationScrollButton,
 } from "../ui/kibo-ui/ai/conversation";
 import {
   AIInput,
@@ -33,103 +42,142 @@ import {
 } from "../ui/kibo-ui/ai/input";
 import { AIMessage, AIMessageContent } from "../ui/kibo-ui/ai/message";
 import { AIResponse } from "../ui/kibo-ui/ai/response";
-import { SelectGroup } from "../ui/select";
-import { SyncStatusButton } from "./sync-status-button";
+import { AISuggestion, AISuggestions } from "../ui/kibo-ui/ai/suggestion";
+import { MicButton } from "./mic-button";
 
 export type ConversationWindowProps = {
-  conversation: Conversation; // Now required since it's created in route
-  messages?: Message[]; // Initial messages can be passed if needed
+  conversation?: Conversation;
+  messages?: Message[];
 };
 
 export const ConversationWindow = (props: ConversationWindowProps) => {
+  const db = useLocalDb();
+  const strongholdStore = useStrongholdStore();
+  const generalStore = useGeneralStore();
+  const { providers: configProviders = {} } = useProviders();
+  const queryClient = useQueryClient();
+
+  const conversationRef = useRef<Conversation>(undefined);
+  useEffect(() => {
+    conversationRef.current = props.conversation;
+  }, [props.conversation]);
+
+  const [isListening, setIsListening] = useState(false);
   const [input, setInput] = useState("");
-  const [model, setModel] = useState<ModelId>("google:gemini-2.5-flash-lite");
-
-  // Fetch messages from the database
-  const { data: dbMessages = [] } = useMessages(props.conversation.id);
-
-  const messageMutation = useMessageMutation();
-  const syncMutation = useSync();
-  const syncStats = useSyncStats();
-
-  // Save assistant messages to database using onFinish hook
-  const handleMessageFinish: ChatOnFinishCallback<UIMessage> = useCallback(
-    async ({ message }) => {
-      try {
-        await messageMutation.mutateAsync({
-          id: message.id,
-          conversationId: props.conversation.id,
-          data: message,
-        });
-
-        // Trigger sync after message is saved (for assistant messages)
-        if (message.role === "assistant") {
-          setTimeout(() => {
-            syncMutation.mutate({});
-          }, 1000);
-        }
-      } catch (error) {
-        console.error("Failed to save message:", error);
+  const [filePaths, setFilePaths] = useState<string[]>([]);
+  const [model, setModel] = useState("google:gemini-2.5-flash");
+  useEffect(() => {
+    generalStore.get<string>("language-model").then((model) => {
+      if (model) {
+        setModel(model);
       }
-    },
-    [props.conversation.id, messageMutation, syncMutation],
-  );
+    });
+  }, [generalStore]);
+  useEffect(() => {
+    generalStore.set("language-model", model);
+  }, [model, generalStore]);
 
-  const { messages, setMessages, sendMessage, status } = useChat({
-    transport: new DefaultChatTransport({
+  const transport = useMemo(() => {
+    const [provider] = model.split(":");
+    if (provider && Object.hasOwn(configProviders, provider)) {
+      console.log(`Using LocalChatTransport for provider: ${provider}`);
+      return new LocalChatTransport({
+        providers: configProviders,
+        strongholdStore,
+      });
+    }
+    return new DefaultChatTransport({
       api: `${import.meta.env.VITE_API_URL}/chat`,
       fetch: fetch as typeof globalThis.fetch,
-    }),
-    messages: dbMessages,
+    });
+  }, [model, configProviders, strongholdStore]);
+
+  const { messages, setMessages, sendMessage, status } = useChat({
+    transport,
+    onFinish: async ({ message }) => {
+      if (!conversationRef.current) {
+        console.error("No conversation found or created.");
+        return;
+      }
+      await db.insert(messagesTable).values({
+        conversationId: conversationRef.current.id,
+        ...message,
+      });
+    },
     onError: (error) => {
       console.error("Chat error:", error);
     },
-    onFinish: handleMessageFinish,
   });
-
-  // Update chat messages when database messages change
   useEffect(() => {
-    if (dbMessages.length > 0) {
-      setMessages(dbMessages);
-    }
-  }, [dbMessages, setMessages]);
-  // Save user message to database before sending
-  const handleUserMessage = useCallback(
-    async (
-      userMessage: { text: string },
-      options?: { body: { conversation: Conversation; modelId: string } },
-    ) => {
-      try {
-        // Create and save user message
-        const userMessageData = {
-          role: "user" as const,
-          parts: [{ type: "text" as const, text: userMessage.text }],
-        };
+    setMessages(props.messages || []);
+  }, [props.messages, setMessages]);
 
-        await messageMutation.mutateAsync({
-          conversationId: props.conversation.id,
-          data: userMessageData,
+  const handleSubmit = useCallback(async () => {
+    const currentInput = input;
+    if (!currentInput.trim()) return;
+    setInput("");
+
+    const parts: UIMessage["parts"] = [
+      { type: "text", text: currentInput.trim() },
+    ];
+    await Promise.all(
+      filePaths.map(async (path) => {
+        const fileContent = await readFile(path);
+        const mediaType = mime.getType(path) || "text/plain";
+        const base64Content = btoa(String.fromCharCode(...fileContent));
+        parts.push({
+          type: "file",
+          filename: path.split("/").pop(),
+          mediaType,
+          url: `data:${mediaType};base64,${base64Content}`,
         });
+      }),
+    );
 
-        // Send message to AI
-        sendMessage(userMessage, options);
-      } catch (error) {
-        console.error("Failed to save user message:", error);
-        // Still send the message even if saving fails
-        sendMessage(userMessage, options);
-      }
-    },
-    [props.conversation.id, messageMutation, sendMessage],
+    let currentConversation = conversationRef.current;
+    if (!currentConversation) {
+      [currentConversation] = await db
+        .insert(conversationsTable)
+        .values({
+          title: "New Conversation",
+        })
+        .returning();
+      conversationRef.current = currentConversation;
+    }
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.conversations.all,
+    });
+
+    if (!currentConversation) {
+      console.error("No conversation found or created.");
+      return;
+    }
+
+    await Promise.all([
+      db.insert(messagesTable).values({
+        conversationId: currentConversation.id,
+        role: "user",
+        parts,
+      }),
+      sendMessage(
+        { parts },
+        {
+          body: {
+            conversation: conversationRef.current,
+            modelId: model,
+          },
+        },
+      ),
+    ]);
+  }, [input, db, queryClient, sendMessage, model, filePaths]);
+
+  const resolvedProviders = useMemo(
+    () => merge(providers, configProviders ?? {}),
+    [configProviders],
   );
 
   return (
     <div className="relative flex size-full flex-col">
-      {/* Sync status icon positioned in top right */}
-      <SyncStatusButton
-        syncStats={syncStats.data}
-        isLoading={syncMutation.isPending}
-        onManualSync={() => syncMutation.mutate({})}
-      />
       <AIConversation className="relative flex flex-1">
         <AIConversationContent>
           {messages.map((message) => (
@@ -152,61 +200,96 @@ export const ConversationWindow = (props: ConversationWindowProps) => {
               </AIMessageContent>
             </AIMessage>
           ))}
+          <AIConversationScrollButton
+            variant="default"
+            className="bottom-32 z-50"
+          />
+          <div className="h-40" />
         </AIConversationContent>
       </AIConversation>
-      <div className="flex justify-center px-2">
+      <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 px-2">
+        {Boolean(filePaths.length) && (
+          <AISuggestions>
+            {filePaths.map((path) => (
+              <AISuggestion
+                key={path}
+                suggestion={path}
+                onClick={(suggestion) => {
+                  setFilePaths((prev) => prev.filter((p) => p !== suggestion));
+                }}
+              >
+                {path.split("/").pop() || path}
+              </AISuggestion>
+            ))}
+          </AISuggestions>
+        )}
         <AIInput
+          className={cn(
+            "rounded-b-none bg-background/90 backdrop-blur-lg transition-all duration-200",
+            isListening && "ring-2 ring-red-500/50",
+          )}
           onSubmit={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            handleUserMessage(
-              { text: input },
-              {
-                body: {
-                  conversation: props.conversation,
-                  modelId: model,
-                },
-              },
-            );
-            setInput("");
+            handleSubmit();
           }}
         >
           <AIInputTextarea
+            disabled={isListening}
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            placeholder={
+              isListening ? "Listening..." : "Type your message here..."
+            }
           />
           <AIInputToolbar>
             <AIInputTools>
-              <AIInputButton>
+              <AIInputButton
+                onClick={async () => {
+                  const filePaths = await open({
+                    multiple: true,
+                    directory: false,
+                    filters: [
+                      {
+                        name: "PDFs, Text, Images",
+                        extensions: ["pdf", "txt", "png", "jpg", "jpeg", "gif"],
+                      },
+                    ],
+                  });
+                  if (filePaths) {
+                    setFilePaths(filePaths);
+                  }
+                }}
+              >
                 <PlusIcon size={16} />
               </AIInputButton>
-              <AIInputButton>
-                <MicIcon size={16} />
-              </AIInputButton>
+              <MicButton
+                setInput={setInput}
+                onIsListeningChange={setIsListening}
+              />
               <AIInputButton>
                 <GlobeIcon size={16} />
                 <span>Search</span>
               </AIInputButton>
               <AIInputModelSelect
                 value={model}
-                onValueChange={(v) => setModel(v as ModelId)}
+                onValueChange={(v) => setModel(v)}
               >
                 <AIInputModelSelectTrigger>
                   <AIInputModelSelectValue />
                 </AIInputModelSelectTrigger>
                 <AIInputModelSelectContent>
-                  {Object.entries(models).map(([provider, models]) => (
-                    <SelectGroup key={provider} title={provider}>
-                      {models.map((model) => (
+                  {Object.entries(resolvedProviders).map(
+                    ([provider, { models = {} }]) =>
+                      Object.entries(models).map(([modelId, { name }]) => (
                         <AIInputModelSelectItem
-                          key={model}
-                          value={`${provider}:${model}`}
+                          key={modelId}
+                          value={`${provider}:${modelId}`}
                         >
-                          {model}
+                          {provider}:{name ?? modelId}
                         </AIInputModelSelectItem>
-                      ))}
-                    </SelectGroup>
-                  ))}
+                      )),
+                  )}
                 </AIInputModelSelectContent>
               </AIInputModelSelect>
             </AIInputTools>

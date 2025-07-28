@@ -1,7 +1,7 @@
 import { initAuth } from "../lib/auth";
 import { initCache } from "../lib/cache";
 import { initDb } from "../lib/db";
-import { initProviderRegistry } from "../lib/model";
+import { initProviderRegistry } from "../lib/provider-registry";
 import { env } from "../utils/env";
 import { factory } from "../utils/factory";
 

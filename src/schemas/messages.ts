@@ -13,7 +13,6 @@ const MessageParts = z.custom<UIMessage["parts"]>();
 export const Message = createSelectSchema(messages, {
   createdAt: Timestamp,
   updatedAt: Timestamp,
-  lastSyncedAt: Timestamp.nullish(),
   parts: MessageParts,
 }).partial({
   userId: true,

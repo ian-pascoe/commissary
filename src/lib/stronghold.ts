@@ -2,45 +2,42 @@ import { appDataDir, BaseDirectory, join } from "@tauri-apps/api/path";
 import { exists, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { type Client, Stronghold } from "@tauri-apps/plugin-stronghold";
 
+export const VAULT_PASSWORD_FILE = ".vault-password";
+
 export type StrongholdStore = {
   get: (key: string) => Promise<string | undefined>;
   set: (key: string, value: string) => Promise<void>;
   remove: (key: string) => Promise<string | undefined>;
 };
 
-let cachedStronghold: {
-  stronghold: Stronghold;
-  client: Client;
-  store: StrongholdStore;
-} | null = null;
-
 export const initStronghold = async () => {
-  if (cachedStronghold) {
-    return cachedStronghold;
-  }
-
   console.log("Initializing Stronghold...");
-  const vaultPath = await join(await appDataDir(), "vault");
-  const vaultPasswordFileExists = await exists("vault-password.txt", {
-    baseDir: BaseDirectory.AppConfig,
+  const vaultPath = await join(await appDataDir(), "vault.hold");
+
+  console.log("Checking for vault password file...");
+  const vaultPasswordFileExists = await exists(VAULT_PASSWORD_FILE, {
+    baseDir: BaseDirectory.AppData,
   });
 
   let vaultPassword: string;
   if (vaultPasswordFileExists) {
-    vaultPassword = await readTextFile("vault-password.txt", {
-      baseDir: BaseDirectory.AppConfig,
+    console.log("Vault password file found. Reading password...");
+    vaultPassword = await readTextFile(VAULT_PASSWORD_FILE, {
+      baseDir: BaseDirectory.AppData,
     });
   } else {
+    console.log("Vault password file not found. Generating new password...");
     // Create a cryptographically secure random password
     vaultPassword = Array.from(
       crypto.getRandomValues(new Uint8Array(32)),
       (byte) => byte.toString(16).padStart(2, "0"),
     ).join("");
-    await writeTextFile("vault-password.txt", vaultPassword, {
-      baseDir: BaseDirectory.AppConfig,
+    await writeTextFile(VAULT_PASSWORD_FILE, vaultPassword, {
+      baseDir: BaseDirectory.AppData,
     });
   }
 
+  console.log("Loading or creating Stronghold vault...");
   const stronghold = await Stronghold.load(vaultPath, vaultPassword);
   const clientName = "commissary";
   let client: Client;
@@ -52,7 +49,7 @@ export const initStronghold = async () => {
 
   const store = client.getStore();
 
-  cachedStronghold = {
+  const strongholdData = {
     stronghold,
     client,
     store: {
@@ -62,10 +59,8 @@ export const initStronghold = async () => {
         return new TextDecoder().decode(new Uint8Array(value));
       },
       set: async (key: string, value: string) => {
-        return await store.insert(
-          key,
-          Array.from(new TextEncoder().encode(value)),
-        );
+        await store.insert(key, Array.from(new TextEncoder().encode(value)));
+        await stronghold.save();
       },
       remove: async (key: string) => {
         const value = await store.remove(key);
@@ -76,7 +71,7 @@ export const initStronghold = async () => {
   };
 
   console.log("Stronghold initialized successfully");
-  return cachedStronghold;
+  return strongholdData;
 };
 
-export type StrongholdInterface = ReturnType<typeof initStronghold>;
+export type StrongholdInterface = Awaited<ReturnType<typeof initStronghold>>;

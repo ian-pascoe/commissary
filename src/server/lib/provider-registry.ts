@@ -1,4 +1,5 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
 import { createProviderRegistry } from "ai";
 import type { Context } from "hono";
 import type { Env } from "../types/hono";
@@ -10,6 +11,9 @@ export const initProviderRegistry = (c: Context<Env>) => {
     google: createGoogleGenerativeAI({
       apiKey: env(c).GOOGLE_API_KEY,
     }),
+    openai: createOpenAI({
+      apiKey: env(c).OPENAI_API_KEY,
+    })
   });
 };
 

@@ -3,13 +3,11 @@ import { relations } from "drizzle-orm";
 import { index, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { baseModel } from "../utils/base-model";
 import { json } from "../utils/json";
-import { syncModel } from "../utils/sync-model";
 
 export const conversations = sqliteTable(
   "conversations",
   {
     ...baseModel("conv_"),
-    ...syncModel,
 
     title: text().notNull(),
   },
@@ -23,7 +21,6 @@ export const messages = sqliteTable(
   "messages",
   {
     ...baseModel("msg_"),
-    ...syncModel,
     conversationId: text()
       .notNull()
       .references(() => conversations.id, {

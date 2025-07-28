@@ -5,7 +5,6 @@ import { authMiddleware } from "./middleware/auth";
 import { initMiddleware } from "./middleware/init";
 import auth from "./routes/auth";
 import chat from "./routes/chat";
-import sync from "./routes/sync";
 import { factory } from "./utils/factory";
 
 const app = factory
@@ -16,7 +15,6 @@ const app = factory
   .use(authMiddleware())
   .route("/auth", auth)
   .route("/chat", chat)
-  .route("/sync", sync)
   .onError((err, c) => {
     if (err instanceof HTTPException) {
       return c.json({ error: err.message }, err.status);

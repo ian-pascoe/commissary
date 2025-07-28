@@ -26,7 +26,12 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false,
 
-    "types": ["@types/bun", "@cloudflare/workers-types", "vite/client"],
+    "types": [
+      "@types/bun",
+      "@cloudflare/workers-types",
+      "vite/client",
+      "@types/dom-speech-recognition"
+    ],
     "paths": {
       "~/*": ["./src/*"],
       "~~/*": ["./*"]

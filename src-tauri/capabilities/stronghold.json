@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "stronghold",
+  "description": "enables stronghold permissions",
+  "windows": ["main"],
+  "permissions": [
+    "stronghold:default",
+    "stronghold:allow-remove-secret",
+    "stronghold:allow-remove-store-record"
+  ]
+}

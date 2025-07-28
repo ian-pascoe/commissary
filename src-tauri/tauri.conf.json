@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "commissary",
+  "productName": "Commissary",
   "version": "0.1.0",
-  "identifier": "com.spiritledsoftware.commissary",
+  "identifier": "commissary",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:3000",
@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' blob: data: media:; script-src 'self' 'unsafe-eval';"
     }
   },
   "bundle": {
@@ -33,6 +33,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "macOS": {
+      "entitlements": "./Entitlements.plist"
+    },
     "resources": ["migrations/*.sql"]
   },
   "plugins": {

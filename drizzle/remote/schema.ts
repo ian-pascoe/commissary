@@ -9,7 +9,6 @@ import {
 } from "drizzle-orm/sqlite-core";
 import { baseModel } from "../utils/base-model";
 import { json } from "../utils/json";
-import { syncModel } from "../utils/sync-model";
 import { timestamp } from "../utils/timestamp";
 
 export const users = sqliteTable(
@@ -84,7 +83,6 @@ export const conversations = sqliteTable(
   "conversations",
   {
     ...baseModel("conv_"),
-    ...syncModel,
     userId: text()
       .notNull()
       .references(() => users.id, {
@@ -113,7 +111,6 @@ export const messages = sqliteTable(
   "messages",
   {
     ...baseModel("msg_"),
-    ...syncModel,
     userId: text()
       .notNull()
       .references(() => users.id, {

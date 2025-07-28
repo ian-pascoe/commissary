@@ -10,7 +10,6 @@ import { Timestamp } from "./utils/timestamp";
 export const Conversation = createSelectSchema(conversations, {
   createdAt: Timestamp,
   updatedAt: Timestamp,
-  lastSyncedAt: Timestamp.nullish(),
 }).partial({
   userId: true,
 });

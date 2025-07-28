@@ -1,3 +1,6 @@
+import { Link } from "@tanstack/react-router";
+import { Button } from "./ui/button";
+
 export const DefaultNotFound = () => {
   return (
     <div className="flex h-full w-full items-center justify-center">
@@ -6,6 +9,9 @@ export const DefaultNotFound = () => {
         <p className="mt-4 text-gray-600">
           The page you are looking for does not exist.
         </p>
+        <Button asChild>
+          <Link to="/">Go to Home</Link>
+        </Button>
       </div>
     </div>
   );

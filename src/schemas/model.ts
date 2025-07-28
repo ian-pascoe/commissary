@@ -1,17 +1,21 @@
 import * as z from "zod";
-import { models } from "~/lib/models";
-import type { ProviderRegistry } from "~/server/lib/model";
+import {
+  type ProviderRegistry,
+  providerRegistry,
+} from "~/server/lib/provider-registry";
 
-export const ModelId = z.custom<
+export const RemoteModelId = z.custom<
   Parameters<ProviderRegistry["languageModel"]>[0]
 >(
   (v) => {
     if (typeof v !== "string") return false;
-    const [vProvider, vModel] = v.split(":");
-    return Object.entries(models).some(([provider, models]) =>
-      models.some((model) => provider === vProvider && model === vModel),
-    );
+    try {
+      providerRegistry().languageModel(v as any);
+      return true;
+    } catch {
+      return false;
+    }
   },
   { error: "Invalid model ID" },
 );
-export type ModelId = z.infer<typeof ModelId>;
+export type RemoteModelId = z.infer<typeof RemoteModelId>;

@@ -5,6 +5,6 @@ export default defineConfig({
   out: "./src-tauri/migrations",
   dialect: "sqlite",
   dbCredentials: {
-    url: `file://${process.env.HOME}/Library/Application\ Support/com.spiritledsoftware.commissary/sqlite.db`,
+    url: `file://${process.env.HOME}/Library/Application\ Support/commissary/sqlite.db`,
   },
 });
