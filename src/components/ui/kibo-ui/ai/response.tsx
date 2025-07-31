@@ -98,13 +98,7 @@ const components: Options["components"] = {
       {children}
     </h6>
   ),
-  pre: ({ node, className, children }) => {
-    let language = "javascript";
-
-    if (typeof node?.properties?.className === "string") {
-      language = node.properties.className.replace("language-", "");
-    }
-
+  pre: ({ className, children }) => {
     const childrenIsCode =
       typeof children === "object" &&
       children !== null &&
@@ -115,11 +109,44 @@ const components: Options["components"] = {
       return <pre>{children}</pre>;
     }
 
+    let language = "javascript";
+    let filename = "index.js";
+    let code = (children.props as { children: string }).children;
+
+    if (
+      typeof (children.props as { className?: string }).className === "string"
+    ) {
+      const match = (children.props as { className?: string }).className?.match(
+        /language-(\w+)/,
+      );
+      if (match?.[1]) {
+        language = match[1];
+        filename = `index.${language}`;
+      }
+    }
+
+    // Check for filename comment in the first line
+    const lines = code?.split("\n");
+    if (lines.length > 0) {
+      const firstLine = lines[0]?.trim();
+      // Match various comment patterns with filename
+      const filenameMatch = firstLine?.match(
+        /^(?:\/\/|#|<!--|\/\*)\s*(?:filepath?:\s*)?(.+?)(?:\s*\*\/)?$/,
+      );
+      if (filenameMatch?.[1]) {
+        const extractedFilename = filenameMatch[1].trim();
+        // Remove leading slash if present and extract just the filename
+        filename = extractedFilename.split("/").pop() || filename;
+        // Remove the filename comment line from the code
+        code = lines.slice(1).join("\n");
+      }
+    }
+
     const data: CodeBlockProps["data"] = [
       {
         language,
-        filename: "index.js",
-        code: (children.props as { children: string }).children,
+        filename,
+        code,
       },
     ];
 

@@ -13,6 +13,7 @@
     "opener:default",
     "deep-link:default",
     "cache:default",
-    "os:default"
+    "os:default",
+    "shell:default"
   ]
 }

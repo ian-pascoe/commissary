@@ -38,6 +38,7 @@ tauri-plugin-deep-link = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-cache = "0.1.5"
 tauri-plugin-os = "2"
+tauri-plugin-shell = "2"
 
 [profile.dev.package.scrypt]
 opt-level = 3

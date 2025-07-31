@@ -1,6 +1,7 @@
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
-import { GlobeIcon, PlusIcon } from "lucide-react";
+import { platform } from "@tauri-apps/plugin-os";
+import { PlusIcon } from "lucide-react";
 import mime from "mime";
 import { useCallback } from "react";
 import { type FileData, useChat } from "~/contexts/chat";
@@ -18,6 +19,7 @@ import {
   AIInputToolbar,
   AIInputTools,
 } from "../ui/kibo-ui/ai/input";
+import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { MicButton } from "./mic-button";
 
 export type ConversationInputProps = {
@@ -35,6 +37,8 @@ export const ConversationInput = ({
     model,
     setModel,
     isListening,
+    isShell,
+    setIsShell,
     handleSubmit,
     status,
     setFileData,
@@ -45,7 +49,8 @@ export const ConversationInput = ({
     model: ctx.model,
     setModel: ctx.setModel,
     isListening: ctx.isListening,
-    setIsListening: ctx.setIsListening,
+    isShell: ctx.isShell,
+    setIsShell: ctx.setIsShell,
     handleSubmit: ctx.handleSubmit,
     status: ctx.status,
     setFileData: ctx.setFileData,
@@ -101,19 +106,42 @@ export const ConversationInput = ({
         disabled={isListening || disabled}
         value={input}
         onChange={(e) => setInput(e.target.value)}
-        placeholder={isListening ? "Listening..." : "Type your message here..."}
+        placeholder={
+          isListening
+            ? "Listening..."
+            : isShell
+              ? "Type your message here..."
+              : "Type your message here..."
+        }
+        autoCorrect="off"
+        spellCheck={false}
       />
       <AIInputToolbar>
         <AIInputTools>
-          <AIInputButton onClick={handleFileSelect}>
+          <AIInputButton onClick={handleFileSelect} disabled={isShell}>
             <PlusIcon size={16} />
           </AIInputButton>
           <MicButton />
-          <AIInputButton>
-            <GlobeIcon size={16} />
-            <span>Search</span>
-          </AIInputButton>
-          <AIInputModelSelect value={model} onValueChange={setModel}>
+          <Tabs
+            defaultValue="ai"
+            value={isShell ? "shell" : "ai"}
+            onValueChange={(v) => setIsShell(v === "shell")}
+          >
+            <TabsList>
+              <TabsTrigger value="ai">AI</TabsTrigger>
+              <TabsTrigger
+                value="shell"
+                disabled={platform() === "android" || platform() === "ios"}
+              >
+                Shell
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <AIInputModelSelect
+            value={model}
+            onValueChange={setModel}
+            disabled={isShell}
+          >
             <AIInputModelSelectTrigger>
               <AIInputModelSelectValue />
             </AIInputModelSelectTrigger>

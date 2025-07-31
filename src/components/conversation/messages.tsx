@@ -7,6 +7,7 @@ import { FileIcon } from "lucide-react";
 import mime from "mime";
 import { toast } from "sonner";
 import { useChat } from "~/contexts/chat";
+import { useUser } from "~/hooks/use-auth";
 import { Button } from "../ui/button";
 import {
   AIConversation,
@@ -23,6 +24,7 @@ export type ConversationMessagesProps = {
 export const ConversationMessages = ({
   className,
 }: ConversationMessagesProps) => {
+  const user = useUser();
   const { messages } = useChat((ctx) => ({
     messages: ctx.messages,
   }));
@@ -101,30 +103,33 @@ export const ConversationMessages = ({
           <AIMessage
             key={message.id}
             from={message.role as "user" | "assistant"}
+            className="[&>div]:max-w-full"
           >
             <AIMessageContent>
-              {message.parts.map((part, index) => {
-                const key = `${message.id}-${index}`;
-                switch (part.type) {
-                  case "text": {
-                    return <AIResponse key={key}>{part.text}</AIResponse>;
+              <div className="flex flex-col gap-2">
+                {message.parts.map((part, index) => {
+                  const key = `${message.id}-${index}`;
+                  switch (part.type) {
+                    case "text": {
+                      return <AIResponse key={key}>{part.text}</AIResponse>;
+                    }
+                    case "file": {
+                      return (
+                        <Button
+                          key={key}
+                          onClick={() => downloadMutation.mutate(part.url)}
+                        >
+                          <FileIcon size={16} />
+                          {part.filename || "Unnamed File"}
+                        </Button>
+                      );
+                    }
+                    default: {
+                      return null;
+                    }
                   }
-                  case "file": {
-                    return (
-                      <Button
-                        key={key}
-                        onClick={() => downloadMutation.mutate(part.url)}
-                      >
-                        <FileIcon size={16} />
-                        {part.filename || "Unnamed File"}
-                      </Button>
-                    );
-                  }
-                  default: {
-                    return null;
-                  }
-                }
-              })}
+                })}
+              </div>
             </AIMessageContent>
           </AIMessage>
         ))}

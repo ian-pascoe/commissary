@@ -1,6 +1,8 @@
 import { type UIMessage, useChat as useAiChat } from "@ai-sdk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { fetch } from "@tauri-apps/plugin-http";
+import { platform } from "@tauri-apps/plugin-os";
+import { Command } from "@tauri-apps/plugin-shell";
 import { type ChatTransport, DefaultChatTransport, type FileUIPart } from "ai";
 import { toMerged } from "es-toolkit";
 import {
@@ -24,6 +26,7 @@ import type { ProviderConfig } from "~/schemas/config/provider";
 import type { Conversation } from "~/schemas/conversation";
 import { DelegatingChatTransport } from "~/utils/chat-transport/delegating";
 import { LocalChatTransport } from "~/utils/chat-transport/local";
+import { createId } from "~/utils/id";
 import {
   conversations as conversationsTable,
   messages as messagesTable,
@@ -39,6 +42,8 @@ export type FileData = Omit<FileUIPart, "type"> & { path: string };
 export type ChatContextType = ReturnType<typeof useAiChat> & {
   isListening: boolean;
   setIsListening: React.Dispatch<React.SetStateAction<boolean>>;
+  isShell: boolean;
+  setIsShell: React.Dispatch<React.SetStateAction<boolean>>;
   input: string;
   setInput: React.Dispatch<React.SetStateAction<string>>;
   model: string;
@@ -74,7 +79,11 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
   });
 
   const [isListening, setIsListening] = useState(false);
+  const [isShell, setIsShell] = useState(false);
   const [input, setInput] = useState("");
+  useEffect(() => {
+    console.log("Input changed:", input);
+  }, [input]);
   const [fileData, setFileData] = useState<FileData[]>([]);
   const [model, setModel] = useState("google:gemini-2.5-flash");
   useEffect(() => {
@@ -150,14 +159,6 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
       const currentFileData = fileData;
       setFileData([]);
 
-      const parts: UIMessage["parts"] = [{ type: "text", text: currentInput }];
-      const fileParts = await Promise.all(
-        currentFileData.map((data) => {
-          return { type: "file", ...data } satisfies FileUIPart;
-        }),
-      );
-      parts.push(...fileParts);
-
       let currentConversation = conversationRef.current;
       if (!currentConversation) {
         [currentConversation] = await db
@@ -182,8 +183,56 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
         `[Performance] 🚀 About to call chat.sendMessage at ${sendMessageStart} (${(sendMessageStart - submitStartTime).toFixed(2)}ms from submit start)`,
       );
 
-      await Promise.all([
-        db
+      if (isShell) {
+        const osPlatform = platform();
+        if (osPlatform === "ios" || osPlatform === "android") {
+          throw new Error(
+            "Shell commands are not supported on iOS or Android.",
+          );
+        }
+        const isWindows = osPlatform === "windows";
+        const inputLanguage = isWindows ? "bat" : "sh";
+        const commandName = isWindows ? "execute-cmd" : "execute-sh";
+        const parts: UIMessage["parts"] = [
+          {
+            type: "text",
+            text: [
+              `\`\`\`${inputLanguage}`,
+              "# command",
+              currentInput,
+              "```",
+            ].join("\n"),
+          },
+        ];
+        console.log("Command (raw):", currentInput);
+        console.log("Command (JSON):", JSON.stringify(currentInput));
+        console.log("Command (length):", currentInput.length);
+        console.log("Command (last char):", currentInput.slice(-1));
+        console.log(
+          "Command (last char code):",
+          currentInput.charCodeAt(currentInput.length - 1),
+        );
+        const command = Command.create(commandName, [
+          osPlatform === "windows" ? "/c" : "-c",
+          currentInput,
+        ]);
+        const { code, stdout, stderr } = await command.execute();
+        if (code !== 0) {
+          parts.push({
+            type: "text",
+            text: ["```txt", "# stderr", stderr.trim(), "```"].join("\n"),
+          });
+        } else {
+          parts.push({
+            type: "text",
+            text: ["```txt", "# stdout", stdout.trim(), "```"].join("\n"),
+          });
+        }
+        chat.setMessages((msgs) => [
+          ...msgs,
+          { id: createId(), role: "user", parts },
+        ]);
+        await db
           .insert(messagesTable)
           .values({
             conversationId: currentConversation.id,
@@ -196,20 +245,46 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
                 currentConversation.id,
               ),
             });
+          });
+      } else {
+        const parts: UIMessage["parts"] = [
+          { type: "text", text: currentInput },
+        ];
+        const fileParts = await Promise.all(
+          currentFileData.map((data) => {
+            return { type: "file", ...data } satisfies FileUIPart;
           }),
-        chat.sendMessage(
-          { parts },
-          {
-            headers: {
-              Authorization: `Bearer ${await strongholdStore.get("auth-token")}`,
+        );
+        parts.push(...fileParts);
+        await Promise.all([
+          db
+            .insert(messagesTable)
+            .values({
+              conversationId: currentConversation.id,
+              role: "user",
+              parts,
+            })
+            .then(() => {
+              queryClient.invalidateQueries({
+                queryKey: queryKeys.messages.byConversation(
+                  currentConversation.id,
+                ),
+              });
+            }),
+          chat.sendMessage(
+            { parts },
+            {
+              headers: {
+                Authorization: `Bearer ${await strongholdStore.get("auth-token")}`,
+              },
+              body: {
+                conversation: currentConversation,
+                modelId: model,
+              },
             },
-            body: {
-              conversation: currentConversation,
-              modelId: model,
-            },
-          },
-        ),
-      ]);
+          ),
+        ]);
+      }
 
       const sendMessageEnd = performance.now();
       console.log(
@@ -220,10 +295,12 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
       input,
       db,
       queryClient,
+      chat.setMessages,
       chat.sendMessage,
       model,
       fileData,
       strongholdStore,
+      isShell,
     ],
   );
 
@@ -232,6 +309,8 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
       ...chat,
       isListening,
       setIsListening,
+      isShell,
+      setIsShell,
       input,
       setInput,
       model,
@@ -244,6 +323,7 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
     [
       chat,
       isListening,
+      isShell,
       input,
       model,
       fileData,

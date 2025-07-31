@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "shell",
+  "description": "enables shell permissions",
+  "windows": ["main"],
+  "permissions": [
+    "shell:default",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        { "name": "execute-sh", "cmd": "sh", "args": true },
+        { "name": "execute-cmd", "cmd": "cmd", "args": true }
+      ]
+    }
+  ]
+}
