@@ -22,12 +22,13 @@ const domain =
       : `${app.stage}.dev.${baseDomain}`;
 
 const db = await D1Database("db", {
+  name: `${project}-${app.stage}-db`,
   migrationsDir: "./drizzle/remote/migrations",
 });
 
-const authKv = await KVNamespace("auth-kv", {});
-
-const kv = await KVNamespace("kv", {});
+const kv = await KVNamespace("kv", {
+  title: `${project}-${app.stage}-kv`,
+});
 
 const apiDomain = `api.${domain}`;
 const apiUrl = dev ? "http://localhost:8080" : `https://${apiDomain}`;
@@ -38,12 +39,13 @@ export const api = await Worker("api", {
   entrypoint: "./src/server/index.ts",
   compatibilityFlags: ["nodejs_compat"],
   bindings: {
+    NODE_ENV: app.stage === "production" ? "production" : "development",
     DB: db,
-    AUTH_KV: authKv,
     KV: kv,
     DOMAIN: domain,
     API_URL: apiUrl,
     APP_URL: appUrl,
+    BETTER_AUTH_SECRET: alchemy.secret(process.env.BETTER_AUTH_SECRET),
     GOOGLE_API_KEY: alchemy.secret(process.env.GOOGLE_API_KEY),
     OPENAI_API_KEY: alchemy.secret(process.env.OPENAI_API_KEY),
   },

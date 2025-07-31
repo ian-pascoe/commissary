@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash } from "lucide-react";
+import { Pencil, Plus, Trash } from "lucide-react";
 import { useConfig } from "~/hooks/use-config";
 import { useProviders } from "~/hooks/use-providers";
+import { queryKeys } from "~/lib/query-keys";
 import { Button } from "../ui/button";
 import {
   Card,
@@ -12,12 +13,13 @@ import {
   CardTitle,
 } from "../ui/card";
 import { Spinner } from "../ui/kibo-ui/spinner";
-import { AddProviderButton } from "./add-button";
+import { CreateProviderButton } from "./create-button";
+import { UpdateProviderButton } from "./update-button";
 
 export const ProviderSettingsCard = () => {
   const config = useConfig();
   const queryClient = useQueryClient();
-  const { providers, status } = useProviders();
+  const { data: providers, status } = useProviders();
 
   const deleteProviderMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -32,7 +34,7 @@ export const ProviderSettingsCard = () => {
       });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["providers"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.providers.all });
     },
   });
 
@@ -52,32 +54,42 @@ export const ProviderSettingsCard = () => {
         ) : (
           <ul className="space-y-2">
             {providers &&
-              Object.entries(providers).map(([key, provider]) => (
+              Object.entries(providers).map(([key, providerConfig]) => (
                 <li
                   key={key}
                   className="flex items-center justify-between rounded-md border p-4"
                 >
                   <div className="flex flex-col">
-                    <div className="font-medium">{provider.name || key}</div>
-                    {provider.baseUrl && (
+                    <div className="font-medium">
+                      {providerConfig.name || key}
+                    </div>
+                    {providerConfig.baseUrl && (
                       <div className="text-muted-foreground text-sm">
-                        {provider.baseUrl}
+                        {providerConfig.baseUrl}
                       </div>
                     )}
                   </div>
-                  <Button onClick={() => deleteProviderMutation.mutate(key)}>
-                    <Trash />
-                  </Button>
+                  <div className="flex gap-2">
+                    <UpdateProviderButton
+                      providerId={key}
+                      providerConfig={providerConfig}
+                    >
+                      <Pencil />
+                    </UpdateProviderButton>
+                    <Button onClick={() => deleteProviderMutation.mutate(key)}>
+                      <Trash />
+                    </Button>
+                  </div>
                 </li>
               ))}
           </ul>
         )}
       </CardContent>
       <CardFooter className="flex justify-end">
-        <AddProviderButton>
+        <CreateProviderButton>
           <Plus />
           New
-        </AddProviderButton>
+        </CreateProviderButton>
       </CardFooter>
     </Card>
   );

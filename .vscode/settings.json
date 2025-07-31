@@ -21,8 +21,11 @@
   "typescript.tsdk": "node_modules/typescript/lib",
   "typescript.experimental.expandableHover": true,
   "typescript.experimental.useTsgo": false,
+  "cSpell.words": ["tauri"],
   "[rust]": {
     "editor.defaultFormatter": "rust-lang.rust-analyzer"
   },
-  "cSpell.words": ["tauri"]
+  "[toml]": {
+    "editor.defaultFormatter": "tamasfe.even-better-toml"
+  }
 }

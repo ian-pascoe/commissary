@@ -5,6 +5,6 @@ export default defineConfig({
   out: "./drizzle/remote/migrations",
   dialect: "sqlite",
   dbCredentials: {
-    url: ".alchemy/miniflare/d1/miniflare-D1DatabaseObject/4fea589dffe569f8ba071ec87ac0160124823fb6b357717ae164e87fbe3b243a.sqlite",
+    url: "/Users/ianpascoe/Code/commissary/.alchemy/miniflare/d1/miniflare-D1DatabaseObject/4fea589dffe569f8ba071ec87ac0160124823fb6b357717ae164e87fbe3b243a.sqlite",
   },
 });

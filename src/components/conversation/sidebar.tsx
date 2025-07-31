@@ -1,7 +1,13 @@
-import { useMutation } from "@tanstack/react-query";
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { eq } from "drizzle-orm";
-import { MessageSquarePlusIcon, PlusIcon, Settings, Trash } from "lucide-react";
+import { UserButton } from "@daveyplate/better-auth-ui";
+import { Link, useBlocker, useParams } from "@tanstack/react-router";
+import {
+  DoorOpen,
+  Edit,
+  MessageSquarePlusIcon,
+  PlusIcon,
+  Settings,
+  Trash,
+} from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   Sidebar,
@@ -14,31 +20,29 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "~/components/ui/sidebar";
+import { useUser } from "~/hooks/use-auth";
 import { useConversations } from "~/hooks/use-conversations";
-import { useLocalDb } from "~/hooks/use-local-db";
-import { conversations as conversationsTable } from "~~/drizzle/local/schema";
+import { DeleteConversationButton } from "./delete-button";
+import { EditConversationButton } from "./edit-button";
 
 export function ConversationsSidebar() {
-  const navigate = useNavigate();
+  const user = useUser();
   const { id: currentConversationId } = useParams({ strict: false });
 
-  const db = useLocalDb();
-  const { data: conversations, isLoading, refetch } = useConversations();
+  const { data: conversations, status, refetch } = useConversations();
 
-  const deleteMutation = useMutation({
-    mutationFn: async (conversationId: string) => {
-      await db
-        .delete(conversationsTable)
-        .where(eq(conversationsTable.id, conversationId));
-      return conversationId;
-    },
-    onSuccess: (conversationId) => {
-      if (currentConversationId === conversationId) {
-        navigate({ to: "/chat" });
+  const { isMobile, setOpenMobile } = useSidebar();
+  useBlocker({
+    shouldBlockFn: () => {
+      if (isMobile) {
+        console.log("[ConversationsSidebar] blocking navigation", { isMobile });
+        setOpenMobile(false);
+        document.body.style.pointerEvents = "";
       }
+      return false;
     },
-    onSettled: () => refetch(),
   });
 
   return (
@@ -60,7 +64,7 @@ export function ConversationsSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {isLoading ? (
+              {status === "pending" ? (
                 // Loading skeleton
                 Array.from({ length: 5 }).map((_, i) => (
                   <SidebarMenuItem key={`loading-${i}`}>
@@ -69,7 +73,13 @@ export function ConversationsSidebar() {
                     </div>
                   </SidebarMenuItem>
                 ))
-              ) : conversations?.length ? (
+              ) : status === "error" ? (
+                <SidebarMenuItem>
+                  <div className="px-2 py-1 text-red-500 text-sm">
+                    Error loading conversations
+                  </div>
+                </SidebarMenuItem>
+              ) : status === "success" ? (
                 conversations.map((conversation) => (
                   <SidebarMenuItem
                     key={conversation.id}
@@ -86,13 +96,25 @@ export function ConversationsSidebar() {
                         </span>
                       </Link>
                     </SidebarMenuButton>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => deleteMutation.mutate(conversation.id)}
-                    >
-                      <Trash />
-                    </Button>
+                    <div className="flex items-center">
+                      <EditConversationButton
+                        size="icon"
+                        variant="ghost"
+                        conversationId={conversation.id}
+                        currentTitle={conversation.title}
+                        onSuccess={() => refetch()}
+                      >
+                        <Edit size={16} />
+                      </EditConversationButton>
+                      <DeleteConversationButton
+                        size="icon"
+                        variant="ghost"
+                        conversationId={conversation.id}
+                        onSuccess={() => refetch()}
+                      >
+                        <Trash size={16} />
+                      </DeleteConversationButton>
+                    </div>
                   </SidebarMenuItem>
                 ))
               ) : (
@@ -107,12 +129,30 @@ export function ConversationsSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <Button variant="ghost" className="w-full justify-start gap-2" asChild>
-          <Link to="/settings">
-            <Settings size={16} />
-            Settings
-          </Link>
-        </Button>
+        <SidebarMenu>
+          {!user || user.isAnonymous ? (
+            <>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link to="/auth/$pathname" params={{ pathname: "sign-in" }}>
+                    <DoorOpen size={16} />
+                    Sign In
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link to="/settings">
+                    <Settings size={16} />
+                    Settings
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </>
+          ) : (
+            <UserButton size="default" variant="ghost" />
+          )}
+        </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
   );

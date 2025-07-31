@@ -1,19 +1,26 @@
+import { AuthQueryProvider } from "@daveyplate/better-auth-tanstack";
+import { AuthUIProviderTanstack } from "@daveyplate/better-auth-ui/tanstack";
 import type { QueryClient } from "@tanstack/react-query";
-import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
+import {
+  createRootRouteWithContext,
+  Link,
+  Outlet,
+  useRouter,
+} from "@tanstack/react-router";
+import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
+import { Toaster } from "~/components/ui/sonner";
 import { ThemeProvider } from "~/contexts/theme";
 import type { ApiClient } from "~/lib/api";
 import type { AuthClient } from "~/lib/auth";
 import type { ConfigInterface } from "~/lib/config";
 import type { LocalDatabase } from "~/lib/database";
-import type { GeneralStore } from "~/lib/general-store";
 import type { StrongholdInterface } from "~/lib/stronghold";
 import type { User } from "~/schemas/user";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
-  db: LocalDatabase;
+  localDb: LocalDatabase;
   config: ConfigInterface;
-  generalStore: GeneralStore;
   stronghold: StrongholdInterface;
   authClient: AuthClient;
   apiClient: ApiClient;
@@ -21,27 +28,34 @@ export const Route = createRootRouteWithContext<{
   wrapInSuspense: true,
   staleTime: Infinity,
   beforeLoad: async ({ context: { authClient } }) => {
-    let user: User | undefined;
     const { data: session } = await authClient.getSession();
-    if (session) {
-      user = session.user as User | undefined;
-    } else {
-      const { error } = await authClient.signIn.anonymous();
-      if (error) {
-        throw new Error(`Failed to sign in anonymously: ${error.message}`);
-      }
-      const { data: newSession } = await authClient.getSession();
-      user = newSession?.user as User | undefined;
-    }
-
     return {
-      user,
+      user: session?.user as User | undefined,
     };
   },
-  component: () => (
-    <ThemeProvider>
-      <Outlet />
-      {/* <TanStackRouterDevtools position="top-right" /> */}
-    </ThemeProvider>
-  ),
+  component: () => {
+    const router = useRouter();
+    const authClient = Route.useRouteContext({
+      select: (ctx) => ctx.authClient,
+    });
+
+    return (
+      <ThemeProvider>
+        <AuthQueryProvider>
+          <AuthUIProviderTanstack
+            authClient={authClient}
+            navigate={(href) => router.navigate({ to: href })}
+            replace={(href) => router.navigate({ to: href, replace: true })}
+            onSessionChange={() => router.invalidate()}
+            settings={{ url: "/settings" }}
+            Link={({ href, ...props }) => <Link to={href} {...props} />}
+          >
+            <Outlet />
+            <Toaster />
+            <TanStackRouterDevtools position="top-right" />
+          </AuthUIProviderTanstack>
+        </AuthQueryProvider>
+      </ThemeProvider>
+    );
+  },
 });

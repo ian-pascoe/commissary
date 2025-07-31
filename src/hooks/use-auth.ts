@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import type { Session } from "better-auth";
+import { queryKeys } from "~/lib/query-keys";
 import type { User } from "~/schemas/user";
 
 export const useAuthClient = () => {
@@ -34,7 +35,7 @@ export type UseAuthReturnType =
 export const useAuth = (): UseAuthReturnType => {
   const authClient = useAuthClient();
   const query = useQuery({
-    queryKey: ["session"],
+    queryKey: queryKeys.session,
     queryFn: async () => {
       const { data: session, error } = await authClient.getSession();
       if (error) {

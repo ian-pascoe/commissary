@@ -1,12 +1,13 @@
 import * as z from "zod";
 import { Theme } from "~/contexts/theme";
-import { ProviderConfig } from "./provider";
+import { ProviderConfig, ProviderId } from "./provider";
 
 export const Config = z.object({
   theme: z.optional(Theme).meta({ description: "UI theme preference" }),
-  providers: z.optional(z.record(z.string(), ProviderConfig)).meta({
+  providers: z.optional(z.record(ProviderId, ProviderConfig)).meta({
     description: "Configuration for various providers",
   }),
+  model: z.optional(z.string()),
 });
 export const CreateConfig = Config;
 export const UpdateConfig = Config.partial();

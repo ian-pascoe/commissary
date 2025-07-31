@@ -5,7 +5,7 @@
   "windows": ["main"],
   "permissions": [
     "stronghold:default",
-    "stronghold:allow-remove-secret",
-    "stronghold:allow-remove-store-record"
+    "stronghold:allow-remove-store-record",
+    "stronghold:allow-remove-secret"
   ]
 }

@@ -13,9 +13,8 @@ import {
 } from "ai";
 import { LRUCache } from "lru-cache";
 import * as z from "zod";
-import type { StrongholdStore } from "~/lib/stronghold";
 import type { Config } from "~/schemas/config";
-import { constructLocalModel } from "./construct-local-model";
+import { constructLocalModel } from "../construct-local-model";
 
 export const LocalChatTransportBody = z.object({
   modelId: z.string().min(1),
@@ -24,6 +23,7 @@ export const LocalChatTransportBody = z.object({
 // Global model cache shared across all LocalChatTransport instances
 export const globalModelCache = new LRUCache<string, LanguageModel>({
   max: 20,
+  ttl: 1000 * 60 * 5, // 5 minutes
 });
 
 // Simple hash function for creating cache keys
@@ -49,23 +49,14 @@ function createHash(data: string): string {
 }
 
 export class LocalChatTransport implements ChatTransport<UIMessage> {
-  private readonly providers: NonNullable<Config["providers"]>;
-  private readonly strongholdStore: StrongholdStore;
-
-  constructor(options: {
-    providers: Config["providers"];
-    strongholdStore: StrongholdStore;
-  }) {
-    this.providers = options.providers ?? {};
-    this.strongholdStore = options.strongholdStore;
-  }
+  constructor(readonly providersConfig: Config["providers"]) {}
 
   private createCacheKey(modelId: string): string {
     const startTime = performance.now();
 
     // Create a deterministic string representation of providers and modelId
-    const sortedKeys = Object.keys(this.providers).sort();
-    const providersString = JSON.stringify(this.providers, sortedKeys);
+    const sortedKeys = Object.keys(this.providersConfig ?? {}).sort();
+    const providersString = JSON.stringify(this.providersConfig, sortedKeys);
     const cacheData = `${modelId}:${providersString}`;
     const cacheKey = createHash(cacheData);
 
@@ -112,8 +103,7 @@ export class LocalChatTransport implements ChatTransport<UIMessage> {
     console.log(`[Performance] 🏗️ Creating new model for ${modelId}`);
     const model = await constructLocalModel({
       modelId,
-      providers: this.providers,
-      strongholdStore: this.strongholdStore,
+      providers: this.providersConfig,
     });
     const modelCreateTime = performance.now() - modelCreateStart;
 
@@ -173,12 +163,55 @@ export class LocalChatTransport implements ChatTransport<UIMessage> {
         );
 
         const mergeStart = performance.now();
-        writer.merge(result.toUIMessageStream());
-        const mergeTime = performance.now() - mergeStart;
+        const uiStream = result.toUIMessageStream();
+        const uiStreamTime = performance.now() - mergeStart;
+
+        // Track time to first chunk
+        let firstChunkReceived = false;
+        let firstChunkProcessed = false;
+        const firstChunkStart = performance.now();
+
+        // Wrap the stream to track first chunk timing at multiple stages
+        const transformedStream = new TransformStream({
+          transform(chunk, controller) {
+            if (!firstChunkReceived) {
+              firstChunkReceived = true;
+              const timeToFirstChunk = performance.now() - firstChunkStart;
+              console.log(
+                `[Performance] ⚡ First chunk received in transform after ${timeToFirstChunk.toFixed(2)}ms (total time from start: ${(performance.now() - startTime).toFixed(2)}ms)`,
+              );
+              console.log(`[Performance] First chunk details:`, {
+                type: chunk.type,
+                hasText: "text" in chunk ? chunk.text?.length || 0 : "N/A",
+                hasData: "data" in chunk ? !!chunk.data : "N/A",
+              });
+            }
+
+            // Track when chunk is actually enqueued
+            const enqueueStart = performance.now();
+            controller.enqueue(chunk);
+            const enqueueTime = performance.now() - enqueueStart;
+
+            if (!firstChunkProcessed) {
+              firstChunkProcessed = true;
+              console.log(
+                `[Performance] 🚀 First chunk enqueued after ${enqueueTime.toFixed(3)}ms (total processing: ${(performance.now() - firstChunkStart).toFixed(2)}ms)`,
+              );
+            }
+          },
+        });
+
+        console.log(
+          `[Performance] About to merge stream (ui stream setup: ${uiStreamTime.toFixed(2)}ms)`,
+        );
+
+        const writerMergeStart = performance.now();
+        writer.merge(uiStream.pipeThrough(transformedStream));
+        const writerMergeTime = performance.now() - writerMergeStart;
 
         const totalTime = performance.now() - startTime;
         console.log(
-          `[Performance] sendMessages completed (merge: ${mergeTime.toFixed(2)}ms, total: ${totalTime.toFixed(2)}ms)`,
+          `[Performance] sendMessages completed (ui stream: ${uiStreamTime.toFixed(2)}ms, writer merge: ${writerMergeTime.toFixed(2)}ms, total: ${totalTime.toFixed(2)}ms)`,
         );
       },
       onError: (error) => {
@@ -194,7 +227,7 @@ export class LocalChatTransport implements ChatTransport<UIMessage> {
   }
 
   async reconnectToStream(
-    options: { chatId: string } & ChatRequestOptions,
+    _options: { chatId: string } & ChatRequestOptions,
   ): Promise<ReadableStream<UIMessageChunk> | null> {
     throw new Error("Method not implemented.");
   }

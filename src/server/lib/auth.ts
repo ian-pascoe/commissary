@@ -9,6 +9,7 @@ import type { Database } from "./db";
 
 export const initAuth = (db: Database, cache: Cache, env: Bindings) => {
   return betterAuth({
+    secret: env.BETTER_AUTH_SECRET,
     baseURL: `${env.API_URL}/auth`,
     trustedOrigins: [env.APP_URL],
     database: drizzleAdapter(db, {
@@ -17,11 +18,43 @@ export const initAuth = (db: Database, cache: Cache, env: Bindings) => {
       usePlural: true,
     }),
     secondaryStorage: {
-      get: (key) => cache.get(key),
-      set: (key, value, ttl) => cache.put(key, value, { expirationTtl: ttl }),
-      delete: (key) => cache.delete(key),
+      get: async (key) => {
+        return await cache.get(`auth:${key}`);
+      },
+      set: async (key, value, ttl) => {
+        await cache.put(`auth:${key}`, value, {
+          expirationTtl: ttl ? ttl * 1000 : undefined,
+        });
+      },
+      delete: async (key) => {
+        await cache.delete(`auth:${key}`);
+      },
     },
-    plugins: [anonymous(), bearer()],
+    logger: {
+      disabled: false,
+      level: env.NODE_ENV === "production" ? "error" : "debug",
+      log: (level, message, ...args) => {
+        console[level](`[Auth] ${message}`, ...args);
+      },
+    },
+    emailAndPassword: {
+      enabled: true,
+      autoSignIn: true,
+    },
+    advanced: {
+      database: {
+        generateId: false,
+      },
+      crossSubDomainCookies: {
+        enabled: true,
+      },
+    },
+    plugins: [
+      anonymous({
+        emailDomainName: "commissary.dev",
+      }),
+      bearer(),
+    ],
   });
 };
 

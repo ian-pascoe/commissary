@@ -1,18 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "~/lib/query-keys";
 import { useConfig } from "./use-config";
 
 export const useProviders = () => {
   const config = useConfig();
-  const query = useQuery({
-    queryKey: ["providers"],
+  return useQuery({
+    queryKey: queryKeys.providers.all,
     queryFn: async () => {
-      const providers = await config.get().then((c) => c.providers || {});
+      const providers = await config.get().then((c) => c.providers);
       return providers;
     },
   });
-  const { data: providers, ...rest } = query;
-  return {
-    ...rest,
-    providers,
-  };
 };

@@ -100,10 +100,13 @@ export function ThemeProvider({
   );
 }
 
-export const useTheme = () => {
+export function useTheme<T = ThemeProviderState>(
+  selector?: (state: ThemeProviderState) => T,
+) {
   const context = useContext(ThemeProviderContext);
   if (context === null) {
     throw new Error("useTheme must be used within a ThemeProvider");
   }
-  return context;
-};
+  const value = selector ? selector(context) : context;
+  return useMemo(() => value as T, [value]);
+}

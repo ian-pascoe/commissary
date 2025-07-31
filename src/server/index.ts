@@ -1,8 +1,8 @@
 import { contextStorage } from "hono/context-storage";
 import { HTTPException } from "hono/http-exception";
-import { logger } from "hono/logger";
 import { authMiddleware } from "./middleware/auth";
 import { initMiddleware } from "./middleware/init";
+import { loggingMiddleware } from "./middleware/logging";
 import auth from "./routes/auth";
 import chat from "./routes/chat";
 import { factory } from "./utils/factory";
@@ -10,7 +10,7 @@ import { factory } from "./utils/factory";
 const app = factory
   .createApp()
   .use(contextStorage())
-  .use(logger())
+  .use(loggingMiddleware())
   .use(initMiddleware())
   .use(authMiddleware())
   .route("/auth", auth)

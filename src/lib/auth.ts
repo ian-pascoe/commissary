@@ -1,17 +1,24 @@
 import { fetch } from "@tauri-apps/plugin-http";
-import { createAuthClient } from "better-auth/client";
 import { anonymousClient } from "better-auth/client/plugins";
-import type { StrongholdStore } from "./stronghold";
+import { createAuthClient } from "better-auth/react";
+import { type StrongholdStore, stronghold } from "./stronghold";
 
-export const initAuthClient = (store: StrongholdStore) => {
-  return createAuthClient({
+const initAuthClient = (store: StrongholdStore) => {
+  console.log(
+    "Initializing Auth client with base URL:",
+    `${import.meta.env.VITE_API_URL}/auth`,
+  );
+  const client = createAuthClient({
     baseURL: `${import.meta.env.VITE_API_URL}/auth`,
     plugins: [anonymousClient()],
     fetchOptions: {
       customFetchImpl: fetch,
+      credentials: "omit",
       auth: {
         type: "Bearer",
-        token: () => store.get("auth-token"),
+        token: async () => {
+          return await store.get("auth-token");
+        },
       },
       onSuccess: async ({ response }) => {
         const authToken = response.headers.get("set-auth-token");
@@ -21,6 +28,9 @@ export const initAuthClient = (store: StrongholdStore) => {
       },
     },
   });
+  console.log("Auth client initialized:", client);
+  return client;
 };
-
 export type AuthClient = ReturnType<typeof initAuthClient>;
+
+export const authClient = initAuthClient(stronghold.store);

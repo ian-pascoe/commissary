@@ -1,24 +1,19 @@
 import { MicIcon, MicOffIcon } from "lucide-react";
-import type React from "react";
 import { useCallback, useEffect, useState } from "react";
+import { useChat } from "~/contexts/chat";
 import { AIInputButton } from "../ui/kibo-ui/ai/input";
 import { AudioWaves } from "./audio-waves";
 
-export type MicButtonProps = {
-  onIsListeningChange?: (isListening: boolean) => void;
-  setInput: React.Dispatch<React.SetStateAction<string>>;
-};
+export const MicButton = () => {
+  const { setInput, setIsListening } = useChat((ctx) => ({
+    setInput: ctx.setInput,
+    setIsListening: ctx.setIsListening,
+  }));
 
-export const MicButton = ({
-  setInput,
-  onIsListeningChange,
-}: MicButtonProps) => {
   const [recognition, setRecognition] = useState<any>(null);
   useEffect(() => {
-    if (onIsListeningChange) {
-      onIsListeningChange(Boolean(recognition));
-    }
-  }, [recognition, onIsListeningChange]);
+    setIsListening(Boolean(recognition));
+  }, [recognition, setIsListening]);
 
   const handleClick = useCallback(async () => {
     // If already recognizing, stop it

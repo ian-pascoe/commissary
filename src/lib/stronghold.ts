@@ -10,7 +10,7 @@ export type StrongholdStore = {
   remove: (key: string) => Promise<string | undefined>;
 };
 
-export const initStronghold = async () => {
+const initStronghold = async () => {
   console.log("Initializing Stronghold...");
   const vaultPath = await join(await appDataDir(), "vault.hold");
 
@@ -65,6 +65,7 @@ export const initStronghold = async () => {
       remove: async (key: string) => {
         const value = await store.remove(key);
         if (!value) return undefined;
+        await stronghold.save();
         return new TextDecoder().decode(new Uint8Array(value));
       },
     },
@@ -73,5 +74,8 @@ export const initStronghold = async () => {
   console.log("Stronghold initialized successfully");
   return strongholdData;
 };
-
 export type StrongholdInterface = Awaited<ReturnType<typeof initStronghold>>;
+
+export const stronghold = await initStronghold();
+export const strongholdClient = stronghold.client;
+export const strongholdStore = stronghold.store;

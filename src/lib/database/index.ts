@@ -1,16 +1,10 @@
 import SQL from "@tauri-apps/plugin-sql";
-import { drizzle, type SqliteRemoteDatabase } from "drizzle-orm/sqlite-proxy";
+import { drizzle } from "drizzle-orm/sqlite-proxy";
 import * as schema from "~~/drizzle/local/schema";
 import { migrate } from "./migrate";
 import { createBatchProxy, createProxy } from "./proxy";
 
-let cachedDb: SqliteRemoteDatabase<typeof schema> | null = null;
-
-export const initLocalDb = async () => {
-  if (cachedDb) {
-    return cachedDb;
-  }
-
+const initLocalDb = async () => {
   console.log("Initializing local database...");
 
   const sqlite = await SQL.load("sqlite:sqlite.db");
@@ -22,10 +16,10 @@ export const initLocalDb = async () => {
     },
   );
   await migrate(sqlite);
-  cachedDb = db;
 
   console.log("Local database initialized successfully");
-  return cachedDb;
+  return db;
 };
-
 export type LocalDatabase = Awaited<ReturnType<typeof initLocalDb>>;
+
+export const localDb = await initLocalDb();

@@ -1,6 +1,21 @@
 import * as z from "zod";
+import { PreloadedProviderId } from "~/lib/preloaded-providers";
 
-export const AuthConfig = z.discriminatedUnion("type", [
+export const ProviderId: z.ZodType<ProviderId, string> = z.union([
+  PreloadedProviderId,
+  z.string().min(1),
+]);
+export type ProviderId = PreloadedProviderId | (string & {});
+
+export const ProviderSdk = z.enum([
+  "@ai-sdk/anthropic",
+  "@ai-sdk/google",
+  "@ai-sdk/openai",
+  "@ai-sdk/openai-compatible",
+]);
+export type ProviderSdk = z.infer<typeof ProviderSdk>;
+
+export const ProviderAuthConfig = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("api-key"),
     apiKey: z.string().meta({
@@ -34,26 +49,30 @@ export const AuthConfig = z.discriminatedUnion("type", [
     }),
   }),
 ]);
-export type AuthConfig = z.infer<typeof AuthConfig>;
+export type ProviderAuthConfig = z.infer<typeof ProviderAuthConfig>;
 
-export const ModelConfig = z.object({
+export const ProviderModelConfig = z.object({
   name: z
     .optional(z.string())
     .meta({ description: "Human-readable name for the model" }),
 });
-export type ModelConfig = z.infer<typeof ModelConfig>;
+export type ProviderModelConfig = z.infer<typeof ProviderModelConfig>;
 
 export const ProviderConfig = z.object({
   name: z
     .optional(z.string())
     .meta({ description: "Human-readable name for the provider" }),
+  sdk: z.optional(ProviderSdk).meta({
+    description:
+      "The SDK to use for this provider. Must be one of the supported SDKs.",
+  }),
   baseUrl: z
     .optional(z.url())
     .meta({ description: "Base URL for the provider API" }),
   auth: z
-    .optional(AuthConfig)
+    .optional(ProviderAuthConfig)
     .meta({ description: "Authentication configuration for the provider" }),
-  models: z.optional(z.record(z.string(), ModelConfig)).meta({
+  models: z.optional(z.record(z.string(), ProviderModelConfig)).meta({
     description:
       "Model-specific configuration. Keys are model IDs, values are model-specific settings.",
   }),

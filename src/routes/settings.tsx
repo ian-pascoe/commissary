@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { ChevronLeft } from "lucide-react";
 import { ProviderSettingsCard } from "~/components/provider/settings-card";
 import { Button } from "~/components/ui/button";
@@ -9,11 +9,19 @@ export const Route = createFileRoute("/settings")({
 });
 
 function RouteComponent() {
-  const navigate = useNavigate();
+  const router = useRouter();
 
   return (
     <div className="relative flex size-full justify-center p-5">
-      <Button onClick={() => navigate({ to: "/chat" })}>
+      <Button
+        variant="outline"
+        className="absolute top-4 left-4"
+        onClick={() =>
+          router.history.canGoBack()
+            ? router.history.back()
+            : router.navigate({ to: "/chat" })
+        }
+      >
         <ChevronLeft size={16} />
         Back
       </Button>

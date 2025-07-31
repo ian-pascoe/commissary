@@ -6,6 +6,19 @@
 let scrollTimeout: NodeJS.Timeout;
 const scrollingElements = new Set<Element>();
 
+function isScrollable(element: Element): boolean {
+  return (
+    element.scrollHeight > element.clientHeight ||
+    element.scrollWidth > element.clientWidth
+  );
+}
+
+function addScrollListener(element: Element) {
+  if (isScrollable(element)) {
+    element.addEventListener("scroll", handleScroll, { passive: true });
+  }
+}
+
 function handleScroll(event: Event) {
   const target = event.target;
 
@@ -42,13 +55,9 @@ export function initAutoHideScrollbars() {
       mutation.addedNodes.forEach((node) => {
         if (node.nodeType === Node.ELEMENT_NODE) {
           const element = node as Element;
-          // Add scroll listener to new scrollable elements
-          if (
-            element.scrollHeight > element.clientHeight ||
-            element.scrollWidth > element.clientWidth
-          ) {
-            element.addEventListener("scroll", handleScroll, { passive: true });
-          }
+          addScrollListener(element);
+          const childElements = element.querySelectorAll("*");
+          childElements.forEach(addScrollListener);
         }
       });
     });
@@ -59,16 +68,8 @@ export function initAutoHideScrollbars() {
     subtree: true,
   });
 
-  // Add listeners to existing scrollable elements
   const scrollableElements = document.querySelectorAll("*");
-  scrollableElements.forEach((element) => {
-    if (
-      element.scrollHeight > element.clientHeight ||
-      element.scrollWidth > element.clientWidth
-    ) {
-      element.addEventListener("scroll", handleScroll, { passive: true });
-    }
-  });
+  scrollableElements.forEach(addScrollListener);
 }
 
 export function cleanupAutoHideScrollbars() {
