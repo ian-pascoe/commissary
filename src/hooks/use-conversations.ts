@@ -6,7 +6,7 @@ export const useConversations = () => {
   const db = useLocalDb();
 
   return useQuery({
-    queryKey: queryKeys.conversations.list(),
+    queryKey: queryKeys.conversations.all(),
     queryFn: async () => {
       if (!db) return [];
 

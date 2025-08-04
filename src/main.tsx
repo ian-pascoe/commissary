@@ -8,8 +8,7 @@ import { Splashscreen } from "./components/splashscreen";
 import { routeTree } from "./routeTree.gen";
 import { initAutoHideScrollbars } from "./utils/auto-hide-scrollbars";
 
-import "@fontsource-variable/inter";
-import "@fontsource/ibm-plex-mono";
+import "@fontsource-variable/geist-mono";
 import "./styles/global.css";
 
 const rootElement = document.getElementById("app");

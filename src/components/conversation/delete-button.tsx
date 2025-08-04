@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { eq } from "drizzle-orm";
 import { Trash } from "lucide-react";
-import { type ComponentProps } from "react";
+import type { ComponentProps } from "react";
 import { useLocalDb } from "~/hooks/use-local-db";
 import { conversations as conversationsTable } from "~~/drizzle/local/schema";
 import { Button } from "../ui/button";

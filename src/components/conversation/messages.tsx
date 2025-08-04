@@ -7,7 +7,7 @@ import { FileIcon } from "lucide-react";
 import mime from "mime";
 import { toast } from "sonner";
 import { useChat } from "~/contexts/chat";
-import { useUser } from "~/hooks/use-auth";
+import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
 import {
   AIConversation,
@@ -24,9 +24,9 @@ export type ConversationMessagesProps = {
 export const ConversationMessages = ({
   className,
 }: ConversationMessagesProps) => {
-  const user = useUser();
-  const { messages } = useChat((ctx) => ({
+  const { messages, fileData } = useChat((ctx) => ({
     messages: ctx.messages,
+    fileData: ctx.fileData,
   }));
   const downloadMutation = useMutation({
     mutationFn: async (url: string) => {
@@ -103,7 +103,7 @@ export const ConversationMessages = ({
           <AIMessage
             key={message.id}
             from={message.role as "user" | "assistant"}
-            className="[&>div]:max-w-full"
+            className="py-1 [&>div]:w-full [&>div]:max-w-full"
           >
             <AIMessageContent>
               <div className="flex flex-col gap-2">
@@ -115,13 +115,14 @@ export const ConversationMessages = ({
                     }
                     case "file": {
                       return (
-                        <Button
-                          key={key}
-                          onClick={() => downloadMutation.mutate(part.url)}
-                        >
-                          <FileIcon size={16} />
-                          {part.filename || "Unnamed File"}
-                        </Button>
+                        <div key={key}>
+                          <Button
+                            onClick={() => downloadMutation.mutate(part.url)}
+                          >
+                            <FileIcon size={16} />
+                            {part.filename || "Unnamed File"}
+                          </Button>
+                        </div>
                       );
                     }
                     default: {
@@ -135,7 +136,7 @@ export const ConversationMessages = ({
         ))}
         <AIConversationScrollButton
           variant="default"
-          className="bottom-32 z-50"
+          className={cn("bottom-32 z-50", fileData.length > 0 && "bottom-40")}
         />
         <div className="h-36" />
       </AIConversationContent>

@@ -15,7 +15,7 @@ export const AIConversation = ({
 }: AIConversationProps) => (
   <StickToBottom
     className={cn("relative flex-1 overflow-y-auto", className)}
-    initial="smooth"
+    initial="instant"
     resize="smooth"
     role="log"
     {...props}

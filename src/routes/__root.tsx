@@ -7,7 +7,6 @@ import {
   Outlet,
   useRouter,
 } from "@tanstack/react-router";
-import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { Toaster } from "~/components/ui/sonner";
 import { ThemeProvider } from "~/contexts/theme";
 import type { ApiClient } from "~/lib/api";
@@ -52,7 +51,7 @@ export const Route = createRootRouteWithContext<{
           >
             <Outlet />
             <Toaster />
-            <TanStackRouterDevtools position="top-right" />
+            {/* <TanStackRouterDevtools position="top-right" /> */}
           </AuthUIProviderTanstack>
         </AuthQueryProvider>
       </ThemeProvider>

@@ -25,6 +25,7 @@ export const FileAttachments = () => {
           key={file.path}
           suggestion={file.path}
           onClick={(suggestion) => handleFileRemove(suggestion)}
+          className="bg-background/70 text-xs backdrop-blur-md"
         >
           <span>{file.filename || file.path}</span>
           <X size={16} />

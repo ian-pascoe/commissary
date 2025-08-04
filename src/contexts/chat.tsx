@@ -1,8 +1,6 @@
 import { type UIMessage, useChat as useAiChat } from "@ai-sdk/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { fetch } from "@tauri-apps/plugin-http";
-import { platform } from "@tauri-apps/plugin-os";
-import { Command } from "@tauri-apps/plugin-shell";
 import { type ChatTransport, DefaultChatTransport, type FileUIPart } from "ai";
 import { toMerged } from "es-toolkit";
 import {
@@ -17,8 +15,9 @@ import {
 import { toast } from "sonner";
 import { useConfig } from "~/hooks/use-config";
 import { useLocalDb } from "~/hooks/use-local-db";
+import { useMcpClients } from "~/hooks/use-mcp";
 import { useMessages } from "~/hooks/use-messages";
-import { useProviders } from "~/hooks/use-providers";
+import { useProvidersConfig } from "~/hooks/use-providers";
 import { useStrongholdStore } from "~/hooks/use-stronghold";
 import { preloadedProviders } from "~/lib/preloaded-providers";
 import { queryKeys } from "~/lib/query-keys";
@@ -26,24 +25,16 @@ import type { ProviderConfig } from "~/schemas/config/provider";
 import type { Conversation } from "~/schemas/conversation";
 import { DelegatingChatTransport } from "~/utils/chat-transport/delegating";
 import { LocalChatTransport } from "~/utils/chat-transport/local";
-import { createId } from "~/utils/id";
 import {
   conversations as conversationsTable,
   messages as messagesTable,
 } from "~~/drizzle/local/schema";
-
-const defaultProvider = new DefaultChatTransport({
-  api: `${import.meta.env.VITE_API_URL}/chat`,
-  fetch: fetch as typeof globalThis.fetch,
-});
 
 export type FileData = Omit<FileUIPart, "type"> & { path: string };
 
 export type ChatContextType = ReturnType<typeof useAiChat> & {
   isListening: boolean;
   setIsListening: React.Dispatch<React.SetStateAction<boolean>>;
-  isShell: boolean;
-  setIsShell: React.Dispatch<React.SetStateAction<boolean>>;
   input: string;
   setInput: React.Dispatch<React.SetStateAction<string>>;
   model: string;
@@ -66,7 +57,15 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
   const db = useLocalDb();
   const strongholdStore = useStrongholdStore();
   const config = useConfig();
-  const { data: configProviders } = useProviders();
+
+  const { data: providersConfig } = useProvidersConfig();
+  const resolvedProvidersConfig = useMemo(
+    () => toMerged(preloadedProviders, providersConfig ?? {}),
+    [providersConfig],
+  );
+
+  const { data: mcpClients } = useMcpClients();
+
   const queryClient = useQueryClient();
 
   const conversationRef = useRef<Conversation | undefined>(props.conversation);
@@ -79,11 +78,7 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
   });
 
   const [isListening, setIsListening] = useState(false);
-  const [isShell, setIsShell] = useState(false);
   const [input, setInput] = useState("");
-  useEffect(() => {
-    console.log("Input changed:", input);
-  }, [input]);
   const [fileData, setFileData] = useState<FileData[]>([]);
   const [model, setModel] = useState("google:gemini-2.5-flash");
   useEffect(() => {
@@ -97,20 +92,26 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
     config.merge({ model });
   }, [model, config]);
 
-  const resolvedProviders = useMemo(
-    () => toMerged(preloadedProviders, configProviders ?? {}),
-    [configProviders],
+  const transportRef = useRef<ChatTransport<UIMessage>>(
+    new DefaultChatTransport({
+      api: `${import.meta.env.VITE_API_URL}/chat`,
+      fetch: fetch as typeof globalThis.fetch,
+    }),
   );
-
-  const transportRef = useRef<ChatTransport<UIMessage>>(defaultProvider);
   useEffect(() => {
     const [provider] = model.split(":");
-    if (provider && Object.hasOwn(configProviders ?? {}, provider)) {
-      transportRef.current = new LocalChatTransport(resolvedProviders);
+    if (provider && Object.hasOwn(providersConfig ?? {}, provider)) {
+      transportRef.current = new LocalChatTransport({
+        providersConfig: resolvedProvidersConfig,
+        mcpClients,
+      });
     } else {
-      transportRef.current = defaultProvider;
+      transportRef.current = new DefaultChatTransport({
+        api: `${import.meta.env.VITE_API_URL}/chat`,
+        fetch: fetch as typeof globalThis.fetch,
+      });
     }
-  }, [model, configProviders, resolvedProviders]);
+  }, [model, providersConfig, resolvedProvidersConfig, mcpClients]);
 
   const chat = useAiChat({
     transport: new DelegatingChatTransport({
@@ -170,7 +171,7 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
         conversationRef.current = currentConversation;
       }
       queryClient.invalidateQueries({
-        queryKey: queryKeys.conversations.all,
+        queryKey: queryKeys.conversations.all(),
       });
 
       if (!currentConversation) {
@@ -183,56 +184,15 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
         `[Performance] 🚀 About to call chat.sendMessage at ${sendMessageStart} (${(sendMessageStart - submitStartTime).toFixed(2)}ms from submit start)`,
       );
 
-      if (isShell) {
-        const osPlatform = platform();
-        if (osPlatform === "ios" || osPlatform === "android") {
-          throw new Error(
-            "Shell commands are not supported on iOS or Android.",
-          );
-        }
-        const isWindows = osPlatform === "windows";
-        const inputLanguage = isWindows ? "bat" : "sh";
-        const commandName = isWindows ? "execute-cmd" : "execute-sh";
-        const parts: UIMessage["parts"] = [
-          {
-            type: "text",
-            text: [
-              `\`\`\`${inputLanguage}`,
-              "# command",
-              currentInput,
-              "```",
-            ].join("\n"),
-          },
-        ];
-        console.log("Command (raw):", currentInput);
-        console.log("Command (JSON):", JSON.stringify(currentInput));
-        console.log("Command (length):", currentInput.length);
-        console.log("Command (last char):", currentInput.slice(-1));
-        console.log(
-          "Command (last char code):",
-          currentInput.charCodeAt(currentInput.length - 1),
-        );
-        const command = Command.create(commandName, [
-          osPlatform === "windows" ? "/c" : "-c",
-          currentInput,
-        ]);
-        const { code, stdout, stderr } = await command.execute();
-        if (code !== 0) {
-          parts.push({
-            type: "text",
-            text: ["```txt", "# stderr", stderr.trim(), "```"].join("\n"),
-          });
-        } else {
-          parts.push({
-            type: "text",
-            text: ["```txt", "# stdout", stdout.trim(), "```"].join("\n"),
-          });
-        }
-        chat.setMessages((msgs) => [
-          ...msgs,
-          { id: createId(), role: "user", parts },
-        ]);
-        await db
+      const parts: UIMessage["parts"] = [{ type: "text", text: currentInput }];
+      const fileParts = await Promise.all(
+        currentFileData.map((data) => {
+          return { type: "file", ...data } satisfies FileUIPart;
+        }),
+      );
+      parts.push(...fileParts);
+      await Promise.all([
+        db
           .insert(messagesTable)
           .values({
             conversationId: currentConversation.id,
@@ -245,46 +205,20 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
                 currentConversation.id,
               ),
             });
-          });
-      } else {
-        const parts: UIMessage["parts"] = [
-          { type: "text", text: currentInput },
-        ];
-        const fileParts = await Promise.all(
-          currentFileData.map((data) => {
-            return { type: "file", ...data } satisfies FileUIPart;
           }),
-        );
-        parts.push(...fileParts);
-        await Promise.all([
-          db
-            .insert(messagesTable)
-            .values({
-              conversationId: currentConversation.id,
-              role: "user",
-              parts,
-            })
-            .then(() => {
-              queryClient.invalidateQueries({
-                queryKey: queryKeys.messages.byConversation(
-                  currentConversation.id,
-                ),
-              });
-            }),
-          chat.sendMessage(
-            { parts },
-            {
-              headers: {
-                Authorization: `Bearer ${await strongholdStore.get("auth-token")}`,
-              },
-              body: {
-                conversation: currentConversation,
-                modelId: model,
-              },
+        chat.sendMessage(
+          { parts },
+          {
+            headers: {
+              Authorization: `Bearer ${await strongholdStore.get("auth-token")}`,
             },
-          ),
-        ]);
-      }
+            body: {
+              conversation: currentConversation,
+              modelId: model,
+            },
+          },
+        ),
+      ]);
 
       const sendMessageEnd = performance.now();
       console.log(
@@ -295,12 +229,10 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
       input,
       db,
       queryClient,
-      chat.setMessages,
       chat.sendMessage,
       model,
       fileData,
       strongholdStore,
-      isShell,
     ],
   );
 
@@ -309,8 +241,6 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
       ...chat,
       isListening,
       setIsListening,
-      isShell,
-      setIsShell,
       input,
       setInput,
       model,
@@ -318,17 +248,16 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
       fileData,
       setFileData,
       handleSubmit,
-      resolvedProviders,
+      resolvedProviders: resolvedProvidersConfig,
     }),
     [
       chat,
       isListening,
-      isShell,
       input,
       model,
       fileData,
       handleSubmit,
-      resolvedProviders,
+      resolvedProvidersConfig,
     ],
   );
 

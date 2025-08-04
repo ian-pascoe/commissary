@@ -92,6 +92,7 @@ export type AIInputTextareaProps = ComponentProps<typeof Textarea> & {
 
 export const AIInputTextarea = ({
   onChange,
+  onKeyDown: externalOnKeyDown,
   className,
   placeholder = "What would you like to know?",
   minHeight = 48,
@@ -111,6 +112,8 @@ export const AIInputTextarea = ({
         form.requestSubmit();
       }
     }
+    
+    externalOnKeyDown?.(e);
   };
 
   return (

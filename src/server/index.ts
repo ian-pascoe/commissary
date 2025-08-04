@@ -1,5 +1,7 @@
 import { contextStorage } from "hono/context-storage";
 import { HTTPException } from "hono/http-exception";
+import * as z from "zod";
+import { Config } from "~/schemas/config";
 import { authMiddleware } from "./middleware/auth";
 import { initMiddleware } from "./middleware/init";
 import { loggingMiddleware } from "./middleware/logging";
@@ -15,6 +17,9 @@ const app = factory
   .use(authMiddleware())
   .route("/auth", auth)
   .route("/chat", chat)
+  .get("/config.schema.json", (c) => {
+    return c.json(z.toJSONSchema(Config));
+  })
   .onError((err, c) => {
     if (err instanceof HTTPException) {
       return c.json({ error: err.message }, err.status);

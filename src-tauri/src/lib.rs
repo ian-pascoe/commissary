@@ -1,3 +1,13 @@
+mod mcp_server;
+
+use mcp_server::{
+    list_mcp_servers, send_to_mcp_server, start_mcp_server, stop_all_mcp_servers, stop_mcp_server,
+    McpServerState,
+};
+use std::{
+    collections::HashMap,
+    sync::{Mutex},
+};
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -12,6 +22,16 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_sql::Builder::new().build())
+        .manage(McpServerState {
+            processes: Mutex::new(HashMap::new()),
+        })
+        .invoke_handler(tauri::generate_handler![
+            start_mcp_server,
+            stop_mcp_server,
+            send_to_mcp_server,
+            list_mcp_servers,
+            stop_all_mcp_servers
+        ])
         .setup(|app| {
             let salt_path = app
                 .path()

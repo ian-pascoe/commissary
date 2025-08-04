@@ -37,7 +37,6 @@ export function ConversationsSidebar() {
   useBlocker({
     shouldBlockFn: () => {
       if (isMobile) {
-        console.log("[ConversationsSidebar] blocking navigation", { isMobile });
         setOpenMobile(false);
         document.body.style.pointerEvents = "";
       }

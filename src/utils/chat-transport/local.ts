@@ -1,3 +1,4 @@
+import type { experimental_MCPClient as McpClient, ToolSet } from "ai";
 import {
   type ChatRequestOptions,
   type ChatTransport,
@@ -49,7 +50,19 @@ function createHash(data: string): string {
 }
 
 export class LocalChatTransport implements ChatTransport<UIMessage> {
-  constructor(readonly providersConfig: Config["providers"]) {}
+  private readonly providersConfig: Config["providers"];
+  private readonly mcpClients: Map<string, McpClient> | undefined;
+
+  constructor({
+    providersConfig,
+    mcpClients,
+  }: {
+    providersConfig: Config["providers"];
+    mcpClients: Map<string, McpClient> | undefined;
+  }) {
+    this.providersConfig = providersConfig;
+    this.mcpClients = mcpClients;
+  }
 
   private createCacheKey(modelId: string): string {
     const startTime = performance.now();
@@ -149,17 +162,29 @@ export class LocalChatTransport implements ChatTransport<UIMessage> {
         const convertedMessages = convertToModelMessages(options.messages);
         const convertTime = performance.now() - convertStart;
 
+        const toolStart = performance.now();
+        const toolPromises = Array.from(this.mcpClients?.values() ?? []).map(
+          (mcpClient) => mcpClient.tools(),
+        );
+        const toolResults = await Promise.all(toolPromises);
+        const tools: ToolSet = toolResults.reduce(
+          (acc, toolSet) => ({ ...acc, ...toolSet }),
+          {},
+        );
+        const toolTime = performance.now() - toolStart;
+
         const streamStart = performance.now();
         const result = streamText({
           model,
           messages: convertedMessages,
+          tools,
           abortSignal: options.abortSignal,
           experimental_transform: [smoothStream()],
         });
         const streamSetupTime = performance.now() - streamStart;
 
         console.log(
-          `[Performance] Stream setup completed (parse: ${parseTime.toFixed(2)}ms, model: ${modelTime.toFixed(2)}ms, convert: ${convertTime.toFixed(2)}ms, stream: ${streamSetupTime.toFixed(2)}ms)`,
+          `[Performance] Stream setup completed (parse: ${parseTime.toFixed(2)}ms, model: ${modelTime.toFixed(2)}ms, convert: ${convertTime.toFixed(2)}ms, tools: ${toolTime.toFixed(2)}ms, stream: ${streamSetupTime.toFixed(2)}ms)`,
         );
 
         const mergeStart = performance.now();

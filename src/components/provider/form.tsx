@@ -78,7 +78,9 @@ export const ProviderForm = (props: ProviderFormProps) => {
       props.onSuccess?.();
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.providers.all });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.config.providers.all(),
+      });
     },
   });
 

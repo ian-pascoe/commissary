@@ -5,20 +5,24 @@
 
 export const queryKeys = {
   // Auth queries
-  session: ["session"] as const,
-  providers: {
-    all: ["providers"] as const,
+  session: { all: () => ["session"] as const },
+  config: {
+    all: () => ["config"] as const,
+    providers: {
+      all: () => [...queryKeys.config.all(), "providers"] as const,
+    },
+    mcp: {
+      all: () => [...queryKeys.config.all(), "mcp"] as const,
+      clients: () => [...queryKeys.config.mcp.all(), "clients"] as const,
+    },
   },
   conversations: {
-    all: ["conversations"] as const,
-    list: () => [...queryKeys.conversations.all, "list"] as const,
-    detail: (id: string) =>
-      [...queryKeys.conversations.all, "detail", id] as const,
+    all: () => ["conversations"] as const,
+    byId: (id: string) => [...queryKeys.conversations.all(), { id }] as const,
   },
   messages: {
-    all: ["messages"] as const,
-    list: () => [...queryKeys.messages.all, "list"] as const,
+    all: () => ["messages"] as const,
     byConversation: (conversationId: string) =>
-      [...queryKeys.messages.all, "conversation", conversationId] as const,
+      [...queryKeys.messages.all(), { conversationId }] as const,
   },
 } as const;

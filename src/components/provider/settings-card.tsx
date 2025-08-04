@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Trash } from "lucide-react";
 import { useConfig } from "~/hooks/use-config";
-import { useProviders } from "~/hooks/use-providers";
+import { useProvidersConfig } from "~/hooks/use-providers";
 import { queryKeys } from "~/lib/query-keys";
 import { Button } from "../ui/button";
 import {
@@ -19,7 +19,7 @@ import { UpdateProviderButton } from "./update-button";
 export const ProviderSettingsCard = () => {
   const config = useConfig();
   const queryClient = useQueryClient();
-  const { data: providers, status } = useProviders();
+  const { data: providers, status } = useProvidersConfig();
 
   const deleteProviderMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -34,7 +34,9 @@ export const ProviderSettingsCard = () => {
       });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.providers.all });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.config.providers.all(),
+      });
     },
   });
 

@@ -35,7 +35,7 @@ export type UseAuthReturnType =
 export const useAuth = (): UseAuthReturnType => {
   const authClient = useAuthClient();
   const query = useQuery({
-    queryKey: queryKeys.session,
+    queryKey: queryKeys.session.all(),
     queryFn: async () => {
       const { data: session, error } = await authClient.getSession();
       if (error) {
