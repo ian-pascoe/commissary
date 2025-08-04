@@ -132,7 +132,7 @@ const components: Options["components"] = {
     }
 
     // Check for filename comment in the first line
-    const lines = code?.split("\n");
+    const lines = code?.split("\n") ?? [];
     if (lines.length > 0) {
       const firstLine = lines[0]?.trim();
       // Match various comment patterns with filename

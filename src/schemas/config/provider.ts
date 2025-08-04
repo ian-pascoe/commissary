@@ -10,6 +10,7 @@ export type ProviderId = PreloadedProviderId | (string & {});
 export const ProviderSdk = z.enum([
   "@ai-sdk/anthropic",
   "@ai-sdk/google",
+  "@ai-sdk/groq",
   "@ai-sdk/openai",
   "@ai-sdk/openai-compatible",
 ]);

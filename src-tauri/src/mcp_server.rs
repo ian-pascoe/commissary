@@ -16,6 +16,7 @@ pub fn start_mcp_server(
     server_id: String,
     command: Vec<String>,
     environment: Option<HashMap<String, String>>,
+    cwd: Option<String>,
     state: tauri::State<'_, McpServerState>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
@@ -29,16 +30,11 @@ pub fn start_mcp_server(
         return Ok(format!("MCP server '{}' is already running", server_id));
     }
 
-    // Log path for debugging
-    println!(
-        "Starting MCP server '{}' with command: {:?}",
-        server_id, command
-    );
-
     // Start Node.js process with the MCP server script
     match Command::new(&command[0])
         .args(&command[1..])
         .envs(environment.unwrap_or_default())
+        .current_dir(cwd.unwrap_or_default())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -65,13 +61,14 @@ pub fn start_mcp_server(
                 let mut reader = BufReader::new(stdout);
                 let mut line = String::new();
                 while reader.read_line(&mut line).unwrap_or(0) > 0 {
-                    match app_handle_stdout.emit(
-                        format!("mcp-stdout-{}", server_id_stdout).as_str(),
-                        line.trim_end(),
-                    ) {
-                        Ok(_) => {}
-                        Err(e) => eprintln!("Failed to emit event: {}", e),
-                    };
+                    app_handle_stdout
+                        .emit(
+                            format!("mcp-stdout-{}", server_id_stdout).as_str(),
+                            line.trim_end(),
+                        )
+                        .unwrap_or_else(|e| {
+                            eprintln!("Failed to emit event: {}", e);
+                        });
                     line.clear();
                 }
             });
@@ -83,13 +80,14 @@ pub fn start_mcp_server(
                 let mut reader = BufReader::new(stderr);
                 let mut line = String::new();
                 while reader.read_line(&mut line).unwrap_or(0) > 0 {
-                    match app_handle_stderr.emit(
-                        format!("mcp-stderr-{}", server_id_stderr).as_str(),
-                        line.trim_end(),
-                    ) {
-                        Ok(_) => {}
-                        Err(e) => eprintln!("Failed to emit event: {}", e),
-                    };
+                    app_handle_stderr
+                        .emit(
+                            format!("mcp-stderr-{}", server_id_stderr).as_str(),
+                            line.trim_end(),
+                        )
+                        .unwrap_or_else(|e| {
+                            eprintln!("Failed to emit event: {}", e);
+                        });
                     line.clear();
                 }
             });
@@ -157,11 +155,9 @@ pub fn stop_all_mcp_servers(state: tauri::State<'_, McpServerState>) -> Result<S
         match process.kill() {
             Ok(_) => {
                 stopped_count += 1;
-                println!("Stopped MCP server '{}'", server_id);
             }
             Err(e) => {
                 failed_servers.push(format!("{}: {}", server_id, e));
-                println!("Failed to stop MCP server '{}': {}", server_id, e);
             }
         }
     }
@@ -185,41 +181,40 @@ pub fn send_to_mcp_server(
     message: String,
     state: tauri::State<'_, McpServerState>,
 ) -> Result<String, String> {
-    println!(
-        "Attempting to send message to MCP server '{}': {}",
-        server_id, message
-    );
-
     let mut processes_guard = match state.processes.lock() {
         Ok(guard) => guard,
         Err(_) => return Err("Failed to acquire lock on server state".to_string()),
     };
 
     if let Some(ref mut process) = processes_guard.get_mut(&server_id) {
-        println!(
-            "Process '{}' found, attempting to write to stdin",
-            server_id
-        );
         if let Some(stdin) = process.stdin.as_mut() {
-            match stdin.write_all(message.as_bytes()) {
+            // Add newline if the message doesn't end with one (common for JSON-RPC)
+            let message_with_newline = if message.ends_with('\n') {
+                message
+            } else {
+                format!("{}\n", message)
+            };
+
+            match stdin.write_all(message_with_newline.as_bytes()) {
                 Ok(_) => {
-                    println!("Message successfully sent to MCP server '{}'", server_id);
-                    Ok(format!("Message sent to MCP server '{}'", server_id))
+                    // Flush to ensure the message is sent immediately
+                    match stdin.flush() {
+                        Ok(_) => Ok(format!("Message sent to MCP server '{}'", server_id)),
+                        Err(e) => Err(format!(
+                            "Failed to flush message to MCP server '{}': {}",
+                            server_id, e
+                        )),
+                    }
                 }
-                Err(e) => {
-                    println!("Failed to write to stdin for '{}': {}", server_id, e);
-                    Err(format!(
-                        "Failed to send message to MCP server '{}': {}",
-                        server_id, e
-                    ))
-                }
+                Err(e) => Err(format!(
+                    "Failed to send message to MCP server '{}': {}",
+                    server_id, e
+                )),
             }
         } else {
-            println!("Failed to get stdin handle for '{}'", server_id);
             Err(format!("Failed to get stdin of MCP server '{}'", server_id))
         }
     } else {
-        println!("No process '{}' found in state", server_id);
         Err(format!("MCP server '{}' not running", server_id))
     }
 }

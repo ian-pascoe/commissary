@@ -15,7 +15,19 @@ import {
   AIConversationScrollButton,
 } from "../ui/kibo-ui/ai/conversation";
 import { AIMessage, AIMessageContent } from "../ui/kibo-ui/ai/message";
+import {
+  AIReasoning,
+  AIReasoningContent,
+  AIReasoningTrigger,
+} from "../ui/kibo-ui/ai/reasoning";
 import { AIResponse } from "../ui/kibo-ui/ai/response";
+import {
+  AITool,
+  AIToolContent,
+  AIToolHeader,
+  AIToolParameters,
+  AIToolResult,
+} from "../ui/kibo-ui/ai/tool";
 
 export type ConversationMessagesProps = {
   className?: string;
@@ -24,9 +36,10 @@ export type ConversationMessagesProps = {
 export const ConversationMessages = ({
   className,
 }: ConversationMessagesProps) => {
-  const { messages, fileData } = useChat((ctx) => ({
+  const { messages, fileData, addToolResult } = useChat((ctx) => ({
     messages: ctx.messages,
     fileData: ctx.fileData,
+    addToolResult: ctx.addToolResult,
   }));
   const downloadMutation = useMutation({
     mutationFn: async (url: string) => {
@@ -113,6 +126,17 @@ export const ConversationMessages = ({
                     case "text": {
                       return <AIResponse key={key}>{part.text}</AIResponse>;
                     }
+                    case "reasoning": {
+                      return (
+                        <AIReasoning
+                          key={key}
+                          isStreaming={part.state === "streaming"}
+                        >
+                          <AIReasoningTrigger />
+                          <AIReasoningContent>{part.text}</AIReasoningContent>
+                        </AIReasoning>
+                      );
+                    }
                     case "file": {
                       return (
                         <div key={key}>
@@ -125,7 +149,76 @@ export const ConversationMessages = ({
                         </div>
                       );
                     }
+                    case "tool-ask_to_continue": {
+                      return (
+                        <div>
+                          <span>Would you like to continue iterating?</span>
+                          <div className="mt-2 flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                await addToolResult({
+                                  tool: "ask_to_continue",
+                                  toolCallId: part.toolCallId,
+                                  output: { continue: true },
+                                });
+                              }}
+                            >
+                              Continue
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                await addToolResult({
+                                  tool: "ask_to_continue",
+                                  toolCallId: part.toolCallId,
+                                  output: { continue: false },
+                                });
+                              }}
+                            >
+                              Stop
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    }
+                    case "dynamic-tool": {
+                      return (
+                        <AITool key={part.toolCallId}>
+                          <AIToolHeader
+                            description={part.toolName}
+                            name={part.toolName}
+                            status={
+                              part.state === "output-available"
+                                ? "completed"
+                                : part.state === "output-error"
+                                  ? "error"
+                                  : "running"
+                            }
+                          />
+                          <AIToolContent>
+                            {Boolean(part.input) && (
+                              <AIToolParameters
+                                parameters={part.input as any}
+                              />
+                            )}
+                            {Boolean(part.output) && (
+                              <AIToolResult
+                                result={
+                                  <AIResponse>
+                                    {JSON.stringify(part.output, null, 2)}
+                                  </AIResponse>
+                                }
+                              />
+                            )}
+                          </AIToolContent>
+                        </AITool>
+                      );
+                    }
                     default: {
+                      console.warn("Unknown message part type:", part.type);
                       return null;
                     }
                   }

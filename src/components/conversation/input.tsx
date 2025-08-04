@@ -1,9 +1,12 @@
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
+import { toMerged } from "es-toolkit";
 import { PlusIcon } from "lucide-react";
 import mime from "mime";
-import { useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { type FileData, useChat } from "~/contexts/chat";
+import { useProvidersConfig } from "~/hooks/use-providers";
+import { preloadedProviders } from "~/lib/preloaded-providers";
 import { cn } from "~/lib/utils";
 import {
   AIInput,
@@ -31,6 +34,7 @@ export const ConversationInput = ({
   className,
 }: ConversationInputProps) => {
   const {
+    messages,
     input,
     setInput,
     model,
@@ -39,8 +43,8 @@ export const ConversationInput = ({
     handleSubmit,
     status,
     setFileData,
-    resolvedProviders,
   } = useChat((ctx) => ({
+    messages: ctx.messages,
     input: ctx.input,
     setInput: ctx.setInput,
     model: ctx.model,
@@ -49,8 +53,13 @@ export const ConversationInput = ({
     handleSubmit: ctx.handleSubmit,
     status: ctx.status,
     setFileData: ctx.setFileData,
-    resolvedProviders: ctx.resolvedProviders,
   }));
+
+  const { data: providersConfig } = useProvidersConfig();
+  const resolvedProviders = useMemo(
+    () => toMerged(providersConfig ?? {}, preloadedProviders),
+    [providersConfig],
+  );
 
   const handleFilesSelected = useCallback(
     async (paths: string[]) => {
@@ -88,6 +97,46 @@ export const ConversationInput = ({
     }
   }, [handleFilesSelected]);
 
+  const history = useMemo(() => {
+    return messages.filter((m) => m.role === "user");
+  }, [messages]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        // Handle up arrow key press
+        if (historyIndex < history.length - 1) {
+          setHistoryIndex((prev) => prev + 1);
+          const historyItem = history[history.length - 1 - (historyIndex + 1)];
+          setInput(
+            historyItem?.parts
+              .map((p) => (p.type === "text" ? p.text : ""))
+              .join("") || "",
+          );
+        }
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        // Handle down arrow key press
+        if (historyIndex > -1) {
+          setHistoryIndex((prev) => prev - 1);
+          const historyItem = history[history.length - 1 - (historyIndex - 1)];
+          setInput(
+            historyItem?.parts
+              .map((p) => (p.type === "text" ? p.text : ""))
+              .join("") || "",
+          );
+        }
+      } else {
+        if (historyIndex !== -1) {
+          setHistoryIndex(-1);
+        }
+      }
+    },
+    [history, historyIndex, setInput],
+  );
+
   return (
     <>
       <FileAttachments />
@@ -97,7 +146,10 @@ export const ConversationInput = ({
           isListening && "ring-2 ring-red-500/50",
           className,
         )}
-        onSubmit={handleSubmit}
+        onSubmit={(e) => {
+          handleSubmit(e);
+          setHistoryIndex(-1);
+        }}
       >
         <AIInputTextarea
           disabled={isListening || disabled}
@@ -108,6 +160,7 @@ export const ConversationInput = ({
           }
           autoCorrect="off"
           spellCheck={false}
+          onKeyDown={handleKeyDown}
         />
         <AIInputToolbar>
           <AIInputTools>
@@ -134,7 +187,7 @@ export const ConversationInput = ({
               </AIInputModelSelectContent>
             </AIInputModelSelect>
           </AIInputTools>
-          <AIInputSubmit disabled={!input || disabled} status={status} />
+          <AIInputSubmit disabled={disabled} status={status} />
         </AIInputToolbar>
       </AIInput>
     </>

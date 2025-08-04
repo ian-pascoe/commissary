@@ -18,7 +18,7 @@ export const useMcpClients = () => {
   const { data: mcpConfig } = useMcpConfig();
 
   return useQuery({
-    queryKey: queryKeys.config.mcp.clients(),
+    queryKey: queryKeys.config.mcp.clients(mcpConfig),
     queryFn: async () => {
       return await constructMcpClients(mcpConfig);
     },

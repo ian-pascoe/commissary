@@ -1,4 +1,6 @@
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createGroq } from "@ai-sdk/groq";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createProviderRegistry } from "ai";
 import type { Context } from "hono";
@@ -8,12 +10,18 @@ import { env } from "../utils/env";
 
 export const initProviderRegistry = (c: Context<Env>) => {
   return createProviderRegistry({
+    anthropic: createAnthropic({
+      apiKey: env(c).ANTHROPIC_API_KEY,
+    }),
     google: createGoogleGenerativeAI({
       apiKey: env(c).GOOGLE_API_KEY,
     }),
+    groq: createGroq({
+      apiKey: env(c).GROQ_API_KEY,
+    }),
     openai: createOpenAI({
       apiKey: env(c).OPENAI_API_KEY,
-    })
+    }),
   });
 };
 

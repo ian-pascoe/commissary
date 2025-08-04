@@ -4,6 +4,9 @@ import { McpConfig } from "./mcp";
 import { ProviderConfig, ProviderId } from "./provider";
 
 export const Config = z.object({
+  $schema: z
+    .optional(z.url())
+    .meta({ description: "URL to the JSON schema for this config" }),
   theme: z.optional(Theme).meta({ description: "UI theme preference" }),
   providers: z.optional(z.record(ProviderId, ProviderConfig)).meta({
     description: "Configuration for various providers",

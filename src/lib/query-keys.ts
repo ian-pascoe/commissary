@@ -3,6 +3,8 @@
  * Centralized location for all query keys to ensure consistency
  */
 
+import type { Config } from "~/schemas/config";
+
 export const queryKeys = {
   // Auth queries
   session: { all: () => ["session"] as const },
@@ -13,7 +15,8 @@ export const queryKeys = {
     },
     mcp: {
       all: () => [...queryKeys.config.all(), "mcp"] as const,
-      clients: () => [...queryKeys.config.mcp.all(), "clients"] as const,
+      clients: (config: Config["mcp"]) =>
+        [...queryKeys.config.mcp.all(), "clients", config] as const,
     },
   },
   conversations: {

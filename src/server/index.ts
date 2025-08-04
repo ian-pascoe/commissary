@@ -2,12 +2,13 @@ import { contextStorage } from "hono/context-storage";
 import { HTTPException } from "hono/http-exception";
 import * as z from "zod";
 import { Config } from "~/schemas/config";
-import { authMiddleware } from "./middleware/auth";
+import { providerRegistry } from "./lib/provider-registry";
+import { authMiddleware, requireAuthMiddleware } from "./middleware/auth";
 import { initMiddleware } from "./middleware/init";
 import { loggingMiddleware } from "./middleware/logging";
 import auth from "./routes/auth";
-import chat from "./routes/chat";
 import { factory } from "./utils/factory";
+import { createOpenAICompat } from "./utils/openai-compat";
 
 const app = factory
   .createApp()
@@ -15,12 +16,24 @@ const app = factory
   .use(loggingMiddleware())
   .use(initMiddleware())
   .use(authMiddleware())
-  .route("/auth", auth)
-  .route("/chat", chat)
   .get("/config.schema.json", (c) => {
     return c.json(z.toJSONSchema(Config));
   })
+  .route("/auth", auth)
+  .route(
+    "/",
+    createOpenAICompat({
+      middleware: requireAuthMiddleware(),
+      languageModels: (modelId) =>
+        providerRegistry().languageModel(modelId as any),
+      embeddingModels: (modelId) =>
+        providerRegistry().textEmbeddingModel(modelId as any),
+      speechModels: (modelId) => providerRegistry().speechModel(modelId as any),
+      imageModels: (modelId) => providerRegistry().imageModel(modelId as any),
+    }),
+  )
   .onError((err, c) => {
+    console.error("[Error] ", err);
     if (err instanceof HTTPException) {
       return c.json({ error: err.message }, err.status);
     }
