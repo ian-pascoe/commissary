@@ -5,6 +5,7 @@ import type {
 } from "~/schemas/config/provider";
 import type {
   AnthropicLanguageModelId,
+  DeepSeekLanguageModelId,
   GoogleLanguageModelId,
   GroqLanguageModelId,
   OpenAILanguageModelId,
@@ -12,6 +13,7 @@ import type {
 
 export const preloadedProviderIds = [
   "anthropic",
+  "deepseek",
   "google",
   "groq",
   "openai",
@@ -38,6 +40,14 @@ export const preloadedProviders: Record<PreloadedProviderId, ProviderConfig> = {
       "claude-opus-4-20250514": {},
       "claude-sonnet-4-20250514": {},
     } satisfies Record<AnthropicLanguageModelId, ProviderModelConfig>,
+  },
+  deepseek: {
+    name: "DeepSeek",
+    sdk: "@ai-sdk/deepseek",
+    models: {
+      "deepseek-chat": {},
+      "deepseek-reasoner": {},
+    } satisfies Record<DeepSeekLanguageModelId, ProviderModelConfig>,
   },
   google: {
     name: "Google Generative AI",

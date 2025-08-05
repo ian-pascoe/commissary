@@ -191,6 +191,7 @@ export const createOpenAICompat = (init: Init): Hono => {
         });
       }
       const aiSDKInit: SDKInit = {
+        abortSignal: c.req.raw.signal,
         model,
         messages: body.messages.flatMap((message): ModelMessage => {
           if (message.role === "assistant") {
@@ -489,6 +490,24 @@ export const createOpenAICompat = (init: Init): Hono => {
                   },
                 ],
               });
+            } else if (chunk.type === "reasoning-start") {
+              await streamChunk({
+                id: createId(),
+                object: "chat.completion.chunk",
+                created: Date.now() / 1000,
+                model,
+                choices: [
+                  {
+                    index: 0,
+                    delta: {
+                      role: "assistant",
+                      // @ts-expect-error
+                      reasoning_content: "",
+                    },
+                    finish_reason: null,
+                  },
+                ],
+              });
             } else if (chunk.type === "reasoning-delta") {
               await streamChunk({
                 id: createId(),
@@ -576,6 +595,7 @@ export const createOpenAICompat = (init: Init): Hono => {
         });
       }
       const generated = await generateImage({
+        abortSignal: c.req.raw.signal,
         model,
         prompt: body.prompt,
         n: body.n ?? undefined,
@@ -604,6 +624,7 @@ export const createOpenAICompat = (init: Init): Hono => {
         });
       }
       const generated = await embedMany({
+        abortSignal: c.req.raw.signal,
         model,
         values: Array.isArray(body.input) ? body.input : [body.input],
       });
@@ -637,6 +658,7 @@ export const createOpenAICompat = (init: Init): Hono => {
         });
       }
       const generated = await generateSpeech({
+        abortSignal: c.req.raw.signal,
         model,
         text: body.input,
         instructions: body.instructions,
@@ -695,9 +717,9 @@ export const createOpenAICompat = (init: Init): Hono => {
       }
 
       const generated = await transcribe({
+        abortSignal: c.req.raw.signal,
         model,
         audio,
-        abortSignal: c.req.raw.signal,
       });
       return c.json({
         text: generated.text,

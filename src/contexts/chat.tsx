@@ -61,7 +61,6 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
   const queryClient = useQueryClient();
 
   const { data: providersConfig } = useProvidersConfig();
-
   const { data: mcpConfig } = useMcpConfig();
   const { data: mcpClients } = useMcpClients();
 
@@ -139,9 +138,10 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
       toast.error(error.message);
     },
   });
+
   useEffect(() => {
     chat.setMessages(dbMessages || []);
-  }, [dbMessages, chat.setMessages]);
+  }, [chat.setMessages, dbMessages]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -219,34 +219,26 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
     ],
   );
 
-  const value = useMemo(
-    () => ({
-      ...chat,
-      conversation,
-      setConversation,
-      isListening,
-      setIsListening,
-      input,
-      setInput,
-      model,
-      setModel,
-      fileData,
-      setFileData,
-      handleSubmit,
-    }),
-    [
-      chat,
-      conversation,
-      setConversation,
-      isListening,
-      input,
-      model,
-      fileData,
-      handleSubmit,
-    ],
+  return (
+    <ChatContext.Provider
+      value={{
+        ...chat,
+        conversation,
+        setConversation,
+        isListening,
+        setIsListening,
+        input,
+        setInput,
+        model,
+        setModel,
+        fileData,
+        setFileData,
+        handleSubmit,
+      }}
+    >
+      {children}
+    </ChatContext.Provider>
   );
-
-  return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 };
 
 export function useChat<T = ChatContextType>(
@@ -256,6 +248,9 @@ export function useChat<T = ChatContextType>(
   if (!ctx) {
     throw new Error("useChat must be used within a ChatProvider");
   }
-  const value = selector ? selector(ctx) : ctx;
-  return useMemo(() => value as T, [value]);
+  const value = useMemo(
+    () => (selector ? selector(ctx) : ctx) as T,
+    [ctx, selector],
+  );
+  return value;
 }

@@ -47,6 +47,7 @@ export const api = await Worker("api", {
     APP_URL: appUrl,
     BETTER_AUTH_SECRET: alchemy.secret(process.env.BETTER_AUTH_SECRET),
     ANTHROPIC_API_KEY: alchemy.secret(process.env.ANTHROPIC_API_KEY),
+    DEEPSEEK_API_KEY: alchemy.secret(process.env.DEEPSEEK_API_KEY),
     GOOGLE_API_KEY: alchemy.secret(process.env.GOOGLE_API_KEY),
     GROQ_API_KEY: alchemy.secret(process.env.GROQ_API_KEY),
     OPENAI_API_KEY: alchemy.secret(process.env.OPENAI_API_KEY),

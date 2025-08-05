@@ -9,11 +9,13 @@ import {
   type ChatTransport,
   convertToModelMessages,
   createUIMessageStream,
+  extractReasoningMiddleware,
   smoothStream,
   stepCountIs,
   streamText,
   type UIMessage,
   type UIMessageChunk,
+  wrapLanguageModel,
 } from "ai";
 import { LRUCache } from "lru-cache";
 import * as z from "zod";
@@ -139,7 +141,17 @@ export class LocalChatTransport<Message extends UIMessage>
         );
 
         const result = streamText({
-          model,
+          model: wrapLanguageModel({
+            model,
+            middleware: [
+              extractReasoningMiddleware({
+                tagName: "think",
+              }),
+              extractReasoningMiddleware({
+                tagName: "thinking",
+              }),
+            ],
+          }),
           messages: [
             ...system.map(
               (s) =>

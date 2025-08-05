@@ -8,11 +8,15 @@ import type { Context } from "hono";
 import type { Env } from "../types/hono";
 import { c } from "../utils/context";
 import { env } from "../utils/env";
+import { createDeepSeek } from "@ai-sdk/deepseek";
 
 export const initProviderRegistry = (c: Context<Env>) => {
   return createProviderRegistry({
     anthropic: createAnthropic({
       apiKey: env(c).ANTHROPIC_API_KEY,
+    }),
+    deepseek: createDeepSeek({
+      apiKey: env(c).DEEPSEEK_API_KEY,
     }),
     google: createGoogleGenerativeAI({
       apiKey: env(c).GOOGLE_API_KEY,
