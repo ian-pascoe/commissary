@@ -50,6 +50,7 @@ export const api = await Worker("api", {
     GOOGLE_API_KEY: alchemy.secret(process.env.GOOGLE_API_KEY),
     GROQ_API_KEY: alchemy.secret(process.env.GROQ_API_KEY),
     OPENAI_API_KEY: alchemy.secret(process.env.OPENAI_API_KEY),
+    OPENROUTER_API_KEY: alchemy.secret(process.env.OPENROUTER_API_KEY),
   },
   dev: {
     port: 8080,

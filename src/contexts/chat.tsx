@@ -4,6 +4,7 @@ import {
   type FileUIPart,
   lastAssistantMessageIsCompleteWithToolCalls,
 } from "ai";
+import type React from "react";
 import {
   createContext,
   useCallback,
@@ -31,6 +32,10 @@ import {
 export type FileData = Omit<FileUIPart, "type"> & { path: string };
 
 export type ChatContextType = ReturnType<typeof useAiChat> & {
+  conversation?: Conversation;
+  setConversation: React.Dispatch<
+    React.SetStateAction<Conversation | undefined>
+  >;
   isListening: boolean;
   setIsListening: React.Dispatch<React.SetStateAction<boolean>>;
   input: string;
@@ -53,28 +58,30 @@ export type ChatProviderProps = {
 export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
   const localDb = useLocalDb();
   const config = useConfig();
+  const queryClient = useQueryClient();
 
   const { data: providersConfig } = useProvidersConfig();
 
   const { data: mcpConfig } = useMcpConfig();
   const { data: mcpClients } = useMcpClients();
-  useEffect(() => {
-    console.log("MCP clients updated:", mcpClients);
-    return () => {
-      for (const client of Object.values(mcpClients ?? {})) {
-        client.close().catch((err) => {
-          console.error("Error closing MCP client:", err);
-        });
-      }
-    };
-  }, [mcpClients]);
 
-  const conversationRef = useRef<Conversation | undefined>(props.conversation);
+  const [conversation, _setConversation] = useState<Conversation | undefined>(
+    props.conversation,
+  );
+  const conversationRef = useRef<Conversation | undefined>(conversation);
+  const setConversation: React.Dispatch<
+    React.SetStateAction<Conversation | undefined>
+  > = useCallback((setter) => {
+    const conversation =
+      typeof setter === "function" ? setter(conversationRef.current) : setter;
+    _setConversation(conversation);
+    conversationRef.current = conversation;
+  }, []);
   useEffect(() => {
-    conversationRef.current = props.conversation;
-  }, [props.conversation]);
+    setConversation(props.conversation);
+  }, [props.conversation, setConversation]);
 
-  const { data: dbMessages } = useMessages(conversationRef.current?.id, {
+  const { data: dbMessages } = useMessages(conversation?.id, {
     initialMessages: props.messages,
   });
 
@@ -94,8 +101,6 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
       config.merge({ model });
     }
   }, [model, config]);
-
-  const queryClient = useQueryClient();
 
   const transportRef = useRef<LocalChatTransport<UIMessage>>(null);
   useEffect(() => {
@@ -130,6 +135,7 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
       });
     },
     onError: (error) => {
+      console.error("Chat error:", error);
       toast.error(error.message);
     },
   });
@@ -158,7 +164,7 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
           .insert(conversationsTable)
           .values({ title: "New Conversation" })
           .returning();
-        conversationRef.current = currentConversation;
+        setConversation(currentConversation);
       }
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversations.all(),
@@ -202,12 +208,22 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
         ),
       ]);
     },
-    [input, localDb, queryClient, chat.sendMessage, model, fileData],
+    [
+      input,
+      localDb,
+      queryClient,
+      chat.sendMessage,
+      model,
+      fileData,
+      setConversation,
+    ],
   );
 
   const value = useMemo(
     () => ({
       ...chat,
+      conversation,
+      setConversation,
       isListening,
       setIsListening,
       input,
@@ -218,7 +234,16 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
       setFileData,
       handleSubmit,
     }),
-    [chat, isListening, input, model, fileData, handleSubmit],
+    [
+      chat,
+      conversation,
+      setConversation,
+      isListening,
+      input,
+      model,
+      fileData,
+      handleSubmit,
+    ],
   );
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

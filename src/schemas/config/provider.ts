@@ -13,6 +13,7 @@ export const ProviderSdk = z.enum([
   "@ai-sdk/groq",
   "@ai-sdk/openai",
   "@ai-sdk/openai-compatible",
+  "@openrouter/ai-sdk-provider",
 ]);
 export type ProviderSdk = z.infer<typeof ProviderSdk>;
 

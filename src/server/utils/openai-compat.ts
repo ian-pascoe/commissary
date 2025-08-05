@@ -1,50 +1,36 @@
-/**
- * @example
- * ```ts
- * import { Hono } from 'hono'
- * import { createOpenAIHono } from '@ns/ai-to-openai-hono'
- *
- * import { anthropic } from  'npm:@ai-sdk/anthropic' // or your favorite provider
- *
- * const app = new Hono()
- *
- * app.route('/my-ai-endpoint', createOpenAIHono({
- *   languageModels: {
- *     'claude-3.7-sonnet': anthropic('claude-3-7-sonnet-20250219') // or your favorite model,
- *     // ...
- *   },
- *   verifyAPIKey(key) {
- *     return key === 'this-is-super-secret-key'
- *   }
- * }))
- *
- * export default app
- * ```
- * @module
- */
-
-import type {
-  EmbeddingModelV2,
-  ImageModelV2,
-  LanguageModelV2,
-  LanguageModelV2FinishReason,
-  SpeechModelV2,
-} from "@ai-sdk/provider";
 import {
+  type AssistantContent,
+  type EmbeddingModel,
   embedMany,
   type FilePart,
+  type FinishReason,
   experimental_generateImage as generateImage,
   experimental_generateSpeech as generateSpeech,
   generateText,
+  type ImageModel,
   type ImagePart,
+  jsonSchema,
+  type LanguageModel,
   type ModelMessage,
+  type SpeechModel,
   streamText as streamTextAI,
   type TextPart,
+  type Tool,
+  type ToolCallPart,
+  type ToolContent,
+  type ToolResultPart,
+  type TranscriptionModel,
+  experimental_transcribe as transcribe,
+  type UserContent,
 } from "ai";
 import { Hono, type MiddlewareHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { streamText as streamTextHono } from "hono/streaming";
 import type { SpeechCreateParams } from "openai/resources/audio/speech";
+import type {
+  TranscriptionCreateParams,
+  TranscriptionCreateResponse,
+} from "openai/resources/audio/transcriptions.mjs";
 import type {
   ChatCompletion,
   ChatCompletionChunk,
@@ -59,10 +45,11 @@ import type {
   ImageGenerateParams,
   ImagesResponse,
 } from "openai/resources/images";
+import { createId } from "~/utils/id";
 
 const STOP_REASON: Record<
-  LanguageModelV2FinishReason,
-  "stop" | "length" | "tool_calls" | "content_filter" | "function_call" | null
+  FinishReason,
+  "stop" | "length" | "tool_calls" | "content_filter" | "function_call"
 > = {
   length: "length",
   stop: "stop",
@@ -78,26 +65,29 @@ const STOP_REASON: Record<
  */
 export interface Init {
   languageModels?:
-    | Record<string, LanguageModelV2>
+    | Record<string, LanguageModel>
     | ((
         modelId: string,
-      ) => Promise<LanguageModelV2 | null> | LanguageModelV2 | null);
+      ) => Promise<LanguageModel | null> | LanguageModel | null);
   imageModels?:
-    | Record<string, ImageModelV2>
-    | ((modelId: string) => Promise<ImageModelV2 | null> | ImageModelV2 | null);
+    | Record<string, ImageModel>
+    | ((modelId: string) => Promise<ImageModel | null> | ImageModel | null);
   embeddingModels?:
-    | Record<string, EmbeddingModelV2<unknown>>
+    | Record<string, EmbeddingModel<unknown>>
     | ((
         modelId: string,
       ) =>
-        | Promise<EmbeddingModelV2<unknown> | null>
-        | EmbeddingModelV2<unknown>
+        | Promise<EmbeddingModel<unknown> | null>
+        | EmbeddingModel<unknown>
         | null);
   speechModels?:
-    | Record<string, SpeechModelV2>
+    | Record<string, SpeechModel>
+    | ((modelId: string) => Promise<SpeechModel | null> | SpeechModel | null);
+  transcriptionModels?:
+    | Record<string, TranscriptionModel>
     | ((
         modelId: string,
-      ) => Promise<SpeechModelV2 | null> | SpeechModelV2 | null);
+      ) => Promise<TranscriptionModel | null> | TranscriptionModel | null);
 
   middleware?: MiddlewareHandler;
 }
@@ -117,14 +107,79 @@ export const createOpenAICompat = (init: Init): Hono => {
     app.use(init.middleware);
   }
 
+  // Add models endpoint
+  app.get("/v1/models", async (c) => {
+    const models: Array<{
+      id: string;
+      object: "model";
+      created: number;
+      owned_by: string;
+    }> = [];
+
+    const timestamp = Math.floor(Date.now() / 1000);
+
+    if (init.languageModels) {
+      if (typeof init.languageModels === "object") {
+        models.push(
+          ...Object.keys(init.languageModels).map((id) => ({
+            id,
+            object: "model" as const,
+            created: timestamp,
+            owned_by: "custom",
+          })),
+        );
+      }
+    }
+
+    if (init.imageModels) {
+      if (typeof init.imageModels === "object") {
+        models.push(
+          ...Object.keys(init.imageModels).map((id) => ({
+            id,
+            object: "model" as const,
+            created: timestamp,
+            owned_by: "custom",
+          })),
+        );
+      }
+    }
+
+    if (init.embeddingModels) {
+      if (typeof init.embeddingModels === "object") {
+        models.push(
+          ...Object.keys(init.embeddingModels).map((id) => ({
+            id,
+            object: "model" as const,
+            created: timestamp,
+            owned_by: "custom",
+          })),
+        );
+      }
+    }
+
+    if (init.speechModels) {
+      if (typeof init.speechModels === "object") {
+        models.push(
+          ...Object.keys(init.speechModels).map((id) => ({
+            id,
+            object: "model" as const,
+            created: timestamp,
+            owned_by: "custom",
+          })),
+        );
+      }
+    }
+
+    return c.json({
+      object: "list",
+      data: models,
+    });
+  });
+
   if (init.languageModels) {
     const models = init.languageModels;
     app.post("/v1/chat/completions", async (c) => {
       const body = await c.req.json<ChatCompletionCreateParams>();
-      console.log(
-        "[OpenAI Compat] Chat completion request:",
-        JSON.stringify(body),
-      );
 
       const model =
         typeof models === "function"
@@ -137,90 +192,123 @@ export const createOpenAICompat = (init: Init): Hono => {
       }
       const aiSDKInit: SDKInit = {
         model,
-        messages: body.messages.map((message): ModelMessage => {
+        messages: body.messages.flatMap((message): ModelMessage => {
           if (message.role === "assistant") {
-            return {
-              role: "assistant",
-              content: message.content
-                ? typeof message.content === "string"
-                  ? message.content
-                  : message.content
-                      .map((c) => (c.type === "text" ? c.text : c.refusal))
-                      .join("")
-                : "",
-            };
+            const content: AssistantContent = message.content
+              ? typeof message.content === "string"
+                ? [{ type: "text", text: message.content }]
+                : message.content.map((c) => ({
+                    type: "text",
+                    text: c.type === "refusal" ? c.refusal : c.text,
+                  }))
+              : [];
+            if (message.refusal) {
+              content.push({ type: "text", text: message.refusal });
+            }
+            if (message.tool_calls) {
+              content.push(
+                ...message.tool_calls.map(
+                  (toolCall): ToolCallPart => ({
+                    type: "tool-call",
+                    toolCallId: toolCall.id,
+                    toolName: toolCall.function.name,
+                    input: JSON.parse(toolCall.function.arguments),
+                  }),
+                ),
+              );
+            }
+            if (message.function_call) {
+              content.push({
+                type: "tool-call",
+                toolCallId: message.function_call.name,
+                toolName: message.function_call.name,
+                input: JSON.parse(message.function_call.arguments),
+              });
+            }
+            return { role: "assistant", content };
           } else if (message.role === "user") {
-            return {
-              role: "user",
-              content:
-                typeof message.content === "string"
-                  ? message.content
-                  : message.content.map(
-                      (c): TextPart | ImagePart | FilePart => {
-                        if (c.type === "text") {
-                          return {
-                            type: "text",
-                            text: c.text,
-                          };
-                        }
-                        if (c.type === "image_url") {
-                          return {
-                            type: "image",
-                            image: new URL(c.image_url.url),
-                          };
-                        }
-                        if (c.type === "file") {
-                          return {
-                            type: "file",
-                            data: c.file.file_data ?? "",
-                            mediaType: "",
-                          };
-                        }
+            const content: UserContent =
+              typeof message.content === "string"
+                ? [{ type: "text", text: message.content }]
+                : message.content.map((c): TextPart | ImagePart | FilePart => {
+                    if (c.type === "text") {
+                      return {
+                        type: "text",
+                        text: c.text,
+                      };
+                    }
+                    if (c.type === "image_url") {
+                      try {
                         return {
-                          type: "file",
-                          data: c.input_audio.data,
-                          mediaType:
-                            c.input_audio.format === "mp3"
-                              ? "audio/mpeg"
-                              : "audio/wav",
+                          type: "image",
+                          image: new URL(c.image_url.url),
                         };
-                      },
-                    ),
-            };
+                      } catch {
+                        throw new HTTPException(400, {
+                          message: `Invalid image URL: ${c.image_url.url}`,
+                        });
+                      }
+                    }
+                    if (c.type === "file") {
+                      // Use the file's media type if available, otherwise default
+                      const mediaType =
+                        (c.file as any).mime_type || "application/octet-stream";
+                      return {
+                        type: "file",
+                        data: c.file.file_data ?? "",
+                        mediaType,
+                      };
+                    }
+                    if (c.type === "input_audio") {
+                      return {
+                        type: "file",
+                        data: c.input_audio.data,
+                        mediaType:
+                          c.input_audio.format === "mp3"
+                            ? "audio/mpeg"
+                            : "audio/wav",
+                      };
+                    }
+                    // Fallback for unknown content types
+                    throw new HTTPException(400, {
+                      message: `Unsupported content type: ${(c as any).type}`,
+                    });
+                  });
+            return { role: "user", content };
           } else if (message.role === "developer") {
-            return {
-              role: "system",
-              content:
-                typeof message.content === "string"
-                  ? message.content
-                  : message.content.map((c) => c.text).join(""),
-            };
+            const content: string =
+              typeof message.content === "string"
+                ? message.content
+                : message.content.map((c) => c.text).join("");
+            return { role: "system", content };
           } else if (message.role === "function") {
-            return {
-              role: "system",
-              content: message.content ?? "",
-            };
+            return { role: "system", content: message.content ?? "" };
           } else if (message.role === "system") {
-            return {
-              role: "system",
-              content:
-                typeof message.content === "string"
-                  ? message.content
-                  : message.content.map((c) => c.text).join(""),
-            };
+            const content: string =
+              typeof message.content === "string"
+                ? message.content
+                : message.content.map((c) => c.text).join("");
+            return { role: "system", content };
           } else if (message.role === "tool") {
-            return {
-              role: "tool",
-              content:
-                typeof message.content === "string"
-                  ? []
-                  : message.content.map((c) => ({
+            const content: ToolContent =
+              typeof message.content === "string"
+                ? [
+                    {
+                      type: "tool-result",
+                      toolCallId: message.tool_call_id,
+                      toolName: message.tool_call_id,
+                      output: { type: "text", value: message.content },
+                    },
+                  ]
+                : message.content.map(
+                    (c): ToolResultPart => ({
                       type: "tool-result",
                       toolCallId: message.tool_call_id,
                       toolName: message.tool_call_id,
                       output: { type: "text", value: c.text },
-                    })),
-            };
+                    }),
+                  );
+            return { role: "tool", content };
           }
           throw new Error(`Unreachable`);
         }),
@@ -236,14 +324,16 @@ export const createOpenAICompat = (init: Init): Hono => {
           : undefined,
         tools: body.tools
           ? Object.fromEntries(
-              body.tools?.map((tool) => [
-                tool.function.name,
-                {
-                  type: "function",
-                  description: tool.function.description,
-                  parameters: tool.function.parameters,
-                },
-              ]),
+              body.tools?.map((tool): [string, Tool] => {
+                return [
+                  tool.function.name,
+                  {
+                    type: "function",
+                    description: tool.function.description,
+                    inputSchema: jsonSchema(tool.function.parameters),
+                  },
+                ];
+              }),
             )
           : undefined,
         toolChoice: body.tool_choice
@@ -256,6 +346,7 @@ export const createOpenAICompat = (init: Init): Hono => {
           : undefined,
         seed: body.seed ?? undefined,
       };
+
       if (body.stream) {
         const aiStream = streamTextAI(aiSDKInit);
 
@@ -264,107 +355,160 @@ export const createOpenAICompat = (init: Init): Hono => {
             await stream.write(`data: ${JSON.stringify(data)}\n\n`);
           };
 
-          const reader = aiStream.fullStream.getReader();
-          while (true) {
-            const { value, done } = await reader.read();
-            if (value) {
-              if (value.type === "error") {
-                await streamChunk({
-                  id: crypto.randomUUID(),
-                  object: "chat.completion.chunk",
-                  created: Date.now() / 1000,
-                  model:
-                    typeof aiSDKInit.model === "string"
-                      ? aiSDKInit.model
-                      : aiSDKInit.model.modelId,
-                  choices: [
-                    {
-                      index: 0,
-                      delta: {},
-                      finish_reason: "stop",
-                    },
-                  ],
-                });
-                break;
-              } else if (value.type === "finish") {
-                await streamChunk({
-                  id: crypto.randomUUID(),
-                  object: "chat.completion.chunk",
-                  created: Date.now() / 1000,
-                  model:
-                    typeof aiSDKInit.model === "string"
-                      ? aiSDKInit.model
-                      : aiSDKInit.model.modelId,
-                  choices: [
-                    {
-                      index: 0,
-                      delta: {},
-                      finish_reason: STOP_REASON[value.finishReason],
-                    },
-                  ],
-                  usage: value.totalUsage
-                    ? {
-                        completion_tokens: value.totalUsage.outputTokens ?? 0,
-                        prompt_tokens: value.totalUsage.inputTokens ?? 0,
-                        total_tokens: value.totalUsage.totalTokens ?? 0,
-                      }
-                    : undefined,
-                });
-                break;
-              } else if (value.type === "text-delta") {
-                await streamChunk({
-                  id: crypto.randomUUID(),
-                  object: "chat.completion.chunk",
-                  created: Date.now() / 1000,
-                  model:
-                    typeof aiSDKInit.model === "string"
-                      ? aiSDKInit.model
-                      : aiSDKInit.model.modelId,
-                  choices: [
-                    {
-                      index: 0,
-                      delta: {
-                        role: "assistant",
-                        content: value.text,
-                      },
-                      finish_reason: null,
-                    },
-                  ],
-                });
-              } else if (value.type === "tool-call") {
-                await streamChunk({
-                  id: crypto.randomUUID(),
-                  object: "chat.completion.chunk",
-                  created: Date.now() / 1000,
-                  model:
-                    typeof aiSDKInit.model === "string"
-                      ? aiSDKInit.model
-                      : aiSDKInit.model.modelId,
-                  choices: [
-                    {
-                      index: 0,
-                      delta: {
-                        role: "assistant",
-                        tool_calls: [
-                          {
-                            id: value.toolCallId,
-                            index: 0,
-                            function: {
-                              name: value.toolName,
-                              arguments: JSON.stringify(value.input),
-                            },
-                          },
-                        ],
-                      },
-                      finish_reason: "stop",
-                    },
-                  ],
-                });
-                break;
-              }
-            }
-            if (done) {
+          const model =
+            typeof aiSDKInit.model === "string"
+              ? aiSDKInit.model
+              : aiSDKInit.model.modelId;
+
+          for await (const chunk of aiStream.fullStream) {
+            console.log("Streamed chunk:", JSON.stringify(chunk));
+            if (chunk.type === "error") {
+              await streamChunk({
+                id: createId(),
+                object: "chat.completion.chunk",
+                created: Date.now() / 1000,
+                model,
+                // @ts-expect-error
+                error: chunk.error,
+              });
               break;
+            } else if (chunk.type === "finish") {
+              await streamChunk({
+                id: createId(),
+                object: "chat.completion.chunk",
+                created: Date.now() / 1000,
+                model,
+                choices: [
+                  {
+                    index: 0,
+                    delta: {},
+                    finish_reason: STOP_REASON[chunk.finishReason],
+                  },
+                ],
+                usage: chunk.totalUsage
+                  ? {
+                      completion_tokens: chunk.totalUsage.outputTokens ?? 0,
+                      prompt_tokens: chunk.totalUsage.inputTokens ?? 0,
+                      total_tokens: chunk.totalUsage.totalTokens ?? 0,
+                    }
+                  : undefined,
+              });
+              break;
+            } else if (chunk.type === "text-delta") {
+              await streamChunk({
+                id: createId(),
+                object: "chat.completion.chunk",
+                created: Date.now() / 1000,
+                model,
+                choices: [
+                  {
+                    index: 0,
+                    delta: {
+                      role: "assistant",
+                      content: chunk.text,
+                    },
+                    finish_reason: null,
+                  },
+                ],
+              });
+            } else if (chunk.type === "tool-call") {
+              await streamChunk({
+                id: createId(),
+                object: "chat.completion.chunk",
+                created: Date.now() / 1000,
+                model,
+                choices: [
+                  {
+                    index: 0,
+                    delta: {
+                      role: "assistant",
+                      tool_calls: [
+                        {
+                          index: 0,
+                          id: chunk.toolCallId,
+                          function: {
+                            name: chunk.toolName,
+                            arguments: JSON.stringify(chunk.input),
+                          },
+                          type: "function",
+                        },
+                      ],
+                    },
+                    finish_reason: "tool_calls",
+                  },
+                ],
+              });
+            } else if (chunk.type === "tool-input-start") {
+              await streamChunk({
+                id: createId(),
+                object: "chat.completion.chunk",
+                created: Date.now() / 1000,
+                model,
+                choices: [
+                  {
+                    index: 0,
+                    delta: {
+                      role: "assistant",
+                      tool_calls: [
+                        {
+                          index: 0,
+                          id: chunk.id,
+                          function: {
+                            name: chunk.toolName,
+                            arguments: "",
+                          },
+                        },
+                      ],
+                    },
+                    finish_reason: null,
+                  },
+                ],
+              });
+            } else if (chunk.type === "tool-input-delta") {
+              await streamChunk({
+                id: createId(),
+                object: "chat.completion.chunk",
+                created: Date.now() / 1000,
+                model,
+                choices: [
+                  {
+                    index: 0,
+                    delta: {
+                      role: "assistant",
+                      tool_calls: [
+                        {
+                          index: 0,
+                          id: chunk.id,
+                          function: {
+                            arguments: chunk.delta,
+                          },
+                        },
+                      ],
+                    },
+                    finish_reason: null,
+                  },
+                ],
+              });
+            } else if (chunk.type === "reasoning-delta") {
+              await streamChunk({
+                id: createId(),
+                object: "chat.completion.chunk",
+                created: Date.now() / 1000,
+                model,
+                choices: [
+                  {
+                    index: 0,
+                    delta: {
+                      role: "assistant",
+                      // @ts-expect-error
+                      reasoning_content: chunk.text,
+                    },
+                    finish_reason: null,
+                  },
+                ],
+              });
+            } else {
+              console.warn(`Unhandled streamed chunk type: ${chunk.type}`);
             }
           }
 
@@ -374,7 +518,7 @@ export const createOpenAICompat = (init: Init): Hono => {
       }
 
       const generated = await generateText(aiSDKInit);
-      const resultJSON: ChatCompletion = {
+      return c.json({
         id: generated.response.id,
         object: "chat.completion",
         created: generated.response.timestamp.getTime() / 1000,
@@ -382,7 +526,6 @@ export const createOpenAICompat = (init: Init): Hono => {
         choices: [
           {
             index: 0,
-            //@ts-expect-error idk
             finish_reason: STOP_REASON[generated.finishReason],
             logprobs: null,
             message: {
@@ -410,8 +553,7 @@ export const createOpenAICompat = (init: Init): Hono => {
               total_tokens: generated.totalUsage.totalTokens ?? 0,
             }
           : undefined,
-      };
-      return c.json(resultJSON);
+      } satisfies ChatCompletion);
     });
   }
 
@@ -439,13 +581,13 @@ export const createOpenAICompat = (init: Init): Hono => {
         n: body.n ?? undefined,
         size: body.size === "auto" ? undefined : (body.size ?? undefined),
       });
-      const resultJSON: ImagesResponse = {
-        created: generated.responses[0]!.timestamp.getTime() / 1000,
+      return c.json({
+        created:
+          (generated.responses[0]?.timestamp ?? new Date()).getTime() / 1000,
         data: generated.images.map((image) => ({
           b64_json: image.base64,
         })),
-      };
-      return c.json(resultJSON);
+      } satisfies ImagesResponse);
     });
   }
   if (init.embeddingModels) {
@@ -498,7 +640,7 @@ export const createOpenAICompat = (init: Init): Hono => {
         model,
         text: body.input,
         instructions: body.instructions,
-        speed: body.speed ?? undefined,
+        speed: body.speed,
         voice: body.voice,
         outputFormat: body.response_format,
       });
@@ -511,5 +653,67 @@ export const createOpenAICompat = (init: Init): Hono => {
     });
   }
 
+  if (init.transcriptionModels) {
+    const models = init.transcriptionModels;
+    app.post("/v1/audio/transcription", async (c) => {
+      const body = await c.req.json<TranscriptionCreateParams>();
+      const model =
+        typeof models === "function"
+          ? await models(body.model)
+          : models[body.model];
+      if (!model) {
+        throw new HTTPException(400, {
+          message: "Invalid model",
+        });
+      }
+
+      let audio: ArrayBuffer;
+      if (body.file instanceof File || body.file instanceof Blob) {
+        audio = await body.file.arrayBuffer();
+      } else if (body.file instanceof Response) {
+        audio = await body.file.arrayBuffer();
+      } else if (isAsyncIterable(body.file)) {
+        const chunks: Uint8Array[] = [];
+        for await (const chunk of body.file) {
+          chunks.push(new Uint8Array(chunk));
+        }
+        const totalLength = chunks.reduce(
+          (sum, chunk) => sum + chunk.length,
+          0,
+        );
+        const result = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const chunk of chunks) {
+          result.set(chunk, offset);
+          offset += chunk.length;
+        }
+        audio = result.buffer;
+      } else {
+        throw new HTTPException(400, {
+          message: "Invalid file type",
+        });
+      }
+
+      const generated = await transcribe({
+        model,
+        audio,
+        abortSignal: c.req.raw.signal,
+      });
+      return c.json({
+        text: generated.text,
+        duration: generated.durationInSeconds,
+        language: generated.language,
+      } satisfies TranscriptionCreateResponse);
+    });
+  }
+
   return app;
 };
+
+function isAsyncIterable(obj: any): obj is AsyncIterable<ArrayBuffer> {
+  return (
+    obj &&
+    typeof obj[Symbol.asyncIterator] === "function" &&
+    typeof obj.next === "function"
+  );
+}

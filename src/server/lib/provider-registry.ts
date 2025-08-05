@@ -2,6 +2,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createGroq } from "@ai-sdk/groq";
 import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createProviderRegistry } from "ai";
 import type { Context } from "hono";
 import type { Env } from "../types/hono";
@@ -21,6 +22,10 @@ export const initProviderRegistry = (c: Context<Env>) => {
     }),
     openai: createOpenAI({
       apiKey: env(c).OPENAI_API_KEY,
+    }),
+    // @ts-expect-error - OpenRouter issues
+    openrouter: createOpenRouter({
+      apiKey: env(c).OPENROUTER_API_KEY,
     }),
   });
 };

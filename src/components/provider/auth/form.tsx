@@ -4,6 +4,7 @@ import { Label } from "~/components/ui/label";
 import { withForm } from "~/hooks/use-form";
 import type { Provider } from "../form";
 import { AnthropicOauthForm } from "./anthropic-oauth-form";
+import { OpenRouterAuthForm } from "./openrouter-form";
 
 export const ProviderAuthForm = withForm({
   defaultValues: {} as Provider,
@@ -114,6 +115,71 @@ export const ProviderAuthForm = withForm({
 
                             case "oauth":
                               return <AnthropicOauthForm form={form} />;
+
+                            default:
+                              return null;
+                          }
+                        }}
+                      </form.Subscribe>
+                    </>
+                  );
+                }
+
+                case "openrouter": {
+                  return (
+                    <>
+                      <form.AppField name="auth.type">
+                        {(field) => (
+                          <div className="flex flex-col gap-1">
+                            <field.Label>Authentication Type</field.Label>
+                            <field.Select
+                              value={field.state.value || "oauth"}
+                              onValueChange={(value) =>
+                                field.setValue(
+                                  value as typeof field.state.value,
+                                )
+                              }
+                            >
+                              <field.SelectTrigger>
+                                <field.SelectValue placeholder="Select Auth Type" />
+                              </field.SelectTrigger>
+                              <field.SelectContent>
+                                <field.SelectItem value="oauth">
+                                  OAuth
+                                </field.SelectItem>
+                                <field.SelectItem value="api-key">
+                                  API Key
+                                </field.SelectItem>
+                              </field.SelectContent>
+                            </field.Select>
+                          </div>
+                        )}
+                      </form.AppField>
+                      <form.Subscribe
+                        selector={(state) => state.values.auth?.type}
+                      >
+                        {(_authType) => {
+                          const authType = _authType || "oauth";
+                          switch (authType) {
+                            case "api-key":
+                              return (
+                                <form.AppField name="auth.apiKey">
+                                  {(field) => (
+                                    <div className="flex flex-col gap-1">
+                                      <field.Label>API Key</field.Label>
+                                      <field.Input
+                                        value={field.state.value}
+                                        onChange={(e) =>
+                                          field.setValue(e.target.value)
+                                        }
+                                      />
+                                    </div>
+                                  )}
+                                </form.AppField>
+                              );
+
+                            case "oauth":
+                              return <OpenRouterAuthForm form={form} />;
 
                             default:
                               return null;

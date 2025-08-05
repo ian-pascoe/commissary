@@ -15,6 +15,7 @@ export const preloadedProviderIds = [
   "google",
   "groq",
   "openai",
+  "openrouter",
 ] as const;
 export const PreloadedProviderId = z.enum(preloadedProviderIds);
 export type PreloadedProviderId = z.infer<typeof PreloadedProviderId>;
@@ -146,5 +147,10 @@ export const preloadedProviders: Record<PreloadedProviderId, ProviderConfig> = {
       o1: {},
       o3: {},
     } satisfies Record<OpenAILanguageModelId, ProviderModelConfig>,
+  },
+  openrouter: {
+    name: "OpenRouter",
+    sdk: "@openrouter/ai-sdk-provider",
+    models: {},
   },
 };

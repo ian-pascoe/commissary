@@ -1,5 +1,10 @@
 import { UserButton } from "@daveyplate/better-auth-ui";
-import { Link, useBlocker, useParams } from "@tanstack/react-router";
+import {
+  Link,
+  useBlocker,
+  useLocation,
+  useParams,
+} from "@tanstack/react-router";
 import {
   DoorOpen,
   Edit,
@@ -22,6 +27,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "~/components/ui/sidebar";
+import { useChat } from "~/contexts/chat";
 import { useUser } from "~/hooks/use-auth";
 import { useConversations } from "~/hooks/use-conversations";
 import { DeleteConversationButton } from "./delete-button";
@@ -30,8 +36,12 @@ import { EditConversationButton } from "./edit-button";
 export function ConversationsSidebar() {
   const user = useUser();
   const { id: currentConversationId } = useParams({ strict: false });
-
   const { data: conversations, status, refetch } = useConversations();
+
+  const { conversation, setConversation } = useChat((s) => ({
+    conversation: s.conversation,
+    setConversation: s.setConversation,
+  }));
 
   const { isMobile, setOpenMobile } = useSidebar();
   useBlocker({
@@ -44,11 +54,24 @@ export function ConversationsSidebar() {
     },
   });
 
+  const pathname = useLocation({ select: (loc) => loc.pathname });
+
   return (
     <Sidebar>
       <SidebarHeader className="border-sidebar-border border-b">
         <Button asChild className="w-full justify-start gap-2">
-          <Link to="/chat">
+          <Link
+            to="/chat"
+            onClick={() => {
+              // If we are on the chat page, reset the conversation
+              if (pathname === "/chat") {
+                if (conversation) {
+                  setConversation(undefined);
+                }
+                setOpenMobile(false);
+              }
+            }}
+          >
             <PlusIcon size={16} />
             New Conversation
           </Link>

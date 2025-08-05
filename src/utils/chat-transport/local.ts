@@ -1,3 +1,4 @@
+import type { LanguageModelV2 } from "@openrouter/ai-sdk-provider";
 import type {
   experimental_MCPClient as McpClient,
   ModelMessage,
@@ -8,7 +9,6 @@ import {
   type ChatTransport,
   convertToModelMessages,
   createUIMessageStream,
-  type LanguageModel,
   smoothStream,
   stepCountIs,
   streamText,
@@ -26,7 +26,7 @@ export const LocalChatTransportBody = z.object({
 });
 
 // Global model cache shared across all LocalChatTransport instances
-export const globalModelCache = new LRUCache<string, LanguageModel>({
+export const globalModelCache = new LRUCache<string, LanguageModelV2>({
   max: 20,
   ttl: 1000 * 60 * 5, // 5 minutes
 });
@@ -71,7 +71,7 @@ export class LocalChatTransport<Message extends UIMessage>
     return createHash(cacheData);
   }
 
-  private async getOrCreateModel(modelId: string): Promise<LanguageModel> {
+  private async getOrCreateModel(modelId: string) {
     const cacheKey = this.createCacheKey(modelId);
 
     // Check if model is already cached

@@ -218,7 +218,7 @@ export const ConversationMessages = ({
                       );
                     }
                     default: {
-                      console.warn("Unknown message part type:", part.type);
+                      // console.warn("Unknown message part type:", part.type); // Good for debugging
                       return null;
                     }
                   }

@@ -45,7 +45,6 @@ export class TauriMcpTransport implements MCPTransport {
   }
 
   async close(): Promise<void> {
-    this.onclose?.();
     await invoke("stop_mcp_server", { serverId: this.id });
     if (this.unlistenStdoutFn) {
       this.unlistenStdoutFn();

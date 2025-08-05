@@ -3,8 +3,11 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createGroq } from "@ai-sdk/groq";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import {
+  createOpenRouter,
+  type LanguageModelV2,
+} from "@openrouter/ai-sdk-provider";
 import { fetch } from "@tauri-apps/plugin-http";
-import type { LanguageModel } from "ai";
 import { toMerged } from "es-toolkit";
 import { config } from "~/lib/config";
 import {
@@ -51,7 +54,7 @@ export const constructLocalModel = async (input: {
     );
   }
 
-  let model: LanguageModel;
+  let model: LanguageModelV2;
   switch (providerConfig.sdk) {
     case "@ai-sdk/anthropic": {
       const authType = providerConfig.auth?.type;
@@ -156,6 +159,18 @@ export const constructLocalModel = async (input: {
         baseURL: baseUrl,
       });
       model = openaiCompat(modelId);
+      break;
+    }
+    case "@openrouter/ai-sdk-provider": {
+      const openRouter = createOpenRouter({
+        fetch: fetch as typeof globalThis.fetch,
+        apiKey: await getApiKey({
+          provider,
+          authConfig: providerConfig.auth,
+        }),
+        baseURL: providerConfig?.baseUrl,
+      });
+      model = openRouter(modelId);
       break;
     }
     default: {

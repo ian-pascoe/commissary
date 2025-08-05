@@ -52,6 +52,7 @@ export const Route = createRootRouteWithContext<{
             <Outlet />
             <Toaster />
             {/* <TanStackRouterDevtools position="top-right" /> */}
+            {/* <ReactQueryDevtools initialIsOpen={false} /> */}
           </AuthUIProviderTanstack>
         </AuthQueryProvider>
       </ThemeProvider>

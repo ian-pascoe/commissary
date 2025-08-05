@@ -14,7 +14,6 @@ export const useMessages = (
   return useQuery({
     queryKey: queryKeys.messages.byConversation(conversationId ?? "unknown"),
     queryFn: async () => {
-      if (!db) return [];
       if (!conversationId) return [];
 
       const messages = await db.query.messages.findMany({
@@ -24,7 +23,7 @@ export const useMessages = (
 
       return messages;
     },
-    enabled: !!db && !!conversationId,
+    enabled: !!conversationId,
     initialData: options.initialMessages,
   });
 };

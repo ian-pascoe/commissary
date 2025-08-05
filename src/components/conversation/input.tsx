@@ -8,14 +8,10 @@ import { type FileData, useChat } from "~/contexts/chat";
 import { useProvidersConfig } from "~/hooks/use-providers";
 import { preloadedProviders } from "~/lib/preloaded-providers";
 import { cn } from "~/lib/utils";
+import { Combobox, ComboboxContent, ComboboxTrigger } from "../ui/combobox";
 import {
   AIInput,
   AIInputButton,
-  AIInputModelSelect,
-  AIInputModelSelectContent,
-  AIInputModelSelectItem,
-  AIInputModelSelectTrigger,
-  AIInputModelSelectValue,
   AIInputSubmit,
   AIInputTextarea,
   AIInputToolbar,
@@ -34,6 +30,7 @@ export const ConversationInput = ({
   className,
 }: ConversationInputProps) => {
   const {
+    stop,
     messages,
     input,
     setInput,
@@ -44,6 +41,7 @@ export const ConversationInput = ({
     status,
     setFileData,
   } = useChat((ctx) => ({
+    stop: ctx.stop,
     messages: ctx.messages,
     input: ctx.input,
     setInput: ctx.setInput,
@@ -147,8 +145,14 @@ export const ConversationInput = ({
           className,
         )}
         onSubmit={(e) => {
-          handleSubmit(e);
-          setHistoryIndex(-1);
+          e.preventDefault();
+          e.stopPropagation();
+          if (status === "streaming") {
+            stop();
+          } else {
+            handleSubmit(e);
+            setHistoryIndex(-1);
+          }
         }}
       >
         <AIInputTextarea
@@ -168,24 +172,28 @@ export const ConversationInput = ({
               <PlusIcon size={16} />
             </AIInputButton>
             <MicButton />
-            <AIInputModelSelect value={model} onValueChange={setModel}>
-              <AIInputModelSelectTrigger>
-                <AIInputModelSelectValue />
-              </AIInputModelSelectTrigger>
-              <AIInputModelSelectContent>
-                {Object.entries(resolvedProviders).map(
-                  ([provider, { models = {} }]) =>
-                    Object.entries(models).map(([modelId, { name }]) => (
-                      <AIInputModelSelectItem
-                        key={modelId}
-                        value={`${provider}:${modelId}`}
-                      >
-                        {provider}:{name ?? modelId}
-                      </AIInputModelSelectItem>
-                    )),
-                )}
-              </AIInputModelSelectContent>
-            </AIInputModelSelect>
+            <Combobox
+              value={model}
+              onValueChange={setModel}
+              items={Object.entries(resolvedProviders)
+                .flatMap(([providerId, providersConfig]) =>
+                  Object.keys(providersConfig.models ?? {}).length
+                    ? {
+                        label: providersConfig.name || providerId,
+                        value: Object.entries(providersConfig.models ?? {}).map(
+                          ([modelId, modelConfig]) => ({
+                            label: modelConfig.name || modelId,
+                            value: `${providerId}:${modelId}`,
+                          }),
+                        ),
+                      }
+                    : null,
+                )
+                .filter((i) => i !== null)}
+            >
+              <ComboboxTrigger className="w-fit max-w-[300px]" />
+              <ComboboxContent align="start" />
+            </Combobox>
           </AIInputTools>
           <AIInputSubmit disabled={disabled} status={status} />
         </AIInputToolbar>
