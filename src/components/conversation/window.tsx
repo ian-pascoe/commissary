@@ -1,5 +1,6 @@
 import { Menu } from "lucide-react";
 import { useChat } from "~/contexts/chat";
+import { cn } from "~/lib/utils";
 import { SidebarTrigger } from "../ui/sidebar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { ConversationFilesTable } from "./files-table";
@@ -7,8 +8,9 @@ import { ConversationInput } from "./input";
 import { ConversationMessages } from "./messages";
 
 export const ConversationWindow = () => {
-  const { conversation } = useChat((ctx) => ({
+  const { conversation, messages } = useChat((ctx) => ({
     conversation: ctx.conversation,
+    messages: ctx.messages,
   }));
   return (
     <div className="relative flex size-full flex-col overflow-hidden">
@@ -35,7 +37,18 @@ export const ConversationWindow = () => {
           className="relative flex size-full flex-1 flex-col overflow-hidden"
         >
           <ConversationMessages className="size-full flex-1 overflow-y-auto" />
-          <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 px-2">
+          <div
+            className={cn(
+              "absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 px-2 transition-all duration-300 ease-in-out",
+              messages.length === 0 &&
+                "-translate-y-1/2 inset-x-1/10 inset-y-1/2 h-fit",
+            )}
+          >
+            {messages.length === 0 && (
+              <div className="text-muted-foreground text-sm">
+                Start the conversation by sending a message.
+              </div>
+            )}
             <ConversationInput />
           </div>
         </TabsContent>

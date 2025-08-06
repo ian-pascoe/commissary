@@ -36,10 +36,9 @@ export type ConversationMessagesProps = {
 export const ConversationMessages = ({
   className,
 }: ConversationMessagesProps) => {
-  const { messages, fileData, addToolResult } = useChat((ctx) => ({
+  const { messages, fileData } = useChat((ctx) => ({
     messages: ctx.messages,
     fileData: ctx.fileData,
-    addToolResult: ctx.addToolResult,
   }));
   const downloadMutation = useMutation({
     mutationFn: async (url: string) => {
@@ -116,7 +115,6 @@ export const ConversationMessages = ({
           <AIMessage
             key={message.id}
             from={message.role as "user" | "assistant"}
-            className="py-1 [&>div]:w-full [&>div]:max-w-full"
           >
             <AIMessageContent>
               <div className="flex flex-col gap-2">
@@ -146,41 +144,6 @@ export const ConversationMessages = ({
                             <FileIcon size={16} />
                             {part.filename || "Unnamed File"}
                           </Button>
-                        </div>
-                      );
-                    }
-                    case "tool-ask_to_continue": {
-                      return (
-                        <div>
-                          <span>Would you like to continue iterating?</span>
-                          <div className="mt-2 flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={async () => {
-                                await addToolResult({
-                                  tool: "ask_to_continue",
-                                  toolCallId: part.toolCallId,
-                                  output: { continue: true },
-                                });
-                              }}
-                            >
-                              Continue
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={async () => {
-                                await addToolResult({
-                                  tool: "ask_to_continue",
-                                  toolCallId: part.toolCallId,
-                                  output: { continue: false },
-                                });
-                              }}
-                            >
-                              Stop
-                            </Button>
-                          </div>
                         </div>
                       );
                     }

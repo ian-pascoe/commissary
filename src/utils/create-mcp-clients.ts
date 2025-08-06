@@ -6,7 +6,7 @@ import {
 import type { Config } from "~/schemas/config";
 import { TauriMcpTransport } from "./mcp-transport/tauri";
 
-export const constructMcpClients = async (mcpConfig: Config["mcp"]) => {
+export const createMcpClients = async (mcpConfig: Config["mcp"]) => {
   console.log("[MCP] Constructing MCP clients from config:", mcpConfig);
 
   const clients: Record<string, McpClient> = {};

@@ -5,9 +5,15 @@ import { PlusIcon } from "lucide-react";
 import mime from "mime";
 import { useCallback, useMemo, useState } from "react";
 import { type FileData, useChat } from "~/contexts/chat";
+import { useModels } from "~/hooks/use-models";
 import { useProvidersConfig } from "~/hooks/use-providers";
 import { preloadedProviders } from "~/lib/preloaded-providers";
 import { cn } from "~/lib/utils";
+import type {
+  ProviderConfig,
+  ProviderModelConfig,
+} from "~/schemas/config/provider";
+import { ProviderIcon } from "../provider/icon";
 import { Combobox, ComboboxContent, ComboboxTrigger } from "../ui/combobox";
 import {
   AIInput,
@@ -53,11 +59,40 @@ export const ConversationInput = ({
     setFileData: ctx.setFileData,
   }));
 
+  const { data: models } = useModels();
   const { data: providersConfig } = useProvidersConfig();
-  const resolvedProviders = useMemo(
-    () => toMerged(providersConfig ?? {}, preloadedProviders),
-    [providersConfig],
-  );
+  const resolvedProvidersConfig = useMemo(() => {
+    const resolvedProvidersConfig = toMerged(
+      providersConfig ?? {},
+      preloadedProviders,
+    );
+    return Object.entries(resolvedProvidersConfig).reduce(
+      (acc, [providerId, config]) => {
+        acc[providerId] = {
+          ...config,
+          models: {
+            ...config.models,
+            ...Object.fromEntries(
+              Object.entries(config.models ?? {}).map(
+                ([modelId, modelConfig]) => [modelId, modelConfig],
+              ),
+            ),
+            ...models?.data
+              .filter((m) => m.owned_by === providerId)
+              .reduce(
+                (acc, model) => {
+                  acc[model.id] = {};
+                  return acc;
+                },
+                {} as Record<string, ProviderModelConfig>,
+              ),
+          },
+        };
+        return acc;
+      },
+      {} as Record<string, ProviderConfig>,
+    );
+  }, [providersConfig, models]);
 
   const handleFilesSelected = useCallback(
     async (paths: string[]) => {
@@ -140,7 +175,7 @@ export const ConversationInput = ({
       <FileAttachments />
       <AIInput
         className={cn(
-          "rounded-b-none bg-background/70 backdrop-blur-md transition-all duration-200",
+          "bg-background/70 backdrop-blur-md transition-all duration-200",
           isListening && "ring-2 ring-red-500/50",
           className,
         )}
@@ -175,14 +210,32 @@ export const ConversationInput = ({
             <Combobox
               value={model}
               onValueChange={setModel}
-              items={Object.entries(resolvedProviders)
+              items={Object.entries(resolvedProvidersConfig)
                 .flatMap(([providerId, providersConfig]) =>
                   Object.keys(providersConfig.models ?? {}).length
                     ? {
                         label: providersConfig.name || providerId,
+                        labelComponent: (
+                          <span className="flex items-center gap-1 border-b pb-2">
+                            <ProviderIcon
+                              providerId={providerId}
+                              className="size-4"
+                            />
+                            {providersConfig.name || providerId}
+                          </span>
+                        ),
                         value: Object.entries(providersConfig.models ?? {}).map(
                           ([modelId, modelConfig]) => ({
                             label: modelConfig.name || modelId,
+                            selectedLabelComponent: (
+                              <span className="flex items-center gap-1">
+                                <ProviderIcon
+                                  providerId={providerId}
+                                  className="size-4"
+                                />
+                                {modelConfig.name || modelId}
+                              </span>
+                            ),
                             value: `${providerId}:${modelId}`,
                           }),
                         ),
@@ -191,8 +244,11 @@ export const ConversationInput = ({
                 )
                 .filter((i) => i !== null)}
             >
-              <ComboboxTrigger className="w-fit max-w-[300px]" />
-              <ComboboxContent align="start" />
+              <ComboboxTrigger className="w-fit min-w-[200px] max-w-[350px]" />
+              <ComboboxContent
+                align="start"
+                className="min-w-[300px] max-w-[350px]"
+              />
             </Combobox>
           </AIInputTools>
           <AIInputSubmit disabled={disabled} status={status} />

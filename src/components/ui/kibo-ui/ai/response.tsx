@@ -1,7 +1,7 @@
 "use client";
 
 import type { HTMLAttributes } from "react";
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import ReactMarkdown, { type Options } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -28,7 +28,9 @@ export type AIResponseProps = HTMLAttributes<HTMLDivElement> & {
   children: Options["children"];
 };
 
-const components: Options["components"] = {
+const REMARK_PLUGINS = [remarkGfm];
+
+const COMPONENTS: Options["components"] = {
   ol: ({ node, children, className, ...props }) => (
     <ol
       className={cn("mb-4 ml-6 list-outside list-decimal", className)}
@@ -202,22 +204,42 @@ const components: Options["components"] = {
 };
 
 export const AIResponse = memo(
-  ({ className, options, children, ...props }: AIResponseProps) => (
-    <div
-      className={cn(
-        "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-        className,
-      )}
-      {...props}
-    >
-      <ReactMarkdown
-        components={components}
-        remarkPlugins={[remarkGfm]}
-        {...options}
+  ({
+    className,
+    options: { remarkPlugins, components, ...options } = {},
+    children,
+    ...props
+  }: AIResponseProps) => {
+    const memoizedComponents = useMemo(() => {
+      return {
+        ...COMPONENTS,
+        ...components,
+      };
+    }, [components]);
+    const memoizedRemarkPlugins = useMemo(() => {
+      return [...REMARK_PLUGINS, ...(remarkPlugins || [])];
+    }, [remarkPlugins]);
+
+    return (
+      <div
+        className={cn(
+          "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+          className,
+        )}
+        {...props}
       >
-        {children}
-      </ReactMarkdown>
-    </div>
-  ),
-  (prevProps, nextProps) => prevProps.children === nextProps.children,
+        <ReactMarkdown
+          remarkPlugins={memoizedRemarkPlugins}
+          components={memoizedComponents}
+          {...options}
+        >
+          {children}
+        </ReactMarkdown>
+      </div>
+    );
+  },
+  (prevProps, nextProps) =>
+    prevProps.children === nextProps.children &&
+    prevProps.className === nextProps.className &&
+    JSON.stringify(prevProps.options) === JSON.stringify(nextProps.options),
 );

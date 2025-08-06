@@ -2,7 +2,7 @@ import type { User } from "~/schemas/user";
 import type { initCache } from "~/server/lib/cache";
 import type { initDb } from "~/server/lib/db";
 import type { initAuth } from "../lib/auth";
-import type { initProviderRegistry } from "../lib/provider-registry";
+import type { initProviders } from "../lib/providers";
 import type { WorkerEnv } from "./cloudflare";
 
 export type Bindings = WorkerEnv;
@@ -11,7 +11,7 @@ export type Variables = {
   db: ReturnType<typeof initDb>;
   cache: ReturnType<typeof initCache>;
   auth: ReturnType<typeof initAuth>;
-  providerRegistry: ReturnType<typeof initProviderRegistry>;
+  providers: ReturnType<typeof initProviders>;
   user?: User;
 };
 

@@ -68,7 +68,7 @@ const initConfig = async () => {
   };
 
   console.log("Config initialized.");
-  return { get, set, merge };
+  return { get, set, merge, path: configPath };
 };
 export type ConfigInterface = Awaited<ReturnType<typeof initConfig>>;
 

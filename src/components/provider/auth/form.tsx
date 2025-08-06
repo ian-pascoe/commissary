@@ -1,5 +1,3 @@
-import { useStore } from "@tanstack/react-form";
-import { useEffect } from "react";
 import { Label } from "~/components/ui/label";
 import { withForm } from "~/hooks/use-form";
 import type { Provider } from "../form";
@@ -14,52 +12,8 @@ export const ProviderAuthForm = withForm({
         <Label className="text-lg">Authentication</Label>
         <div className="flex flex-col gap-4">
           <form.Subscribe selector={(state) => state.values.id}>
-            {function Comp(id) {
-              const authType = useStore(
-                form.store,
-                (state) => state.values.auth?.type,
-              );
-              useEffect(() => {
-                switch (id) {
-                  case "openai":
-                  case "google":
-                    form.setFieldValue("auth.type", "api-key");
-                    break;
-                  case "anthropic":
-                    if (!authType) {
-                      form.setFieldValue("auth.type", "oauth");
-                    }
-                    break;
-                  default:
-                    if (
-                      !authType ||
-                      authType === "aws" ||
-                      authType === "oauth"
-                    ) {
-                      form.setFieldValue("auth", undefined);
-                    }
-                    break;
-                }
-              }, [id, authType, form]);
-
+            {(id) => {
               switch (id) {
-                // OpenAI and Google both only use API keys for auth
-                case "openai":
-                case "google":
-                  return (
-                    <form.AppField name="auth.apiKey">
-                      {(field) => (
-                        <div className="flex flex-col gap-1">
-                          <field.Label>API Key</field.Label>
-                          <field.Input
-                            value={field.state.value}
-                            onChange={(e) => field.setValue(e.target.value)}
-                          />
-                        </div>
-                      )}
-                    </form.AppField>
-                  );
-
                 case "anthropic": {
                   return (
                     <>
@@ -68,7 +22,7 @@ export const ProviderAuthForm = withForm({
                           <div className="flex flex-col gap-1">
                             <field.Label>Authentication Type</field.Label>
                             <field.Select
-                              value={field.state.value || "oauth"}
+                              value={field.state.value || "none"}
                               onValueChange={(value) =>
                                 field.setValue(
                                   value as typeof field.state.value,
@@ -76,9 +30,12 @@ export const ProviderAuthForm = withForm({
                               }
                             >
                               <field.SelectTrigger>
-                                <field.SelectValue placeholder="Select Auth Type" />
+                                <field.SelectValue placeholder="None" />
                               </field.SelectTrigger>
                               <field.SelectContent>
+                                <field.SelectItem value="none">
+                                  None
+                                </field.SelectItem>
                                 <field.SelectItem value="oauth">
                                   OAuth
                                 </field.SelectItem>
@@ -93,8 +50,7 @@ export const ProviderAuthForm = withForm({
                       <form.Subscribe
                         selector={(state) => state.values.auth?.type}
                       >
-                        {(_authType) => {
-                          const authType = _authType || "oauth";
+                        {(authType) => {
                           switch (authType) {
                             case "api-key":
                               return (
@@ -105,7 +61,9 @@ export const ProviderAuthForm = withForm({
                                       <field.Input
                                         value={field.state.value}
                                         onChange={(e) =>
-                                          field.setValue(e.target.value)
+                                          field.setValue(
+                                            e.target.value || undefined,
+                                          )
                                         }
                                       />
                                     </div>
@@ -133,7 +91,7 @@ export const ProviderAuthForm = withForm({
                           <div className="flex flex-col gap-1">
                             <field.Label>Authentication Type</field.Label>
                             <field.Select
-                              value={field.state.value || "oauth"}
+                              value={field.state.value || "none"}
                               onValueChange={(value) =>
                                 field.setValue(
                                   value as typeof field.state.value,
@@ -141,9 +99,12 @@ export const ProviderAuthForm = withForm({
                               }
                             >
                               <field.SelectTrigger>
-                                <field.SelectValue placeholder="Select Auth Type" />
+                                <field.SelectValue placeholder="None" />
                               </field.SelectTrigger>
                               <field.SelectContent>
+                                <field.SelectItem value="none">
+                                  None
+                                </field.SelectItem>
                                 <field.SelectItem value="oauth">
                                   OAuth
                                 </field.SelectItem>
@@ -158,8 +119,7 @@ export const ProviderAuthForm = withForm({
                       <form.Subscribe
                         selector={(state) => state.values.auth?.type}
                       >
-                        {(_authType) => {
-                          const authType = _authType || "oauth";
+                        {(authType) => {
                           switch (authType) {
                             case "api-key":
                               return (
@@ -170,7 +130,9 @@ export const ProviderAuthForm = withForm({
                                       <field.Input
                                         value={field.state.value}
                                         onChange={(e) =>
-                                          field.setValue(e.target.value)
+                                          field.setValue(
+                                            e.target.value || undefined,
+                                          )
                                         }
                                       />
                                     </div>
@@ -198,16 +160,12 @@ export const ProviderAuthForm = withForm({
                           <div className="flex flex-col gap-1">
                             <field.Label>Authentication Type</field.Label>
                             <field.Select
-                              value={field.state.value}
-                              onValueChange={(value) => {
-                                if (value === "none") {
-                                  form.setFieldValue("auth", undefined);
-                                } else {
-                                  field.setValue(
-                                    value as typeof field.state.value,
-                                  );
-                                }
-                              }}
+                              value={field.state.value || "none"}
+                              onValueChange={(value) =>
+                                field.setValue(
+                                  value as typeof field.state.value,
+                                )
+                              }
                             >
                               <field.SelectTrigger>
                                 <field.SelectValue placeholder="None" />

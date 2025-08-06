@@ -17,13 +17,17 @@ import {
 import { strongholdStore } from "~/lib/stronghold";
 import type { Config } from "~/schemas/config";
 import type { ProviderAuthConfig, ProviderId } from "~/schemas/config/provider";
+import type { ProviderOptions } from "~/types/provider-options";
 import { AnthropicAuth } from "./auth/anthropic";
 import { createId } from "./id";
 
-export const constructLocalModel = async (input: {
+export const createLocalModel = async (input: {
   modelId: string;
   providersConfig: Config["providers"];
-}) => {
+}): Promise<{
+  model: LanguageModelV2;
+  providerOptions: ProviderOptions;
+}> => {
   const [provider, ...modelIdParts] = input.modelId.split(":");
   if (!provider || !modelIdParts.length) {
     throw new Error(`Invalid model ID: ${input.modelId}`);
@@ -37,6 +41,7 @@ export const constructLocalModel = async (input: {
     if (!providerConfig) {
       throw new Error(`Provider not found in configuration: ${provider}`);
     }
+    // Update the provider config to use Commissary's OpenAI-compatible API
     providerConfig = {
       ...providerConfig,
       sdk: "@ai-sdk/openai-compatible",
@@ -44,7 +49,7 @@ export const constructLocalModel = async (input: {
         type: "api-key",
         apiKey: (await strongholdStore.get("auth-token")) ?? "",
       },
-      baseUrl: `${import.meta.env.VITE_API_URL}/v1`,
+      baseUrl: `${import.meta.env.VITE_API_URL}/openai/v1`,
     };
     modelId = input.modelId; // Use full modelId for preloaded providers
   } else {
@@ -57,30 +62,23 @@ export const constructLocalModel = async (input: {
   let model: LanguageModelV2;
   switch (providerConfig.sdk) {
     case "@ai-sdk/anthropic": {
-      const authType = providerConfig.auth?.type;
-      if (!authType) {
-        throw new Error(
-          `Missing auth configuration for Anthropic provider: ${provider}`,
-        );
-      }
-      const defaultHeaders = {
+      const headers = {
         "anthropic-beta": "oauth-2025-04-20",
         "anthropic-dangerous-direct-browser-access": "true",
+        ...providerConfig.headers,
       };
       const anthropic = createAnthropic({
-        fetch: ((input, init: any) => {
-          const headers = init?.headers ?? {};
-          if (authType === "oauth") {
-            delete headers["x-api-key"];
-          }
-          return fetch(input, {
-            ...init,
-            headers,
-          });
-        }) as typeof globalThis.fetch,
+        apiKey:
+          providerConfig.auth?.type === "api-key"
+            ? await getApiKey({
+                provider: provider as ProviderId,
+                authConfig: providerConfig.auth,
+              })
+            : undefined,
+        baseURL: providerConfig?.baseUrl,
         headers: {
-          ...defaultHeaders,
-          ...(authType === "oauth"
+          ...headers,
+          ...(providerConfig.auth?.type === "oauth"
             ? {
                 Authorization: `Bearer ${await getAccessToken({
                   provider: provider as ProviderId,
@@ -89,14 +87,16 @@ export const constructLocalModel = async (input: {
               }
             : {}),
         },
-        apiKey:
-          authType === "api-key"
-            ? await getApiKey({
-                provider: provider as ProviderId,
-                authConfig: providerConfig.auth,
-              })
-            : undefined,
-        baseURL: providerConfig?.baseUrl,
+        fetch: ((input, init: any) => {
+          const headers = init?.headers ?? {};
+          if ("Authorization" in headers) {
+            delete headers["x-api-key"];
+          }
+          return fetch(input, {
+            ...init,
+            headers,
+          });
+        }) as typeof globalThis.fetch,
       });
       model = anthropic(modelId);
       (model as any).needsAnthropicSpoof = true; // Add a flag to indicate we need to spoof the user-agent
@@ -104,42 +104,44 @@ export const constructLocalModel = async (input: {
     }
     case "@ai-sdk/google": {
       const google = createGoogleGenerativeAI({
-        fetch: fetch as typeof globalThis.fetch,
         apiKey: await getApiKey({
           provider,
           authConfig: providerConfig.auth,
         }),
-        baseURL: providerConfig?.baseUrl,
+        baseURL: providerConfig.baseUrl,
+        headers: providerConfig.headers,
+        fetch: fetch as typeof globalThis.fetch,
       });
       model = google(modelId);
       break;
     }
     case "@ai-sdk/groq": {
       const groq = createGroq({
-        fetch: fetch as typeof globalThis.fetch,
         apiKey: await getApiKey({
           provider,
           authConfig: providerConfig.auth,
         }),
-        baseURL: providerConfig?.baseUrl,
+        baseURL: providerConfig.baseUrl,
+        headers: providerConfig.headers,
+        fetch: fetch as typeof globalThis.fetch,
       });
       model = groq(modelId);
       break;
     }
     case "@ai-sdk/openai": {
       const openai = createOpenAI({
-        fetch: fetch as typeof globalThis.fetch,
         apiKey: await getApiKey({
           provider,
           authConfig: providerConfig.auth,
         }),
-        baseURL: providerConfig?.baseUrl,
+        baseURL: providerConfig.baseUrl,
+        headers: providerConfig.headers,
+        fetch: fetch as typeof globalThis.fetch,
       });
       model = openai(modelId);
       break;
     }
     case "@ai-sdk/openai-compatible": {
-      const authType = providerConfig.auth?.type;
       const baseUrl = providerConfig?.baseUrl;
       if (!baseUrl) {
         throw new Error(
@@ -147,28 +149,30 @@ export const constructLocalModel = async (input: {
         );
       }
       const openaiCompat = createOpenAICompatible({
-        fetch: fetch as typeof globalThis.fetch,
         name: providerConfig.name || provider,
         apiKey:
-          authType === "api-key"
+          providerConfig.auth?.type === "api-key"
             ? await getApiKey({
                 provider,
                 authConfig: providerConfig.auth,
               })
             : undefined,
         baseURL: baseUrl,
+        headers: providerConfig.headers,
+        fetch: fetch as typeof globalThis.fetch,
       });
       model = openaiCompat(modelId);
       break;
     }
     case "@openrouter/ai-sdk-provider": {
       const openRouter = createOpenRouter({
-        fetch: fetch as typeof globalThis.fetch,
         apiKey: await getApiKey({
           provider,
           authConfig: providerConfig.auth,
         }),
-        baseURL: providerConfig?.baseUrl,
+        baseURL: providerConfig.baseUrl,
+        headers: providerConfig.headers,
+        fetch: fetch as typeof globalThis.fetch,
       });
       model = openRouter(modelId);
       break;
@@ -178,7 +182,15 @@ export const constructLocalModel = async (input: {
     }
   }
 
-  return model;
+  return {
+    model,
+    providerOptions: {
+      [model.provider]: {
+        ...providerConfig.options,
+        ...providerConfig.models?.[modelId]?.options,
+      },
+    },
+  };
 };
 
 export const getApiKey = async ({

@@ -8,6 +8,7 @@ import {
   useRouter,
 } from "@tanstack/react-router";
 import { Toaster } from "~/components/ui/sonner";
+import { ConfigProvider } from "~/contexts/config";
 import { ThemeProvider } from "~/contexts/theme";
 import type { ApiClient } from "~/lib/api";
 import type { AuthClient } from "~/lib/auth";
@@ -39,23 +40,25 @@ export const Route = createRootRouteWithContext<{
     });
 
     return (
-      <ThemeProvider>
-        <AuthQueryProvider>
-          <AuthUIProviderTanstack
-            authClient={authClient}
-            navigate={(href) => router.navigate({ to: href })}
-            replace={(href) => router.navigate({ to: href, replace: true })}
-            onSessionChange={() => router.invalidate()}
-            settings={{ url: "/settings" }}
-            Link={({ href, ...props }) => <Link to={href} {...props} />}
-          >
-            <Outlet />
-            <Toaster />
-            {/* <TanStackRouterDevtools position="top-right" /> */}
-            {/* <ReactQueryDevtools initialIsOpen={false} /> */}
-          </AuthUIProviderTanstack>
-        </AuthQueryProvider>
-      </ThemeProvider>
+      <ConfigProvider>
+        <ThemeProvider>
+          <AuthQueryProvider>
+            <AuthUIProviderTanstack
+              authClient={authClient}
+              navigate={(href) => router.navigate({ to: href })}
+              replace={(href) => router.navigate({ to: href, replace: true })}
+              onSessionChange={() => router.invalidate()}
+              settings={{ url: "/settings" }}
+              Link={({ href, ...props }) => <Link to={href} {...props} />}
+            >
+              <Outlet />
+              <Toaster />
+              {/* <TanStackRouterDevtools position="top-right" /> */}
+              {/* <ReactQueryDevtools initialIsOpen={false} /> */}
+            </AuthUIProviderTanstack>
+          </AuthQueryProvider>
+        </ThemeProvider>
+      </ConfigProvider>
     );
   },
 });

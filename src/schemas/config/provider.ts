@@ -14,11 +14,15 @@ export const ProviderSdk = z.enum([
   "@ai-sdk/groq",
   "@ai-sdk/openai",
   "@ai-sdk/openai-compatible",
+  "@ai-sdk/togetherai",
   "@openrouter/ai-sdk-provider",
 ]);
 export type ProviderSdk = z.infer<typeof ProviderSdk>;
 
 export const ProviderAuthConfig = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("none"),
+  }),
   z.object({
     type: z.literal("api-key"),
     apiKey: z.string().meta({
@@ -58,6 +62,9 @@ export const ProviderModelConfig = z.object({
   name: z
     .optional(z.string())
     .meta({ description: "Human-readable name for the model" }),
+  options: z.optional(z.record(z.string(), z.any())).meta({
+    description: "Additional provider options to apply for this model",
+  }),
 });
 export type ProviderModelConfig = z.infer<typeof ProviderModelConfig>;
 
@@ -72,12 +79,18 @@ export const ProviderConfig = z.object({
   baseUrl: z
     .optional(z.url())
     .meta({ description: "Base URL for the provider API" }),
+  headers: z
+    .optional(z.record(z.string(), z.string()))
+    .meta({ description: "Additional headers to include in API requests" }),
   auth: z
     .optional(ProviderAuthConfig)
     .meta({ description: "Authentication configuration for the provider" }),
   models: z.optional(z.record(z.string(), ProviderModelConfig)).meta({
     description:
       "Model-specific configuration. Keys are model IDs, values are model-specific settings.",
+  }),
+  options: z.optional(z.record(z.string(), z.any())).meta({
+    description: "Additional options for the provider",
   }),
 });
 export type ProviderConfig = z.infer<typeof ProviderConfig>;

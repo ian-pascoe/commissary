@@ -2,13 +2,13 @@ import { contextStorage } from "hono/context-storage";
 import { HTTPException } from "hono/http-exception";
 import * as z from "zod";
 import { Config } from "~/schemas/config";
-import { providerRegistry } from "./lib/provider-registry";
+import { providers } from "./lib/providers";
 import { authMiddleware, requireAuthMiddleware } from "./middleware/auth";
 import { initMiddleware } from "./middleware/init";
 import { loggingMiddleware } from "./middleware/logging";
 import auth from "./routes/auth";
+import { createOpenAICompat } from "./routes/openai";
 import { factory } from "./utils/factory";
-import { createOpenAICompat } from "./utils/openai-compat";
 
 const app = factory
   .createApp()
@@ -21,15 +21,18 @@ const app = factory
   })
   .route("/auth", auth)
   .route(
-    "/",
+    "/openai",
     createOpenAICompat({
       middleware: requireAuthMiddleware(),
       languageModels: (modelId) =>
-        providerRegistry().languageModel(modelId as any),
+        providers().registry.languageModel(modelId as any),
       embeddingModels: (modelId) =>
-        providerRegistry().textEmbeddingModel(modelId as any),
-      speechModels: (modelId) => providerRegistry().speechModel(modelId as any),
-      imageModels: (modelId) => providerRegistry().imageModel(modelId as any),
+        providers().registry.textEmbeddingModel(modelId as any),
+      speechModels: (modelId) =>
+        providers().registry.speechModel(modelId as any),
+      transcriptionModels: (modelId) =>
+        providers().registry.transcriptionModel(modelId as any),
+      imageModels: (modelId) => providers().registry.imageModel(modelId as any),
     }),
   )
   .onError((err, c) => {

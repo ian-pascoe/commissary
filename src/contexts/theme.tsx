@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import type React from "react";
 import {
   createContext,
@@ -10,7 +10,8 @@ import {
 } from "react";
 import { useMediaQuery } from "usehooks-ts";
 import * as z from "zod";
-import { useConfig } from "~/hooks/use-config";
+import { useConfigInterface } from "~/hooks/use-config";
+import { useConfig } from "./config";
 
 export const Theme = z.enum(["light", "dark", "system"]).default("system");
 export type Theme = z.infer<typeof Theme>;
@@ -32,27 +33,21 @@ type ThemeProviderState = {
 const ThemeProviderContext = createContext<ThemeProviderState | null>(null);
 
 export const useStoredTheme = () => {
-  const config = useConfig();
-  const query = useQuery({
-    queryKey: ["stored-theme"],
-    queryFn: async () => {
-      const theme = await config.get().then((c) => c.theme);
-      return theme ?? null;
-    },
-  });
+  const configInterface = useConfigInterface();
+  const { data: config, refetch } = useConfig();
   const setMutation = useMutation({
     mutationFn: async (newTheme: Theme | null) => {
-      await config.merge({ theme: newTheme || undefined });
+      await configInterface.merge({ theme: newTheme || undefined });
     },
     onSettled: () => {
-      query.refetch();
+      refetch();
     },
   });
 
   return {
-    theme: query.data,
+    theme: config?.theme,
     setTheme: setMutation.mutateAsync,
-    refresh: query.refetch,
+    refetch,
   };
 };
 

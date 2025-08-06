@@ -21,6 +21,8 @@ import { cn } from "~/lib/utils";
 
 type Item = {
   label: string;
+  labelComponent?: React.ReactNode;
+  selectedLabelComponent?: React.ReactNode;
   value: string | Item[];
 };
 
@@ -114,6 +116,11 @@ export function ComboboxTrigger({
     [],
   );
 
+  const selectedItem = React.useMemo(
+    () => findItemByValue(items, value ?? ""),
+    [items, value, findItemByValue],
+  );
+
   return (
     <PopoverTrigger asChild>
       {/* biome-ignore lint/a11y/useSemanticElements: shadcn/ui */}
@@ -125,7 +132,10 @@ export function ComboboxTrigger({
         {...props}
       >
         <span className="truncate">
-          {value ? findItemByValue(items, value)?.label : placeholder}
+          {selectedItem?.selectedLabelComponent ||
+            selectedItem?.labelComponent ||
+            selectedItem?.label ||
+            placeholder}
         </span>
         <ChevronsUpDown className="opacity-50" />
       </Button>
@@ -163,7 +173,9 @@ export function ComboboxContent({
                 setOpen(false);
               }}
             >
-              {item.label}
+              {item.labelComponent || (
+                <span className="truncate">{item.label}</span>
+              )}
               <Check
                 className={cn(
                   "ml-auto",
@@ -175,7 +187,10 @@ export function ComboboxContent({
         } else {
           // Group item - render as CommandGroup with nested items
           return (
-            <CommandGroup key={`${item.label}-${index}`} heading={item.label}>
+            <CommandGroup
+              key={`${item.label}-${index}`}
+              heading={item.labelComponent || item.label}
+            >
               {renderItems(item.value)}
             </CommandGroup>
           );

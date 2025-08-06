@@ -1,8 +1,5 @@
 import * as z from "zod";
-import {
-  type ProviderRegistry,
-  providerRegistry,
-} from "~/server/lib/provider-registry";
+import { type ProviderRegistry, providers } from "~/server/lib/providers";
 
 export const RemoteModelId = z.custom<
   Parameters<ProviderRegistry["languageModel"]>[0]
@@ -10,7 +7,7 @@ export const RemoteModelId = z.custom<
   (v) => {
     if (typeof v !== "string") return false;
     try {
-      providerRegistry().languageModel(v as any);
+      providers().registry.languageModel(v as any);
       return true;
     } catch {
       return false;

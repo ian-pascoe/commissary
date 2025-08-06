@@ -46,12 +46,15 @@ export const api = await Worker("api", {
     API_URL: apiUrl,
     APP_URL: appUrl,
     BETTER_AUTH_SECRET: alchemy.secret(process.env.BETTER_AUTH_SECRET),
+
+    // AI Provider API Keys
     ANTHROPIC_API_KEY: alchemy.secret(process.env.ANTHROPIC_API_KEY),
     DEEPSEEK_API_KEY: alchemy.secret(process.env.DEEPSEEK_API_KEY),
     GOOGLE_API_KEY: alchemy.secret(process.env.GOOGLE_API_KEY),
     GROQ_API_KEY: alchemy.secret(process.env.GROQ_API_KEY),
     OPENAI_API_KEY: alchemy.secret(process.env.OPENAI_API_KEY),
     OPENROUTER_API_KEY: alchemy.secret(process.env.OPENROUTER_API_KEY),
+    TOGETHERAI_API_KEY: alchemy.secret(process.env.TOGETHERAI_API_KEY),
   },
   dev: {
     port: 8080,

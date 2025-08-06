@@ -10,14 +10,8 @@ export const queryKeys = {
   session: { all: () => ["session"] as const },
   config: {
     all: () => ["config"] as const,
-    providers: {
-      all: () => [...queryKeys.config.all(), "providers"] as const,
-    },
-    mcp: {
-      all: () => [...queryKeys.config.all(), "mcp"] as const,
-      clients: (config: Config["mcp"]) =>
-        [...queryKeys.config.mcp.all(), "clients", config] as const,
-    },
+    mcpClients: (mcp: Config["mcp"]) =>
+      [...queryKeys.config.all(), "mcp-clients", { mcp }] as const,
   },
   conversations: {
     all: () => ["conversations"] as const,
@@ -27,5 +21,8 @@ export const queryKeys = {
     all: () => ["messages"] as const,
     byConversation: (conversationId: string) =>
       [...queryKeys.messages.all(), { conversationId }] as const,
+  },
+  models: {
+    all: () => ["models"] as const,
   },
 } as const;

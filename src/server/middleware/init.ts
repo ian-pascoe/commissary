@@ -1,7 +1,7 @@
 import { initAuth } from "../lib/auth";
 import { initCache } from "../lib/cache";
 import { initDb } from "../lib/db";
-import { initProviderRegistry } from "../lib/provider-registry";
+import { initProviders } from "../lib/providers";
 import { env } from "../utils/env";
 import { factory } from "../utils/factory";
 
@@ -15,7 +15,7 @@ export const initMiddleware = () => {
 
     c.set("auth", initAuth(db, cache, env(c)));
 
-    c.set("providerRegistry", initProviderRegistry(c));
+    c.set("providers", initProviders(c));
 
     return next();
   });

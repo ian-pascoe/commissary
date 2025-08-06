@@ -2,8 +2,9 @@ import { useStore } from "@tanstack/react-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import type * as z from "zod";
-import { useConfig } from "~/hooks/use-config";
+import { useConfigInterface } from "~/hooks/use-config";
 import { useForm } from "~/hooks/use-form";
+import { useModels } from "~/hooks/use-models";
 import { useStrongholdStore } from "~/hooks/use-stronghold";
 import {
   type PreloadedProviderId,
@@ -13,14 +14,18 @@ import { queryKeys } from "~/lib/query-keys";
 import {
   ProviderConfig,
   ProviderId,
+  type ProviderModelConfig,
   ProviderSdk,
 } from "~/schemas/config/provider";
 import type { Prettify } from "~/types/prettify";
 import { createId } from "~/utils/id";
 import { AutoCompleteInput } from "../ui/autocomplete-input";
 import { Button } from "../ui/button";
+import { Label } from "../ui/label";
 import { ProviderAuthForm } from "./auth/form";
-import { ProviderModelForm } from "./model/form";
+import { HeaderMultiselector } from "./header-multiselector";
+import { ModelMultiselector } from "./model-multiselector";
+import { JsonEditor } from "./options-json-editor";
 
 export const Provider = ProviderConfig.extend({
   id: ProviderId.meta({ description: "Unique identifier for the provider" }),
@@ -38,7 +43,7 @@ interface ProviderFormProps {
 }
 
 export const ProviderForm = (props: ProviderFormProps) => {
-  const config = useConfig();
+  const config = useConfigInterface();
   const strongholdStore = useStrongholdStore();
   const queryClient = useQueryClient();
 
@@ -63,12 +68,15 @@ export const ProviderForm = (props: ProviderFormProps) => {
           }
         }
       }
+      const currentConfig = await config.get();
       const providerConfig = {
         ...rest,
         auth,
       };
-      await config.merge({
+      await config.set({
+        ...currentConfig,
         providers: {
+          ...currentConfig.providers,
           [id]: providerConfig,
         },
       });
@@ -79,7 +87,7 @@ export const ProviderForm = (props: ProviderFormProps) => {
     },
     onSettled: () => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.config.providers.all(),
+        queryKey: queryKeys.config.all(),
       });
     },
   });
@@ -95,10 +103,24 @@ export const ProviderForm = (props: ProviderFormProps) => {
     onSubmit: ({ value }) => submitMutation.mutateAsync(value),
   });
 
-  const values = useStore(form.store, (state) => state.values);
+  const { data: models } = useModels();
+  const currentId = useStore(form.store, (state) => state.values.id);
   useEffect(() => {
-    console.log("Form values changed:", JSON.stringify(values, null, 2));
-  }, [values]);
+    if (currentId && Object.keys(preloadedProviders).includes(currentId)) {
+      form.setFieldValue(
+        "models",
+        models?.data
+          .filter((model) => model.owned_by === currentId)
+          .reduce(
+            (acc, model) => {
+              acc[model.id] = {};
+              return acc;
+            },
+            {} as Record<string, ProviderModelConfig>,
+          ) || {},
+      );
+    }
+  }, [currentId, models?.data, form.setFieldValue]);
 
   const errors = useStore(form.store, (state) => state.errors);
   useEffect(() => {
@@ -132,6 +154,7 @@ export const ProviderForm = (props: ProviderFormProps) => {
                 }))}
                 allowCustomValues
                 placeholder="Select or enter a provider ID"
+                disabled={!!props.providerId}
               />
               <field.FieldError />
             </div>
@@ -192,14 +215,50 @@ export const ProviderForm = (props: ProviderFormProps) => {
           )}
         </form.AppField>
         <ProviderAuthForm form={form} />
-        <form.Subscribe selector={(state) => state.values.id}>
-          {(id) =>
-            id &&
-            !Object.keys(preloadedProviders).includes(id) && (
-              <ProviderModelForm form={form} />
-            )
-          }
-        </form.Subscribe>
+        <div className="flex flex-col gap-2">
+          <Label className="text-lg">Additional Headers</Label>
+          <form.AppField name="headers">
+            {(field) => (
+              <div className="flex flex-col gap-1">
+                <HeaderMultiselector
+                  value={field.state.value ?? {}}
+                  onChange={field.setValue}
+                />
+                <field.FieldError />
+              </div>
+            )}
+          </form.AppField>
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label className="text-lg">Provider Options</Label>
+          <div className="flex flex-col gap-4">
+            <form.AppField name="options">
+              {(field) => (
+                <div className="flex flex-col gap-1">
+                  <JsonEditor
+                    value={field.state.value ?? {}}
+                    onChange={field.setValue}
+                  />
+                  <field.FieldError />
+                </div>
+              )}
+            </form.AppField>
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label className="text-lg">Models</Label>
+          <form.AppField name="models">
+            {(field) => (
+              <div className="flex flex-col gap-1">
+                <ModelMultiselector
+                  value={field.state.value ?? {}}
+                  onChange={field.setValue}
+                />
+                <field.FieldError />
+              </div>
+            )}
+          </form.AppField>
+        </div>
       </div>
       <div className="flex justify-end">
         <form.Subscribe

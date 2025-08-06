@@ -20,15 +20,19 @@ import {
 import { LRUCache } from "lru-cache";
 import * as z from "zod";
 import type { Config } from "~/schemas/config";
+import type { ProviderOptions } from "~/types/provider-options";
 import anthropicSpoof from "../../prompts/anthropic-spoof.txt?raw";
-import { constructLocalModel } from "../construct-local-model";
+import { createLocalModel } from "../create-local-model";
 
 export const LocalChatTransportBody = z.object({
   modelId: z.string().min(1),
 });
 
 // Global model cache shared across all LocalChatTransport instances
-export const globalModelCache = new LRUCache<string, LanguageModelV2>({
+export const globalModelCache = new LRUCache<
+  string,
+  { model: LanguageModelV2; providerOptions: ProviderOptions }
+>({
   max: 20,
   ttl: 1000 * 60 * 5, // 5 minutes
 });
@@ -83,13 +87,13 @@ export class LocalChatTransport<Message extends UIMessage>
     }
 
     // Construct new model and cache it
-    const model = await constructLocalModel({
+    const { model, providerOptions } = await createLocalModel({
       modelId,
       providersConfig: this.providersConfig,
     });
 
-    globalModelCache.set(cacheKey, model);
-    return model;
+    globalModelCache.set(cacheKey, { model, providerOptions });
+    return { model, providerOptions };
   }
 
   async sendMessages(
@@ -106,11 +110,13 @@ export class LocalChatTransport<Message extends UIMessage>
 
     const stream = createUIMessageStream({
       execute: async ({ writer }) => {
-        const model = await this.getOrCreateModel(body.modelId);
+        const { model, providerOptions } = await this.getOrCreateModel(
+          body.modelId,
+        );
 
-        let system = ["You are a helpful assistant."];
+        let systemMessages = ["You are a helpful assistant."];
         if ((model as any).needsAnthropicSpoof) {
-          system = [anthropicSpoof, ...system];
+          systemMessages = [anthropicSpoof, ...systemMessages];
         }
 
         const convertedMessages = convertToModelMessages(options.messages);
@@ -135,10 +141,10 @@ export class LocalChatTransport<Message extends UIMessage>
           },
         );
         const toolResults = await Promise.all(toolPromises);
-        const tools: ToolSet = toolResults.reduce(
-          (acc, toolSet) => ({ ...acc, ...toolSet }),
-          {},
-        );
+        const tools = toolResults.reduce((acc, toolSet) => {
+          const currentTools = acc;
+          return { ...currentTools, ...toolSet };
+        }, {} as ToolSet);
 
         const result = streamText({
           model: wrapLanguageModel({
@@ -153,12 +159,11 @@ export class LocalChatTransport<Message extends UIMessage>
             ],
           }),
           messages: [
-            ...system.map(
-              (s) =>
-                ({
-                  role: "system",
-                  content: s,
-                }) satisfies ModelMessage,
+            ...systemMessages.map(
+              (systemMessage): ModelMessage => ({
+                role: "system",
+                content: systemMessage,
+              }),
             ),
             ...convertedMessages,
           ],
@@ -166,6 +171,7 @@ export class LocalChatTransport<Message extends UIMessage>
           abortSignal: options.abortSignal,
           stopWhen: [stepCountIs(100)],
           experimental_transform: [smoothStream()],
+          providerOptions,
         });
 
         const uiStream = result.toUIMessageStream();

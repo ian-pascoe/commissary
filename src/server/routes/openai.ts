@@ -1,3 +1,5 @@
+import { Anthropic } from "@anthropic-ai/sdk";
+import { GoogleGenAI } from "@google/genai";
 import {
   type AssistantContent,
   type EmbeddingModel,
@@ -13,6 +15,7 @@ import {
   type LanguageModel,
   type ModelMessage,
   type SpeechModel,
+  smoothStream,
   streamText as streamTextAI,
   type TextPart,
   type Tool,
@@ -23,9 +26,11 @@ import {
   experimental_transcribe as transcribe,
   type UserContent,
 } from "ai";
-import { Hono, type MiddlewareHandler } from "hono";
+import { Groq } from "groq-sdk";
+import type { MiddlewareHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { streamText as streamTextHono } from "hono/streaming";
+import OpenAI from "openai";
 import type { SpeechCreateParams } from "openai/resources/audio/speech";
 import type {
   TranscriptionCreateParams,
@@ -45,7 +50,12 @@ import type {
   ImageGenerateParams,
   ImagesResponse,
 } from "openai/resources/images";
+import type { Model } from "openai/resources/models";
+import { Together } from "together-ai";
 import { createId } from "~/utils/id";
+import { providers } from "../lib/providers";
+import { env } from "../utils/env";
+import { factory } from "../utils/factory";
 
 const STOP_REASON: Record<
   FinishReason,
@@ -64,15 +74,15 @@ const STOP_REASON: Record<
  * Options to init
  */
 export interface Init {
-  languageModels?:
+  languageModels:
     | Record<string, LanguageModel>
     | ((
         modelId: string,
       ) => Promise<LanguageModel | null> | LanguageModel | null);
-  imageModels?:
+  imageModels:
     | Record<string, ImageModel>
     | ((modelId: string) => Promise<ImageModel | null> | ImageModel | null);
-  embeddingModels?:
+  embeddingModels:
     | Record<string, EmbeddingModel<unknown>>
     | ((
         modelId: string,
@@ -80,16 +90,16 @@ export interface Init {
         | Promise<EmbeddingModel<unknown> | null>
         | EmbeddingModel<unknown>
         | null);
-  speechModels?:
+  speechModels:
     | Record<string, SpeechModel>
     | ((modelId: string) => Promise<SpeechModel | null> | SpeechModel | null);
-  transcriptionModels?:
+  transcriptionModels:
     | Record<string, TranscriptionModel>
     | ((
         modelId: string,
       ) => Promise<TranscriptionModel | null> | TranscriptionModel | null);
 
-  middleware?: MiddlewareHandler;
+  middleware: MiddlewareHandler;
 }
 
 type SDKInit = Parameters<typeof generateText>[0] &
@@ -100,91 +110,174 @@ type SDKInit = Parameters<typeof generateText>[0] &
  * @param init Options to init
  * @returns Hono app
  */
-export const createOpenAICompat = (init: Init): Hono => {
-  const app = new Hono();
+export const createOpenAICompat = (init: Init) => {
+  const app = factory
+    .createApp()
+    .use(init.middleware)
+    .get("/v1/models", async (c) => {
+      const { registry: _registry, ...resolvedProviders } = providers();
+      const models: Model[] = [];
 
-  if (init.middleware) {
-    app.use(init.middleware);
-  }
+      // Create promises for each provider's model fetching
+      const modelPromises = Object.keys(resolvedProviders).map(
+        async (provider) => {
+          const providerModels: Model[] = [];
 
-  // Add models endpoint
-  app.get("/v1/models", async (c) => {
-    const models: Array<{
-      id: string;
-      object: "model";
-      created: number;
-      owned_by: string;
-    }> = [];
+          try {
+            switch (provider as keyof typeof resolvedProviders) {
+              case "anthropic": {
+                const anthropic = new Anthropic({
+                  apiKey: env().ANTHROPIC_API_KEY,
+                });
+                const anthropicModels = await anthropic.models.list({
+                  limit: 1000,
+                });
+                for (const model of anthropicModels.data) {
+                  providerModels.push({
+                    id: model.id,
+                    object: "model",
+                    created: new Date(model.created_at).getTime() / 1000,
+                    owned_by: provider,
+                  });
+                }
+                break;
+              }
+              case "deepseek": {
+                const deepseek = new OpenAI({
+                  baseURL: "https://api.deepseek.com",
+                  apiKey: env().DEEPSEEK_API_KEY,
+                });
+                const deepseekModels = await deepseek.models.list();
+                for (const model of deepseekModels.data) {
+                  providerModels.push({
+                    id: model.id,
+                    object: "model",
+                    created: model.created,
+                    owned_by: provider,
+                  });
+                }
+                break;
+              }
+              case "google": {
+                const google = new GoogleGenAI({
+                  apiKey: env().GOOGLE_API_KEY,
+                });
+                const googleModels = await google.models.list({
+                  config: { pageSize: 1000 },
+                });
+                for (const model of googleModels.page) {
+                  if (model.name) {
+                    providerModels.push({
+                      id: model.name.split("/").pop() ?? "",
+                      object: "model",
+                      created: Date.now() / 1000,
+                      owned_by: provider,
+                    });
+                  }
+                }
+                break;
+              }
+              case "groq": {
+                const groq = new Groq({
+                  apiKey: env().GROQ_API_KEY,
+                });
+                const groqModels = await groq.models.list();
+                for (const model of groqModels.data) {
+                  providerModels.push({
+                    id: model.id,
+                    object: "model",
+                    created: model.created,
+                    owned_by: provider,
+                  });
+                }
+                break;
+              }
+              case "openai": {
+                const openai = new OpenAI({
+                  apiKey: env().OPENAI_API_KEY,
+                });
+                const openaiModels = await openai.models.list();
+                for (const model of openaiModels.data) {
+                  providerModels.push({
+                    id: model.id,
+                    object: "model",
+                    created: model.created,
+                    owned_by: provider,
+                  });
+                }
+                break;
+              }
+              case "openrouter": {
+                const url = "https://openrouter.ai/api/v1/models";
+                const options = { method: "GET" };
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                  throw new Error(
+                    `Failed to fetch models from OpenRouter: ${response.statusText}`,
+                  );
+                }
+                const { data } = (await response.json()) as any;
+                for (const model of data) {
+                  providerModels.push({
+                    id: model.id,
+                    object: "model",
+                    created: model.created,
+                    owned_by: provider,
+                  });
+                }
+                break;
+              }
+              case "togetherai": {
+                const togetherai = new Together({
+                  apiKey: env().TOGETHERAI_API_KEY,
+                });
+                const togetheraiModels = await togetherai.models.list();
+                for (const model of togetheraiModels) {
+                  providerModels.push({
+                    id: model.id,
+                    object: "model",
+                    created: model.created,
+                    owned_by: provider,
+                  });
+                }
+                break;
+              }
+              default: {
+                console.warn(`Unhandled provider: ${provider}`);
+                break;
+              }
+            }
+          } catch (error) {
+            console.error(
+              `Error fetching models for provider ${provider}:`,
+              error,
+            );
+          }
 
-    const timestamp = Math.floor(Date.now() / 1000);
+          return providerModels;
+        },
+      );
 
-    if (init.languageModels) {
-      if (typeof init.languageModels === "object") {
-        models.push(
-          ...Object.keys(init.languageModels).map((id) => ({
-            id,
-            object: "model" as const,
-            created: timestamp,
-            owned_by: "custom",
-          })),
-        );
+      // Wait for all providers to finish fetching models
+      const providerModelArrays = await Promise.all(modelPromises);
+
+      // Flatten all provider models into the main models array
+      for (const providerModels of providerModelArrays) {
+        models.push(...providerModels);
       }
-    }
 
-    if (init.imageModels) {
-      if (typeof init.imageModels === "object") {
-        models.push(
-          ...Object.keys(init.imageModels).map((id) => ({
-            id,
-            object: "model" as const,
-            created: timestamp,
-            owned_by: "custom",
-          })),
-        );
-      }
-    }
-
-    if (init.embeddingModels) {
-      if (typeof init.embeddingModels === "object") {
-        models.push(
-          ...Object.keys(init.embeddingModels).map((id) => ({
-            id,
-            object: "model" as const,
-            created: timestamp,
-            owned_by: "custom",
-          })),
-        );
-      }
-    }
-
-    if (init.speechModels) {
-      if (typeof init.speechModels === "object") {
-        models.push(
-          ...Object.keys(init.speechModels).map((id) => ({
-            id,
-            object: "model" as const,
-            created: timestamp,
-            owned_by: "custom",
-          })),
-        );
-      }
-    }
-
-    return c.json({
-      object: "list",
-      data: models,
-    });
-  });
-
-  if (init.languageModels) {
-    const models = init.languageModels;
-    app.post("/v1/chat/completions", async (c) => {
+      return c.json({
+        object: "list",
+        data: models,
+      });
+    })
+    .post("/v1/chat/completions", async (c) => {
       const body = await c.req.json<ChatCompletionCreateParams>();
 
       const model =
-        typeof models === "function"
-          ? await models(body.model)
-          : models[body.model];
+        typeof init.languageModels === "function"
+          ? await init.languageModels(body.model)
+          : init.languageModels[body.model];
       if (!model) {
         throw new HTTPException(400, {
           message: "Invalid model",
@@ -258,6 +351,7 @@ export const createOpenAICompat = (init: Init): Hono => {
                         type: "file",
                         data: c.file.file_data ?? "",
                         mediaType,
+                        filename: c.file.filename,
                       };
                     }
                     if (c.type === "input_audio") {
@@ -346,6 +440,7 @@ export const createOpenAICompat = (init: Init): Hono => {
               }
           : undefined,
         seed: body.seed ?? undefined,
+        experimental_transform: [smoothStream()],
       };
 
       if (body.stream) {
@@ -552,15 +647,14 @@ export const createOpenAICompat = (init: Init): Hono => {
               content: generated.text,
               refusal: "",
               tool_calls: generated.toolCalls.map(
-                (call) =>
-                  ({
-                    id: call.toolCallId,
-                    type: "function",
-                    function: {
-                      name: call.toolName,
-                      arguments: JSON.stringify(call.input),
-                    },
-                  }) satisfies ChatCompletionMessageToolCall,
+                (call): ChatCompletionMessageToolCall => ({
+                  id: call.toolCallId,
+                  type: "function",
+                  function: {
+                    name: call.toolName,
+                    arguments: JSON.stringify(call.input),
+                  },
+                }),
               ),
             },
           },
@@ -573,12 +667,8 @@ export const createOpenAICompat = (init: Init): Hono => {
             }
           : undefined,
       } satisfies ChatCompletion);
-    });
-  }
-
-  if (init.imageModels) {
-    const models = init.imageModels;
-    app.post("/v1/images/generations", async (c) => {
+    })
+    .post("/v1/images/generations", async (c) => {
       const body = await c.req.json<ImageGenerateParams>();
       if (!body.model) {
         throw new HTTPException(400, {
@@ -586,9 +676,9 @@ export const createOpenAICompat = (init: Init): Hono => {
         });
       }
       const model =
-        typeof models === "function"
-          ? await models(body.model)
-          : models[body.model];
+        typeof init.imageModels === "function"
+          ? await init.imageModels(body.model)
+          : init.imageModels[body.model];
       if (!model) {
         throw new HTTPException(400, {
           message: "Invalid model",
@@ -608,16 +698,13 @@ export const createOpenAICompat = (init: Init): Hono => {
           b64_json: image.base64,
         })),
       } satisfies ImagesResponse);
-    });
-  }
-  if (init.embeddingModels) {
-    const models = init.embeddingModels;
-    app.post("/v1/embeddings", async (c) => {
+    })
+    .post("/v1/embeddings", async (c) => {
       const body = await c.req.json<EmbeddingCreateParams>();
       const model =
-        typeof models === "function"
-          ? await models(body.model)
-          : models[body.model];
+        typeof init.embeddingModels === "function"
+          ? await init.embeddingModels(body.model)
+          : init.embeddingModels[body.model];
       if (!model) {
         throw new HTTPException(400, {
           message: "Invalid model",
@@ -641,17 +728,13 @@ export const createOpenAICompat = (init: Init): Hono => {
           total_tokens: generated.usage.tokens,
         },
       } satisfies CreateEmbeddingResponse);
-    });
-  }
-
-  if (init.speechModels) {
-    const models = init.speechModels;
-    app.post("/v1/audio/speech", async (c) => {
+    })
+    .post("/v1/audio/speech", async (c) => {
       const body = await c.req.json<SpeechCreateParams>();
       const model =
-        typeof models === "function"
-          ? await models(body.model)
-          : models[body.model];
+        typeof init.speechModels === "function"
+          ? await init.speechModels(body.model)
+          : init.speechModels[body.model];
       if (!model) {
         throw new HTTPException(400, {
           message: "Invalid model",
@@ -672,17 +755,13 @@ export const createOpenAICompat = (init: Init): Hono => {
           "Content-Length": generated.audio.uint8Array.byteLength.toString(),
         },
       });
-    });
-  }
-
-  if (init.transcriptionModels) {
-    const models = init.transcriptionModels;
-    app.post("/v1/audio/transcription", async (c) => {
+    })
+    .post("/v1/audio/transcription", async (c) => {
       const body = await c.req.json<TranscriptionCreateParams>();
       const model =
-        typeof models === "function"
-          ? await models(body.model)
-          : models[body.model];
+        typeof init.transcriptionModels === "function"
+          ? await init.transcriptionModels(body.model)
+          : init.transcriptionModels[body.model];
       if (!model) {
         throw new HTTPException(400, {
           message: "Invalid model",
@@ -727,7 +806,6 @@ export const createOpenAICompat = (init: Init): Hono => {
         language: generated.language,
       } satisfies TranscriptionCreateResponse);
     });
-  }
 
   return app;
 };

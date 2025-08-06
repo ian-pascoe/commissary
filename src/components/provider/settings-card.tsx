@@ -1,7 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toMerged } from "es-toolkit";
 import { Pencil, Plus, Trash } from "lucide-react";
-import { useConfig } from "~/hooks/use-config";
+import { useMemo } from "react";
+import { useConfigInterface } from "~/hooks/use-config";
 import { useProvidersConfig } from "~/hooks/use-providers";
+import { preloadedProviders } from "~/lib/preloaded-providers";
 import { queryKeys } from "~/lib/query-keys";
 import { Button } from "../ui/button";
 import {
@@ -14,12 +17,13 @@ import {
 } from "../ui/card";
 import { Spinner } from "../ui/kibo-ui/spinner";
 import { CreateProviderButton } from "./create-button";
+import { ProviderIcon } from "./icon";
 import { UpdateProviderButton } from "./update-button";
 
 export const ProviderSettingsCard = () => {
-  const config = useConfig();
+  const config = useConfigInterface();
   const queryClient = useQueryClient();
-  const { data: providers, status } = useProvidersConfig();
+  const { data: providersConfig, status } = useProvidersConfig();
 
   const deleteProviderMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -35,10 +39,15 @@ export const ProviderSettingsCard = () => {
     },
     onSettled: () => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.config.providers.all(),
+        queryKey: queryKeys.config.all(),
       });
     },
   });
+
+  const resolvedProvidersConfig = useMemo(
+    () => toMerged(providersConfig ?? {}, preloadedProviders),
+    [providersConfig],
+  );
 
   return (
     <Card>
@@ -51,19 +60,29 @@ export const ProviderSettingsCard = () => {
           <Spinner />
         ) : status === "error" ? (
           <div className="text-red-500">Error loading providers.</div>
-        ) : providers && Object.keys(providers).length === 0 ? (
+        ) : Object.keys(providersConfig ?? {}).length === 0 ? (
           <div>No providers configured.</div>
         ) : (
           <ul className="space-y-2">
-            {providers &&
-              Object.entries(providers).map(([key, providerConfig]) => (
+            {Object.keys(providersConfig ?? {}).map((providerId) => {
+              const providerConfig =
+                resolvedProvidersConfig[
+                  providerId as keyof typeof resolvedProvidersConfig
+                ];
+              return (
                 <li
-                  key={key}
+                  key={providerId}
                   className="flex items-center justify-between rounded-md border p-4"
                 >
-                  <div className="flex flex-col">
-                    <div className="font-medium">
-                      {providerConfig.name || key}
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <ProviderIcon
+                        providerId={providerId}
+                        className="size-6"
+                      />
+                      <div className="font-medium">
+                        {providerConfig.name || providerId}
+                      </div>
                     </div>
                     {providerConfig.baseUrl && (
                       <div className="text-muted-foreground text-sm">
@@ -73,17 +92,20 @@ export const ProviderSettingsCard = () => {
                   </div>
                   <div className="flex gap-2">
                     <UpdateProviderButton
-                      providerId={key}
+                      providerId={providerId}
                       providerConfig={providerConfig}
                     >
                       <Pencil />
                     </UpdateProviderButton>
-                    <Button onClick={() => deleteProviderMutation.mutate(key)}>
+                    <Button
+                      onClick={() => deleteProviderMutation.mutate(providerId)}
+                    >
                       <Trash />
                     </Button>
                   </div>
                 </li>
-              ))}
+              );
+            })}
           </ul>
         )}
       </CardContent>

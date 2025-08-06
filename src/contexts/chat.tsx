@@ -15,7 +15,7 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
-import { useConfig } from "~/hooks/use-config";
+import { useConfigInterface } from "~/hooks/use-config";
 import { useLocalDb } from "~/hooks/use-local-db";
 import { useMcpClients, useMcpConfig } from "~/hooks/use-mcp";
 import { useMessages } from "~/hooks/use-messages";
@@ -57,7 +57,7 @@ export type ChatProviderProps = {
 
 export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
   const localDb = useLocalDb();
-  const config = useConfig();
+  const config = useConfigInterface();
   const queryClient = useQueryClient();
 
   const { data: providersConfig } = useProvidersConfig();
@@ -219,25 +219,35 @@ export const ChatProvider = ({ children, ...props }: ChatProviderProps) => {
     ],
   );
 
+  const contextValue = useMemo(
+    () => ({
+      ...chat,
+      conversation,
+      setConversation,
+      isListening,
+      setIsListening,
+      input,
+      setInput,
+      model,
+      setModel,
+      fileData,
+      setFileData,
+      handleSubmit,
+    }),
+    [
+      chat,
+      conversation,
+      setConversation,
+      isListening,
+      input,
+      model,
+      fileData,
+      handleSubmit,
+    ],
+  );
+
   return (
-    <ChatContext.Provider
-      value={{
-        ...chat,
-        conversation,
-        setConversation,
-        isListening,
-        setIsListening,
-        input,
-        setInput,
-        model,
-        setModel,
-        fileData,
-        setFileData,
-        handleSubmit,
-      }}
-    >
-      {children}
-    </ChatContext.Provider>
+    <ChatContext.Provider value={contextValue}>{children}</ChatContext.Provider>
   );
 };
 

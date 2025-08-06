@@ -1,5 +1,5 @@
 import { type ComponentProps, useState } from "react";
-import type { ProviderConfig } from "~/schemas/config/provider";
+import type { McpConfig } from "~/schemas/config/mcp";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -9,36 +9,36 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../ui/dialog";
-import { ProviderForm } from "./form";
+import { McpForm } from "./form";
 
-export type UpdateProviderButtonProps = ComponentProps<typeof Button> & {
-  providerId: string;
-  providerConfig: ProviderConfig;
+export type UpdateMcpButtonProps = ComponentProps<typeof Button> & {
+  mcpId: string;
+  mcpConfig: McpConfig;
 };
 
-export const UpdateProviderButton = ({
+export const UpdateMcpButton = ({
   children,
-  providerId,
-  providerConfig,
+  mcpId,
+  mcpConfig,
   ...props
-}: UpdateProviderButtonProps) => {
+}: UpdateMcpButtonProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button {...props}>{children ?? "Update Provider"}</Button>
+        <Button {...props}>{children ?? "Update MCP Server"}</Button>
       </DialogTrigger>
       <DialogContent className="max-h-screen overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Update Provider</DialogTitle>
+          <DialogTitle>Update MCP Server</DialogTitle>
           <DialogDescription>
-            Update the provider configuration
+            Update the MCP server configuration
           </DialogDescription>
         </DialogHeader>
-        <ProviderForm
-          providerId={providerId}
-          providerConfig={providerConfig}
+        <McpForm
+          mcpId={mcpId}
+          mcpConfig={mcpConfig}
           onSuccess={() => setIsOpen(false)}
         />
       </DialogContent>

@@ -7,7 +7,11 @@
     "opener:default",
     {
       "identifier": "opener:allow-open-path",
-      "allow": [{ "path": "**/*" }, { "path": "**/.*" }]
+      "allow": [
+        { "path": "**/*" },
+        { "path": "**/.*" },
+        { "path": "$HOME/.config/commissary.json" }
+      ]
     }
   ]
 }

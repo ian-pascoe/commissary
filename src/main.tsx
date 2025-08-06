@@ -8,7 +8,9 @@ import { Splashscreen } from "./components/splashscreen";
 import { routeTree } from "./routeTree.gen";
 import { initAutoHideScrollbars } from "./utils/auto-hide-scrollbars";
 
-import "@fontsource-variable/geist-mono";
+import "@fontsource-variable/inter";
+import "@fontsource-variable/jetbrains-mono";
+import "@fontsource-variable/merriweather";
 import "./styles/global.css";
 
 const rootElement = document.getElementById("app");
@@ -26,7 +28,14 @@ const { config } = await import("./lib/config");
 const { authClient } = await import("./lib/auth");
 const { apiClient } = await import("./lib/api");
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      gcTime: 1000 * 60 * 60 * 24, // 24 hours
+    },
+  },
+});
 const router = createRouter({
   routeTree,
   context: {
