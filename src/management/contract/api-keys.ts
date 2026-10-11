@@ -202,8 +202,10 @@ export const REDACTED_PREFIX = "[redacted]";
 
 /** Runtime state of the credential a key produced (counters, cooldowns, last error). */
 export const KeyRuntime = Schema.Struct({
-  /** Credential id (`claude:apikey:…`): what `PATCH /credentials/status` takes as `name`. */
-  id: Schema.String,
+  /**
+   * The key's keyed `auth_index`: what `PATCH /credentials/status` and the usage filters take. The credential id is not
+   * sent (it is an unsalted hash of the key).
+   */
   auth_index: Schema.String,
   status: CredentialStatus,
   unavailable: Schema.Boolean,

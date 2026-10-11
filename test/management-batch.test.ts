@@ -194,6 +194,19 @@ describe("POST /credentials/batch", () => {
       failed: 4,
       skipped: 0,
     });
+
+    // A delete answers a config id like any name that is no auth file: the reply confirms no guessed key.
+    const deleted = await batch({ action: "delete", names: [configId, "ghost.json"] });
+
+    expect(deleted.body).toMatchObject({
+      results: [
+        { name: configId, ok: true },
+        { name: "ghost.json", ok: true },
+      ],
+    });
+    expect((await controlPlane().listCredentials()).some((entry) => entry.id === configId)).toBe(
+      true,
+    );
   });
 
   it("deletes the named accounts, keeping the rest; a name already gone counts as deleted", async () => {

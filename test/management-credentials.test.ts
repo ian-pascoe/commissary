@@ -1,6 +1,6 @@
 // /v8/management/credentials* and /routing/cooldown/reset through the router with the real ControlPlane.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { authIndexOf } from "../src/management/auth-index.ts";
+import { authIndexOf } from "./support/auth-index.ts";
 import {
   claudeFile,
   controlPlane,
@@ -389,10 +389,18 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     const entries = await controlPlane().listCredentials();
     const id = entries.find((entry) => entry.source === "config")!.id;
     const authIndex = authIndexOf(id);
+
+    // A config key is addressed by its auth_index only: its id (a hash of the key) is no lookup key.
     expect(
       await json(
         "/v8/management/credentials/status",
         jsonInit("PATCH", { name: id, disabled: true }),
+      ),
+    ).toMatchObject({ status: 404 });
+    expect(
+      await json(
+        "/v8/management/credentials/status",
+        jsonInit("PATCH", { auth_index: authIndex, disabled: true }),
       ),
     ).toMatchObject({
       status: 200,
@@ -440,7 +448,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     expect(
       await json(
         "/v8/management/credentials/status",
-        jsonInit("PATCH", { name: compat.id, disabled: true }),
+        jsonInit("PATCH", { auth_index: authIndexOf(compat.id), disabled: true }),
       ),
     ).toMatchObject({ status: 409 });
   });

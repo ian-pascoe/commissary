@@ -132,6 +132,8 @@ export interface PipelineOptions {
   readonly websocketConnector?: Layer.Layer<UpstreamWebSocketConnector>;
   /** Extra global layers (middleware, loggers) merged next to the routes. */
   readonly extraLayers?: Layer.Layer<never, never, HttpRouter.HttpRouter>;
+  /** Overrides of the request's bindings (Access is always configured). */
+  readonly bindings?: Partial<Env>;
 }
 
 export interface PipelineHarness {
@@ -185,7 +187,7 @@ export const makePipeline = (options: PipelineOptions): PipelineHarness => {
 
     return handler(
       new Request(`https://proxy.test${path}`, { ...init, headers }),
-      requestContext(accessEnv, ctx),
+      requestContext({ ...accessEnv, ...options.bindings }, ctx),
     );
   };
 

@@ -8,12 +8,15 @@
  * required, `until` defaults to now, hour ranges are capped at 31 days and day ranges at 400).
  *
  * Deviations: `queue` pops from the records not yet exported (at most 1000 per call) and the export payload carries
- * the Access principal as `api_key`. Go's `GET /observability/usage/api-keys` (`GetAPIKeyUsage`, api_key_usage.go,
+ * the Access principal as `api_key`. Credentials appear only as the keyed `auth_index` (`group_by=auth` keys, the
+ * export's `auth_index`, the `auth_index` filter); the stored credential id is never answered, and the old `auth_id`
+ * filter is refused (400) rather than ignored. Go's `GET /observability/usage/api-keys` (`GetAPIKeyUsage`, api_key_usage.go,
  * per-key counters for the upstream panel) is not ported: the Keys page's `GET /api-keys` carries the same counters.
  */
 import { Clock, Effect } from "effect";
 import { HttpRouter } from "effect/http";
 import { WorkerEnv } from "../platform/env.ts";
+import { currentAuthIndexer } from "./auth-index.ts";
 import {
   BUCKET_MS,
   GROUP_BY,
@@ -31,7 +34,7 @@ import {
   summarizeUsageSeries,
   type UsageFilter,
 } from "../usage/d1.ts";
-import { handled, jsonReply, queryParams, replyError } from "./http.ts";
+import { controlPlane, handled, jsonReply, queryParams, replyError } from "./http.ts";
 
 const BASE = "/v8/management/observability/usage";
 
@@ -85,7 +88,12 @@ const usageQueue = Effect.gen(function* () {
     popUsageQueue(db, Math.min(count, MAX_QUEUE_COUNT), now),
   );
 
-  return jsonReply(200, rows.map(rowToPayload));
+  const authIndexOf = yield* currentAuthIndexer;
+
+  return jsonReply(
+    200,
+    rows.map((row) => rowToPayload(row, authIndexOf)),
+  );
 });
 
 // --- records and summary -------------------------------------------------------------------------------------------
@@ -129,7 +137,10 @@ const parseFilter = (params: URLSearchParams) =>
     const provider = optional(params, "provider");
     const model = optional(params, "model");
     const principal = optional(params, "principal");
-    const authId = optional(params, "auth_id");
+    const authIndex = optional(params, "auth_index");
+
+    // Credential ids are not published any more; a stale client must not silently get unfiltered totals.
+    if (params.has("auth_id")) return yield* replyError(400, "auth_id was replaced by auth_index");
 
     if (provider !== undefined) filter.provider = provider.toLowerCase();
 
@@ -137,7 +148,17 @@ const parseFilter = (params: URLSearchParams) =>
 
     if (principal !== undefined) filter.principal = principal;
 
-    if (authId !== undefined) filter.authId = authId;
+    if (authIndex !== undefined) {
+      filter.authIndex = authIndex.toLowerCase();
+
+      // A live credential narrows D1 to its id directly; only other indexes read the distinct ids (`resolveAuthIds`).
+      const live = yield* controlPlane("credentialIdOfAuthIndex", (stub) =>
+        stub.credentialIdOfAuthIndex(authIndex.toLowerCase()),
+      );
+
+      if (live !== undefined) filter.liveAuthId = live;
+    }
+
     const failed = optional(params, "failed");
 
     if (failed !== undefined) {
@@ -170,17 +191,22 @@ const usageRecords = Effect.gen(function* () {
   const limit = yield* parseLimit(params);
   const before = optional(params, "before");
   const db = yield* usageDb;
+  const authIndexOf = yield* currentAuthIndexer;
 
   const page = yield* query("records", () =>
-    listUsageRecords(db, {
-      ...filter,
-      ...(limit === undefined ? {} : { limit }),
-      ...(before === undefined ? {} : { before }),
-    }),
+    listUsageRecords(
+      db,
+      {
+        ...filter,
+        ...(limit === undefined ? {} : { limit }),
+        ...(before === undefined ? {} : { before }),
+      },
+      authIndexOf,
+    ),
   );
 
   return jsonReply(200, {
-    records: page.rows.map(rowToPayload),
+    records: page.rows.map((row) => rowToPayload(row, authIndexOf)),
     ...(page.nextBefore === undefined ? {} : { next_before: page.nextBefore }),
   });
 });
@@ -198,14 +224,19 @@ const usageSummary = Effect.gen(function* () {
   }
 
   const db = yield* usageDb;
+  const authIndexOf = yield* currentAuthIndexer;
 
   const summary = yield* query("summary", () =>
-    summarizeUsage(db, {
-      ...filter,
-      // SAFETY: groupBy was checked against GROUP_BY above.
-      groupBy: groupBy as GroupBy,
-      ...(limit === undefined ? {} : { limit }),
-    }),
+    summarizeUsage(
+      db,
+      {
+        ...filter,
+        // SAFETY: groupBy was checked against GROUP_BY above.
+        groupBy: groupBy as GroupBy,
+        ...(limit === undefined ? {} : { limit }),
+      },
+      authIndexOf,
+    ),
   );
 
   return jsonReply(200, { group_by: groupBy, totals: summary.totals, groups: summary.groups });
@@ -217,7 +248,7 @@ const usageSeries = Effect.gen(function* () {
   // Only the series filters: summary-only params (principal, failed) are ignored, not validated.
   const scoped = new URLSearchParams();
 
-  for (const name of ["since", "until", "provider", "model", "auth_id"]) {
+  for (const name of ["since", "until", "provider", "model", "auth_index", "auth_id"]) {
     const value = params.get(name);
 
     if (value !== null) scoped.set(name, value);
@@ -254,18 +285,24 @@ const usageSeries = Effect.gen(function* () {
   }
 
   const db = yield* usageDb;
+  const authIndexOf = yield* currentAuthIndexer;
 
   const series = yield* query("series", () =>
-    summarizeUsageSeries(db, {
-      since,
-      until,
-      bucket: seriesBucket,
-      // SAFETY: see above.
-      groupBy: groupBy as SeriesGroupBy,
-      ...(filter.provider === undefined ? {} : { provider: filter.provider }),
-      ...(filter.model === undefined ? {} : { model: filter.model }),
-      ...(filter.authId === undefined ? {} : { authId: filter.authId }),
-    }),
+    summarizeUsageSeries(
+      db,
+      {
+        since,
+        until,
+        bucket: seriesBucket,
+        // SAFETY: see above.
+        groupBy: groupBy as SeriesGroupBy,
+        ...(filter.provider === undefined ? {} : { provider: filter.provider }),
+        ...(filter.model === undefined ? {} : { model: filter.model }),
+        ...(filter.authIndex === undefined ? {} : { authIndex: filter.authIndex }),
+        ...(filter.liveAuthId === undefined ? {} : { liveAuthId: filter.liveAuthId }),
+      },
+      authIndexOf,
+    ),
   );
 
   return jsonReply(200, { bucket, group_by: groupBy, series });

@@ -2,7 +2,7 @@
 import { Layer, Logger, References } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Config } from "../src/config/schema.ts";
-import { authIndexOf } from "../src/management/auth-index.ts";
+import { authIndexOf, unkeyedAuthIndexOf } from "./support/auth-index.ts";
 import { TraceLayer } from "../src/observability/trace.ts";
 import {
   jsonResponse,
@@ -56,7 +56,8 @@ beforeAll(async () => {
   config = await loadConfig(YAML);
 });
 
-const TRACE = /^(\d{14})-([0-9a-f]{16})-([0-9a-f-]{36})$/;
+/** The header is the bare request id (a random UUID): never derived from the credential (deviation from Go). */
+const TRACE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 const pipeline = (respond: Parameters<typeof makePipeline>[0]["respond"]) => {
   const p = makePipeline({ config, respond, extraLayers: Layer.mergeAll(TraceLayer, capture) });
@@ -71,17 +72,17 @@ const chat = {
 };
 
 describe("X-CPA-TRACE-ID", () => {
-  it("carries the selection time, the credential's auth index and the request id", async () => {
+  it("carries the request id only, never the credential's index or id", async () => {
     const p = pipeline(() => jsonResponse(COMPLETION));
     const response = await p.call("/v1/chat/completions", postJson(chat));
     expect(response.status).toBe(200);
     const header = response.headers.get("x-cpa-trace-id") ?? "";
-    const match = TRACE.exec(header);
-    expect(match).not.toBeNull();
+    expect(header).toMatch(TRACE);
     const record = p.records[0]!;
-    expect(match?.[2]).toBe(authIndexOf(record.authId));
-    // The usage record shares the request id of the inbound request.
-    expect(record.traceId).toBe(match?.[3]);
+    expect(header).not.toContain(authIndexOf(record.authId));
+    expect(header).not.toContain(unkeyedAuthIndexOf(record.authId));
+    // The usage record shares the request id of the inbound request: admins join through it.
+    expect(record.traceId).toBe(header);
     expect(record.requestId).not.toBe(record.traceId);
   });
 
@@ -165,7 +166,8 @@ describe("structured request log", () => {
       attempts: 1,
     });
     expect(line.annotations["requestId"]).toMatch(/^[0-9a-f-]{36}$/);
-    expect(line.annotations["authIndex"]).toMatch(/^[0-9a-f]{16}$/);
+    // The log carries the keyed index of the credential that served the request.
+    expect(line.annotations["authIndex"]).toBe(authIndexOf(p.records[0]!.authId));
     expect(typeof line.annotations["latencyMs"]).toBe("number");
     const serialised = JSON.stringify(logs);
 

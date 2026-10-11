@@ -9,7 +9,7 @@ import type { Schema } from "effect";
 import type { Json } from "../json/index.ts";
 import type { Credential } from "../credentials/model.ts";
 import type { RefreshTarget } from "../credentials/pool.ts";
-import { authIndexOf } from "./auth-index.ts";
+import type { AuthIndexer } from "./auth-index.ts";
 
 /** A credential reference as the panel sends it: file name (or id) and/or `auth_index`. */
 export interface CredentialRef {
@@ -17,19 +17,27 @@ export interface CredentialRef {
   readonly authIndex?: string;
 }
 
-/** `matchesAuthFileLookup`: both given criteria must match; a reference without criteria matches nothing. */
+/**
+ * `matchesAuthFileLookup`: both given criteria must match; a reference without criteria matches nothing. `authIndexOf`
+ * is the deployment's indexer.
+ *
+ * Deviation from Go: `name` matches auth files only. A config API key is addressed by its `auth_index`: its id is
+ * derived from the key and never published, and matching it would let a caller confirm guessed keys.
+ */
 export const findCredential = (
   entries: ReadonlyArray<RefreshTarget>,
   ref: CredentialRef,
+  authIndexOf: AuthIndexer,
 ): RefreshTarget | undefined => {
   const name = ref.name?.trim() ?? "";
-  const authIndex = ref.authIndex?.trim() ?? "";
+  // Indexes are lower-case hex; match them case-insensitively like every other `auth_index` input.
+  const authIndex = ref.authIndex?.trim().toLowerCase() ?? "";
 
   if (name === "" && authIndex === "") return undefined;
 
   return entries.find(
     (entry) =>
-      (name === "" || entry.credential.id === name) &&
+      (name === "" || (entry.credential.source === "file" && entry.credential.id === name)) &&
       (authIndex === "" || authIndexOf(entry.credential.id) === authIndex),
   );
 };

@@ -97,7 +97,7 @@ export const mergePoints = (
 export interface UsageFilters {
   readonly model?: string | undefined;
   readonly provider?: string | undefined;
-  /** A credential id. */
+  /** A credential's `auth_index`. */
   readonly account?: string | undefined;
   /** An Access principal. */
   readonly user?: string | undefined;
@@ -143,7 +143,7 @@ export const FILTER_LABELS: Readonly<Record<FilterKey, string>> = {
 export const filterQuery = (filters: UsageFilters) => ({
   ...(filters.model === undefined ? {} : { model: filters.model }),
   ...(filters.provider === undefined ? {} : { provider: filters.provider }),
-  ...(filters.account === undefined ? {} : { auth_id: filters.account }),
+  ...(filters.account === undefined ? {} : { auth_index: filters.account }),
   ...(filters.user === undefined ? {} : { principal: filters.user }),
 });
 

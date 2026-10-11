@@ -79,7 +79,8 @@ const listCredentials = Effect.gen(function* () {
   if (pagination === "invalid_page_size")
     return yield* replyError(400, "page_size must be a positive integer");
   const name = params.get("name")?.trim() ?? "";
-  const authIndex = params.get("auth_index")?.trim() ?? "";
+  // Indexes are lower-case hex; match them case-insensitively like every other `auth_index` input.
+  const authIndex = params.get("auth_index")?.trim().toLowerCase() ?? "";
 
   const entries = yield* controlPlane("listCredentialEntries", (stub) =>
     stub.listCredentialEntries(),
@@ -331,7 +332,10 @@ const credentialModels = Effect.gen(function* () {
     Effect.mapError(() => replyError(502, "model registry unavailable")),
   );
 
-  const models = snapshot.modelsForCredential(name).map((model) => ({
+  // Auth files only: a config credential id is derived from its key, so answering for one would confirm guesses.
+  const file = snapshot.sources.some((source) => source.source === "file" && source.id === name);
+
+  const models = (file ? snapshot.modelsForCredential(name) : []).map((model) => ({
     id: model.id,
     ...(model.displayName === undefined || model.displayName === ""
       ? {}

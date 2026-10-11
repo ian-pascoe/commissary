@@ -20,6 +20,7 @@ import {
 } from "../src/management/config-document.ts";
 import { buildCredentialEntry, cooldownSnapshot } from "../src/management/credential-entry.ts";
 import { keepStoredKeys, typedKeysAt } from "../src/management/key-duplicates.ts";
+import { authIndexOf } from "./support/auth-index.ts";
 import { cred, cooling, state } from "./support/credentials.ts";
 
 const NOW = 1_800_000_000_000;
@@ -214,7 +215,13 @@ describe("credential entries", () => {
       },
     });
 
-    const entry = buildCredentialEntry(credential, state({ success: 5, failed: 1 }), NOW);
+    const entry = buildCredentialEntry(
+      credential,
+      state({ success: 5, failed: 1 }),
+      NOW,
+      authIndexOf,
+    );
+
     expect(entry).toMatchObject({
       id: "codex.json",
       name: "codex.json",
@@ -292,7 +299,7 @@ describe("credential entries", () => {
       },
     });
 
-    const entry = buildCredentialEntry(credential, emptyState(), NOW);
+    const entry = buildCredentialEntry(credential, emptyState(), NOW, authIndexOf);
 
     expect(entry).toMatchObject({
       prefix: "team",
@@ -337,7 +344,7 @@ describe("credential entries", () => {
       expect(raw).not.toContain(secret);
 
     // Unset fields stay out of the entry, so the routing defaults apply.
-    const plain = buildCredentialEntry(cred("plain.json"), emptyState(), NOW);
+    const plain = buildCredentialEntry(cred("plain.json"), emptyState(), NOW, authIndexOf);
 
     for (const key of ["prefix", "disable_cooling", "headers", "excluded_models", "model_aliases"])
       expect(plain).not.toHaveProperty(key);
@@ -371,7 +378,7 @@ describe("credential entries", () => {
       lastError: { message: "x", retryable: true, httpStatus: 503 },
     });
 
-    const entry = buildCredentialEntry(credential, credentialWide, NOW);
+    const entry = buildCredentialEntry(credential, credentialWide, NOW, authIndexOf);
     expect(entry).toMatchObject({
       unavailable: true,
       status: "error",
@@ -389,7 +396,7 @@ describe("credential entries", () => {
       [],
     );
     expect(
-      buildCredentialEntry(cred("d.json", { disabled: true }), emptyState(), NOW),
+      buildCredentialEntry(cred("d.json", { disabled: true }), emptyState(), NOW, authIndexOf),
     ).toMatchObject({
       disabled: true,
       status: "disabled",

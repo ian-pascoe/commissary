@@ -74,8 +74,8 @@ describe("mergePoints", () => {
 describe("filters", () => {
   it("maps filters to management API query parameters", () => {
     expect(
-      filterQuery({ model: "gpt-5", account: "codex-a.json", user: "ian@example.com" }),
-    ).toEqual({ model: "gpt-5", auth_id: "codex-a.json", principal: "ian@example.com" });
+      filterQuery({ model: "gpt-5", account: "0123456789abcdef", user: "ian@example.com" }),
+    ).toEqual({ model: "gpt-5", auth_index: "0123456789abcdef", principal: "ian@example.com" });
     expect(filterQuery({})).toEqual({});
   });
 

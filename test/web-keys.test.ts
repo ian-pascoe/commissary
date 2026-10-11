@@ -29,7 +29,6 @@ import {
 const NOW = Date.parse("2026-10-11T12:00:00Z");
 
 const runtime = (overrides: Partial<KeyRuntime> = {}): KeyRuntime => ({
-  id: "claude:apikey:abc",
   auth_index: "a1",
   status: "active",
   unavailable: false,

@@ -53,7 +53,10 @@ export const UsageSummary = Schema.Struct({
 
 export type UsageSummary = typeof UsageSummary.Type;
 
-/** Filters: `since` inclusive and `until` exclusive (epoch milliseconds); `auth_id` is a credential id. */
+/**
+ * Filters: `since` inclusive and `until` exclusive (epoch milliseconds); `auth_index` is a credential's keyed index (the
+ * `auth_index` of `/credentials`, `/api-keys` and the records). Grouped `by=auth`, the keys are `auth_index` values.
+ */
 export const UsageSummaryQuery = Schema.Struct({
   group_by: optional(UsageGroupBy),
   since: optional(Schema.Number),
@@ -61,7 +64,7 @@ export const UsageSummaryQuery = Schema.Struct({
   provider: optional(Schema.String),
   model: optional(Schema.String),
   principal: optional(Schema.String),
-  auth_id: optional(Schema.String),
+  auth_index: optional(Schema.String),
   failed: optional(Schema.Literals(["true", "false"])),
   limit: optional(Schema.Number),
 });
@@ -71,7 +74,7 @@ export const UsageBucket = Schema.Literals(["hour", "day"]);
 
 export type UsageBucket = typeof UsageBucket.Type;
 
-/** Keys a series can be split by: one series per credential, model or provider. */
+/** Keys a series can be split by: one series per credential (keyed by `auth_index`), model or provider. */
 export const UsageSeriesGroupBy = Schema.Literals(["auth", "model", "provider"]);
 
 export const UsagePoint = Schema.Struct({
@@ -100,7 +103,7 @@ export const UsageSeriesQuery = Schema.Struct({
   group_by: optional(UsageSeriesGroupBy),
   provider: optional(Schema.String),
   model: optional(Schema.String),
-  auth_id: optional(Schema.String),
+  auth_index: optional(Schema.String),
 });
 
 const tokenBreakdown = Schema.Struct({
@@ -158,7 +161,7 @@ export const UsageRecordsQuery = Schema.Struct({
   provider: optional(Schema.String),
   model: optional(Schema.String),
   principal: optional(Schema.String),
-  auth_id: optional(Schema.String),
+  auth_index: optional(Schema.String),
   failed: optional(Schema.Literals(["true", "false"])),
   limit: optional(Schema.Number),
   before: optional(Schema.String),

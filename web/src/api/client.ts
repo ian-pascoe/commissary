@@ -100,7 +100,7 @@ export const usageSeriesAtom = Atom.family((view: UsageView) =>
         get(usageEpochAtom);
         const client = yield* ManagementClient;
         const now = yield* Clock.currentTimeMillis;
-        const { model, provider, auth_id } = filterQuery(view.filters);
+        const { model, provider, auth_index } = filterQuery(view.filters);
 
         // The series has no principal filter: the page shows no chart while a user filter is set.
         const series = yield* client.usage.series({
@@ -110,7 +110,7 @@ export const usageSeriesAtom = Atom.family((view: UsageView) =>
             group_by: "provider",
             ...(model === undefined ? {} : { model }),
             ...(provider === undefined ? {} : { provider }),
-            ...(auth_id === undefined ? {} : { auth_id }),
+            ...(auth_index === undefined ? {} : { auth_index }),
           },
         });
 
@@ -151,8 +151,8 @@ export const usageRecordsAtom = Atom.family(
       .pipe(Atom.setIdleTTL(KEEP)),
 );
 
-/** One account's hourly usage over the history span (credential id), for its window history. */
-export const accountSeriesAtom = Atom.family((authId: string) =>
+/** One account's hourly usage over the history span (by `auth_index`), for its window history. */
+export const accountSeriesAtom = Atom.family((authIndex: string) =>
   ManagementClient.runtime
     .atom(
       Effect.gen(function* () {
@@ -161,12 +161,12 @@ export const accountSeriesAtom = Atom.family((authId: string) =>
         const since = now - HISTORY_SPAN_MS;
 
         const series = yield* client.usage.series({
-          query: { since, bucket: "hour", group_by: "auth", auth_id: authId },
+          query: { since, bucket: "hour", group_by: "auth", auth_index: authIndex },
         });
 
         return {
           since,
-          points: series.series.find((entry) => entry.key === authId)?.points ?? [],
+          points: series.series.find((entry) => entry.key === authIndex)?.points ?? [],
         };
       }),
     )

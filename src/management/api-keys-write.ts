@@ -21,7 +21,7 @@
 import { isJsonObject, jsonEquals, type Json, type JsonObject } from "../json/index.ts";
 import { DEDUPED_FAMILIES, type DedupedFamily } from "../config/normalize.ts";
 import { typedDuplicates, withoutKeys } from "./key-duplicates.ts";
-import { authIndexOf } from "./auth-index.ts";
+import type { AuthIndexer } from "./auth-index.ts";
 import type { ConfigKeyIds, GroupKeyIds } from "./config-document.ts";
 import { type ApiKeyFamily, REDACTED_PREFIX } from "./contract/api-keys.ts";
 
@@ -75,6 +75,7 @@ const findStoredKey = (
   groups: ReadonlyArray<JsonObject>,
   ids: ReadonlyArray<GroupKeyIds>,
   authIndex: string,
+  authIndexOf: AuthIndexer,
 ): StoredKey | undefined => {
   for (const [groupIndex, group] of groups.entries()) {
     for (const [keyIndex, key] of keysOf(group).entries()) {
@@ -148,10 +149,11 @@ const resolveKey = (
   compat: boolean,
   groups: ReadonlyArray<JsonObject>,
   ids: ReadonlyArray<GroupKeyIds>,
+  authIndexOf: AuthIndexer,
   groupTyped: boolean,
 ): Edit<ResolvedKey> => {
   const authIndex = text(input.auth_index);
-  const stored = authIndex === "" ? undefined : findStoredKey(groups, ids, authIndex);
+  const stored = authIndex === "" ? undefined : findStoredKey(groups, ids, authIndex, authIndexOf);
 
   if (authIndex !== "" && stored === undefined) return fail(409, "unknown_auth_index");
   const supplied = input["api-key"];
@@ -187,6 +189,7 @@ interface ResolvedGroup {
 const resolveGroup = (
   document: JsonObject,
   ids: ReadonlyArray<GroupKeyIds>,
+  authIndexOf: AuthIndexer,
   family: ApiKeyFamily,
   index: number | undefined,
   input: JsonObject,
@@ -215,7 +218,7 @@ const resolveGroup = (
 
   for (const key of Array.isArray(keys) ? keys : []) {
     if (!isJsonObject(key)) return fail(422, "every key must be an object");
-    const result = resolveKey(key, compat, groups, ids, groupTyped);
+    const result = resolveKey(key, compat, groups, ids, authIndexOf, groupTyped);
 
     if (!result.ok) return result;
     resolved.push(result.value.key);
@@ -252,16 +255,19 @@ export interface GroupWrite {
 /**
  * `document` with `group` written at `index` (appended without one), and the group as stored. `ids` are the
  * credential ids of `document`'s keys (`configKeyIds(config, { includeDisabledGroups: true })`), which `auth_index`
- * entries are resolved against. Duplicates are not settled here (`settleDuplicates`).
+ * entries are resolved against with the deployment's indexer `authIndexOf`. Duplicates are not settled here
+ * (`settleDuplicates`).
  */
 export const applyGroupWrite = (
   document: JsonObject,
   ids: ConfigKeyIds,
+  authIndexOf: AuthIndexer,
   request: { readonly family: ApiKeyFamily; readonly index?: number; readonly group: JsonObject },
 ): Edit<GroupWrite> => {
   const resolved = resolveGroup(
     document,
     ids[request.family],
+    authIndexOf,
     request.family,
     request.index,
     request.group,

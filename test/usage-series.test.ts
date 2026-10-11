@@ -8,6 +8,7 @@ import { ManagementApi } from "../src/management/contract/api.ts";
 import { ManagementError } from "../src/management/contract/errors.ts";
 import { insertUsageRecord } from "../src/usage/d1.ts";
 import { type Harness, makeHarness, resetControlPlane } from "./support/management.ts";
+import { authIndexOf } from "./support/auth-index.ts";
 import { resetUsageDb, sampleRecord } from "./support/usage.ts";
 
 const harness = makeHarness();
@@ -85,7 +86,7 @@ describe("bucketing", () => {
       group_by: "auth",
       series: [
         {
-          key: "codex-a.json",
+          key: authIndexOf("codex-a.json"),
           points: [
             { start: D0, requests: 1, failed: 0, total_tokens: tokens },
             { start: D0 + HOUR, requests: 2, failed: 1, total_tokens: 2 * tokens },
@@ -110,7 +111,7 @@ describe("bucketing", () => {
       group_by: "auth",
       series: [
         {
-          key: "codex-a.json",
+          key: authIndexOf("codex-a.json"),
           points: [
             { start: D0 - DAY, requests: 1, failed: 0, total_tokens: tokens },
             { start: D0, requests: 2, failed: 0, total_tokens: 2 * tokens },
@@ -137,7 +138,10 @@ describe("bucketing", () => {
 
     const { body } = await get(`since=${new Date(D0).toISOString()}&until=${D0 + HOUR}`);
 
-    expect(body.series.map((s) => s.key)).toEqual(["a.json", "b.json"]);
+    // Keyed by auth_index (never the credential id), sorted by that key.
+    expect(body.series.map((s) => s.key)).toEqual(
+      [authIndexOf("a.json"), authIndexOf("b.json")].toSorted(),
+    );
   });
 
   plain("answers an empty series when nothing matches", async () => {
@@ -159,14 +163,22 @@ describe("grouping and filters", () => {
   const summary = (body: SeriesBody) =>
     body.series.map((s) => [s.key, s.points.map((p) => p.requests)]);
 
+  const a = authIndexOf("a.json");
+  const b = authIndexOf("b.json");
+
+  const byIndex = (rows: Array<[string, number[]]>) =>
+    rows.toSorted(([x], [y]) => (x < y ? -1 : 1));
+
   plain("groups by auth, model and provider", async () => {
     await seed();
     const range = `since=${D0}&until=${D0 + HOUR}`;
 
-    expect(summary((await get(`${range}&group_by=auth`)).body)).toEqual([
-      ["a.json", [2]],
-      ["b.json", [1]],
-    ]);
+    expect(summary((await get(`${range}&group_by=auth`)).body)).toEqual(
+      byIndex([
+        [a, [2]],
+        [b, [1]],
+      ]),
+    );
     expect(summary((await get(`${range}&group_by=model`)).body)).toEqual([
       ["gpt-4", [1]],
       ["gpt-5", [2]],
@@ -177,17 +189,23 @@ describe("grouping and filters", () => {
     ]);
   });
 
-  plain("filters by provider (case-insensitive), model and auth_id", async () => {
+  plain("filters by provider (case-insensitive), model and auth_index", async () => {
     await seed();
     const range = `since=${D0}&until=${D0 + HOUR}`;
 
-    expect(summary((await get(`${range}&provider=CODEX`)).body)).toEqual([["a.json", [2]]]);
-    expect(summary((await get(`${range}&model=gpt-5`)).body)).toEqual([
-      ["a.json", [1]],
-      ["b.json", [1]],
-    ]);
-    expect(summary((await get(`${range}&auth_id=b.json`)).body)).toEqual([["b.json", [1]]]);
-    expect(summary((await get(`${range}&auth_id=b.json&model=gpt-4`)).body)).toEqual([]);
+    expect(summary((await get(`${range}&provider=CODEX`)).body)).toEqual([[a, [2]]]);
+    expect(summary((await get(`${range}&model=gpt-5`)).body)).toEqual(
+      byIndex([
+        [a, [1]],
+        [b, [1]],
+      ]),
+    );
+    expect(summary((await get(`${range}&auth_index=${b}`)).body)).toEqual([[b, [1]]]);
+    expect(summary((await get(`${range}&auth_index=${b.toUpperCase()}`)).body)).toEqual([[b, [1]]]);
+    expect(summary((await get(`${range}&auth_index=${b}&model=gpt-4`)).body)).toEqual([]);
+    expect(summary((await get(`${range}&auth_index=0000000000000000`)).body)).toEqual([]);
+    // The stored credential id is not a filter any more: refused rather than silently ignored.
+    expect((await get(`${range}&auth_id=b.json`)).status).toBe(400);
   });
 });
 
@@ -291,7 +309,7 @@ describe("contract", () => {
         series.series.map((entry) => [entry.key, entry.points.map((p) => [p.start, p.failed])]),
         [
           [
-            "codex-a.json",
+            authIndexOf("codex-a.json"),
             [
               [D0, 0],
               [D0 + HOUR, 1],
