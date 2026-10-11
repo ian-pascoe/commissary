@@ -7,6 +7,8 @@ import { AccountsPage } from "./pages/Accounts.tsx";
 import { ConnectPage } from "./pages/Connect.tsx";
 import { KeyGroupPage, NewKeyGroupPage } from "./pages/KeyGroup.tsx";
 import { KeysPage } from "./pages/Keys.tsx";
+import { ModelRulesPage } from "./pages/ModelRules.tsx";
+import { ModelsPage } from "./pages/Models.tsx";
 import { OverviewPage } from "./pages/Overview.tsx";
 import { NotFound, Placeholder } from "./pages/Placeholder.tsx";
 import { UsagePage } from "./pages/Usage.tsx";
@@ -47,11 +49,12 @@ const routeTree = rootRoute.addChildren([
     path: "/keys/$family/$index",
     component: KeyGroupPage,
   }),
-  page(
-    "/models",
-    "Models",
-    "The models clients can call, which accounts serve each one, aliases and exclusions.",
-  ),
+  createRoute({ getParentRoute: () => rootRoute, path: "/models", component: ModelsPage }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/models/rules",
+    component: ModelRulesPage,
+  }),
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/usage",

@@ -1,10 +1,12 @@
 // The typed management API client (generated from the shared contract) and the atoms the pages read. Calls go to the
 // panel's own origin; Cloudflare Access authenticates them with the session cookie, so no credentials live here.
-import { Clock, Duration, Effect } from "effect";
-import { FetchHttpClient } from "effect/http";
-import { Atom, AtomHttpApi } from "effect/reactivity";
+import { Clock, Duration, Effect, Schema } from "effect";
+import { FetchHttpClient, HttpClientError } from "effect/http";
+import { Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 import { ManagementApi } from "#contract/api.ts";
+import type { RoutingModels } from "#contract/routing.ts";
 import { HISTORY_SPAN_MS } from "../lib/history.ts";
+import { type RuleChange, type RuleWrite, saveRuleChange } from "../lib/models.ts";
 import {
   type Breakdown,
   filterQuery,
@@ -199,6 +201,55 @@ export const probeKeyAtom = Atom.family((authIndex: string) =>
 
       return yield* client.apiKeys.probe({ payload: { auth_index: authIndex } });
     }),
+  ),
+);
+
+/** The Models page refetches after a mutation tagged with this key. */
+export const ROUTING = ["routing"] as const;
+
+/** Every model clients can call with the credentials that serve it, and the channel rules (fresh on every read). */
+export const routingModelsAtom = ManagementClient.query("routing", "models", {
+  reactivityKeys: ROUTING,
+  timeToLive: KEEP,
+});
+
+/**
+ * One channel rule edit (key: `<rule>:<channel>`), sent with the view's `config_version` as `If-Match` and re-applied
+ * to a fresh read once when another edit landed first (`saveRuleChange`). Transport and decoding failures become
+ * defects, as in the generated mutations, so the failure is a `ManagementError` or none.
+ */
+export const saveRuleAtom = Atom.family((_key: string) =>
+  ManagementClient.runtime.fn(
+    (input: { readonly change: RuleChange; readonly base: RoutingModels }) =>
+      Effect.gen(function* () {
+        const client = yield* ManagementClient;
+
+        const write = (request: RuleWrite, version: number) => {
+          const headers = { "if-match": String(version) };
+          const params = { channel: request.channel };
+
+          switch (request.kind) {
+            case "put-aliases":
+              return client.routing.putAliases({ params, headers, payload: request.body });
+            case "delete-aliases":
+              return client.routing.deleteAliases({ params, headers });
+            case "put-excluded":
+              return client.routing.putExclusions({ params, headers, payload: request.body });
+            case "delete-excluded":
+              return client.routing.deleteExclusions({ params, headers });
+          }
+        };
+
+        return yield* Reactivity.mutation(
+          saveRuleChange(input.change, input.base, { read: client.routing.models(), write }),
+          ROUTING,
+        );
+      }).pipe(
+        Effect.catchIf(
+          (error) => Schema.isSchemaError(error) || HttpClientError.isHttpClientError(error),
+          Effect.die,
+        ),
+      ),
   ),
 );
 

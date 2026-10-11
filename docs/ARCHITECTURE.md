@@ -843,7 +843,14 @@ until the next page load).
   enable/disable; `/keys/$family/$index` and `/keys/new?family=` edit or add one group: endpoint, keys typed in once,
   models with discovery through the probe, exclusions, delete; reads `GET /api-keys` and writes one group with
   `PUT /api-keys/groups` carrying the list's `version`, existing keys by `auth_index`, everything the form does not
-  show kept as stored; a `409` offers a reload). The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
+  show kept as stored; a `409` offers a reload); Models (`/models`: every model clients can call, plus the hidden ones
+  no account serves now, ordered by standing, filters All / Needs attention / Hidden, search over names, aliases and
+  accounts, each model's routes with their account or key, upstream name, alias or exclusion and the rule's channel,
+  cooldowns with clear; `/models/rules` edits the channel rules `oauth-model-alias` and `oauth-excluded-models`, one
+  section per channel with a live count of the models a pattern matches; reads `GET /routing/models` and writes one
+  channel's list with `PUT`/`DELETE /config/oauth/model-alias|excluded-models/:channel` carrying the view's
+  `config_version` as `If-Match`; on `409` the edit is re-applied once to a fresh read, and a second refusal or a
+  changed entry offers a reload). The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
   address (`?range=&by=&model=&provider=&account=&user=&failed=`, decoded per parameter by `web/src/lib/usage.ts`
   `readUsageSearch`, a malformed one dropped), reads `GET /observability/usage/summary`, `/series` (provider series
   summed in the browser; no principal filter, so no chart while a user filter is set) and `/records` (pages of 50
