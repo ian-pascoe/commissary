@@ -15,6 +15,7 @@ import { ManagementError } from "../src/management/contract/errors.ts";
 import { WorkerEnv, WorkerExecutionContext } from "../src/platform/env.ts";
 import { LEASE_RENEW_INTERVAL_MS, runQuotaSweep, sweepQuotas } from "../src/quota/check.ts";
 import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/quota/claude.ts";
+import { RESET_GRANT_STATUS_URL } from "../src/quota/reset-grants.ts";
 import type { Json } from "../src/json/index.ts";
 import {
   LEASE_TTL_MS,
@@ -55,6 +56,7 @@ const harness = makeHarness(
   routes({
     [`GET ${CLAUDE_USAGE_URL}`]: (request) => usage(request.headers.authorization),
     [`GET ${CLAUDE_PROFILE_URL}`]: { status: 200, body: { account: { has_claude_max: true } } },
+    [`GET ${RESET_GRANT_STATUS_URL}`]: { status: 200, body: { cedar_ember: { eligible: false } } },
   }),
 );
 
@@ -234,6 +236,10 @@ describe("POST /credentials/batch", () => {
           .exec("SELECT id FROM credential_state ORDER BY id")
           .toArray()
           .map((row) => row.id),
+        grants: state.storage.sql
+          .exec("SELECT id FROM credential_reset_grants WHERE status IS NOT NULL ORDER BY id")
+          .toArray()
+          .map((row) => row.id),
         alarm: await state.storage.getAlarm(),
       }));
 
@@ -241,6 +247,7 @@ describe("POST /credentials/batch", () => {
 
     expect(before.reports).toEqual(["a.json", "b.json"]);
     expect(before.states).toEqual(["a.json", "b.json"]);
+    expect(before.grants).toEqual(["a.json", "b.json"]);
     expect(before.alarm).not.toBeNull();
 
     expect((await batch({ action: "delete", names: ["a.json", "b.json"] })).body).toMatchObject({
@@ -248,7 +255,7 @@ describe("POST /credentials/batch", () => {
     });
 
     // The same as deleting them one by one: nothing of theirs is left, and with no account to refresh no alarm.
-    expect(await counts()).toEqual({ reports: [], states: [], alarm: null });
+    expect(await counts()).toEqual({ reports: [], states: [], grants: [], alarm: null });
 
     // A re-import under the same name starts clean: no report of the deleted account shows up.
     await seed("a.json");
@@ -529,6 +536,7 @@ describe("POST /credentials/quota/all", () => {
           return { status: 200, body: USAGE };
         },
         [`GET ${CLAUDE_PROFILE_URL}`]: { status: 200, body: {} },
+        [`GET ${RESET_GRANT_STATUS_URL}`]: { status: 404 },
       }),
     );
 

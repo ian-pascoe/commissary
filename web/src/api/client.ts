@@ -381,6 +381,12 @@ export const batchAtom = ManagementClient.runtime.fn(
     }).pipe((effect) => Reactivity.mutation(effect, CREDENTIALS)),
 );
 
+/** Reads a Claude account's reset grants from Anthropic now (stored server-side: refresh `CREDENTIALS` after it). */
+export const readResetGrantsAtom = ManagementClient.mutation("credentials", "resetGrants");
+
+/** Spends one reset of a Claude account; the server picks the grant and re-checks first. */
+export const claimResetGrantAtom = ManagementClient.mutation("credentials", "claimResetGrant");
+
 export const oauthStartAtom = ManagementClient.mutation("oauth", "start");
 
 export const oauthStatusAtom = ManagementClient.mutation("oauth", "status");

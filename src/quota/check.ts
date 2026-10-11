@@ -16,6 +16,7 @@ import { holdInvocation, WorkerEnv } from "../platform/env.ts";
 import { probeQuota } from "./probe.ts";
 import type { QuotaOutcome } from "./report.ts";
 import type { SweepLease, SweepSource } from "./sweep-lease.ts";
+import type { ResetGrantMark } from "./reset-grant-store.ts";
 
 /** A ControlPlane RPC failed (the message never carries payloads). */
 export class QuotaControlPlaneError extends Data.TaggedError("QuotaControlPlaneError")<{
@@ -33,7 +34,8 @@ export type QuotaCheckResult =
 
 type Stub = ReturnType<Env["CONTROL_PLANE"]["getByName"]>;
 
-const call = <R>(
+/** One ControlPlane RPC (also used by `reset-grant-flow.ts`). */
+export const call = <R>(
   operation: string,
   run: (stub: Stub) => R,
 ): Effect.Effect<Awaited<R>, QuotaControlPlaneError, WorkerEnv> =>
@@ -55,6 +57,8 @@ interface RecordOptions {
   readonly credentialVersion?: number | undefined;
   /** The token of the sweep the check is part of: storing the report renews its lease. */
   readonly sweepLease?: string | undefined;
+  /** Claude: the reset grant state the probe's grant read is based on (`reset-grant-store.ts`). */
+  readonly grantsMark?: ResetGrantMark | undefined;
 }
 
 const record = (id: string, outcome: QuotaOutcome, options: RecordOptions) =>
@@ -67,6 +71,7 @@ const record = (id: string, outcome: QuotaOutcome, options: RecordOptions) =>
           ? {}
           : { credentialVersion: options.credentialVersion }),
         ...(options.sweepLease === undefined ? {} : { sweepLease: options.sweepLease }),
+        ...(options.grantsMark === undefined ? {} : { grantsMark: options.grantsMark }),
       }),
     );
 
@@ -84,17 +89,20 @@ const record = (id: string, outcome: QuotaOutcome, options: RecordOptions) =>
 
 /**
  * Checks the quota of the auth file `name` (and/or `authIndex`) and returns the stored report. An outcome for tokens
- * replaced during the check is dropped (`stale`), like a refresh result.
+ * replaced during the check is dropped (`stale`), like a refresh result. `sweep`: part of a sweep, which skips
+ * recent Claude reset grant reads (`quotaProbeTarget`).
  */
 export const checkCredentialQuota = (
   ref: {
     readonly name?: string;
     readonly authIndex?: string;
   },
-  options: { readonly sweepLease?: string } = {},
+  options: { readonly sweepLease?: string; readonly sweep?: boolean } = {},
 ): Effect.Effect<QuotaCheckResult, QuotaControlPlaneError, WorkerEnv | HttpClient.HttpClient> =>
   Effect.gen(function* () {
-    const target = yield* call("quotaProbeTarget", (stub) => stub.quotaProbeTarget(ref));
+    const target = yield* call("quotaProbeTarget", (stub) =>
+      stub.quotaProbeTarget(ref, { sweep: options.sweep === true }),
+    );
 
     if (target.ok) {
       const outcome = yield* probeQuota(target.target);
@@ -102,6 +110,7 @@ export const checkCredentialQuota = (
       return yield* record(target.target.id, outcome, {
         credentialVersion: target.target.credentialVersion,
         sweepLease: options.sweepLease,
+        grantsMark: target.grantsMark,
       });
     }
 
@@ -119,8 +128,14 @@ export const checkCredentialQuota = (
     }
   });
 
-/** Provider usage calls a sweep makes at once. */
-export const SWEEP_CONCURRENCY = 4;
+/**
+ * Accounts a sweep checks at once. A Claude check opens up to three upstream connections at once (usage, profile,
+ * reset grants), so two checks stay within the six simultaneous connections a Workers invocation may have waiting for
+ * headers (more are queued, and could run into the probe's 15 s bound). Subrequests per Claude account: three upstream
+ * fetches (two when the grant read is skipped) plus two ControlPlane RPCs; see docs/ARCHITECTURE.md "Quota check" for
+ * the plan limits.
+ */
+export const SWEEP_CONCURRENCY = 2;
 
 export type QuotaSweep =
   | {
@@ -147,7 +162,7 @@ const renew = (token: string) =>
 
 /** One account's outcome as a sweep reports it; a failed check is a result, never a failed sweep. */
 const checkForSweep = (token: string) => (id: string) =>
-  checkCredentialQuota({ name: id }, { sweepLease: token }).pipe(
+  checkCredentialQuota({ name: id }, { sweepLease: token, sweep: true }).pipe(
     Effect.flatMap((result) => {
       switch (result.kind) {
         case "checked": {

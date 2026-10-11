@@ -70,6 +70,128 @@ export const QuotaReport = Schema.Struct({
 
 export type QuotaReport = typeof QuotaReport.Type;
 
+/**
+ * One Claude reset grant (Anthropic's `cedar_ember` program, `../../quota/reset-grants.ts`): a bundle of resets, each
+ * of which sets the usage windows in `clears` (`five_hour`, `seven_day`, …) back to empty. `label` is Anthropic's
+ * display text, sanitised (empty when none); times are ISO instants.
+ */
+export const ResetGrant = Schema.Struct({
+  id: Schema.String,
+  label: Schema.String,
+  resets_total: Schema.Int,
+  resets_left: Schema.Int,
+  starts_at: optional(Schema.String),
+  ends_at: optional(Schema.String),
+  clears: Schema.Array(Schema.String),
+  paused: Schema.Boolean,
+  usable_now: Schema.Boolean,
+  use_requires_limit: Schema.Boolean,
+});
+
+export type ResetGrant = typeof ResetGrant.Type;
+
+/**
+ * Why no reset can be claimed now: the account is not eligible, Anthropic's cooldown between resets is running, no
+ * grant has resets left (or all have expired or not started), the remaining ones are paused or not usable yet, or
+ * they need a limit to be reached first and the account is not at one.
+ */
+export const ResetGrantBlocker = Schema.Literals([
+  "ineligible",
+  "cooldown",
+  "none_left",
+  "unusable",
+  "not_limited",
+]);
+
+export type ResetGrantBlocker = typeof ResetGrantBlocker.Type;
+
+/**
+ * A Claude account's reset grants as Anthropic reported them at `checked_at`. `claimable` is the grant a claim would
+ * spend at that time (Anthropic's `next_grant_id` when usable, else the lowest usable id); without it, `blocked_by`
+ * says why. Known `ineligible_reason`s are passed on, others read `unknown`.
+ */
+export const ResetGrantStatus = Schema.Struct({
+  checked_at: Schema.String,
+  eligible: Schema.Boolean,
+  ineligible_reason: optional(Schema.String),
+  at_limit: Schema.Boolean,
+  cooldown_until: optional(Schema.String),
+  weekly_resets_at: optional(Schema.String),
+  next_grant_id: optional(Schema.String),
+  grants: Schema.Array(ResetGrant),
+  claimable: optional(Schema.String),
+  blocked_by: optional(ResetGrantBlocker),
+});
+
+export type ResetGrantStatus = typeof ResetGrantStatus.Type;
+
+/**
+ * A claim sent to Anthropic that got no definite answer. Claiming again before `retry_until` resends the same request
+ * (same grant and request id) instead of spending another reset. `in_flight`: a request of it is running now (another
+ * tab or admin); it cannot be resent until that one is answered.
+ */
+export const PendingResetClaim = Schema.Struct({
+  grant_id: Schema.String,
+  started_at: Schema.String,
+  retry_until: Schema.String,
+  in_flight: Schema.Boolean,
+});
+
+export type PendingResetClaim = typeof PendingResetClaim.Type;
+
+/**
+ * The answer to one claim: Anthropic's `result` (`reset`, `already_used`, `not_limited`, `cooldown`, `ineligible`,
+ * `unavailable`), its refusals by status (`rate_limited` 429, `auth_error` 401/403), `unknown` when no definite
+ * answer came back (a reset may have been spent), `not_confirmed` when an unanswered claim's status read hints that it
+ * landed but the account is still at a limit (no request was sent and nothing proves a reset; the claim stays open and
+ * the next attempt resends it), or
+ * `none_available` when nothing could be claimed and no request was sent.
+ */
+export const ResetGrantOutcome = Schema.Literals([
+  "reset",
+  "already_used",
+  "not_limited",
+  "cooldown",
+  "ineligible",
+  "unavailable",
+  "rate_limited",
+  "auth_error",
+  "unknown",
+  "not_confirmed",
+  "none_available",
+]);
+
+export type ResetGrantOutcome = typeof ResetGrantOutcome.Type;
+
+/** `GET /credentials/reset-grants`: the live status (also stored as the entry's `reset_grants`). */
+export const ResetGrantsView = Schema.Struct({
+  status: Schema.Literal("ok"),
+  grants: ResetGrantStatus,
+  pending_claim: optional(PendingResetClaim),
+});
+
+export type ResetGrantsView = typeof ResetGrantsView.Type;
+
+/**
+ * `POST /credentials/reset-grants/claim`. `retried`: the claim resent an unanswered one. `cooldown_cleared`: the proxy
+ * cleared the account's cooldowns after a reset. `report`: the quota check made after a reset (with fresh `grants`
+ * in the entry); `grants`: the status the claim was decided on otherwise. `pending_claim` is set while an `unknown`
+ * outcome can be retried. `warning`: Anthropic answered but the proxy could not record the answer (the outcome is
+ * still Anthropic's).
+ */
+export const ResetGrantClaim = Schema.Struct({
+  status: Schema.Literal("ok"),
+  outcome: ResetGrantOutcome,
+  retried: Schema.Boolean,
+  cooldown_cleared: Schema.Boolean,
+  grants: optional(ResetGrantStatus),
+  report: optional(QuotaReport),
+  pending_claim: optional(PendingResetClaim),
+  warning: optional(Schema.String),
+});
+
+export type ResetGrantClaim = typeof ResetGrantClaim.Type;
+
 /** An unexpired retry timer of the credential or one of its models. */
 export const Cooldown = Schema.Struct({
   scope: Schema.Literals(["credential", "model"]),
@@ -125,6 +247,8 @@ export const CredentialEntry = Schema.Struct({
   quota: QuotaObservation,
   model_quotas: optional(Schema.Record(Schema.String, QuotaObservation)),
   quota_report: optional(QuotaReport),
+  /** Claude only: the last reset grant status read by the quota check or `GET /credentials/reset-grants`. */
+  reset_grants: optional(ResetGrantStatus),
   supports_quota: optional(Schema.Boolean),
   email: optional(Schema.String),
   account: optional(Schema.String),
@@ -340,6 +464,21 @@ export class CredentialsGroup extends HttpApiGroup.make("credentials").add(
    */
   HttpApiEndpoint.post("checkAllQuotas", "/credentials/quota/all", {
     success: QuotaSweepResult,
+    error: managementErrors,
+  }),
+  /** A Claude account's reset grants, read from Anthropic now (server side). `422` for other providers. */
+  HttpApiEndpoint.get("resetGrants", "/credentials/reset-grants", {
+    query: { auth_index: Schema.String },
+    success: ResetGrantsView,
+    error: managementErrors,
+  }),
+  /**
+   * Spend one reset of a Claude account (the server picks the grant). `409` while another claim of the account runs,
+   * `502` when the status could not be read (nothing was sent).
+   */
+  HttpApiEndpoint.post("claimResetGrant", "/credentials/reset-grants/claim", {
+    payload: Schema.Struct({ auth_index: Schema.String }),
+    success: ResetGrantClaim,
     error: managementErrors,
   }),
 ) {}

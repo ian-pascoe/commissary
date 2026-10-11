@@ -1,7 +1,8 @@
 // Test helpers for token refresh: a recording HttpClient (no network), an in-memory credential store behind a real
 // CredentialPool, and an alarm recorder.
-import { Effect, Layer, Predicate } from "effect";
+import { Effect, Layer, Option, Predicate } from "effect";
 import {
+  FetchHttpClient,
   HttpClient,
   HttpClientError,
   HttpClientResponse,
@@ -26,6 +27,8 @@ export interface RecordedRequest {
   readonly url: string;
   readonly headers: Readonly<Record<string, string>>;
   readonly body: string;
+  /** The `redirect` mode of the `FetchHttpClient.RequestInit` the caller provided, if any. */
+  readonly redirect: globalThis.RequestInit["redirect"];
   /** Body parsed as JSON, or as form fields for urlencoded bodies. */
   readonly json: () => Record<string, unknown>;
   readonly form: () => Record<string, string>;
@@ -56,24 +59,27 @@ export const mockHttp = (handler: MockHandler) => {
   const layer = Layer.succeed(
     HttpClient.HttpClient,
     HttpClient.make((request) =>
-      Effect.flatMap(
-        Effect.promise(async () => {
-          const body = decode(request);
+      Effect.serviceOption(FetchHttpClient.RequestInit).pipe(
+        Effect.flatMap((init) =>
+          Effect.promise(async () => {
+            const body = decode(request);
 
-          const recorded: RecordedRequest = {
-            method: request.method,
-            url: request.url,
-            headers: { ...request.headers },
-            body,
-            json: () => JSON.parse(body) as Record<string, unknown>,
-            form: () => Object.fromEntries(new URLSearchParams(body)),
-          };
+            const recorded: RecordedRequest = {
+              method: request.method,
+              url: request.url,
+              headers: { ...request.headers },
+              body,
+              redirect: Option.getOrUndefined(init)?.redirect,
+              json: () => JSON.parse(body) as Record<string, unknown>,
+              form: () => Object.fromEntries(new URLSearchParams(body)),
+            };
 
-          requests.push(recorded);
+            requests.push(recorded);
 
-          return handler(recorded);
-        }),
-        (reply) => {
+            return handler(recorded);
+          }),
+        ),
+        Effect.flatMap((reply) => {
           if (reply.transportError === true) {
             return Effect.fail(
               new HttpClientError.HttpClientError({
@@ -91,7 +97,7 @@ export const mockHttp = (handler: MockHandler) => {
               new Response(text, { status: reply.status ?? 200, headers: reply.headers ?? {} }),
             ),
           );
-        },
+        }),
       ),
     ),
   );

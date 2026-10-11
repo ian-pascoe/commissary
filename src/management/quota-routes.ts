@@ -3,8 +3,8 @@
  * allowance at the provider's usage endpoint now and answers with the stored report.
  *
  * `POST /v8/management/credentials/quota/all` (`checkAllQuotas`): the panel's "Check all quotas", the cron task's
- * sweep run now (`sweepQuotas`: every enabled auth file of a supported provider, `SWEEP_CONCURRENCY` provider calls at
- * a time).
+ * sweep run now (`sweepQuotas`: every enabled auth file of a supported provider, `SWEEP_CONCURRENCY` accounts at a
+ * time, recent Claude reset grant reads skipped).
  * Answers `200 {started_at, finished_at, results, checked, failed}` with each account's outcome (a failed check is
  * `ok: false` with the report's fixed error message and the upstream status). Deduplicated through the ControlPlane's sweep lease
  * (src/quota/sweep-lease.ts): while another sweep runs, the panel's or the scheduled one, it answers `409

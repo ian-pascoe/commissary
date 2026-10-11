@@ -1,19 +1,21 @@
-// One account: its allowance (each window with its reset blade), cooldowns, tokens per past window, its own routing
-// fields (`AccountRouting.tsx`, `#routing`), details, the models it serves, and the actions on it (check quota,
-// refresh tokens, enable or disable, delete).
+// One account: its allowance (each window with its reset blade), Claude reset grants (use one, with a confirmation),
+// cooldowns, tokens per past window, its own routing fields (`AccountRouting.tsx`, `#routing`), details, the models it
+// serves, and the actions on it (check quota, refresh tokens, enable or disable, delete).
 import { useAtomValue } from "@effect/atom-react";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
-import { ArrowLeft, ChevronRight, Gauge, Power, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowLeft, ChevronRight, Gauge, Power, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
-import type { CredentialEntry } from "#contract/credentials.ts";
+import type { CredentialEntry, PendingResetClaim } from "#contract/credentials.ts";
 import {
   accountModelsAtom,
   accountSeriesAtom,
   CREDENTIALS,
   checkQuotaAtom,
+  claimResetGrantAtom,
   credentialsAtom,
   nowAtom,
+  readResetGrantsAtom,
   refreshAtom,
   removeAtom,
   resetCooldownAtom,
@@ -36,6 +38,13 @@ import {
 import { dailyHistory, type HistoryBar, windowHistory } from "../lib/history.ts";
 import { providerName } from "../lib/providers.ts";
 import { checksQuota, type QuotaWindow, quotaReading, windowLevel } from "../lib/quota.ts";
+import {
+  type AttemptNotice,
+  attemptNotice,
+  resetsView,
+  unansweredWarning,
+  windowList,
+} from "../lib/reset-grants.ts";
 import { useAction } from "../lib/use-action.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
 import styles from "./Account.module.css";
@@ -121,6 +130,226 @@ const Allowance = ({ entry, now }: { readonly entry: CredentialEntry; readonly n
           </p>
         </div>
       )}
+    </Section>
+  );
+};
+
+// ---------------------------------------------------------------------------------------------------------------
+// Resets (Claude reset grants)
+
+const Resets = ({ entry, now }: { readonly entry: CredentialEntry; readonly now: number }) => {
+  const read = useAction(readResetGrantsAtom);
+  const attempt = useAction(claimResetGrantAtom);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const answer = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const reasonId = useId();
+  const [notice, setNotice] = useState<AttemptNotice | undefined>(undefined);
+  /** The unanswered attempt the server holds, as last seen (it is tried again by the next "Use a reset"). */
+  const [pending, setPending] = useState<PendingResetClaim | undefined>(undefined);
+  /** The last try of `pending` was answered `not_confirmed` (its warning says so). */
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  /** When this page last saw a reset empty the limits. */
+  const [emptiedAt, setEmptiedAt] = useState<number | undefined>(undefined);
+  const status = entry.reset_grants;
+  const retryUntil = parsed(pending?.retry_until);
+  const open = retryUntil !== undefined && retryUntil > now;
+  const inFlight = open && pending?.in_flight === true;
+  const resend = open && !inFlight;
+
+  const view =
+    status === undefined
+      ? undefined
+      : resetsView(status, now, { unanswered: resend, inFlight, emptiedAt });
+
+  const readAt = parsed(status?.checked_at);
+  const next = status?.grants.find((grant) => grant.id === status.claimable);
+  const canUse = !inFlight && (resend || (view !== undefined && view.readiness !== "blocked"));
+  const unavailable = !canUse || attempt.busy;
+
+  const check = async () => {
+    const outcome = await read.run({
+      query: { auth_index: entry.auth_index },
+      reactivityKeys: CREDENTIALS,
+    });
+
+    if (outcome.ok) {
+      setPending(outcome.value.pending_claim);
+
+      if (outcome.value.pending_claim === undefined) setUnconfirmed(false);
+      setNotice(undefined);
+      setEmptiedAt(undefined);
+    } else {
+      setNotice({ tone: "problem", text: `Could not check the resets. ${outcome.message}` });
+    }
+  };
+
+  const use = async () => {
+    const outcome = await attempt.run({
+      payload: { auth_index: entry.auth_index },
+      reactivityKeys: CREDENTIALS,
+    });
+
+    dialog.current?.close();
+    // The answer is announced and focused; closing the dialog put focus back on the button.
+    answer.current?.focus();
+
+    if (!outcome.ok) {
+      setNotice({ tone: "problem", text: `Could not use a reset. ${outcome.message}` });
+
+      return;
+    }
+
+    const { value } = outcome;
+    setPending(value.pending_claim);
+    setUnconfirmed(value.pending_claim !== undefined && value.outcome === "not_confirmed");
+    const spent = value.outcome === "reset" || (value.retried && value.outcome === "already_used");
+    setEmptiedAt(spent ? Date.now() : undefined);
+
+    // An unanswered (or unconfirmed) attempt has its own warning in the same region, which says when it lapses.
+    if (value.pending_claim !== undefined) {
+      setNotice(undefined);
+
+      return;
+    }
+
+    const told = attemptNotice({
+      outcome: value.outcome,
+      retried: value.retried,
+      cooldownCleared: value.cooldown_cleared,
+      blocked: value.grants === undefined ? undefined : resetsView(value.grants, now).detail,
+    });
+
+    setNotice(
+      value.warning === undefined
+        ? told
+        : { tone: "problem", text: `${told.text} ${value.warning}.` },
+    );
+  };
+
+  return (
+    <Section
+      title="Resets"
+      aside={
+        <button
+          type="button"
+          className={kit["secondary"]}
+          disabled={read.busy}
+          aria-busy={read.busy}
+          onClick={check}
+        >
+          {read.busy ? "Checking…" : "Check resets"}
+        </button>
+      }
+    >
+      {view === undefined ? (
+        <p id={reasonId} className={styles["lead"]}>
+          Anthropic gives some Claude plans a few resets that empty the usage limits early. Check
+          resets to see this account's.
+        </p>
+      ) : (
+        <>
+          <div className={styles["resetsHead"]}>
+            <p className={styles["resetsCount"]}>{view.headline}</p>
+            <p id={reasonId} className={styles["resetsDetail"]}>
+              {view.detail}
+            </p>
+          </div>
+          {view.lines.length === 0 ? null : (
+            <ul className={styles["grants"]} aria-label="Reset grants">
+              {view.lines.map((line) => (
+                <li key={line.id} data-live={line.live}>
+                  <span className={styles["grantName"]}>{line.name}</span>
+                  <span className={styles["grantLeft"]}>{line.left}</span>
+                  <span className={styles["grantWhen"]}>{line.when}</span>
+                  <span className={styles["grantState"]}>
+                    {line.holdup ?? (line.next ? "Next to use" : "")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      <div ref={answer} className={styles["resetsNotice"]} role="status" tabIndex={-1}>
+        {resend ? (
+          <p data-tone="problem">
+            <TrailMark />
+            {unansweredWarning(retryUntil, unconfirmed)}
+          </p>
+        ) : null}
+        {notice === undefined ? null : (
+          <p data-tone={notice.tone}>
+            {notice.tone === "problem" ? <TrailMark /> : null}
+            {notice.text}
+          </p>
+        )}
+      </div>
+      {view === undefined && !open ? null : (
+        <div className={styles["resetsActions"]}>
+          <button
+            type="button"
+            className={kit["secondary"]}
+            aria-disabled={unavailable}
+            aria-describedby={canUse ? undefined : reasonId}
+            aria-busy={attempt.busy}
+            onClick={() => {
+              if (!unavailable) dialog.current?.showModal();
+            }}
+          >
+            <RotateCcw
+              aria-hidden="true"
+              size={16}
+              strokeWidth={2.25}
+              className={attempt.busy ? kit["spinning"] : undefined}
+            />
+            {attempt.busy ? "Using…" : resend ? "Try the reset again" : "Use a reset"}
+          </button>
+          {readAt === undefined ? null : (
+            <span className={styles["source"]}>
+              Checked with Anthropic {formatAgo(now - readAt)}.
+            </span>
+          )}
+        </div>
+      )}
+      <dialog ref={dialog} className={kit["dialog"]} aria-labelledby={titleId}>
+        <form
+          method="dialog"
+          className={kit["dialogBody"]}
+          onSubmit={async (event) => {
+            event.preventDefault();
+            await use();
+          }}
+        >
+          <h2 id={titleId} className={kit["dialogTitle"]}>
+            {resend ? "Try the unanswered reset again?" : `Use a reset on ${accountName(entry)}?`}
+          </h2>
+          {resend ? (
+            <p>
+              The proxy sends the same request again. Anthropic counts it once, so it cannot spend a
+              second reset.
+            </p>
+          ) : (
+            <p>
+              Anthropic empties {windowList(next?.clears ?? [])} now. This spends one of the
+              account's {view?.left ?? 0} resets and cannot be undone. The proxy checks the resets
+              again first and spends nothing if none can be used.
+            </p>
+          )}
+          <div className={kit["dialogActions"]}>
+            <button type="submit" className={kit["primary"]} disabled={attempt.busy}>
+              {attempt.busy ? "Using…" : resend ? "Try the reset again" : "Use a reset"}
+            </button>
+            <button
+              type="button"
+              className={kit["secondary"]}
+              onClick={() => dialog.current?.close()}
+            >
+              Not now
+            </button>
+          </div>
+        </form>
+      </dialog>
     </Section>
   );
 };
@@ -621,6 +850,7 @@ const AccountView = ({ entry }: { readonly entry: CredentialEntry }) => {
       <div className={styles["columns"]}>
         <div className={styles["main"]}>
           <Allowance entry={entry} now={now} />
+          {entry.provider === "claude" ? <Resets entry={entry} now={now} /> : null}
           <Cooldowns entry={entry} now={now} onNotice={setNotice} />
           <History entry={entry} now={now} />
           <Routing entry={entry} />

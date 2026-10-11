@@ -11,6 +11,7 @@ import { ManagementError } from "../src/management/contract/errors.ts";
 import { WorkerEnv } from "../src/platform/env.ts";
 import { runQuotaSweep } from "../src/quota/check.ts";
 import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/quota/claude.ts";
+import { RESET_GRANT_STATUS_URL } from "../src/quota/reset-grants.ts";
 import {
   claudeFile,
   controlPlane,
@@ -36,6 +37,8 @@ const harness = makeHarness(
   routes({
     [`GET ${CLAUDE_USAGE_URL}`]: () => usageReply,
     [`GET ${CLAUDE_PROFILE_URL}`]: { status: 200, body: { account: { has_claude_max: true } } },
+    // Reset grants are covered by reset-grants.test.ts; their failure is tolerated here.
+    [`GET ${RESET_GRANT_STATUS_URL}`]: { status: 404 },
   }),
 );
 
@@ -277,6 +280,7 @@ describe("quota-check cron task", () => {
         routes({
           [`GET ${CLAUDE_USAGE_URL}`]: { status: 200, body: USAGE },
           [`GET ${CLAUDE_PROFILE_URL}`]: { status: 401 },
+          [`GET ${RESET_GRANT_STATUS_URL}`]: { status: 401 },
         }),
       );
 
@@ -289,6 +293,7 @@ describe("quota-check cron task", () => {
       assert.deepStrictEqual(outbound.requests.map((request) => request.url).toSorted(), [
         CLAUDE_PROFILE_URL,
         CLAUDE_USAGE_URL,
+        RESET_GRANT_STATUS_URL,
       ]);
 
       const report = yield* Effect.promise(() => listedReport("claude-a.json"));

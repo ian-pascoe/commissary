@@ -39,6 +39,7 @@ import { locateKey, setKeyExcludedAll } from "../management/api-keys-write.ts";
 import { configKeyIds } from "../management/config-document.ts";
 import { buildCredentialEntry } from "../management/credential-entry.ts";
 import {
+  apiCallToken,
   findCredential,
   type CredentialMutation,
   type CredentialRef,
@@ -60,14 +61,37 @@ import { OAuthSessions, SqliteSessionTable } from "../oauth/session-store.ts";
 import type {
   AccountResult,
   BatchAction,
+  PendingResetClaim,
   QuotaReport,
+  ResetGrantStatus,
 } from "../management/contract/credentials.ts";
 import { isQuotaProvider, mergeQuotaReport, type QuotaOutcome } from "../quota/report.ts";
 import { QuotaReportStore } from "../quota/store.ts";
 import { type SweepSource, SweepLeaseStore, type TakeLease } from "../quota/sweep-lease.ts";
+import {
+  type PutStatusResult,
+  type ResetGrantMark,
+  ResetGrantStore,
+} from "../quota/reset-grant-store.ts";
+import {
+  beginClaim,
+  type BeginClaim,
+  type ClaimAnswer,
+  type FreshClaim,
+  holdsOrganization,
+  openClaim,
+  pendingClaimJson,
+  settleClaim,
+} from "../quota/reset-grants.ts";
 import { buildQuotaTarget, type QuotaTargetResult } from "../quota/target.ts";
 
 const decodePickRequest = Schema.decodeUnknownSync(PickRequest);
+
+/** The cron sweep re-reads a Claude account's reset grants at most this often (see `quotaProbeTarget`). */
+const GRANT_SWEEP_TTL_MS = 6 * 60 * 60_000;
+
+/** How long the cron sweep trusts a stored "not eligible" status (new grants can make the account eligible). */
+const GRANT_INELIGIBLE_TTL_MS = 24 * 60 * 60_000;
 
 const decodeLease = Schema.decodeUnknownSync(Lease);
 
@@ -133,6 +157,29 @@ export type RecordQuotaResult =
 /** JSON object as it crosses the RPC boundary (the recursive `JsonObject` is too deep for the RPC stub types). */
 type WireJsonObject = Record<string, Schema.MutableJson>;
 
+/** Answer of the `settleResetGrantClaim` RPC: whether cooldowns were cleared, and the claim still open. */
+export interface SettledResetGrantClaim {
+  readonly cooldownCleared: boolean;
+  readonly pending?: PendingResetClaim;
+}
+
+/** Answer of the `resetGrantTarget` RPC. */
+export type ResetGrantTargetResult =
+  | {
+      readonly ok: true;
+      readonly id: string;
+      readonly token: string;
+      /** The grant state the Worker's status read is based on (`reset-grant-store.ts`). */
+      readonly mark: ResetGrantMark;
+      readonly disabled: boolean;
+      readonly pending?: PendingResetClaim;
+      /** The request id of `pending`, which a resend names (`beginResetGrantClaim`); a nonce, not a secret. */
+      readonly pendingRequestId?: string;
+    }
+  | { readonly ok: false; readonly error: "not_found" }
+  | { readonly ok: false; readonly error: "unsupported"; readonly provider: string }
+  | { readonly ok: false; readonly error: "unavailable"; readonly message: string };
+
 export type SetDisabledResult =
   | { readonly ok: true; readonly via?: "config:excluded-models" }
   | {
@@ -155,6 +202,7 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #oauth: OAuthService;
   readonly #quota: QuotaReportStore;
   readonly #sweepLease: SweepLeaseStore;
+  readonly #grants: ResetGrantStore;
   #configView: ConfigView | undefined;
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -162,6 +210,7 @@ export class ControlPlane extends DurableObject<Env> {
     this.#config = new ConfigStore(ctx.storage.sql);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
+    this.#grants = new ResetGrantStore(ctx.storage.sql);
     this.#pool = new CredentialPool({
       store: new CredentialStore(ctx.storage.sql),
       config: () => this.#currentConfig(),
@@ -304,6 +353,7 @@ export class ControlPlane extends DurableObject<Env> {
     if (removed) {
       this.#refresh.forget(id);
       this.#quota.delete(id);
+      this.#grants.forget(id);
       await this.#rearm();
     }
 
@@ -321,15 +371,18 @@ export class ControlPlane extends DurableObject<Env> {
 
   /**
    * Removes stored credentials in one storage transaction, clearing what {@link removeCredential} clears for each:
-   * the credential with its runtime (cooldown) state and session bindings, its quota report, and the refresher's
-   * in-memory state. The caller re-arms the refresh alarm once.
+   * the credential with its runtime (cooldown) state and session bindings, its quota report, its reset grants (a claim
+   * in flight is kept, `ResetGrantStore.forget`), and the refresher's in-memory state. The caller re-arms the refresh alarm once.
    */
   #removeMany(ids: ReadonlyArray<string>): string[] {
     const removed = this.#pool.removeMany(ids, (write) =>
       this.ctx.storage.transactionSync(() => {
         const gone = write();
 
-        for (const id of gone) this.#quota.delete(id);
+        for (const id of gone) {
+          this.#quota.delete(id);
+          this.#grants.forget(id);
+        }
 
         return gone;
       }),
@@ -435,12 +488,19 @@ export class ControlPlane extends DurableObject<Env> {
   listCredentialEntries(): WireJsonObject[] {
     const now = Date.now();
     const reports = this.#quota.all();
+    const grants = this.#grants.statuses();
 
     return this.#pool
       .entries()
       .filter(({ credential }) => credential.source === "file")
       .map(({ credential, state }) =>
-        buildCredentialEntry(credential, state, now, reports.get(credential.id)),
+        buildCredentialEntry(
+          credential,
+          state,
+          now,
+          reports.get(credential.id),
+          grants.get(credential.id),
+        ),
       );
   }
 
@@ -582,6 +642,7 @@ export class ControlPlane extends DurableObject<Env> {
         current.state,
         Date.now(),
         this.#quota.get(id),
+        this.#grants.status(id),
       ),
     };
   }
@@ -694,9 +755,14 @@ export class ControlPlane extends DurableObject<Env> {
    * What the Worker needs to probe the usage endpoint of an auth file (`POST /credentials/quota`, cron `quota-check`):
    * the provider and the token of the credential refreshed when needed, with the `credentialVersion` the token belongs
    * to (handed back with the outcome, see {@link recordQuotaReport}). Carries token material: the Worker uses it for
-   * the upstream call only.
+   * the upstream call only. A Claude target carries the grant `grantsMark`; in a sweep (`sweep`) it skips the reset
+   * grant read while the stored status is under `GRANT_SWEEP_TTL_MS` old, or under `GRANT_INELIGIBLE_TTL_MS` old when
+   * it says the account is not eligible.
    */
-  async quotaProbeTarget(ref: CredentialRef): Promise<QuotaTargetResult> {
+  async quotaProbeTarget(
+    ref: CredentialRef,
+    options?: { readonly sweep?: boolean },
+  ): Promise<QuotaTargetResult> {
     const target = findCredential(this.#pool.entries(), ref);
 
     if (target === undefined || target.credential.source !== "file")
@@ -720,11 +786,26 @@ export class ControlPlane extends DurableObject<Env> {
     const built = buildQuotaTarget(fresh.credential, provider);
     const credentialVersion = fresh.credential.credentialVersion;
 
-    return built.ok
-      ? { ok: true, target: { ...built.target, credentialVersion } }
-      : built.error === "unavailable"
-        ? { ...built, credentialVersion }
-        : built;
+    if (!built.ok) return built.error === "unavailable" ? { ...built, credentialVersion } : built;
+
+    if (provider !== "claude") return { ok: true, target: { ...built.target, credentialVersion } };
+    const stored = this.#grants.status(id);
+
+    const skip =
+      options?.sweep === true &&
+      stored !== undefined &&
+      Date.now() - Date.parse(stored.checked_at) <
+        (stored.eligible ? GRANT_SWEEP_TTL_MS : GRANT_INELIGIBLE_TTL_MS);
+
+    return {
+      ok: true,
+      target: {
+        ...built.target,
+        credentialVersion,
+        ...(skip ? { skipResetGrants: true } : {}),
+      },
+      grantsMark: this.#grants.mark(id),
+    };
   }
 
   /**
@@ -736,7 +817,11 @@ export class ControlPlane extends DurableObject<Env> {
     id: string,
     outcome: QuotaOutcome,
     checkedAtMs: number,
-    options: { readonly credentialVersion?: number; readonly sweepLease?: string } = {},
+    options: {
+      readonly credentialVersion?: number;
+      readonly sweepLease?: string;
+      readonly grantsMark?: ResetGrantMark;
+    } = {},
   ): RecordQuotaResult {
     if (options.sweepLease !== undefined) this.#sweepLease.renew(options.sweepLease);
     const current = this.#pool.entry(id);
@@ -757,7 +842,146 @@ export class ControlPlane extends DurableObject<Env> {
 
     this.#quota.put(id, report);
 
+    // A stale outcome returned above stores no grant status either; the grant mark guards against re-logins and claims.
+    if (outcome.ok && outcome.resetGrants !== undefined && options.grantsMark !== undefined)
+      this.#grants.putStatus(id, outcome.resetGrants, options.grantsMark);
+
     return { kind: "stored", report };
+  }
+
+  // --- Claude reset grants (src/quota/reset-grant-flow.ts) ------------------------------------------------------
+
+  /**
+   * What the Worker needs to read or claim the reset grants of a Claude auth file: the fresh OAuth token and the claim
+   * that can still be resent, the grant `mark` its status read is based on and whether the account is disabled.
+   * Carries token material: the Worker uses it for the upstream calls only.
+   */
+  async resetGrantTarget(ref: CredentialRef): Promise<ResetGrantTargetResult> {
+    const target = findCredential(this.#pool.entries(), ref);
+
+    if (target === undefined || target.credential.source !== "file")
+      return { ok: false, error: "not_found" };
+    const provider = executorKey(target.credential);
+
+    if (provider !== "claude") return { ok: false, error: "unsupported", provider };
+    const id = target.credential.id;
+    const fresh = await this.#refresh.ensureFresh(id);
+
+    if (!fresh.ok) return { ok: false, error: "unavailable", message: "token refresh failed" };
+    const token = apiCallToken(fresh.credential);
+
+    if (token === "")
+      return { ok: false, error: "unavailable", message: "credential has no access token" };
+    const now = Date.now();
+    const open = openClaim(this.#grants.claim(id), now);
+
+    return {
+      ok: true,
+      id,
+      token,
+      mark: this.#grants.mark(id),
+      disabled: target.credential.disabled,
+      ...(open === undefined
+        ? {}
+        : { pending: pendingClaimJson(open, now), pendingRequestId: open.request_id }),
+    };
+  }
+
+  /**
+   * Stores a reset grant status read under `mark` (`ResetGrantStore.putStatus`); `gone` when the credential was
+   * removed.
+   */
+  recordResetGrantStatus(
+    id: string,
+    status: ResetGrantStatus,
+    mark: ResetGrantMark,
+  ): PutStatusResult | "gone" {
+    if (this.#pool.entry(id) === undefined) return "gone";
+
+    return this.#grants.putStatus(id, status, mark);
+  }
+
+  /**
+   * Starts a claim (`reset-grants.ts` `beginClaim`): resends the open claim of `organization` whose request id is
+   * `resend`, or starts `fresh` when nothing happened to the grants since `mark` was handed out. Serialized here, so
+   * two tabs or admins never send two claims of one account at once, nor two auth files of one organization. Refused
+   * for a disabled account and when the credential was replaced or removed since `mark` (`changed`).
+   */
+  beginResetGrantClaim(
+    id: string,
+    organization: string,
+    fresh: FreshClaim | undefined,
+    mark: ResetGrantMark,
+    resend?: string,
+  ):
+    | BeginClaim
+    | {
+        readonly ok: false;
+        readonly error: "not_found" | "disabled" | "changed" | "busy_removed";
+      } {
+    const entry = this.#pool.entry(id);
+
+    if (entry === undefined) return { ok: false, error: "not_found" };
+
+    if (entry.credential.disabled) return { ok: false, error: "disabled" };
+    const current = this.#grants.mark(id);
+
+    if (current.generation !== mark.generation) return { ok: false, error: "changed" };
+
+    const now = Date.now();
+    const others = [...this.#grants.claims()].filter(([other]) => other !== id);
+    const own = this.#grants.claim(id);
+
+    const started = beginClaim(
+      own,
+      {
+        organization,
+        fresh,
+        resend,
+        current: current.claimSeq === mark.claimSeq,
+        others: others.map(([, journal]) => journal),
+      },
+      now,
+    );
+
+    if (started.ok) this.#grants.putClaim(id, started.journal);
+    else if (
+      started.error === "busy" &&
+      !(own !== undefined && own.in_flight_until > now) &&
+      others.some(
+        ([other, journal]) =>
+          this.#pool.entry(other) === undefined && holdsOrganization(journal, organization, now),
+      )
+    )
+      // Held by the claim of a removed auth file: its journal outlived the file (`ResetGrantStore.forget`).
+      return { ok: false, error: "busy_removed" };
+
+    return started;
+  }
+
+  /**
+   * Records Anthropic's answer to the claim `requestId`, also after the credential was removed or re-logged (its journal
+   * outlives `forget` while in flight). When it spent a reset the account's cooldowns are cleared (`resetCooldown`, as
+   * `POST /routing/cooldown/reset`): the windows that made it cool down were reset upstream.
+   */
+  settleResetGrantClaim(
+    id: string,
+    requestId: string,
+    answer: ClaimAnswer,
+  ): SettledResetGrantClaim {
+    const settled = settleClaim(this.#grants.claim(id), requestId, answer);
+
+    this.#grants.putClaim(id, settled.journal);
+
+    if (this.#pool.entry(id) === undefined) return { cooldownCleared: false };
+    const cleared = settled.spent && this.#pool.resetCooldown(id) !== undefined;
+    const now = Date.now();
+    const open = openClaim(settled.journal, now);
+
+    return {
+      cooldownCleared: cleared,
+      ...(open === undefined ? {} : { pending: pendingClaimJson(open, now) }),
+    };
   }
 
   /** Ids of the enabled auth files whose provider has a usage endpoint (cron `quota-check`). */
@@ -819,12 +1043,15 @@ export class ControlPlane extends DurableObject<Env> {
 
   /**
    * Stores an auth file. Replacing the token material of an existing credential (a re-login, possibly into another
-   * account) drops its quota report, which described the previous tokens.
+   * account) drops its quota report and reset grants, which described the previous tokens.
    */
   #upsert(name: string, content: string | JsonObject, mergeExisting: boolean): UpsertResult {
     const result = this.#pool.upsert(name, content, { mergeExisting });
 
-    if (result.ok && result.credentialsChanged && !result.created) this.#quota.delete(result.id);
+    if (result.ok && result.credentialsChanged && !result.created) {
+      this.#quota.delete(result.id);
+      this.#grants.forget(result.id);
+    }
 
     return result;
   }

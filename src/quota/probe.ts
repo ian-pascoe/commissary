@@ -1,6 +1,7 @@
 /**
- * The upstream calls of the quota check: one provider usage endpoint (plus Claude's profile) per credential, made from
- * the Worker with the token the ControlPlane resolved (src/quota/target.ts). Parsing is in the per-provider modules.
+ * The upstream calls of the quota check: one provider usage endpoint (plus Claude's profile and reset grants) per
+ * credential, made from the Worker with the token the ControlPlane resolved (src/quota/target.ts). Parsing is in the
+ * per-provider modules.
  *
  * Upstream panel source: .repos/Cli-Proxy-API-Management-Center/src/features/quota/providers/{claude,codex,antigravity,
  * kimi,xai,meta,devin}/ (requests, headers and which failures are fatal). Every upstream call is bounded to 15 s (an
@@ -11,10 +12,10 @@
  * (Devin: in the request body, as `devin-user-status` does).
  */
 import { Clock, Effect, Result } from "effect";
-import { HttpClient, HttpClientRequest } from "effect/http";
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 import { fetchDevinUserStatus } from "../credentials/devin-status.ts";
 import { type Json, tryParseJson } from "../json/index.ts";
-import type { QuotaWindow } from "../management/contract/credentials.ts";
+import type { QuotaWindow, ResetGrantStatus } from "../management/contract/credentials.ts";
 import {
   ANTIGRAVITY_HEADERS,
   ANTIGRAVITY_QUOTA_URLS,
@@ -32,6 +33,7 @@ import { devinUsage } from "./devin.ts";
 import { parseKimiUsage } from "./kimi.ts";
 import { META_HEADERS, META_QUOTA_URL, parseMetaUsage } from "./meta.ts";
 import type { QuotaOutcome } from "./report.ts";
+import { parseResetGrantStatus, RESET_GRANT_STATUS_URL } from "./reset-grants.ts";
 import type { QuotaProbeTarget } from "./target.ts";
 import {
   XAI_BILLING_MONTHLY_URL,
@@ -95,15 +97,28 @@ const invalid = failure("invalid usage response");
 interface Usage {
   readonly plan?: string;
   readonly windows: ReadonlyArray<QuotaWindow>;
+  readonly resetGrants?: ResetGrantStatus;
 }
 
 const claude = Effect.fnUntraced(function* (target: QuotaProbeTarget) {
   const headers = { ...CLAUDE_HEADERS, authorization: bearer(target.token) };
+  // The grant status is dated by when its read started (a claim answered meanwhile is newer than it).
+  const startedAt = yield* Clock.currentTimeMillis;
 
-  // The profile only adds the plan: its failure is tolerated (panel behaviour).
-  const [usage, profile] = yield* Effect.all(
-    [get(CLAUDE_USAGE_URL, headers), Effect.result(get(CLAUDE_PROFILE_URL, headers))],
-    { concurrency: 2 },
+  // The profile only adds the plan and the reset grant read only the grants: their failures are tolerated (panel
+  // behaviour; the panel reads the grants beside the usage too). The cron sweep skips recent grant reads.
+  const [usage, profile, grants] = yield* Effect.all(
+    [
+      get(CLAUDE_USAGE_URL, headers),
+      Effect.result(get(CLAUDE_PROFILE_URL, headers)),
+      target.skipResetGrants === true
+        ? Effect.succeed(undefined)
+        : Effect.result(get(RESET_GRANT_STATUS_URL, headers)),
+    ],
+    { concurrency: 3 },
+  ).pipe(
+    // Anthropic answers are never followed to another host: a 3xx is a failed call.
+    Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual" }),
   );
 
   const body = yield* expectOk(usage);
@@ -115,9 +130,15 @@ const claude = Effect.fnUntraced(function* (target: QuotaProbeTarget) {
       ? parseClaudePlan(profile.success.body)
       : undefined;
 
+  const resetGrants =
+    grants !== undefined && Result.isSuccess(grants) && ok(grants.success)
+      ? parseResetGrantStatus(grants.success.body, startedAt)
+      : undefined;
+
   return {
     ...(plan === undefined ? {} : { plan }),
     windows: parseClaudeUsage(body),
+    ...(resetGrants === undefined ? {} : { resetGrants }),
   } satisfies Usage;
 });
 

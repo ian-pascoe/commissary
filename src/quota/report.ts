@@ -11,7 +11,11 @@
  * the browser through Go's `POST /requests/api-call`, not ported); see docs/ARCHITECTURE.md "Quota check".
  */
 import type { JsonObject } from "../json/index.ts";
-import type { QuotaReport, QuotaWindow } from "../management/contract/credentials.ts";
+import type {
+  QuotaReport,
+  QuotaWindow,
+  ResetGrantStatus,
+} from "../management/contract/credentials.ts";
 
 /** Executor keys (`executorKey`) with a usage endpoint. */
 export const QUOTA_PROVIDERS = [
@@ -32,9 +36,18 @@ const SUPPORTED: ReadonlySet<string> = new Set(QUOTA_PROVIDERS);
 export const isQuotaProvider = (provider: string): provider is QuotaProvider =>
   SUPPORTED.has(provider);
 
-/** The result of one check: the windows (and plan) the provider reported, or why the check failed (no secrets). */
+/**
+ * The result of one check: the windows (and plan) the provider reported, or why the check failed (no secrets).
+ * `resetGrants`: Claude's reset grant status, when its tolerated read answered (stored apart from the report,
+ * src/quota/reset-grant-store.ts).
+ */
 export type QuotaOutcome =
-  | { readonly ok: true; readonly plan?: string; readonly windows: ReadonlyArray<QuotaWindow> }
+  | {
+      readonly ok: true;
+      readonly plan?: string;
+      readonly windows: ReadonlyArray<QuotaWindow>;
+      readonly resetGrants?: ResetGrantStatus;
+    }
   /** `status`: the upstream HTTP status when there was one (not stored in the report). */
   | { readonly ok: false; readonly error: string; readonly status?: number };
 
