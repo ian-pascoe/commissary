@@ -33,6 +33,8 @@ export interface QuotaProbeTarget {
   /** Devin API base URL and device seed. */
   readonly baseUrl?: string;
   readonly deviceSeed?: string;
+  /** The stored credential version the token belongs to (`recordQuotaReport` drops a stale outcome). */
+  readonly credentialVersion?: number;
 }
 
 /** Answer of the `quotaProbeTarget` RPC. `unavailable` is a failed check (it is recorded in the report). */
@@ -45,6 +47,7 @@ export type QuotaTargetResult =
       readonly error: "unavailable";
       readonly id: string;
       readonly message: string;
+      readonly credentialVersion?: number;
     };
 
 const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");

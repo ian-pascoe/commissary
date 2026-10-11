@@ -57,9 +57,14 @@ import {
   type StatusResult,
 } from "../oauth/service.ts";
 import { OAuthSessions, SqliteSessionTable } from "../oauth/session-store.ts";
-import type { QuotaReport } from "../management/contract/credentials.ts";
+import type {
+  AccountResult,
+  BatchAction,
+  QuotaReport,
+} from "../management/contract/credentials.ts";
 import { isQuotaProvider, mergeQuotaReport, type QuotaOutcome } from "../quota/report.ts";
 import { QuotaReportStore } from "../quota/store.ts";
+import { type SweepSource, SweepLeaseStore, type TakeLease } from "../quota/sweep-lease.ts";
 import { buildQuotaTarget, type QuotaTargetResult } from "../quota/target.ts";
 
 const decodePickRequest = Schema.decodeUnknownSync(PickRequest);
@@ -82,6 +87,48 @@ const PROTECTED_KEYS = new Set([
 /** Keys `patchCredentialMetadata` must not write: token lifecycle, identity of the provider, the disabled flag. */
 const isProtectedMetadataKey = (key: string): boolean =>
   isTokenPayloadKey(key) || PROTECTED_KEYS.has(key);
+
+/** Token refreshes one batch runs at once (each is an upstream call made by this object). */
+const BATCH_REFRESH_CONCURRENCY = 4;
+
+const NOT_FOUND: Omit<AccountResult, "name"> = {
+  ok: false,
+  error: "not_found",
+  message: "auth file not found",
+};
+
+/**
+ * A failed batch refresh as the panel shows it: a fixed reason per failure code plus the upstream status. The
+ * refresher's own message is never passed on: it can quote the upstream body, which may echo the refresh token.
+ */
+const REFRESH_REASONS = new Map([
+  ["unauthorized", "the provider refused the refresh token"],
+  ["disabled", "the account is disabled"],
+  ["persist_failed", "the new tokens could not be stored"],
+]);
+
+const refreshFailure = (
+  name: string,
+  error: { readonly code: string; readonly httpStatus?: number },
+): AccountResult => {
+  const reason = REFRESH_REASONS.get(error.code) ?? "the token refresh failed";
+  const status = error.httpStatus;
+
+  return {
+    name,
+    ok: false,
+    error: error.code === "unauthorized" ? "unauthorized" : "refresh_failed",
+    message: status === undefined ? reason : `${reason} (HTTP ${status})`,
+    ...(status === undefined ? {} : { status }),
+  };
+};
+
+/** Stored under `recordQuotaReport`: the report, or why it was not stored. */
+export type RecordQuotaResult =
+  | { readonly kind: "stored"; readonly report: QuotaReport }
+  | { readonly kind: "gone" }
+  /** The credential's tokens changed during the check: the outcome says nothing about the new ones. */
+  | { readonly kind: "stale" };
 
 /** JSON object as it crosses the RPC boundary (the recursive `JsonObject` is too deep for the RPC stub types). */
 type WireJsonObject = Record<string, Schema.MutableJson>;
@@ -107,12 +154,14 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #refresh: RefreshManager;
   readonly #oauth: OAuthService;
   readonly #quota: QuotaReportStore;
+  readonly #sweepLease: SweepLeaseStore;
   #configView: ConfigView | undefined;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.#config = new ConfigStore(ctx.storage.sql);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
+    this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
     this.#pool = new CredentialPool({
       store: new CredentialStore(ctx.storage.sql),
       config: () => this.#currentConfig(),
@@ -263,9 +312,30 @@ export class ControlPlane extends DurableObject<Env> {
 
   /** Removes several stored credentials; returns the ids that existed. */
   async removeCredentials(ids: ReadonlyArray<string>): Promise<string[]> {
-    const removed: string[] = [];
+    const removed = this.#removeMany(ids);
 
-    for (const id of ids) if ((await this.removeCredential(id)).removed) removed.push(id);
+    if (removed.length > 0) await this.#rearm();
+
+    return removed;
+  }
+
+  /**
+   * Removes stored credentials in one storage transaction, clearing what {@link removeCredential} clears for each:
+   * the credential with its runtime (cooldown) state and session bindings, its quota report, and the refresher's
+   * in-memory state. The caller re-arms the refresh alarm once.
+   */
+  #removeMany(ids: ReadonlyArray<string>): string[] {
+    const removed = this.#pool.removeMany(ids, (write) =>
+      this.ctx.storage.transactionSync(() => {
+        const gone = write();
+
+        for (const id of gone) this.#quota.delete(id);
+
+        return gone;
+      }),
+    );
+
+    for (const id of removed) this.#refresh.forget(id);
 
     return removed;
   }
@@ -537,11 +607,93 @@ export class ControlPlane extends DurableObject<Env> {
     return items;
   }
 
+  /**
+   * One batch action over auth files named by id (`POST /credentials/batch`, src/management/credentials-batch.ts):
+   * one result per name, in order. Every name is resolved against one snapshot of the stored credentials.
+   *
+   * Enable, disable and delete apply every name in one synchronous pass inside a storage transaction (nothing
+   * interleaves, and a failure leaves no half-applied batch), dropping the pool's derived view once, then re-arm the
+   * refresh alarm once. A batch delete clears exactly what a single delete clears: the credential with its runtime
+   * (cooldown) state and session bindings, its quota report and the refresher's in-memory state. A name that is no
+   * longer stored is already deleted, so a delete answers it `ok`; config API keys are `not_found` for every action.
+   *
+   * Refresh forces each refresh with at most {@link BATCH_REFRESH_CONCURRENCY} upstream calls at a time; an account
+   * without a refresh token is `skipped`, and a failure carries a fixed reason (`refreshFailure`).
+   */
+  async batchCredentials(
+    action: BatchAction,
+    names: ReadonlyArray<string>,
+  ): Promise<AccountResult[]> {
+    const stored = new Set(this.#pool.refreshTargets().map(({ credential }) => credential.id));
+
+    if (action === "refresh") {
+      return await Effect.runPromise(
+        Effect.forEach(
+          names,
+          (name) =>
+            stored.has(name)
+              ? Effect.promise(() => this.#refreshForBatch(name))
+              : Effect.succeed<AccountResult>({ name, ...NOT_FOUND }),
+          { concurrency: BATCH_REFRESH_CONCURRENCY },
+        ),
+      );
+    }
+
+    const known = names.filter((name) => stored.has(name));
+
+    const config = new Set(
+      this.#pool
+        .entries()
+        .filter(({ credential }) => credential.source === "config")
+        .map(({ credential }) => credential.id),
+    );
+
+    const applied = new Set(
+      action === "delete"
+        ? this.#removeMany(known)
+        : this.#pool.setDisabledMany(known, action === "disable", (write) =>
+            this.ctx.storage.transactionSync(write),
+          ),
+    );
+
+    if (applied.size > 0) await this.#rearm();
+
+    return names.map((name): AccountResult => {
+      if (applied.has(name)) return { name, ok: true };
+
+      // Gone already (here or in a concurrent call): what a delete asked for holds.
+      if (action === "delete" && !config.has(name)) return { name, ok: true };
+
+      return { name, ...NOT_FOUND };
+    });
+  }
+
+  async #refreshForBatch(name: string): Promise<AccountResult> {
+    const result = await this.#refresh.refreshNow(name, { force: true });
+
+    if (result.ok) return { name, ok: true };
+
+    if (result.error.code === "not_found") return { name, ...NOT_FOUND };
+
+    if (result.error.code === "not_refreshable") {
+      return {
+        name,
+        ok: false,
+        skipped: true,
+        error: "not_refreshable",
+        message: "the account has no refresh token",
+      };
+    }
+
+    return refreshFailure(name, result.error);
+  }
+
   // --- quota check (src/quota) ----------------------------------------------------------------------------------
 
   /**
    * What the Worker needs to probe the usage endpoint of an auth file (`POST /credentials/quota`, cron `quota-check`):
-   * the provider and the token of the credential refreshed when needed. Carries token material: the Worker uses it for
+   * the provider and the token of the credential refreshed when needed, with the `credentialVersion` the token belongs
+   * to (handed back with the outcome, see {@link recordQuotaReport}). Carries token material: the Worker uses it for
    * the upstream call only.
    */
   async quotaProbeTarget(ref: CredentialRef): Promise<QuotaTargetResult> {
@@ -555,18 +707,47 @@ export class ControlPlane extends DurableObject<Env> {
     const id = target.credential.id;
     const fresh = await this.#refresh.ensureFresh(id);
 
-    if (!fresh.ok) return { ok: false, error: "unavailable", id, message: "token refresh failed" };
+    if (!fresh.ok) {
+      return {
+        ok: false,
+        error: "unavailable",
+        id,
+        message: "token refresh failed",
+        credentialVersion: target.credential.credentialVersion,
+      };
+    }
 
-    return buildQuotaTarget(fresh.credential, provider);
+    const built = buildQuotaTarget(fresh.credential, provider);
+    const credentialVersion = fresh.credential.credentialVersion;
+
+    return built.ok
+      ? { ok: true, target: { ...built.target, credentialVersion } }
+      : built.error === "unavailable"
+        ? { ...built, credentialVersion }
+        : built;
   }
 
-  /** Stores the result of one quota check made at `checkedAtMs`; `undefined` when the credential is gone. */
+  /**
+   * Stores the result of one quota check made at `checkedAtMs` with the tokens of `credentialVersion`: `gone` when the
+   * credential was deleted meanwhile, `stale` (nothing stored) when its tokens changed meanwhile (a re-login), as a
+   * refresh result is dropped. `sweepLease`: the check is part of a sweep, whose lease this renews.
+   */
   recordQuotaReport(
     id: string,
     outcome: QuotaOutcome,
     checkedAtMs: number,
-  ): QuotaReport | undefined {
-    if (this.#pool.entry(id) === undefined) return undefined;
+    options: { readonly credentialVersion?: number; readonly sweepLease?: string } = {},
+  ): RecordQuotaResult {
+    if (options.sweepLease !== undefined) this.#sweepLease.renew(options.sweepLease);
+    const current = this.#pool.entry(id);
+
+    if (current === undefined) return { kind: "gone" };
+
+    if (
+      options.credentialVersion !== undefined &&
+      current.credential.credentialVersion !== options.credentialVersion
+    )
+      return { kind: "stale" };
 
     const report = mergeQuotaReport(
       this.#quota.get(id),
@@ -576,7 +757,7 @@ export class ControlPlane extends DurableObject<Env> {
 
     this.#quota.put(id, report);
 
-    return report;
+    return { kind: "stored", report };
   }
 
   /** Ids of the enabled auth files whose provider has a usage endpoint (cron `quota-check`). */
@@ -590,6 +771,24 @@ export class ControlPlane extends DurableObject<Env> {
           isQuotaProvider(executorKey(credential)),
       )
       .map(({ credential }) => credential.id);
+  }
+
+  /**
+   * Takes the lease of a check of every quota (src/quota/sweep-lease.ts) at this object's own time; refused while a
+   * live sweep holds it.
+   */
+  takeQuotaSweepLease(source: SweepSource): TakeLease {
+    return this.#sweepLease.take(source);
+  }
+
+  /** Marks the sweep holding `token` alive; `false` when it no longer holds the lease. */
+  renewQuotaSweepLease(token: string): boolean {
+    return this.#sweepLease.renew(token);
+  }
+
+  /** Gives back the lease taken with `token` (a lease taken over meanwhile is left alone). */
+  releaseQuotaSweepLease(token: string): void {
+    this.#sweepLease.release(token);
   }
 
   // --- provider OAuth logins (src/oauth) ------------------------------------------------------------------------

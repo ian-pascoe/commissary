@@ -271,6 +271,12 @@ export const probeQuota = (
     Effect.catch((error) =>
       Effect.logWarning(
         `quota check for ${target.id} (${target.provider}) failed: ${error.message}`,
-      ).pipe(Effect.as<QuotaOutcome>({ ok: false, error: error.message })),
+      ).pipe(
+        Effect.as<QuotaOutcome>(
+          error.status === undefined
+            ? { ok: false, error: error.message }
+            : { ok: false, error: error.message, status: error.status },
+        ),
+      ),
     ),
   );

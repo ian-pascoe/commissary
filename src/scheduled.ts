@@ -52,10 +52,8 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
       );
     }),
   },
-  // Quota check (Workers addition, src/quota): provider usage windows of every enabled auth file that has a usage
-  // endpoint, stored as the credential's `quota_report`.
-  { name: "quota-check", run: runQuotaSweep },
-  // Credential refresh safety sweep: re-arms the ControlPlane refresh alarm.
+  // Credential refresh safety sweep: re-arms the ControlPlane refresh alarm. Before the quota
+  // check, so its token refreshes are done and it does not refresh the same accounts from a second place.
   {
     name: "credential-refresh-sweep",
     run: Effect.gen(function* () {
@@ -63,6 +61,10 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
       yield* Effect.promise(() => env.CONTROL_PLANE.getByName("global").sweepRefresh());
     }),
   },
+  // Quota check (Workers addition, src/quota): provider usage windows of every enabled auth file that has a usage
+  // endpoint, stored as the credential's `quota_report`.
+  // Skipped while the panel's "Check all quotas" holds the sweep lease (src/quota/sweep-lease.ts).
+  { name: "quota-check", run: runQuotaSweep },
 ];
 
 export const ScheduledLayer = Layer.mergeAll(

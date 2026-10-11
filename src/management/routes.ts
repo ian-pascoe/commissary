@@ -12,7 +12,8 @@
  * server-side, so tokens never leave the Worker), and the upstream panel page itself (Go serves it at
  * `/management.html`; here that path redirects to `/`). The upstream panel's `X-CPA-Version` and
  * `X-CPA-Support-Plugin` response headers are not sent. OAuth
- * login (`/oauth/*`) is in `oauth-routes.ts`; usage (`/observability/usage/*`) is in `usage-routes.ts`; the
+ * login (`/oauth/*`) is in `oauth-routes.ts`; the batch account actions (`/credentials/batch`) in
+ * `credentials-batch.ts`; usage (`/observability/usage/*`) is in `usage-routes.ts`; the
  * per-model routing view (`/routing/models`) in `routing-models.ts`; the Settings page (`/settings`) in
  * `settings-routes.ts` and its raw configuration editor (`/settings/config`) in `settings-raw-routes.ts`.
  */
@@ -31,9 +32,10 @@ import { ModelRegistryLive } from "../registry/live.ts";
 import type { ModelRegistry } from "../registry/service.ts";
 import { apiKeyProbeHandler, apiKeysRoutes } from "./api-keys-routes.ts";
 import { configRoutes } from "./config-routes.ts";
+import { credentialsBatchHandler } from "./credentials-batch.ts";
 import { credentialModelsHandler, credentialRoutes } from "./credentials-routes.ts";
 import { oauthRoutes } from "./oauth-routes.ts";
-import { quotaCheckHandler } from "./quota-routes.ts";
+import { quotaCheckHandler, quotaSweepHandler } from "./quota-routes.ts";
 import { routingModelsHandler } from "./routing-models.ts";
 import { settingsRawRoutes } from "./settings-raw-routes.ts";
 import { settingsRoutes } from "./settings-routes.ts";
@@ -72,7 +74,9 @@ export const ManagementRoutes = HttpRouter.addAll(
       ...usageRoutes,
       ...oauthRoutes,
       HttpRouter.route("GET", `${BASE}/credentials/models`, bound(credentialModelsHandler)),
+      HttpRouter.route("POST", `${BASE}/credentials/batch`, credentialsBatchHandler),
       HttpRouter.route("POST", `${BASE}/credentials/quota`, bound(quotaCheckHandler)),
+      HttpRouter.route("POST", `${BASE}/credentials/quota/all`, bound(quotaSweepHandler)),
       HttpRouter.route("POST", `${BASE}/api-keys/probe`, bound(apiKeyProbeHandler)),
       HttpRouter.route("GET", `${BASE}/routing/models`, bound(routingModelsHandler)),
       HttpRouter.route("GET", LEGACY_PANEL_PATH, LEGACY_PANEL_REDIRECT),
