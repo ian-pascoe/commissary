@@ -3,6 +3,7 @@
  */
 import type { Schema } from "effect";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import { isSecretHeader } from "../management/contract/headers.ts";
 import type { RecentBucket } from "./cooldown/recent-requests.ts";
 import { accessTokenExpiry } from "./expiry.ts";
 import {
@@ -13,6 +14,9 @@ import {
 } from "./model.ts";
 import type { CredentialSnapshot } from "./selection/types.ts";
 
+// The header classifier lives in the browser-safe contract so the panel shares it.
+export { isSecretHeader, SAFE_HEADER_NAMES } from "../management/contract/headers.ts";
+
 const SECRET_KEY =
   /token|secret|password|passwd|api[_-]?key|private[_-]?key|authorization|cookie|session_id|dca/i;
 
@@ -20,13 +24,25 @@ const SAFE_KEYS = new Set(["token_type", "token_endpoint", "dca_expired", "dca_e
 
 const SECRET_ATTRIBUTES = new Set(["api_key"]);
 
-/** Does a metadata key or header name look like it carries a secret (`x-api-key`, `authorization`, ...)? */
+/** Does a metadata key look like it carries a secret (`api_key`, `refresh_token`, ...)? Headers: {@link isSecretHeader}. */
 export const isSecretName = (name: string): boolean =>
   SECRET_KEY.test(name) && !SAFE_KEYS.has(name);
 
+/** How every masked value starts; a write that sends one back means "keep the stored value". */
+export const MASK_PREFIX = "[redacted]";
+
 /** Last four characters only, so a key is recognisable without being usable. */
 export const maskSecret = (value: string): string =>
-  value.length <= 8 ? "[redacted]" : `[redacted]…${value.slice(-4)}`;
+  value.length <= 8 ? MASK_PREFIX : `${MASK_PREFIX}…${value.slice(-4)}`;
+
+/** Masks every header value {@link isSecretHeader} classifies as secret. */
+export const maskHeaders = (headers: Readonly<Record<string, string>>): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(headers).map(([name, value]) => [
+      name,
+      isSecretHeader(name, value) ? maskSecret(value) : value,
+    ]),
+  );
 
 const redactValue = (value: Json): Json => {
   if (Array.isArray(value)) return value.map(redactValue);

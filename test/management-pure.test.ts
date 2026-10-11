@@ -224,6 +224,98 @@ describe("credential entries", () => {
     );
   });
 
+  it("shows the account's own routing fields with every header value masked but safe ones", () => {
+    const credential = cred("claude.json", {
+      // The effective prefix (outer slashes dropped by derivation), not the raw metadata.
+      prefix: "team",
+      metadata: {
+        type: "claude",
+        access_token: "secret-access",
+        prefix: " /team/ ",
+        disable_cooling: "true",
+        headers: {
+          Authorization: "Bearer sk-ant-api-0123456789wxyz",
+          "X-Api-Key": "tiny",
+          // Secrets under names no pattern would catch.
+          "Helicone-Auth": "Bearer sk-helicone-secret-1111",
+          "X-Portkey-Virtual-Key": "pk-virtual-secret-2222",
+          "Ocp-Apim-Subscription-Key": "apim-secret-3333",
+          "X-Auth-Key": "auth-secret-4444",
+          "X-Session-Id": "session-secret-5555",
+          token_type: "bearer-secret-6666",
+          // A template sends its literal text upstream: masked.
+          "X-Trace": "$CPA-SESSION-ID:sk-template-secret-7777",
+          // Copy-shaped, but the executor reads them as session templates and sends the suffix upstream.
+          "X-Sid": "$CPA-SESSION-ID-sk-live-1234abcd",
+          "X-Sid-Lower": "$cpa-session-idSECRET-8888",
+          // Pure client copies and safe headers are shown.
+          "X-Session": "$x-session",
+          "X-Cpa": "$CPA-SESSION-ID",
+          "X-Cpa-Spaced": "$ cpa-session-id",
+          "User-Agent": "my-agent/1.0",
+          "anthropic-beta": "context-1m",
+          "X-Team": "blue",
+          "X-Empty": " ",
+        },
+        excluded_models: [" Claude-3-* ", "claude-3-*", ""],
+        model_aliases: [
+          { name: "claude-opus-4-5", alias: "opus", fork: true },
+          { name: "x", alias: "x" },
+        ],
+      },
+    });
+
+    const entry = buildCredentialEntry(credential, emptyState(), NOW);
+
+    expect(entry).toMatchObject({
+      prefix: "team",
+      disable_cooling: true,
+      headers: {
+        Authorization: "[redacted]\u2026wxyz",
+        "X-Api-Key": "[redacted]",
+        "Helicone-Auth": "[redacted]\u20261111",
+        "X-Trace": "[redacted]\u20267777",
+        "X-Sid": "[redacted]\u2026abcd",
+        "X-Sid-Lower": "[redacted]\u20268888",
+        token_type: "[redacted]\u20266666",
+        "X-Session": "$x-session",
+        "X-Cpa": "$CPA-SESSION-ID",
+        "X-Cpa-Spaced": "$ cpa-session-id",
+        "User-Agent": "my-agent/1.0",
+        "anthropic-beta": "context-1m",
+        "X-Team": "[redacted]",
+      },
+      excluded_models: ["claude-3-*"],
+      model_aliases: [{ name: "claude-opus-4-5", alias: "opus", fork: true }],
+    });
+    expect(entry.headers).not.toHaveProperty("X-Empty");
+
+    const raw = JSON.stringify(entry);
+
+    for (const secret of [
+      "sk-ant-api",
+      "tiny",
+      "secret-access",
+      "sk-helicone",
+      "pk-virtual",
+      "apim-secret",
+      "auth-secret",
+      "session-secret",
+      "bearer-secret",
+      "sk-template",
+      "sk-live",
+      "SECRET-8888",
+      "blue",
+    ])
+      expect(raw).not.toContain(secret);
+
+    // Unset fields stay out of the entry, so the routing defaults apply.
+    const plain = buildCredentialEntry(cred("plain.json"), emptyState(), NOW);
+
+    for (const key of ["prefix", "disable_cooling", "headers", "excluded_models", "model_aliases"])
+      expect(plain).not.toHaveProperty(key);
+  });
+
   it("shows cooldowns and the derived status", () => {
     const next = NOW + 90_500;
     const credential = cred("a.json");
@@ -301,13 +393,14 @@ describe("field patch", () => {
   it("does not mutate the input and applies nested paths", () => {
     const result = applyFieldPatch(meta, {
       "a.b.c": 1,
-      "excluded-models": ["x"],
+      "excluded-models": [" X ", "x", "claude-3-*"],
       "model-aliases": [],
     });
 
+    // Exclusions are stored as selection reads them; an empty alias list deletes the key.
     expect(result).toEqual({
       ok: true,
-      metadata: { ...meta, a: { b: { c: 1 } }, excluded_models: ["x"], model_aliases: [] },
+      metadata: { ...meta, a: { b: { c: 1 } }, excluded_models: ["x", "claude-3-*"] },
     });
     expect(meta).toEqual({ type: "claude", access_token: "t", headers: { A: "1" }, keep: true });
   });
@@ -321,15 +414,207 @@ describe("field patch", () => {
     expect(applyFieldPatch(meta, { request_retry: -1 })).toEqual({ ok: true, metadata: meta });
   });
 
-  it("replaces non-string-map headers and drops them when emptied", () => {
+  it("merges string-map headers, drops them when emptied and refuses anything else", () => {
     expect(applyFieldPatch(meta, { headers: { A: "" } })).toEqual({
       ok: true,
       metadata: { type: "claude", access_token: "t", keep: true },
     });
     expect(applyFieldPatch(meta, { headers: null })).toMatchObject({ ok: true });
-    expect(applyFieldPatch(meta, { headers: { A: 1 } })).toMatchObject({
+    expect(applyFieldPatch(meta, { headers: { A: 1 } })).toEqual({
+      ok: false,
+      message: "header A must have a text value",
+      path: "headers.A",
+    });
+    expect(applyFieldPatch(meta, { headers: ["A"] })).toMatchObject({ ok: false, path: "headers" });
+    expect(applyFieldPatch(meta, { headers: { "Bad Name": "x" } })).toEqual({
+      ok: false,
+      message: "“Bad Name” is not a valid header name",
+      path: "headers.Bad Name",
+    });
+    expect(applyFieldPatch(meta, { headers: { B: "x\ny" } })).toMatchObject({
+      ok: false,
+      path: "headers.B",
+    });
+    expect(applyFieldPatch(meta, { headers: { B: "x\u0000" } })).toEqual({
+      ok: false,
+      message: "header B cannot contain a NUL character",
+      path: "headers.B",
+    });
+    expect(applyFieldPatch(meta, { headers: { "": "x" } })).toMatchObject({
+      ok: false,
+      path: "headers",
+    });
+  });
+
+  it("keeps a masked header value only for the header it belongs to", () => {
+    const secret = "Bearer sk-live-0123456789abcd";
+
+    const stored = {
+      type: "claude",
+      headers: { Authorization: secret, "X-Api-Key": "short", "X-Team": "blue" },
+    };
+
+    // The masks GET /credentials shows: the secret's last four characters, a short secret fully hidden.
+    const kept = applyFieldPatch(stored, {
+      headers: { Authorization: "[redacted]…abcd", "X-Api-Key": "[redacted]", "X-Team": "red" },
+    });
+
+    expect(kept).toEqual({
       ok: true,
-      metadata: { headers: { A: 1 } },
+      metadata: {
+        type: "claude",
+        headers: { Authorization: secret, "X-Api-Key": "short", "X-Team": "red" },
+      },
+    });
+
+    // Names match case-insensitively: the mask under another spelling keeps the value, under that spelling.
+    expect(applyFieldPatch(stored, { headers: { authorization: "[redacted]…abcd" } })).toEqual({
+      ok: true,
+      metadata: {
+        type: "claude",
+        headers: { "X-Api-Key": "short", "X-Team": "blue", authorization: secret },
+      },
+    });
+
+    // Moved to another header, not the stored value's mask, or a placeholder anywhere in the value: refused.
+    for (const [name, value] of [
+      ["X-Api-Key", "[redacted]…abcd"],
+      ["X-Auth", "[redacted]…abcd"],
+      ["Authorization", "[redacted]…zzzz"],
+      ["Authorization", "Bearer [redacted]…abcd"],
+      ["X-Team", "x[REDACTED]"],
+      ["X-Team", "[new secret]"],
+    ] as const) {
+      expect(applyFieldPatch(stored, { headers: { [name]: value } })).toMatchObject({
+        ok: false,
+        path: `headers.${name}`,
+      });
+    }
+
+    // A new value replaces the secret under any spelling; an empty one removes the header under any spelling.
+    expect(
+      applyFieldPatch(stored, { headers: { AUTHORIZATION: "Bearer new", "x-api-key": "" } }),
+    ).toEqual({
+      ok: true,
+      metadata: { type: "claude", headers: { "X-Team": "blue", AUTHORIZATION: "Bearer new" } },
+    });
+  });
+
+  it("renames a header's case with its value unchanged", () => {
+    const stored = {
+      type: "claude",
+      headers: { "user-agent": "x", Authorization: "Bearer s-1234abcd" },
+    };
+
+    expect(applyFieldPatch(stored, { headers: { "User-Agent": "x" } })).toEqual({
+      ok: true,
+      metadata: {
+        type: "claude",
+        headers: { Authorization: "Bearer s-1234abcd", "User-Agent": "x" },
+      },
+    });
+    // A hidden value sent back as its mask keeps the stored secret under the new spelling.
+    expect(applyFieldPatch(stored, { headers: { AUTHORIZATION: "[redacted]\u2026abcd" } })).toEqual(
+      {
+        ok: true,
+        metadata: {
+          type: "claude",
+          headers: { "user-agent": "x", AUTHORIZATION: "Bearer s-1234abcd" },
+        },
+      },
+    );
+  });
+
+  it("removes a stored header whose name is not valid", () => {
+    const stored = { type: "claude", headers: { "X Foo": "bar", "X-Team": "blue" } };
+
+    expect(applyFieldPatch(stored, { headers: { "X Foo": "" } })).toEqual({
+      ok: true,
+      metadata: { type: "claude", headers: { "X-Team": "blue" } },
+    });
+    // Setting a value under an invalid name is still refused.
+    expect(applyFieldPatch(stored, { headers: { "X Foo": "baz" } })).toMatchObject({
+      ok: false,
+      path: "headers.X Foo",
+    });
+  });
+
+  it("type-checks the routing fields and names the refused one", () => {
+    const base = { type: "codex", prefix: "old", websockets: true };
+
+    expect(
+      applyFieldPatch(base, {
+        prefix: " team ",
+        "disable-cooling": true,
+        websockets: null,
+        model_aliases: [
+          { name: " gpt-5 ", alias: "fast", fork: true, extra: 1 },
+          { name: "gpt-5-mini", alias: "mini", "force-mapping": true, "display-name": " Mini " },
+        ],
+      }),
+    ).toEqual({
+      ok: true,
+      metadata: {
+        type: "codex",
+        prefix: "team",
+        disable_cooling: true,
+        model_aliases: [
+          { name: "gpt-5", alias: "fast", fork: true },
+          { name: "gpt-5-mini", alias: "mini", "force-mapping": true, "display-name": "Mini" },
+        ],
+      },
+    });
+    expect(applyFieldPatch(base, { prefix: "" })).toEqual({
+      ok: true,
+      metadata: { type: "codex", websockets: true },
+    });
+    expect(applyFieldPatch(base, { excluded_models: [] })).toEqual({ ok: true, metadata: base });
+    // Outer slashes are dropped like Go's synthesizer.
+    expect(applyFieldPatch(base, { prefix: "/team/" })).toEqual({
+      ok: true,
+      metadata: { ...base, prefix: "team" },
+    });
+
+    const refused: ReadonlyArray<readonly [JsonObject, string]> = [
+      [{ prefix: "a/b" }, "prefix"],
+      [{ prefix: "a b" }, "prefix"],
+      [{ prefix: 1 }, "prefix"],
+      [{ disable_cooling: "yes" }, "disable_cooling"],
+      [{ websockets: 1 }, "websockets"],
+      [{ excluded_models: "x" }, "excluded_models"],
+      [{ excluded_models: ["a b"] }, "excluded_models"],
+      [{ excluded_models: [1] }, "excluded_models"],
+      [{ model_aliases: {} }, "model_aliases"],
+      [{ model_aliases: [{ name: "a", alias: "" }] }, "model_aliases.0"],
+      [{ model_aliases: [{ name: "a", alias: "A" }] }, "model_aliases.0"],
+      [
+        {
+          model_aliases: [
+            { name: "a", alias: "x" },
+            { name: "b", alias: "X" },
+          ],
+        },
+        "model_aliases.1",
+      ],
+      [{ model_aliases: [{ name: "a", alias: "x", fork: "yes" }] }, "model_aliases.0"],
+      [{ weight: -1.5 }, "weight"],
+    ];
+
+    for (const [fields, path] of refused) {
+      expect(applyFieldPatch(base, fields), JSON.stringify(fields)).toMatchObject({
+        ok: false,
+        path,
+      });
+    }
+
+    // Nested paths into a typed field are malformed requests, not refused values.
+    expect(applyFieldPatch(base, { "prefix.x": "a" })).toEqual({
+      ok: false,
+      message: "prefix does not support nested fields",
+    });
+    expect(applyFieldPatch(base, { "headers.X-Foo": "a" })).toEqual({
+      ok: false,
+      message: "headers does not support nested fields",
     });
   });
 });

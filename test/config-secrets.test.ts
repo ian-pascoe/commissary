@@ -548,6 +548,66 @@ describe("config secrets", () => {
     });
   });
 
+  it("masks a header template but not a pure copy, and restores the template", () => {
+    const template = "$CPA-SESSION-ID:sk-template-SECRET-7777";
+
+    const document: JsonObject = {
+      "api-keys": {
+        claude: [
+          {
+            headers: {
+              "X-Trace": template,
+              // Copy-shaped session templates: the executor sends the suffix upstream.
+              "X-Sid": "$CPA-SESSION-ID-sk-live-1234abcd",
+              "X-Sid-Lower": "$cpa-session-idSECRET-8888",
+              "X-Session": "$CPA-SESSION-ID",
+              "X-Copy": "$ x-team",
+            },
+            keys: [],
+          },
+        ],
+      },
+    };
+
+    const { document: out, secrets } = maskDocument(document);
+
+    // The template sends its literal text upstream: a secret. Pure copies name what is sent and stay shown.
+    expect(secrets).toBe(3);
+    expect(at(out, "api-keys", "claude", 0).headers).toEqual({
+      "X-Trace": "[redacted#1]\u20267777",
+      "X-Sid": "[redacted#2]\u2026abcd",
+      "X-Sid-Lower": "[redacted#3]\u20268888",
+      "X-Session": "$CPA-SESSION-ID",
+      "X-Copy": "$ x-team",
+    });
+    expect(JSON.stringify(out)).not.toContain("SECRET");
+    expect(JSON.stringify(out)).not.toContain("sk-live");
+    expect(restoreSecrets(out, document)).toMatchObject({ ok: true, document });
+
+    // Moved to other secret headers they are restored too: none reads as a copy.
+    at(out, "api-keys", "claude", 0).headers = {
+      "X-Other": "[redacted#1]",
+      "X-Sid-2": "[redacted#2]",
+      "X-Sid-3": "[redacted#3]",
+    };
+    expect(restoreSecrets(out, document)).toMatchObject({
+      ok: true,
+      document: {
+        "api-keys": {
+          claude: [
+            {
+              headers: {
+                "X-Other": template,
+                "X-Sid-2": "$CPA-SESSION-ID-sk-live-1234abcd",
+                "X-Sid-3": "$cpa-session-idSECRET-8888",
+              },
+            },
+          ],
+        },
+      },
+    });
+  });
+
   it("masks secret-looking URL parameters, in the query and the fragment", () => {
     const urls = [
       ["https://h.test/?password=pw-1&x=1", "https://h.test/?password=[redacted#1]&x=1"],

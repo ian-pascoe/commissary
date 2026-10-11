@@ -9,7 +9,10 @@
  * Differences: only auth files are listed (Go lists config API keys as `runtime_only` only for plugin credentials);
  * `recent_requests` come from the credential's recent-requests ring; cooldown reasons are reduced to
  * the quota reason or the last error class. `quota_report` is the stored server-side quota check (src/quota, a Workers
- * addition with no Go counterpart).
+ * addition with no Go counterpart). The account's own routing fields (`prefix`, `disable_cooling`, `headers`,
+ * `excluded_models`, `model_aliases`) are a Workers addition for the control panel: the effective prefix, every header
+ * value masked except safe headers and pure client copies (`maskHeaders`, as on the API keys page), and the account's
+ * own exclusions and aliases, without the channel rules.
  */
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { decodeJwtClaims } from "../credentials/expiry.ts";
@@ -18,7 +21,10 @@ import {
   RECENT_BUCKET_MS,
   recentRequestsSnapshot,
 } from "../credentials/cooldown/recent-requests.ts";
+import { coolingOverride } from "../credentials/cooldown/mark-result.ts";
+import { aliasesFromMetadata, extractHeaders, ownExclusions } from "../credentials/derive.ts";
 import type { Credential, CredentialState } from "../credentials/model.ts";
+import { maskHeaders } from "../credentials/summary.ts";
 import { DEFAULT_WEIGHT } from "../credentials/weight.ts";
 import { quotaReportJson } from "../quota/report.ts";
 import { authIndexOf } from "./auth-index.ts";
@@ -263,6 +269,22 @@ export const buildCredentialEntry = (
   const retry = integer(metadata.request_retry);
 
   if (retry !== undefined && retry >= 0) entry.request_retry = retry;
+
+  // The prefix selection uses (outer slashes dropped, one with an inner slash ignored), not the raw metadata.
+  if (credential.prefix !== undefined) entry.prefix = credential.prefix;
+  const cooling = coolingOverride(metadata);
+
+  if (cooling !== undefined) entry.disable_cooling = cooling;
+  // Secret-looking header values leave masked, like the API keys page; writing the mask back keeps them.
+  const headers = maskHeaders(extractHeaders(metadata.headers));
+
+  if (Object.keys(headers).length > 0) entry.headers = headers;
+  const excluded = ownExclusions(metadata.excluded_models);
+
+  if (excluded.length > 0) entry.excluded_models = excluded;
+  const aliases = aliasesFromMetadata(metadata.model_aliases);
+
+  if (aliases.length > 0) entry.model_aliases = aliases.map((alias) => ({ ...alias }));
   entry.cooldowns = cooldowns;
 
   if (quotaReport !== undefined) entry.quota_report = quotaReportJson(quotaReport);

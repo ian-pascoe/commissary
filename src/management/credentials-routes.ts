@@ -5,6 +5,8 @@
  * auth_files_crud.go (`UploadAuthFile`, `DeleteAuthFile`, `DownloadAuthFile`), auth_files_fields.go
  * (`PatchAuthFileStatus`, `PatchAuthFileFields`), auth_files_refresh.go (`RefreshAuthFiles`), quota.go (`ResetQuota`).
  * Auth files live in the ControlPlane Durable Object instead of a directory; the credential `id` is the file name.
+ * Differences: a field patch refused for its value answers `422 {error, path}` naming the field (Go: `400`), and the
+ * list masks secret-looking header values (`field-patch.ts`, `credential-entry.ts`).
  */
 import { Clock, Effect } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
@@ -395,7 +397,12 @@ const patchFields = Effect.gen(function* () {
 
   if (result.ok) return jsonReply(200, { status: "ok" });
 
-  return yield* replyError(result.error === "not_found" ? 404 : 400, result.message);
+  if (result.error === "not_found") return yield* replyError(404, result.message);
+
+  // A refused value names its field (`422`, like the settings writes); a malformed request stays `400`.
+  return yield* result.path === undefined
+    ? replyError(400, result.message)
+    : replyError(422, result.message, { path: result.path });
 });
 
 const refreshCredentials = Effect.gen(function* () {

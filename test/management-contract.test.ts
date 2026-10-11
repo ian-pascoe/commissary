@@ -320,6 +320,7 @@ describe("management contract", () => {
         );
 
         assert.instanceOf(invalid, ManagementError);
+        assert.strictEqual(invalid.path, "weight");
 
         const missing = yield* Effect.flip(
           api.credentials.patchFields({ payload: { name: "ghost.json", note: "x" } }),
@@ -327,6 +328,48 @@ describe("management contract", () => {
 
         assert.instanceOf(missing, ManagementError);
         assert.strictEqual(missing.error, "auth file not found");
+      }).pipe(through(harness)),
+    );
+
+    it.effect("patchFields edits the routing fields and names a refused one", () =>
+      Effect.gen(function* () {
+        yield* seed("r.json", { headers: { Authorization: "Bearer sk-ant-api-secret-4321" } });
+        const api = yield* client;
+
+        const before = (yield* api.credentials.list()).files[0];
+        assert.deepStrictEqual(before?.headers, { Authorization: "[redacted]\u20264321" });
+
+        yield* api.credentials.patchFields({
+          payload: {
+            name: "r.json",
+            prefix: "team",
+            disable_cooling: false,
+            headers: { Authorization: "[redacted]\u20264321", "User-Agent": "blue" },
+            excluded_models: ["Claude-3-*"],
+            model_aliases: [{ name: "claude-opus-4-5", alias: "opus", fork: true }],
+          },
+        });
+
+        const after = (yield* api.credentials.list()).files[0];
+        assert.strictEqual(after?.prefix, "team");
+        assert.strictEqual(after?.disable_cooling, false);
+        assert.deepStrictEqual(after?.headers, {
+          Authorization: "[redacted]\u20264321",
+          "User-Agent": "blue",
+        });
+        assert.deepStrictEqual(after?.excluded_models, ["claude-3-*"]);
+        assert.deepStrictEqual(after?.model_aliases, [
+          { name: "claude-opus-4-5", alias: "opus", fork: true },
+        ]);
+
+        const refused = yield* Effect.flip(
+          api.credentials.patchFields({
+            payload: { name: "r.json", model_aliases: [{ name: "a", alias: "a" }] },
+          }),
+        );
+
+        assert.instanceOf(refused, ManagementError);
+        assert.strictEqual(refused.path, "model_aliases.0");
       }).pipe(through(harness)),
     );
 
@@ -755,7 +798,12 @@ describe("management contract", () => {
                   name: "main",
                   "base-url": "https://api.anthropic.com",
                   "proxy-url": "http://127.0.0.1:9",
-                  headers: { "X-Api-Key": "hdr-secret-9876", "X-Team": "blue" },
+                  headers: {
+                    "X-Api-Key": "hdr-secret-9876",
+                    "X-Team": "blue",
+                    "X-Sid": "$CPA-SESSION-ID-sk-live-1234abcd",
+                    "X-Copy": "$x-team",
+                  },
                   keys: [{ "api-key": SECRETS[0] }, { "api-key": SECRETS[1], weight: 3 }],
                 },
               ],
@@ -819,9 +867,13 @@ describe("management contract", () => {
           claude.group.keys[0]?.auth_index,
         );
         assert.strictEqual(claude.group.keys[0]?.runtime?.success, 0);
+        // Every header value is masked except safe headers: a secret can sit under any name.
         assert.deepStrictEqual(claude.group.headers, {
           "X-Api-Key": "[redacted]…9876",
-          "X-Team": "blue",
+          "X-Team": "[redacted]",
+          // A session template is a secret; a pure client copy is shown.
+          "X-Sid": "[redacted]…abcd",
+          "X-Copy": "$x-team",
         });
         // The hidden proxy is reported as a warning only.
         assert.strictEqual(claude.warnings.length, 1);

@@ -69,7 +69,7 @@ export const sanitizeAliases = (aliases: ReadonlyArray<OAuthModelAlias>): OAuthM
 };
 
 /** Per-account `model_aliases` from auth-file metadata. */
-const aliasesFromMetadata = (raw: Json | undefined): OAuthModelAlias[] => {
+export const aliasesFromMetadata = (raw: Json | undefined): OAuthModelAlias[] => {
   if (!Array.isArray(raw)) return [];
   const entries: OAuthModelAlias[] = [];
 
@@ -89,6 +89,15 @@ const aliasesFromMetadata = (raw: Json | undefined): OAuthModelAlias[] => {
 
 const stringList = (raw: Json | undefined): string[] =>
   Array.isArray(raw) ? raw.filter((item): item is string => typeof item === "string") : [];
+
+/** The account's own `excluded_models` as selection reads them: trimmed, lower-cased, de-duplicated, in order. */
+export const ownExclusions = (raw: Json | undefined): string[] => [
+  ...new Set(
+    stringList(raw)
+      .map((entry) => entry.trim().toLowerCase())
+      .filter((entry) => entry !== ""),
+  ),
+];
 
 /** `ApplyAuthPriorityMetadata`: numbers are truncated, strings must be integers; anything else is ignored. */
 const parsePriority = (raw: Json | undefined): number | undefined => {

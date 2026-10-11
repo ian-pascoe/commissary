@@ -783,14 +783,28 @@ until the next page load).
   _API keys_ below). `auth_index` =
   `sha256("id:" + id)[:16 hex]` (`auth-index.ts`, the Go fallback seed). The ControlPlane builds the redacted panel
   entries (`listCredentialEntries`) and owns the mutations (`patchCredentialFields`, `refreshCredential`,
-  `refreshAllCredentials`, `resetCredentialCooldown`, `removeCredentials`, `getCredentialFile`).
+  `refreshAllCredentials`, `resetCredentialCooldown`, `removeCredentials`, `getCredentialFile`). Entries also carry the
+  account's own routing fields for the panel (Workers addition): `prefix` (the effective one selection uses, not the
+  raw metadata), `disable_cooling`, `headers` (masked like the API keys page, `maskHeaders`: every non-empty value
+  except the safe-header allow-list `SAFE_HEADER_NAMES` and pure client copies `$Name` / `$CPA-SESSION-ID`, since a
+  secret can sit under any name), `excluded_models` and `model_aliases` (its own lists, without the channel rules).
+  `PATCH /credentials/fields` type-checks the fields the panel edits (`prefix` with outer slashes dropped like Go's
+  synthesizer, then without `/` or spaces; booleans; exclusion patterns stored lower-cased; aliases with both names,
+  different, each alias once; header names and single-line values, merged with names matched case-insensitively, an
+  empty value removing a header whatever its name) and answers a refused value with `422 {error, path}`, where `path`
+  is the field or its entry (`headers.<name>`, `model_aliases.<index>`) (Go: `400`, and it stored most values as sent;
+  a malformed request stays `400`, including a nested path into a typed field such as `headers.X-Foo`, which Go set). A
+  header value equal to the mask of the same header's stored value keeps the stored value; any other value containing
+  `[redacted` or `[new secret` is refused, so a masked value is never stored or copied to another header. This does
+  not make stored secrets immovable: a PATCH of `base_url` (stored as sent, as in Go) still sends the account's token
+  to the new address.
 - **API keys** (`api-keys-routes.ts`, `api-keys-view.ts`, `api-keys-write.ts`, `api-keys-probe.ts`, contract `api-keys.ts`):
   the control panel's keys page. Workers addition, no Go counterpart (Go's panel edits whole family arrays with raw keys).
   - `GET /api-keys`: every `api-keys` group (all families, compat endpoints included) with the config `version`, the
     effective base URL and, per key, `auth_index`, a `[redacted]…abcd` preview, `disabled` (effective `excluded-models`
     holds `*`) and the runtime of its credential (counters, cooldowns, last error). Built in the ControlPlane
-    (`apiKeysView`) from one snapshot of config and credential pool. **Secrets never leave**: keys are previews, header
-    values with secret-looking names are masked (`[redacted]…`), `proxy-url` and `experimental-cch-signing` (no effect
+    (`apiKeysView`) from one snapshot of config and credential pool. **Secrets never leave**: keys are previews, every
+    header value is masked (`[redacted]…`) except safe headers and pure client copies (`maskHeaders`), `proxy-url` and `experimental-cch-signing` (no effect
     on Workers) are left out and only reported as group `warnings`.
   - `PUT /api-keys/groups` (`{version, family, index?, group}`: replace or append) and `DELETE /api-keys/groups`
     (`{version, family, index}`): the Worker reads the stored config, answers `409 conflict` when `version` is stale,
@@ -840,10 +854,11 @@ until the next page load).
   document.
   - `GET /settings/config`: `{version, yaml, secrets}`, the stored document as sparse YAML (`sparseDocument`, the
     `/config.yaml` export without defaults) with every secret masked. Secret positions (`config-secrets.ts`, pure):
-    `access.api-keys` entries; every `api-keys` key; every group, key and payload-rule header value except `$Header`
-    copies and a short allow-list of protocol/client headers (`User-Agent`, `Accept`, `Content-Type`,
-    `Anthropic-Version`/`-Beta`, `OpenAI-Beta`, `HTTP-Referer`, `X-Title`, ...), names compared trimmed and
-    lower-cased as the normaliser stores them; strings under payload `params` whose path's last part or inner key
+    `access.api-keys` entries; every `api-keys` key; every group, key and payload-rule header value except pure client
+    copies (`$Header`, `$CPA-SESSION-ID`; a template such as `$CPA-SESSION-ID:sk-…` is masked) and the allow-list of
+    protocol/client headers (`User-Agent`, `Accept`, `Content-Type`, `Anthropic-Version`/`-Beta`, `OpenAI-Beta`,
+    `HTTP-Referer`, `X-Title`, ...), names compared trimmed and lower-cased as the normaliser stores them: the rules
+    the Keys and Account pages share (`contract/headers.ts`); strings under payload `params` whose path's last part or inner key
     looks secret (key, token, secret, sig, auth, pass, pwd, cred, session; `*-raw` JSON text is not looked into); and
     in URLs (`requests.proxy-url`, model catalogs, group and key `base-url`/`proxy-url`) the user info and the values
     of secret-looking query and fragment parameters. A whole value becomes `[redacted#n]…abcd` (last four characters
@@ -908,7 +923,10 @@ until the next page load).
   `data-theme`, `color-scheme` and the `theme-color` metas before the first paint, so a stored choice never flashes.
 - **Panel pages** (`web/src/pages/`): Overview (`/`); Accounts (`/accounts`: every account ordered by urgency, filters
   All / Needs attention / Disabled, search, allowance meters); Account (`/accounts/$authIndex`: allowance with reset
-  blades, cooldowns with clear, window history, routing priority and note, details, served models, check quota, refresh
+  blades, cooldowns with clear, window history, the Routing section (`#routing`: priority, weight, retry rounds,
+  cooling, Codex WebSocket preference, model prefix, exclusions, aliases, extra headers with secret values kept masked,
+  note; only the fields that apply to the provider; one save of the changed fields with a change count, a leave guard
+  and a `422` under the row it names; Models links an account's own rules here), details, served models, check quota, refresh
   tokens, enable/disable, delete); Connect (`/accounts/connect`: OAuth sign-in by pasted callback address or device
   code, Vertex service-account import, auth-file upload); Usage (`/usage`: totals, tokens per hour or day, a breakdown
   by model, account, provider, user or endpoint whose rows narrow the page, and the request log with each request's

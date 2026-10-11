@@ -55,7 +55,13 @@ export type ApiCallTokenResult =
 
 export type CredentialMutation =
   | { readonly ok: true; readonly id: string }
-  | { readonly ok: false; readonly error: "not_found" | "invalid"; readonly message: string };
+  | {
+      readonly ok: false;
+      readonly error: "not_found" | "invalid";
+      readonly message: string;
+      /** The field a refused value belongs to (`invalid` only). */
+      readonly path?: string;
+    };
 
 const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");
 
