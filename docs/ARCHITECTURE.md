@@ -817,7 +817,21 @@ panel paths and `/management.html` as `management`); there is no management key.
   _API keys_ below). `auth_index` =
   `sha256("id:" + id)[:16 hex]` (`auth-index.ts`, the Go fallback seed). The ControlPlane builds the redacted panel
   entries (`listCredentialEntries`) and owns the mutations (`patchCredentialFields`, `refreshCredential`,
-  `refreshAllCredentials`, `resetCredentialCooldown`, `removeCredentials`, `getCredentialFile`). Entries also carry the
+  `refreshAllCredentials`, `resetCredentialCooldown`, `removeCredentials`, `getCredentialFile`, `batchCredentials`).
+  `POST /credentials/batch {action: enable|disable|refresh|delete, names}` (`credentials-batch.ts`, Workers addition
+  for the Accounts page's selection) answers `200 {action, results, succeeded, failed, skipped}` with one `{name, ok,
+  skipped?, error?, message?, status?}` per distinct name (names are exact file names, not trimmed), so a partial
+  failure names who failed and why: `not_found` for unknown names and config API keys (a delete of a name already gone
+  counts as done, as the single delete would leave it), `refresh_failed` with a fixed message and the upstream status
+  (never the token endpoint's body, which can echo the refresh token), and `skipped` + `not_refreshable` for an account
+  without a refresh token. At most `MAX_BATCH_NAMES` (100) names, `MAX_BATCH_REFRESH_NAMES` (20) for a refresh (each
+  name is an upstream call), `400` beyond or when empty; the body is read up to 64 KiB (`413` beyond). One endpoint
+  instead of the panel calling the single-account routes: the single-writer ControlPlane applies
+  enable/disable/delete against one snapshot in one SQLite transaction with one alarm re-arm (per-account calls would
+  interleave with other writes and re-arm each time; a batch delete shares `removeCredentials`' cleanup of state,
+  quota reports and the pool), the Worker spends one RPC instead of one per account, and token refreshes run in the
+  object four at a time. Entries
+  also carry the
   account's own routing fields for the panel (Workers addition): `prefix` (the effective one selection uses, not the
   raw metadata), `disable_cooling`, `headers` (masked like the API keys page, `maskHeaders`: every non-empty value
   except the safe-header allow-list `SAFE_HEADER_NAMES` and pure client copies `$Name` / `$CPA-SESSION-ID`, since a
@@ -991,7 +1005,13 @@ panel paths and `/management.html` as `management`); there is no management key.
   builds `theme-boot.ts` into a hashed same-origin classic script (`/assets/theme-<hash>.js`) placed in `<head>`; it sets
   `data-theme`, `color-scheme` and the `theme-color` metas before the first paint, so a stored choice never flashes.
 - **Panel pages** (`web/src/pages/`): Overview (`/`); Accounts (`/accounts`: every account ordered by urgency, filters
-  All / Needs attention / Disabled, search, allowance meters); Account (`/accounts/$authIndex`: allowance with reset
+  All / Needs attention / Disabled, search, allowance meters, "Check all quotas" with the accounts whose check failed,
+  and a Select mode: checkboxes, select-all of the shown rows, and a bar pinned to the window bottom that enables,
+  disables, refreshes the tokens of or deletes (after a confirmation naming each account) the selected accounts the
+  filter shows, through `POST /credentials/batch` in requests of 100 (20 for a refresh, which leaves out providers
+  without one); failed and left-out accounts stay selected with their reason on the bar and on the row; the delete
+  confirmation stays open until the deletion settles, then focus moves to the result; the Select toggle reads Done
+  while selecting, and leaving returns focus to it); Account (`/accounts/$authIndex`: allowance with reset
   blades, cooldowns with clear, window history, the Routing section (`#routing`: priority, weight, retry rounds,
   cooling, Codex WebSocket preference, model prefix, exclusions, aliases, extra headers with secret values kept masked,
   note; only the fields that apply to the provider; one save of the changed fields with a change count, a leave guard
@@ -1059,7 +1079,8 @@ panel paths and `/management.html` as `management`); there is no management key.
   `/settings/config`, system → `/settings`, the rest → `/`).
 - Deviations from Go: `/` serves the control panel (admins only) instead of the public JSON banner; cooldown `reason`s are
   limited to the quota reason / last error code; `GET /credentials` always returns JSON timestamps as RFC 3339 strings;
-  `POST /credentials/quota` and the entries' `quota_report` are a Workers addition (see _Quota check_). The API keys
+  `POST /credentials/quota`, `POST /credentials/quota/all`, `POST /credentials/batch` and the entries' `quota_report`
+  are Workers additions (see _Quota check_). The API keys
   and Settings routes, including the raw configuration editor, are Workers additions (secrets never in their
   responses, masked as `[redacted#n]` placeholders restored on save; versioned writes; values the normaliser would
   rewrite refused with `422` instead of silently changed); `GET /config*` are masked the same way and refuse
@@ -1082,7 +1103,27 @@ result is stored.
     failed; the report then carries `error`.
   - `404` for an unknown auth file; `422 quota check is not supported for <provider>` for providers without a usage
     endpoint.
-- **Cron** task `quota-check` (`runQuotaSweep`): checks every enabled auth file of a supported provider, four at a time.
+  - `POST /v8/management/credentials/quota/all` (the panel's "Check all quotas") runs the sweep below now and answers
+    `200 {started_at, finished_at, results, checked, failed}` (`results`: `{name, ok, error?, message?, status?}` per
+    account, `status` the provider's HTTP status so the panel can tell a refused sign-in); `409 quota_check_running`
+    while another sweep holds the lease.
+  - A single check whose account's tokens changed while the provider answered (`credentialVersion` changed: a
+    re-login or a token refresh) answers `409 stale`: the outcome describes the old tokens and is dropped, like a refresh
+    result for replaced tokens.
+- **Sweep** (`sweepQuotas`): every enabled auth file of a supported provider, four provider calls at a time; an
+  outcome for replaced tokens is dropped (`stale`). One sweep at a time across isolates: it takes a lease in the
+  ControlPlane first (`sweep-lease.ts`, one SQLite row, taken atomically under the input gate on the object's clock,
+  given back with its token; a table from before `renewed_at` is recreated, it only holds a transient lease). Each
+  recorded account renews it (`renewed_at`), and so does a background renewal every 30 s, since one account's check
+  can outlast the lease (`ensureFresh` up to 120 s plus the 15 s probe); when a renewal finds the lease lost the sweep
+  stops (`409 quota_check_lost` for the panel). A lease not renewed for 2 min counts as abandoned, so a long sweep
+  keeps it while a Worker that died mid-sweep blocks the next one for at most 2 min. Taking the lease is the acquire
+  step of `acquireUseRelease`, so it is given back however the sweep ends (failure, a cancelled request), and the
+  invocation is held open with `waitUntil` until it has been. `waitUntil` only extends an invocation by about 30 s
+  after the client disconnects; if the release has not run by then, the lease expiry covers the rest.
+- **Cron**: the `refresh` sweep runs before `quota-check` (`runQuotaSweep`, the same sweep), so the check sees the
+  fresh tokens; the quota check skips its run (`skipped: true`) while the panel's sweep holds the lease instead of
+  asking every provider twice.
 - **Report**:
   - `checked_at` is the last attempt and `refreshed_at` the last success.
   - `windows` and `plan` survive a failed check, and a success without a plan keeps the previous plan.

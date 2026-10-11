@@ -1,9 +1,10 @@
 /**
  * The `/v8/management/credentials` routes the panel uses (`../credentials-routes.ts`; `../credential-entry.ts` builds
- * each entry) and the quota check (`../quota-routes.ts`). Shared with the browser: imports `effect` only. Field names
- * are the wire's (snake_case, like Go's auth-file list).
+ * each entry), the batch actions (`../credentials-batch.ts`) and the quota checks (`../quota-routes.ts`). Shared with
+ * the browser: imports `effect` only. Field names are the wire's (snake_case, like Go's auth-file list).
  *
- * Mutations answer with a status only (except refresh and the quota check): the panel re-reads the list afterwards.
+ * Mutations answer with a status only (except refresh, the batch actions and the quota checks, which answer per
+ * account): the panel re-reads the list afterwards.
  * There is no write versioning on credentials; `PATCH /credentials/fields` changes only the keys it names, so two
  * edits of different fields cannot overwrite each other.
  */
@@ -185,6 +186,68 @@ export const CredentialFieldsPatch = Schema.Struct({
 
 export type CredentialFieldsPatch = typeof CredentialFieldsPatch.Type;
 
+/**
+ * What a batch applies to every account it names (`POST /credentials/batch`). A `delete` of a name that is not stored
+ * (already deleted, or never there) answers `ok: true`, like a delete that just happened: what was asked for holds.
+ * Only a config API key, which cannot be deleted here, answers `not_found`.
+ */
+export const BatchAction = Schema.Literals(["enable", "disable", "refresh", "delete"]);
+
+export type BatchAction = typeof BatchAction.Type;
+
+/** Most accounts one batch request may name; the panel sends larger selections in several requests. */
+export const MAX_BATCH_NAMES = 100;
+
+/**
+ * Most accounts one `refresh` batch may name: each is an upstream token call the ControlPlane makes (four at a time),
+ * so a refresh request is kept short. The panel splits a larger selection by it.
+ */
+export const MAX_BATCH_REFRESH_NAMES = 20;
+
+/** The most names a batch of `action` may carry. */
+export const batchLimit = (action: BatchAction): number =>
+  action === "refresh" ? MAX_BATCH_REFRESH_NAMES : MAX_BATCH_NAMES;
+
+/**
+ * One account's outcome in a batch or a check of every quota. `error` is a code (`not_found`, `refresh_failed`,
+ * `unauthorized`, `check_failed`, `stale`, `unavailable`, `not_refreshable`), `message` a fixed reason and `status` the
+ * upstream HTTP status when there was one; none of them ever carries a token or an upstream body. `skipped` (with `ok:
+ * false`, `error: "not_refreshable"`): the action did not apply to the account (a refresh of an account without a
+ * refresh token); it counts as neither succeeded nor failed.
+ */
+export const AccountResult = Schema.Struct({
+  name: Schema.String,
+  ok: Schema.Boolean,
+  skipped: optional(Schema.Boolean),
+  error: optional(Schema.String),
+  message: optional(Schema.String),
+  status: optional(Schema.Number),
+});
+
+export type AccountResult = typeof AccountResult.Type;
+
+export const BatchResult = Schema.Struct({
+  action: BatchAction,
+  /** One per distinct name, in the order sent. */
+  results: Schema.Array(AccountResult),
+  succeeded: Schema.Number,
+  failed: Schema.Number,
+  skipped: Schema.Number,
+});
+
+export type BatchResult = typeof BatchResult.Type;
+
+export const QuotaSweepResult = Schema.Struct({
+  started_at: Schema.String,
+  finished_at: Schema.String,
+  /** One per enabled account whose provider reports quota; a failed check keeps the account's last figures. */
+  results: Schema.Array(AccountResult),
+  checked: Schema.Number,
+  failed: Schema.Number,
+});
+
+export type QuotaSweepResult = typeof QuotaSweepResult.Type;
+
 export const CredentialModel = Schema.Struct({
   id: Schema.String,
   display_name: optional(Schema.String),
@@ -259,6 +322,24 @@ export class CredentialsGroup extends HttpApiGroup.make("credentials").add(
   HttpApiEndpoint.post("checkQuota", "/credentials/quota", {
     payload: Schema.Struct({ name: Schema.String }),
     success: Schema.Struct({ status: Schema.Literal("ok"), report: QuotaReport }),
+    error: managementErrors,
+  }),
+  /**
+   * Enable, disable, refresh the tokens of or delete several accounts (auth files) at once; answers each account's
+   * outcome, so some may succeed while others fail. At most {@link MAX_BATCH_NAMES} names, {@link
+   * MAX_BATCH_REFRESH_NAMES} for `refresh` (`400` beyond).
+   */
+  HttpApiEndpoint.post("batch", "/credentials/batch", {
+    payload: Schema.Struct({ action: BatchAction, names: Schema.Array(Schema.String) }),
+    success: BatchResult,
+    error: managementErrors,
+  }),
+  /**
+   * Check the quota of every enabled account that reports it, a few at a time, and answer each outcome. `409
+   * quota_check_running` while another check of every account (the scheduled one included) is under way.
+   */
+  HttpApiEndpoint.post("checkAllQuotas", "/credentials/quota/all", {
+    success: QuotaSweepResult,
     error: managementErrors,
   }),
 ) {}

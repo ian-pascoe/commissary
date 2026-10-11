@@ -35,7 +35,8 @@ export const isQuotaProvider = (provider: string): provider is QuotaProvider =>
 /** The result of one check: the windows (and plan) the provider reported, or why the check failed (no secrets). */
 export type QuotaOutcome =
   | { readonly ok: true; readonly plan?: string; readonly windows: ReadonlyArray<QuotaWindow> }
-  | { readonly ok: false; readonly error: string };
+  /** `status`: the upstream HTTP status when there was one (not stored in the report). */
+  | { readonly ok: false; readonly error: string; readonly status?: number };
 
 /** Applies one check made at `checkedAt` (ISO) to the stored report. */
 export const mergeQuotaReport = (

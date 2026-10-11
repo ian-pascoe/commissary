@@ -52,6 +52,12 @@ export interface PoolStore {
   deleteState(id: string): void;
 }
 
+/**
+ * Runs a batch's storage writes, typically in a storage transaction (`transactionSync`), and returns what `write`
+ * returned; throwing rolls the batch back and the pool's in-memory state is left untouched.
+ */
+export type Commit = (write: () => string[]) => string[];
+
 /** The config as seen by the pool: a version for cheap change detection plus the decoded document. */
 export interface ConfigView {
   readonly version: number;
@@ -482,6 +488,45 @@ export class CredentialPool {
     }
 
     return removed;
+  }
+
+  /**
+   * Removes several stored credentials with their runtime state and session bindings, dropping the derived view once
+   * (a batch delete); returns the ids that existed. `commit` runs the storage writes (the caller's transaction, which
+   * may add its own writes); the in-memory state changes only once it returned, so a transaction that rolls back
+   * (throws) leaves the pool as it was.
+   */
+  removeMany(ids: ReadonlyArray<string>, commit: Commit = (write) => write()): string[] {
+    const removed = commit(() => ids.filter((id) => this.#store.remove(id)));
+
+    for (const id of removed) {
+      this.#states.delete(id);
+      this.#invalidateBindings(id);
+    }
+
+    if (removed.length > 0) this.#invalidate();
+
+    return removed;
+  }
+
+  /**
+   * Disables or enables several stored credentials, dropping the derived view once (a batch); returns the ids that are
+   * stored auth files (the others are left alone). `commit`: as in {@link removeMany}.
+   */
+  setDisabledMany(
+    ids: ReadonlyArray<string>,
+    disabled: boolean,
+    commit: Commit = (write) => write(),
+  ): string[] {
+    const applied = commit(() =>
+      ids.filter((id) => this.#store.setDisabled(id, disabled) !== undefined),
+    );
+
+    if (disabled) for (const id of applied) this.#invalidateBindings(id);
+
+    if (applied.length > 0) this.#invalidate();
+
+    return applied;
   }
 
   /** Disables/enables a stored credential. Config API keys are disabled by removing them from the config. */
