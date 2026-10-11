@@ -871,13 +871,17 @@ until the next page load).
     values, so it is no guessing oracle either. `check` stores nothing and answers the masked
     canonical result (`[new secret]…abcd` for new ones), `dropped` (input paths not stored as written: unknown or
     legacy keys, entries the normaliser removes or rewrites), `not_applied`, the kept/new secret counts and
-    `moved_secrets`: paths where a kept secret is now sent elsewhere than where it was stored (another family, or for
+    `moved_secrets`: each kept secret now sent elsewhere than where it was stored (another family, or for
     `api-keys` keys and headers another key or group `base-url`, for URL credentials another URL; URLs compared without
-    their secrets, path included, host case and a trailing `/` aside: a shared gateway host serves many accounts). `PUT` stores with `putConfig(text, version)` and answers `{status: "ok", version, dropped, not_applied,
+    their secrets, path included, host case and a trailing `/` aside: a shared gateway host serves many accounts), as
+    `{path, placeholder, from, to}`: its `[redacted#n]…abcd` and the family (or config section) and upstream host
+    before and after. Only the host (lower-cased, port kept) is named: it is who receives the secret, while user info,
+    path and query can carry secrets or account ids of their own. `PUT` stores with `putConfig(text, version)` and answers `{status: "ok", version, dropped, not_applied,
     moved_secrets}`; a document whose canonical form equals the stored one is not written and keeps its `version`.
   - Limitations: only the canonical document is stored, so comments, key order and anchors in the edited text are
     not kept, and a secret is never shown back once stored. Moving a kept secret to another host is allowed (an admin
-    may re-point an upstream); the panel flags `moved_secrets` in its review. Saving a typed copy of a stored secret
+    may re-point an upstream); the panel's review names each moved secret by placeholder with both hosts, marks its line
+    and asks for a confirmation before Save. Saving a typed copy of a stored secret
     next to it lets the normaliser deduplicate them without the review showing it (the review never compares typed
     values with stored ones); the next read shows it. Two kept keys with the same stored value whose identities an edit
     makes equal (e.g. Gemini groups that differ only by `prefix`) are deduplicated too: the review decodes once more
@@ -930,8 +934,24 @@ until the next page load).
   `409` the delta is re-applied once to a fresh read, and a `422` lands under the field its `path` names (the message
   names the bad value; the hint says what is expected); other save outcomes show in the section's sticky save bar; the
   jump list counts each section's unsaved changes and leaving the page with any asks first (`useBlocker`); payload
-  rules and account error rules are read-only there until the configuration editor, edited meanwhile in the classic
-  panel at `/management.html`). The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
+  rules and account error rules are read-only there, each linking its key in the raw configuration); Raw configuration
+  (`/settings/config`, linked from the Settings head: the whole configuration as masked YAML from
+  `GET /settings/config`, the escape hatch for what has no typed home (payload rules, account error rules,
+  `oauth.settings`), with a list of where each concept lives. A lazy route, its own chunk with CodeMirror 6 and `yaml`:
+  YAML highlighting, line numbers, search, history, bracket matching, no Tab capture, live YAML syntax diagnostics
+  (`web/src/lib/raw-config.ts` parses as the server does), secret placeholders marked and atomic. The editor runs in a
+  shadow root: CodeMirror's `style-mod` writes a `<style>` element into a document, which the panel's
+  `style-src 'self'` refuses, but a constructed stylesheet (`adoptedStyleSheets`) into a shadow root, so the CSP stays
+  as it is; its theme uses the semantic colour tokens, which inherit into the shadow tree. Review changes posts
+  `POST /settings/config/check` and shows the line diff (Myers, unchanged runs folded) from the stored text to the
+  canonical result, what would not be kept, what has no effect on Workers, secrets kept and new, and secrets now sent to
+  another provider or host (each by placeholder with both hosts, its diff line marked), which Save requires confirming; Save is `PUT /settings/config` with the read's `version`
+  and refetches every view that reads the configuration. A `422` marks the line and column (`invalid_yaml`) or the key
+  its `path` names in the editor and moves the cursor there, the message led by a "Line n" button that goes back to it; a `409` (or a newer read while editing) offers Reload or
+  Copy my draft and never merges, since placeholders are bound to the version they were read at, and Reload and a save
+  start the editor over without undo history for the same reason. `#<dotted.path>` in the address (the Settings rule
+  notes, the Keys form's kept-settings notice at `#api-keys.<family>.<index>`) puts the cursor on that key (its line tinted until the next edit or click), or
+  its deepest present ancestor with a note when the key is at its default. Leaving with a draft asks first). The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
   address (`?range=&by=&model=&provider=&account=&user=&failed=`, decoded per parameter by `web/src/lib/usage.ts`
   `readUsageSearch`, a malformed one dropped), reads `GET /observability/usage/summary`, `/series` (provider series
   summed in the browser; no principal filter, so no chart while a user filter is set) and `/records` (pages of 50

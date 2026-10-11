@@ -1,6 +1,11 @@
 // Page routes (code-based, no generator). The Worker answers every one of these paths with index.html
 // (src/access/routes.ts `PANEL_SECTIONS`); add a section there when adding a top-level page here.
-import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  lazyRouteComponent,
+} from "@tanstack/react-router";
 import { Shell } from "./components/Shell.tsx";
 import { AccountPage } from "./pages/Account.tsx";
 import { AccountsPage } from "./pages/Accounts.tsx";
@@ -56,6 +61,12 @@ const routeTree = rootRoute.addChildren([
     component: UsagePage,
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: SettingsPage }),
+  // Its own chunk: CodeMirror and `yaml` load only when the raw configuration is opened.
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/settings/config",
+    component: lazyRouteComponent(() => import("./pages/RawConfig.tsx"), "RawConfigPage"),
+  }),
 ]);
 
 export const router = createRouter({

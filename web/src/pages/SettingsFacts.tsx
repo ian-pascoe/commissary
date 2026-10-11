@@ -1,6 +1,6 @@
 // The read-only parts of the Settings page: payload rule counts, the account error rules, the deployment's own admins,
-// and the keys that do nothing on Workers (each with Remove). Payload and error rules are edited in the configuration
-// editor once it lands; until then the classic panel (OLD_PANEL) edits them.
+// and the keys that do nothing on Workers (each with Remove). Payload and error rules are edited in the raw
+// configuration (/settings/config), which each links at its key.
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import type { RequestScopedErrorRule } from "#contract/api-keys.ts";
@@ -8,17 +8,18 @@ import type { SettingsView } from "#contract/settings.ts";
 import { removeSettingAtom } from "../api/client.ts";
 import { kit, Problem } from "../components/Kit.tsx";
 import { formatCount } from "../lib/format.ts";
-import { OLD_PANEL } from "../lib/old-panel.ts";
 import { providerName } from "../lib/providers.ts";
 import { removalPatch } from "../lib/settings.ts";
 import { useAction } from "../lib/use-action.ts";
 import styles from "./Settings.module.css";
 
-/** Where payload and error rules are edited until the configuration editor lands. */
-const ClassicPanel = ({ what }: { readonly what: string }) => (
+/** Where payload and error rules are edited: the raw configuration, at their key. */
+const EditRaw = ({ what, path }: { readonly what: string; readonly path: string }) => (
   <p className={styles["quiet"]}>
-    Editing {what} comes with the configuration editor. Until then,{" "}
-    <a href={OLD_PANEL}>edit them in the classic panel</a>.
+    <Link to="/settings/config" hash={path}>
+      Edit {what} in the raw configuration
+    </Link>
+    .
   </p>
 );
 
@@ -65,7 +66,7 @@ export const PayloadRules = ({ payload }: { readonly payload: SettingsView["payl
         </li>
       ))}
     </ul>
-    <ClassicPanel what="payload rules" />
+    <EditRaw what="payload rules" path="requests.payload" />
   </PlainSection>
 );
 
@@ -128,7 +129,7 @@ export const ErrorRules = ({
           </tbody>
         </table>
       )}
-      <ClassicPanel what="error rules" />
+      <EditRaw what="error rules" path="oauth.request-scoped-errors" />
     </div>
   );
 };

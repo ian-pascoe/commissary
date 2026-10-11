@@ -17,6 +17,9 @@ export type Outcome<A> =
       readonly detail?: string;
       /** The dotted config path the failure is about, when the server named one. */
       readonly path?: string;
+      /** Where submitted YAML stops parsing (1-based), when the server said. */
+      readonly line?: number;
+      readonly column?: number;
     };
 
 export const useAction = <Arg, A, E>(atom: Atom.AtomResultFn<Arg, A, E>) => {
@@ -31,14 +34,14 @@ export const useAction = <Arg, A, E>(atom: Atom.AtomResultFn<Arg, A, E>) => {
         const exit = await call(input);
 
         if (Exit.isSuccess(exit)) return { ok: true, value: exit.value };
-        const { message: detail, path } = serverDetail(exit.cause);
+        const { message: detail, ...where } = serverDetail(exit.cause);
 
         return {
           ok: false,
           message: causeMessage(exit.cause),
           error: serverError(exit.cause),
           ...(detail === undefined ? {} : { detail }),
-          ...(path === undefined ? {} : { path }),
+          ...where,
         };
       } finally {
         setBusy(false);

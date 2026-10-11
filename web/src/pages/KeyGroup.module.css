@@ -247,6 +247,11 @@
   color: var(--quiet);
 }
 
+.kept a {
+  font-weight: 650;
+  color: var(--text);
+}
+
 .warning {
   max-width: 65ch;
   font-size: var(--text-sm);

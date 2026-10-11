@@ -307,6 +307,32 @@ export const removeSettingAtom = Atom.family((key: string) =>
   ),
 );
 
+/** The raw configuration page refetches after a mutation tagged with this key. */
+export const RAW_CONFIG = ["raw-config"] as const;
+
+/**
+ * The whole configuration as masked YAML with its version. Read afresh on every visit (no idle cache): the draft's
+ * placeholders are bound to the version it was read at.
+ */
+export const rawConfigAtom = ManagementClient.query("settings", "raw", {
+  reactivityKeys: RAW_CONFIG,
+});
+
+/** What saving a raw configuration would store (stores nothing). */
+export const checkRawConfigAtom = ManagementClient.mutation("settings", "checkRaw");
+
+/** Stores a raw configuration: call with `reactivityKeys: RAW_CONFIG_WRITES`. */
+export const saveRawConfigAtom = ManagementClient.mutation("settings", "saveRaw");
+
+/** A raw save can change anything the other pages show: every view that reads the configuration refetches. */
+export const RAW_CONFIG_WRITES = [
+  ...RAW_CONFIG,
+  ...SETTINGS,
+  ...API_KEYS,
+  ...ROUTING,
+  ...CREDENTIALS,
+] as const;
+
 // Mutations: call with `reactivityKeys: CREDENTIALS` so the credential list refetches afterwards (`API_KEYS` for a
 // config API key).
 export const setDisabledAtom = ManagementClient.mutation("credentials", "setDisabled");

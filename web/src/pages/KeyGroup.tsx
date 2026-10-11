@@ -608,7 +608,14 @@ const GroupForm = ({
 
       <div className={styles["save"]}>
         {kept.length === 0 ? null : (
-          <p className={styles["kept"]}>Kept as they are: {kept.join(", ")}.</p>
+          <p className={styles["kept"]}>
+            Kept as they are: {kept.join(", ")}.{" "}
+            {view === undefined ? null : (
+              <Link to="/settings/config" hash={`api-keys.${family}.${String(view.index)}`}>
+                Edit them in the raw configuration
+              </Link>
+            )}
+          </p>
         )}
         {changesIdentity(family, view, draft) ? (
           <p className={styles["warning"]}>
