@@ -1,7 +1,7 @@
 // /v8/management/config, /config.yaml and /config/*path through the router, Access gate and real ControlPlane.
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { Json } from "../src/json/index.ts";
-import { authIndexOf } from "../src/management/auth-index.ts";
+import { authIndexOf } from "./support/auth-index.ts";
 import {
   controlPlane,
   jsonInit,

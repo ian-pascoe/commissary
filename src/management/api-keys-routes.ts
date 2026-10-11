@@ -19,6 +19,7 @@ import { keyIdentities } from "../config/normalize.ts";
 import { decodeStoredConfig } from "../config/store.ts";
 import { isJsonObject, type JsonObject } from "../json/index.ts";
 import { probeApiKey } from "./api-keys-probe.ts";
+import { currentAuthIndexer } from "./auth-index.ts";
 import {
   applyGroupWrite,
   checkSurvival,
@@ -140,9 +141,10 @@ const putGroup = Effect.gen(function* () {
 
   if (current.version !== value.version) return yield* conflict();
   const ids = configKeyIds(current.config, { includeDisabledGroups: true });
+  const authIndexOf = yield* currentAuthIndexer;
 
   const applied = yield* refuse(
-    applyGroupWrite(current.document, ids, {
+    applyGroupWrite(current.document, ids, authIndexOf, {
       family: value.family,
       ...(value.index === undefined ? {} : { index: value.index }),
       group,

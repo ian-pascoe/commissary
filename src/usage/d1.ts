@@ -7,8 +7,14 @@
  *
  * Workers addition (not in Go): `summarizeUsageSeries` (one aggregate query: requests, failures and v2
  * `acct_total_tokens` per key × UTC hour/day bucket) for the control panel's per-account quota-window bars.
+ *
+ * Rows keep the credential id (`auth_id`); every read answers with the keyed `auth_index` instead
+ * (`management/auth-index.ts`), computed on read under the deployment's key. A config credential id is an unsalted
+ * hash of its API key, so it never leaves the database: the `auth` grouping keys are indexes, and the credential filter
+ * takes an index, resolved to the live credential's id by the ControlPlane or, for a credential that no longer exists,
+ * against the distinct ids of the filtered rows (`resolveAuthIds`).
  */
-import { authIndexOf } from "../management/auth-index.ts";
+import type { AuthIndexer } from "../management/auth-index.ts";
 import { normalizeToCanonicalUuid } from "../session-routing/identity.ts";
 import {
   ensureTokenBreakdown,
@@ -211,8 +217,11 @@ const sessionPayload = (row: UsageRow) => {
   };
 };
 
-/** The export JSON of one record. `api_key` carries the Access principal id (the Go client API key). */
-export const rowToPayload = (row: UsageRow) => {
+/**
+ * The export JSON of one record under the deployment's indexer. `api_key` carries the Access principal id (the Go
+ * client API key).
+ */
+export const rowToPayload = (row: UsageRow, authIndexOf: AuthIndexer) => {
   const failed = row.failed === 1;
 
   return {
@@ -220,7 +229,7 @@ export const rowToPayload = (row: UsageRow) => {
     latency_ms: row.latency_ms,
     ttft_ms: row.ttft_ms ?? 0,
     source: row.source,
-    // The management API's `auth_index` (a stable hash of the credential id), so collectors can join the two.
+    // The management API's keyed `auth_index`, so collectors can join the two; the credential id is never exported.
     auth_index: authIndexOf(row.auth_id),
     tokens: {
       input_tokens: row.input_tokens,
@@ -322,7 +331,10 @@ export interface UsageFilter {
   readonly provider?: string;
   readonly model?: string;
   readonly principal?: string;
-  readonly authId?: string;
+  /** Keyed `auth_index` of the credential (`resolveAuthIds`). */
+  readonly authIndex?: string;
+  /** The live credential id the ControlPlane resolved `authIndex` to (`credentialIdOfAuthIndex`), if any. */
+  readonly liveAuthId?: string;
   readonly failed?: boolean;
 }
 
@@ -331,7 +343,11 @@ interface FilterClauses {
   readonly params: Array<string | number>;
 }
 
-const filterClauses = (filter: UsageFilter): FilterClauses => {
+/** `filter` as SQL; `authIds` are the credential ids `filter.authIndex` resolved to (`resolveAuthIds`). */
+const filterClauses = (
+  filter: UsageFilter,
+  authIds: ReadonlyArray<string> | undefined,
+): FilterClauses => {
   const clauses: string[] = [];
   const params: Array<string | number> = [];
 
@@ -350,12 +366,56 @@ const filterClauses = (filter: UsageFilter): FilterClauses => {
 
   if (filter.principal !== undefined) add("principal_id = ?", filter.principal);
 
-  if (filter.authId !== undefined) add("auth_id = ?", filter.authId);
+  if (authIds !== undefined) {
+    const first = params.length + 1;
+    params.push(...authIds);
+
+    // An index no stored id maps to matches nothing.
+    clauses.push(
+      authIds.length === 0
+        ? "0"
+        : `auth_id IN (${authIds.map((_, offset) => `?${first + offset}`).join(", ")})`,
+    );
+  }
 
   if (filter.failed !== undefined) add("failed = ?", filter.failed ? 1 : 0);
 
   return { where: clauses.length === 0 ? "" : ` WHERE ${clauses.join(" AND ")}`, params };
 };
+
+/**
+ * The credential ids `filter.authIndex` stands for (undefined without an index). A live credential
+ * (`filter.liveAuthId`, resolved by the ControlPlane) is used directly, with no D1 read. Otherwise (a deleted
+ * credential, or an index that matches nothing) the distinct `auth_id`s of the rows the other filters select are read
+ * and indexed: a scan of the `usage_records_auth` index over the filtered range, bounded by the records kept
+ * (`USAGE_RETENTION_DAYS`).
+ */
+export const resolveAuthIds = async (
+  db: D1Database,
+  filter: UsageFilter,
+  authIndexOf: AuthIndexer,
+): Promise<ReadonlyArray<string> | undefined> => {
+  const { authIndex, liveAuthId, ...rest } = filter;
+
+  if (authIndex === undefined) return undefined;
+
+  if (liveAuthId !== undefined && authIndexOf(liveAuthId) === authIndex) return [liveAuthId];
+  const { where, params } = filterClauses(rest, undefined);
+
+  const result = await db
+    .prepare(`SELECT DISTINCT auth_id FROM usage_records${where}`)
+    .bind(...params)
+    .all<{ readonly auth_id: string }>();
+
+  return result.results.map((row) => row.auth_id).filter((id) => authIndexOf(id) === authIndex);
+};
+
+/** `filter` as SQL, its `authIndex` resolved first. */
+const resolvedClauses = async (
+  db: D1Database,
+  filter: UsageFilter,
+  authIndexOf: AuthIndexer,
+): Promise<FilterClauses> => filterClauses(filter, await resolveAuthIds(db, filter, authIndexOf));
 
 export const MAX_LIST_LIMIT = 1000;
 
@@ -387,13 +447,14 @@ export const parseCursor = (
 export const listUsageRecords = async (
   db: D1Database,
   query: UsageListQuery,
+  authIndexOf: AuthIndexer,
 ): Promise<UsageListPage> => {
   const limit = Math.max(
     1,
     Math.min(MAX_LIST_LIMIT, Math.trunc(query.limit ?? DEFAULT_LIST_LIMIT)),
   );
 
-  const { where, params } = filterClauses(query);
+  const { where, params } = await resolvedClauses(db, query, authIndexOf);
   const cursor = query.before === undefined ? undefined : parseCursor(query.before);
   let sql = `SELECT * FROM usage_records${where}`;
 
@@ -473,12 +534,16 @@ export interface UsageSummaryQuery extends UsageFilter {
   readonly limit?: number;
 }
 
-/** Token totals (v2 breakdown buckets) overall and per `groupBy` key, largest total first (`day`: chronological). */
+/**
+ * Token totals (v2 breakdown buckets) overall and per `groupBy` key, largest total first (`day`: chronological). The
+ * `auth` keys are keyed `auth_index` values.
+ */
 export const summarizeUsage = async (
   db: D1Database,
   query: UsageSummaryQuery,
+  authIndexOf: AuthIndexer,
 ): Promise<UsageSummary> => {
-  const { where, params } = filterClauses(query);
+  const { where, params } = await resolvedClauses(db, query, authIndexOf);
 
   const limit = Math.max(
     1,
@@ -512,10 +577,11 @@ export const summarizeUsage = async (
       avg_latency_ms: 0,
       avg_ttft_ms: null,
     },
-    groups: (groups?.results ?? []).map((group) => ({
-      ...group,
-      key: String(group.key ?? ""),
-    })),
+    groups: (groups?.results ?? []).map((group) => {
+      const key = String(group.key ?? "");
+
+      return { ...group, key: query.groupBy === "auth" ? authIndexOf(key) : key };
+    }),
   };
 };
 
@@ -568,8 +634,13 @@ export interface UsageSeriesQuery {
   readonly groupBy: SeriesGroupBy;
   readonly provider?: string;
   readonly model?: string;
-  readonly authId?: string;
+  /** Keyed `auth_index` of the credential. */
+  readonly authIndex?: string;
+  /** See {@link UsageFilter.liveAuthId}. */
+  readonly liveAuthId?: string;
 }
+
+const compareKeys = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 interface SeriesRow {
   readonly key: string | null;
@@ -582,18 +653,25 @@ interface SeriesRow {
 /**
  * Requests, failures and `acct_total_tokens` per `groupBy` key and UTC hour/day bucket (only buckets with requests),
  * series sorted by key, points by time. The first bucket may start before `since` (it holds the records from `since`).
+ * The `auth` keys are keyed `auth_index` values.
  */
 export const summarizeUsageSeries = async (
   db: D1Database,
   query: UsageSeriesQuery,
+  authIndexOf: AuthIndexer,
 ): Promise<ReadonlyArray<UsageSeriesGroup>> => {
-  const { where, params } = filterClauses({
-    since: query.since,
-    until: query.until,
-    ...(query.provider === undefined ? {} : { provider: query.provider }),
-    ...(query.model === undefined ? {} : { model: query.model }),
-    ...(query.authId === undefined ? {} : { authId: query.authId }),
-  });
+  const { where, params } = await resolvedClauses(
+    db,
+    {
+      since: query.since,
+      until: query.until,
+      ...(query.provider === undefined ? {} : { provider: query.provider }),
+      ...(query.model === undefined ? {} : { model: query.model }),
+      ...(query.authIndex === undefined ? {} : { authIndex: query.authIndex }),
+      ...(query.liveAuthId === undefined ? {} : { liveAuthId: query.liveAuthId }),
+    },
+    authIndexOf,
+  );
 
   const ms = BUCKET_MS[query.bucket];
   const key = SERIES_KEY_EXPRESSIONS[query.groupBy];
@@ -610,7 +688,8 @@ export const summarizeUsageSeries = async (
   const series: Array<{ key: string; points: UsagePoint[] }> = [];
 
   for (const row of result.results) {
-    const rowKey = String(row.key ?? "");
+    const rawKey = String(row.key ?? "");
+    const rowKey = query.groupBy === "auth" ? authIndexOf(rawKey) : rawKey;
     let current = series[series.length - 1];
 
     if (current === undefined || current.key !== rowKey) {
@@ -626,7 +705,8 @@ export const summarizeUsageSeries = async (
     });
   }
 
-  return series;
+  // Indexes do not sort like the ids the query ordered by.
+  return query.groupBy === "auth" ? series.toSorted((a, b) => compareKeys(a.key, b.key)) : series;
 };
 
 // ---------------------------------------------------------------------------------------------------------------

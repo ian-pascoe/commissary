@@ -20,5 +20,11 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["alchemy.run.ts", "infra", "stacks", "web/vite.config.ts"]
+  "include": [
+    "alchemy.run.ts",
+    "infra",
+    "stacks",
+    "web/vite.config.ts",
+    "src/management/auth-index-key.ts"
+  ]
 }

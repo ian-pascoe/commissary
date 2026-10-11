@@ -17,6 +17,7 @@ import {
   makeHarness,
   resetControlPlane,
 } from "./support/management.ts";
+import { authIndexOf } from "./support/auth-index.ts";
 import type { MockHandler, RecordedRequest } from "./support/refresh.ts";
 import { resetUsageDb, sampleRecord } from "./support/usage.ts";
 
@@ -231,11 +232,14 @@ describe("management contract", () => {
       }).pipe(through(harness)),
     );
 
-    it.effect("filters by auth_id", () =>
+    it.effect("filters by auth_index", () =>
       Effect.gen(function* () {
         yield* seedRecords;
         const api = yield* client;
-        const page = yield* api.usage.records({ query: { auth_id: "codex-a.json" } });
+
+        const page = yield* api.usage.records({
+          query: { auth_index: authIndexOf("codex-a.json") },
+        });
 
         assert.deepStrictEqual(
           page.records.map((record) => record.request_id),
@@ -920,7 +924,7 @@ describe("management contract", () => {
 
         assert.strictEqual(after.version, written.version);
         assert.strictEqual(keys[0]?.auth_index, kept?.auth_index);
-        assert.strictEqual(keys[0]?.runtime?.id, kept?.runtime?.id);
+        assert.strictEqual(keys[0]?.runtime?.auth_index, kept?.runtime?.auth_index);
         assert.strictEqual(keys[0]?.priority, 5);
         assert.strictEqual(keys[1]?.key_preview, "[redacted]…3333");
         assert.notStrictEqual(keys[1]?.auth_index, replaced?.auth_index);
@@ -1048,7 +1052,7 @@ describe("management contract", () => {
           const key = view.group.keys[0]!;
 
           const off = yield* api.credentials.setDisabled({
-            payload: { name: key.runtime!.id, disabled: true },
+            payload: { auth_index: key.runtime!.auth_index, disabled: true },
           });
 
           assert.deepStrictEqual(off, {
@@ -1065,7 +1069,7 @@ describe("management contract", () => {
           assert.deepStrictEqual(disabled["excluded-models"], ["*"]);
 
           yield* api.credentials.setDisabled({
-            payload: { name: "", auth_index: key.auth_index!, disabled: false },
+            payload: { auth_index: key.auth_index!, disabled: false },
           });
           assert.strictEqual(claudeGroup(yield* api.apiKeys.list()).group.keys[0]?.disabled, false);
 
@@ -1073,7 +1077,9 @@ describe("management contract", () => {
             .keys[0]!;
 
           const refused = yield* Effect.flip(
-            api.credentials.setDisabled({ payload: { name: compat.runtime!.id, disabled: true } }),
+            api.credentials.setDisabled({
+              payload: { auth_index: compat.runtime!.auth_index, disabled: true },
+            }),
           );
 
           assert.instanceOf(refused, ManagementError);

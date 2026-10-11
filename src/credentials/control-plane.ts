@@ -29,7 +29,7 @@ import {
 import { CredentialStore } from "./store.ts";
 import type { CredentialSummary } from "./summary.ts";
 import type { ModelSource } from "../registry/source.ts";
-import { authIndexOf } from "../management/auth-index.ts";
+import { type AuthIndexer, deploymentAuthIndexer } from "../management/auth-index.ts";
 import {
   type ApiKeyProbeTargetResult,
   buildApiKeyProbeTarget,
@@ -203,6 +203,12 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #quota: QuotaReportStore;
   readonly #sweepLease: SweepLeaseStore;
   readonly #grants: ResetGrantStore;
+  /**
+   * The deployment's keyed `auth_index` (`AUTH_INDEX_KEY`, indexer cached per isolate). Resolved per call so a refused
+   * key fails the calls that need an index, not the Durable Object's constructor.
+   */
+  readonly #authIndex: AuthIndexer = (credentialId) =>
+    deploymentAuthIndexer(this.env)(credentialId);
   #configView: ConfigView | undefined;
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -498,6 +504,7 @@ export class ControlPlane extends DurableObject<Env> {
           credential,
           state,
           now,
+          this.#authIndex,
           reports.get(credential.id),
           grants.get(credential.id),
         ),
@@ -514,7 +521,7 @@ export class ControlPlane extends DurableObject<Env> {
     ref: CredentialRef,
     fields: WireJsonObject,
   ): Promise<CredentialMutation> {
-    const target = findCredential(this.#pool.entries(), ref);
+    const target = findCredential(this.#pool.entries(), ref, this.#authIndex);
 
     if (target === undefined || target.credential.source !== "file") {
       return { ok: false, error: "not_found", message: "auth file not found" };
@@ -546,7 +553,7 @@ export class ControlPlane extends DurableObject<Env> {
     ref: CredentialRef,
     disabled: boolean,
   ): Promise<SetDisabledResult> {
-    const target = findCredential(this.#pool.entries(), ref);
+    const target = findCredential(this.#pool.entries(), ref, this.#authIndex);
 
     if (target === undefined) return { ok: false, error: "not_found" };
 
@@ -585,7 +592,15 @@ export class ControlPlane extends DurableObject<Env> {
   apiKeysView(): WireJsonObject {
     const { version, config } = this.#currentConfig();
 
-    return buildApiKeysList(version, config, this.#pool.entries(), Date.now());
+    return buildApiKeysList(version, config, this.#pool.entries(), Date.now(), this.#authIndex);
+  }
+
+  /**
+   * The id of the live credential (auth file or config key) whose `auth_index` is `authIndex`, for the usage filter
+   * (`resolveAuthIds`): it narrows D1 to that id without scanning the distinct ids. Internal: never sent to a client.
+   */
+  credentialIdOfAuthIndex(authIndex: string): string | undefined {
+    return findCredential(this.#pool.entries(), { authIndex }, this.#authIndex)?.credential.id;
   }
 
   /**
@@ -593,7 +608,7 @@ export class ControlPlane extends DurableObject<Env> {
    * key itself. Carries the secret: the Worker uses it for the upstream call only and never returns it.
    */
   apiKeyProbeTarget(authIndex: string): ApiKeyProbeTargetResult {
-    const target = findCredential(this.#pool.entries(), { authIndex });
+    const target = findCredential(this.#pool.entries(), { authIndex }, this.#authIndex);
 
     const probe =
       target?.credential.source === "config"
@@ -609,17 +624,17 @@ export class ControlPlane extends DurableObject<Env> {
   ):
     | { readonly ok: true; readonly authIndex: string; readonly models: ReadonlyArray<string> }
     | { readonly ok: false } {
-    const target = findCredential(this.#pool.entries(), ref);
+    const target = findCredential(this.#pool.entries(), ref, this.#authIndex);
     const reset = target === undefined ? undefined : this.#pool.resetCooldown(target.credential.id);
 
     return target === undefined || reset === undefined
       ? { ok: false }
-      : { ok: true, authIndex: authIndexOf(target.credential.id), models: reset.models };
+      : { ok: true, authIndex: this.#authIndex(target.credential.id), models: reset.models };
   }
 
   /** Manual refresh of one auth file (`POST /credentials/refresh`). */
   async refreshCredential(ref: CredentialRef): Promise<RefreshOneResult> {
-    const target = findCredential(this.#pool.entries(), ref);
+    const target = findCredential(this.#pool.entries(), ref, this.#authIndex);
 
     if (target === undefined || target.credential.source !== "file")
       return { ok: false, error: "not_found" };
@@ -641,6 +656,7 @@ export class ControlPlane extends DurableObject<Env> {
         current.credential,
         current.state,
         Date.now(),
+        this.#authIndex,
         this.#quota.get(id),
         this.#grants.status(id),
       ),
@@ -676,7 +692,9 @@ export class ControlPlane extends DurableObject<Env> {
    * interleaves, and a failure leaves no half-applied batch), dropping the pool's derived view once, then re-arm the
    * refresh alarm once. A batch delete clears exactly what a single delete clears: the credential with its runtime
    * (cooldown) state and session bindings, its quota report and the refresher's in-memory state. A name that is no
-   * longer stored is already deleted, so a delete answers it `ok`; config API keys are `not_found` for every action.
+   * longer stored is already deleted, so a delete answers it `ok`, a config API key's id included: answering it
+   * `not_found` would confirm a guessed config id, i.e. a guessed API key (`auth-index.ts`). Enable, disable and
+   * refresh answer every name that is no stored auth file `not_found`, config ids or not.
    *
    * Refresh forces each refresh with at most {@link BATCH_REFRESH_CONCURRENCY} upstream calls at a time; an account
    * without a refresh token is `skipped`, and a failure carries a fixed reason (`refreshFailure`).
@@ -702,13 +720,6 @@ export class ControlPlane extends DurableObject<Env> {
 
     const known = names.filter((name) => stored.has(name));
 
-    const config = new Set(
-      this.#pool
-        .entries()
-        .filter(({ credential }) => credential.source === "config")
-        .map(({ credential }) => credential.id),
-    );
-
     const applied = new Set(
       action === "delete"
         ? this.#removeMany(known)
@@ -722,8 +733,9 @@ export class ControlPlane extends DurableObject<Env> {
     return names.map((name): AccountResult => {
       if (applied.has(name)) return { name, ok: true };
 
-      // Gone already (here or in a concurrent call): what a delete asked for holds.
-      if (action === "delete" && !config.has(name)) return { name, ok: true };
+      // Gone already (here or in a concurrent call), or never an auth file: no auth file of that name is stored, as a
+      // delete asked. A config id reads like any other such name, so the reply does not confirm a guessed key.
+      if (action === "delete") return { name, ok: true };
 
       return { name, ...NOT_FOUND };
     });
@@ -763,7 +775,7 @@ export class ControlPlane extends DurableObject<Env> {
     ref: CredentialRef,
     options?: { readonly sweep?: boolean },
   ): Promise<QuotaTargetResult> {
-    const target = findCredential(this.#pool.entries(), ref);
+    const target = findCredential(this.#pool.entries(), ref, this.#authIndex);
 
     if (target === undefined || target.credential.source !== "file")
       return { ok: false, error: "not_found" };
@@ -857,7 +869,7 @@ export class ControlPlane extends DurableObject<Env> {
    * Carries token material: the Worker uses it for the upstream calls only.
    */
   async resetGrantTarget(ref: CredentialRef): Promise<ResetGrantTargetResult> {
-    const target = findCredential(this.#pool.entries(), ref);
+    const target = findCredential(this.#pool.entries(), ref, this.#authIndex);
 
     if (target === undefined || target.credential.source !== "file")
       return { ok: false, error: "not_found" };

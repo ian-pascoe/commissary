@@ -814,15 +814,31 @@ panel paths and `/management.html` as `management`); there is no management key.
   `403 download_requires_service_token`: the response is the one place a stored refresh token leaves the Worker, and
   a service token is the credential meant for scripts, see `ACCESS.md`), `models`, `status`, `fields`, `refresh`, `routing/cooldown/reset`. Credential id = file name; only
   auth files are listed (config API keys are not auth files; `status` toggles one through its `excluded-models`, see
-  _API keys_ below). `auth_index` =
-  `sha256("id:" + id)[:16 hex]` (`auth-index.ts`, the Go fallback seed). The ControlPlane builds the redacted panel
+  _API keys_ below). `auth_index` = `hex(HMAC-SHA256(AUTH_INDEX_KEY, "auth-index:" + id))[:16]` (`auth-index.ts`).
+  Deviation from Go (security): Go's index is the unsalted `sha256(seed)[:16 hex]`, and a config credential id is
+  itself `kind:sha256(kind␀key␀base␀proxy␀prefix␀headers)[:12]` (`credentials/synthesize.ts`), so anyone holding
+  either could confirm guessed API keys offline and brute-force low-entropy ones (self-hosted or compat endpoints),
+  narrowed further by the `…abcd` preview. The index is keyed with a per-deployment secret (`AUTH_INDEX_KEY`, an
+  Alchemy `Random` minted on a stage's first deploy and kept in the stack state, `alchemy.run.ts`; fixed keys in
+  `alchemy dev` and the tests), and config credential ids never leave the Worker: no management response, usage
+  export or proxy header carries them, `name` lookups (`PATCH /credentials/status`, `GET /credentials/models`) match
+  auth files only, and a config key is addressed by its `auth_index`. The index is never stored (D1 keeps the
+  credential id, the ControlPlane recomputes indexes for lookups), so setting or rotating the key changes every index
+  once (panel links `/accounts/<auth_index>` included). The key fails closed: a missing, non-string or < 16-character
+  key throws instead of hashing (node:crypto accepts a 0-byte HMAC key), and once `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD`
+  is set (the condition that refuses `ACCESS_DEV_BYPASS`) the `alchemy dev` key and keys under 64 characters are
+  refused too (`deploymentAuthIndexer`, logged once per isolate; the ControlPlane resolves the key per call, so a
+  refusal fails the management calls that need an index, not the Durable Object; proxying is unaffected, its log
+  line then omits `authIndex`). `auth_index` inputs match case-insensitively. The key is a node:crypto `KeyObject` imported once per isolate
+  and the indexes are memoised (`subtle.sign` is async-only; DO lookups and the views are synchronous). The ControlPlane builds the redacted panel
   entries (`listCredentialEntries`) and owns the mutations (`patchCredentialFields`, `refreshCredential`,
   `refreshAllCredentials`, `resetCredentialCooldown`, `removeCredentials`, `getCredentialFile`, `batchCredentials`).
   `POST /credentials/batch {action: enable|disable|refresh|delete, names}` (`credentials-batch.ts`, Workers addition
   for the Accounts page's selection) answers `200 {action, results, succeeded, failed, skipped}` with one `{name, ok,
   skipped?, error?, message?, status?}` per distinct name (names are exact file names, not trimmed), so a partial
   failure names who failed and why: `not_found` for unknown names and config API keys (a delete of a name already gone
-  counts as done, as the single delete would leave it), `refresh_failed` with a fixed message and the upstream status
+  counts as done, as the single delete would leave it; so does a config id, which must read like any unknown name or
+  the reply would confirm a guessed API key), `refresh_failed` with a fixed message and the upstream status
   (never the token endpoint's body, which can echo the refresh token), and `skipped` + `not_refreshable` for an account
   without a refresh token. At most `MAX_BATCH_NAMES` (100) names, `MAX_BATCH_REFRESH_NAMES` (20) for a refresh (each
   name is an upstream call), `400` beyond or when empty; the body is read up to 64 KiB (`413` beyond). One endpoint
@@ -850,7 +866,7 @@ panel paths and `/management.html` as `management`); there is no management key.
   the control panel's keys page. Workers addition, no Go counterpart (Go's panel edits whole family arrays with raw keys).
   - `GET /api-keys`: every `api-keys` group (all families, compat endpoints included) with the config `version`, the
     effective base URL and, per key, `auth_index`, a `[redacted]…abcd` preview, `disabled` (effective `excluded-models`
-    holds `*`) and the runtime of its credential (counters, cooldowns, last error). Built in the ControlPlane
+    holds `*`) and the runtime of its credential (`auth_index`, counters, cooldowns, last error; not its id). Built in the ControlPlane
     (`apiKeysView`) from one snapshot of config and credential pool. **Secrets never leave**: keys are previews, every
     header value is masked (`[redacted]…`) except safe headers and pure client copies (`maskHeaders`), `proxy-url` and `experimental-cch-signing` (no effect
     on Workers) are left out and only reported as group `warnings`.
@@ -887,7 +903,7 @@ panel paths and `/management.html` as `management`); there is no management key.
     `countTokens` on the first configured model. 30 s bound, not reported to the credential pool (no counters or
     cooldown), `200` always (`ok: false` with `status_code` and a fixed message; bodies and keys are never copied).
     Meta `/models` and Vertex `countTokens` are unverified against the live services.
-  - `PATCH /credentials/status` (`name` or `auth_index`) on a config API key adds or removes `*` in its
+  - `PATCH /credentials/status` (`auth_index`; `name` addresses auth files only) on a config API key adds or removes `*` in its
     `excluded-models` (Go `toggleConfigAPIKeyExcludedAll`; answers `via: "config:excluded-models"`, `excluded_pattern: "*"`);
     the id and `auth_index` do not change. A compat key answers `409`: disable the endpoint (its group's `disabled`).
   - `configKeyIds` (`config-document.ts`) maps config positions to credential ids through the synthesised credentials;
@@ -1261,19 +1277,26 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   30, `0` = keep) in bounded batches. `usage-statistics-enabled` and `redis-usage-queue-retention-seconds` are not used:
   persistence is always on when the `USAGE` binding exists.
 - **Management** (`management/usage-routes.ts`): `GET /v8/management/observability/usage/queue?count=N` (atomically pops the oldest unexported records, Go queue JSON with
-  `token_breakdown`; `api_key` = Access principal id, `auth_index` = the management `auth_index`) and the Workers
-  additions `.../records` (filters `since|until|provider|model|principal|auth_id|failed`, `limit`, keyset `before`) and
+  `token_breakdown`; `api_key` = Access principal id, `auth_index` = the management (keyed) `auth_index`) and the Workers
+  additions `.../records` (filters `since|until|provider|model|principal|auth_index|failed`, `limit`, keyset `before`) and
   `.../summary` (`group_by=model|provider|principal|auth|endpoint|day`, totals per v2 bucket, avg latency/TTFT) and
   `.../series` (not in Go; the panel's per-account quota-window bars: `since` required, `until` default now, `bucket=hour|day`
-  UTC, `group_by=auth|model|provider`, filters `provider|model|auth_id`; per key the points `{start, requests, failed,
+  UTC, `group_by=auth|model|provider`, filters `provider|model|auth_index`; per key the points `{start, requests, failed,
   total_tokens}` (`acct_total_tokens`) of buckets with requests, one aggregate query; hour ranges are capped at 31 days and
-  day ranges at 400, else 400).
+  day ranges at 400, else 400). Credentials appear as their keyed `auth_index` only: `group_by=auth` keys are mapped
+  from the stored `auth_id` on read (series re-sorted by index), and the `auth_index` filter (case-insensitive) is
+  resolved by the ControlPlane to the live credential's id (`credentialIdOfAuthIndex`, no D1 read); only an index of
+  no live credential (deleted, or matching nothing) reads the distinct `auth_id`s of the filtered rows
+  (`resolveAuthIds`, an index scan bounded by the retained records). The former `auth_id`
+  filter answers 400 instead of being ignored.
 - **Trace and logs** (`observability/`): the global `TraceLayer` middleware gives each request a `RequestTrace` (Context
-  reference, `undefined` outside the router) and sets `X-CPA-TRACE-ID` = `yyyyMMddHHmmss-<auth index>-<request id>`
-  (UTC; refreshed on every credential selection, `auth_index` = management `auth_index`) or the bare request id when no
-  credential was selected (Go omits the header then). `/healthz` is exempt. One structured log line per request
+  reference, `undefined` outside the router) and sets `X-CPA-TRACE-ID` = the request id (a random UUID, also the usage
+  records' `trace_id`). Deviation from Go: Go sends `yyyyMMddHHmmss-<auth index>-<request id>` to every API client (none
+  when no credential was selected); its unsalted index would let any client confirm key guesses, and even a keyed one
+  tells a client which credential served it. Nothing here or in the Go panel parses the header; admins join a response
+  to its credential through the usage record (`trace_id` → `auth_index`) or the log line. `/healthz` is exempt. One structured log line per request
   (`method`, pathname without query, `status`, `latencyMs`, `principal`, `provider`, `model`, `authIndex`, `attempts`,
-  `requestId`) through Effect logging; `WorkersLoggerLayer` (`Logger.consoleStructured`) makes Workers Logs index the
+  `requestId`; `authIndex` is the keyed index) through Effect logging; `WorkersLoggerLayer` (`Logger.consoleStructured`) makes Workers Logs index the
   annotations. Headers, bodies, query strings and credentials are never logged. `principal` is the Access id (`user:<email>`),
   i.e. personal data, documented in ACCESS.md "Logs and personal data" (not hashed so operators can attribute usage). Failure
   logs of cron jobs and management handlers use `observability/cause.ts` (`causeSummary`: tag + message, URL queries removed,

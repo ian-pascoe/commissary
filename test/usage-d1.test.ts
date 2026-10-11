@@ -11,6 +11,7 @@ import {
   popUsageQueue,
   pruneUsageRecords,
   recordToRow,
+  resolveAuthIds,
   rowToPayload,
   summarizeUsage,
   type UsageRow,
@@ -20,6 +21,7 @@ import { ensureTokenBreakdown } from "../src/usage/accounting.ts";
 import { parseClaudeUsage } from "../src/usage/parsers.ts";
 import { pruneExpiredUsage, retentionDays } from "../src/usage/retention.ts";
 import { UsageSink } from "../src/usage/sink.ts";
+import { authIndexOf } from "./support/auth-index.ts";
 import { resetUsageDb, sampleRecord } from "./support/usage.ts";
 
 let db: D1Database;
@@ -244,7 +246,7 @@ describe("export queue (GET /observability/usage/queue)", () => {
   it("renders the Go queue payload shape", async () => {
     await insertUsageRecord(db, sampleRecord({ requestId: "r1", ttftMs: 15, stream: true }));
     const [row] = await popUsageQueue(db, 1, 1);
-    const payload = rowToPayload(row as UsageRow);
+    const payload = rowToPayload(row as UsageRow, authIndexOf);
     expect(payload).toMatchObject({
       timestamp: "2023-11-14T22:13:20.000Z",
       latency_ms: 120,
@@ -333,30 +335,82 @@ describe("listing and summary", () => {
 
   it("lists newest first with keyset pagination and filters", async () => {
     const { base } = await seed();
-    const page1 = await listUsageRecords(db, { limit: 2 });
+    const page1 = await listUsageRecords(db, { limit: 2 }, authIndexOf);
     expect(page1.rows.map((row) => row.request_id)).toEqual(["c", "b"]);
     expect(page1.nextBefore).toBeDefined();
-    const page2 = await listUsageRecords(db, { limit: 2, before: page1.nextBefore as string });
+
+    const page2 = await listUsageRecords(
+      db,
+      { limit: 2, before: page1.nextBefore as string },
+      authIndexOf,
+    );
+
     expect(page2.rows.map((row) => row.request_id)).toEqual(["a"]);
     expect(page2.nextBefore).toBeUndefined();
     expect(
-      (await listUsageRecords(db, { model: "gpt-5" })).rows.map((row) => row.request_id),
+      (await listUsageRecords(db, { model: "gpt-5" }, authIndexOf)).rows.map(
+        (row) => row.request_id,
+      ),
     ).toEqual(["b", "a"]);
     expect(
-      (await listUsageRecords(db, { principal: "user:a", failed: true })).rows.map(
+      (await listUsageRecords(db, { principal: "user:a", failed: true }, authIndexOf)).rows.map(
         (row) => row.request_id,
       ),
     ).toEqual(["c"]);
     expect(
-      (await listUsageRecords(db, { since: base + 500, until: base + 2000 })).rows.map(
+      (await listUsageRecords(db, { since: base + 500, until: base + 2000 }, authIndexOf)).rows.map(
         (row) => row.request_id,
       ),
     ).toEqual(["b"]);
   });
 
+  it("resolves an auth_index through the live credential first, through D1 only for gone ones", async () => {
+    await insertUsageRecord(db, sampleRecord({ requestId: "live", authId: "live.json" }));
+    await insertUsageRecord(db, sampleRecord({ requestId: "gone", authId: "gone.json" }));
+
+    // A D1 that fails every query: the live path must not touch it.
+    const noDb = {
+      prepare: () => {
+        throw new Error("D1 must not be read for a live credential");
+      },
+    } as unknown as D1Database; // SAFETY: only `prepare` is reachable, and it throws.
+
+    expect(
+      await resolveAuthIds(
+        noDb,
+        { authIndex: authIndexOf("live.json"), liveAuthId: "live.json" },
+        authIndexOf,
+      ),
+    ).toEqual(["live.json"]);
+
+    // A deleted credential (no live id) or a live id of another index: the distinct stored ids decide.
+    expect(await resolveAuthIds(db, { authIndex: authIndexOf("gone.json") }, authIndexOf)).toEqual([
+      "gone.json",
+    ]);
+    expect(
+      await resolveAuthIds(
+        db,
+        { authIndex: authIndexOf("gone.json"), liveAuthId: "live.json" },
+        authIndexOf,
+      ),
+    ).toEqual(["gone.json"]);
+    expect(await resolveAuthIds(db, { authIndex: "0000000000000000" }, authIndexOf)).toEqual([]);
+    expect(await resolveAuthIds(noDb, {}, authIndexOf)).toBeUndefined();
+
+    expect(
+      (
+        await listUsageRecords(
+          db,
+          { authIndex: authIndexOf("live.json"), liveAuthId: "live.json" },
+          authIndexOf,
+        )
+      ).rows.map((row) => row.request_id),
+    ).toEqual(["live"]);
+  });
+
   it("summarises the v2 buckets overall and per group", async () => {
     await seed();
-    const byModel = await summarizeUsage(db, { groupBy: "model" });
+    const byModel = await summarizeUsage(db, { groupBy: "model" }, authIndexOf);
     expect(byModel.totals).toMatchObject({
       requests: 3,
       failed: 1,
@@ -371,9 +425,15 @@ describe("listing and summary", () => {
       ["gpt-5", 2, 260],
       ["gpt-4", 1, 0],
     ]);
-    const byDay = await summarizeUsage(db, { groupBy: "day" });
+    const byDay = await summarizeUsage(db, { groupBy: "day" }, authIndexOf);
     expect(byDay.groups.map((group) => group.key)).toEqual(["2023-11-15", "2023-11-14"]);
-    const empty = await summarizeUsage(db, { groupBy: "provider", since: 0, until: 1 });
+
+    const empty = await summarizeUsage(
+      db,
+      { groupBy: "provider", since: 0, until: 1 },
+      authIndexOf,
+    );
+
     expect(empty.totals.requests).toBe(0);
     expect(empty.groups).toEqual([]);
   });
@@ -438,7 +498,7 @@ describe("usage session identity and base URL", () => {
       parent_session_id: "lcp:v1:abcdef",
       base_url: "https://api.example.test/v1",
     });
-    const payload = rowToPayload(row as UsageRow);
+    const payload = rowToPayload(row as UsageRow, authIndexOf);
     expect(payload).toMatchObject({
       session_id: "123e4567-e89b-12d3-a456-426614174000",
       base_url: "https://api.example.test/v1",
@@ -462,7 +522,7 @@ describe("usage session identity and base URL", () => {
         requestedAt: 1_700_000_000_001,
       }),
     );
-    const [plain, same] = (await rows()).map(rowToPayload);
+    const [plain, same] = (await rows()).map((row) => rowToPayload(row, authIndexOf));
     expect(plain).not.toHaveProperty("session_id");
     expect(plain).not.toHaveProperty("base_url");
     expect(same).toHaveProperty("session_id");

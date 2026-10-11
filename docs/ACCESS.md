@@ -65,6 +65,7 @@ Set by the deploy from the settings above (Alchemy binds them as plain-text vari
 | `ACCESS_ADMIN_EMAILS`         | Admins for `/v8/management*` and the panels (comma/space separated, case-insensitive)                 |
 | `ACCESS_ADMIN_SERVICE_TOKENS` | Service token **Client IDs** allowed to administer (the full `….access` id)                           |
 | `ACCESS_DEV_BYPASS`           | Set only by `alchemy dev` (local development); empty on deployed Workers                              |
+| `AUTH_INDEX_KEY`              | Secret (`secret_text`) HMAC key of `auth_index`: minted by the deploy, not a setting (below)          |
 
 Empty `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` fails closed: protected routes answer 500. An authenticated principal that is not on an
 admin list gets 403 on management routes but can still use the proxy endpoints.
@@ -80,6 +81,11 @@ stored (writing the same list again is fine). Without it such an admin could gra
 
 `ACCESS_DEV_BYPASS` only applies to requests whose host is `localhost`, `127.0.0.1` or `[::1]`, and is refused (with a logged
 warning) whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set: a Worker wired to Access never skips it.
+
+`AUTH_INDEX_KEY` is the one secret binding: 32 random bytes each stage mints on its first deploy and keeps in the Alchemy
+state, so there is nothing to set (management security below, [DEPLOY.md](DEPLOY.md) "Operations"). Like the dev bypass,
+a Worker with `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` set refuses the fixed `alchemy dev` key and any key shorter than 64
+characters; a missing key is refused everywhere.
 
 ## 4. How the Worker validates requests
 
@@ -150,6 +156,13 @@ put a server-side client in between.
   `CF-Access-Client-Id`/`-Secret`, [MIGRATION.md](MIGRATION.md) §2). The panel never calls it. This narrows who can read a
   token; it does not make tokens unreachable to an email admin, who can still point a stored key at a host of their
   choice (above). Treat admin access as access to every stored token: keep the admin lists short and prefer service tokens scoped to automation.
+- No response publishes a hash of a stored key. The handle of a credential (`auth_index`, also in panel URLs
+  `/accounts/<auth_index>` and usage exports) is an HMAC under the per-deployment secret `AUTH_INDEX_KEY`, so it reveals
+  nothing about the key (Go's unsalted index of a config key's id, itself an unsalted hash of the key, let anyone holding
+  it test guesses offline). Config credential ids (`claude:apikey:<hash>`) are never sent: not in `GET /api-keys`, usage
+  summaries and series (`group_by=auth` keys are `auth_index` values), `routing/models` or proxy responses, whose
+  `X-CPA-TRACE-ID` is a random request id for every client. Lookups by `name` match auth files only, so a guessed id is
+  not confirmed either; address a config key by its `auth_index`.
 - Writes never confirm a guessed secret: the reply does not confirm a guess, the next read does. A typed API key
   equal to a key stored in another group of its family (gemini, interactions, vertex: the families whose keys are unique
   across groups) is answered like any other new key: `PUT /api-keys/groups` and the path writes of `/config/*path` drop the

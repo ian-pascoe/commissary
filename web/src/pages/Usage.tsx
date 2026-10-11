@@ -52,9 +52,8 @@ import styles from "./Usage.module.css";
 // ---------------------------------------------------------------------------------------------------------------
 // Names
 
-/** Accounts by credential id (summary keys) and by auth index (records), to name them. */
+/** Accounts by auth index (summary keys, records and the account filter), to name them. */
 interface Names {
-  readonly byId: ReadonlyMap<string, CredentialEntry>;
   readonly byIndex: ReadonlyMap<string, CredentialEntry>;
 }
 
@@ -63,7 +62,6 @@ const useNames = (): Names => {
   const files = AsyncResult.isSuccess(result) ? result.value.files : [];
 
   return {
-    byId: new Map(files.map((entry) => [entry.id, entry])),
     byIndex: new Map(files.map((entry) => [entry.auth_index, entry])),
   };
 };
@@ -75,7 +73,7 @@ const valueName = (key: FilterKey | Breakdown["id"], value: string, names: Names
       return value === "" ? "Unknown model" : value;
     case "account":
     case "auth": {
-      const entry = names.byId.get(value);
+      const entry = names.byIndex.get(value);
 
       return entry === undefined ? value || "Unknown account" : accountName(entry);
     }
@@ -699,10 +697,10 @@ export const UsagePage = () => {
               <X aria-hidden="true" size={14} strokeWidth={2.5} />
             </button>
           ))}
-          {filters.account === undefined ? null : (
+          {filters.account === undefined || !names.byIndex.has(filters.account) ? null : (
             <Link
               to="/accounts/$authIndex"
-              params={{ authIndex: names.byId.get(filters.account)?.auth_index ?? "" }}
+              params={{ authIndex: filters.account }}
               className={kit["sectionLink"]}
             >
               Open the account

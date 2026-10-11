@@ -466,7 +466,7 @@ const chartTitle = (window: QuotaWindow): string => {
 };
 
 const History = ({ entry, now }: { readonly entry: CredentialEntry; readonly now: number }) => {
-  const result = useAtomValue(accountSeriesAtom(entry.id));
+  const result = useAtomValue(accountSeriesAtom(entry.auth_index));
 
   return (
     <Section
@@ -474,7 +474,7 @@ const History = ({ entry, now }: { readonly entry: CredentialEntry; readonly now
       aside={
         <Link
           to="/usage"
-          search={{ account: entry.id, range: "week" }}
+          search={{ account: entry.auth_index, range: "week" }}
           className={kit["sectionLink"]}
         >
           Requests and usage

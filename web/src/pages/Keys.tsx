@@ -194,7 +194,7 @@ const KeyRow = ({
                   const disabled = !keyView.disabled;
 
                   const outcome = await toggle.run({
-                    payload: { name: runtime.id, auth_index: runtime.auth_index, disabled },
+                    payload: { auth_index: runtime.auth_index, disabled },
                     reactivityKeys: API_KEYS,
                   });
 

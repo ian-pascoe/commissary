@@ -1,7 +1,8 @@
 /**
  * Infrastructure of the Workers port, deployed with Alchemy (`pnpm deploy`, `pnpm dev`, `pnpm destroy`): the Worker
  * with its Durable Objects, static assets and cron trigger, the KV namespace, the D1 usage database (migrations
- * applied on every deploy) and the Cloudflare Access application, policies and service tokens in front of it.
+ * applied on every deploy), the `auth_index` HMAC key and the Cloudflare Access application, policies and service tokens
+ * in front of it.
  * Deploy-time settings are read from the environment / `.env` (see `.env.example` and infra/settings.ts).
  */
 import * as Alchemy from "alchemy";
@@ -9,6 +10,7 @@ import * as Cloudflare from "alchemy/Cloudflare";
 import * as Effect from "effect/Effect";
 import { type AccessWiring, provisionAccess } from "./infra/access.ts";
 import { readSettings } from "./infra/settings.ts";
+import { DEV_AUTH_INDEX_KEY } from "./src/management/auth-index-key.ts";
 
 /** Runtime compatibility of the Worker; keep in sync with vitest.config.ts and worker-configuration.d.ts. */
 export const COMPATIBILITY = { date: "2026-08-01", flags: ["nodejs_compat"] };
@@ -29,6 +31,13 @@ export default Alchemy.Stack(
 
     const cache = yield* Cloudflare.KV.Namespace("Cache");
     const usage = yield* Cloudflare.D1.Database("Usage", { migrations: "./migrations" });
+
+    // Key of the keyed `auth_index` (src/management/auth-index.ts): 32 random bytes minted on the first deploy of a
+    // stage and kept in the (encrypted) stack state, so every later deploy binds the same secret with no manual step.
+    // `alchemy dev` (loopback only, no Access) uses a fixed key so local panel links survive a wiped local state.
+    const authIndexKey = dev
+      ? DEV_AUTH_INDEX_KEY
+      : yield* Alchemy.makeRandom("AuthIndexKey", { bytes: 32 });
 
     // `alchemy dev` serves the Worker on localhost without Access: the dev bypass (src/access/config.ts) makes every
     // loopback request an admin. Deployed Workers never get it and require the Access JWT.
@@ -62,6 +71,8 @@ export default Alchemy.Stack(
         ACCESS_DEV_BYPASS: dev ? settings.devBypass : "",
         USAGE_RETENTION_DAYS: settings.usageRetentionDays,
         META_MINT_URL: settings.metaMintUrl,
+        // Redacted: bound as a secret (`secret_text`), never as a plain variable.
+        AUTH_INDEX_KEY: authIndexKey,
       },
     });
 

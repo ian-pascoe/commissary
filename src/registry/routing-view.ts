@@ -23,7 +23,7 @@ import type {
   RoutingModels,
   RuleScope,
 } from "../management/contract/routing.ts";
-import { authIndexOf } from "../management/auth-index.ts";
+import type { AuthIndexer } from "../management/auth-index.ts";
 import { cooldownReason } from "./availability.ts";
 import { compareStrings } from "./compare.ts";
 import {
@@ -110,6 +110,7 @@ const runtimeState = (source: ModelSource, model: ModelInfo, now: number): Runti
 interface Context {
   readonly snapshot: RegistrySnapshot;
   readonly options: AssemblyOptions;
+  readonly authIndex: AuthIndexer;
 }
 
 /** The alias/exclusion channel of a credential; empty for API keys and OpenAI-compatible groups. */
@@ -222,7 +223,7 @@ const routesOf = (context: Context, source: ModelSource, now: number) => {
       ruleScope = aliasScope(context, source, channel, bare);
 
     const route: Types.Mutable<ModelRoute> = {
-      auth_index: authIndexOf(source.id),
+      auth_index: context.authIndex(source.id),
       source: source.source,
       provider: source.provider,
       label: source.label,
@@ -256,12 +257,20 @@ const aliasWire = (entry: OAuthModelAlias): OAuthModelAliasWire => {
   return out;
 };
 
-/** The routing view of `snapshot` at `now` (epoch ms). */
-export const routingView = (snapshot: RegistrySnapshot, now: number): RoutingModels => {
+/**
+ * The routing view of `snapshot` at `now` (epoch ms). Routes carry the keyed `auth_index` (`authIndex`, the
+ * deployment's indexer) and, for auth files only, the file name: config credential ids are never sent.
+ */
+export const routingView = (
+  snapshot: RegistrySnapshot,
+  now: number,
+  authIndex: AuthIndexer,
+): RoutingModels => {
   const { config } = snapshot;
 
   const context: Context = {
     snapshot,
+    authIndex,
     options: {
       config,
       catalogs: snapshot.catalogs,

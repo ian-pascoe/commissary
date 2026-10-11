@@ -28,8 +28,8 @@ import { maskHeaders } from "../credentials/summary.ts";
 import { DEFAULT_WEIGHT } from "../credentials/weight.ts";
 import { quotaReportJson } from "../quota/report.ts";
 import { resetGrantStatusJson } from "../quota/reset-grants.ts";
+import type { AuthIndexer } from "./auth-index.ts";
 import type { QuotaReport, ResetGrantStatus } from "./contract/credentials.ts";
-import { authIndexOf } from "./auth-index.ts";
 
 const BUCKET_MS = RECENT_BUCKET_MS;
 
@@ -168,13 +168,15 @@ const websockets = (credential: Credential): boolean | undefined => {
 };
 
 /**
- * Builds the panel entry of an auth-file credential. `now` is epoch milliseconds; `quotaReport` is the credential's
- * last quota check, when there was one, and `resetGrants` its last reset grant status (Claude).
+ * Builds the panel entry of an auth-file credential. `now` is epoch milliseconds; `authIndex` is the deployment's
+ * indexer; `quotaReport` is the credential's last quota check, when there was one, and `resetGrants` its last reset
+ * grant status (Claude).
  */
 export const buildCredentialEntry = (
   credential: Credential,
   state: CredentialState,
   now: number,
+  authIndex: AuthIndexer,
   quotaReport?: QuotaReport,
   resetGrants?: ResetGrantStatus,
 ): JsonObject => {
@@ -186,7 +188,7 @@ export const buildCredentialEntry = (
 
   const entry: JsonObject = {
     id: credential.id,
-    auth_index: authIndexOf(credential.id),
+    auth_index: authIndex(credential.id),
     name: credential.id,
     type: credential.provider,
     provider: credential.provider,

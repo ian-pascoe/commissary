@@ -5,6 +5,7 @@ import { emptyQuota, emptyState } from "../src/credentials/model.ts";
 import { routingView } from "../src/registry/routing-view.ts";
 import { buildSnapshot } from "../src/registry/service.ts";
 import type { ModelSource } from "../src/registry/source.ts";
+import { authIndexOf } from "./support/auth-index.ts";
 import { catalogs } from "./support/registry.ts";
 import { configOf, source } from "./support/registry-sources.ts";
 
@@ -14,6 +15,7 @@ const view = (sources: ModelSource[], yaml = "", now = NOW) =>
   routingView(
     buildSnapshot({ sources, config: configOf(yaml), catalogs, now, configVersion: 7 }),
     now,
+    authIndexOf,
   );
 
 /** Runtime state with overrides (the helper's default state minus the secret field). */

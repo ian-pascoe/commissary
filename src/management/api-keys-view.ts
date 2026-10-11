@@ -6,7 +6,9 @@
  * Workers addition, no Go counterpart (Go's panel reads raw keys from `GET /config` and masks them in the browser;
  * here the browser never sees them, PRODUCT.md). Nothing secret is included: keys become `[redacted]…abcd`
  * previews, header values whose names look secret are masked, `proxy-url` and `experimental-cch-signing` are left
- * out (a warning says they exist), and error messages are scrubbed of the key and of token-shaped text.
+ * out (a warning says they exist), and error messages are scrubbed of the key and of token-shaped text. Keys and their
+ * runtime are identified by the keyed `auth_index` only: the credential id (`claude:apikey:<sha256 prefix>`) is an
+ * unsalted hash of the key and its settings, so it is never sent.
  */
 import type { ApiKeyGroup, Config, OpenAICompatGroup } from "../config/schema.ts";
 import { maskHeaders, maskSecret } from "../credentials/summary.ts";
@@ -18,7 +20,7 @@ import { GEMINI_ENDPOINT, VERTEX_DEFAULT_BASE_URL } from "../executor/gemini/tar
 import { META_DEFAULT_BASE_URL } from "../executor/meta/credentials.ts";
 import { XAI_DEFAULT_API_BASE_URL } from "../executor/xai/credentials.ts";
 import type { JsonObject } from "../json/index.ts";
-import { authIndexOf } from "./auth-index.ts";
+import type { AuthIndexer } from "./auth-index.ts";
 import { configKeyIds } from "./config-document.ts";
 import { cooldownSnapshot, recentRequestBuckets } from "./credential-entry.ts";
 import type { ApiKeyFamily } from "./contract/api-keys.ts";
@@ -47,7 +49,7 @@ const keyPreview = (key: string): string => (key === "" ? "" : maskSecret(key));
 const iso = (ms: number): string => new Date(ms).toISOString();
 
 /** Runtime of one config credential; `secret` is scrubbed from the last error. */
-const runtimeOf = (target: RefreshTarget, now: number): JsonObject => {
+const runtimeOf = (target: RefreshTarget, now: number, authIndex: AuthIndexer): JsonObject => {
   const { credential, state } = target;
   const cooldowns = cooldownSnapshot(state, now);
   const blocked = state.unavailable || cooldowns.length > 0;
@@ -68,8 +70,7 @@ const runtimeOf = (target: RefreshTarget, now: number): JsonObject => {
         };
 
   return {
-    id: credential.id,
-    auth_index: authIndexOf(credential.id),
+    auth_index: authIndex(credential.id),
     status: credential.disabled
       ? "disabled"
       : blocked && state.status === "active"
@@ -99,12 +100,13 @@ interface Lookup {
   readonly ids: ReturnType<typeof configKeyIds>;
   readonly runtime: ReadonlyMap<string, RefreshTarget>;
   readonly now: number;
+  readonly authIndex: AuthIndexer;
 }
 
 const runtimeFor = (lookup: Lookup, id: string | undefined): JsonObject | null => {
   const target = id === undefined ? undefined : lookup.runtime.get(id);
 
-  return target === undefined ? null : runtimeOf(target, lookup.now);
+  return target === undefined ? null : runtimeOf(target, lookup.now, lookup.authIndex);
 };
 
 const groupView = (
@@ -134,7 +136,7 @@ const groupView = (
     const excluded = entry["excluded-models"] ?? group["excluded-models"] ?? [];
 
     return {
-      ...(id === undefined ? {} : { auth_index: authIndexOf(id) }),
+      ...(id === undefined ? {} : { auth_index: lookup.authIndex(id) }),
       key_preview: keyPreview(apiKey),
       disabled: excluded.some(isDisablingPattern),
       runtime: runtimeFor(lookup, id),
@@ -162,7 +164,7 @@ const compatGroupView = (group: OpenAICompatGroup, index: number, lookup: Lookup
   const proxy = keys.some((entry) => hasText(entry["proxy-url"]));
 
   const keyViews = keys.map((entry, keyIndex): JsonObject => ({
-    ...(ids[keyIndex] === undefined ? {} : { auth_index: authIndexOf(ids[keyIndex]) }),
+    ...(ids[keyIndex] === undefined ? {} : { auth_index: lookup.authIndex(ids[keyIndex]) }),
     key_preview: keyPreview(entry["api-key"]),
     disabled,
     runtime: runtimeFor(lookup, ids[keyIndex]),
@@ -183,13 +185,14 @@ const compatGroupView = (group: OpenAICompatGroup, index: number, lookup: Lookup
 
 /**
  * The `ApiKeysList` of `config` (stored at `version`); `entries` are the pool's credentials, of which only the
- * config ones are used. `now` is epoch milliseconds.
+ * config ones are used. `now` is epoch milliseconds; `authIndex` is the deployment's indexer.
  */
 export const buildApiKeysList = (
   version: number,
   config: Pick<Config, "api-keys">,
   entries: ReadonlyArray<RefreshTarget>,
   now: number,
+  authIndex: AuthIndexer,
 ): JsonObject => {
   const runtime = new Map<string, RefreshTarget>();
 
@@ -200,6 +203,7 @@ export const buildApiKeysList = (
     ids: configKeyIds(config, { includeDisabledGroups: true }),
     runtime,
     now,
+    authIndex,
   };
 
   const apiKeys = config["api-keys"];

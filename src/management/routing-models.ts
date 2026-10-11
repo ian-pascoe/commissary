@@ -8,6 +8,7 @@
 import { Clock, Effect } from "effect";
 import { routingView } from "../registry/routing-view.ts";
 import { ModelRegistry } from "../registry/service.ts";
+import { currentAuthIndexer } from "./auth-index.ts";
 import { handled, jsonReply, replyError } from "./http.ts";
 
 const routingModels = Effect.gen(function* () {
@@ -23,7 +24,7 @@ const routingModels = Effect.gen(function* () {
 
   const now = yield* Clock.currentTimeMillis;
 
-  return jsonReply(200, routingView(snapshot, now));
+  return jsonReply(200, routingView(snapshot, now, yield* currentAuthIndexer));
 });
 
 export const routingModelsHandler = handled(routingModels);

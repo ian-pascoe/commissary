@@ -9,7 +9,7 @@ import { TestClock } from "effect/testing";
 import { FetchHttpClient } from "effect/http";
 import { HttpApiClient } from "effect/http-api";
 import { afterAll, beforeEach, expect } from "vitest";
-import { authIndexOf } from "../src/management/auth-index.ts";
+import { authIndexOf } from "./support/auth-index.ts";
 import { ManagementApi } from "../src/management/contract/api.ts";
 import { CredentialEntry, type ResetGrantStatus } from "../src/management/contract/credentials.ts";
 import { ManagementError } from "../src/management/contract/errors.ts";

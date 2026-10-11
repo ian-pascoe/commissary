@@ -84,3 +84,18 @@ the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --pro
 - **Concurrency.** One deploy per stage at a time, never cancelled midway; a newer push to `main` waits for the
   running production deploy.
 - **Stale previews.** If a destroy fails, rerun the job, or run `pnpm run destroy --stage pr-<number>` locally.
+- **`auth_index` key.** `AUTH_INDEX_KEY` (the HMAC key of the credential handle `auth_index`,
+  `src/management/auth-index.ts`) is an Alchemy `Random` in `alchemy.run.ts`: minted on a stage's first deploy, kept in
+  the (encrypted) state store and bound as a Worker secret on every deploy. No GitHub secret or manual step is needed.
+  `alchemy dev` uses a fixed key (`DEV_AUTH_INDEX_KEY`), the tests the one in `vitest.config.ts`. A Worker with Access
+  configured refuses that dev key and any key shorter than 64 characters, and logs the refusal: management calls that
+  need an index fail (500), while proxying keeps working (its request log lines then carry no `authIndex`).
+- **`auth_index` values change once.** Indexes are computed on read, never stored, so the first deploy with the keyed
+  index (or a new key: destroying a stage, replacing its `AuthIndexKey` resource, or a state entry that fails to
+  decrypt, after which the next deploy mints a new key) changes every `auth_index` at once. With
+  `ALCHEMY_STATE=local` the key sits in plain text under `.alchemy/` on that machine: protect that directory like the
+  key itself, and expect a new key (and new indexes) when it is deleted or another machine deploys with its own local
+  state. Nothing stored needs migrating, but bookmarked panel links `/accounts/<auth_index>`, `/usage?account=…`
+  addresses and `auth_index` values saved by usage collectors from earlier exports stop matching; open the account
+  from the Accounts page again. Clients that filtered usage with `auth_id` must switch to `auth_index` (the old
+  parameter answers 400).
