@@ -8,8 +8,8 @@
  *
  * Differences: only auth files are listed (Go lists config API keys as `runtime_only` only for plugin credentials);
  * `recent_requests` come from the credential's recent-requests ring; cooldown reasons are reduced to
- * the quota reason or the last error class. `quota_report` is the stored server-side quota check (src/quota, a Workers
- * addition with no Go counterpart). The account's own routing fields (`prefix`, `disable_cooling`, `headers`,
+ * the quota reason or the last error class. `quota_report` is the stored server-side quota check and `reset_grants`
+ * the last Claude reset grant status read (src/quota, Workers additions with no Go counterpart). The account's own routing fields (`prefix`, `disable_cooling`, `headers`,
  * `excluded_models`, `model_aliases`) are a Workers addition for the control panel: the effective prefix, every header
  * value masked except safe headers and pure client copies (`maskHeaders`, as on the API keys page), and the account's
  * own exclusions and aliases, without the channel rules.
@@ -27,8 +27,9 @@ import type { Credential, CredentialState } from "../credentials/model.ts";
 import { maskHeaders } from "../credentials/summary.ts";
 import { DEFAULT_WEIGHT } from "../credentials/weight.ts";
 import { quotaReportJson } from "../quota/report.ts";
+import { resetGrantStatusJson } from "../quota/reset-grants.ts";
+import type { QuotaReport, ResetGrantStatus } from "./contract/credentials.ts";
 import { authIndexOf } from "./auth-index.ts";
-import type { QuotaReport } from "./contract/credentials.ts";
 
 const BUCKET_MS = RECENT_BUCKET_MS;
 
@@ -168,13 +169,14 @@ const websockets = (credential: Credential): boolean | undefined => {
 
 /**
  * Builds the panel entry of an auth-file credential. `now` is epoch milliseconds; `quotaReport` is the credential's
- * last quota check, when there was one.
+ * last quota check, when there was one, and `resetGrants` its last reset grant status (Claude).
  */
 export const buildCredentialEntry = (
   credential: Credential,
   state: CredentialState,
   now: number,
   quotaReport?: QuotaReport,
+  resetGrants?: ResetGrantStatus,
 ): JsonObject => {
   const { metadata } = credential;
   const disabled = credential.disabled;
@@ -288,6 +290,8 @@ export const buildCredentialEntry = (
   entry.cooldowns = cooldowns;
 
   if (quotaReport !== undefined) entry.quota_report = quotaReportJson(quotaReport);
+
+  if (resetGrants !== undefined) entry.reset_grants = resetGrantStatusJson(resetGrants);
 
   return entry;
 };

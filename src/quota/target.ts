@@ -16,6 +16,7 @@ import { apiCallToken } from "../management/credential-ops.ts";
 import { kimiUsageUrl } from "./kimi.ts";
 import { isDcaToken } from "./meta.ts";
 import type { QuotaProvider } from "./report.ts";
+import type { ResetGrantMark } from "./reset-grant-store.ts";
 
 export interface QuotaProbeTarget {
   readonly id: string;
@@ -35,11 +36,18 @@ export interface QuotaProbeTarget {
   readonly deviceSeed?: string;
   /** The stored credential version the token belongs to (`recordQuotaReport` drops a stale outcome). */
   readonly credentialVersion?: number;
+  /** Claude: leave out the reset grant read (cron sweep, the stored status is recent or the account not eligible). */
+  readonly skipResetGrants?: boolean;
 }
 
 /** Answer of the `quotaProbeTarget` RPC. `unavailable` is a failed check (it is recorded in the report). */
 export type QuotaTargetResult =
-  | { readonly ok: true; readonly target: QuotaProbeTarget }
+  | {
+      readonly ok: true;
+      readonly target: QuotaProbeTarget;
+      /** Claude: the grant state a reset grant status read is stored under (`reset-grant-store.ts`). */
+      readonly grantsMark?: ResetGrantMark;
+    }
   | { readonly ok: false; readonly error: "not_found" }
   | { readonly ok: false; readonly error: "unsupported"; readonly provider: string }
   | {

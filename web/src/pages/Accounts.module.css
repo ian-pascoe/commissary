@@ -210,6 +210,21 @@
   max-width: 26rem;
 }
 
+/* A Claude account's resets left, under its meters. */
+.resets {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 650;
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
+}
+
+/* At a limit with a reset usable now: worth acting on, so it reads in ink. */
+.resets[data-tone="ink"] {
+  color: var(--text);
+}
+
 .count {
   display: block;
   font-size: var(--text-md);

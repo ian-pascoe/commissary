@@ -26,7 +26,13 @@ import {
 } from "lucide-react";
 import { type ReactNode, useDeferredValue, useEffect, useId, useRef, useState } from "react";
 import type { BatchAction } from "#contract/credentials.ts";
-import { batchAtom, CREDENTIALS, checkAllQuotasAtom, credentialsAtom } from "../api/client.ts";
+import {
+  batchAtom,
+  CREDENTIALS,
+  checkAllQuotasAtom,
+  credentialsAtom,
+  nowAtom,
+} from "../api/client.ts";
 import { kit, Problem } from "../components/Kit.tsx";
 import { Meter } from "../components/Meter.tsx";
 import { TrailMark } from "../components/Signs.tsx";
@@ -62,6 +68,7 @@ import { failureMessage } from "../lib/failure.ts";
 import { formatCount, formatDuration } from "../lib/format.ts";
 import { providerName } from "../lib/providers.ts";
 import { checksQuota, windowLevel } from "../lib/quota.ts";
+import { resetsBrief } from "../lib/reset-grants.ts";
 import { useAction } from "../lib/use-action.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
 import styles from "./Accounts.module.css";
@@ -240,6 +247,7 @@ const Row = ({
   const pickId = useId();
   const requests = entry.recent_requests.reduce((sum, bucket) => sum + bucket.success, 0);
   const failed = entry.recent_requests.reduce((sum, bucket) => sum + bucket.failed, 0);
+  const resets = resetsBrief(entry.reset_grants, useAtomValue(nowAtom));
 
   return (
     <tr
@@ -327,6 +335,11 @@ const Row = ({
               />
             ))}
           </div>
+        )}
+        {resets === undefined ? null : (
+          <span className={styles["resets"]} data-tone={resets.tone}>
+            {resets.text}
+          </span>
         )}
       </td>
       <td className={`${styles["number"]} ${styles["priority"]}`}>

@@ -1080,7 +1080,8 @@ panel paths and `/management.html` as `management`); there is no management key.
 - Deviations from Go: `/` serves the control panel (admins only) instead of the public JSON banner; cooldown `reason`s are
   limited to the quota reason / last error code; `GET /credentials` always returns JSON timestamps as RFC 3339 strings;
   `POST /credentials/quota`, `POST /credentials/quota/all`, `POST /credentials/batch` and the entries' `quota_report`
-  are Workers additions (see _Quota check_). The API keys
+  are Workers additions (see _Quota check_), as are `/credentials/reset-grants` and the entries' `reset_grants` (see
+  _Claude reset grants_). The API keys
   and Settings routes, including the raw configuration editor, are Workers additions (secrets never in their
   responses, masked as `[redacted#n]` placeholders restored on save; versioned writes; values the normaliser would
   rewrite refused with `422` instead of silently changed); `GET /config*` are masked the same way and refuse
@@ -1110,8 +1111,10 @@ result is stored.
   - A single check whose account's tokens changed while the provider answered (`credentialVersion` changed: a
     re-login or a token refresh) answers `409 stale`: the outcome describes the old tokens and is dropped, like a refresh
     result for replaced tokens.
-- **Sweep** (`sweepQuotas`): every enabled auth file of a supported provider, four provider calls at a time; an
-  outcome for replaced tokens is dropped (`stale`). One sweep at a time across isolates: it takes a lease in the
+- **Sweep** (`sweepQuotas`): every enabled auth file of a supported provider, two accounts at a time. A Claude check
+  opens up to three upstream connections at once (usage, profile, reset grants), so two checks stay within the six
+  connections a Workers invocation may have waiting for response headers (more are queued, and could run into the
+  15 s bound). An outcome for replaced tokens is dropped (`stale`), its reset grant status with it. One sweep at a time across isolates: it takes a lease in the
   ControlPlane first (`sweep-lease.ts`, one SQLite row, taken atomically under the input gate on the object's clock,
   given back with its token; a table from before `renewed_at` is recreated, it only holds a transient lease). Each
   recorded account renews it (`renewed_at`), and so does a background renewal every 30 s, since one account's check
@@ -1124,6 +1127,14 @@ result is stored.
 - **Cron**: the `refresh` sweep runs before `quota-check` (`runQuotaSweep`, the same sweep), so the check sees the
   fresh tokens; the quota check skips its run (`skipped: true`) while the panel's sweep holds the lease instead of
   asking every provider twice.
+  - **Subrequests per run**: the lease and list RPCs, then per account two RPCs (`quotaProbeTarget`,
+    `recordQuotaReport`) and its upstream calls: three for Claude (usage, profile, reset grants), two when the sweep
+    skips the grant read (stored status under 6 h old, or under 24 h old when not eligible; cron and "Check all
+    quotas" alike), one or two for the other providers. Token refreshes run in the ControlPlane, not in the
+    invocation. On the Workers Free plan (50 external subrequests per invocation, 1,000 to Cloudflare services such
+    as Durable Objects; Workers limits page, October 2026) a run covers about 16 Claude accounts when every grant read
+    is due, 25 when none is; on Paid (10,000) the limit is out of reach. Redirects are never followed for Anthropic
+    calls, so a redirect chain cannot add subrequests.
 - **Report**:
   - `checked_at` is the last attempt and `refreshed_at` the last success.
   - `windows` and `plan` survive a failed check, and a success without a plan keeps the previous plan.
@@ -1134,21 +1145,85 @@ result is stored.
   material (a re-login). `listCredentialEntries`/`refreshCredential` add it to the entry as `quota_report`.
 - **Providers and window ids**:
 
-| Executor key      | Endpoint                                                                                  | Window ids                                                                                                                                                         |
-| ----------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `claude`          | `GET api.anthropic.com/api/oauth/usage` (plus `/profile` for the plan, failure tolerated) | the payload keys (`five_hour`, `seven_day`, `seven_day_opus`, …, unknown keys title-cased); dollar pools skipped; `limits[]` `weekly_scoped` → `seven_day_<model>` |
-| `codex`           | `GET chatgpt.com/backend-api/wham/usage`                                                  | `primary`, `secondary`, `code_review_*`, `<limit>_*`; labelled from `limit_window_seconds`; plan = `plan_type`                                                     |
-| `antigravity`     | `POST …/v1internal:retrieveUserQuotaSummary` (three hosts in order)                       | `bucketId`, labelled "Group · bucket", `used = 1 - remainingFraction`                                                                                              |
-| `kimi`, `kimi-ai` | `GET api.kimi.com` / `api.kimi.ai` `/coding/v1/usages` (only these two hosts)             | `limits[]` by length (`five_hour`, …, else `limit_<n>`), `weekly` (summary), `monthly`                                                                             |
-| `xai`             | `GET cli-chat-proxy.grok.com/v1/billing` (`?format=credits` for weekly)                   | `weekly`, `monthly`                                                                                                                                                |
-| `meta`            | `POST api.meta.ai/muse-code/key` with the `dca_token`                                     | `window`, `weekly`                                                                                                                                                 |
-| `devin`           | `GetUserStatus` (the `devin-user-status` call)                                            | `daily`, `weekly` (`used = 100 - remaining`)                                                                                                                       |
+| Executor key      | Endpoint                                                                                                            | Window ids                                                                                                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `claude`          | `GET api.anthropic.com/api/oauth/usage` (plus `/profile` for the plan and the reset grant read, failures tolerated) | the payload keys (`five_hour`, `seven_day`, `seven_day_opus`, …, unknown keys title-cased); dollar pools skipped; `limits[]` `weekly_scoped` → `seven_day_<model>` |
+| `codex`           | `GET chatgpt.com/backend-api/wham/usage`                                                                            | `primary`, `secondary`, `code_review_*`, `<limit>_*`; labelled from `limit_window_seconds`; plan = `plan_type`                                                     |
+| `antigravity`     | `POST …/v1internal:retrieveUserQuotaSummary` (three hosts in order)                                                 | `bucketId`, labelled "Group · bucket", `used = 1 - remainingFraction`                                                                                              |
+| `kimi`, `kimi-ai` | `GET api.kimi.com` / `api.kimi.ai` `/coding/v1/usages` (only these two hosts)                                       | `limits[]` by length (`five_hour`, …, else `limit_<n>`), `weekly` (summary), `monthly`                                                                             |
+| `xai`             | `GET cli-chat-proxy.grok.com/v1/billing` (`?format=credits` for weekly)                                             | `weekly`, `monthly`                                                                                                                                                |
+| `meta`            | `POST api.meta.ai/muse-code/key` with the `dca_token`                                                               | `window`, `weekly`                                                                                                                                                 |
+| `devin`           | `GetUserStatus` (the `devin-user-status` call)                                                                      | `daily`, `weekly` (`used = 100 - remaining`)                                                                                                                       |
 
 - **Differences from the upstream panel**:
   - xAI never makes its paid-account fallback (`/v1/me` plus a real chat completion).
   - The Codex subscription and reset-credit calls and the Antigravity tier call are skipped.
   - Windows without a percentage are dropped (`used_percent` is required).
   - Labels are English and fixed.
+
+## Claude reset grants (`src/quota/reset-grant*.ts`, `src/management/reset-grant-routes.ts`)
+
+Workers addition with no Go counterpart (Go has no reset grant code; the upstream panel makes these calls from the
+browser through `POST /requests/api-call`, not ported). A reset grant is Anthropic's `cedar_ember` program: a bundle of
+resets, each of which empties the usage windows it `clears` (`five_hour`, `seven_day`, …). Upstream panel sources:
+`services/api/claudeResetGrants.ts`, `features/quota/providers/claude/{selectResetGrant,resetGrantOperations}.ts`.
+
+- **Upstream calls** (fixed host `api.anthropic.com`, Claude CLI headers and the account's OAuth bearer, from the Worker
+  like the quota check): status `GET /api/oauth/usage?cedar_ember=1&skip_spend=1` (its `cedar_ember` block; 12 s),
+  organization `GET /api/oauth/profile` (`organization.uuid`; 12 s), claim
+  `POST /api/organizations/{uuid}/reset_rate_limits {program: "cedar_ember", grant_id, request_id}` (25 s).
+- **Status** (`reset-grants.ts`): parsed fail-closed like the panel (one malformed grant, a duplicate id or a bad
+  timestamp rejects the block; missing `usable_now` reads false, missing `use_requires_limit` true; labels stripped of
+  control characters). `claimable` is `next_grant_id` when usable, else the lowest usable id; otherwise `blocked_by`
+  says why (`ineligible`, `cooldown`, `none_left`, `unusable`, `not_limited`). The quota check reads it as a third,
+  tolerated Claude call (one more subrequest per Claude account per check; the cron sweep skips it while the stored
+  status is under 6 h old, or under 24 h old when it says not eligible, so new grants are eventually noticed); `GET /v8/management/credentials/reset-grants?auth_index=` reads it now.
+  A status is dated by when its read started. The last good status is stored (SQLite table `credential_reset_grants`,
+  `reset-grant-store.ts`) and listed as the entry's `reset_grants`; an older read never overwrites a newer one.
+- **Stale reads** (`reset-grant-store.ts`): each row keeps two counters that are never reset, a `generation` bumped
+  when a re-login replaces the tokens or the credential is removed (so re-creating the same name starts a new one) and
+  a `claim_seq` bumped at every claim start and answer. The ControlPlane hands out the credential's `generation` and
+  the sum of every row's `claim_seq` with the token (`resetGrantTarget`, `quotaProbeTarget`), so a claim of another
+  auth file of the same organization also outdates a read, even once its journal is gone; a status read under an older pair is not stored, a read whose credential
+  was replaced answers `409`, and a fresh claim decided on it is refused with `409` ("check resets and try again"),
+  since the read may predate a reset another claim spent. Counters instead of timestamps: only the ControlPlane's own
+  values are compared, never the clocks of the Worker and the Durable Object.
+- **Claim** (`POST /v8/management/credentials/reset-grants/claim {auth_index}`, `reset-grant-flow.ts`): refused with
+  `409` on a disabled account (reads stay allowed); re-reads the status (`502` when it cannot; nothing is sent), answers `outcome: "none_available"` without a request when nothing is
+  claimable, reads the organization (`502` when it cannot), then sends the claim. Anthropic's `result` is the
+  `outcome`; `429` is `rate_limited`, `401`/`403` `auth_error`; any other status or body, a timeout or a transport
+  error is `unknown` (a reset may have been spent; "HTTP 200 alone is not a reset"); so is a `3xx`, since Anthropic
+  calls never follow redirects (`redirect: "manual"`; a redirected status read is a failed read). Only `reset` (or
+  `already_used` on a resend) counts as spent: the proxy then clears the account's cooldowns (as
+  `POST /routing/cooldown/reset`) and checks its quota again. When the answer cannot be recorded in the ControlPlane
+  the `outcome` is still returned, with a `warning`.
+- **Double spends**: the claim journal lives in the ControlPlane (single writer, so serialized across tabs and admins):
+  a claim in flight answers `409` to a second one for 60 s; an `unknown` claim stays open for 10 minutes and the next
+  claim resends it with the same grant and `request_id`, naming the request it saw (`409` when another claim replaced
+  it). The resend reads the status first (a failing read does not block it): when the grant's `resets_left` dropped
+  below the count the claim was decided on, or a `cooldown_until` runs from after the claim started, the claim is
+  answered without sending, as spent (claim closed, cooldowns cleared) only when that read also shows
+  `at_limit: false`, else with `outcome: "not_confirmed"` (nothing cleared; "check resets before trying again"; the
+  claim stays open and the next resend sends the same `request_id`). One claim per Anthropic
+  organization runs or stays open at a time across every auth file of it: a claim in flight or open in another file
+  of the same organization (two files of one account, or a re-login into it) answers `409`, which names the case of
+  a removed file's claim (it frees itself within 10 minutes). A resend for another organization
+  (the account was replaced) is refused with `409`, and a refusal of a resend keeps the claim open, since it cannot
+  prove the first request did not spend (panel rules). `pending_claim.in_flight` says a request of the open claim is
+  running (the panel offers no resend then); a resend whose claim another tab answered meanwhile gets its own `409`.
+  The journal and the stored status are dropped with the credential and when a re-login replaces its tokens, except a
+  journal in flight: its answer is still recorded and it keeps holding its organization.
+- **Assumptions** (no Anthropic documentation exists for these endpoints; taken from the upstream panel and the
+  Claude Code client, not verified against Anthropic): the `request_id` is an idempotency key, so a resend with it
+  does not spend a second reset; `already_used` answering a resend means the first request spent the reset; a reset
+  is the only thing that lowers a grant's `resets_left` or starts a `cooldown_until`; `skip_spend=1` makes the status
+  read free of side effects; the Claude CLI headers (`CLAUDE_HEADERS`) are required. Clearing the proxy's cooldowns
+  after a reset follows the Go maintainers' advice in issue #6507, not upstream code.
+- **Differences from the upstream panel**: the journal is server-side and shared instead of per tab, with the in-flight
+  lease; an open claim past its 10 minutes is dropped and the next claim starts fresh (the panel blocks the tab until
+  reload); cooldowns are cleared after a reset (the panel leaves them); `percent_used` is not kept; window ids beyond
+  the panel's three are kept when they look like ids. The weekly `juniper_tide` program is not handled (nor by the
+  panel).
 
 ## Usage accounting and observability (`src/usage/`, `src/observability/`, `src/management/usage-routes.ts`)
 
