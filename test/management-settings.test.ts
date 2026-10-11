@@ -1,5 +1,6 @@
 // /v8/management/settings through the router, Access gate and real ControlPlane: the Settings page's view and writes.
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { parse as parseYaml } from "yaml";
 import type { Json } from "../src/json/index.ts";
 import type { SettingsView } from "../src/management/contract/settings.ts";
 import {
@@ -8,6 +9,7 @@ import {
   jsonInit,
   makeHarness,
   resetControlPlane,
+  serviceToken,
   token,
 } from "./support/management.ts";
 
@@ -371,6 +373,896 @@ describe("management settings", () => {
       const removed = await as(ADMIN, { access: { "admin-emails": null } }, version + 1);
 
       expect(removed).toMatchObject({ status: 200, body: { version: version + 2 } });
+    } finally {
+      await own.dispose();
+    }
+  });
+});
+
+describe("management raw configuration", () => {
+  const RAW = "/v8/management/settings/config";
+
+  const RAW_SECRETS = {
+    key: "sk-ant-RAW-SECRET-KEY-4242",
+    header: "Bearer raw-header-SECRET-7777",
+    proxyPass: "raw-proxy-pass-SECRET-3131",
+    client: "raw-client-key-SECRET-1313",
+    pattern: "Bearer sk-raw-pattern-SECRET*",
+  };
+
+  const seeded = {
+    access: { "api-keys": [RAW_SECRETS.client] },
+    requests: {
+      "proxy-url": `http://proxy-user:${RAW_SECRETS.proxyPass}@proxy.test:8080`,
+      payload: {
+        default: [
+          {
+            models: [{ name: "gpt-*", headers: { Authorization: RAW_SECRETS.pattern } }],
+            params: { temperature: 0 },
+          },
+        ],
+      },
+    },
+    routing: { strategy: "fill-first" },
+    "api-keys": {
+      claude: [
+        {
+          name: "main",
+          "base-url": "https://api.anthropic.com",
+          headers: { Authorization: RAW_SECRETS.header },
+          keys: [{ "api-key": RAW_SECRETS.key }],
+        },
+      ],
+    },
+  };
+
+  const expectNoSecret = (text: string): void => {
+    for (const secret of Object.values(RAW_SECRETS)) expect(text).not.toContain(secret);
+    expect(text).not.toContain("SECRET");
+  };
+
+  const rawText = async (init?: RequestInit) => {
+    const response = await call(RAW, init);
+    const text = await response.text();
+
+    return { status: response.status, text, body: JSON.parse(text) as Record<string, unknown> };
+  };
+
+  const getRaw = async () => {
+    const { status, text, body } = await rawText();
+
+    expect(status).toBe(200);
+    expectNoSecret(text);
+
+    // SAFETY: a 200 body of this route is a RawConfig (checked by the contract test).
+    return body as { version: number; yaml: string; secrets: number };
+  };
+
+  const send = async (method: "PUT" | "POST", body: Json) => {
+    const response = await call(method === "PUT" ? RAW : `${RAW}/check`, jsonInit(method, body));
+    const text = await response.text();
+
+    return { status: response.status, text, body: JSON.parse(text) as Record<string, unknown> };
+  };
+
+  it("requires an Access admin", async () => {
+    expect((await call(RAW, { auth: false })).status).toBe(401);
+    expect((await call(RAW, { auth: await token("other@example.com") })).status).toBe(403);
+  });
+
+  it("serves the stored document as sparse YAML with every secret masked", async () => {
+    const version = await seed(seeded);
+    const raw = await getRaw();
+
+    expect(raw.version).toBe(version);
+    expect(raw.secrets).toBe(5);
+    expect(raw.yaml.match(/\[redacted#\d+\]/g)).toHaveLength(5);
+    expect(raw.yaml).toContain('"[redacted#1]…1313"');
+    expect(raw.yaml).toContain('"http://[redacted#2]@proxy.test:8080"');
+    expect(raw.yaml).toContain("strategy: fill-first");
+    // Sparse: defaults are omitted.
+    expect(raw.yaml).not.toContain("session-affinity");
+    expect(raw.yaml).not.toContain("auth_index");
+    expect(parseYaml(raw.yaml)).toMatchObject({ "config-version": 8 });
+  });
+
+  it("saves unchanged YAML without writing, keeping the version", async () => {
+    const version = await seed(seeded);
+    const before = await storedDocument();
+    const { yaml } = await getRaw();
+    const saved = await send("PUT", { version, yaml });
+
+    expectNoSecret(saved.text);
+    expect(saved).toMatchObject({
+      status: 200,
+      body: {
+        status: "ok",
+        version,
+        dropped: [],
+        not_applied: ["access.api-keys", "requests.proxy-url"],
+      },
+    });
+    expect((await controlPlane().getConfig()).version).toBe(version);
+    expect(await storedDocument()).toEqual(before);
+  });
+
+  it("stores an edit and keeps every secret behind its placeholder", async () => {
+    const version = await seed(seeded);
+    const before = await storedDocument();
+    const { yaml } = await getRaw();
+    const saved = await send("PUT", { version, yaml: yaml.replace("fill-first", "round-robin") });
+
+    expectNoSecret(saved.text);
+    expect(saved).toMatchObject({ status: 200, body: { status: "ok", version: version + 1 } });
+
+    const after = await storedDocument();
+
+    expect(after["api-keys"]).toEqual(before["api-keys"]);
+    expect(after.access).toEqual(before.access);
+    expect(after.requests).toEqual(before.requests);
+    expect((after.routing as { strategy: string }).strategy).toBe("round-robin");
+  });
+
+  it("checks without storing and never echoes a submitted secret", async () => {
+    const version = await seed(seeded);
+    const { yaml } = await getRaw();
+    const typed = "sk-ant-NEW-TYPED-SECRET-5150";
+    const edited = yaml.replace('"[redacted#5]…4242"', JSON.stringify(typed));
+
+    expect(edited).toContain(typed);
+    const checked = await send("POST", { version, yaml: edited });
+
+    expect(checked.status).toBe(200);
+    expectNoSecret(checked.text);
+    expect(checked.text).not.toContain(typed);
+    expect(checked.body).toMatchObject({ kept_secrets: 4, new_secrets: 1, dropped: [] });
+    expect(checked.body.yaml).toContain('"[new secret]…5150"');
+    expect(checked.body.yaml).toContain('"[redacted#1]…1313"');
+    expect((await controlPlane().getConfig()).version).toBe(version);
+  });
+
+  it("reports what a pasted Go config loses and what does nothing on Workers", async () => {
+    const { version } = await getRaw();
+
+    const legacy = [
+      "host: 0.0.0.0",
+      "port: 8317",
+      "remote-management:",
+      "  allow-remote: true",
+      "debug: true",
+      "request-retry: 3",
+      "claude-api-key:",
+      `  - api-key: ${RAW_SECRETS.key}`,
+      "    auth_index: deadbeefdeadbeef",
+      "",
+    ].join("\n");
+
+    const checked = await send("POST", { version, yaml: legacy });
+
+    expect(checked.status).toBe(200);
+    expectNoSecret(checked.text);
+    expect(checked.body.dropped).toEqual(["host", "port", "remote-management"]);
+    expect(checked.body.not_applied).toEqual(["observability.logs.debug"]);
+    expect(checked.body.new_secrets).toBe(1);
+
+    const saved = await send("PUT", { version, yaml: legacy });
+
+    expectNoSecret(saved.text);
+    expect(saved.status).toBe(200);
+
+    const stored = await storedDocument();
+
+    const claude = (
+      stored["api-keys"] as { claude: Array<{ keys: Array<Record<string, unknown>> }> }
+    ).claude;
+
+    expect(claude[0]?.keys[0]).toEqual({ "api-key": RAW_SECRETS.key });
+    expect(JSON.stringify(stored)).not.toContain("auth_index");
+    expect(JSON.stringify(stored)).not.toContain("allow-remote");
+  });
+
+  it("reports entries the normaliser drops (a duplicated placeholder)", async () => {
+    const version = await seed({
+      "api-keys": { gemini: [{ keys: [{ "api-key": "AIzaSy-gemini-SECRET-0001" }] }] },
+    });
+
+    const yaml = [
+      "api-keys:",
+      "  gemini:",
+      "    - keys:",
+      '        - api-key: "[redacted#1]…0001"',
+      '        - api-key: "[redacted#1]"',
+      "",
+    ].join("\n");
+
+    const checked = await send("POST", { version, yaml });
+
+    expect(checked.status).toBe(200);
+    expect(checked.text).not.toContain("SECRET");
+    expect(checked.body.dropped).toEqual(["api-keys.gemini[0].keys[1]"]);
+    expect(checked.body.kept_secrets).toBe(1);
+  });
+
+  it("answers 422 invalid_yaml with line and column, without quoting the source", async () => {
+    const { version } = await getRaw();
+
+    for (const [yaml, line] of [
+      ["routing:\n  strategy: fill-first\n  strategy: round-robin\n", 3],
+      ["access:\n  api-keys:\n    - |SECRET-in-a-block-header\n", 3],
+      ["routing: !custom\n  strategy: fill-first\n", 1],
+      ["models:\n  catalog: !secret SECRET-tagged\n", 2],
+    ] as const) {
+      const refused = await send("POST", { version, yaml });
+
+      expect(refused, yaml).toMatchObject({
+        status: 422,
+        body: {
+          error: "invalid_yaml",
+          message: expect.any(String),
+          line,
+          column: expect.any(Number),
+        },
+      });
+      expect(refused.text).not.toContain("SECRET");
+    }
+  });
+
+  it("expands anchors", async () => {
+    const { version } = await getRaw();
+
+    const yaml = [
+      "upstream:",
+      "  codex:",
+      "    model-level-cooling: &on true",
+      "  claude:",
+      "    model-level-cooling: *on",
+      "",
+    ].join("\n");
+
+    const checked = await send("POST", { version, yaml });
+
+    expect(checked.status).toBe(200);
+    expect(checked.body.yaml).toContain("model-level-cooling: true");
+    expect(checked.body.yaml).not.toContain("*on");
+  });
+
+  it("answers 422 invalid_config with the path, scrubbed of secrets", async () => {
+    const { version } = await getRaw();
+
+    const cases: ReadonlyArray<readonly [string, string]> = [
+      ["routing:\n  retry:\n    request-retry: lots\n", "routing.retry.request-retry"],
+      [
+        `api-keys:\n  claude:\n    - keys:\n        - api-key: sk-ant-ECHO-SECRET-0001\n          weight: { heavy: sk-ant-ECHO-SECRET-0001 }\n`,
+        "api-keys.claude[0].keys[0].weight",
+      ],
+    ];
+
+    for (const [yaml, path] of cases) {
+      const refused = await send("PUT", { version, yaml });
+
+      expect(refused, yaml).toMatchObject({
+        status: 422,
+        body: { error: "invalid_config", path, message: expect.any(String) },
+      });
+      expect(refused.text).not.toContain("ECHO-SECRET");
+    }
+
+    const notMapping = await send("PUT", { version, yaml: "- a\n- b\n" });
+
+    expect(notMapping).toMatchObject({ status: 422, body: { error: "invalid_config" } });
+    expect((await getRaw()).version).toBe(version);
+  });
+
+  it("refuses placeholders that cannot be restored, with their path", async () => {
+    const version = await seed(seeded);
+    const { yaml } = await getRaw();
+
+    const cases: ReadonlyArray<readonly [string, string, string]> = [
+      [
+        yaml.replace("name: main", 'name: "[redacted#5]…4242"'),
+        "masked_value_outside_secret_field",
+        "api-keys.claude[0].name",
+      ],
+      [
+        yaml.replace('Authorization: "[redacted#4]', '" user-agent": "[redacted#4]'),
+        "masked_value_outside_secret_field",
+        "api-keys.claude[0].headers. user-agent",
+      ],
+      [
+        yaml.replace('"[redacted#5]…4242"', '"[redacted#9]"'),
+        "unknown_secret_reference",
+        "api-keys.claude[0].keys[0].api-key",
+      ],
+      [
+        yaml.replace('"[redacted#5]…4242"', '"[redacted]…4242"'),
+        "invalid_secret_placeholder",
+        "api-keys.claude[0].keys[0].api-key",
+      ],
+    ];
+
+    for (const [edited, error, path] of cases) {
+      expect(edited).not.toBe(yaml);
+      const refused = await send("PUT", { version, yaml: edited });
+
+      expect(refused, error).toMatchObject({ status: 422, body: { error, path } });
+      expectNoSecret(refused.text);
+    }
+
+    expect((await controlPlane().getConfig()).version).toBe(version);
+  });
+
+  it("refuses a stale version with 409 and stores nothing, also after an unconditional write", async () => {
+    const version = await seed(seeded);
+    const { yaml } = await getRaw();
+
+    // The upstream panel (or curl) writes without a version: the raw editor's view is now stale.
+    const upstream = await call("/v8/management/config.yaml", {
+      method: "PUT",
+      headers: { "content-type": "application/yaml" },
+      body: "routing:\n  strategy: round-robin\n",
+    });
+
+    expect(upstream.status).toBe(200);
+
+    for (const method of ["POST", "PUT"] as const) {
+      const stale = await send(method, { version, yaml });
+
+      expect(stale).toMatchObject({ status: 409, body: { error: "conflict" } });
+    }
+
+    expect((await controlPlane().getConfig()).version).toBe(version + 1);
+  });
+
+  it("refuses bodies without a version, non-JSON bodies and bodies above 512 KiB", async () => {
+    expect(await send("PUT", { yaml: "" })).toMatchObject({
+      status: 400,
+      body: { error: "invalid body" },
+    });
+    expect(await send("POST", { version: -1, yaml: "" })).toMatchObject({ status: 400 });
+    expect(await send("PUT", { version: 0 })).toMatchObject({ status: 400 });
+
+    const big = await send("PUT", { version: 0, yaml: `# ${"x".repeat(512 * 1024)}\n` });
+
+    expect(big).toMatchObject({ status: 413, body: { error: "body_too_large" } });
+  });
+
+  it("does not let a config-only service token remove its own access", async () => {
+    const own = makeHarness();
+    const SERVICE = "svc-client.access";
+
+    try {
+      const version = await seed({ access: { "admin-service-tokens": [SERVICE, "other.access"] } });
+      const auth = await serviceToken(SERVICE);
+      const yaml = "access:\n  admin-service-tokens:\n    - other.access\n";
+
+      for (const [method, path] of [
+        ["POST", `${RAW}/check`],
+        ["PUT", RAW],
+      ] as const) {
+        const response = await own.call(path, { ...jsonInit(method, { version, yaml }), auth });
+
+        expect(response.status).toBe(422);
+        expect(await response.json()).toMatchObject({
+          error: "would_remove_your_admin_access",
+          path: "access.admin-service-tokens",
+        });
+      }
+
+      expect((await controlPlane().getConfig()).version).toBe(version);
+    } finally {
+      await own.dispose();
+    }
+  });
+
+  it("keeps a secret masked behind a padded exempt header name (` token_type`)", async () => {
+    const version = await seed(seeded);
+    const { yaml } = await getRaw();
+
+    const edited = yaml.replace(
+      'Authorization: "[redacted#4]…7777"',
+      '" token_type": "[redacted#5]…4242"',
+    );
+
+    expect(edited).not.toBe(yaml);
+    const checked = await send("POST", { version, yaml: edited });
+
+    expect(checked.status).toBe(200);
+    expectNoSecret(checked.text);
+    expect(checked.body.yaml).toContain('token_type: "[redacted#5]…4242"');
+
+    const saved = await send("PUT", { version, yaml: edited });
+
+    expect(saved.status).toBe(200);
+    expectNoSecret(saved.text);
+
+    const after = await getRaw();
+
+    expect(after.yaml).toContain('token_type: "[redacted#');
+  });
+
+  it("refuses a $-secret moved into a header", async () => {
+    const version = await seed({
+      access: { "api-keys": ["$ecret-client-SECRET-0001"] },
+      "api-keys": {
+        claude: [
+          { headers: { "X-Org": "org-SECRET-0002" }, keys: [{ "api-key": "k-SECRET-0003" }] },
+        ],
+      },
+    });
+
+    const { yaml } = await getRaw();
+    const edited = yaml.replace('"[redacted#2]…0002"', '"[redacted#1]…0001"');
+
+    expect(edited).not.toBe(yaml);
+    const refused = await send("PUT", { version, yaml: edited });
+
+    expect(refused).toMatchObject({
+      status: 422,
+      body: {
+        error: "masked_value_outside_secret_field",
+        path: "api-keys.claude[0].headers.X-Org",
+      },
+    });
+    expect(refused.text).not.toContain("SECRET");
+  });
+
+  it("refuses placeholders copied by an alias, and does not merge with << (even under %YAML 1.1)", async () => {
+    const version = await seed(seeded);
+
+    const alias = [
+      "api-keys:",
+      "  claude:",
+      "    - name: *k",
+      "      keys:",
+      '        - api-key: &k "[redacted#5]…4242"',
+      "",
+    ].join("\n");
+
+    // An alias before its anchor is a YAML error; anchor first:
+    const anchored = [
+      "api-keys:",
+      "  claude:",
+      "    - keys:",
+      '        - api-key: &k "[redacted#5]…4242"',
+      "      name: *k",
+      "",
+    ].join("\n");
+
+    const aliasRefused = await send("PUT", { version, yaml: alias });
+
+    expect(aliasRefused.status).toBe(422);
+    expectNoSecret(aliasRefused.text);
+    expect(await send("PUT", { version, yaml: anchored })).toMatchObject({
+      status: 422,
+      body: { error: "masked_value_outside_secret_field", path: "api-keys.claude[0].name" },
+    });
+
+    const merge = [
+      "%YAML 1.1",
+      "---",
+      "api-keys:",
+      "  claude:",
+      "    - headers: &h",
+      '        Authorization: "[redacted#4]…7777"',
+      "      keys:",
+      '        - api-key: "[redacted#5]…4242"',
+      "    - base-url: https://evil.test",
+      "      headers:",
+      "        <<: *h",
+      "      keys:",
+      "        - api-key: typed-new-key",
+      "",
+    ].join("\n");
+
+    const merged = await send("POST", { version, yaml: merge });
+
+    expect(merged).toMatchObject({
+      status: 422,
+      body: { error: "invalid_yaml", line: 1, column: 1, message: "only YAML 1.2 is supported" },
+    });
+
+    // Without the directive, a plain `<<` key is refused where it is.
+    const plain = await send("POST", { version, yaml: merge.split("\n").slice(2).join("\n") });
+
+    expect(plain).toMatchObject({
+      status: 422,
+      body: { error: "invalid_yaml", line: 9, column: 9 },
+    });
+    expectNoSecret(merged.text);
+    expect((await controlPlane().getConfig()).version).toBe(version);
+  });
+
+  it("answers the same review for a right and a wrong guess of a stored secret", async () => {
+    const version = await seed(seeded);
+    const { yaml } = await getRaw();
+
+    const guess = async (value: string) => {
+      const edited = yaml.replace(
+        '        - api-key: "[redacted#5]…4242"',
+        `        - api-key: "[redacted#5]…4242"\n        - api-key: ${JSON.stringify(value)}`,
+      );
+
+      expect(edited).not.toBe(yaml);
+      const checked = await send("POST", { version, yaml: edited });
+
+      expect(checked.status).toBe(200);
+
+      return checked.body;
+    };
+
+    const right = await guess(RAW_SECRETS.key);
+    const wrong = await guess(`X${RAW_SECRETS.key.slice(1)}`);
+
+    expect(right).toEqual(wrong);
+    expect(right).toMatchObject({ kept_secrets: 5, new_secrets: 1 });
+  });
+
+  it("refuses tags that would resolve to merges or non-JSON values", async () => {
+    const version = await seed(seeded);
+
+    for (const yaml of [
+      'routing: &a\n  strategy: fill-first\nupstream:\n  !!merge "<<": *a\n',
+      "models:\n  catalog: !!binary aGVsbG8=\n",
+      "models:\n  catalog: !!timestamp 2001-12-14\n",
+      "access:\n  admin-emails: !!set {a@example.com}\n",
+      "access:\n  admin-emails: !!omap [{a: 1}]\n",
+      "access:\n  admin-emails: !!pairs [{a: 1}]\n",
+    ]) {
+      expect(await send("POST", { version, yaml }), yaml).toMatchObject({
+        status: 422,
+        body: { error: "invalid_yaml", message: "custom tags are not supported" },
+      });
+    }
+  });
+
+  it("answers the same whether a typed string contains a stored secret or not (no fail-safe oracle)", async () => {
+    const version = await seed(seeded);
+    const { yaml } = await getRaw();
+
+    const probe = async (text: string) => {
+      const edited = yaml.replace("name: main", `name: ${JSON.stringify(text)}`);
+
+      expect(edited).not.toBe(yaml);
+      const checked = await send("POST", { version, yaml: edited });
+
+      const body = { ...checked.body };
+
+      if (typeof body.yaml === "string")
+        body.yaml = body.yaml
+          .replace(`name: ${JSON.stringify(text)}\n`, "name: TYPED\n")
+          .replace(`name: ${text}\n`, "name: TYPED\n");
+
+      return { status: checked.status, body };
+    };
+
+    for (const [right, wrong] of [
+      [RAW_SECRETS.key, `X${RAW_SECRETS.key.slice(1)}`],
+      [`words ${RAW_SECRETS.key.slice(3, 9)} words`, "words zzzzzz words"],
+      [RAW_SECRETS.key.slice(-4), "9999"],
+    ] as const) {
+      const a = await probe(right);
+      const b = await probe(wrong);
+
+      expect(a.status).toBe(200);
+      expect(a).toEqual(b);
+    }
+  });
+
+  it("accepts a new value that contains a short stored secret (no false refusal)", async () => {
+    const version = await seed({
+      "api-keys": { claude: [{ name: "main", keys: [{ "api-key": "test" }] }] },
+    });
+
+    const { yaml } = await getRaw();
+
+    expect(
+      await send("PUT", { version, yaml: yaml.replace("name: main", "name: test-x") }),
+    ).toMatchObject({
+      status: 200,
+      body: { version: version + 1 },
+    });
+  });
+
+  it("reviews raw payload rules and dca: Meta keys like the stored decode", async () => {
+    const version = await seed({
+      access: { "api-keys": ["dca:client-SECRET-0002"] },
+      requests: {
+        payload: {
+          "override-raw": [{ params: { "metadata.api_key": '"raw-SECRET-0001"' } }],
+        },
+      },
+    });
+
+    const { yaml, secrets } = await getRaw();
+
+    expect(secrets).toBe(2);
+    const unchanged = await send("POST", { version, yaml });
+
+    expect(unchanged.status).toBe(200);
+    expectNoSecret(unchanged.text);
+    expect(unchanged.body).toMatchObject({ dropped: [], kept_secrets: 2, new_secrets: 0 });
+
+    const meta = `${yaml}api-keys:\n  meta:\n    - keys:\n        - api-key: "[redacted#1]"\n`;
+    const checked = await send("POST", { version, yaml: meta });
+
+    expect(checked.status).toBe(200);
+    expectNoSecret(checked.text);
+    expect(checked.body).toMatchObject({ kept_secrets: 2, moved_secrets: [] });
+    expect(checked.body.dropped).toEqual([expect.stringMatching(/^api-keys\.meta/)]);
+  });
+
+  it("flags a kept secret moved to another path on the same host", async () => {
+    const version = await seed(seeded);
+    const { yaml } = await getRaw();
+
+    const shared = yaml.replace(
+      "base-url: https://api.anthropic.com",
+      "base-url: https://api.anthropic.com/v1/other-account",
+    );
+
+    expect(shared).not.toBe(yaml);
+    expect((await send("POST", { version, yaml: shared })).body.moved_secrets).toEqual([
+      "api-keys.claude[0].headers.Authorization",
+      "api-keys.claude[0].keys[0].api-key",
+    ]);
+
+    const slash = yaml.replace(
+      "base-url: https://api.anthropic.com",
+      "base-url: https://API.anthropic.com/",
+    );
+
+    expect((await send("POST", { version, yaml: slash })).body.moved_secrets).toEqual([]);
+  });
+
+  it("reports kept keys the normaliser deduplicates once an edit makes their identities equal", async () => {
+    const key = "AIzaSy-shared-SECRET-0001";
+
+    const version = await seed({
+      "api-keys": {
+        gemini: [
+          { prefix: "a", keys: [{ "api-key": key }] },
+          { prefix: "b", keys: [{ "api-key": key }] },
+        ],
+      },
+    });
+
+    const { yaml } = await getRaw();
+
+    expect(await send("POST", { version, yaml })).toMatchObject({
+      status: 200,
+      body: { dropped: [] },
+    });
+
+    const same = yaml.replace("prefix: b", "prefix: a");
+
+    expect(same).not.toBe(yaml);
+    const checked = await send("POST", { version, yaml: same });
+
+    expect(checked).toMatchObject({ status: 200, body: { dropped: ["api-keys.gemini[1]"] } });
+    expect(checked.text).not.toContain("SECRET");
+  });
+
+  it("reports kept secrets moved to another family or upstream host", async () => {
+    const version = await seed(seeded);
+    const { yaml } = await getRaw();
+
+    const edited = `${yaml}  codex:\n    - base-url: https://evil.test\n      keys:\n        - api-key: "[redacted#5]"\n`;
+
+    const checked = await send("POST", { version, yaml: edited });
+
+    expect(checked).toMatchObject({
+      status: 200,
+      body: { moved_secrets: ["api-keys.codex[0].keys[0].api-key"] },
+    });
+
+    const saved = await send("PUT", { version, yaml: edited });
+
+    expect(saved).toMatchObject({
+      status: 200,
+      body: { version: version + 1, moved_secrets: ["api-keys.codex[0].keys[0].api-key"] },
+    });
+    expectNoSecret(saved.text);
+    expect(
+      (await send("POST", { version: version + 1, yaml: (await getRaw()).yaml })).body
+        .moved_secrets,
+    ).toEqual([]);
+  });
+
+  it("refuses a chunked body above 512 KiB while reading it", async () => {
+    const chunk = new TextEncoder().encode("x".repeat(64 * 1024));
+    let pulled = 0;
+
+    const body = new ReadableStream<Uint8Array>({
+      pull: (controller) => {
+        pulled++;
+
+        if (pulled > 64) controller.close();
+        else controller.enqueue(chunk);
+      },
+    });
+
+    const response = await call(RAW, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body,
+      // SAFETY: a streaming request body needs `duplex` (not in the RequestInit typings used here).
+      ...({ duplex: "half" } as RequestInit),
+    });
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toMatchObject({ error: "body_too_large" });
+    expect(pulled).toBeLessThan(20);
+  });
+
+  it("never shows a stored secret, whatever placeholder moves where", async () => {
+    const SECRET_DOC = {
+      models: {
+        catalog: "https://cdn.test/models.json?v=1&token=cat-SECRET-01#sig=frag-SECRET-02",
+      },
+      access: { "api-keys": ["client-SECRET-03", "$dollar-SECRET-04"] },
+      requests: {
+        "proxy-url": "http://user:proxy-SECRET-05@proxy.test:8080",
+        payload: {
+          default: [
+            {
+              models: [
+                { name: "gpt-*", headers: { "X-Match": "pattern-SECRET-06*", Accept: "json" } },
+              ],
+              params: { "metadata.api_key": "param-SECRET-07", temperature: 0 },
+            },
+          ],
+        },
+      },
+      "api-keys": {
+        claude: [
+          {
+            name: "main",
+            prefix: "team",
+            "base-url":
+              "https://base-user:base-SECRET-08@api.anthropic.test/v1?key=query-SECRET-09",
+            "proxy-url": "socks5://gp:group-proxy-SECRET-10@proxy.test:1080",
+            headers: {
+              "X-Custom": "custom-SECRET-11",
+              "User-Agent": "agent",
+              "X-Copy": "$Authorization",
+            },
+            keys: [{ "api-key": "key-SECRET-12", headers: { token_type: "tt-SECRET-13" } }],
+          },
+        ],
+        "openai-compatibility": [
+          {
+            name: "compat",
+            "base-url": "https://compat.test/v1",
+            keys: [{ "api-key": "compat-SECRET-14" }],
+          },
+        ],
+      },
+    };
+
+    const leakFree = (text: string, what: string) => {
+      expect(text, what).not.toContain("SECRET");
+      expect(text, what).not.toMatch(/t[0-9a-f]{32}k\d+k/);
+    };
+
+    let version = await seed(SECRET_DOC);
+    const masked = parseYaml((await getRaw()).yaml) as Record<string, Json>;
+    const placeholders: string[] = [];
+    const leaves: Array<Array<string | number>> = [];
+
+    const walk = (value: Json, path: Array<string | number>) => {
+      if (typeof value === "string") {
+        leaves.push(path);
+
+        for (const match of value.matchAll(/\[redacted#\d+\]/g)) placeholders.push(match[0]);
+      } else if (Array.isArray(value)) value.forEach((item, index) => walk(item, [...path, index]));
+      else if (value !== null && typeof value === "object")
+        for (const [key, child] of Object.entries(value)) walk(child, [...path, key]);
+    };
+
+    walk(masked, []);
+    expect(placeholders.length).toBe(14);
+
+    const setAt = (document: Json, path: ReadonlyArray<string | number>, text: string) => {
+      const parent = path.slice(0, -1).reduce<Json>(
+        // SAFETY: the paths come from walking this very document.
+        (node, segment) => (node as Record<string | number, Json>)[segment] as Json,
+        document,
+      );
+
+      // SAFETY: as above.
+      (parent as Record<string | number, Json>)[path.at(-1) as string | number] = text;
+    };
+
+    const edits: string[] = [];
+
+    for (const placeholder of placeholders)
+      for (const leaf of leaves) {
+        const document = structuredClone(masked);
+
+        setAt(document, leaf, placeholder);
+        edits.push(JSON.stringify(document));
+      }
+
+    // Header renames: padded, exempt and plain names over every header map.
+    for (const name of [" token_type", "User-Agent", " accept ", "X-New", "authorization "]) {
+      const document = structuredClone(masked) as Record<string, Json>;
+
+      const claude = (document["api-keys"] as Record<string, Json[]>).claude?.[0] as Record<
+        string,
+        Json
+      >;
+
+      const headers = claude.headers as Record<string, string>;
+
+      headers[name] = headers["X-Custom"] ?? "";
+      delete headers["X-Custom"];
+      edits.push(JSON.stringify(document));
+    }
+
+    let accepted = 0;
+
+    for (const yaml of edits) {
+      const checked = await send("POST", { version, yaml });
+
+      leakFree(checked.text, `check ${yaml}`);
+
+      if (checked.status !== 200) continue;
+      accepted++;
+      const saved = await send("PUT", { version, yaml });
+
+      leakFree(saved.text, `save ${yaml}`);
+      expect(saved.status).toBe(200);
+
+      const raw = await call(RAW);
+
+      leakFree(await raw.text(), `get after ${yaml}`);
+
+      // Back to the seeded document for the next edit.
+      const reset = await controlPlane().putConfig(JSON.stringify(SECRET_DOC));
+
+      if (!reset.ok) throw new Error(reset.message);
+      version = reset.version;
+    }
+
+    // Many edits are accepted (a placeholder over another secret, unchanged positions), many refused.
+    expect(accepted).toBeGreaterThan(50);
+    expect(accepted).toBeLessThan(edits.length);
+  });
+
+  it("does not let a config-only admin remove their own access", async () => {
+    const own = makeHarness();
+    const CONFIG_ADMIN = "cfg@example.com";
+
+    try {
+      const version = await seed({
+        access: { "admin-emails": [CONFIG_ADMIN, "other@example.com"] },
+      });
+
+      const as = async (email: string, method: string, path: string, body: Json) => {
+        const response = await own.call(path, {
+          ...jsonInit(method, body),
+          auth: await token(email),
+        });
+
+        return { status: response.status, body: (await response.json()) as unknown };
+      };
+
+      const yaml = "access:\n  admin-emails:\n    - other@example.com\n";
+
+      for (const [method, path] of [
+        ["POST", `${RAW}/check`],
+        ["PUT", RAW],
+      ] as const) {
+        expect(await as(CONFIG_ADMIN, method, path, { version, yaml })).toMatchObject({
+          status: 422,
+          body: { error: "would_remove_your_admin_access", path: "access.admin-emails" },
+        });
+      }
+
+      expect(await as(ADMIN, "PUT", RAW, { version, yaml })).toMatchObject({
+        status: 200,
+        body: { version: version + 1 },
+      });
     } finally {
       await own.dispose();
     }

@@ -1,7 +1,8 @@
 /**
  * `GET|PATCH /v8/management/settings` (`../settings-routes.ts`, `../settings.ts`): the Settings page's typed view of
- * the config settings that apply on Workers, and its writes. Shared with the browser: imports `effect` and sibling
- * contract modules only.
+ * the config settings that apply on Workers, and its writes; `GET|PUT /settings/config` and
+ * `POST /settings/config/check` (`../settings-raw-routes.ts`, `../config-secrets.ts`): the raw configuration editor.
+ * Shared with the browser: imports `effect` and sibling contract modules only.
  *
  * Values keep the config's kebab-case spelling and nesting, so a patch maps 1:1 to document paths. The view never
  * carries a secret (PRODUCT.md): API keys have their own page, and the keys that do nothing on Workers are listed by
@@ -14,6 +15,19 @@
  * (invalid duration, unknown catalog source, a value the normaliser rewrites, ...); `422
  * would_remove_your_admin_access` when a caller who is not a deployment admin removes themselves from the config's
  * admin lists.
+ *
+ * The raw configuration is the whole document as YAML without defaults, every secret masked as `[redacted#n]…abcd`
+ * (`secrets` counts them; the panel never reads `GET /config*`, which serve raw secrets to the upstream panel).
+ * Comments and key order are not kept, anchors are expanded and custom tags refused: only the canonical document is
+ * stored. `checkRaw` and `saveRaw` take `{version, yaml}`; a placeholder left as it was keeps its stored secret, plain
+ * text at a secret position is a new secret. Both answer `409 conflict` for a stale `version` (placeholders are bound
+ * to it); `422 invalid_yaml` with `message`, `line`, `column`; `422 invalid_config` with `message` and `path` when
+ * known; `422 masked_value_outside_secret_field` / `unknown_secret_reference` / `invalid_secret_placeholder` with
+ * the `path` of a placeholder that cannot be restored; `422 would_remove_your_admin_access`; `413` above 512 KiB.
+ * `checkRaw` stores nothing and returns the masked canonical result (new secrets as `[new secret]…abcd`, told apart
+ * from kept ones by origin, never by value) and `moved_secrets`, the paths where a kept secret is now sent to another
+ * provider family or upstream host (also in the `saveRaw` reply). `saveRaw` of a document whose canonical form equals
+ * the stored one writes nothing and returns the same `version`.
  */
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
@@ -274,11 +288,65 @@ export const SaveSettings = Schema.Struct({ version: ConfigVersion, patch: Setti
 
 export type SaveSettings = typeof SaveSettings.Type;
 
+/** `GET /settings/config`: the stored document as sparse YAML with every secret masked. */
+export const RawConfig = Schema.Struct({
+  version: ConfigVersion,
+  yaml: Schema.String,
+  /** How many `[redacted#n]` placeholders `yaml` carries (n = 1..secrets). */
+  secrets: Schema.Int,
+});
+
+export type RawConfig = typeof RawConfig.Type;
+
+/** An edited raw configuration and the `version` it was read at. */
+export const RawConfigInput = Schema.Struct({ version: ConfigVersion, yaml: Schema.String });
+
+export type RawConfigInput = typeof RawConfigInput.Type;
+
+/** What a save would store, for the review (nothing is stored). */
+export const RawConfigCheck = Schema.Struct({
+  /** The canonical result as sparse YAML, masked: kept secrets `[redacted#n]…`, new ones `[new secret]…`. */
+  yaml: Schema.String,
+  /** Paths of the input that would not be stored as written (unknown or Workers-only keys, entries the normaliser
+   * removes or rewrites). */
+  dropped: Strings,
+  /** Keys set in the result that have no effect on Workers. */
+  not_applied: Strings,
+  kept_secrets: Schema.Int,
+  new_secrets: Schema.Int,
+  /** Paths of kept secrets now sent to another provider family or upstream host than where they were stored. */
+  moved_secrets: Strings,
+});
+
+export type RawConfigCheck = typeof RawConfigCheck.Type;
+
+/** A stored raw configuration; `version` is unchanged when the document was already stored as is. */
+export const RawConfigSaved = Schema.Struct({
+  status: Schema.Literal("ok"),
+  version: Schema.Int,
+  dropped: Strings,
+  not_applied: Strings,
+  moved_secrets: Strings,
+});
+
+export type RawConfigSaved = typeof RawConfigSaved.Type;
+
 export class SettingsGroup extends HttpApiGroup.make("settings").add(
   HttpApiEndpoint.get("get", "/settings", { success: SettingsView, error: managementErrors }),
   HttpApiEndpoint.patch("save", "/settings", {
     payload: SaveSettings,
     success: Saved,
+    error: managementErrors,
+  }),
+  HttpApiEndpoint.get("raw", "/settings/config", { success: RawConfig, error: managementErrors }),
+  HttpApiEndpoint.post("checkRaw", "/settings/config/check", {
+    payload: RawConfigInput,
+    success: RawConfigCheck,
+    error: managementErrors,
+  }),
+  HttpApiEndpoint.put("saveRaw", "/settings/config", {
+    payload: RawConfigInput,
+    success: RawConfigSaved,
     error: managementErrors,
   }),
 ) {}

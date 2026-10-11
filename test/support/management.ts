@@ -8,7 +8,15 @@ import { ManagementRoutes } from "../../src/management/routes.ts";
 import { OAuthCallbackRoutes } from "../../src/oauth/public-routes.ts";
 import { requestContext } from "../../src/platform/env.ts";
 import { ModelRegistryLive } from "../../src/registry/live.ts";
-import { AUD, fakeJwksLayer, makeFakeJwks, makeKey, signToken, userClaims } from "./access.ts";
+import {
+  AUD,
+  fakeJwksLayer,
+  makeFakeJwks,
+  makeKey,
+  serviceClaims,
+  signToken,
+  userClaims,
+} from "./access.ts";
 import { type MockHandler, mockHttp } from "./refresh.ts";
 import type { Json } from "../../src/json/index.ts";
 
@@ -29,6 +37,10 @@ const ctx = {} as unknown as ExecutionContext;
 
 export const token = async (email: string = ADMIN): Promise<string> =>
   await signToken({ key, now: Math.floor(Date.now() / 1000), claims: userClaims(email) });
+
+/** An Access service token assertion for the client id `commonName`. */
+export const serviceToken = async (commonName: string): Promise<string> =>
+  await signToken({ key, now: Math.floor(Date.now() / 1000), claims: serviceClaims(commonName) });
 
 export const controlPlane = () => env.CONTROL_PLANE.getByName("global");
 

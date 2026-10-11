@@ -4,7 +4,7 @@
  * Go source: internal/api/handlers/management/handler.go (response headers set by the management middleware) and
  * the `c.JSON(status, gin.H{"error": ...})` convention of every management handler.
  */
-import { Data, Effect } from "effect";
+import { Data, Effect, Stream } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { causeSummary } from "../observability/cause.ts";
@@ -67,6 +67,39 @@ export const bodyText = Effect.gen(function* () {
 
   return new TextDecoder().decode(buffer);
 });
+
+/**
+ * Request body as text; `413 body_too_large` above `maxBytes`, `400 invalid body` when unreadable. A declared
+ * `content-length` above the bound is refused before reading; otherwise (chunked bodies too) the stream is counted
+ * while it is read and cancelled as soon as it passes the bound, so no more than `maxBytes` plus one chunk is held.
+ */
+export const boundedBodyText = (maxBytes: number) =>
+  Effect.gen(function* () {
+    const request = yield* HttpServerRequest.HttpServerRequest;
+
+    const tooLarge = replyError(413, "body_too_large", {
+      message: `the request body is larger than ${maxBytes} bytes`,
+    });
+
+    if (Number(request.headers["content-length"] ?? 0) > maxBytes) return yield* tooLarge;
+    const decoder = new TextDecoder();
+    let read = 0;
+    let text = "";
+
+    yield* request.stream.pipe(
+      Stream.mapError(() => replyError(400, "invalid body")),
+      Stream.runForEach((chunk) => {
+        read += chunk.byteLength;
+
+        if (read > maxBytes) return Effect.fail(tooLarge);
+        text += decoder.decode(chunk, { stream: true });
+
+        return Effect.void;
+      }),
+    );
+
+    return text + decoder.decode();
+  });
 
 /** Request body parsed as JSON (any value); 400 `invalid body` otherwise. */
 export const bodyJson = Effect.gen(function* () {
