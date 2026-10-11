@@ -2,10 +2,11 @@
  * Provider OAuth login routes of the management API.
  *
  * Go source: internal/api/server_management_v8.go (route table), handlers/management/auth_files_v8.go
- * (`StartOAuthV8`), oauth_callback.go (`PostOAuthCallback`, `GetOAuthCallback`, `handleOAuthCallback`),
+ * (`StartOAuthV8`), oauth_callback.go (`PostOAuthCallback`, `handleOAuthCallback`),
  * auth_files_provider_oauth.go (`GetAuthStatus`, `CancelAuthSession`). Request/response shapes are the ones the control
  * panel uses (`oauthApi`: `GET /oauth/auth-url?provider=`, `GET /oauth/status?state=`, `DELETE /oauth/session?state=`,
  * `POST /oauth/callback {provider, redirect_url}`); `is_webui` is accepted and ignored (there is no local forwarder).
+ * Deviation: Go's `GET /oauth/callback` (the local forwarder's redirect target) is not ported.
  * The login state lives in the ControlPlane (`src/oauth`).
  */
 import { Effect } from "effect";
@@ -126,22 +127,10 @@ const postCallback = Effect.gen(function* () {
   });
 });
 
-const getCallback = Effect.gen(function* () {
-  const params = yield* queryParams;
-
-  return yield* completeLogin({
-    provider: params.get("provider")?.trim() ?? "",
-    state: params.get("state")?.trim() ?? "",
-    code: params.get("code")?.trim() ?? "",
-    error: params.get("error")?.trim() || params.get("error_description")?.trim() || "",
-  });
-});
-
 export const oauthRoutes = [
   HttpRouter.route("GET", `${BASE}/auth-url`, handled(startLogin)),
   HttpRouter.route("GET", `${BASE}/status`, handled(loginStatus)),
   HttpRouter.route("DELETE", `${BASE}/session`, handled(cancelLogin)),
   HttpRouter.route("POST", `${BASE}/callback`, handled(postCallback)),
-  HttpRouter.route("GET", `${BASE}/callback`, handled(getCallback)),
   ...oauthImportRoutes,
 ];

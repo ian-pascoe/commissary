@@ -6,9 +6,11 @@
  * canonical JSON document is stored, so comments and key order are lost, anchors are expanded (`toJS`), custom tags
  * and merge keys (`<<`) are refused. After decoding, a
  * second decode with stand-ins for the restored secrets gives the review (`reviewResult`) and the fail-safe: a
- * stand-in the masking would show refuses the edit (`exposedTagPath`). Known gaps of the review: a typed copy of a
- * stored secret is deduplicated with it without the review showing it (typed values are never compared with stored
- * ones); kept secrets sharing a stored value get one more decode with shared stand-ins (`sharedDropped`), so a dedupe
+ * stand-in the masking would show refuses the edit (`exposedTagPath`). Stored keys win over typed ones: a typed key
+ * that duplicates a kept one (gemini, interactions, vertex: Go keeps the first of a family's duplicates) is dropped
+ * before the document is stored, never the stored key (`keepStoredKeys`, `key-duplicates.ts`). Known gaps of the
+ * review: that dropped typed copy is not shown as dropped (typed values are never compared with stored ones; the next
+ * read shows it); kept secrets sharing a stored value get one more decode with shared stand-ins (`sharedDropped`), so a dedupe
  * an edit causes among them is listed in `dropped`. `%YAML 1.1` is refused (its schema resolves
  * timestamps, binary, sets and merges whatever the parse options say). Messages never quote a value: a YAML error
  * is a fixed sentence per error code (`yaml-message.ts`) with its line and column, a config error is value-free
@@ -20,6 +22,7 @@ import { Document, isScalar, LineCounter, parseDocument, Scalar, visit } from "y
 import { decodeConfig, encodeConfig, sparseDocument } from "../config/codec.ts";
 import { prepareDocument } from "../config/document.ts";
 import { ConfigValidationError, configPath } from "../config/errors.ts";
+import type { DedupedFamily } from "../config/normalize.ts";
 import { notAppliedSettings } from "../config/not-applied.ts";
 import { yamlMessage } from "../config/yaml-message.ts";
 import type { Config } from "../config/schema.ts";
@@ -27,12 +30,14 @@ import { isJsonObject, type Json, type JsonObject, jsonEquals } from "../json/in
 import {
   exposedTagPath,
   type RestoredSecret,
+  maskDocument,
   restoreSecrets,
   type ReviewedResult,
   reviewResult,
   type SecretTags,
   secretTags,
 } from "./config-secrets.ts";
+import { keepStoredKeys, type TypedKeys } from "./key-duplicates.ts";
 
 /** A refused raw configuration: `{error, message, path?, line?, column?}` with status 422. */
 export interface RawProblem {
@@ -52,6 +57,12 @@ export interface RawEdit {
   readonly canonical: JsonObject;
   /** Stored secrets the edit kept through their placeholders. */
   readonly restored: ReadonlyArray<RestoredSecret>;
+  /**
+   * Whether the edit leaves the stored document as it is: the canonical form equals the stored one and no secret was
+   * typed (every secret stayed behind its placeholder). A typed secret that equals a stored one (or is deduplicated
+   * with it) never counts as unchanged, so whether a guess is right cannot show in whether the save writes.
+   */
+  readonly unchanged: boolean;
   /** The result masked for the review, kept and new secrets told apart by origin (`reviewResult`). */
   readonly review: ReviewedResult;
   readonly dropped: ReadonlyArray<string>;
@@ -295,6 +306,47 @@ const sharedDropped = Effect.fnUntraced(function* (
 });
 
 /**
+ * Whether the tagged decode of an edit (`taggedCanonical`: restored secrets as stand-ins, typed ones as written) is the
+ * decode of the stored document as the editor showed it (every secret restored as its stand-in). They differ as soon
+ * as a secret was typed, whatever the typed text is: a typed copy of a stored secret stays apart from its stand-in, so
+ * this never compares typed text with stored secrets.
+ */
+const holdsNoTypedSecret = (
+  stored: JsonObject,
+  tags: SecretTags,
+  taggedCanonical: JsonObject,
+): Effect.Effect<boolean> => {
+  const untouched = restoreSecrets(maskDocument(stored).document, stored, tags.standIn);
+
+  if (!untouched.ok) return Effect.succeed(false);
+
+  return decodeConfig(untouched.document).pipe(
+    // SAFETY: the encoded config is a plain JSON object (the schema's encoded side only holds JSON values).
+    Effect.map((config) => jsonEquals(taggedCanonical, encodeConfig(config) as JsonObject)),
+    Effect.catch(() => Effect.succeed(false)),
+  );
+};
+
+/** A key kept behind its placeholder (`[redacted#n]…abcd`); anything else at an `api-key` was typed. */
+const KEPT_KEY = /^\[redacted#\d+\]/;
+
+/** Which keys of `prepared` (the edit, placeholders not restored yet) were typed, `[group][key]`. */
+const typedKeys = (prepared: JsonObject, family: DedupedFamily): TypedKeys => {
+  const apiKeys = prepared["api-keys"];
+  const groups = isJsonObject(apiKeys) ? apiKeys[family] : undefined;
+
+  return (Array.isArray(groups) ? groups : []).map((group) => {
+    const keys = isJsonObject(group) && Array.isArray(group.keys) ? group.keys : [];
+
+    return keys.map((key) => {
+      const secret = isJsonObject(key) ? key["api-key"] : undefined;
+
+      return !(typeof secret === "string" && KEPT_KEY.test(secret));
+    });
+  });
+};
+
+/**
  * Reads edited YAML against the stored document: parse, prepare (v8 layout, `auth_index` stripped), validate, restore
  * the secrets behind `[redacted#n]`, decode and normalise. `stored` must be the document the placeholders were made
  * from (same version).
@@ -321,7 +373,13 @@ export const readRawEdit = Effect.fnUntraced(function* (
 
   if (!restored.ok) return yield* Effect.fail<RawProblem>(restored.problem);
 
-  const config = yield* decodeConfig(restored.document).pipe(
+  // Stored keys win over typed ones: the typed copy of a kept key goes, never the stored key. Not reported: the answer
+  // must not depend on whether a typed key equals a stored one (`key-duplicates.ts`).
+  const document = yield* keepStoredKeys(restored.document, (family) =>
+    typedKeys(prepared, family),
+  );
+
+  const config = yield* decodeConfig(document).pipe(
     Effect.mapError((error) => invalidConfig(error)),
   );
 
@@ -353,10 +411,12 @@ export const readRawEdit = Effect.fnUntraced(function* (
     });
 
   return {
-    document: restored.document,
+    document,
     config,
     canonical,
     restored: restored.restored,
+    unchanged:
+      jsonEquals(canonical, stored) && (yield* holdsNoTypedSecret(stored, tags, taggedCanonical)),
     review: reviewResult(taggedCanonical, stored, tags),
     dropped: yield* sharedDropped(prepared, stored, restored.restored, tags).pipe(
       Effect.map((dropped) => dropped ?? droppedPaths(tagged.document, taggedCanonical)),

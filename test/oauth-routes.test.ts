@@ -7,6 +7,9 @@ import {
   jsonInit,
   makeHarness,
   resetControlPlane,
+  SERVICE_ADMIN,
+  SERVICE_ADMIN_BINDINGS,
+  serviceToken,
   token,
 } from "./support/management.ts";
 import type { Json } from "../src/json/index.ts";
@@ -21,7 +24,7 @@ const realFetch = globalThis.fetch;
 
 const upstreamCalls: string[] = [];
 
-const harness = makeHarness();
+const harness = makeHarness(undefined, SERVICE_ADMIN_BINDINGS);
 
 beforeAll(() => {
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -140,6 +143,7 @@ describe("management oauth routes", () => {
 
     const download = await json(
       `/v8/management/credentials/download?name=${encodeURIComponent(stored)}`,
+      { auth: await serviceToken(SERVICE_ADMIN) },
     );
 
     expect(download.body).toMatchObject({
@@ -242,11 +246,21 @@ describe("management oauth routes", () => {
     expect((await json("/v8/management/credentials")).body).toMatchObject({ files: [] });
   });
 
-  it("accepts the callback as GET query parameters too and records provider errors", async () => {
+  it("records a provider error posted to the callback; the GET form is not served", async () => {
     const started = await start("provider=antigravity");
 
+    expect(
+      (
+        await call(
+          `/v8/management/oauth/callback?provider=antigravity&state=${started.state}&error=access_denied`,
+        )
+      ).status,
+    ).toBe(404);
+    expect(await status(started.state)).toMatchObject({ status: "wait" });
+
     const reply = await json(
-      `/v8/management/oauth/callback?provider=antigravity&state=${started.state}&error=access_denied`,
+      "/v8/management/oauth/callback",
+      jsonInit("POST", { provider: "antigravity", state: started.state, error: "access_denied" }),
     );
 
     expect(reply).toMatchObject({ status: 200, body: { status: "ok" } });

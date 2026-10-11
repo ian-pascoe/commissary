@@ -31,13 +31,18 @@
  *   with `line` and `column`, a schema error its expectation and `path`); they name at most keys of the written
  *   document, and are passed on unscrubbed, so a refused write reads the same whether a typed value or key equals a
  *   stored secret or not.
+ * - `access.admin-service-tokens` can only be changed by a service-token administrator or a deployment admin
+ *   (`ACCESS_ADMIN_*`): an email admin who changes it, by any write, gets `403 service_tokens_require_service_admin`
+ *   and nothing is stored (`settings.ts` `checkServiceTokenAdmins`, the same rule as `PATCH /settings` and
+ *   `PUT /settings/config`).
  * - Path segments `__proto__`, `constructor` and `prototype` are `400 invalid_path` (Go treats them as map keys). The
  *   path is read from the URL as the router matched it (`config-document.ts` `configPathOfUrl`).
  */
 import { Effect, Match, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { parse } from "yaml";
-import { parseConfigYaml } from "../config/codec.ts";
+import { AccessPrincipal } from "../access/principal.ts";
+import { decodeConfig, parseConfigYaml } from "../config/codec.ts";
 import { prepareDocument } from "../config/document.ts";
 import type { ConfigValidationError } from "../config/errors.ts";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
@@ -49,9 +54,13 @@ import {
   stripAuthIndexes,
   writeAtPath,
 } from "./config-document.ts";
+import type { WorkerEnv } from "../platform/env.ts";
+import { keepStoredKeys, typedKeysAt } from "./key-duplicates.ts";
 import { maskDocument, type MaskedValue, maskedValueAt } from "./config-secrets.ts";
 import { bodyText, controlPlane, handled, jsonReply, Reply, replyError } from "./http.ts";
+import { checkServiceTokenAdmins } from "./settings.ts";
 import { maskedYaml } from "./settings-raw.ts";
+import { alwaysAdmin } from "./settings-routes.ts";
 
 const PREFIX = "/v8/management/config";
 
@@ -152,7 +161,11 @@ const checkWrite = Effect.fnUntraced(function* (
   text: string,
   raw: Json,
   stored: JsonObject,
-): Effect.fn.Return<void, Reply> {
+): Effect.fn.Return<
+  void,
+  Reply,
+  AccessPrincipal | WorkerEnv | HttpServerRequest.HttpServerRequest
+> {
   const prepared = preparedOf(raw);
   const masked = isJsonObject(prepared) ? maskedValueAt(prepared, stored) : undefined;
 
@@ -160,6 +173,28 @@ const checkWrite = Effect.fnUntraced(function* (
   const parsed = yield* Effect.result(parseConfigYaml(text));
 
   if (Result.isFailure(parsed)) return yield* invalidConfig(parsed.failure);
+  const { principal } = yield* AccessPrincipal;
+  const always = yield* alwaysAdmin;
+
+  if (always || principal.kind === "service") return;
+
+  // The stored document decoded as the ControlPlane does, to tell whether the admin service tokens change.
+  const before = yield* decodeConfig(stored).pipe(
+    Effect.mapError(() => replyError(500, "invalid_config")),
+  );
+
+  const refused = checkServiceTokenAdmins({
+    before,
+    after: parsed.success,
+    principal,
+    alwaysAdmin: always,
+  });
+
+  if (refused !== undefined)
+    return yield* replyError(refused.status, refused.error, {
+      message: refused.message,
+      path: refused.path,
+    });
 });
 
 type StoreOutcome = { readonly saved: number } | "conflict";
@@ -216,7 +251,11 @@ const storeWhole = Effect.fnUntraced(function* (
  * Read-modify-write of the document (`edit` returns a reply to abort, or the new document). With `expected` (the
  * request's `If-Match`) there is one attempt against that version; otherwise a concurrent write is retried.
  */
-const modify = (edit: (document: JsonObject) => JsonObject | Reply, expected: number | undefined) =>
+const modify = (
+  edit: (document: JsonObject) => JsonObject | Reply,
+  expected: number | undefined,
+  written: ReadonlyArray<string> | undefined,
+) =>
   Effect.gen(function* () {
     for (let attempt = 0; attempt < (expected === undefined ? MAX_ATTEMPTS : 1); attempt += 1) {
       const current = yield* storedDocument;
@@ -226,7 +265,14 @@ const modify = (edit: (document: JsonObject) => JsonObject | Reply, expected: nu
       const edited = edit(current.document);
 
       if (edited instanceof Reply) return yield* edited;
-      const document = stripAuthIndexes(edited);
+      const stripped = stripAuthIndexes(edited);
+
+      // Stored keys win over the ones this write put in (`key-duplicates.ts`); a delete puts none in.
+      const document =
+        written === undefined
+          ? stripped
+          : yield* keepStoredKeys(stripped, (family) => typedKeysAt(stripped, family, written));
+
       const text = JSON.stringify(document);
       yield* checkWrite(text, document, current.document);
       const outcome = yield* store(text, current.version);
@@ -294,11 +340,15 @@ const writeConfig = (mode: "put" | "patch", yaml: boolean) =>
       return yield* storeWhole(JSON.stringify(document), document, expected);
     }
 
-    return yield* modify((document) => {
-      const written = writeAtPath(document, parts, value, mode);
+    return yield* modify(
+      (document) => {
+        const written = writeAtPath(document, parts, value, mode);
 
-      return written === "invalid_path" ? replyError(400, "invalid_path") : written;
-    }, expected);
+        return written === "invalid_path" ? replyError(400, "invalid_path") : written;
+      },
+      expected,
+      parts,
+    );
   });
 
 const deleteConfig = Effect.gen(function* () {
@@ -310,6 +360,7 @@ const deleteConfig = Effect.gen(function* () {
   return yield* modify(
     (document) => deleteAtPath(document, parts) ?? replyError(404, "not_found"),
     expected,
+    undefined,
   );
 });
 

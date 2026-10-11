@@ -102,6 +102,20 @@ Logging in fresh avoids sharing refresh tokens. In the panel → _Connect accoun
 The credential is stored under the same file-name scheme as Go (e.g. `claude-<hash>-<email>.json`); a re-login of the same account
 replaces the tokens but keeps your per-file settings.
 
+### Exporting an account (Worker to Worker, or back to files)
+
+A stored auth file, tokens included, can be downloaded to move an account to another deployment. The download is limited to
+**service-token administrators** (§0); an email admin, including in the panel, gets `403 download_requires_service_token`:
+
+```bash
+curl "${H[@]}" "$M/credentials/download?name=claude-ab12cd34-me@example.com.json" -o claude-ab12cd34-me@example.com.json
+curl "${H[@]}" -X POST "$M/credentials?name=claude-ab12cd34-me@example.com.json" \
+  -H 'content-type: application/json' --data-binary @claude-ab12cd34-me@example.com.json   # against the other deployment
+```
+
+The same caveat as §2 applies: two deployments refreshing one single-use refresh token break each other, so retire the source
+account afterwards (or log in again on the target, §3, which needs no export). The file is written verbatim, so treat it as a secret.
+
 ## 4. Switch clients
 
 Point each tool at the Worker with Access headers ([CLIENTS.md](CLIENTS.md)); verify `GET /v1/models` lists the models you expect,

@@ -7,15 +7,27 @@
  * config `version` of the list they came from: the edit is applied to the stored document and stored with
  * `putConfig(text, version)` and no retry, so a stale view is a `409 conflict` instead of silently overwriting a
  * concurrent change. The edited document is dry-run through the config decoder first, so a group the normaliser
- * would drop (codex without base-url, a duplicate key) is refused with `422` and the reason instead of "succeeding".
+ * would drop for its own shape (codex without base-url, an empty key) is refused with `422` and the reason instead of
+ * "succeeding". A typed key that duplicates a key of another group is dropped from the written group, silently and
+ * never refused (stored keys win, `api-keys-write.ts` `settleDuplicates`): the reply must not tell a right guess of
+ * a stored key from a wrong one, and the normaliser's first-wins must not delete the stored key instead.
  */
 import { Effect, Schema } from "effect";
 import { HttpRouter, type HttpServerRequest } from "effect/http";
-import { decodeConfig } from "../config/codec.ts";
+import { decodeConfig, decodeRawConfig } from "../config/codec.ts";
+import { keyIdentities } from "../config/normalize.ts";
 import { decodeStoredConfig } from "../config/store.ts";
 import { isJsonObject, type JsonObject } from "../json/index.ts";
 import { probeApiKey } from "./api-keys-probe.ts";
-import { applyGroupWrite, checkSurvival, type Edit, removeGroup } from "./api-keys-write.ts";
+import {
+  applyGroupWrite,
+  checkSurvival,
+  type Edit,
+  type GroupWrite,
+  isDedupedFamily,
+  removeGroup,
+  settleDuplicates,
+} from "./api-keys-write.ts";
 import { configKeyIds } from "./config-document.ts";
 import {
   type ApiKeyFamily,
@@ -105,6 +117,19 @@ const list = Effect.gen(function* () {
   return jsonReply(200, view);
 });
 
+/** `write` with the typed keys that duplicate another group's key dropped (families Go deduplicates only). */
+const settled = (family: ApiKeyFamily, index: number | undefined, write: GroupWrite) =>
+  Effect.gen(function* () {
+    if (!isDedupedFamily(family)) return write;
+
+    // As written: nothing deduplicated yet, so the indexes are those of the document.
+    const raw = yield* decodeRawConfig(write.document).pipe(
+      Effect.mapError((error) => replyError(422, error.message)),
+    );
+
+    return yield* refuse(settleDuplicates(family, write, index, keyIdentities(family, raw)));
+  });
+
 const putGroup = Effect.gen(function* () {
   const { value, raw } = yield* decoded(PutGroupRequest);
   const group = raw.group;
@@ -116,7 +141,7 @@ const putGroup = Effect.gen(function* () {
   if (current.version !== value.version) return yield* conflict();
   const ids = configKeyIds(current.config, { includeDisabledGroups: true });
 
-  const write = yield* refuse(
+  const applied = yield* refuse(
     applyGroupWrite(current.document, ids, {
       family: value.family,
       ...(value.index === undefined ? {} : { index: value.index }),
@@ -124,7 +149,11 @@ const putGroup = Effect.gen(function* () {
     }),
   );
 
-  // Dry run through the decoder (what the ControlPlane will store): the group must survive normalisation.
+  // Stored keys win: a typed key equal to a key of another group goes, whatever the normaliser would keep.
+  const write = yield* settled(value.family, value.index, applied);
+
+  // Dry run through the decoder (what the ControlPlane will store): the group must survive normalisation, and no
+  // other group may lose a key.
   const normalised = yield* decodeConfig(write.document).pipe(
     Effect.mapError((error) => replyError(422, error.message)),
   );
@@ -135,6 +164,7 @@ const putGroup = Effect.gen(function* () {
       familyCounts(familyOf(current.config, value.family)),
       familyCounts(familyOf(normalised, value.family)),
       value.index,
+      applied.group,
       write.group,
     ),
   );

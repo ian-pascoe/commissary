@@ -759,8 +759,8 @@ claude/gemini/openai-response -> openai, interactions <-> openai (Chat Completio
 Port of `internal/api/handlers/management` for the `/v8/management` routes that apply on Workers; the Go-compatible
 routes keep Go's response shapes (scripts written for the Go server keep working), while the control panel at `/`
 (`web/`) talks to the API through `contract/`. The upstream panel (`Cli-Proxy-API-Management-Center`) is not served:
-its address redirects to `/` (_Legacy panel address_ below), and the routes only it needed are gone (`requests/api-call`)
-or masked (`GET /config*`). Auth is the Access admin gate only (`access/routes.ts` classifies `/v8/management*`, the
+its address redirects to `/` (_Legacy panel address_ below), and the routes only it needed are gone (`requests/api-call`,
+the operational and log routes listed under _Also not ported_) or masked (`GET /config*`). Auth is the Access admin gate only (`access/routes.ts` classifies `/v8/management*`, the
 panel paths and `/management.html` as `management`); there is no management key.
 
 - **Config** (`config-routes.ts`, `config-document.ts`): `GET|PUT|PATCH /config`, `GET|PUT /config.yaml`,
@@ -788,7 +788,16 @@ panel paths and `/management.html` as `management`); there is no management key.
   value). They name at most keys of the written document (the `path`, an unknown `api-keys` family or group field)
   and are passed on unscrubbed: scrubbing stored secrets out of an echoed key would itself tell a right guess from a
   wrong one. So a refused write reads the same whether a typed value, key or alias name equals a stored secret or
-  not. The same messages serve `/settings/config`. Deviation from Go (paths):
+  not. The same messages serve `/settings/config`. Workers addition (admin service tokens): every write refuses a
+  change of `access.admin-service-tokens` by an email admin who is one only through the config
+  (`403 service_tokens_require_service_admin`, `checkServiceTokenAdmins` in `settings.ts`; service-token administrators
+  and env admins may), compared as a set against the stored document so rewriting the same list is fine. Stored keys win
+  here too (`key-duplicates.ts`) for the path writes (`PUT|PATCH /config/*path`): the keys at, under or containing the
+  written path count as typed, the others are the stored ones the write carries over, and a typed key equal to a stored
+  one of another group is dropped before the normaliser's first-wins can evict the stored one (a `DELETE` puts no key in).
+  Only the whole-document writes (`PUT /config`, `PUT /config.yaml`) keep Go's first-wins: they replace the document,
+  so every key in them is typed and there is no stored key to tell apart.
+  Deviation from Go (paths):
   segments `__proto__`, `constructor` and `prototype` are `400 invalid_path` (they would reach `Object.prototype`;
   writes use own properties only and `mergePatch` skips a `__proto__` key), and the path is read from the URL as the
   router matched it (`configPathOfUrl`: duplicate slashes, percent-encoding and case of the prefix). Deviation from Go
@@ -801,7 +810,9 @@ panel paths and `/management.html` as `management`); there is no management key.
   `deleteExclusions`), because it replaces whole per-channel lists.
 - **Credentials** (`credentials-routes.ts`, `credential-entry.ts`, `credentials/field-patch.ts`): list (filters,
   pagination), upload (multipart or raw JSON + `?name=`), delete (`name`/`names`/`all`), download (the stored file,
-  tokens included), `models`, `status`, `fields`, `refresh`, `routing/cooldown/reset`. Credential id = file name; only
+  tokens included; deviation from Go: only a service-token admin may call it, an email admin gets
+  `403 download_requires_service_token`: the response is the one place a stored refresh token leaves the Worker, and
+  a service token is the credential meant for scripts, see `ACCESS.md`), `models`, `status`, `fields`, `refresh`, `routing/cooldown/reset`. Credential id = file name; only
   auth files are listed (config API keys are not auth files; `status` toggles one through its `excluded-models`, see
   _API keys_ below). `auth_index` =
   `sha256("id:" + id)[:16 hex]` (`auth-index.ts`, the Go fallback seed). The ControlPlane builds the redacted panel
@@ -836,8 +847,24 @@ panel paths and `/management.html` as `management`); there is no management key.
     `auth_index` (keep the stored secret; same credential id) and/or `api-key` (new secret, new id); an unknown
     `auth_index` is `409 unknown_auth_index`, a missing group `404 group not found`. Hidden settings and masked header
     values are carried over from the stored entry, so a write is lossless. The config normaliser drops groups and keys
-    silently (codex without `base-url`, duplicate keys): the dry run compares the result with the request and answers
-    `422` with the reason instead of "succeeding". The stored document is already canonical (`ConfigStore.put`
+    silently (codex without `base-url`, empty keys, ...): the dry run compares the result with the request and answers
+    `422` with the reason when the written group's own shape caused the loss. Duplicate keys are the exception and are
+    dropped silently, as Go's `Sanitize*Keys` do (Go answers `200`; the Workers port used to answer `422 duplicate
+    key`). Deviations from Go, deliberate: (1) a `422` for a typed key equal to a stored one would let an admin
+    confirm a guessed secret, so the reply (`{status, version}`, the version always advancing by one) is the same for a
+    right and a wrong guess: the reply does not confirm a guess, the next read does. (2) Stored keys win (Go keeps the
+    first of a family's duplicates, which would let a typed key in an earlier group delete the stored key, or the
+    whole group, of a later one): for the families Go deduplicates across groups (gemini, interactions, vertex;
+    `keyIdentities` in `config/normalize.ts` is the normaliser's own uniqueness id) `settleDuplicates`
+    (`api-keys-write.ts`, `key-duplicates.ts`) drops from the written group every typed key (`api-key`) equal to a
+    key of another group, to a key the group keeps by `auth_index`, or to an earlier typed key, before the
+    normaliser runs. A key counts as typed when the request writes its secret, header values (other than
+    masked placeholders), a `proxy-url` or, for its group, another `base-url`: these feed the uniqueness id, so a
+    collision found by trying a value would confirm a guess (an admin could try header values on a key kept by
+    `auth_index`) and is dropped silently instead. A key kept by `auth_index` that the edit makes equal to a key of
+    another group by its `prefix` alone is `422` (the other key differs only by a value the caller can read). `checkSurvival` asserts that every other group keeps its key count. A group
+    left without keys (a new group, or a replaced one, made only of copies) is dropped as any empty group, and the
+    reply is the same `{status, version}`. The stored document is already canonical (`ConfigStore.put`
     round-trips it), so list positions are document positions.
   - `POST /api-keys/probe {auth_index}`: one connection test, made by the **Worker** with the credential's own base URL
     and headers (the ControlPlane only hands over the target, `apiKeyProbeTarget`, like `quotaProbeTarget`): a model
@@ -866,7 +893,11 @@ panel paths and `/management.html` as `management`); there is no management key.
     durations > 0, non-negative counts, strategy literal, `gpt-` model prefix, catalog `""`/`embed`/`disabled`/http(s),
     IANA time zone or `Local`, email-shaped admin entries); then the edited document is dry-run through the config
     decoder and every written leaf must come back unchanged (a value the normaliser trims, lower-cases or clamps is
-    refused with its path instead of "succeeding"). A caller who is an admin only through `access.admin-*` cannot
+    refused with its path instead of "succeeding"). Only a service-token administrator or an env admin may change
+    `access.admin-service-tokens`: an email admin who is one only through the config gets
+    `403 service_tokens_require_service_admin` (also on `PUT /settings/config` and `/config*`; a Workers addition: the
+    credential download is for service tokens only, so an email admin must not be able to grant that right, see
+    `docs/ACCESS.md`). A caller who is an admin only through `access.admin-*` cannot
     remove themselves (`422 would_remove_your_admin_access`; deployment admins and the dev bypass can). Stored with
     `putConfig(text, version)` without retry: a stale `version` is `409 conflict`. Ok: `{status: "ok", version}`.
   - `ManagementError` decodes the optional `message` and `path` of an error body, so the panel can show the reason
@@ -900,7 +931,11 @@ panel paths and `/management.html` as `management`); there is no management key.
     index the version does not have `422 unknown_secret_reference`, a malformed one `422 invalid_secret_placeholder`,
     each with its `path`; plain text at a secret position is a new secret. The result is decoded like a stored
     document (`422 invalid_config` with `path` when known; value-free messages, not scrubbed, see `/config`).
-    Then the admin lock-out check of `PATCH /settings` applies (users and service tokens).
+    Then the guards of `PATCH /settings` apply (users and service tokens): `403 service_tokens_require_service_admin`
+    when a config-only email admin changes `access.admin-service-tokens`, then the admin lock-out check. Stored
+    keys win here too: a typed `api-key` (not behind a `[redacted#n]` placeholder) equal to a kept key of another
+    group or of its own group is dropped before the document is stored (`keepStoredKeys`), never the stored one; the
+    review does not show it (typed values are never compared with stored ones) and the reply is the same.
   - The review is computed from a second decode where unguessable per-request tags stand for the restored secrets
     (keeping what the normaliser decides on: a JSON secret is stood in for by a JSON string, or by
     `{"secret": <tag>}` when it names a secret-looking key so a `*-raw` parameter stays masked, so `*-raw` payload rules
@@ -917,19 +952,26 @@ panel paths and `/management.html` as `management`); there is no management key.
     `{path, placeholder, from, to}`: its `[redacted#n]…abcd` and the family (or config section) and upstream host
     before and after. Only the host (lower-cased, port kept) is named: it is who receives the secret, while user info,
     path and query can carry secrets or account ids of their own. `PUT` stores with `putConfig(text, version)` and answers `{status: "ok", version, dropped, not_applied,
-    moved_secrets}`; a document whose canonical form equals the stored one is not written and keeps its `version`.
+    moved_secrets}`; a document whose canonical form equals the stored one and in which no secret was typed is not
+    written and keeps its `version` (`RawEdit.unchanged`: the tagged decode equals the decode of the untouched editor
+    text, so typed text is never compared with stored secrets; a typed secret always writes and advances the `version`,
+    even when it equals a stored one or is dropped as a copy of it).
   - Limitations: only the canonical document is stored, so comments, key order and anchors in the edited text are
     not kept, and a secret is never shown back once stored. Moving a kept secret to another host is allowed (an admin
     may re-point an upstream); the panel's review names each moved secret by placeholder with both hosts, marks its line
     and asks for a confirmation before Save. Saving a typed copy of a stored secret
-    next to it lets the normaliser deduplicate them without the review showing it (the review never compares typed
-    values with stored ones); the next read shows it. Two kept keys with the same stored value whose identities an edit
+    next to it drops the typed copy (the stored one is kept, `keepStoredKeys`) without the review showing it (the
+    review never compares typed values with stored ones); the next read shows it. Two kept keys with the same stored value whose identities an edit
     makes equal (e.g. Gemini groups that differ only by `prefix`) are deduplicated too: the review decodes once more
     with one stand-in per shared value and lists the removed entry in `dropped`. A restored URL secret must stay
     exactly in the masked part of the URL both as written and as stored (trimmed), unless the field keeps its stored
     text.
-- **Operational**: `server/latest-version`, `routing/model-definitions/:channel`
-  (static catalogs of the model registry), file-log routes answering like Go with file logging disabled.
+- **Also not ported** (only the upstream panel called these; all answer `404`): `server/latest-version`
+  (GitHub release lookup), the file-log routes (`GET|DELETE /observability/logs`, `/observability/logs/errors/*`,
+  `/observability/logs/requests/*`; Workers have no log files), `routing/model-definitions/:channel` (static catalogs;
+  the panel reads `routing/models` and `credentials/models`), `GET /observability/usage/api-keys` (per-key counters;
+  `GET /api-keys` carries them) and `GET /oauth/callback` (the local callback forwarder's target; `POST` is the panel's).
+  The upstream panel's `X-CPA-Version` and `X-CPA-Support-Plugin` response headers are not sent either (deviation from Go).
 - **Not here**: `/oauth/*` (`oauth-routes.ts`, see _Provider OAuth logins_), `/observability/usage/*` (`usage-routes.ts`, see
   "Usage accounting and observability"), plugins, Home, `/v0/management`, and (deviation from Go) `POST /requests/api-call`:
   Go substitutes a credential's token into a request to any host the caller names, for the upstream panel's browser-side
@@ -1102,9 +1144,7 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
 - **Retention** (`retention.ts`, cron task `usage-retention`): deletes records older than `USAGE_RETENTION_DAYS` (default
   30, `0` = keep) in bounded batches. `usage-statistics-enabled` and `redis-usage-queue-retention-seconds` are not used:
   persistence is always on when the `USAGE` binding exists.
-- **Management** (`management/usage-routes.ts`): `GET /v8/management/observability/usage/api-keys` (per provider,
-  `base_url|api_key` -> success/failed/`recent_requests`, from the ControlPlane counters and recent-requests ring; keys
-  use the masked API key), `.../queue?count=N` (atomically pops the oldest unexported records, Go queue JSON with
+- **Management** (`management/usage-routes.ts`): `GET /v8/management/observability/usage/queue?count=N` (atomically pops the oldest unexported records, Go queue JSON with
   `token_breakdown`; `api_key` = Access principal id, `auth_index` = the management `auth_index`) and the Workers
   additions `.../records` (filters `since|until|provider|model|principal|auth_id|failed`, `limit`, keyset `before`) and
   `.../summary` (`group_by=model|provider|principal|auth|endpoint|day`, totals per v2 bucket, avg latency/TTFT) and
@@ -1413,7 +1453,7 @@ Port of the management OAuth handlers (`auth_files_provider_oauth.go`, `auth_fil
 `oauth_sessions.go`) and `internal/auth/*`. The panel's OAuth page works unchanged: `GET /v8/management/oauth/auth-url?provider=`
 (`claude`, `codex`, `antigravity`, `devin`, `xai`, `meta`, `kimi`, `kimi-ai`; `is_webui` ignored) returns `{status,url,state}`
 (+ `flow:"device"`, `user_code`, `expires_in` for device logins), `GET /oauth/status?state=` answers `ok|wait|error`,
-`DELETE /oauth/session?state=` cancels and `POST|GET /oauth/callback` takes `{provider, redirect_url | state+code}`.
+`DELETE /oauth/session?state=` cancels and `POST /oauth/callback` takes `{provider, redirect_url | state+code}`.
 
 - **Sessions** (`session-store.ts`): a SQLite table in the `ControlPlane` DO with the Go rules (TTL 30 min, completed kept 1 min,
   `SetError` refreshes the TTL, cancel only for pending sessions). Flow secrets (PKCE verifier, device code) stay in the row and are

@@ -1,5 +1,6 @@
 /**
- * Config documents <-> `Config`: YAML/JSON import, validation, normalisation and export.
+ * Config documents <-> `Config`: YAML/JSON import, validation, normalisation and the canonical/sparse JSON documents
+ * the management API exports (`config-routes.ts`, `settings-raw.ts` render the YAML).
  *
  * Go source: internal/config/config_load.go (LoadConfig) and config_v8.go (YAML boundary). Unlike Go, no file is
  * ever rewritten: the canonical form is the JSON document stored in the ControlPlane Durable Object.
@@ -11,7 +12,7 @@
  * scrubbed of stored secrets (that would tell the two apart).
  */
 import { Effect, Match, Predicate, Schema, SchemaIssue } from "effect";
-import { LineCounter, parseDocument, stringify } from "yaml";
+import { LineCounter, parseDocument } from "yaml";
 import {
   isJsonArray,
   isJsonObject,
@@ -88,10 +89,11 @@ const entryPath = (path: ReadonlyArray<PropertyKey>): string =>
   configPath(path.map((segment) => (typeof segment === "object" ? String(segment) : segment)));
 
 /**
- * Validates a raw document (parsed YAML or JSON; v8 or legacy layout) and returns the normalised `Config`.
- * Unknown keys and keys that do not apply on Workers are dropped.
+ * Validates a raw document (parsed YAML or JSON; v8 or legacy layout) and returns the `Config` as written, before
+ * normalisation: groups and keys keep their place (nothing is deduplicated or dropped), which is what lets a caller
+ * compare the document's own indexes with `keyIdentities`.
  */
-export const decodeConfig = (raw: Json): Effect.Effect<Config, ConfigValidationError> =>
+export const decodeRawConfig = (raw: Json): Effect.Effect<Config, ConfigValidationError> =>
   Effect.gen(function* () {
     const prepared = yield* Effect.try({
       try: () => prepareDocument(raw),
@@ -119,8 +121,15 @@ export const decodeConfig = (raw: Json): Effect.Effect<Config, ConfigValidationE
       }),
     );
 
-    return normalizeConfig(decoded);
+    return decoded;
   });
+
+/**
+ * Validates a raw document (parsed YAML or JSON; v8 or legacy layout) and returns the normalised `Config`.
+ * Unknown keys and keys that do not apply on Workers are dropped.
+ */
+export const decodeConfig = (raw: Json): Effect.Effect<Config, ConfigValidationError> =>
+  Effect.map(decodeRawConfig(raw), normalizeConfig);
 
 /**
  * YAML (or JSON) text as a JSON value (`{}` for an empty document); a syntax error is a value-free
@@ -194,18 +203,4 @@ export const sparseDocument = (document: Json): JsonObject => {
   const sparse = omitDefaults(document, defaults() as Json);
 
   return Object.assign({ "config-version": 8 }, isJsonObject(sparse) ? sparse : {});
-};
-
-export interface YamlExportOptions {
-  /** Emit every field, including defaults (default: only non-default values). */
-  readonly includeDefaults?: boolean;
-}
-
-/** Serialises `config` as v8 YAML. */
-export const stringifyConfigYaml = (config: Config, options: YamlExportOptions = {}): string => {
-  // SAFETY: the encoded config is a plain JSON document (the schema's encoded side only holds JSON values).
-  const encoded = encodeConfig(config) as Json;
-  const document = options.includeDefaults === true ? encoded : sparseDocument(encoded);
-
-  return stringify(document, { lineWidth: 0 });
 };

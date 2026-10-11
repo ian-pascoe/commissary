@@ -29,7 +29,8 @@
  * from kept ones by origin, never by value) and `moved_secrets`, each kept secret now sent to another provider family
  * or upstream address with its placeholder, path and the family and host before and after (host only: user info,
  * path and query can carry secrets; also in the `saveRaw` reply). `saveRaw` of a document whose canonical form equals
- * the stored one writes nothing and returns the same `version`.
+ * the stored one and in which no secret was typed writes nothing and returns the same `version`; with a typed secret
+ * it always writes (a version that stayed put would tell a right guess of a stored secret from a wrong one).
  */
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";

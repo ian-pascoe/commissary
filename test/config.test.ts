@@ -8,12 +8,7 @@ import {
   sessionAffinityTtlMs,
   videoResultAuthCacheTtlMs,
 } from "../src/config/accessors.ts";
-import {
-  decodeConfig,
-  encodeConfig,
-  parseConfigYaml,
-  stringifyConfigYaml,
-} from "../src/config/codec.ts";
+import { decodeConfig, encodeConfig, parseConfigYaml } from "../src/config/codec.ts";
 import { ConfigValidationError } from "../src/config/errors.ts";
 import { yamlMessage } from "../src/config/yaml-message.ts";
 import { Config } from "../src/config/schema.ts";
@@ -484,28 +479,9 @@ api-keys:
     assert.strictEqual(yamlMessage(unknown), "invalid syntax");
   });
 
-  it.effect("YAML export is stable: yaml -> config -> yaml -> config", () =>
-    Effect.gen(function* () {
-      const first = yield* parse(V8_YAML);
-      const exported = stringifyConfigYaml(first);
-      const second = yield* parse(exported);
-      assert.deepStrictEqual(encodeConfig(second), encodeConfig(first));
-      assert.strictEqual(stringifyConfigYaml(second), exported);
-      // Compact export lists only non-default values.
-      assert.notInclude(exported, "session-affinity-subagents");
-      assert.include(exported, "config-version: 8");
-      assert.include(exported, "weighted-round-robin");
-      // Full export includes defaults and decodes to the same config.
-      const full = stringifyConfigYaml(first, { includeDefaults: true });
-      assert.include(full, "session-affinity-subagents: true");
-      assert.deepStrictEqual(encodeConfig(yield* parse(full)), encodeConfig(first));
-    }),
-  );
-
-  it.effect("defaults export as just the version marker", () =>
+  it.effect("the defaults round-trip through the encoded document", () =>
     Effect.gen(function* () {
       const config = yield* parse("");
-      assert.strictEqual(stringifyConfigYaml(config).trim(), "config-version: 8");
       assert.deepStrictEqual(Schema.decodeUnknownSync(Config)(encodeConfig(config)), config);
     }),
   );

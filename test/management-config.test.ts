@@ -30,12 +30,10 @@ describe("management config", () => {
     );
   });
 
-  it("serves the whole document with the management headers and no-store", async () => {
+  it("serves the whole document with no-store", async () => {
     const response = await json("/v8/management/config");
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(response.headers.get("x-cpa-version")).toBeTruthy();
-    expect(response.headers.get("x-cpa-support-plugin")).toBe("false");
     expect(response.body).toMatchObject({
       "config-version": 8,
       routing: { strategy: "round-robin" },

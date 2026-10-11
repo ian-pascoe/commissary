@@ -24,6 +24,12 @@ const key = await makeKey("management-kid");
 
 export const ADMIN = "admin@example.com";
 
+/** An Access service token Client ID for tests that need a service-token administrator (`SERVICE_ADMIN_BINDINGS`). */
+export const SERVICE_ADMIN = "automation.access";
+
+/** Pass to `makeHarness` as the bindings to make `SERVICE_ADMIN` an administrator. */
+export const SERVICE_ADMIN_BINDINGS: Partial<Env> = { ACCESS_ADMIN_SERVICE_TOKENS: SERVICE_ADMIN };
+
 const baseEnv = {
   ...env,
   ACCESS_TEAM_DOMAIN: "team",
@@ -59,7 +65,7 @@ export interface Harness {
   ) => Promise<Response>;
   readonly json: (
     path: string,
-    init?: RequestInit,
+    init?: RequestInit & { readonly auth?: false | string },
   ) => Promise<{ status: number; body: unknown; headers: Headers }>;
   readonly requests: ReturnType<typeof mockHttp>["requests"];
   readonly dispose: () => Promise<void>;

@@ -191,6 +191,34 @@ const geminiIdentity = (group: ApiKeyGroup, key: ApiKeyEntry): string =>
     sortedHeadersId(key.headers ?? group.headers),
   ].join("\0");
 
+/** Vertex keys are unique by key and base URL (`SanitizeVertexCompatKeys`). */
+const vertexIdentity = (group: ApiKeyGroup, key: ApiKeyEntry): string =>
+  `${key["api-key"]}|${group["base-url"] ?? ""}`;
+
+/** The families whose keys Go deduplicates across groups (the others keep every key). */
+export type DedupedFamily = "gemini" | "interactions" | "vertex";
+
+export const DEDUPED_FAMILIES: ReadonlyArray<DedupedFamily> = ["gemini", "interactions", "vertex"];
+
+const IDENTITY: Readonly<Record<DedupedFamily, (group: ApiKeyGroup, key: ApiKeyEntry) => string>> =
+  { gemini: geminiIdentity, interactions: geminiIdentity, vertex: vertexIdentity };
+
+/**
+ * The uniqueness id of every key of the `family` groups of `config` as normalisation computes it (group and key
+ * fields normalised first), indexed `[group][key]`. `config` is a decode that is not normalised yet
+ * (`decodeRawConfig`), so the indexes are those of the document. The normaliser keeps the first key of an id; the
+ * management writes use these ids to keep the stored one instead (`management/key-duplicates.ts`).
+ */
+export const keyIdentities = (
+  family: DedupedFamily,
+  config: Config,
+): ReadonlyArray<ReadonlyArray<string>> =>
+  config["api-keys"][family].map((raw) => {
+    const group = normalizeGroup(raw);
+
+    return group.keys.map((key) => IDENTITY[family](group, key));
+  });
+
 /** Applies the per-family rules of config_normalization.go to the grouped layout. */
 const normalizeFamily = (
   family: Exclude<ApiKeyFamily, "openai-compatibility">,
@@ -440,15 +468,12 @@ export const normalizeConfig = (config: Config): Config => {
       },
     },
     "api-keys": {
-      gemini: dedupeAcrossGroups(normalizeFamily("gemini", apiKeys.gemini), geminiIdentity),
+      gemini: dedupeAcrossGroups(normalizeFamily("gemini", apiKeys.gemini), IDENTITY.gemini),
       interactions: dedupeAcrossGroups(
         normalizeFamily("interactions", apiKeys.interactions),
-        geminiIdentity,
+        IDENTITY.interactions,
       ),
-      vertex: dedupeAcrossGroups(
-        normalizeFamily("vertex", apiKeys.vertex),
-        (group, key) => `${key["api-key"]}|${group["base-url"] ?? ""}`,
-      ),
+      vertex: dedupeAcrossGroups(normalizeFamily("vertex", apiKeys.vertex), IDENTITY.vertex),
       codex: normalizeFamily("codex", apiKeys.codex),
       claude: normalizeFamily("claude", apiKeys.claude),
       xai: normalizeFamily("xai", apiKeys.xai),
