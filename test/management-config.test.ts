@@ -1,5 +1,6 @@
 // /v8/management/config, /config.yaml and /config/*path through the router, Access gate and real ControlPlane.
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import type { Json } from "../src/json/index.ts";
 import { authIndexOf } from "../src/management/auth-index.ts";
 import {
   controlPlane,
@@ -246,6 +247,141 @@ describe("management config", () => {
     );
 
     expect(exported).not.toContain("auth_index");
+  });
+
+  describe("ETag and If-Match", () => {
+    const ALIASES = "/v8/management/config/oauth/model-alias/claude";
+    const alias = [{ name: "claude-opus-4", alias: "opus" }];
+
+    const version = async (): Promise<number> => (await controlPlane().getConfig()).version;
+
+    const ifMatch = (value: string, method: string, body?: Json): RequestInit => ({
+      method,
+      headers: { "content-type": "application/json", "if-match": value },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+
+    it("answers the config version as a strong ETag on every GET", async () => {
+      await json(ALIASES, jsonInit("PUT", alias));
+      const current = await version();
+
+      expect(current).toBeGreaterThan(0);
+      expect((await call("/v8/management/config")).headers.get("etag")).toBe(`"${current}"`);
+      expect((await call(ALIASES)).headers.get("etag")).toBe(`"${current}"`);
+      expect((await call("/v8/management/config.yaml")).headers.get("etag")).toBe(`"${current}"`);
+    });
+
+    it("every ok reply carries the stored version, with or without If-Match", async () => {
+      const plain = await json(ALIASES, jsonInit("PUT", alias));
+
+      expect(plain).toMatchObject({
+        status: 200,
+        body: { status: "ok", "config-version": 8, version: await version() },
+      });
+
+      const matched = await json(ALIASES, ifMatch(`"${await version()}"`, "PUT", []));
+
+      expect(matched).toMatchObject({
+        status: 200,
+        body: { status: "ok", version: await version() },
+      });
+    });
+
+    it("PUT with the current version stores the edit, in quoted, weak and bare forms", async () => {
+      for (const format of [(n: number) => `"${n}"`, (n: number) => `W/"${n}"`, String]) {
+        const before = await version();
+        const response = await json(ALIASES, ifMatch(format(before), "PUT", alias));
+
+        expect(response).toMatchObject({ status: 200, body: { version: before + 1 } });
+      }
+
+      expect((await json(ALIASES)).body).toEqual(alias);
+    });
+
+    it("a stale PUT answers 409 conflict and leaves the document unchanged", async () => {
+      await json(ALIASES, jsonInit("PUT", alias));
+      const stale = await version();
+      await json(ALIASES, jsonInit("PUT", [{ name: "claude-opus-4", alias: "o4" }]));
+      const current = await version();
+
+      const response = await json(
+        ALIASES,
+        ifMatch(`"${stale}"`, "PUT", [{ name: "claude-opus-4", alias: "lost" }]),
+      );
+
+      expect(response).toMatchObject({ status: 409, body: { error: "conflict" } });
+      // One attempt only: nothing was retried against the newer version.
+      expect(await version()).toBe(current);
+      expect((await json(ALIASES)).body).toEqual([{ name: "claude-opus-4", alias: "o4" }]);
+    });
+
+    it("PATCH and DELETE honour If-Match; a stale DELETE is 409, not 404", async () => {
+      await json(ALIASES, jsonInit("PUT", alias));
+      const stale = await version();
+      await json("/v8/management/config/routing/strategy", jsonInit("PUT", "fill-first"));
+
+      expect((await json(ALIASES, ifMatch(`"${stale}"`, "DELETE"))).body).toMatchObject({
+        error: "conflict",
+      });
+      expect(
+        (await json("/v8/management/config/routing", ifMatch(`"${stale}"`, "PATCH", {}))).status,
+      ).toBe(409);
+      expect((await json(ALIASES)).body).toEqual(alias);
+
+      const deleted = await json(ALIASES, ifMatch(`"${await version()}"`, "DELETE"));
+
+      expect(deleted).toMatchObject({
+        status: 200,
+        body: { status: "ok", version: await version() },
+      });
+      // A current version with a missing key keeps the ordinary 404.
+      expect(await json(ALIASES, ifMatch(`"${await version()}"`, "DELETE"))).toMatchObject({
+        status: 404,
+        body: { error: "not_found" },
+      });
+    });
+
+    it("whole-document writes honour If-Match too", async () => {
+      await json("/v8/management/config", jsonInit("PUT", { routing: { strategy: "fill-first" } }));
+      const stale = await version();
+      await json(ALIASES, jsonInit("PUT", alias));
+
+      const jsonPut = await json(
+        "/v8/management/config",
+        ifMatch(`"${stale}"`, "PUT", { routing: { strategy: "round-robin" } }),
+      );
+
+      expect(jsonPut).toMatchObject({ status: 409, body: { error: "conflict" } });
+
+      const yamlPut = await json("/v8/management/config.yaml", {
+        method: "PUT",
+        headers: { "content-type": "application/yaml", "if-match": `"${stale}"` },
+        body: "routing:\n  strategy: round-robin\n",
+      });
+
+      expect(yamlPut).toMatchObject({ status: 409, body: { error: "conflict" } });
+      expect((await json("/v8/management/config/routing/strategy")).body).toBe("fill-first");
+    });
+
+    it("a malformed If-Match is 400 and stores nothing; * is unconditional", async () => {
+      const before = await version();
+
+      for (const value of ["abc", '"1', "-1", "1.5", '"1", "2"']) {
+        expect(await json(ALIASES, ifMatch(value, "PUT", alias)), value).toMatchObject({
+          status: 400,
+          body: { error: "invalid_if_match" },
+        });
+      }
+
+      expect(await version()).toBe(before);
+      expect((await json(ALIASES, ifMatch("*", "PUT", alias))).status).toBe(200);
+    });
+
+    it("without If-Match writes keep the unconditional behaviour", async () => {
+      await json(ALIASES, jsonInit("PUT", alias));
+      await json("/v8/management/config/routing/strategy", jsonInit("PUT", "fill-first"));
+      expect((await json(ALIASES, jsonInit("PUT", []))).status).toBe(200);
+    });
   });
 
   it("derives auth_index from the credential id", () => {

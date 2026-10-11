@@ -41,6 +41,10 @@ export class RegistrySnapshot {
     readonly catalogs: ModelCatalogs,
     readonly config: Config,
     readonly now: number,
+    /** The enriched credential model sources the index was built from (id order); `routingView` re-assembles them. */
+    readonly sources: ReadonlyArray<ModelSource> = [],
+    /** Version of `config` in the ControlPlane (0 = defaults, or unknown when built outside the service). */
+    readonly configVersion: number = 0,
   ) {}
 
   /** `util.GetProviderName`: providers of an exact model id, retrying the lower-cased id. */
@@ -93,12 +97,14 @@ export const buildSnapshot = (input: {
   readonly config: Config;
   readonly catalogs: ModelCatalogs;
   readonly now: number;
+  readonly configVersion?: number;
 }): RegistrySnapshot => {
-  const { sources, config, catalogs, now } = input;
+  const { config, catalogs, now } = input;
   const nowSeconds = Math.floor(now / 1000);
   const clients: ClientRegistration[] = [];
+  const sources = input.sources.toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
-  for (const source of sources.toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
+  for (const source of sources) {
     const assembled = assembleCredentialModels(source, { config, catalogs, nowSeconds });
 
     if (assembled === undefined) continue;
@@ -110,7 +116,14 @@ export const buildSnapshot = (input: {
     });
   }
 
-  return new RegistrySnapshot(new ModelRegistryIndex(clients, now), catalogs, config, now);
+  return new RegistrySnapshot(
+    new ModelRegistryIndex(clients, now),
+    catalogs,
+    config,
+    now,
+    sources,
+    input.configVersion ?? 0,
+  );
 };
 
 export class ModelRegistry extends Context.Service<
@@ -118,6 +131,16 @@ export class ModelRegistry extends Context.Service<
   {
     /** Current registry snapshot (cached for {@link SNAPSHOT_TTL_MS}). */
     readonly snapshot: Effect.Effect<
+      RegistrySnapshot,
+      ModelRegistryError | ConfigStoreError,
+      WorkerEnv
+    >;
+    /**
+     * A snapshot built right now from a freshly read config (the config reader's cache is dropped first), stored in
+     * the cache. Unlike `snapshot` there is no stale fallback: a failure is reported. For admin views that must show an
+     * edit made a moment ago.
+     */
+    readonly fresh: Effect.Effect<
       RegistrySnapshot,
       ModelRegistryError | ConfigStoreError,
       WorkerEnv
@@ -135,7 +158,7 @@ export class ModelRegistry extends Context.Service<
       const build = Effect.gen(function* () {
         const env = yield* WorkerEnv;
 
-        const [{ config }, catalogs, sources] = yield* Effect.all(
+        const [{ config, version }, catalogs, sources] = yield* Effect.all(
           [
             configReader.get,
             catalogStore.load,
@@ -155,7 +178,13 @@ export class ModelRegistry extends Context.Service<
         // Antigravity credentials serve the entitlements of their last `fetchAvailableModels` probe (KV).
         const enriched = yield* Effect.promise(() => withAntigravityHints(env.CACHE, sources));
 
-        return buildSnapshot({ sources: enriched, config, catalogs, now });
+        return buildSnapshot({
+          sources: enriched,
+          config,
+          catalogs,
+          now,
+          configVersion: version,
+        });
       });
 
       const snapshot = Effect.gen(function* () {
@@ -183,7 +212,15 @@ export class ModelRegistry extends Context.Service<
         return yield* built.failure;
       });
 
-      return ModelRegistry.of({ snapshot });
+      const fresh = Effect.gen(function* () {
+        yield* configReader.invalidate;
+        const built = yield* build;
+        yield* Ref.set(cache, built);
+
+        return built;
+      });
+
+      return ModelRegistry.of({ snapshot, fresh });
     }),
   );
 }

@@ -63,6 +63,62 @@ describe("ModelRegistry service", () => {
   });
 
   it.effect(
+    "fresh rebuilds inside the TTL, keeps the sources and replaces the cached snapshot",
+    () => {
+      const calls = { count: 0 };
+      let credentials: ModelSource[] = [source("claude-a.json", "claude")];
+
+      return Effect.gen(function* () {
+        const registry = yield* ModelRegistry;
+        const first = yield* registry.snapshot;
+        assert.deepStrictEqual(
+          first.sources.map((entry) => entry.id),
+          ["claude-a.json"],
+        );
+        assert.strictEqual(first.configVersion, 1);
+
+        credentials = [source("codex-b.json", "codex", { planType: "pro" }), ...credentials];
+        assert.strictEqual(yield* registry.snapshot, first);
+
+        const fresh = yield* registry.fresh;
+        assert.notStrictEqual(fresh, first);
+        assert.strictEqual(calls.count, 2);
+        assert.deepStrictEqual(
+          fresh.sources.map((entry) => entry.id),
+          ["claude-a.json", "codex-b.json"],
+        );
+        assert.deepStrictEqual(fresh.providersForModel("gpt-5.5"), ["codex"]);
+        // The normal reader now serves the fresh build within the TTL.
+        assert.strictEqual(yield* registry.snapshot, fresh);
+        assert.strictEqual(calls.count, 2);
+      }).pipe(
+        Effect.provide(serviceLayer()),
+        Effect.provide(fakeControlPlane(() => credentials, calls)),
+      );
+    },
+  );
+
+  it.effect("fresh reports a failure instead of serving the cached snapshot", () => {
+    const calls = { count: 0 };
+    let failing = false;
+
+    const sources = () => {
+      if (failing) throw new Error("do unreachable");
+
+      return [source("claude-a.json", "claude")];
+    };
+
+    return Effect.gen(function* () {
+      const registry = yield* ModelRegistry;
+      const first = yield* registry.snapshot;
+      failing = true;
+      const error = yield* registry.fresh.pipe(Effect.flip);
+      assert.instanceOf(error, ModelRegistryError);
+      assert.strictEqual(yield* registry.snapshot, first);
+    }).pipe(Effect.provide(serviceLayer()), Effect.provide(fakeControlPlane(sources, calls)));
+  });
+
+  it.effect(
     "serves the previous snapshot when the ControlPlane fails, and fails without one",
     () => {
       const calls = { count: 0 };

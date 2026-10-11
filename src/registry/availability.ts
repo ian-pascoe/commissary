@@ -30,7 +30,7 @@ export const NOT_PROJECTED: ClientProjection = {
 type Quota = ModelSource["state"]["quota"];
 
 /** `cooldownReason`. */
-const cooldownReason = (
+export const cooldownReason = (
   statusMessage: string | undefined,
   quota: Quota,
   lastError: ModelSource["state"]["lastError"],

@@ -474,6 +474,165 @@ describe("management contract", () => {
     );
   });
 
+  describe("routing", () => {
+    const aliases = [{ name: "claude-sonnet-4-6", alias: "s46" }];
+
+    it.effect("models decodes accounts and API keys with their routes", () =>
+      Effect.gen(function* () {
+        yield* seed("claude-a.json");
+        yield* Effect.promise(async () => {
+          const result = await controlPlane().putConfig(
+            JSON.stringify({
+              "api-keys": {
+                claude: [
+                  {
+                    "base-url": "https://api.anthropic.com",
+                    "excluded-models": ["claude-opus-*"],
+                    keys: [{ "api-key": "sk-ant-one" }],
+                  },
+                ],
+              },
+            }),
+          );
+
+          assert.isTrue(result.ok);
+        });
+
+        const api = yield* client;
+        const view = yield* api.routing.models();
+        const entry = (yield* api.credentials.list()).files[0];
+
+        assert.isAbove(view.config_version, 0);
+        assert.strictEqual(view.force_model_prefix, false);
+        assert.deepStrictEqual(view.channels, [{ channel: "claude", accounts: 1 }]);
+
+        const sonnet = view.models.find((model) => model.id === "claude-sonnet-4-6");
+        assert.isDefined(sonnet);
+        assert.strictEqual(sonnet?.listed, true);
+        assert.strictEqual(sonnet?.routes.length, 2);
+
+        const file = sonnet?.routes.find((route) => route.source === "file");
+        assert.strictEqual(file?.auth_index, entry?.auth_index);
+        assert.strictEqual(file?.name, "claude-a.json");
+        assert.strictEqual(file?.channel, "claude");
+        assert.strictEqual(file?.state, "available");
+
+        const config = sonnet?.routes.find((route) => route.source === "config");
+        assert.isDefined(config);
+        assert.strictEqual(config?.channel, undefined);
+        assert.strictEqual(config?.state, "available");
+
+        const opus = view.models.find((model) => model.id === "claude-opus-4-6");
+        const excluded = opus?.routes.find((route) => route.source === "config");
+        assert.strictEqual(excluded?.state, "excluded");
+        assert.strictEqual(excluded?.reason, "claude-opus-*");
+        assert.strictEqual(excluded?.rule_scope, "key");
+        assert.strictEqual(opus?.listed, true);
+      }).pipe(through(harness)),
+    );
+
+    it.effect("a rule edit with the view's version shows in the next read", () =>
+      Effect.gen(function* () {
+        yield* seed("claude-a.json");
+        const api = yield* client;
+        const before = yield* api.routing.models();
+        assert.isUndefined(before.models.find((model) => model.id === "s46"));
+
+        const saved = yield* api.routing.putAliases({
+          params: { channel: "claude" },
+          headers: { "if-match": String(before.config_version) },
+          payload: aliases,
+        });
+
+        assert.strictEqual(saved.status, "ok");
+        assert.isAbove(saved.version, before.config_version);
+
+        const after = yield* api.routing.models();
+        assert.strictEqual(after.config_version, saved.version);
+        assert.deepStrictEqual(after.aliases, { claude: aliases });
+
+        const aliased = after.models.find((model) => model.id === "s46");
+        assert.strictEqual(aliased?.routes[0]?.via, "alias");
+        assert.strictEqual(aliased?.routes[0]?.upstream, "claude-sonnet-4-6");
+        assert.strictEqual(aliased?.routes[0]?.rule_scope, "channel");
+        assert.isUndefined(after.models.find((model) => model.id === "claude-sonnet-4-6"));
+
+        const excluded = yield* api.routing.putExclusions({
+          params: { channel: "claude" },
+          headers: { "if-match": String(saved.version) },
+          payload: ["claude-opus-*"],
+        });
+
+        const hidden = (yield* api.routing.models()).models.find(
+          (model) => model.id === "claude-opus-4-6",
+        );
+
+        assert.strictEqual(excluded.version, saved.version + 1);
+        assert.strictEqual(hidden?.listed, false);
+        assert.strictEqual(hidden?.routes[0]?.state, "excluded");
+        assert.strictEqual(hidden?.routes[0]?.rule_scope, "channel");
+
+        const removed = yield* api.routing.deleteExclusions({
+          params: { channel: "claude" },
+          headers: { "if-match": String(excluded.version) },
+        });
+
+        assert.strictEqual(removed.version, excluded.version + 1);
+        assert.deepStrictEqual((yield* api.routing.models()).excluded, {});
+      }).pipe(through(harness)),
+    );
+
+    it.effect("a stale version is a 409 ManagementError and stores nothing", () =>
+      Effect.gen(function* () {
+        const api = yield* client;
+        const first = yield* api.routing.models();
+
+        yield* api.routing.putAliases({
+          params: { channel: "claude" },
+          headers: { "if-match": String(first.config_version) },
+          payload: aliases,
+        });
+
+        const error = yield* Effect.flip(
+          api.routing.putAliases({
+            params: { channel: "claude" },
+            headers: { "if-match": String(first.config_version) },
+            payload: [{ name: "claude-opus-4-6", alias: "lost" }],
+          }),
+        );
+
+        assert.instanceOf(error, ManagementError);
+        assert.strictEqual(error.error, "conflict");
+        assert.deepStrictEqual((yield* api.routing.models()).aliases, { claude: aliases });
+
+        const staleDelete = yield* Effect.flip(
+          api.routing.deleteAliases({
+            params: { channel: "claude" },
+            headers: { "if-match": String(first.config_version) },
+          }),
+        );
+
+        assert.instanceOf(staleDelete, ManagementError);
+        assert.strictEqual(staleDelete.error, "conflict");
+      }).pipe(through(harness)),
+    );
+
+    it.effect("deleting a channel without rules is a 404 not_found", () =>
+      Effect.gen(function* () {
+        const api = yield* client;
+        const view = yield* api.routing.models();
+        const headers = { "if-match": String(view.config_version) };
+
+        for (const remove of [api.routing.deleteAliases, api.routing.deleteExclusions]) {
+          const error = yield* Effect.flip(remove({ params: { channel: "claude" }, headers }));
+
+          assert.instanceOf(error, ManagementError);
+          assert.strictEqual(error.error, "not_found");
+        }
+      }).pipe(through(harness)),
+    );
+  });
+
   describe("oauth", () => {
     it.effect("start answers a callback flow's authorize URL, pending status and cancel", () =>
       Effect.gen(function* () {

@@ -21,13 +21,19 @@ const snapshot = (yaml = "") =>
   });
 
 const registryLayer = (yaml = "") =>
-  Layer.succeed(ModelRegistry, ModelRegistry.of({ snapshot: Effect.succeed(snapshot(yaml)) }));
+  Layer.succeed(
+    ModelRegistry,
+    ModelRegistry.of({
+      snapshot: Effect.succeed(snapshot(yaml)),
+      fresh: Effect.succeed(snapshot(yaml)),
+    }),
+  );
+
+const unavailable = Effect.fail(new ModelRegistryError({ message: "no control plane" }));
 
 const failingRegistry = Layer.succeed(
   ModelRegistry,
-  ModelRegistry.of({
-    snapshot: Effect.fail(new ModelRegistryError({ message: "no control plane" })),
-  }),
+  ModelRegistry.of({ snapshot: unavailable, fresh: unavailable }),
 );
 
 const env = Layer.succeed(WorkerEnv, {} as Env);
