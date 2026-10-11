@@ -372,8 +372,11 @@ const List = ({ view }: { readonly view: RoutingModels }) => {
     <>
       {view.force_model_prefix && prefixed ? (
         <p className={styles["fact"]}>
-          Accounts and keys with a prefix serve only their prefixed ids (prefix/model), as the
-          routing settings require.
+          Accounts and keys with a prefix serve only their prefixed ids (prefix/model), as the{" "}
+          <Link to="/settings" hash="routing">
+            routing settings
+          </Link>{" "}
+          require.
         </p>
       ) : null}
       <div className={styles["toolbar"]}>

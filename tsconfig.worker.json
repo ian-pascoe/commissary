@@ -32,6 +32,7 @@
     "web/src/lib/models.ts",
     "web/src/lib/providers.ts",
     "web/src/lib/quota.ts",
+    "web/src/lib/settings.ts",
     "web/src/lib/usage.ts",
     "worker-configuration.d.ts",
     "vitest.config.ts"

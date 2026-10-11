@@ -24,6 +24,7 @@ import {
   RequestScopedErrorRule,
   ThinkingSupport,
 } from "../management/contract/api-keys.ts";
+import { DisableImageGeneration, RoutingStrategy } from "../management/contract/settings.ts";
 
 // --- field helpers -------------------------------------------------------------------------------------------------
 
@@ -84,14 +85,8 @@ export type OAuthModelSetting = typeof OAuthModelSetting.Type;
 
 // --- sections ------------------------------------------------------------------------------------------------------
 
-/** `routing.strategy` (aliases `wrr`, `ff`, ... are normalised before decoding). */
-export const RoutingStrategy = Schema.Literals([
-  "round-robin",
-  "weighted-round-robin",
-  "fill-first",
-]);
-
-export type RoutingStrategy = typeof RoutingStrategy.Type;
+// `routing.strategy` and `multimedia.disable-image-generation` are shared with the Settings page (contract/settings.ts).
+export { DisableImageGeneration, RoutingStrategy };
 
 const routing = section({
   strategy: RoutingStrategy.pipe(
@@ -208,12 +203,6 @@ const oauth = section({
     }),
   }),
 });
-
-/** `multimedia.disable-image-generation`: `false`, `true`, `"chat"` or `"passthrough"`. */
-export const DisableImageGeneration = Schema.Union([
-  Schema.Boolean,
-  Schema.Literals(["chat", "passthrough"]),
-]);
 
 const multimedia = section({
   "disable-image-generation": DisableImageGeneration.pipe(

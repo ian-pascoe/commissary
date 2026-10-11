@@ -4,7 +4,7 @@ import { useAtomSet } from "@effect/atom-react";
 import { Exit } from "effect";
 import type { Atom } from "effect/reactivity";
 import { useCallback, useState } from "react";
-import { causeMessage, serverError } from "./failure.ts";
+import { causeMessage, serverDetail, serverError } from "./failure.ts";
 
 export type Outcome<A> =
   | { readonly ok: true; readonly value: A }
@@ -13,6 +13,10 @@ export type Outcome<A> =
       readonly message: string;
       /** The server's raw error text (`conflict`, ...), to tell failures apart. */
       readonly error: string | undefined;
+      /** The server's own explanation (`422` reasons), when it sent one. */
+      readonly detail?: string;
+      /** The dotted config path the failure is about, when the server named one. */
+      readonly path?: string;
     };
 
 export const useAction = <Arg, A, E>(atom: Atom.AtomResultFn<Arg, A, E>) => {
@@ -26,9 +30,16 @@ export const useAction = <Arg, A, E>(atom: Atom.AtomResultFn<Arg, A, E>) => {
       try {
         const exit = await call(input);
 
-        return Exit.isSuccess(exit)
-          ? { ok: true, value: exit.value }
-          : { ok: false, message: causeMessage(exit.cause), error: serverError(exit.cause) };
+        if (Exit.isSuccess(exit)) return { ok: true, value: exit.value };
+        const { message: detail, path } = serverDetail(exit.cause);
+
+        return {
+          ok: false,
+          message: causeMessage(exit.cause),
+          error: serverError(exit.cause),
+          ...(detail === undefined ? {} : { detail }),
+          ...(path === undefined ? {} : { path }),
+        };
       } finally {
         setBusy(false);
       }

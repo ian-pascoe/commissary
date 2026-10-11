@@ -11,6 +11,7 @@ import { ApiKeysGroup } from "./api-keys.ts";
 import { CredentialsGroup } from "./credentials.ts";
 import { OAuthGroup } from "./oauth.ts";
 import { RoutingGroup } from "./routing.ts";
+import { SettingsGroup } from "./settings.ts";
 import { UsageGroupApi } from "./usage.ts";
 
 export const MANAGEMENT_API_PREFIX = "/v8/management";
@@ -21,4 +22,5 @@ export class ManagementApi extends HttpApi.make("management")
   .add(OAuthGroup)
   .add(ApiKeysGroup)
   .add(RoutingGroup)
+  .add(SettingsGroup)
   .prefix(MANAGEMENT_API_PREFIX) {}

@@ -24,6 +24,22 @@ export const serverError = (cause: Cause.Cause<unknown>): string | undefined => 
     : undefined;
 };
 
+/** The server's own explanation of a failure and the config path it is about, when it sent them. */
+export interface ServerDetail {
+  readonly message?: string;
+  readonly path?: string;
+}
+
+/** The server's `message` and `path` (a refused setting says which and why), when it sent them. */
+export const serverDetail = (cause: Cause.Cause<unknown>): ServerDetail => {
+  const failure = Cause.findErrorOption(cause);
+
+  if (Option.isNone(failure) || !(failure.value instanceof ManagementError)) return {};
+  const { message, path } = failure.value;
+
+  return { ...(message === undefined ? {} : { message }), ...(path === undefined ? {} : { path }) };
+};
+
 /** What a failed call's cause tells the operator (a mutation's `Exit` carries one). */
 export const causeMessage = (cause: Cause.Cause<unknown>): string => {
   const failure = Cause.findErrorOption(cause);

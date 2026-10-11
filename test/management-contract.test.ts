@@ -1179,4 +1179,91 @@ describe("management contract", () => {
       );
     });
   });
+
+  describe("settings", () => {
+    it.effect("get decodes the view and save stores a patch", () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(async () => {
+          await controlPlane().putConfig(
+            JSON.stringify({
+              access: { "api-keys": ["client-secret-key"] },
+              "api-keys": {
+                claude: [
+                  {
+                    prefix: "team",
+                    "base-url": "https://api.anthropic.com",
+                    keys: [{ "api-key": "sk-ant-contract-secret" }],
+                  },
+                ],
+              },
+            }),
+          );
+        });
+        const api = yield* client;
+        const view = yield* api.settings.get();
+
+        assert.deepStrictEqual(view.values, view.defaults);
+        assert.deepStrictEqual(
+          view.not_applied.map((entry) => entry.key),
+          ["access.api-keys"],
+        );
+        assert.strictEqual(view.prefixed_credentials, 1);
+        assert.notInclude(JSON.stringify(view), "secret");
+
+        const saved = yield* api.settings.save({
+          payload: {
+            version: view.version,
+            patch: {
+              routing: { strategy: "fill-first", retry: { "request-retry": 2 } },
+              access: { "api-keys": null },
+              oauth: { providers: { antigravity: { "signature-bypass-strict": true } } },
+            },
+          },
+        });
+
+        assert.deepStrictEqual(saved, { status: "ok", version: view.version + 1 });
+        const after = yield* api.settings.get();
+
+        assert.strictEqual(after.values.routing.strategy, "fill-first");
+        assert.strictEqual(after.values.routing.retry["request-retry"], 2);
+        assert.strictEqual(
+          after.values.oauth.providers.antigravity["signature-bypass-strict"],
+          true,
+        );
+        assert.deepStrictEqual(after.not_applied, []);
+      }).pipe(through(harness)),
+    );
+
+    it.effect("refusals carry message and path in ManagementError", () =>
+      Effect.gen(function* () {
+        const api = yield* client;
+        const view = yield* api.settings.get();
+
+        const invalid = yield* Effect.flip(
+          api.settings.save({
+            payload: { version: view.version, patch: { routing: { "session-affinity-ttl": "x" } } },
+          }),
+        );
+
+        assert.instanceOf(invalid, ManagementError);
+        assert.strictEqual(invalid.error, "invalid_setting");
+        assert.strictEqual(invalid.path, "routing.session-affinity-ttl");
+        assert.isString(invalid.message);
+
+        yield* api.settings.save({
+          payload: { version: view.version, patch: { routing: { "session-affinity": true } } },
+        });
+
+        const stale = yield* Effect.flip(
+          api.settings.save({
+            payload: { version: view.version, patch: { routing: { "session-affinity": false } } },
+          }),
+        );
+
+        assert.instanceOf(stale, ManagementError);
+        assert.strictEqual(stale.error, "conflict");
+        assert.isTrue((yield* api.settings.get()).values.routing["session-affinity"]);
+      }).pipe(through(harness)),
+    );
+  });
 });

@@ -40,6 +40,14 @@ const normalizeTeamHost = (raw: string): string | undefined => {
   return host.includes(".") ? host : `${host}.cloudflareaccess.com`;
 };
 
+/** The `ACCESS_ADMIN_EMAILS` / `ACCESS_ADMIN_SERVICE_TOKENS` allow-lists (emails lowercased). */
+export const envAdminLists = (
+  env: Pick<Env, "ACCESS_ADMIN_EMAILS" | "ACCESS_ADMIN_SERVICE_TOKENS">,
+): AdminLists => ({
+  adminEmails: new Set(splitList(env.ACCESS_ADMIN_EMAILS).map((email) => email.toLowerCase())),
+  adminServiceTokens: new Set(splitList(env.ACCESS_ADMIN_SERVICE_TOKENS)),
+});
+
 type AccessEnv = Pick<
   Env,
   "ACCESS_TEAM_DOMAIN" | "ACCESS_AUD" | "ACCESS_ADMIN_EMAILS" | "ACCESS_ADMIN_SERVICE_TOKENS"
@@ -67,8 +75,7 @@ export const loadAccessConfig = (
     issuer: `https://${host}`,
     jwksUrl: `https://${host}/cdn-cgi/access/certs`,
     audiences,
-    adminEmails: new Set(splitList(env.ACCESS_ADMIN_EMAILS).map((email) => email.toLowerCase())),
-    adminServiceTokens: new Set(splitList(env.ACCESS_ADMIN_SERVICE_TOKENS)),
+    ...envAdminLists(env),
   });
 };
 
