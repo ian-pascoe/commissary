@@ -2,11 +2,11 @@
  * The control panel built from `web/` (`pnpm web:build` writes `public/index.html` and `public/assets/*`): `/`, its
  * page paths (`access/routes.ts` `PANEL_SECTIONS`) and the bundled files under `/assets`.
  *
- * New in the Workers port: Go serves the upstream panel at `/management.html` (still served by `panel.ts` until the new
- * panel replaces it) and a public JSON banner at `/`. Every page path answers the same `index.html`; the panel's router
- * picks the page in the browser. Both pages and files are gated like the management API (Access admin) because the
- * Worker runs before static assets. The page talks to `/v8/management` on its own origin and sends no credentials of
- * its own: Access authenticates those calls.
+ * New in the Workers port: Go serves the upstream panel at `/management.html` and a public JSON banner at `/`. Here
+ * `/management.html` is a legacy redirect to `/` (`LEGACY_PANEL_REDIRECT`, deviation from Go). Every page path
+ * answers the same `index.html`; the panel's router picks the page in the browser. Both pages and files are gated like
+ * the management API (Access admin) because the Worker runs before static assets. The page talks to `/v8/management`
+ * on its own origin and sends no credentials of its own: Access authenticates those calls.
  */
 import { Effect } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
@@ -78,6 +78,15 @@ export const webPanelPage = Effect.gen(function* () {
 
   return HttpServerResponse.raw(asset.body, { status: 200, headers: PAGE_HEADERS });
 });
+
+/**
+ * `GET|HEAD /management.html` (any case or percent-encoding the router matches): the upstream panel's address, kept
+ * so bookmarks land on the panel. `302` (not cached, so the admin gate and this handler stay authoritative); the
+ * browser carries an old `#/...` fragment over, which the panel maps on boot (`web/src/lib/legacy-hash.ts`).
+ */
+export const LEGACY_PANEL_REDIRECT = Effect.succeed(
+  HttpServerResponse.redirect("/", { status: 302, headers: { "cache-control": "no-store" } }),
+);
 
 /** Headers of a bundle file worth keeping: hashed names are cached forever by the assets platform. */
 const PASSED_ASSET_HEADERS = ["content-type", "cache-control", "etag", "last-modified"] as const;

@@ -16,8 +16,6 @@ permissions: {}
 env:
   # Deploy settings shared by every stage (infra/settings.ts); the environments hold the values.
   STAGE: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'prod' }}
-  # Management panel served at /management.html (tools/panel-sync); bump deliberately.
-  PANEL_TAG: v1.26.0
 
 jobs:
   static:
@@ -125,10 +123,6 @@ jobs:
         with:
           # No dependency cache in jobs holding deploy credentials (cache poisoning).
           cache: "false"
-      - name: Install the management panel
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: pnpm panel:sync --tag "$PANEL_TAG"
       - name: Build the control panel
         run: pnpm web:build
       - name: Deploy

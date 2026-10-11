@@ -1,6 +1,6 @@
 // Vite config of the control panel (web/). `pnpm web:build` writes `public/index.html` and `public/assets/*`, which the
-// Worker serves at `/` (src/management/web-panel.ts) next to `public/management.html` (the upstream panel, installed by
-// `pnpm panel:sync`). `pnpm web:dev` serves the panel with hot reload and forwards `/v8` to a running `pnpm dev` Worker.
+// Worker serves at `/` (src/management/web-panel.ts). `pnpm web:dev` serves the panel with hot reload and forwards `/v8`
+// to a running `pnpm dev` Worker.
 import { rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
@@ -12,8 +12,8 @@ const outDir = fileURLToPath(new URL("../public", import.meta.url));
 const workerUrl = process.env["CLIPROXY_DEV_URL"] ?? "http://localhost:1337";
 
 /**
- * `public/` also holds `management.html`, so the build cannot empty its output directory: remove only the previous
- * panel build (stale hashed bundles would otherwise be deployed).
+ * `public/` also holds the tracked `.gitkeep` (and whatever else is put there), so the build cannot empty its output
+ * directory: remove only the previous panel build (stale hashed bundles would otherwise be deployed).
  */
 const cleanPreviousBuild = (): Plugin => ({
   name: "cliproxy:clean-previous-build",

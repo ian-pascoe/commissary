@@ -80,9 +80,10 @@ warning) whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set: a Worker wired to
 ## 4. How the Worker validates requests
 
 1. The path is classified (`src/access/routes.ts`): `/v1*` (incl. `/v1beta`, `/v1internal`), `/openai/v1*`, `/backend-api/codex*` need a
-   principal; `/v8/management*`, `/management.html` and the control panel (`/`, `/accounts`, `/keys`, `/models`, `/usage`,
-   `/settings` with their sub-paths, `/assets/*`) need an admin; everything else (`/healthz`, the OAuth browser callbacks
-   `/anthropic/callback`, `/codex/callback`, `/antigravity/callback`, `/callback`, `/devin/callback`) is public to the Worker.
+   principal; `/v8/management*`, the control panel (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/settings` with their
+   sub-paths, `/assets/*`) and `/management.html` (the upstream panel's old address, a redirect to `/`) need an admin;
+   everything else (`/healthz`, the OAuth browser callbacks `/anthropic/callback`, `/codex/callback`,
+   `/antigravity/callback`, `/callback`, `/devin/callback`) is public to the Worker.
    Matching is case-, slash- and percent-encoding-insensitive, so odd spellings cannot dodge the gate.
 2. `Cf-Access-Jwt-Assertion` is verified with `jose`: RS256 signature against the JWKS at
    `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs` (cached per isolate, refetched on an unknown `kid` at most every
@@ -101,8 +102,11 @@ admin's session. Before authentication the gate (`src/access/csrf.ts`) refuses, 
 
 - state-changing requests (anything but `GET`/`HEAD`/`OPTIONS`) to `/v1*`, `/openai/v1*`, `/backend-api/codex*` and the
   management zone when `Sec-Fetch-Site` is `cross-site`/`same-site` or `Origin` names another host;
-- any management request (`/v8/management*`, `/management.html`) with a foreign `Origin` or a cross-site `Sec-Fetch-Site`, except
-  top-level navigations (a link to the panel still opens it);
+- any management request (`/v8/management*`, the panel paths) with a foreign `Origin` or a cross-site `Sec-Fetch-Site`,
+  except a top-level document navigation (`GET`/`HEAD` with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document`)
+  to a panel page (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/settings` and their sub-paths) or
+  `/management.html`: a link to a panel page still opens it, while frames (clickjacking), `/assets/*` and every
+  `/v8/management*` request are refused (OAuth providers redirect to the public callback paths, never there);
 - WebSocket upgrades (`GET /v1/responses`, `/backend-api/codex/responses`) whose `Origin` is not the Worker's own host
   (403 `Cross-origin WebSocket rejected`).
 
@@ -117,14 +121,25 @@ put a server-side client in between.
 
 ### Management API security
 
-- `POST /v8/management/requests/api-call` (the panel's quota probes) sends a request from the Worker to any public `http(s)` host
-  an admin names, and substitutes `$TOKEN$` with the selected credential's access token (refreshed first). The substitution is
-  only done for `https:` URLs; the target host is not restricted to the credential's provider because the panel probes several
-  provider hosts and admins can download credential files anyway. Treat admin access as access to every stored token. Workers
-  `fetch` reaches public addresses only (no private networks behind the Worker), but it can reach other Cloudflare-hosted
-  services, including your own zones, with the Worker's egress.
-- Credential downloads (`GET /v8/management/credentials/download`) contain refresh tokens. Keep the admin lists short and
-  prefer service tokens scoped to automation.
+- Go's `POST /requests/api-call` (substitutes `$TOKEN$` into a request to any host the caller names, the upstream
+  panel's quota probe) is not ported. Quota checks (`POST /credentials/quota`) call the auth file's own provider usage
+  endpoint. Key tests (`POST /api-keys/probe`) send a config key to the `base-url` stored with it, and an admin can
+  change that `base-url` while keeping the key (`PUT /api-keys/groups`, or the raw editor, whose review lists such a
+  move under `moved_secrets`): an admin can still direct a stored key to a host of their choice. The replies carry no
+  token.
+- The configuration is read back masked: `GET /config`, `/config/<path>`, `/config.yaml` and `/settings/config` show
+  the secret positions as `[redacted#n]…abcd`: API keys and client keys, header values other than an allow-list of
+  protocol headers and pure client copies, URL user info and query or fragment values whose names look secret,
+  payload parameters whose names (or, for `*-raw` JSON text, keys inside) look secret. Detection is by position and
+  name: a secret typed into another field (a model alias, a `prefix`) is shown. Writes to `/config*` refuse
+  placeholders (`422 masked_value`, or `masked_value_outside_secret_field`); edit secrets in the panel's raw editor
+  (`/settings/config`), which restores them. Config error messages never quote a written value (YAML errors are a
+  fixed sentence per error code with line and column; schema errors an expectation and a path) and are not
+  scrubbed: they name at most keys the caller wrote, so a refused write reads the same whether a typed value, key
+  or alias name equals a stored secret or not.
+- Credential downloads (`GET /v8/management/credentials/download`) are the one way to read a stored token: the auth file
+  verbatim, refresh token included, for moving an account to another deployment. The panel never calls it. Treat admin
+  access as access to every stored token: keep the admin lists short and prefer service tokens scoped to automation.
 
 ### Logs and personal data
 

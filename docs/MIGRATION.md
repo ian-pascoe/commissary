@@ -15,7 +15,8 @@ M=https://proxy.example.com/v8/management
 H=(-H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
 ```
 
-Alternatively use the panel (`/management.html`) as an admin user: it has config and auth-file upload pages.
+Alternatively use the control panel (`/`) as an admin user: the raw configuration editor (_Settings → Raw
+configuration_, `/settings/config`) takes a pasted `config.yaml`, and _Connect account_ uploads auth files.
 
 ## 1. Config
 
@@ -24,13 +25,19 @@ Remove what the Workers port ignores, then upload the file as-is:
 ```bash
 curl "${H[@]}" -X PUT "$M/config.yaml" -H 'content-type: application/yaml' --data-binary @config.yaml
 # {"status":"ok","config-version":8}
-curl "${H[@]}" "$M/config.yaml"                                       # sparse export of what was stored
+curl "${H[@]}" "$M/config.yaml"                                       # sparse export of what was stored, secrets masked
 ```
 
 - Legacy top-level keys (`claude-api-key`, `codex-api-key`, `gemini-api-key`, `openai-compatibility`, `request-retry`, …) are
   migrated to the v8 layout on import; unknown or inapplicable keys are dropped. A malformed document answers 422
   `invalid_config` with a message; nothing is stored.
 - **Secrets in `config.yaml`** (provider API keys) are stored in the `ControlPlane` Durable Object, not in your repo.
+  They are never read back: every `GET /config*` shows them as `[redacted#n]…abcd` (numbered like the raw editor), and a
+  write that contains such a placeholder answers 422 `masked_value` (`masked_value_outside_secret_field` outside a
+  secret field) with its `path` (nothing stored). The path is that of the v8 layout: a placeholder in a legacy file
+  (`claude-api-key: [{api-key: …}]`) is reported where the import moves it (`api-keys.claude[0].keys[0].api-key`). So
+  import the original file, not an export; edit secrets afterwards in the raw editor (`PUT /settings/config`), which
+  restores them.
 - Management writes need a `content-type` (`application/json`; `application/yaml` for `config.yaml`; multipart for uploads):
   curl's default `application/x-www-form-urlencoded` answers 415 (cross-site request forgery protection, see ACCESS.md).
 - Dropped on import (no effect on Workers): `host`/`port`/`tls`, `remote-management.*` (Access replaces it), `auth-dir`, `pprof`,
@@ -54,7 +61,8 @@ effect. Storing a config that sets any of them logs a warning naming the keys (`
 
 - The client `api-keys:` list is **not enforced**: every client must now present an Access identity ([CLIENTS.md](CLIENTS.md)).
   Give each client its own service token instead of a shared key.
-- `PATCH $M/config` and `/config/<path>` allow incremental edits; the panel's config editor uses them.
+- `PATCH $M/config` and `/config/<path>` allow incremental edits for scripts (plain new secrets are stored, placeholders
+  refused as above). The panel's raw configuration editor is `/settings/config`.
 
 ## 2. Auth files (OAuth credentials)
 
@@ -81,7 +89,7 @@ Caveats:
 
 ## 3. OAuth re-login via the panel
 
-Logging in fresh avoids sharing refresh tokens. In the panel → _OAuth login_ (or `GET $M/oauth/auth-url?provider=<claude|codex|antigravity|devin|xai|meta|kimi|kimi-ai>`):
+Logging in fresh avoids sharing refresh tokens. In the panel → _Connect account_ (or `GET $M/oauth/auth-url?provider=<claude|codex|antigravity|devin|xai|meta|kimi|kimi-ai>`):
 
 1. Open the returned authorization URL and sign in with the provider.
 2. **Authorization-code providers (Claude, Codex, Antigravity, Devin)**: the provider redirects to `http://localhost:<port>/…callback?code=…&state=…`.

@@ -1,13 +1,16 @@
 /**
- * Management API routes (`/v8/management/*`) and the control panels (`/management.html`, the `web/` panel at `/`).
+ * Management API routes (`/v8/management/*`), the control panel (`web/`, at `/`) and the old panel's address
+ * (`/management.html`, a redirect to `/`).
  *
  * Go source: internal/api/server_management_v8.go (route table). Authorization is the Access admin gate
- * (`access/routes.ts`: the whole `/v8/management` prefix and `/management.html`), which replaces the Go management
- * key, IP ban and `allow-remote` logic. Routes that are not ported: plugins, Home, file logs (answered like Go with
- * file logging off), the deprecated `/v0/management` tree. OAuth login (`/oauth/*`) is in `oauth-routes.ts`; usage
- * (`/observability/usage/*`) is in `usage-routes.ts`; the per-model routing view (`/routing/models`) in
- * `routing-models.ts`; the Settings page (`/settings`) in `settings-routes.ts` and its raw configuration editor
- * (`/settings/config`) in `settings-raw-routes.ts`.
+ * (`access/routes.ts`: the whole `/v8/management` prefix, the panel paths and `/management.html`), which replaces the
+ * Go management key, IP ban and `allow-remote` logic. Routes that are not ported: plugins, Home, file logs (answered
+ * like Go with file logging off), the deprecated `/v0/management` tree, `POST /requests/api-call` (the upstream
+ * panel's token-substituting upstream probe; quota and key checks run server-side, so tokens never leave the Worker),
+ * and the upstream panel page itself (Go serves it at `/management.html`; here that path redirects to `/`). OAuth
+ * login (`/oauth/*`) is in `oauth-routes.ts`; usage (`/observability/usage/*`) is in `usage-routes.ts`; the
+ * per-model routing view (`/routing/models`) in `routing-models.ts`; the Settings page (`/settings`) in
+ * `settings-routes.ts` and its raw configuration editor (`/settings/config`) in `settings-raw-routes.ts`.
  */
 import { Effect, Layer } from "effect";
 import {
@@ -17,22 +20,26 @@ import {
   type HttpServerRequest,
   type HttpServerResponse,
 } from "effect/http";
+import { LEGACY_PANEL_PATH } from "../access/routes.ts";
 import { routeServices } from "../http/route-services.ts";
 import type { WorkerEnv } from "../platform/env.ts";
 import { ModelRegistryLive } from "../registry/live.ts";
 import type { ModelRegistry } from "../registry/service.ts";
-import { apiCallHandler } from "./api-call.ts";
 import { apiKeyProbeHandler, apiKeysRoutes } from "./api-keys-routes.ts";
 import { configRoutes } from "./config-routes.ts";
 import { credentialModelsHandler, credentialRoutes } from "./credentials-routes.ts";
 import { modelDefinitionsHandler } from "./model-definitions.ts";
 import { oauthRoutes } from "./oauth-routes.ts";
-import { panelHandler } from "./panel.ts";
 import { quotaCheckHandler } from "./quota-routes.ts";
 import { routingModelsHandler } from "./routing-models.ts";
 import { settingsRawRoutes } from "./settings-raw-routes.ts";
 import { settingsRoutes } from "./settings-routes.ts";
-import { PANEL_PAGE_PATHS, webPanelAsset, webPanelPage } from "./web-panel.ts";
+import {
+  LEGACY_PANEL_REDIRECT,
+  PANEL_PAGE_PATHS,
+  webPanelAsset,
+  webPanelPage,
+} from "./web-panel.ts";
 import { usageRoutes } from "./usage-routes.ts";
 import {
   errorLogsHandler,
@@ -71,7 +78,6 @@ export const ManagementRoutes = HttpRouter.addAll(
       HttpRouter.route("POST", `${BASE}/credentials/quota`, bound(quotaCheckHandler)),
       HttpRouter.route("POST", `${BASE}/api-keys/probe`, bound(apiKeyProbeHandler)),
       HttpRouter.route("GET", `${BASE}/server/latest-version`, bound(latestVersionHandler)),
-      HttpRouter.route("POST", `${BASE}/requests/api-call`, bound(apiCallHandler)),
       HttpRouter.route("GET", `${BASE}/routing/models`, bound(routingModelsHandler)),
       HttpRouter.route(
         "GET",
@@ -82,7 +88,7 @@ export const ManagementRoutes = HttpRouter.addAll(
       HttpRouter.route("DELETE", `${BASE}/observability/logs`, logsDisabledHandler),
       HttpRouter.route("GET", `${BASE}/observability/logs/errors/*`, errorLogsHandler),
       HttpRouter.route("GET", `${BASE}/observability/logs/requests/*`, requestLogHandler),
-      HttpRouter.route("GET", "/management.html", panelHandler),
+      HttpRouter.route("GET", LEGACY_PANEL_PATH, LEGACY_PANEL_REDIRECT),
       ...PANEL_PAGE_PATHS.map((path) => HttpRouter.route("GET", path, webPanelPage)),
       HttpRouter.route("GET", "/assets/*", webPanelAsset),
     ];

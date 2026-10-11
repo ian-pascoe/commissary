@@ -2,18 +2,27 @@
  * Path-addressed edits of the config document served by `/v8/management/config[/*path]`.
  *
  * Go source: internal/api/handlers/management/config_v8.go (`configV8Node`, `deleteConfigV8Path`,
- * `mergeConfigV8Patch`, the write path of `ConfigV8`) and config_auth_index.go (auth_index injection).
+ * `mergeConfigV8Patch`, the write path of `ConfigV8`) and config_auth_index.go (`auth_index` stripping on writes; Go's
+ * injection on reads is not ported: its only consumer was the upstream panel's `api-call`).
  * Paths address mapping keys, never array indexes; lists and scalars are replaced whole, `PATCH` deep-merges objects
  * (explicit `null` is kept: DELETE is the removal operation). The Go read-only Home revision paths do not exist in
  * the Workers config schema, so there is nothing to protect. All functions work on a private copy of the document.
  */
 import type { ApiKeyFamily, Config } from "../config/schema.ts";
-import { API_KEY_FAMILIES } from "../config/schema.ts";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import { setOwn } from "../json/value.ts";
 import { synthesizeConfigCredentials } from "../credentials/synthesize.ts";
-import { authIndexOf } from "./auth-index.ts";
 
-/** `/a/b/c` (percent-decoded segments) -> `["a","b","c"]`; `undefined` for an empty segment in the middle. */
+/**
+ * Segments no path may name (deviation from Go, where they are ordinary map keys): written through a plain JavaScript
+ * object they would reach `Object.prototype`.
+ */
+const RESERVED_SEGMENTS = new Set(["__proto__", "constructor", "prototype"]);
+
+/**
+ * `/a/b/c` (percent-decoded segments) -> `["a","b","c"]`; `undefined` for an empty segment in the middle or a
+ * reserved one (`__proto__`, `constructor`, `prototype`).
+ */
 export const parseConfigPath = (rest: string): ReadonlyArray<string> | undefined => {
   const trimmed = rest.replace(/^\/+|\/+$/g, "");
 
@@ -27,7 +36,42 @@ export const parseConfigPath = (rest: string): ReadonlyArray<string> | undefined
     }
   });
 
-  return parts.some((part) => part === "") ? undefined : parts;
+  return parts.some((part) => part === "" || RESERVED_SEGMENTS.has(part)) ? undefined : parts;
+};
+
+/**
+ * The config path of a `/v8/management/config/*` request: the URL path with its prefix read as the router matched it
+ * (duplicate slashes skipped, each segment percent-decoded, compared case-insensitively), the segments after `config`
+ * still encoded so `%2F` stays inside one key (`parseConfigPath` decodes them). `undefined` when the prefix is not
+ * `/v8/management/config`.
+ */
+const decodedSegment = (segment: string): string => {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+};
+
+export const configPathOfUrl = (url: string): string | undefined => {
+  const pathname = /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(url)
+    ? new URL(url).pathname
+    : (url.split(/[?#]/)[0] ?? "");
+
+  const segments = pathname.split("/");
+  let index = 0;
+
+  // The prefix as the router matches it; the rest keeps its empty segments (`a//b` is an invalid path, as in Go).
+  for (const expected of ["v8", "management", "config"]) {
+    while (segments[index] === "") index++;
+    const segment = segments[index];
+
+    if (segment === undefined || decodedSegment(segment).toLowerCase() !== expected)
+      return undefined;
+    index++;
+  }
+
+  return `/${segments.slice(index).join("/")}`;
 };
 
 /** Value at `parts`, or `undefined` when a key is missing or a non-object is traversed. */
@@ -48,6 +92,8 @@ export const mergePatch = (target: Json | undefined, patch: Json): Json => {
   const out: JsonObject = { ...target };
 
   for (const [key, value] of Object.entries(patch)) {
+    // A `__proto__` key (own, from JSON.parse) would replace the prototype of `out` when assigned.
+    if (key === "__proto__") continue;
     out[key] = Object.hasOwn(out, key) ? mergePatch(out[key], value) : structuredClone(value);
   }
 
@@ -73,11 +119,11 @@ export const writeAtPath = (
   let parent: JsonObject = root;
 
   for (const part of parts.slice(0, -1)) {
-    const next = parent[part];
+    const next = Object.hasOwn(parent, part) ? parent[part] : undefined;
 
     if (next === undefined) {
       const created: JsonObject = {};
-      parent[part] = created;
+      setOwn(parent, part, created);
       parent = created;
     } else if (isJsonObject(next)) {
       parent = next;
@@ -88,7 +134,9 @@ export const writeAtPath = (
 
   // SAFETY: parts is non-empty: the empty path returned above.
   const leaf = parts[parts.length - 1] as string;
-  parent[leaf] = mode === "patch" ? mergePatch(parent[leaf], value) : structuredClone(value);
+  const current = Object.hasOwn(parent, leaf) ? parent[leaf] : undefined;
+
+  setOwn(parent, leaf, mode === "patch" ? mergePatch(current, value) : structuredClone(value));
 
   return root;
 };
@@ -123,7 +171,7 @@ export const deleteAtPath = (
   return removeAt(root, parts) ? root : undefined;
 };
 
-// --- auth_index injection ---------------------------------------------------------------------------------------
+// --- config key ids ---------------------------------------------------------------------------------------------
 
 const FAMILY_PROVIDERS: Readonly<Record<Exclude<ApiKeyFamily, "openai-compatibility">, string>> = {
   gemini: "gemini",
@@ -148,15 +196,15 @@ export type ConfigKeyIds = Readonly<Record<ApiKeyFamily, ReadonlyArray<GroupKeyI
 export interface ConfigKeyIdsOptions {
   /**
    * Also give the keys of a disabled OpenAI-compatibility group an id (as if the group were enabled), so the panel
-   * can still address them. Off for `auth_index` injection: a disabled group has no credentials (as in Go).
+   * can still address them. Off by default: a disabled group has no credentials (as in Go).
    */
   readonly includeDisabledGroups?: boolean;
 }
 
 /**
  * Maps every position in `config["api-keys"]` (family, group, key) to the id of the credential it produced, through
- * the synthesised credentials (`attributes.config_index`), the same order the credential pool uses. Shared by
- * `injectAuthIndexes` and the API keys view/writes, so both agree on which key an `auth_index` names.
+ * the synthesised credentials (`attributes.config_index`), the same order the credential pool uses. Shared by the
+ * ControlPlane and the API keys view/writes, so both agree on which key an `auth_index` names.
  */
 export const configKeyIds = (
   config: Pick<Config, "api-keys">,
@@ -224,48 +272,6 @@ export const configKeyIds = (
       };
     }),
   };
-};
-
-/**
- * Adds `auth_index` to every `api-keys.<family>[].keys[]` entry (and to key-less OpenAI-compatibility groups), the
- * way the Go server does, so the panel can address those credentials (`/requests/api-call`, cooldown reset).
- * `document` must be the JSON form of `config`; the result is a modified copy. Positions come from
- * {@link configKeyIds}.
- */
-export const injectAuthIndexes = (
-  document: JsonObject,
-  config: Pick<Config, "api-keys">,
-): JsonObject => {
-  const ids = configKeyIds(config);
-  const out = structuredClone(document);
-  const apiKeys = out["api-keys"];
-
-  if (!isJsonObject(apiKeys)) return out;
-
-  for (const family of API_KEY_FAMILIES) {
-    const groups = apiKeys[family];
-
-    if (!Array.isArray(groups)) continue;
-
-    groups.forEach((group, groupIndex) => {
-      if (!isJsonObject(group)) return;
-      const groupIds = ids[family][groupIndex];
-
-      if (groupIds === undefined) return;
-
-      if (Array.isArray(group.keys)) {
-        group.keys.forEach((key, keyIndex) => {
-          const id = groupIds.keys[keyIndex];
-
-          if (isJsonObject(key) && id !== undefined) key.auth_index = authIndexOf(id);
-        });
-      }
-
-      if (groupIds.group !== undefined) group.auth_index = authIndexOf(groupIds.group);
-    });
-  }
-
-  return out;
 };
 
 const stripNode = (node: Json | undefined): void => {

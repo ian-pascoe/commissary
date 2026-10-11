@@ -229,7 +229,9 @@ const normalizeDisableImageGeneration = (value: Json | undefined): Json | undefi
       return "passthrough";
     default:
       throw new ConfigValidationError({
-        message: `invalid multimedia.disable-image-generation value "${value}" (allowed: true, false, chat, passthrough)`,
+        message:
+          "invalid multimedia.disable-image-generation value (allowed: true, false, chat, passthrough)",
+        path: "multimedia.disable-image-generation",
       });
   }
 };

@@ -1,5 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
+import { type ErrorCode, YAMLParseError } from "yaml";
 import {
   codexStreamBootstrapTimeoutMs,
   gptImage2BaseModel,
@@ -14,6 +15,7 @@ import {
   stringifyConfigYaml,
 } from "../src/config/codec.ts";
 import { ConfigValidationError } from "../src/config/errors.ts";
+import { yamlMessage } from "../src/config/yaml-message.ts";
 import { Config } from "../src/config/schema.ts";
 import { applyPayloadRules } from "../src/config/payload/index.ts";
 import { get } from "../src/json/index.ts";
@@ -431,6 +433,56 @@ api-keys:
       assert.include(text, message);
     }),
   );
+
+  it.effect("never quotes the document in an error (value-free messages)", () =>
+    Effect.gen(function* () {
+      const secret = "sk-VALUE-FREE-9182";
+
+      for (const yaml of [
+        `multimedia: { disable-image-generation: ${secret} }\n`,
+        `routing: { retry: { request-retry: ${secret} } }\n`,
+        `access:\n  api-keys: ${secret}\n`,
+        `access:\n  api-keys: [${secret}\n`,
+        `access:\n  api-keys: ["${secret}\\q"]\n`,
+        `a: &x 1\nb: *${secret}\n`,
+      ]) {
+        const error = yield* Effect.flip(parse(yaml));
+
+        assert.notInclude(error.message, secret, yaml);
+        assert.notInclude(error.message, "got", yaml);
+      }
+
+      const syntax = yield* Effect.flip(parse(`access:\n  api-keys: [${secret}\n`));
+
+      assert.isNumber(syntax.line);
+      assert.isNumber(syntax.column);
+
+      const typed = yield* Effect.flip(parse("routing: { retry: { request-retry: many } }\n"));
+
+      assert.strictEqual(typed.path, "routing.retry.request-retry");
+      assert.match(typed.message, /^Expected .+ at routing\.retry\.request-retry$/);
+    }),
+  );
+
+  it("gives YAML errors a fixed sentence per error code, never the library's text", () => {
+    const quoting = new YAMLParseError(
+      [0, 1],
+      "BAD_DQ_ESCAPE",
+      "Invalid escape sequence \\q in sk-QUOTED-1",
+    );
+
+    assert.strictEqual(yamlMessage(quoting), "invalid escape sequence in a double-quoted string");
+    assert.strictEqual(
+      yamlMessage(
+        new YAMLParseError([0, 1], "DUPLICATE_KEY", "Map keys must be unique sk-QUOTED-1"),
+      ),
+      "map keys must be unique",
+    );
+    // SAFETY: a code a later `yaml` release could add, outside the typed union on purpose.
+    const unknown = new YAMLParseError([0, 1], "NEW_CODE" as ErrorCode, "sk-QUOTED-1");
+
+    assert.strictEqual(yamlMessage(unknown), "invalid syntax");
+  });
 
   it.effect("YAML export is stable: yaml -> config -> yaml -> config", () =>
     Effect.gen(function* () {

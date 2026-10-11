@@ -63,7 +63,7 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
   "Responses WebSocket transports").
 - **KV `CACHE`**: model catalogs refreshed by cron, best-effort caches (signature cache) with `expirationTtl`.
 - **D1 `USAGE`**: usage records written with `ctx.waitUntil`.
-- **Static assets** (`public/`, Worker runs first): the control panel (`web/` build) and the upstream panel.
+- **Static assets** (`public/`, Worker runs first): the control panel (`web/` build).
 - **Cron trigger**: model catalog refresh (3 h in Go), the quota check of connected accounts and a safety sweep that
   re-arms credential refresh alarms.
 
@@ -756,24 +756,47 @@ claude/gemini/openai-response -> openai, interactions <-> openai (Chat Completio
 
 ## Management API and control panel (`src/management/`)
 
-Port of `internal/api/handlers/management` for the `/v8/management` routes that apply on Workers; response shapes follow
-the Go server so the official panel (`Cli-Proxy-API-Management-Center`, checked against v1.25.6) works unchanged. Auth is
-the Access admin gate only (`access/routes.ts` classifies `/v8/management*` **and `/management.html`** as `management`);
-there is no management key: the page is served with a small script prepended to `<head>` (`panel.ts`, `AUTO_LOGIN_SCRIPT`)
-that seeds the panel's saved login with a placeholder key, so it connects without showing its login form (its logout lasts
-until the next page load).
+Port of `internal/api/handlers/management` for the `/v8/management` routes that apply on Workers; the Go-compatible
+routes keep Go's response shapes (scripts written for the Go server keep working), while the control panel at `/`
+(`web/`) talks to the API through `contract/`. The upstream panel (`Cli-Proxy-API-Management-Center`) is not served:
+its address redirects to `/` (_Legacy panel address_ below), and the routes only it needed are gone (`requests/api-call`)
+or masked (`GET /config*`). Auth is the Access admin gate only (`access/routes.ts` classifies `/v8/management*`, the
+panel paths and `/management.html` as `management`); there is no management key.
 
 - **Config** (`config-routes.ts`, `config-document.ts`): `GET|PUT|PATCH /config`, `GET|PUT /config.yaml`,
   `GET|PUT|PATCH|DELETE /config/*path`. `/config` serves the ControlPlane's canonical document (defaults included),
   `/config.yaml` the sparse YAML export. Writes are read-modify-write over the JSON document with `putConfig(text,
   expectedVersion)` (retried on a concurrent write, `409 conflict` after four attempts); the ControlPlane validates
   (`422 invalid_config`). Paths address mapping keys, DELETE prunes emptied parents, PATCH deep-merges. `auth_index` is
-  injected into `api-keys` entries on read and stripped on write. The Go read-only Home revision paths and TURN secret
-  handling do not exist in the Workers schema. Deviation from Go (optimistic concurrency for stale panels): GETs answer
-  `ETag: "<version>"`; a write with `If-Match: "<version>"` (also `W/"<v>"` or the bare number; `*` = none) is a single
-  attempt against exactly that version (a changed config answers `409 conflict` before the edit runs, nothing is stored; a
-  malformed header `400 invalid_if_match`) and applies to `PUT /config`, `PUT /config.yaml` and the path writes. Ok replies
-  add `version` (the stored one) next to `config-version: 8`. Without `If-Match` nothing changes. The Models page sends
+  stripped on write; unlike Go it is not injected on read (its consumer, the upstream panel's `api-call`, is gone). The
+  Go read-only Home revision paths and TURN secret handling do not exist in the Workers schema. Deviation from Go
+  (masked reads): `GET /config`, `/config/<path>` and `/config.yaml` mask every secret with `config-secrets.ts`
+  `maskDocument`, numbered over the whole document of the version exactly as `GET /settings/config` (`/config.yaml` is
+  that editor's YAML byte for byte; a subtree read keeps the whole document's numbers). Deviation from Go (writes
+  restore nothing): every write (`PUT /config`, `PUT /config.yaml`, path `PUT`/`PATCH`/`DELETE`) refuses a string
+  carrying a placeholder marker (`[redacted…`, `[new secret]`, any case; `maskedValueAt`) with
+  `422 masked_value {path, message}` pointing to `PUT /settings/config`, and stores nothing. The guard covers
+  non-secret fields too (there `422 masked_value_outside_secret_field`, the raw editor's code), because the raw editor
+  refuses markers outside secret positions (one stored there would block every later raw save); a marker the stored
+  document already holds at the same path passes (written before the guard). Paths are those of the v8 layout, also
+  for a legacy-layout `PUT /config.yaml` (reported where the import moves the value). Plain new secrets are stored as
+  sent, so a Go `config.yaml` import keeps working; the lossless round trip of a masked document is the raw editor's
+  (version-pinned restore). Deviation from Go (value-free errors): config errors never quote a value
+  (`config/codec.ts`: a YAML syntax error is a fixed sentence per `yaml` error code from `config/yaml-message.ts`,
+  never the library's text, plus `line`/`column`; an unresolvable alias `invalid YAML: unresolvable aliases`; a
+  schema error its expectation and `path`, formatted without `got <input>`; `disable-image-generation` without its
+  value). They name at most keys of the written document (the `path`, an unknown `api-keys` family or group field)
+  and are passed on unscrubbed: scrubbing stored secrets out of an echoed key would itself tell a right guess from a
+  wrong one. So a refused write reads the same whether a typed value, key or alias name equals a stored secret or
+  not. The same messages serve `/settings/config`. Deviation from Go (paths):
+  segments `__proto__`, `constructor` and `prototype` are `400 invalid_path` (they would reach `Object.prototype`;
+  writes use own properties only and `mergePatch` skips a `__proto__` key), and the path is read from the URL as the
+  router matched it (`configPathOfUrl`: duplicate slashes, percent-encoding and case of the prefix). Deviation from Go
+  (optimistic concurrency for stale panels): GETs answer `ETag: "<version>"`; a write with `If-Match: "<version>"`
+  (also `W/"<v>"` or the bare number; `*` = none) is a single attempt against exactly that version (a changed config
+  answers `409 conflict` before the edit runs, nothing is stored; a malformed header `400 invalid_if_match`) and
+  applies to `PUT /config`, `PUT /config.yaml` and the path writes. Ok replies add `version` (the stored one) next to
+  `config-version: 8`. Without `If-Match` nothing changes. The Models page sends
   `routing/models.config_version` this way (`contract/routing.ts`: `putAliases`, `deleteAliases`, `putExclusions`,
   `deleteExclusions`), because it replaces whole per-channel lists.
 - **Credentials** (`credentials-routes.ts`, `credential-entry.ts`, `credentials/field-patch.ts`): list (filters,
@@ -827,7 +850,7 @@ until the next page load).
     `excluded-models` (Go `toggleConfigAPIKeyExcludedAll`; answers `via: "config:excluded-models"`, `excluded_pattern: "*"`);
     the id and `auth_index` do not change. A compat key answers `409`: disable the endpoint (its group's `disabled`).
   - `configKeyIds` (`config-document.ts`) maps config positions to credential ids through the synthesised credentials;
-    `auth_index` injection and the keys page share it. `includeDisabledGroups` also addresses the keys of a disabled compat
+    the ControlPlane and the keys page share it. `includeDisabledGroups` also addresses the keys of a disabled compat
     group (they have no credentials in the pool).
 - **Settings** (`settings-routes.ts`, `settings.ts`, contract `settings.ts`): the control panel's Settings page. Workers
   addition, no Go counterpart (Go v8 edits `/config` paths without a version and normalises silently).
@@ -850,8 +873,8 @@ until the next page load).
     and focus the field, and the `line`/`column` of a raw configuration that is not valid YAML.
 - **Raw configuration** (`settings-raw-routes.ts`, `settings-raw.ts`, `config-secrets.ts`, contract `settings.ts`): the
   control panel's configuration editor. Workers addition (Go's `GET /config.yaml` serves the file with its secrets
-  and writes without a version). The panel never reads `GET /config*`; these routes are its only view of the whole
-  document.
+  and writes without a version). The panel never reads `GET /config*` (masked the same way, but their writes cannot
+  restore placeholders); these routes are its only view of the whole document and the one lossless round trip.
   - `GET /settings/config`: `{version, yaml, secrets}`, the stored document as sparse YAML (`sparseDocument`, the
     `/config.yaml` export without defaults) with every secret masked. Secret positions (`config-secrets.ts`, pure):
     `access.api-keys` entries; every `api-keys` key; every group, key and payload-rule header value except pure client
@@ -859,7 +882,8 @@ until the next page load).
     protocol/client headers (`User-Agent`, `Accept`, `Content-Type`, `Anthropic-Version`/`-Beta`, `OpenAI-Beta`,
     `HTTP-Referer`, `X-Title`, ...), names compared trimmed and lower-cased as the normaliser stores them: the rules
     the Keys and Account pages share (`contract/headers.ts`); strings under payload `params` whose path's last part or inner key
-    looks secret (key, token, secret, sig, auth, pass, pwd, cred, session; `*-raw` JSON text is not looked into); and
+    looks secret (key, token, secret, sig, auth, pass, pwd, cred, session), and the whole JSON text of a `*-raw`
+    parameter when a key anywhere inside it looks secret by that rule (`{"api_key": "sk-…"}`: one secret); and
     in URLs (`requests.proxy-url`, model catalogs, group and key `base-url`/`proxy-url`) the user info and the values
     of secret-looking query and fragment parameters. A whole value becomes `[redacted#n]…abcd` (last four characters
     only when the value is longer than eight), a URL part `[redacted#n]` without tail; `n` is 1-based in document
@@ -869,16 +893,17 @@ until the next page load).
     parsing (placeholders are bound to the version they were read at). The YAML is parsed with the 1.2 core schema
     without the YAML 1.1 tags it would still resolve (`resolveKnownTags: false`); custom tags (`!!binary`,
     `!!timestamp`, `!!set`, `!!omap`, `!!pairs`, `!!merge`, ...), merge keys (`<<`) and a `%YAML 1.1` directive are
-    `422 invalid_yaml` with `message`, `line`, `column` (messages that would quote the source are reduced); anchors are
+    `422 invalid_yaml` with `message`, `line`, `column` (a fixed sentence per error code, never the source); anchors are
     expanded. Placeholders are restored by
     index from the stored document when they sit at a secret position (whatever group they moved to); a placeholder
     or marker elsewhere, or a stored `$…` secret placed in a header, is `422 masked_value_outside_secret_field`, an
     index the version does not have `422 unknown_secret_reference`, a malformed one `422 invalid_secret_placeholder`,
     each with its `path`; plain text at a secret position is a new secret. The result is decoded like a stored
-    document (`422 invalid_config` with `path` when known; messages scrubbed of every secret).
+    document (`422 invalid_config` with `path` when known; value-free messages, not scrubbed, see `/config`).
     Then the admin lock-out check of `PATCH /settings` applies (users and service tokens).
   - The review is computed from a second decode where unguessable per-request tags stand for the restored secrets
-    (keeping what the normaliser decides on: a JSON secret is stood in for by a JSON string, so `*-raw` payload rules
+    (keeping what the normaliser decides on: a JSON secret is stood in for by a JSON string, or by
+    `{"secret": <tag>}` when it names a secret-looking key so a `*-raw` parameter stays masked, so `*-raw` payload rules
     survive alike, and a `dca:` prefix, so Meta drops the same keys), so kept and new secrets (and `dropped`) are told
     apart by origin, never by comparing values: typing a guess of a stored secret answers the same whether it is right
     or not. Fail-safe on that decode: a tag the masking would still show (a normaliser rename or move took a restored
@@ -903,11 +928,13 @@ until the next page load).
     with one stand-in per shared value and lists the removed entry in `dropped`. A restored URL secret must stay
     exactly in the masked part of the URL both as written and as stored (trimmed), unless the field keeps its stored
     text.
-- **Operational**: `requests/api-call` (`api-call.ts`; `$TOKEN$` resolved in the ControlPlane through `ensureFresh`;
-  60 s bound like Go; no `proxy_url`/`Host` override on Workers), `server/latest-version`, `routing/model-definitions/:channel`
+- **Operational**: `server/latest-version`, `routing/model-definitions/:channel`
   (static catalogs of the model registry), file-log routes answering like Go with file logging disabled.
 - **Not here**: `/oauth/*` (`oauth-routes.ts`, see _Provider OAuth logins_), `/observability/usage/*` (`usage-routes.ts`, see
-  "Usage accounting and observability"), plugins, Home, `/v0/management`.
+  "Usage accounting and observability"), plugins, Home, `/v0/management`, and (deviation from Go) `POST /requests/api-call`:
+  Go substitutes a credential's token into a request to any host the caller names, for the upstream panel's browser-side
+  quota and key probes; here those probes run server-side (`credentials/quota`, `api-keys/probe`), so the route is not
+  ported and answers `404` (still behind the admin gate).
 - **Control panel** (`web-panel.ts`, `web/`): `GET /`, the panel's page paths (`/accounts`, `/keys`, `/models`, `/usage`,
   `/settings` and their sub-paths; `access/routes.ts` `PANEL_SECTIONS`) and `/assets/*` (hashed bundle files) are in the
   management zone, so only Access admins get them. Every page path answers `public/index.html` (the browser router picks
@@ -981,28 +1008,33 @@ until the next page load).
   for an account without windows. The Vertex import is multipart, so the panel posts a `FormData` itself and decodes the
   answer with `contract/oauth.ts` `VertexImported` / `VertexImportFailed`. Pure helpers in `web/src/lib/` are tested in
   workerd (`test/web-*.test.ts`, included by `tsconfig.worker.json`).
-- **Upstream panel asset** (until the control panel covers every page): `GET /management.html` serves `public/management.html` through the `ASSETS` binding
-  (`run_worker_first`, so the Access gate runs first; `404` with an install hint when missing). `pnpm panel:sync`
-  (`tools/panel-sync/`) downloads it from the GitHub release asset and verifies the `sha256` digest before replacing the
-  file (no unverified fallback download, unlike Go); the file is git-ignored and must be synced before deploying.
+- **Legacy panel address** (`web-panel.ts` `LEGACY_PANEL_REDIRECT`, deviation from Go, which serves the upstream panel
+  there): `GET|HEAD /management.html` (any case or percent-encoding) answers `302 Location: /` with
+  `cache-control: no-store`. It stays in the management zone (`access/routes.ts` `LEGACY_PANEL_PATH`): `401`
+  unauthenticated, `403` for non-admins, no CORS. The browser keeps the old `#/auth-files`-style fragment over the
+  redirect, and the panel maps it on boot to the page that replaced it (`web/src/lib/legacy-hash.ts`: auth files and
+  quota → `/accounts`, OAuth → `/accounts/connect`, providers → `/keys`, OAuth rule editors → `/models/rules`, config →
+  `/settings/config`, system → `/settings`, the rest → `/`).
 - Deviations from Go: `/` serves the control panel (admins only) instead of the public JSON banner; cooldown `reason`s are
   limited to the quota reason / last error code; `GET /credentials` always returns JSON timestamps as RFC 3339 strings;
   `POST /credentials/quota` and the entries' `quota_report` are a Workers addition (see _Quota check_). The API keys
   and Settings routes, including the raw configuration editor, are Workers additions (secrets never in their
   responses, masked as `[redacted#n]` placeholders restored on save; versioned writes; values the normaliser would
-  rewrite refused with `422` instead of silently changed); `GET /config` and `GET /config.yaml` stay raw (keys
-  included) for the upstream `management.html`, which the control panel does not use. Config API keys can be toggled
+  rewrite refused with `422` instead of silently changed); `GET /config*` are masked the same way and refuse
+  placeholders on write (_Config_ above). Config API keys can be toggled
   (Go answers the same through `excluded-models`); compat keys cannot, only their endpoint.
 
 ## Quota check (`src/quota/`, `src/management/quota-routes.ts`)
 
 Workers addition with no Go counterpart: the upstream panel asks the provider usage endpoints itself, from the browser,
-through `POST /requests/api-call`. Here the server does it, so tokens never reach the browser and the result is stored.
+through Go's `POST /requests/api-call` (not ported). Here the server does it, so tokens never reach the browser and the
+result is stored.
 
 - **Flow** (`check.ts`): the ControlPlane resolves the auth file and its token (`quotaProbeTarget`: `ensureFresh`, then
-  `target.ts`; the `$TOKEN$` value of api-call, the Meta `dca_token`, the Devin session token). The **Worker** then calls
-  the usage endpoint with its `HttpClient` (`probe.ts`, 15 s per call), so the single-writer object is never held by a
-  slow provider. Finally the ControlPlane merges the outcome into the stored report (`recordQuotaReport`, `report.ts`).
+  `target.ts`; the token Go's api-call substitutes for `$TOKEN$`, the Meta `dca_token`, the Devin session token). The
+  **Worker** then calls the usage endpoint with its `HttpClient` (`probe.ts`, 15 s per call), so the single-writer
+  object is never held by a slow provider. Finally the ControlPlane merges the outcome into the stored report
+  (`recordQuotaReport`, `report.ts`).
 - **Routes**:
   - `POST /v8/management/credentials/quota {name}` answers `200 {status: "ok", report}`, including when the upstream call
     failed; the report then carries `error`.
@@ -1360,9 +1392,10 @@ Grok/GPT/recognised checks, Gemini replay, ~500 sanitiser runs over synthetic hi
 - Cross-site protections (`access/csrf.ts`, before authentication; new in the port because the Access session cookie is sent by
   browsers automatically): state-changing requests are refused on protected and management zones when `Sec-Fetch-Site` is
   `cross-site`/`same-site` or `Origin` is another host; management requests of any method with a foreign `Origin` (or a
-  cross-site `Sec-Fetch-Site` that is not a navigation) too; WebSocket upgrades with a foreign `Origin`; management writes need
+  cross-site `Sec-Fetch-Site`, unless a `GET`/`HEAD` with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document` to a
+  panel page or `/management.html`: `routes.ts` `isPanelPagePath`; frames, `/assets` and `/v8/management*` never) too; WebSocket upgrades with a foreign `Origin`; management writes need
   JSON (multipart for `POST /credentials`, YAML for `PUT /config.yaml`) or no body (415). The CORS middleware adds no headers in
-  the management zone (deviation from Go's `*`). `requests/api-call` substitutes `$TOKEN$` only for `https:` URLs.
+  the management zone (deviation from Go's `*`).
 - Implementation notes (`src/access/`): the gate is a _global_ router middleware that matches protected path
   prefixes (default-deny for `/v1*`, `/openai/v1*`, `/backend-api/codex*`, `/v8/management*`, normalising case, duplicate
   slashes and percent-encoding) and provides `AccessPrincipal`; route layers that read it use `withAccess(...)` for typing.

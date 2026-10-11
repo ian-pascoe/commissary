@@ -19,6 +19,7 @@ import { NotFound } from "./pages/NotFound.tsx";
 import { SettingsPage } from "./pages/Settings.tsx";
 import { UsagePage } from "./pages/Usage.tsx";
 import { readNewKeySearch } from "./lib/keys.ts";
+import { legacyHashTarget } from "./lib/legacy-hash.ts";
 import { readUsageSearch } from "./lib/usage.ts";
 
 const rootRoute = createRootRoute({ component: Shell, notFoundComponent: NotFound });
@@ -68,6 +69,13 @@ const routeTree = rootRoute.addChildren([
     component: lazyRouteComponent(() => import("./pages/RawConfig.tsx"), "RawConfigPage"),
   }),
 ]);
+
+// An upstream panel bookmark (`/management.html#/auth-files`, redirected to `/#/auth-files`) opens the page that
+// replaced it. Before the router reads the location.
+const legacyTarget =
+  window.location.pathname === "/" ? legacyHashTarget(window.location.hash) : undefined;
+
+if (legacyTarget !== undefined) window.history.replaceState(null, "", legacyTarget);
 
 export const router = createRouter({
   routeTree,

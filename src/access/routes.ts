@@ -12,8 +12,11 @@ export const PROTECTED_PREFIXES = [
 /** Paths under this prefix additionally require the principal to be on the admin allow-list. */
 export const MANAGEMENT_PREFIX = "/v8/management";
 
-/** The control panel page: static, but only administrators get it (Go serves it unauthenticated behind its login). */
-export const MANAGEMENT_PANEL_PATH = "/management.html";
+/**
+ * Where Go serves the upstream panel. Here it redirects to `/` (`management/web-panel.ts`), and stays in the
+ * management zone like the panel it points to: only administrators get the redirect.
+ */
+export const LEGACY_PANEL_PATH = "/management.html";
 
 /**
  * Top-level paths of the new control panel (`web/`, served by `src/management/web-panel.ts`): `/` itself, the panel's
@@ -29,9 +32,20 @@ export const PANEL_SECTIONS = [
   "assets",
 ] as const;
 
+const inSection = (path: string, section: string): boolean =>
+  path === `/${section}` || path.startsWith(`/${section}/`);
+
 const isPanelPath = (path: string): boolean =>
+  path === "/" || PANEL_SECTIONS.some((section) => inSection(path, section));
+
+/**
+ * Whether a normalised path (`normalizedPath`) is a page a browser may open from another site: the panel's pages
+ * (not `/assets`) and the legacy panel address. The management API (`/v8/management*`) never is.
+ */
+export const isPanelPagePath = (path: string): boolean =>
   path === "/" ||
-  PANEL_SECTIONS.some((section) => path === `/${section}` || path.startsWith(`/${section}/`));
+  path === LEGACY_PANEL_PATH ||
+  PANEL_SECTIONS.some((section) => section !== "assets" && inSection(path, section));
 
 export type AccessZone = "public" | "protected" | "management";
 
@@ -67,11 +81,7 @@ export const classifyPath = (requestUrl: string): AccessZone => {
 
   if (path === undefined) return "protected";
 
-  if (
-    path.startsWith(MANAGEMENT_PREFIX) ||
-    path.startsWith(MANAGEMENT_PANEL_PATH) ||
-    isPanelPath(path)
-  )
+  if (path.startsWith(MANAGEMENT_PREFIX) || path.startsWith(LEGACY_PANEL_PATH) || isPanelPath(path))
     return "management";
 
   return PROTECTED_PREFIXES.some((prefix) => path.startsWith(prefix)) ? "protected" : "public";

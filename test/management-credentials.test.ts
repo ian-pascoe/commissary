@@ -349,14 +349,9 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
   it("toggles config API keys through excluded-models and refuses compat keys", async () => {
     await controlPlane().putConfig("api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-x }]\n");
 
-    const config = (await json("/v8/management/config/api-keys/claude")).body as Array<{
-      keys: Array<{ auth_index: string }>;
-    }>;
-
-    const authIndex = config[0]!.keys[0]!.auth_index;
     const entries = await controlPlane().listCredentials();
     const id = entries.find((entry) => entry.source === "config")!.id;
-    expect(authIndexOf(id)).toBe(authIndex);
+    const authIndex = authIndexOf(id);
     expect(
       await json(
         "/v8/management/credentials/status",
@@ -377,10 +372,14 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
 
     // The id (and so auth_index) is unchanged: excluded-models is not part of the identity.
     const stored = (await json("/v8/management/config/api-keys/claude")).body as Array<{
-      keys: Array<{ auth_index: string; "excluded-models"?: string[] }>;
+      keys: Array<{ auth_index?: string; "excluded-models"?: string[] }>;
     }>;
 
-    expect(stored[0]!.keys[0]).toMatchObject({ auth_index: authIndex, "excluded-models": ["*"] });
+    expect(stored[0]!.keys[0]).toMatchObject({ "excluded-models": ["*"] });
+    expect(stored[0]!.keys[0]!.auth_index).toBeUndefined();
+    expect(
+      (await controlPlane().listCredentials()).find((entry) => entry.source === "config")!.id,
+    ).toBe(id);
     expect(await claudeKeyDisabled()).toBe(true);
 
     expect(

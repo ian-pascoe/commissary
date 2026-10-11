@@ -183,7 +183,7 @@ const ai = new GoogleGenAI({
 
 ## Browser users
 
-Anyone allowed by an Access Allow policy can open `https://proxy.example.com/management.html` and (if listed in
+Anyone allowed by an Access Allow policy can open the control panel at `https://proxy.example.com/` and (if listed in
 `ACCESS_ADMIN_EMAILS` or the config's `access.admin-emails`) manage credentials. They do not need a service token.
 
 Web applications on other origins cannot use a user's Access session to call the proxy: cross-site POSTs and cross-origin

@@ -114,7 +114,7 @@ describe("Access gate through the router", () => {
     expect(admin.status).toBe(200);
     expect(admin.headers.get("access-control-allow-origin")).toBeNull();
 
-    const preflight = await call("/v8/management/requests/api-call", {
+    const preflight = await call("/v8/management/config", {
       method: "OPTIONS",
       headers: { origin: "https://evil.test", "access-control-request-method": "POST" },
     });

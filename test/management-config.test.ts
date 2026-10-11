@@ -117,7 +117,14 @@ describe("management config", () => {
 
     expect(config.routing.strategy).toBe("fill-first");
     expect(config.routing["session-affinity"]).toBe(true);
-    expect(config.access["api-keys"]).toEqual(["b", "c"]);
+    // Client keys are secrets: masked on read (short values carry no tail), stored as sent.
+    expect(config.access["api-keys"]).toEqual(["[redacted#1]", "[redacted#2]"]);
+
+    const stored = JSON.parse((await controlPlane().getConfig()).document ?? "{}") as {
+      access: { "api-keys": string[] };
+    };
+
+    expect(stored.access["api-keys"]).toEqual(["b", "c"]);
   });
 
   it("reads, writes, patches and deletes nested paths", async () => {
@@ -181,7 +188,8 @@ describe("management config", () => {
     expect(value.body).toEqual([{ name: "claude-opus-4", alias: "opus" }]);
   });
 
-  it("adds auth_index to api-key entries and never stores it", async () => {
+  it("shows no auth_index and never stores one", async () => {
+    // A Go export carries `auth_index` on every key; it is derived data and dropped on write.
     const put = await json(
       "/v8/management/config",
       jsonInit("PUT", {
@@ -189,16 +197,16 @@ describe("management config", () => {
           claude: [
             {
               "base-url": "https://api.anthropic.com",
-              keys: [{ "api-key": "sk-ant-one" }, { "api-key": "sk-ant-two" }],
+              keys: [{ "api-key": "sk-ant-one", auth_index: "0123456789abcdef" }],
             },
           ],
           "openai-compatibility": [
             {
-              name: "Router",
-              "base-url": "https://router.example/v1",
-              keys: [{ "api-key": "k1" }, { "api-key": "k2" }],
+              name: "Keyless",
+              "base-url": "https://free.example/v1",
+              keys: [],
+              auth_index: "fedcba9876543210",
             },
-            { name: "Keyless", "base-url": "https://free.example/v1", keys: [] },
           ],
         },
       }),
@@ -206,41 +214,12 @@ describe("management config", () => {
 
     expect(put.status).toBe(200);
 
-    const config = (await json("/v8/management/config")).body as {
-      "api-keys": {
-        claude: Array<{ keys: Array<{ auth_index?: string }> }>;
-        "openai-compatibility": Array<{
-          auth_index?: string;
-          keys: Array<{ auth_index?: string }>;
-        }>;
-      };
-    };
-
-    const indexes = [
-      ...config["api-keys"].claude[0]!.keys.map((entry) => entry.auth_index),
-      ...config["api-keys"]["openai-compatibility"][0]!.keys.map((entry) => entry.auth_index),
-      config["api-keys"]["openai-compatibility"][1]!.auth_index,
-    ];
-
-    for (const index of indexes) expect(index).toMatch(/^[0-9a-f]{16}$/);
-    expect(new Set(indexes).size).toBe(5);
-
-    // The same handles address the credentials: cooldown reset knows them.
-    const reset = await json(
-      "/v8/management/routing/cooldown/reset",
-      jsonInit("POST", { auth_index: indexes[0] ?? "" }),
-    );
-
-    expect(reset.body).toMatchObject({ status: "ok", auth_index: indexes[0] ?? "" });
-
-    // Writing the document back (with auth_index) does not persist the derived field.
-    expect((await json("/v8/management/config", jsonInit("PUT", config))).status).toBe(200);
-
     const stored = JSON.parse((await controlPlane().getConfig()).document ?? "{}") as {
       "api-keys": unknown;
     };
 
     expect(JSON.stringify(stored["api-keys"])).not.toContain("auth_index");
+    expect(JSON.stringify((await json("/v8/management/config")).body)).not.toContain("auth_index");
 
     const exported = new TextDecoder().decode(
       await (await call("/v8/management/config.yaml")).arrayBuffer(),

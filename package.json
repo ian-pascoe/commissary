@@ -16,7 +16,6 @@
     "format": "oxfmt",
     "lint": "oxlint && oxfmt --check",
     "logs": "alchemy logs",
-    "panel:sync": "node --experimental-strip-types tools/panel-sync/cli.ts",
     "plan": "alchemy plan",
     "prepare": "effect-tsgo patch --no-typescript --oxlint && husky && ([ -n \"$CI\" ] || tools/sync-reference-repos.sh)",
     "repos:sync": "tools/sync-reference-repos.sh",

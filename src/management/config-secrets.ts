@@ -14,7 +14,8 @@
  *   by the rules the Keys and Account pages share (`contract/headers.ts`);
  * - `requests.payload.<kind>[r].params.<path>` (not `filter`): every string under a parameter whose last path part,
  *   or a key inside its value, looks secret (`SECRET_PART`: key, token, secret, sig, auth, pass, pwd, cred, session);
- *   raw (`*-raw`) JSON text is not looked into;
+ *   a raw (`*-raw`) parameter's JSON text is one whole secret when a key anywhere inside it looks secret by the same
+ *   rule (`{"api_key": "sk-…"}`), so it is masked, restored and checked like any whole value;
  * - URLs (`requests.proxy-url`, `models.*catalog`, a group's or key's `base-url` / `proxy-url`): the user info
  *   (`user:pass` before `@`) and the value of each query or fragment `name=value` pair whose name looks secret.
  *
@@ -50,6 +51,9 @@
  *
  * `exposedTagPath` is the fail-safe on that same decode: a stand-in the masking would still show (a normaliser rename
  * or move took a restored secret out of a secret position) refuses the edit, without ever comparing real values.
+ *
+ * `maskedValueAt` guards the unversioned `/config*` writes (`config-routes.ts`), which restore nothing: the first
+ * string carrying a marker that the stored document does not already hold at the same path.
  */
 import { configPath } from "../config/errors.ts";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
@@ -88,8 +92,11 @@ type Segment = string | number;
 
 type Path = ReadonlyArray<Segment>;
 
-/** How a string position holds secrets. */
-type Position = "value" | "header" | "url";
+/**
+ * How a string position holds secrets: `raw` is the JSON text of a `*-raw` payload parameter, a whole secret when it
+ * names a secret-looking key.
+ */
+type Position = "value" | "header" | "url" | "raw";
 
 const NEW_SECRET = "[new secret]";
 
@@ -133,7 +140,31 @@ const paramPosition = (path: Path): Position | undefined => {
   if (kind === "filter" || !isIndex(rule) || field !== "params" || !isKey(param)) return undefined;
   const parts = [lastPathPart(param), ...path.slice(6).filter(isKey)];
 
-  return parts.some((part) => SECRET_PART.test(part)) ? "value" : undefined;
+  if (parts.some((part) => SECRET_PART.test(part))) return "value";
+
+  return isKey(kind) && kind.endsWith("-raw") && path.length === 6 ? "raw" : undefined;
+};
+
+/** Whether any object key inside `value` (at any depth) looks secret. */
+const namesSecret = (value: Json): boolean => {
+  if (Array.isArray(value)) return value.some(namesSecret);
+
+  if (isJsonObject(value))
+    return Object.entries(value).some(
+      ([key, child]) => SECRET_PART.test(key) || namesSecret(child),
+    );
+
+  return false;
+};
+
+/** Whether the JSON text of a raw payload parameter names a secret-looking key (not JSON: no). */
+const rawHoldsSecret = (text: string): boolean => {
+  try {
+    // SAFETY: JSON.parse always returns a JSON value.
+    return namesSecret(JSON.parse(text.trim()) as Json);
+  } catch {
+    return false;
+  }
 };
 
 /** A field of an `api-keys` group or key: its URLs and its headers. */
@@ -323,6 +354,8 @@ const secretsAt = (position: Position, text: string): ReadonlyArray<Span> => {
   // A pure client copy is shown as is; a template (`$CPA-SESSION-ID:sk-…`) is a secret like any value.
   if (position === "header" && isHeaderCopy(text)) return [];
 
+  if (position === "raw" && !rawHoldsSecret(text)) return [];
+
   return [{ start: 0, end: text.length, kind: "value" }];
 };
 
@@ -424,10 +457,11 @@ const isJsonText = (text: string): boolean => {
  * secret values in two places, and a stand-in keeps both properties of the secret it replaces so the review decode
  * keeps and drops exactly what the stored decode does: a `dca:` prefix (Meta keys with it are dropped) and being JSON
  * text (`*-raw` payload rules whose params are not JSON are dropped): a JSON secret is stood in for by the tag as a
- * JSON string. URL parts are always the bare tag.
+ * JSON string, or as `{"secret": tag}` when it names a secret-looking key (the masking of a raw parameter keys on
+ * that, so the stand-in stays masked exactly where the secret would). URL parts are always the bare tag.
  */
 export const secretTags = (nonce: string): SecretTags => {
-  const pattern = new RegExp(`^(?:dca:)?"?${nonce}k(\\d+)k"?$`);
+  const pattern = new RegExp(`^(?:dca:|\\{"secret":)?"?${nonce}k(\\d+)k"?\\}?$`);
 
   return {
     standIn: (index, slot) => {
@@ -436,6 +470,8 @@ export const secretTags = (nonce: string): SecretTags => {
       if (slot.kind !== "value") return tag;
 
       if (slot.value.startsWith("dca:")) return `dca:${tag}`;
+
+      if (rawHoldsSecret(slot.value)) return JSON.stringify({ secret: tag });
 
       return isJsonText(slot.value) ? JSON.stringify(tag) : tag;
     },
@@ -648,6 +684,35 @@ export const exposedTagPath = (tagged: JsonObject, tags: SecretTags): string | u
 
   eachString(maskDocument(tagged).document, [], (path, text) => {
     if (found === undefined && tags.shownIn(text)) found = configPath(path);
+  });
+
+  return found;
+};
+
+/** A marker (`[redacted…`, `[new secret]`, any case) found by {@link maskedValueAt}. */
+export interface MaskedValue {
+  /** `configPath` of the string. */
+  readonly path: string;
+  /** Whether the string is at a secret position (else the marker is plain text in an ordinary field). */
+  readonly secret: boolean;
+}
+
+/**
+ * The first string value of `document` (document order) carrying a marker of a masked value, unless `stored` holds
+ * the very same string at the same path (written before writes were guarded: refusing it would block every write).
+ * `undefined` when there is none.
+ */
+export const maskedValueAt = (
+  document: JsonObject,
+  stored: JsonObject,
+): MaskedValue | undefined => {
+  let found: MaskedValue | undefined;
+
+  mapStrings(document, [], (path, text) => {
+    if (found === undefined && MARKER.test(text) && at(stored, path) !== text)
+      found = { path: configPath(path), secret: positionOf(path) !== undefined };
+
+    return text;
   });
 
   return found;

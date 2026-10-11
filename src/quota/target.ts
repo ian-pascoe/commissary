@@ -1,12 +1,12 @@
 /**
  * What a quota probe needs from one credential, extracted inside the ControlPlane Durable Object from the freshly
- * refreshed credential (`ensureFresh`, the same freshness as `POST /requests/api-call`) and handed to the Worker, which
- * makes the upstream calls (src/quota/probe.ts).
+ * refreshed credential (`ensureFresh`) and handed to the Worker, which makes the upstream calls (src/quota/probe.ts).
  *
- * Token per provider: the `$TOKEN$` value of api-call (`apiCallToken`) for Claude, Codex, Antigravity, Kimi and xAI;
- * the `dca_token` for Meta (the usage endpoint refuses the minted API key, upstream panel
- * features/quota/providers/meta/requests.ts); the session token for Devin (`devinCredentials`). The target carries
- * token material, so it only ever crosses the RPC boundary to the Worker and is never logged or returned to clients.
+ * Token per provider: the `$TOKEN$` value of Go's `POST /requests/api-call` (`apiCallToken`; the route itself is not
+ * ported) for Claude, Codex, Antigravity, Kimi and xAI; the `dca_token` for Meta (the usage endpoint refuses the
+ * minted API key, upstream panel features/quota/providers/meta/requests.ts); the session token for Devin
+ * (`devinCredentials`). The target carries token material, so it only ever crosses the RPC boundary to the Worker and
+ * is never logged or returned to clients.
  */
 import { decodeJwtClaims } from "../credentials/expiry.ts";
 import type { Credential } from "../credentials/model.ts";

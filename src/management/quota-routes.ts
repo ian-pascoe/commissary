@@ -2,9 +2,9 @@
  * `POST /v8/management/credentials/quota` (`checkQuota` in contract/credentials.ts): checks one auth file's
  * allowance at the provider's usage endpoint now and answers with the stored report.
  *
- * Workers addition, no Go counterpart: the upstream panel calls the usage endpoints from the browser through
- * `POST /requests/api-call` (see docs/ARCHITECTURE.md "Quota check"). Tokens never leave the server; an upstream
- * failure is a 200 whose report carries `error` (and keeps the last successful windows).
+ * Workers addition, no Go counterpart: the upstream panel calls the usage endpoints from the browser through Go's
+ * `POST /requests/api-call`, which is not ported (see docs/ARCHITECTURE.md "Quota check"). Tokens never leave the
+ * server; an upstream failure is a 200 whose report carries `error` (and keeps the last successful windows).
  */
 import { Effect } from "effect";
 import type { Json } from "../json/index.ts";

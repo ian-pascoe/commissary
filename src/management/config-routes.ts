@@ -6,34 +6,63 @@
  * Writes are read-modify-write with the stored version as `expectedVersion` (retried on a concurrent write), and the
  * ControlPlane validates and normalises the result: invalid documents answer `422 invalid_config`.
  *
- * Differences: a Workers addition for stale clients (the panel's rule editors replace whole lists). GETs answer
- * `ETag: "<version>"`; a write with `If-Match: "<version>"` (or the bare number) is one attempt against exactly that
- * version: a changed config answers `409 conflict` and nothing is stored, a malformed header `400 invalid_if_match`.
- * Every ok reply carries the stored `version`. Without `If-Match` the behaviour is Go's (retry on interleaving).
+ * Differences:
+ *
+ * - A Workers addition for stale clients (the panel's rule editors replace whole lists). GETs answer
+ *   `ETag: "<version>"`; a write with `If-Match: "<version>"` (or the bare number) is one attempt against exactly
+ *   that version: a changed config answers `409 conflict` and nothing is stored, a malformed header
+ *   `400 invalid_if_match`. Every ok reply carries the stored `version`. Without `If-Match` the behaviour is Go's
+ *   (retry on interleaving).
+ * - Every read is masked (Go serves secrets in the clear): `GET /config`, `/config/<path>` and `/config.yaml` show each
+ *   secret as `[redacted#n]…abcd` (`config-secrets.ts` `maskDocument`, numbered over the whole document of the
+ *   version, so the numbers are those of `GET /settings/config`; `config.yaml` is the same masked YAML). Lossless
+ *   round trips go through the version-pinned raw editor (`PUT /settings/config`), which restores placeholders.
+ * - Writes restore nothing: a string carrying a placeholder marker (`[redacted…`, `[new secret]`, any case) at a
+ *   secret position is `422 masked_value` with its `path`, and nothing is stored. Elsewhere it is
+ *   `422 masked_value_outside_secret_field` (the raw editor's code), because the raw editor refuses markers outside
+ *   secret fields: one stored there would block every later `PUT /settings/config`. A marker the stored document
+ *   already holds at the same path is let through (written before this guard; refusing it would block every write).
+ *   Paths are those of the v8 layout: a placeholder in a legacy-layout `PUT /config.yaml` (`claude-api-key`, ...) is
+ *   reported where the import moves it (`api-keys.claude[0]...`). Plain new secrets are stored as sent (a Go config
+ *   import keeps working).
+ * - No `auth_index` on `GET /config` (Go adds one per config key for its panel's `api-call`; that panel is gone).
+ *   Writes still strip it, as Go does.
+ * - Config error messages never quote a value (`config/codec.ts`: a YAML error is a fixed sentence per error code
+ *   with `line` and `column`, a schema error its expectation and `path`); they name at most keys of the written
+ *   document, and are passed on unscrubbed, so a refused write reads the same whether a typed value or key equals a
+ *   stored secret or not.
+ * - Path segments `__proto__`, `constructor` and `prototype` are `400 invalid_path` (Go treats them as map keys). The
+ *   path is read from the URL as the router matched it (`config-document.ts` `configPathOfUrl`).
  */
 import { Effect, Match, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { parseConfigYaml, stringifyConfigYaml } from "../config/codec.ts";
-import { decodeStoredConfig } from "../config/store.ts";
+import { parse } from "yaml";
+import { parseConfigYaml } from "../config/codec.ts";
+import { prepareDocument } from "../config/document.ts";
+import type { ConfigValidationError } from "../config/errors.ts";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import {
+  configPathOfUrl,
   deleteAtPath,
   getAtPath,
-  injectAuthIndexes,
   parseConfigPath,
   stripAuthIndexes,
   writeAtPath,
 } from "./config-document.ts";
+import { maskDocument, type MaskedValue, maskedValueAt } from "./config-secrets.ts";
 import { bodyText, controlPlane, handled, jsonReply, Reply, replyError } from "./http.ts";
+import { maskedYaml } from "./settings-raw.ts";
 
 const PREFIX = "/v8/management/config";
 
 const MAX_ATTEMPTS = 4;
 
+/** The path after `/config`, read like the router matched the URL (`//v8/…`, `%63onfig` and case included). */
 const pathRemainder = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
+  const rest = configPathOfUrl(request.originalUrl);
 
-  return new URL(request.originalUrl, "http://localhost").pathname.slice(PREFIX.length);
+  return rest === undefined ? yield* replyError(400, "invalid_path") : rest;
 });
 
 const storedDocument = Effect.gen(function* () {
@@ -41,11 +70,8 @@ const storedDocument = Effect.gen(function* () {
   const text = wire.document ?? "{}";
 
   // SAFETY: the stored config document is always a serialized JSON object (writes reject non-objects).
-  return { version: wire.version, text, document: JSON.parse(text) as JsonObject };
+  return { version: wire.version, document: JSON.parse(text) as JsonObject };
 });
-
-const decodeConfig = (text: string) =>
-  decodeStoredConfig(text).pipe(Effect.mapError(() => replyError(500, "invalid_config")));
 
 const readPath = (rest: string) => {
   const parts = parseConfigPath(rest);
@@ -72,6 +98,70 @@ const ifMatch = Effect.gen(function* () {
   return Number(digits);
 });
 
+// --- write checks ----------------------------------------------------------------------------------------------
+
+/** `raw` in the v8 layout when it can be prepared (legacy layouts are moved), else as is. */
+const preparedOf = (raw: Json): Json => {
+  try {
+    return prepareDocument(raw);
+  } catch {
+    return raw;
+  }
+};
+
+/** YAML (or JSON) text as the codec reads it; `{}` when it does not parse (the decode then reports why). */
+const rawOf = (text: string): Json => {
+  try {
+    const parsed: Json | null | undefined = text.trim() === "" ? {} : parse(text);
+
+    return parsed ?? {};
+  } catch {
+    return {};
+  }
+};
+
+const maskedValue = (found: MaskedValue) =>
+  found.secret
+    ? replyError(422, "masked_value", {
+        path: found.path,
+        message:
+          "a masked placeholder cannot be stored as a secret; edit secrets through PUT /v8/management/settings/config, which restores them",
+      })
+    : // The raw editor's code for the same refusal: it would refuse this document too.
+      replyError(422, "masked_value_outside_secret_field", {
+        path: found.path,
+        message:
+          "masked placeholder text cannot be stored; edit the configuration through PUT /v8/management/settings/config",
+      });
+
+/** A config the codec refused: its value-free message and where, when known. */
+const invalidConfig = (error: ConfigValidationError) =>
+  replyError(422, "invalid_config", {
+    message: error.message,
+    ...(error.path === undefined ? {} : { path: error.path }),
+    ...(error.line === undefined ? {} : { line: error.line }),
+    ...(error.column === undefined ? {} : { column: error.column }),
+  });
+
+/**
+ * Checks what a write would store (`text`, YAML or JSON, parsed as `raw`) against the stored document: a placeholder
+ * marker is `422 masked_value` (`masked_value_outside_secret_field` outside secret positions; paths of the v8
+ * layout, also for a legacy-layout document), an invalid config `422 invalid_config` (value-free message).
+ */
+const checkWrite = Effect.fnUntraced(function* (
+  text: string,
+  raw: Json,
+  stored: JsonObject,
+): Effect.fn.Return<void, Reply> {
+  const prepared = preparedOf(raw);
+  const masked = isJsonObject(prepared) ? maskedValueAt(prepared, stored) : undefined;
+
+  if (masked !== undefined) return yield* maskedValue(masked);
+  const parsed = yield* Effect.result(parseConfigYaml(text));
+
+  if (Result.isFailure(parsed)) return yield* invalidConfig(parsed.failure);
+});
+
 type StoreOutcome = { readonly saved: number } | "conflict";
 
 /** Stores `text`; `conflict` is reported to the caller so read-modify-write loops can retry. */
@@ -94,6 +184,7 @@ const store = (text: string, expectedVersion: number | undefined) =>
 
       if (result.error === "conflict") return Effect.succeed("conflict" as const);
 
+      // The codec's value-free message (`config/codec.ts`).
       return Effect.fail(replyError(422, "invalid_config", { message: result.message }));
     }),
   );
@@ -106,6 +197,19 @@ const etag = (version: number) => ({ etag: `"${version}"` });
 
 const stale = replyError(409, "conflict", {
   message: "config changed since the version in If-Match",
+});
+
+/** Checks and stores a whole document (`text`, parsed as `raw`): one attempt, conditional on `expected` if set. */
+const storeWhole = Effect.fnUntraced(function* (
+  text: string,
+  raw: Json,
+  expected: number | undefined,
+) {
+  const current = yield* storedDocument;
+  yield* checkWrite(text, raw, current.document);
+  const outcome = yield* store(text, expected);
+
+  return outcome === "conflict" ? yield* conflictFor(expected) : okReply(outcome.saved);
 });
 
 /**
@@ -122,7 +226,10 @@ const modify = (edit: (document: JsonObject) => JsonObject | Reply, expected: nu
       const edited = edit(current.document);
 
       if (edited instanceof Reply) return yield* edited;
-      const outcome = yield* store(JSON.stringify(stripAuthIndexes(edited)), current.version);
+      const document = stripAuthIndexes(edited);
+      const text = JSON.stringify(document);
+      yield* checkWrite(text, document, current.document);
+      const outcome = yield* store(text, current.version);
 
       if (outcome !== "conflict") return okReply(outcome.saved);
     }
@@ -130,24 +237,23 @@ const modify = (edit: (document: JsonObject) => JsonObject | Reply, expected: nu
     return yield* conflictFor(expected);
   });
 
+// --- handlers --------------------------------------------------------------------------------------------------
+
 const getConfig = (yaml: boolean) =>
   Effect.gen(function* () {
     const rest = yaml ? "" : yield* pathRemainder;
     const parts = yield* readPath(rest);
     const current = yield* storedDocument;
+    // Numbered over the whole document, so a subtree read shows the same `[redacted#n]` as the full one.
+    const masked = maskDocument(current.document).document;
 
-    if (yaml) {
-      const config = yield* decodeConfig(current.text);
-
-      return HttpServerResponse.text(stringifyConfigYaml(config), {
+    if (yaml)
+      return HttpServerResponse.text(maskedYaml(masked), {
         contentType: "application/yaml; charset=utf-8",
         headers: etag(current.version),
       });
-    }
 
-    const config = yield* decodeConfig(current.text);
-    const document = injectAuthIndexes(current.document, config);
-    const value = getAtPath(document, parts);
+    const value = getAtPath(masked, parts);
 
     if (value === undefined) return yield* replyError(404, "not_found");
 
@@ -171,14 +277,8 @@ const writeConfig = (mode: "put" | "patch", yaml: boolean) =>
 
     if (yaml) {
       const text = yield* bodyText;
-      // Validate before storing so a malformed document answers the same way as a bad JSON write.
-      const parsed = yield* Effect.result(parseConfigYaml(text));
 
-      if (Result.isFailure(parsed))
-        return yield* replyError(422, "invalid_config", { message: parsed.failure.message });
-      const outcome = yield* store(text, expected);
-
-      return outcome === "conflict" ? yield* conflictFor(expected) : okReply(outcome.saved);
+      return yield* storeWhole(text, rawOf(text), expected);
     }
 
     const parts = yield* readPath(yield* pathRemainder);
@@ -188,13 +288,10 @@ const writeConfig = (mode: "put" | "patch", yaml: boolean) =>
       return yield* replyError(400, "config_must_be_object");
 
     if (parts.length === 0 && mode === "put") {
-      const outcome = yield* store(
-        // SAFETY: the branch above returned unless value is a JSON object when parts is empty.
-        JSON.stringify(stripAuthIndexes(value as JsonObject)),
-        expected,
-      );
+      // SAFETY: the branch above returned unless value is a JSON object when parts is empty.
+      const document = stripAuthIndexes(value as JsonObject);
 
-      return outcome === "conflict" ? yield* conflictFor(expected) : okReply(outcome.saved);
+      return yield* storeWhole(JSON.stringify(document), document, expected);
     }
 
     return yield* modify((document) => {
