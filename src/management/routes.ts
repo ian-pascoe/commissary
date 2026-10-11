@@ -5,7 +5,8 @@
  * (`access/routes.ts`: the whole `/v8/management` prefix and `/management.html`), which replaces the Go management
  * key, IP ban and `allow-remote` logic. Routes that are not ported: plugins, Home, file logs (answered like Go with
  * file logging off), the deprecated `/v0/management` tree. OAuth login (`/oauth/*`) is in `oauth-routes.ts`; usage
- * (`/observability/usage/*`) is in `usage-routes.ts`.
+ * (`/observability/usage/*`) is in `usage-routes.ts`; the per-model routing view (`/routing/models`) in
+ * `routing-models.ts`.
  */
 import { Effect, Layer } from "effect";
 import {
@@ -27,6 +28,7 @@ import { modelDefinitionsHandler } from "./model-definitions.ts";
 import { oauthRoutes } from "./oauth-routes.ts";
 import { panelHandler } from "./panel.ts";
 import { quotaCheckHandler } from "./quota-routes.ts";
+import { routingModelsHandler } from "./routing-models.ts";
 import { PANEL_PAGE_PATHS, webPanelAsset, webPanelPage } from "./web-panel.ts";
 import { usageRoutes } from "./usage-routes.ts";
 import {
@@ -65,6 +67,7 @@ export const ManagementRoutes = HttpRouter.addAll(
       HttpRouter.route("POST", `${BASE}/api-keys/probe`, bound(apiKeyProbeHandler)),
       HttpRouter.route("GET", `${BASE}/server/latest-version`, bound(latestVersionHandler)),
       HttpRouter.route("POST", `${BASE}/requests/api-call`, bound(apiCallHandler)),
+      HttpRouter.route("GET", `${BASE}/routing/models`, bound(routingModelsHandler)),
       HttpRouter.route(
         "GET",
         `${BASE}/routing/model-definitions/*`,

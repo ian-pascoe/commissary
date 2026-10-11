@@ -78,7 +78,7 @@ describe("model routes with a fixed registry", () => {
 
   const registry = Layer.succeed(
     ModelRegistry,
-    ModelRegistry.of({ snapshot: Effect.succeed(snapshot) }),
+    ModelRegistry.of({ snapshot: Effect.succeed(snapshot), fresh: Effect.succeed(snapshot) }),
   );
 
   const handler = makeHandler(registry);
@@ -171,7 +171,13 @@ describe("model routes with a fixed registry", () => {
     });
 
     const codexHandler = makeHandler(
-      Layer.succeed(ModelRegistry, ModelRegistry.of({ snapshot: Effect.succeed(codexSnapshot) })),
+      Layer.succeed(
+        ModelRegistry,
+        ModelRegistry.of({
+          snapshot: Effect.succeed(codexSnapshot),
+          fresh: Effect.succeed(codexSnapshot),
+        }),
+      ),
     );
 
     const codexCall = caller(codexHandler);
@@ -218,13 +224,10 @@ describe("model routes with a fixed registry", () => {
 });
 
 describe("model routes when the registry is unavailable", () => {
+  const failure = Effect.fail(new ModelRegistryError({ message: "failed to read model sources" }));
+
   const handler = makeHandler(
-    Layer.succeed(
-      ModelRegistry,
-      ModelRegistry.of({
-        snapshot: Effect.fail(new ModelRegistryError({ message: "failed to read model sources" })),
-      }),
-    ),
+    Layer.succeed(ModelRegistry, ModelRegistry.of({ snapshot: failure, fresh: failure })),
   );
 
   afterAll(handler.dispose);

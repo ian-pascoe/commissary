@@ -498,7 +498,7 @@ long-lived sockets follow the Workers platform rules (`limits.cpu_ms`).
 
 Port of `internal/registry` plus the model registration in `sdk/cliproxy/service_models.go`. The Go registry is a mutable
 process-wide singleton that the service keeps in sync with credentials; on Workers it is a pure function of three inputs,
-evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySnapshot`):
+evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySnapshot`; `ModelRegistry.fresh` builds uncached):
 
 - **Credentials**: `ControlPlane.listModelSources()` returns a `ModelSource` per credential (provider, executor key, prefix,
   plan tier, exclusions, per-account aliases, the `models:` of config entries, credential/model runtime state; no secrets).
@@ -526,6 +526,18 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
   detail routes pick the entry whose `id` equals the path remainder (ids may contain `/`). `GET /v1beta/models[/{model}]` is
   the Gemini shape. Bodies are serialised like Go's `encoding/json` (sorted keys, `\u003c` escapes) so they are byte-identical
   to the Go server's; lists are sorted by model id (Go's order is map iteration order).
+- **Routing view** (`routing-view.ts`, `GET /v8/management/routing/models`; no Go counterpart): the admin answer to "which
+  credentials serve each model, and why not". `RegistrySnapshot` keeps the enriched `sources` and the `configVersion` it was
+  built from; `ModelRegistry.fresh` drops the config reader's cache, builds now and stores the result in the 5 s cache (no
+  stale fallback: failures answer 502), so an edit shows on the next read (other isolates follow within the config and
+  snapshot TTLs). `routingView(snapshot, now)` assembles every credential twice (`assembleCredentialModels`: as registered,
+  and enabled without exclusions); each model of the second list is a route (`auth_index`, `upstream` = `metadataModelId`,
+  `via` catalog/config/alias, `prefix`). State: `disabled` (credential off), `excluded` (missing from the registered list;
+  `reason` = first matching pattern, `rule_scope` channel/account/key), else read from the credential state like
+  `projectModel` (`quota` / `cooling` with `until`, `unavailable`, `available`). `listed` and `providers` come from the
+  index, so they equal `/v1/models`; a model whose only routes are cooling is unlisted but still shown. The body also carries
+  `oauth.model-alias`, `oauth.excluded-models`, `force_model_prefix`, per-channel account counts and `config_version` (the
+  `If-Match` value of rule edits, see _Config_ below). Contract: `contract/routing.ts`.
 - Fixtures: `go run ./tools/fixturegen/registry` drives the real Go handlers (`OpenAIModels`, `ClaudeModels`,
   `GeminiModels`, `GeminiGetHandler`, `WriteModelListResponse` detail mode) against a real `registry.ModelRegistry` and records
   bodies and registry queries (`test/fixtures/registry.json`).
@@ -761,7 +773,13 @@ until the next page load).
   expectedVersion)` (retried on a concurrent write, `409 conflict` after four attempts); the ControlPlane validates
   (`422 invalid_config`). Paths address mapping keys, DELETE prunes emptied parents, PATCH deep-merges. `auth_index` is
   injected into `api-keys` entries on read and stripped on write. The Go read-only Home revision paths and TURN secret
-  handling do not exist in the Workers schema.
+  handling do not exist in the Workers schema. Deviation from Go (optimistic concurrency for stale panels): GETs answer
+  `ETag: "<version>"`; a write with `If-Match: "<version>"` (also `W/"<v>"` or the bare number; `*` = none) is a single
+  attempt against exactly that version (a changed config answers `409 conflict` before the edit runs, nothing is stored; a
+  malformed header `400 invalid_if_match`) and applies to `PUT /config`, `PUT /config.yaml` and the path writes. Ok replies
+  add `version` (the stored one) next to `config-version: 8`. Without `If-Match` nothing changes. The Models page sends
+  `routing/models.config_version` this way (`contract/routing.ts`: `putAliases`, `deleteAliases`, `putExclusions`,
+  `deleteExclusions`), because it replaces whole per-channel lists.
 - **Credentials** (`credentials-routes.ts`, `credential-entry.ts`, `credentials/field-patch.ts`): list (filters,
   pagination), upload (multipart or raw JSON + `?name=`), delete (`name`/`names`/`all`), download (the stored file,
   tokens included), `models`, `status`, `fields`, `refresh`, `routing/cooldown/reset`. Credential id = file name; only
@@ -825,7 +843,14 @@ until the next page load).
   enable/disable; `/keys/$family/$index` and `/keys/new?family=` edit or add one group: endpoint, keys typed in once,
   models with discovery through the probe, exclusions, delete; reads `GET /api-keys` and writes one group with
   `PUT /api-keys/groups` carrying the list's `version`, existing keys by `auth_index`, everything the form does not
-  show kept as stored; a `409` offers a reload). The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
+  show kept as stored; a `409` offers a reload); Models (`/models`: every model clients can call, plus the hidden ones
+  no account serves now, ordered by standing, filters All / Needs attention / Hidden, search over names, aliases and
+  accounts, each model's routes with their account or key, upstream name, alias or exclusion and the rule's channel,
+  cooldowns with clear; `/models/rules` edits the channel rules `oauth-model-alias` and `oauth-excluded-models`, one
+  section per channel with a live count of the models a pattern matches; reads `GET /routing/models` and writes one
+  channel's list with `PUT`/`DELETE /config/oauth/model-alias|excluded-models/:channel` carrying the view's
+  `config_version` as `If-Match`; on `409` the edit is re-applied once to a fresh read, and a second refusal or a
+  changed entry offers a reload). The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
   address (`?range=&by=&model=&provider=&account=&user=&failed=`, decoded per parameter by `web/src/lib/usage.ts`
   `readUsageSearch`, a malformed one dropped), reads `GET /observability/usage/summary`, `/series` (provider series
   summed in the browser; no principal filter, so no chart while a user filter is set) and `/records` (pages of 50

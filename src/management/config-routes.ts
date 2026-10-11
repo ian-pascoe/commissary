@@ -5,6 +5,11 @@
  * document is the ControlPlane's canonical config (all defaults included); `config.yaml` is the sparse YAML export.
  * Writes are read-modify-write with the stored version as `expectedVersion` (retried on a concurrent write), and the
  * ControlPlane validates and normalises the result: invalid documents answer `422 invalid_config`.
+ *
+ * Differences: a Workers addition for stale clients (the panel's rule editors replace whole lists). GETs answer
+ * `ETag: "<version>"`; a write with `If-Match: "<version>"` (or the bare number) is one attempt against exactly that
+ * version: a changed config answers `409 conflict` and nothing is stored, a malformed header `400 invalid_if_match`.
+ * Every ok reply carries the stored `version`. Without `If-Match` the behaviour is Go's (retry on interleaving).
  */
 import { Effect, Match, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
@@ -48,21 +53,42 @@ const readPath = (rest: string) => {
   return parts === undefined ? Effect.fail(replyError(400, "invalid_path")) : Effect.succeed(parts);
 };
 
-const okReply = jsonReply(200, { status: "ok", "config-version": 8 });
+const okReply = (version: number) => jsonReply(200, { status: "ok", "config-version": 8, version });
+
+/**
+ * The version a write is conditional on (`If-Match`): `"12"`, `W/"12"` or `12`. Absent or `*` = unconditional;
+ * anything else is a malformed header.
+ */
+const ifMatch = Effect.gen(function* () {
+  const request = yield* HttpServerRequest.HttpServerRequest;
+  const raw = request.headers["if-match"]?.trim();
+
+  if (raw === undefined || raw === "" || raw === "*") return undefined;
+  const match = /^(?:W\/)?(?:"(\d{1,15})"|(\d{1,15}))$/.exec(raw);
+  const digits = match?.[1] ?? match?.[2];
+
+  if (digits === undefined) return yield* replyError(400, "invalid_if_match");
+
+  return Number(digits);
+});
+
+type StoreOutcome = { readonly saved: number } | "conflict";
 
 /** Stores `text`; `conflict` is reported to the caller so read-modify-write loops can retry. */
 const store = (text: string, expectedVersion: number | undefined) =>
   controlPlane("putConfig", (stub) => stub.putConfig(text, expectedVersion)).pipe(
-    Effect.flatMap((result) => {
+    Effect.flatMap((result): Effect.Effect<StoreOutcome, Reply> => {
       if (result.ok) {
         // Go config files often carry keys that do nothing on Workers; say so instead of silently ignoring them.
         const { notApplied } = result;
 
+        const saved: StoreOutcome = { saved: result.version };
+
         return notApplied.length === 0
-          ? Effect.succeed("saved" as const)
+          ? Effect.succeed(saved)
           : Effect.logWarning("config keys not applied on Workers (see MIGRATION.md)").pipe(
               Effect.annotateLogs({ keys: notApplied.join(", ") }),
-              Effect.as("saved" as const),
+              Effect.as(saved),
             );
       }
 
@@ -74,20 +100,34 @@ const store = (text: string, expectedVersion: number | undefined) =>
 
 const conflict = replyError(409, "conflict", { message: "config changed concurrently, retry" });
 
-/** Read-modify-write of the document (`edit` returns a reply to abort, or the new document). */
-const modify = (edit: (document: JsonObject) => JsonObject | Reply) =>
+const conflictFor = (expected: number | undefined) => (expected === undefined ? conflict : stale);
+
+const etag = (version: number) => ({ etag: `"${version}"` });
+
+const stale = replyError(409, "conflict", {
+  message: "config changed since the version in If-Match",
+});
+
+/**
+ * Read-modify-write of the document (`edit` returns a reply to abort, or the new document). With `expected` (the
+ * request's `If-Match`) there is one attempt against that version; otherwise a concurrent write is retried.
+ */
+const modify = (edit: (document: JsonObject) => JsonObject | Reply, expected: number | undefined) =>
   Effect.gen(function* () {
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+    for (let attempt = 0; attempt < (expected === undefined ? MAX_ATTEMPTS : 1); attempt += 1) {
       const current = yield* storedDocument;
+
+      // A stale view answers 409 before the edit can fail with its own (misleading) 404.
+      if (expected !== undefined && expected !== current.version) return yield* stale;
       const edited = edit(current.document);
 
       if (edited instanceof Reply) return yield* edited;
       const outcome = yield* store(JSON.stringify(stripAuthIndexes(edited)), current.version);
 
-      if (outcome === "saved") return okReply;
+      if (outcome !== "conflict") return okReply(outcome.saved);
     }
 
-    return yield* conflict;
+    return yield* conflictFor(expected);
   });
 
 const getConfig = (yaml: boolean) =>
@@ -101,6 +141,7 @@ const getConfig = (yaml: boolean) =>
 
       return HttpServerResponse.text(stringifyConfigYaml(config), {
         contentType: "application/yaml; charset=utf-8",
+        headers: etag(current.version),
       });
     }
 
@@ -110,7 +151,7 @@ const getConfig = (yaml: boolean) =>
 
     if (value === undefined) return yield* replyError(404, "not_found");
 
-    return jsonReply(200, value);
+    return HttpServerResponse.setHeaders(jsonReply(200, value), etag(current.version));
   });
 
 /** Parses a JSON request body (`invalid_json` when the text is not valid JSON). */
@@ -126,6 +167,8 @@ const jsonValue = Effect.gen(function* () {
 
 const writeConfig = (mode: "put" | "patch", yaml: boolean) =>
   Effect.gen(function* () {
+    const expected = yield* ifMatch;
+
     if (yaml) {
       const text = yield* bodyText;
       // Validate before storing so a malformed document answers the same way as a bad JSON write.
@@ -133,9 +176,9 @@ const writeConfig = (mode: "put" | "patch", yaml: boolean) =>
 
       if (Result.isFailure(parsed))
         return yield* replyError(422, "invalid_config", { message: parsed.failure.message });
-      const outcome = yield* store(text, undefined);
+      const outcome = yield* store(text, expected);
 
-      return outcome === "saved" ? okReply : yield* conflict;
+      return outcome === "conflict" ? yield* conflictFor(expected) : okReply(outcome.saved);
     }
 
     const parts = yield* readPath(yield* pathRemainder);
@@ -148,25 +191,29 @@ const writeConfig = (mode: "put" | "patch", yaml: boolean) =>
       const outcome = yield* store(
         // SAFETY: the branch above returned unless value is a JSON object when parts is empty.
         JSON.stringify(stripAuthIndexes(value as JsonObject)),
-        undefined,
+        expected,
       );
 
-      return outcome === "saved" ? okReply : yield* conflict;
+      return outcome === "conflict" ? yield* conflictFor(expected) : okReply(outcome.saved);
     }
 
     return yield* modify((document) => {
       const written = writeAtPath(document, parts, value, mode);
 
       return written === "invalid_path" ? replyError(400, "invalid_path") : written;
-    });
+    }, expected);
   });
 
 const deleteConfig = Effect.gen(function* () {
   const parts = yield* readPath(yield* pathRemainder);
 
   if (parts.length === 0) return yield* replyError(400, "cannot_delete_config");
+  const expected = yield* ifMatch;
 
-  return yield* modify((document) => deleteAtPath(document, parts) ?? replyError(404, "not_found"));
+  return yield* modify(
+    (document) => deleteAtPath(document, parts) ?? replyError(404, "not_found"),
+    expected,
+  );
 });
 
 const routes = (
