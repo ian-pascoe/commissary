@@ -1,10 +1,11 @@
-// One account: its allowance (each window with its reset blade), cooldowns, tokens per past window, routing fields,
-// details, the models it serves, and the actions on it (check quota, refresh tokens, enable or disable, delete).
+// One account: its allowance (each window with its reset blade), cooldowns, tokens per past window, its own routing
+// fields (`AccountRouting.tsx`, `#routing`), details, the models it serves, and the actions on it (check quota,
+// refresh tokens, enable or disable, delete).
 import { useAtomValue } from "@effect/atom-react";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
 import { ArrowLeft, ChevronRight, Gauge, Power, RefreshCw, Trash2 } from "lucide-react";
-import { type FormEvent, type ReactNode, useId, useRef, useState } from "react";
+import { type ReactNode, useId, useRef, useState } from "react";
 import type { CredentialEntry } from "#contract/credentials.ts";
 import {
   accountModelsAtom,
@@ -13,7 +14,6 @@ import {
   checkQuotaAtom,
   credentialsAtom,
   nowAtom,
-  patchFieldsAtom,
   refreshAtom,
   removeAtom,
   resetCooldownAtom,
@@ -39,6 +39,7 @@ import { checksQuota, type QuotaWindow, quotaReading, windowLevel } from "../lib
 import { useAction } from "../lib/use-action.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
 import styles from "./Account.module.css";
+import { Routing } from "./AccountRouting.tsx";
 
 const route = getRouteApi("/accounts/$authIndex");
 
@@ -307,99 +308,6 @@ const History = ({ entry, now }: { readonly entry: CredentialEntry; readonly now
 };
 
 // ---------------------------------------------------------------------------------------------------------------
-// Routing
-
-const Routing = ({
-  entry,
-  onNotice,
-}: {
-  readonly entry: CredentialEntry;
-  readonly onNotice: (notice: Notice) => void;
-}) => {
-  const save = useAction(patchFieldsAtom);
-  const ids = useId();
-  const [priority, setPriority] = useState(entry.priority?.toString() ?? "");
-  const [note, setNote] = useState(entry.note ?? "");
-  const trimmedPriority = priority.trim();
-  const priorityValid = trimmedPriority === "" || /^-?\d+$/.test(trimmedPriority);
-  const nextPriority = trimmedPriority === "" ? undefined : Number(trimmedPriority);
-  const priorityChanged = nextPriority !== entry.priority;
-  const noteChanged = note.trim() !== (entry.note ?? "");
-  const changed = priorityChanged || noteChanged;
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-
-    if (!priorityValid || !changed) return;
-
-    const outcome = await save.run({
-      payload: {
-        name: entry.name,
-        ...(priorityChanged ? { priority: nextPriority ?? null } : {}),
-        ...(noteChanged ? { note: note.trim() === "" ? null : note.trim() } : {}),
-      },
-      reactivityKeys: CREDENTIALS,
-    });
-
-    onNotice(
-      outcome.ok
-        ? { tone: "done", text: "Routing saved." }
-        : { tone: "problem", text: `Could not save routing. ${outcome.message}` },
-    );
-  };
-
-  return (
-    <Section title="Routing">
-      <form className={styles["form"]} onSubmit={submit} noValidate>
-        <div className={kit["field"]}>
-          <label className={kit["fieldLabel"]} htmlFor={`${ids}-priority`}>
-            Priority
-          </label>
-          <input
-            id={`${ids}-priority`}
-            className={kit["input"]}
-            inputMode="numeric"
-            value={priority}
-            placeholder="0"
-            aria-invalid={!priorityValid}
-            aria-describedby={`${ids}-priority-hint`}
-            onChange={(event) => setPriority(event.target.value)}
-          />
-          {priorityValid ? (
-            <span id={`${ids}-priority-hint`} className={styles["hint"]}>
-              The proxy uses the highest priority first; empty counts as 0.
-            </span>
-          ) : (
-            <span id={`${ids}-priority-hint`} className={kit["fieldError"]}>
-              Enter a whole number, such as 10 or -1.
-            </span>
-          )}
-        </div>
-        <div className={kit["field"]}>
-          <label className={kit["fieldLabel"]} htmlFor={`${ids}-note`}>
-            Note
-          </label>
-          <input
-            id={`${ids}-note`}
-            className={kit["input"]}
-            value={note}
-            maxLength={200}
-            onChange={(event) => setNote(event.target.value)}
-          />
-        </div>
-        <button
-          type="submit"
-          className={kit["secondary"]}
-          disabled={!changed || !priorityValid || save.busy}
-        >
-          {save.busy ? "Saving…" : "Save routing"}
-        </button>
-      </form>
-    </Section>
-  );
-};
-
-// ---------------------------------------------------------------------------------------------------------------
 // Details and models
 
 const Details = ({ entry, now }: { readonly entry: CredentialEntry; readonly now: number }) => {
@@ -418,8 +326,6 @@ const Details = ({ entry, now }: { readonly entry: CredentialEntry; readonly now
     ["Changed", updated === undefined ? undefined : formatDate(updated)],
     ["Requests served", formatCount(entry.success)],
     ["Requests failed", formatCount(entry.failed)],
-    ["Weight", entry.weight?.toString()],
-    ["Retries", entry.request_retry?.toString()],
     ["File", entry.name],
     ["Index", entry.auth_index],
   ];
@@ -717,13 +623,9 @@ const AccountView = ({ entry }: { readonly entry: CredentialEntry }) => {
           <Allowance entry={entry} now={now} />
           <Cooldowns entry={entry} now={now} onNotice={setNotice} />
           <History entry={entry} now={now} />
+          <Routing entry={entry} />
         </div>
         <div className={styles["side"]}>
-          <Routing
-            key={`${entry.priority ?? ""}:${entry.note ?? ""}`}
-            entry={entry}
-            onNotice={setNotice}
-          />
           <Details entry={entry} now={now} />
           <Models entry={entry} />
           <Remove entry={entry} onNotice={setNotice} />
