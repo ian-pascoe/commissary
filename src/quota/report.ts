@@ -8,7 +8,7 @@
  * without plans) keeps the previously known plan.
  *
  * Workers deviation: Go has no server-side usage probing (the upstream panel calls the provider usage endpoints from
- * the browser through `POST /requests/api-call`); see docs/ARCHITECTURE.md "Quota check".
+ * the browser through Go's `POST /requests/api-call`, not ported); see docs/ARCHITECTURE.md "Quota check".
  */
 import type { JsonObject } from "../json/index.ts";
 import type { QuotaReport, QuotaWindow } from "../management/contract/credentials.ts";

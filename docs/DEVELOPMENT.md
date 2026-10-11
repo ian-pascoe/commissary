@@ -36,7 +36,6 @@ Run from the repository root:
 | `pnpm run deploy`   | `alchemy deploy` (`pnpm deploy` is a pnpm built-in; use `run`)                                                              |
 | `pnpm destroy`      | `alchemy destroy`: delete every resource of a stage                                                                         |
 | `pnpm logs`         | `alchemy logs` (`--tail`)                                                                                                   |
-| `pnpm panel:sync`   | Install `public/management.html` (upstream panel, until the new one replaces it) from its GitHub release                    |
 | `pnpm ci:setup`     | Deploy `stacks/github.ts`: CI's Cloudflare token, check service token and GitHub environments (`docs/DEPLOY.md`)            |
 | `pnpm catalog:sync` | Regenerate the embedded model catalogs from the Go registry (reference checkout)                                            |
 
@@ -67,8 +66,8 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
 and `src/thinking` (pure sync translation), `src/executor` (one directory per provider), `src/credentials` (ControlPlane
 Durable Object, token refresh), `src/session-state` (SessionState Durable Object), `src/registry` (model catalogs and
 `/models`), `src/management` and `src/oauth` (management API, panel, provider logins), `src/usage` and
-`src/observability` (D1 usage records, trace ids), `migrations/` (D1 schema), `web/` (control panel, below),
-`tools/panel-sync` (upstream panel installer) and `tools/fixturegen` (Go programs that emit golden fixtures, see below).
+`src/observability` (D1 usage records, trace ids), `migrations/` (D1 schema), `web/` (control panel, below) and
+`tools/fixturegen` (Go programs that emit golden fixtures, see below).
 
 ## Control panel (`web/`)
 

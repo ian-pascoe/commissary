@@ -690,14 +690,18 @@ describe("config secrets", () => {
     const tags = secretTags("t0123abcd");
     const slot = (value: string) => ({ path: "", kind: "value", value }) as const;
 
-    expect(tags.standIn(1, slot('{"key":"raw-SECRET"}'))).toBe('"t0123abcdk1k"');
+    // JSON naming a secret-looking key keeps naming one, so a raw payload parameter stays masked.
+    expect(tags.standIn(1, slot('{"key":"raw-SECRET"}'))).toBe('{"secret":"t0123abcdk1k"}');
+    expect(tags.standIn(6, slot('{"region":"eu"}'))).toBe('"t0123abcdk6k"');
     expect(tags.standIn(2, slot("12345"))).toBe('"t0123abcdk2k"');
     expect(tags.standIn(3, slot("dca:meta-SECRET"))).toBe("dca:t0123abcdk3k");
     expect(tags.standIn(4, slot("sk-plain-SECRET"))).toBe("t0123abcdk4k");
     expect(tags.standIn(5, { path: "", kind: "userinfo", value: "1234" })).toBe("t0123abcdk5k");
-    expect(['"t0123abcdk1k"', "dca:t0123abcdk3k", "t0123abcdk4k"].map(tags.indexOf)).toEqual([
-      1, 3, 4,
-    ]);
+    expect(
+      ['{"secret":"t0123abcdk1k"}', '"t0123abcdk2k"', "dca:t0123abcdk3k", "t0123abcdk4k"].map(
+        tags.indexOf,
+      ),
+    ).toEqual([1, 2, 3, 4]);
     expect(tags.indexOf("t0123abcdk4kx")).toBeUndefined();
   });
 

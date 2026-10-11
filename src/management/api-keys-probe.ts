@@ -1,11 +1,12 @@
 /**
  * `POST /v8/management/api-keys/probe` (`contract/api-keys.ts` `ProbeResult`): one connection test of a config API key.
  *
- * Workers addition, no Go counterpart. The upstream panel tests keys from the browser through `POST /requests/api-call`
- * with the raw key (`useConnectivityTest.ts`, `models.ts`); here the ControlPlane hands the Worker a probe target
- * (`apiKeyProbeTarget`, like `quotaProbeTarget`) and the Worker makes the request itself, so the key never reaches the
- * browser and can only go to the key's own configured base host. The probe is a model listing (which doubles as model
- * discovery) or, for Vertex (no listing), a one-token `countTokens`. Per family:
+ * Workers addition, no Go counterpart. The upstream panel tests keys from the browser through Go's (not ported)
+ * `POST /requests/api-call` with the raw key (`useConnectivityTest.ts`, `models.ts`); here the ControlPlane hands the
+ * Worker a probe target (`apiKeyProbeTarget`, like `quotaProbeTarget`) and the Worker makes the request itself, so
+ * the key never reaches the browser and only goes to the base host configured for it (which a key-page write can
+ * change while keeping the key). The probe is a model listing (which doubles as model discovery) or, for Vertex (no
+ * listing), a one-token `countTokens`. Per family:
  *
  * - gemini / interactions: `GET {base}/v1beta/models` (`x-goog-api-key`, paged by `nextPageToken`, at most 20 pages);
  * - claude: `GET {base}/v1/models` with `x-api-key` + `anthropic-version` on api.anthropic.com, Bearer elsewhere

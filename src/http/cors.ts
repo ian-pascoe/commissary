@@ -34,9 +34,9 @@ const notFound = HttpServerResponse.text("404 page not found", { status: 404 });
  * Global middleware: every response (including 404s) carries the CORS headers, and `OPTIONS` requests are
  * answered with an empty 204 before routing.
  *
- * Deviation from Go: the management zone (`/v8/management*`, `/management.html`) gets no CORS headers at all, so other
- * origins can neither pass a preflight nor read a management response with an admin's Access cookie. The panel is
- * served by the Worker itself and does not need CORS.
+ * Deviation from Go: the management zone (`/v8/management*`, the control panel at `/` and its pages, the legacy
+ * `/management.html` redirect) gets no CORS headers at all, so other origins can neither pass a preflight nor read a
+ * management response with an admin's Access cookie. The panel is served by the Worker itself and does not need CORS.
  */
 export const CorsLayer = HttpRouter.middleware<{ handles: HttpServerError.HttpServerError }>()(
   (app) =>

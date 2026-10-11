@@ -1422,7 +1422,19 @@ describe("management contract", () => {
       }).pipe(through(harness)),
     );
 
-    it("no panel endpoint reads the unmasked configuration (GET /config*)", () => {
+    it("has no endpoint for the token-disclosing routes (api-call, credential download)", () => {
+      const paths = Object.values(ManagementApi.groups).flatMap((group) =>
+        Object.values(group.endpoints).map((endpoint) => endpoint.path),
+      );
+
+      assert.isNotEmpty(paths);
+      assert.deepStrictEqual(
+        paths.filter((path) => /^\/(requests\/api-call|credentials\/download)/.test(path)),
+        [],
+      );
+    });
+
+    it("no panel endpoint reads the configuration through GET /config*", () => {
       const reads = Object.values(ManagementApi.groups).flatMap((group) =>
         Object.values(group.endpoints)
           .filter((endpoint) => endpoint.method === "GET")

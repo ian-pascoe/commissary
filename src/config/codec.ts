@@ -3,9 +3,15 @@
  *
  * Go source: internal/config/config_load.go (LoadConfig) and config_v8.go (YAML boundary). Unlike Go, no file is
  * ever rewritten: the canonical form is the JSON document stored in the ControlPlane Durable Object.
+ *
+ * Error messages never quote a value of the document (Workers addition): a YAML error is a fixed sentence per error
+ * code (`yaml-message.ts`) with its line and column, a schema issue its expectation and path, never the offending
+ * value. Paths (and the `api-keys` family or group field `document.ts` names) are keys the caller wrote, so a
+ * refused write reads the same whether a typed value or key equals a stored secret or not; the messages are not
+ * scrubbed of stored secrets (that would tell the two apart).
  */
-import { Effect, Schema, SchemaIssue } from "effect";
-import { parse, stringify } from "yaml";
+import { Effect, Match, Predicate, Schema, SchemaIssue } from "effect";
+import { LineCounter, parseDocument, stringify } from "yaml";
 import {
   isJsonArray,
   isJsonObject,
@@ -17,12 +23,69 @@ import { ConfigValidationError, configPath } from "./errors.ts";
 import { normalizeConfig } from "./normalize.ts";
 import { prepareDocument } from "./document.ts";
 import { Config, type ConfigEncoded } from "./schema.ts";
+import { yamlMessage } from "./yaml-message.ts";
 
 const decodeSchema = Schema.decodeUnknownEffect(Config);
 
 const encodeSchema = Schema.encodeSync(Config);
 
-const issuePaths = SchemaIssue.makeFormatterStandardSchemaV1();
+interface IssueEntry {
+  readonly path: ReadonlyArray<PropertyKey>;
+  readonly message: string;
+}
+
+/** `Expected <annotation>` when the schema names what it expects, else `fallback`. */
+const expectation = (
+  annotations: { readonly expected?: unknown } | undefined,
+  fallback: string,
+): string => {
+  const expected = annotations?.expected;
+
+  return typeof expected === "string" ? `Expected ${expected}` : fallback;
+};
+
+/**
+ * The issues of a failed decode, flattened like `makeFormatterStandardSchemaV1` but never with the input (its
+ * `got <input>` and custom messages can quote a value): the expectation, else the kind of issue.
+ */
+const issueEntries = (
+  issue: SchemaIssue.Issue,
+  path: ReadonlyArray<PropertyKey>,
+): ReadonlyArray<IssueEntry> =>
+  Match.value(issue).pipe(
+    Match.tagsExhaustive({
+      Filter: (filter): ReadonlyArray<IssueEntry> =>
+        Predicate.isTagged(filter.issue, "InvalidValue")
+          ? [{ path, message: expectation(filter.filter.annotations, "Invalid value") }]
+          : issueEntries(filter.issue, path),
+      Encoding: (encoding) => issueEntries(encoding.issue, path),
+      Pointer: (pointer) => issueEntries(pointer.issue, [...path, ...pointer.path]),
+      Composite: (composite) => composite.issues.flatMap((inner) => issueEntries(inner, path)),
+      AnyOf: (anyOf) =>
+        anyOf.issues.length === 0
+          ? [{ path, message: "Expected one of the allowed values" }]
+          : anyOf.issues.flatMap((inner) => issueEntries(inner, path)),
+      // `Expected <type>`; the stock message adds `, got <input>` only when the input is attached.
+      InvalidType: (invalid) => [
+        {
+          path,
+          message: SchemaIssue.hasInput(invalid)
+            ? "Invalid type"
+            : SchemaIssue.defaultLeafHook(invalid),
+        },
+      ],
+      InvalidValue: (invalid) => [
+        { path, message: expectation(invalid.annotations, "Invalid value") },
+      ],
+      MissingKey: () => [{ path, message: "Missing key" }],
+      UnexpectedKey: () => [{ path, message: "Unexpected key" }],
+      Forbidden: () => [{ path, message: "Forbidden operation" }],
+      OneOf: () => [{ path, message: "Expected exactly one member to match" }],
+    }),
+  );
+
+const entryPath = (path: ReadonlyArray<PropertyKey>): string =>
+  configPath(path.map((segment) => (typeof segment === "object" ? String(segment) : segment)));
 
 /**
  * Validates a raw document (parsed YAML or JSON; v8 or legacy layout) and returns the normalised `Config`.
@@ -35,22 +98,23 @@ export const decodeConfig = (raw: Json): Effect.Effect<Config, ConfigValidationE
       catch: (error) =>
         error instanceof ConfigValidationError
           ? error
-          : new ConfigValidationError({ message: String(error) }),
+          : new ConfigValidationError({ message: "invalid config document" }),
     });
 
     const decoded = yield* decodeSchema(prepared).pipe(
       Effect.mapError((error) => {
-        const path = issuePaths(error.issue).issues[0]?.path;
+        const entries = issueEntries(error.issue, []);
+        const path = entries[0]?.path;
 
         return new ConfigValidationError({
-          message: error.message,
-          ...(path === undefined || path.length === 0
-            ? {}
-            : {
-                path: configPath(
-                  path.map((segment) => (typeof segment === "object" ? segment.key : segment)),
-                ),
-              }),
+          message: entries
+            .map((entry) =>
+              entry.path.length === 0
+                ? entry.message
+                : `${entry.message} at ${entryPath(entry.path)}`,
+            )
+            .join("\n"),
+          ...(path === undefined || path.length === 0 ? {} : { path: entryPath(path) }),
         });
       }),
     );
@@ -58,19 +122,40 @@ export const decodeConfig = (raw: Json): Effect.Effect<Config, ConfigValidationE
     return normalizeConfig(decoded);
   });
 
+/**
+ * YAML (or JSON) text as a JSON value (`{}` for an empty document); a syntax error is a value-free
+ * `ConfigValidationError` with its line and column.
+ */
+export const parseYamlText = (text: string): Effect.Effect<Json, ConfigValidationError> =>
+  Effect.suspend(() => {
+    if (text.trim() === "") return Effect.succeed({});
+    const lines = new LineCounter();
+    const document = parseDocument(text, { lineCounter: lines, prettyErrors: false });
+    const error = document.errors[0];
+
+    if (error !== undefined) {
+      const { line, col } = lines.linePos(error.pos[0]);
+
+      return Effect.fail(
+        new ConfigValidationError({
+          message: `invalid YAML: ${yamlMessage(error)} (line ${line}, column ${col})`,
+          line,
+          column: col,
+        }),
+      );
+    }
+
+    return Effect.try({
+      // SAFETY: the core schema yields JSON values only (plain objects, arrays, strings, numbers, booleans, null).
+      try: () => (document.toJS() ?? {}) as Json,
+      // Alias resolution errors name the alias (source text): only the kind is kept.
+      catch: () => new ConfigValidationError({ message: "invalid YAML: unresolvable aliases" }),
+    });
+  });
+
 /** Parses YAML (or JSON) text into a `Config`. An empty document yields the defaults. */
 export const parseConfigYaml = (text: string): Effect.Effect<Config, ConfigValidationError> =>
-  Effect.gen(function* () {
-    const raw = yield* Effect.try({
-      try: (): Json => (text.trim() === "" ? {} : parse(text)),
-      catch: (error) =>
-        new ConfigValidationError({
-          message: `invalid YAML: ${error instanceof Error ? error.message : String(error)}`,
-        }),
-    });
-
-    return yield* decodeConfig(raw ?? {});
-  });
+  Effect.flatMap(parseYamlText(text), decodeConfig);
 
 /** The JSON-compatible v8 document of `config` (all defaults included). */
 export const encodeConfig = (config: Config): ConfigEncoded => encodeSchema(config);

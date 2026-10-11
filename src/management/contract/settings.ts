@@ -17,7 +17,8 @@
  * admin lists.
  *
  * The raw configuration is the whole document as YAML without defaults, every secret masked as `[redacted#n]…abcd`
- * (`secrets` counts them; the panel never reads `GET /config*`, which serve raw secrets to the upstream panel).
+ * (`secrets` counts them). `GET /config*` serve the same masking with the same numbers per version, but their writes
+ * restore nothing (a placeholder there is `422 masked_value`): this editor is the one lossless round trip.
  * Comments and key order are not kept, anchors are expanded and custom tags refused: only the canonical document is
  * stored. `checkRaw` and `saveRaw` take `{version, yaml}`; a placeholder left as it was keeps its stored secret, plain
  * text at a secret position is a new secret. Both answer `409 conflict` for a stale `version` (placeholders are bound

@@ -7,6 +7,9 @@ export class ConfigValidationError extends Schema.TaggedError<ConfigValidationEr
     message: Schema.String,
     /** Where a schema check failed (`configPath` spelling), when known. */
     path: Schema.optional(Schema.String),
+    /** Where a YAML syntax error is (1-based), when the text did not parse. */
+    line: Schema.optional(Schema.Number),
+    column: Schema.optional(Schema.Number),
   },
 ) {}
 

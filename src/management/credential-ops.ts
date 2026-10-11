@@ -49,10 +49,6 @@ export interface RefreshAllItem {
   readonly error?: string;
 }
 
-export type ApiCallTokenResult =
-  | { readonly ok: true; readonly token: string }
-  | { readonly ok: false; readonly error: "not_found" | "refresh_failed" | "token_not_found" };
-
 export type CredentialMutation =
   | { readonly ok: true; readonly id: string }
   | {
@@ -65,7 +61,10 @@ export type CredentialMutation =
 
 const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");
 
-/** `tokenValueFromMetadata` + `tokenValueForAuth`: the value `$TOKEN$` stands for. */
+/**
+ * `tokenValueFromMetadata` + `tokenValueForAuth`: the value Go's `api-call` substitutes for `$TOKEN$` (not ported), the
+ * token the quota probes send (`quota/target.ts`).
+ */
 export const apiCallToken = (credential: Pick<Credential, "metadata" | "attributes">): string => {
   const { metadata } = credential;
   const direct = text(metadata.accessToken) || text(metadata.access_token);

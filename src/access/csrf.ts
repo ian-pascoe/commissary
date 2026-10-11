@@ -6,7 +6,7 @@
 // Non-browser clients (curl, SDKs, Claude Code, Codex) send neither `Origin` nor `Sec-Fetch-*` headers and are not
 // affected. Browsers always send `Origin` on cross-origin fetches, form posts and WebSocket handshakes, and
 // `Sec-Fetch-Site` on every request; the control panel is served by the Worker itself (same origin).
-import { MANAGEMENT_PREFIX, normalizedPath } from "./routes.ts";
+import { isPanelPagePath, MANAGEMENT_PREFIX, normalizedPath } from "./routes.ts";
 import type { AccessZone } from "./routes.ts";
 
 export interface CrossSiteRejection {
@@ -64,10 +64,20 @@ const isWebSocketUpgrade = (headers: Headers): boolean =>
     .split(",")
     .some((token) => token.trim() === "websocket");
 
-/** A top-level navigation (link, bookmark, typed URL), which may legitimately come from another site. */
-const isNavigation = (method: string, headers: Headers): boolean =>
+const header = (headers: Headers, name: string): string =>
+  (headers[name] ?? "").trim().toLowerCase();
+
+/**
+ * A top-level navigation (link, bookmark, typed URL) to a panel page, which may legitimately come from another site:
+ * `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document` (not a frame: `iframe`/`frame`/`embed`/`object` are
+ * refused, against clickjacking), to a panel page or the legacy panel address. The management API
+ * (`/v8/management*`) has no such page: OAuth provider redirects land on the public callback paths.
+ */
+const isPanelNavigation = (method: string, headers: Headers, requestUrl: string): boolean =>
   (method === "GET" || method === "HEAD") &&
-  (headers["sec-fetch-mode"] ?? "").trim().toLowerCase() === "navigate";
+  header(headers, "sec-fetch-mode") === "navigate" &&
+  header(headers, "sec-fetch-dest") === "document" &&
+  isPanelPagePath(normalizedPath(requestUrl) ?? "");
 
 const mediaType = (headers: Headers): string =>
   (headers["content-type"] ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
@@ -111,7 +121,8 @@ const hasBody = (headers: Headers): boolean => {
  * - WebSocket upgrades whose `Origin` is not the Worker's own host are refused (cross-site WebSocket hijacking).
  * - State-changing methods are refused when `Sec-Fetch-Site` is `cross-site`/`same-site` or `Origin` is foreign.
  * - Management requests of any method are refused for a foreign `Origin`, and for a cross-site `Sec-Fetch-Site` unless
- *   they are top-level navigations (a link to `/management.html` still works).
+ *   they are top-level document navigations to a panel page or `/management.html` (a link to `/accounts` still
+ *   works; a frame or any `/v8/management` request does not).
  * - Management writes need a JSON body (multipart for uploads, YAML for `config.yaml`) or no body at all.
  */
 export const crossSiteRejection = (
@@ -130,7 +141,7 @@ export const crossSiteRejection = (
 
   if (zone !== "management") return undefined;
 
-  if (foreignOrigin || (fetchedCrossSite(headers) && !isNavigation(verb, headers)))
+  if (foreignOrigin || (fetchedCrossSite(headers) && !isPanelNavigation(verb, headers, requestUrl)))
     return CROSS_SITE_REJECTED;
 
   if (!unsafe) return undefined;

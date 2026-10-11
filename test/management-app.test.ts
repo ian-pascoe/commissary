@@ -3,7 +3,6 @@
 import { env } from "cloudflare:workers";
 import { afterAll, describe, expect, it } from "vitest";
 import { makeWebHandler } from "../src/http/app.ts";
-import { AUTO_LOGIN_SCRIPT } from "../src/management/panel.ts";
 import { requestContext } from "../src/platform/env.ts";
 import { claudeFile, resetControlPlane } from "./support/management.ts";
 
@@ -13,8 +12,6 @@ afterAll(app.dispose);
 
 const PANEL_HTML =
   "<!doctype html><html><head><title>cliproxy panel</title></head><body></body></html>";
-
-const SERVED_HTML = PANEL_HTML.replace("<head>", `<head><script>${AUTO_LOGIN_SCRIPT}</script>`);
 
 const bindings = {
   ...env,
@@ -37,9 +34,14 @@ describe("control panel in the application", () => {
       JSON.stringify(claudeFile()),
     );
 
-    const page = await get("/management.html");
+    const page = await get("/");
     expect(page.status).toBe(200);
-    expect(await page.text()).toBe(SERVED_HTML);
+    expect(await page.text()).toBe(PANEL_HTML);
+
+    // The old panel's address (bookmarks) sends the browser to the panel.
+    const legacy = await get("/management.html");
+    expect(legacy.status).toBe(302);
+    expect(legacy.headers.get("location")).toBe("/");
 
     const list = await get("/v8/management/credentials");
     expect(list.status).toBe(200);
@@ -49,9 +51,14 @@ describe("control panel in the application", () => {
   });
 
   it("does not apply the dev bypass to non-loopback hosts", async () => {
-    expect((await get("/management.html", "https://proxy.example.com")).status).not.toBe(200);
-    expect(
-      (await get("/v8/management/credentials", "https://proxy.example.com")).status,
-    ).toBeGreaterThanOrEqual(401);
+    // No Access settings in these bindings: the gate fails closed (500 Authentication service error) instead of
+    // redirecting or bypassing.
+    for (const path of ["/", "/management.html", "/v8/management/credentials"]) {
+      const response = await get(path, "https://proxy.example.com");
+
+      expect(response.status, path).toBe(500);
+      // The legacy redirect is gated too: no Location leaks past the gate.
+      expect(response.headers.get("location"), path).toBeNull();
+    }
   });
 });

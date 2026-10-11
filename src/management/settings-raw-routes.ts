@@ -2,9 +2,10 @@
  * `GET|PUT /v8/management/settings/config` and `POST /v8/management/settings/config/check` (`SettingsGroup` `raw`,
  * `checkRaw`, `saveRaw` in contract/settings.ts): the control panel's raw configuration editor.
  *
- * Workers addition, no Go counterpart (Go's panel reads and writes `config.yaml` with raw secrets; the Workers panel
- * never calls `GET /config*`, which stay raw for the upstream `management.html`). The editor gets the stored document as
- * sparse YAML with every secret masked as `[redacted#n]…abcd` (`config-secrets.ts`) and sends `{version, yaml}` back:
+ * Workers addition, no Go counterpart (Go's panel reads and writes `config.yaml` with raw secrets). `GET /config*`
+ * mask the same way (`config-routes.ts`) but cannot restore placeholders on write, so this is the one lossless round
+ * trip of a masked document. The editor gets the stored document as sparse YAML with every secret masked as
+ * `[redacted#n]…abcd` (`config-secrets.ts`) and sends `{version, yaml}` back:
  *
  * - a stale `version` is `409 conflict` before anything else (placeholders are numbered per version), no retry;
  * - the text is read by `settings-raw.ts` `readRawEdit` (YAML `422 invalid_yaml` with `line`/`column`, config
@@ -22,11 +23,11 @@ import { Effect, Schema } from "effect";
 import { HttpRouter } from "effect/http";
 import { AccessPrincipal } from "../access/principal.ts";
 import { isJsonObject, type Json, jsonEquals } from "../json/index.ts";
-import { maskDocument, secretSlots } from "./config-secrets.ts";
+import { maskDocument } from "./config-secrets.ts";
 import { RawConfigInput } from "./contract/settings.ts";
 import { boundedBodyText, controlPlane, handled, jsonReply, replyError } from "./http.ts";
 import { checkDocumentLockout } from "./settings.ts";
-import { maskedYaml, type RawEdit, readRawEdit, scrub } from "./settings-raw.ts";
+import { maskedYaml, type RawEdit, readRawEdit } from "./settings-raw.ts";
 import { alwaysAdmin, storedConfig } from "./settings-routes.ts";
 
 const PATH = "/v8/management/settings/config";
@@ -134,12 +135,8 @@ const save = Effect.gen(function* () {
   if (result.error === "conflict")
     return yield* replyError(409, "conflict", { message: result.message });
 
-  // Not expected (the same document was just decoded); the message is scrubbed like every other.
-  const secrets = [current.document, read.document].flatMap((document) =>
-    secretSlots(document).map((slot) => slot.value),
-  );
-
-  return yield* replyError(422, "invalid_config", { message: scrub(result.message, secrets) });
+  // Not expected (the same document was just decoded); the codec's message is value-free (`config/codec.ts`).
+  return yield* replyError(422, "invalid_config", { message: result.message });
 });
 
 export const settingsRawRoutes = [

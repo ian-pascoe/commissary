@@ -2,17 +2,17 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { decodeConfig } from "../src/config/codec.ts";
-import type { JsonObject } from "../src/json/index.ts";
+import type { Json, JsonObject } from "../src/json/index.ts";
 import { resetCooldownState } from "../src/credentials/cooldown-reset.ts";
+import { synthesizeConfigCredentials } from "../src/credentials/synthesize.ts";
 import { applyFieldPatch } from "../src/credentials/field-patch.ts";
 import { emptyQuota, emptyState, type CredentialState } from "../src/credentials/model.ts";
-import { classifyPath } from "../src/access/routes.ts";
-import { authIndexOf } from "../src/management/auth-index.ts";
+import { classifyPath, isPanelPagePath, LEGACY_PANEL_PATH } from "../src/access/routes.ts";
 import {
   configKeyIds,
+  configPathOfUrl,
   deleteAtPath,
   getAtPath,
-  injectAuthIndexes,
   mergePatch,
   parseConfigPath,
   stripAuthIndexes,
@@ -32,6 +32,41 @@ describe("config document paths", () => {
     expect(parseConfigPath("/")).toEqual([]);
     expect(parseConfigPath("/a/b%20c/")).toEqual(["a", "b c"]);
     expect(parseConfigPath("/a//b")).toBeUndefined();
+
+    // Reserved segments would reach Object.prototype through a plain object.
+    for (const reserved of ["__proto__", "constructor", "prototype", "%5F%5Fproto%5F%5F"])
+      expect(parseConfigPath(`/a/${reserved}/b`), reserved).toBeUndefined();
+    expect(parseConfigPath("/a/Constructor")).toEqual(["a", "Constructor"]);
+  });
+
+  it("reads the config path of a URL like the router matches it", () => {
+    expect(configPathOfUrl("https://x.test/v8/management/config/a/b?x=1")).toBe("/a/b");
+    expect(configPathOfUrl("https://x.test//v8//management/%63onfig/a")).toBe("/a");
+    expect(configPathOfUrl("https://x.test/V8/MANAGEMENT/Config")).toBe("/");
+    expect(configPathOfUrl("/v8/management/config/a%2Fb/c")).toBe("/a%2Fb/c");
+    expect(parseConfigPath(configPathOfUrl("/v8/management/config/a%2Fb/c") ?? "")).toEqual([
+      "a/b",
+      "c",
+    ]);
+    expect(configPathOfUrl("https://x.test/v8/management/config/a//b")).toBe("/a//b");
+    expect(configPathOfUrl("https://x.test/v8/management/settings/config")).toBeUndefined();
+    expect(configPathOfUrl("https://x.test/v8/management")).toBeUndefined();
+  });
+
+  it("never writes to a prototype", () => {
+    const patch = JSON.parse(
+      '{"__proto__": {"polluted": 1}, "a": {"__proto__": {"x": 1}, "b": 2}}',
+    ) as Json;
+
+    const merged = mergePatch({ a: { c: 3 } }, patch);
+
+    expect(merged).toEqual({ a: { c: 3, b: 2 } });
+    expect(Object.getPrototypeOf(merged)).toBe(Object.prototype);
+    expect("polluted" in {}).toBe(false);
+
+    // Keys that only exist on the prototype are not traversed.
+    expect(writeAtPath({}, ["toString", "x"], 1, "put")).toEqual({ toString: { x: 1 } });
+    expect(Object.prototype).not.toHaveProperty("toString.x");
   });
 
   it("reads, writes and deletes without mutating the input", () => {
@@ -112,22 +147,13 @@ describe("config key ids", () => {
 
   const config = Effect.runSync(decodeConfig(document));
 
-  it("maps every key position to the credential id that injectAuthIndexes uses", () => {
+  it("maps every key position to a credential the pool synthesises", () => {
     const ids = configKeyIds(config);
-    const injected = injectAuthIndexes(document, config)["api-keys"] as Record<string, unknown>;
+    const synthesised = new Set(synthesizeConfigCredentials(config, 0).map((entry) => entry.id));
 
-    const indexes = (family: string) =>
-      (injected[family] as Array<{ keys: Array<{ auth_index?: string }> }>).map((group) =>
-        group.keys.map((key) => key.auth_index),
-      );
-
-    for (const family of ["claude", "vertex", "openai-compatibility"] as const) {
-      expect(
-        ids[family].map((group) =>
-          group.keys.map((id) => (id === undefined ? undefined : authIndexOf(id))),
-        ),
-      ).toEqual(indexes(family));
-    }
+    for (const family of ["claude", "vertex", "openai-compatibility"] as const)
+      for (const id of ids[family].flatMap((group) => group.keys))
+        if (id !== undefined) expect(synthesised).toContain(id);
 
     // Keys of one family are distinct, in config order across groups.
     const claude = ids.claude.flatMap((group) => group.keys);
@@ -661,10 +687,31 @@ describe("cooldown reset", () => {
 });
 
 describe("access classification of the panel page", () => {
-  it("treats /management.html like the management API", () => {
+  it("keeps the legacy panel path (a redirect to /) in the management zone", () => {
+    expect(classifyPath(`https://x.test${LEGACY_PANEL_PATH}`)).toBe("management");
     expect(classifyPath("https://x.test/management.html")).toBe("management");
     expect(classifyPath("https://x.test//Management.HTML")).toBe("management");
     expect(classifyPath("https://x.test/%6danagement.html")).toBe("management");
     expect(classifyPath("https://x.test/other.html")).toBe("public");
+  });
+
+  it("names the pages a cross-site navigation may open (not the API, not the bundle)", () => {
+    for (const path of [
+      "/",
+      "/accounts",
+      "/accounts/connect",
+      "/settings/config",
+      LEGACY_PANEL_PATH,
+    ])
+      expect(isPanelPagePath(path), path).toBe(true);
+
+    for (const path of [
+      "/v8/management/config",
+      "/assets/index.js",
+      "/assets",
+      "/management.htm",
+      "/healthz",
+    ])
+      expect(isPanelPagePath(path), path).toBe(false);
   });
 });

@@ -1,58 +1,16 @@
-// api-call, latest-version, model definitions, log stubs and the control panel page.
+// Latest-version, model definitions, log stubs, the removed api-call route and the legacy panel redirect.
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { authIndexOf } from "../src/management/auth-index.ts";
-import {
-  AUTO_LOGIN_SCRIPT,
-  NOT_INSTALLED,
-  PANEL_PLACEHOLDER_KEY,
-} from "../src/management/panel.ts";
-import {
-  claudeFile,
-  controlPlane,
-  jsonInit,
-  makeHarness,
-  resetControlPlane,
-  token,
-} from "./support/management.ts";
-import type { Json } from "../src/json/index.ts";
+import { jsonInit, makeHarness, resetControlPlane, token } from "./support/management.ts";
 
 let release: () => { status?: number; body?: unknown; transportError?: boolean } = () => ({
   body: { tag_name: "v8.1.0" },
 });
 
-const PANEL_HTML = "<!doctype html><html><head><title>panel</title></head><body></body></html>";
+const harness = makeHarness((request) => {
+  if (request.url.startsWith("https://api.github.com/")) return release();
 
-const SERVED_HTML = PANEL_HTML.replace("<head>", `<head><script>${AUTO_LOGIN_SCRIPT}</script>`);
-
-const panelAssets = (found: boolean) =>
-  ({
-    fetch: async (request: Request) =>
-      found && new URL(request.url).pathname === "/management.html"
-        ? new Response(PANEL_HTML, {
-            headers: { "content-type": "text/html; charset=utf-8", etag: '"abc"' },
-          })
-        : new Response("not found", { status: 404 }),
-  }) as unknown as Fetcher;
-
-const harness = makeHarness(
-  (request) => {
-    if (request.url.startsWith("https://api.github.com/")) return release();
-
-    if (request.url === "https://offline.example/x") return { transportError: true };
-
-    return {
-      status: 201,
-      headers: { "x-upstream": "yes" },
-      body: {
-        method: request.method,
-        url: request.url,
-        headers: request.headers,
-        body: request.body,
-      },
-    };
-  },
-  { ASSETS: panelAssets(true) },
-);
+  return { status: 201, body: { method: request.method, url: request.url } };
+});
 
 afterAll(harness.dispose);
 
@@ -64,166 +22,31 @@ beforeEach(async () => {
 
 const { call, json } = harness;
 
-const apiCall = (body: Json) => json("/v8/management/requests/api-call", jsonInit("POST", body));
-
 describe("api-call", () => {
-  it("validates the request", async () => {
+  // Go's token-substituting upstream probe served only the upstream panel; quota and key checks run server-side.
+  it("is not ported: 404 for administrators, still behind the admin gate", async () => {
+    const body = {
+      method: "GET",
+      url: "https://api.example.com/q",
+      header: { Authorization: "Bearer $TOKEN$" },
+    };
+
+    const admin = await call("/v8/management/requests/api-call", jsonInit("POST", body));
+
+    expect(admin.status).toBe(404);
+    expect(
+      (await call("/v8/management/requests/api-call", { ...jsonInit("POST", body), auth: false }))
+        .status,
+    ).toBe(401);
     expect(
       (
-        await json("/v8/management/requests/api-call", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: "x",
+        await call("/v8/management/requests/api-call", {
+          ...jsonInit("POST", body),
+          auth: await token("other@example.com"),
         })
-      ).body,
-    ).toEqual({
-      error: "invalid body",
-    });
-    expect((await apiCall({ url: "https://a.example" })).body).toEqual({ error: "missing method" });
-    expect((await apiCall({ method: "GET" })).body).toEqual({ error: "missing url" });
-    expect((await apiCall({ method: "GET", url: "/relative" })).body).toEqual({
-      error: "invalid url",
-    });
-    expect((await apiCall({ method: "GET", url: "ftp://a.example/x" })).body).toEqual({
-      error: "invalid url",
-    });
-    expect(
-      (await apiCall({ method: "GET", url: "https://a.example", proxy_url: "ftp://p" })).body,
-    ).toEqual({
-      error: "invalid proxy_url",
-    });
+      ).status,
+    ).toBe(403);
     expect(harness.requests).toHaveLength(0);
-  });
-
-  it("forwards the request and returns status, headers and body", async () => {
-    const result = await apiCall({
-      method: "post",
-      url: "https://api.example.com/v1/ping?x=1",
-      header: { "X-Test": "1", Host: "ignored.example" },
-      data: '{"a":1}',
-      proxy_url: "direct",
-    });
-
-    expect(result.status).toBe(200);
-
-    const body = result.body as {
-      status_code: number;
-      header: Record<string, string[]>;
-      body: string;
-    };
-
-    expect(body.status_code).toBe(201);
-    expect(body.header["x-upstream"]).toEqual(["yes"]);
-
-    const echoed = JSON.parse(body.body) as {
-      method: string;
-      url: string;
-      headers: Record<string, string>;
-      body: string;
-    };
-
-    // The mock transport records the URL without its query (the HTTP client keeps parameters separately).
-    expect(echoed).toMatchObject({
-      method: "POST",
-      url: "https://api.example.com/v1/ping",
-      body: '{"a":1}',
-    });
-    expect(echoed.headers["x-test"]).toBe("1");
-    expect(echoed.headers).not.toHaveProperty("host");
-  });
-
-  it("replaces $TOKEN$ with the credential token in headers and (JSON-escaped) data", async () => {
-    await controlPlane().importAuthFile("x.json", claudeFile({ access_token: 'tok"en\\1' }));
-    const authIndex = authIndexOf("x.json");
-
-    const result = await apiCall({
-      auth_index: authIndex,
-      method: "POST",
-      url: "https://api.example.com/q",
-      header: { Authorization: "Bearer $TOKEN$" },
-      data: '{"t":"$TOKEN$"}',
-    });
-
-    const echoed = JSON.parse((result.body as { body: string }).body) as {
-      headers: Record<string, string>;
-      body: string;
-    };
-
-    expect(echoed.headers.authorization).toBe('Bearer tok"en\\1');
-    expect(JSON.parse(echoed.body)).toEqual({ t: 'tok"en\\1' });
-
-    const plain = await apiCall({
-      authIndex,
-      method: "POST",
-      url: "https://api.example.com/q",
-      data: "raw $TOKEN$ text",
-    });
-
-    expect(JSON.parse((plain.body as { body: string }).body).body).toBe('raw tok"en\\1 text');
-  });
-
-  it("never substitutes $TOKEN$ into plain-http requests", async () => {
-    await controlPlane().importAuthFile("x.json", claudeFile());
-    const before = harness.requests.length;
-
-    const result = await apiCall({
-      auth_index: authIndexOf("x.json"),
-      method: "GET",
-      url: "http://api.example.com/q",
-      header: { Authorization: "Bearer $TOKEN$" },
-    });
-
-    expect(result).toMatchObject({
-      status: 400,
-      body: { error: "auth token requires an https url" },
-    });
-    expect(harness.requests).toHaveLength(before);
-  });
-
-  it("uses the API key of config credentials and reports token problems", async () => {
-    await controlPlane().putConfig(
-      "api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-config }]\n",
-    );
-
-    const config = (await json("/v8/management/config/api-keys/claude")).body as Array<{
-      keys: Array<{ auth_index: string }>;
-    }>;
-
-    const result = await apiCall({
-      auth_index: config[0]!.keys[0]!.auth_index,
-      method: "GET",
-      url: "https://api.example.com/q",
-      header: { "x-api-key": "$TOKEN$" },
-    });
-
-    expect(JSON.parse((result.body as { body: string }).body).headers["x-api-key"]).toBe(
-      "sk-ant-config",
-    );
-
-    const base = {
-      method: "GET",
-      url: "https://api.example.com/q",
-      header: { Authorization: "Bearer $TOKEN$" },
-    };
-
-    expect((await apiCall(base)).body).toEqual({ error: "auth token not found" });
-    expect((await apiCall({ ...base, auth_index: "ffffffffffffffff" })).body).toEqual({
-      error: "auth credential not found for auth_index",
-    });
-    await controlPlane().importAuthFile("empty.json", { type: "claude", email: "e@x.com" });
-    expect((await apiCall({ ...base, auth_index: authIndexOf("empty.json") })).body).toEqual({
-      error: "auth token not found",
-    });
-    expect(
-      harness.requests.filter((request) => request.url.includes("api.example.com")),
-    ).toHaveLength(1);
-  });
-
-  it("answers 502 when the upstream is unreachable", async () => {
-    expect(await apiCall({ method: "GET", url: "https://offline.example/x" })).toMatchObject({
-      status: 502,
-      body: { error: "request failed" },
-    });
   });
 });
 
@@ -338,63 +161,32 @@ describe("server information", () => {
   });
 });
 
-describe("control panel page", () => {
-  it("serves management.html to administrators only", async () => {
-    const page = await call("/management.html");
-    expect(page.status).toBe(200);
-    expect(page.headers.get("content-type")).toBe("text/html; charset=utf-8");
-    expect(page.headers.get("x-frame-options")).toBe("DENY");
-    expect(page.headers.get("x-content-type-options")).toBe("nosniff");
-    expect(page.headers.get("etag")).toBeNull();
-    expect(await page.text()).toBe(SERVED_HTML);
+describe("legacy panel address", () => {
+  // `/management.html` was the upstream panel; it now sends bookmarks to the control panel at `/`.
+  const spellings = [
+    "/management.html",
+    "/Management.HTML",
+    "/management%2Ehtml",
+    "//management.html",
+    "/%6Danagement.html",
+  ];
 
-    expect((await call("/management.html", { auth: false })).status).toBe(401);
-    expect((await call("/Management.HTML", { auth: false })).status).toBe(401);
-    expect(
-      (await call("/management.html", { auth: await token("other@example.com") })).status,
-    ).toBe(403);
+  it("redirects administrators to / without caching, for every spelling, GET and HEAD", async () => {
+    for (const path of spellings)
+      for (const method of ["GET", "HEAD"]) {
+        const response = await call(path, { method, redirect: "manual" });
+
+        expect(response.status, `${method} ${path}`).toBe(302);
+        expect(response.headers.get("location"), path).toBe("/");
+        expect(response.headers.get("cache-control"), path).toBe("no-store");
+        expect(response.headers.get("access-control-allow-origin"), path).toBeNull();
+      }
   });
 
-  it("explains how to install the panel when the asset is missing", async () => {
-    const missing = makeHarness(undefined, { ASSETS: panelAssets(false) });
-
-    try {
-      expect(await missing.json("/management.html")).toMatchObject({
-        status: 404,
-        body: { error: NOT_INSTALLED },
-      });
-    } finally {
-      await missing.dispose();
+  it("stays behind the admin gate", async () => {
+    for (const path of spellings) {
+      expect((await call(path, { auth: false })).status, path).toBe(401);
+      expect((await call(path, { auth: await token("other@example.com") })).status, path).toBe(403);
     }
-  });
-});
-
-describe("control panel auto-login", () => {
-  // Runs the injected script against a fake localStorage, as the browser does before the panel boots.
-  const run = (initial: Record<string, string>) => {
-    const store = new Map(Object.entries(initial));
-
-    const localStorage = {
-      getItem: (key: string) => store.get(key) ?? null,
-      setItem: (key: string, value: string) => void store.set(key, value),
-    };
-
-    new Function("localStorage", AUTO_LOGIN_SCRIPT)(localStorage);
-
-    return Object.fromEntries(store);
-  };
-
-  it("stores a placeholder key and the remember-me flag", () => {
-    expect(run({})).toEqual({
-      managementKey: JSON.stringify(PANEL_PLACEHOLDER_KEY),
-      isLoggedIn: "true",
-    });
-  });
-
-  it("keeps an existing saved login", () => {
-    expect(run({ managementKey: "obfuscated", isLoggedIn: "true" })).toEqual({
-      managementKey: "obfuscated",
-      isLoggedIn: "true",
-    });
   });
 });

@@ -10,24 +10,18 @@
  * stored secret is deduplicated with it without the review showing it (typed values are never compared with stored
  * ones); kept secrets sharing a stored value get one more decode with shared stand-ins (`sharedDropped`), so a dedupe
  * an edit causes among them is listed in `dropped`. `%YAML 1.1` is refused (its schema resolves
- * timestamps, binary, sets and merges whatever the parse options say). Nothing secret reaches a message: YAML errors whose text would quote the source are reduced to their
- * kind, and config errors are decoded on the edited document (placeholders, not stored secrets), then scrubbed of
- * every secret of either document.
+ * timestamps, binary, sets and merges whatever the parse options say). Messages never quote a value: a YAML error
+ * is a fixed sentence per error code (`yaml-message.ts`) with its line and column, a config error is value-free
+ * (`config/codec.ts`) and names at most the keys the caller wrote; they are not scrubbed of stored secrets (a
+ * scrubbed echo would tell a right guess from a wrong one).
  */
 import { Effect } from "effect";
-import {
-  Document,
-  isScalar,
-  LineCounter,
-  parseDocument,
-  Scalar,
-  visit,
-  type YAMLError,
-} from "yaml";
+import { Document, isScalar, LineCounter, parseDocument, Scalar, visit } from "yaml";
 import { decodeConfig, encodeConfig, sparseDocument } from "../config/codec.ts";
 import { prepareDocument } from "../config/document.ts";
 import { ConfigValidationError, configPath } from "../config/errors.ts";
 import { notAppliedSettings } from "../config/not-applied.ts";
+import { yamlMessage } from "../config/yaml-message.ts";
 import type { Config } from "../config/schema.ts";
 import { isJsonObject, type Json, type JsonObject, jsonEquals } from "../json/index.ts";
 import {
@@ -37,7 +31,6 @@ import {
   type ReviewedResult,
   reviewResult,
   type SecretTags,
-  secretSlots,
   secretTags,
 } from "./config-secrets.ts";
 
@@ -86,47 +79,6 @@ export const maskedYaml = (masked: JsonObject): string => {
 
 // --- messages ------------------------------------------------------------------------------------------------------
 
-/** Every non-empty secret replaced in `message` (quoted forms always, bare ones from four characters). */
-export const scrub = (message: string, secrets: ReadonlyArray<string>): string =>
-  secrets
-    .filter((secret) => secret !== "")
-    .toSorted((a, b) => b.length - a.length)
-    .reduce((out, secret) => {
-      const quoted = JSON.stringify(secret);
-      const escaped = quoted.slice(1, -1);
-      let next = out.replaceAll(quoted, '"[redacted]"');
-
-      if (secret.length >= 4) next = next.replaceAll(secret, "[redacted]");
-
-      return escaped.length >= 4 ? next.replaceAll(escaped, "[redacted]") : next;
-    }, message);
-
-/** YAML messages that end with a piece of the source (which could be a secret): only their kind is kept. */
-const QUOTING_MESSAGES = [
-  "Block scalar header includes extra characters",
-  "Unresolved tag",
-  "Invalid escape sequence",
-  "Plain value cannot start with",
-  "Not a valid tag",
-  "Could not resolve tag",
-  "Unknown directive",
-  "Unsupported YAML version",
-  "Unresolved plain scalar",
-  "Ordered maps must not include duplicate keys",
-];
-
-const yamlMessage = (error: YAMLError): string => {
-  if (error.code === "TAG_RESOLVE_FAILED" || error.code === "BAD_COLLECTION_TYPE")
-    return "custom tags are not supported";
-  const quoting = QUOTING_MESSAGES.find((prefix) => error.message.startsWith(prefix));
-
-  if (quoting !== undefined) return quoting;
-
-  return /^Verbatim tags|^The .* tag has no suffix/.test(error.message)
-    ? "invalid tag"
-    : error.message;
-};
-
 const isMergeKey = (key: unknown): key is Scalar =>
   isScalar(key) &&
   (key.type === undefined || key.type === Scalar.PLAIN) &&
@@ -155,7 +107,7 @@ const mergeKeyOffset = (document: Document): number | undefined => {
 const REFUSED_WARNINGS = new Set(["TAG_RESOLVE_FAILED", "BAD_COLLECTION_TYPE"]);
 
 /** Parses YAML text (or JSON) into a JSON value; an empty document is `{}`. */
-const parseYaml = (text: string, secrets: ReadonlyArray<string>): Effect.Effect<Json, RawProblem> =>
+const parseYaml = (text: string): Effect.Effect<Json, RawProblem> =>
   Effect.suspend(() => {
     const lines = new LineCounter();
 
@@ -187,7 +139,7 @@ const parseYaml = (text: string, secrets: ReadonlyArray<string>): Effect.Effect<
 
       return Effect.fail({
         error: "invalid_yaml",
-        message: scrub(yamlMessage(error), secrets),
+        message: yamlMessage(error),
         line,
         column: col,
       });
@@ -209,18 +161,14 @@ const parseYaml = (text: string, secrets: ReadonlyArray<string>): Effect.Effect<
     return Effect.try({
       // SAFETY: the core schema yields JSON values only (plain objects, arrays, strings, numbers, booleans, null).
       try: () => (document.toJS() ?? {}) as Json,
-      catch: (cause) => ({
-        error: "invalid_yaml",
-        message: scrub(cause instanceof Error ? cause.message : String(cause), secrets),
-      }),
+      // Alias resolution errors name the alias (source text): a fixed message instead.
+      catch: () => ({ error: "invalid_yaml", message: "invalid YAML: unresolvable aliases" }),
     });
   });
 
-const invalidConfig = (
-  error: ConfigValidationError,
-  secrets: ReadonlyArray<string>,
-): RawProblem => {
-  const problem = { error: "invalid_config", message: scrub(error.message, secrets) };
+/** Config errors are value-free (`config/codec.ts`): passed on as they are, never scrubbed (that is an oracle). */
+const invalidConfig = (error: ConfigValidationError): RawProblem => {
+  const problem = { error: "invalid_config", message: error.message };
 
   return error.path === undefined ? problem : { ...problem, path: error.path };
 };
@@ -319,7 +267,6 @@ const sharedDropped = Effect.fnUntraced(function* (
   stored: JsonObject,
   restored: ReadonlyArray<RestoredSecret>,
   tags: SecretTags,
-  secrets: ReadonlyArray<string>,
 ): Effect.fn.Return<ReadonlyArray<string> | undefined, RawProblem> {
   const first = new Map<string, number>();
 
@@ -340,7 +287,7 @@ const sharedDropped = Effect.fnUntraced(function* (
   if (!merged.ok) return undefined;
 
   const config = yield* decodeConfig(merged.document).pipe(
-    Effect.mapError((error) => invalidConfig(error, secrets)),
+    Effect.mapError((error) => invalidConfig(error)),
   );
 
   // SAFETY: the encoded config is a plain JSON object (the schema's encoded side only holds JSON values).
@@ -356,8 +303,7 @@ export const readRawEdit = Effect.fnUntraced(function* (
   text: string,
   stored: JsonObject,
 ): Effect.fn.Return<RawEdit, RawProblem> {
-  const storedSecrets = secretSlots(stored).map((slot) => slot.value);
-  const raw = yield* parseYaml(text, storedSecrets);
+  const raw = yield* parseYaml(text);
 
   const prepared = yield* Effect.try({
     try: () => prepareDocument(raw),
@@ -365,22 +311,18 @@ export const readRawEdit = Effect.fnUntraced(function* (
       invalidConfig(
         error instanceof ConfigValidationError
           ? error
-          : new ConfigValidationError({ message: String(error) }),
-        storedSecrets,
+          : new ConfigValidationError({ message: "invalid config document" }),
       ),
   });
 
-  const secrets = [...storedSecrets, ...secretSlots(prepared).map((slot) => slot.value)];
-
-  // Validated before the secrets are restored: a schema message may quote a value, and here it can only be a
-  // placeholder or what the caller typed.
-  yield* decodeConfig(prepared).pipe(Effect.mapError((error) => invalidConfig(error, secrets)));
+  // Validated before the secrets are restored, so a refusal depends only on what the caller sent.
+  yield* decodeConfig(prepared).pipe(Effect.mapError((error) => invalidConfig(error)));
   const restored = restoreSecrets(prepared, stored);
 
   if (!restored.ok) return yield* Effect.fail<RawProblem>(restored.problem);
 
   const config = yield* decodeConfig(restored.document).pipe(
-    Effect.mapError((error) => invalidConfig(error, secrets)),
+    Effect.mapError((error) => invalidConfig(error)),
   );
 
   // SAFETY: the encoded config is a plain JSON object (the schema's encoded side only holds JSON values).
@@ -394,7 +336,7 @@ export const readRawEdit = Effect.fnUntraced(function* (
   if (!tagged.ok) return yield* Effect.fail<RawProblem>(tagged.problem);
 
   const taggedConfig = yield* decodeConfig(tagged.document).pipe(
-    Effect.mapError((error) => invalidConfig(error, secrets)),
+    Effect.mapError((error) => invalidConfig(error)),
   );
 
   // SAFETY: as above.
@@ -416,7 +358,7 @@ export const readRawEdit = Effect.fnUntraced(function* (
     canonical,
     restored: restored.restored,
     review: reviewResult(taggedCanonical, stored, tags),
-    dropped: yield* sharedDropped(prepared, stored, restored.restored, tags, secrets).pipe(
+    dropped: yield* sharedDropped(prepared, stored, restored.restored, tags).pipe(
       Effect.map((dropped) => dropped ?? droppedPaths(tagged.document, taggedCanonical)),
     ),
     notApplied: notAppliedSettings(config),

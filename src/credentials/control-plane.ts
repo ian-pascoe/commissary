@@ -39,9 +39,7 @@ import { locateKey, setKeyExcludedAll } from "../management/api-keys-write.ts";
 import { configKeyIds } from "../management/config-document.ts";
 import { buildCredentialEntry } from "../management/credential-entry.ts";
 import {
-  apiCallToken,
   findCredential,
-  type ApiCallTokenResult,
   type CredentialMutation,
   type CredentialRef,
   type RefreshAllItem,
@@ -537,28 +535,6 @@ export class ControlPlane extends DurableObject<Env> {
     }
 
     return items;
-  }
-
-  /**
-   * The value `$TOKEN$` stands for in `POST /requests/api-call`: the (refreshed when needed) access token of a stored
-   * credential or the API key of a config credential.
-   */
-  async resolveApiCallToken(authIndex: string): Promise<ApiCallTokenResult> {
-    const target = findCredential(this.#pool.entries(), { authIndex });
-
-    if (target === undefined) return { ok: false, error: "not_found" };
-    let credential: Pick<Credential, "metadata" | "attributes"> = target.credential;
-
-    if (target.credential.source === "file") {
-      const fresh = await this.#refresh.ensureFresh(target.credential.id);
-
-      if (!fresh.ok) return { ok: false, error: "refresh_failed" };
-      credential = fresh.credential;
-    }
-
-    const token = apiCallToken(credential);
-
-    return token === "" ? { ok: false, error: "token_not_found" } : { ok: true, token };
   }
 
   // --- quota check (src/quota) ----------------------------------------------------------------------------------
