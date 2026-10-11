@@ -1,0 +1,632 @@
+/* Settings: one 56rem column of sections on the 4rem rhythm; each setting is a row between stone-2 hairlines, its
+   control left and, when it differs from the default, its reset right. The jump list sits under the title on narrow
+   screens and becomes a sticky rail beside the column on wide ones. No boxes: the sticky save bar is white with a
+   hairline above. */
+.page {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.head {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 56rem;
+}
+
+.layout {
+  display: grid;
+  gap: var(--space-7);
+}
+
+.body {
+  display: grid;
+  gap: var(--space-7);
+  min-width: 0;
+  max-width: 56rem;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--stone-4);
+}
+
+.facts > span:not(:first-child)::before {
+  margin-right: var(--space-3);
+  content: "·";
+}
+
+.attention {
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+
+.jumps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  max-width: 56rem;
+  padding-bottom: var(--space-5);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  border-bottom: 2px solid var(--ink);
+}
+
+.jumpCount {
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+/* Wide screens: the jumps follow the reader down the page, beside the column. */
+@media (width >= 78rem) {
+  .page {
+    gap: var(--space-7);
+  }
+
+  .head {
+    padding-bottom: var(--space-5);
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .layout {
+    grid-template-columns: minmax(0, 56rem) 12rem;
+    align-items: start;
+  }
+
+  .body {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  .jumps {
+    position: sticky;
+    top: var(--space-5);
+    grid-column: 2;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: 0 0 0 var(--space-4);
+    border-bottom: 0;
+    border-left: 2px solid var(--stone-2);
+  }
+}
+
+.section {
+  display: grid;
+  scroll-margin-top: var(--space-5);
+}
+
+.section > form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.sectionHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-4);
+}
+
+.section > .sectionHead {
+  margin-bottom: var(--space-4);
+}
+
+.sectionTitle {
+  font-size: var(--text-lg);
+  font-weight: 750;
+  letter-spacing: -0.015em;
+}
+
+.sectionTitle:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.state {
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+
+.lead {
+  max-width: 65ch;
+  font-size: var(--text-sm);
+  color: var(--stone-4);
+}
+
+.section > .lead {
+  margin-bottom: var(--space-4);
+}
+
+.quiet {
+  max-width: 65ch;
+  font-size: var(--text-sm);
+  color: var(--stone-4);
+}
+
+.quiet a {
+  color: var(--ink);
+}
+
+.fields {
+  display: grid;
+  border-bottom: 1px solid var(--stone-2);
+}
+
+/* One setting. */
+.field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--stone-2);
+}
+
+.control {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* A setting that applies only while the one above it is on: indented to that checkbox's hint. */
+.dependent {
+  margin-left: calc(1.125rem + var(--space-2));
+}
+
+/* Off while its parent is off; the line saying why stays readable. */
+.field:has(:disabled) .control > :not(.requires) {
+  opacity: 0.55;
+}
+
+.requires {
+  max-width: 65ch;
+  font-size: var(--text-xs);
+  font-weight: 650;
+  color: var(--stone-4);
+}
+
+/* The sticky save bar must not cover the control the keyboard is on. */
+.section :is(input, textarea, fieldset) {
+  scroll-margin-bottom: 5rem;
+}
+
+.meta {
+  padding-top: 0.125rem;
+  font-size: var(--text-xs);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.reset {
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 650;
+  text-decoration: underline;
+  text-decoration-color: var(--stone-3);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.22em;
+  cursor: pointer;
+}
+
+.reset:hover {
+  text-decoration-color: var(--ink);
+}
+
+.reset:disabled {
+  cursor: not-allowed;
+}
+
+.hint {
+  max-width: 65ch;
+  font-size: var(--text-xs);
+  color: var(--stone-4);
+}
+
+.hint a {
+  color: var(--ink);
+}
+
+.reading {
+  font-size: var(--text-xs);
+  font-weight: 650;
+}
+
+.check {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.check > input {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0.0625rem 0 0;
+  accent-color: var(--ink);
+}
+
+.check ~ .hint,
+.check ~ .requires,
+.check ~ span[id$="-error"] {
+  padding-left: calc(1.125rem + var(--space-2));
+}
+
+.short {
+  width: 8rem;
+}
+
+.medium {
+  width: min(100%, 18rem);
+}
+
+.long {
+  width: min(100%, 36rem);
+}
+
+.lines {
+  width: min(100%, 36rem);
+  height: auto;
+  min-height: 5.5rem;
+  padding: var(--space-2) var(--space-3);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+/* Radio lists: the choice's name, its meaning beneath. */
+.choices {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choices > legend {
+  float: left;
+  width: 100%;
+  margin-bottom: var(--space-1);
+  padding: 0;
+}
+
+.choiceList {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.choiceRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-5);
+}
+
+.choiceLabel {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0 var(--space-2);
+  padding: var(--space-1) 0;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.choiceLabel > input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--ink);
+  transform: translateY(0.1875rem);
+}
+
+.choiceName {
+  font-weight: 650;
+}
+
+.choiceHint {
+  grid-column: 2;
+  font-size: var(--text-xs);
+  color: var(--stone-4);
+}
+
+.choiceText {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-left: calc(1rem + var(--space-2));
+}
+
+.choiceTextFlush {
+  display: flex;
+  width: 100%;
+  margin-top: var(--space-1);
+}
+
+/* The meanings of a section's one-line radio lists, said once above them. */
+.legend {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  color: var(--stone-4);
+}
+
+.legend b {
+  margin-right: var(--space-2);
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.unit {
+  font-size: var(--text-sm);
+  color: var(--stone-4);
+}
+
+/* Provider groups, the account error rules, the deployment admins. */
+.sub {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-5) 0 var(--space-3);
+  border-top: 1px solid var(--stone-2);
+}
+
+.fields > .sub:first-child {
+  padding-top: var(--space-3);
+}
+
+.sub > .field:last-child {
+  padding-bottom: 0;
+}
+
+.subTitle {
+  font-size: var(--text-md);
+  font-weight: 750;
+}
+
+.sub > .hint {
+  margin-top: var(--space-3);
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--space-5);
+}
+
+.pair .medium,
+.pair .long {
+  width: 100%;
+}
+
+/* The sticky save bar: what the last save said, above the buttons that made it. */
+.actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  background: var(--white);
+  border-top: 1px solid var(--stone-2);
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Payload rule counts: the figure, the kind, its meaning. */
+.counts {
+  display: grid;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+  border-bottom: 1px solid var(--stone-2);
+}
+
+.countRow {
+  display: grid;
+  grid-template-columns: 2.5rem 11rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-1) var(--space-4);
+  padding: var(--space-2) 0;
+  font-size: var(--text-sm);
+  border-top: 1px solid var(--stone-2);
+}
+
+.count {
+  font-weight: 750;
+  text-align: right;
+}
+
+.countName {
+  font-weight: 650;
+}
+
+.countMeaning {
+  color: var(--stone-4);
+}
+
+.table {
+  width: 100%;
+  margin: var(--space-2) 0;
+  font-size: var(--text-sm);
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.table th {
+  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--stone-4);
+  text-align: left;
+  border-bottom: 2px solid var(--ink);
+}
+
+.table th:nth-child(1) {
+  width: 22%;
+}
+
+.table th:nth-child(2) {
+  width: 12%;
+}
+
+.table td {
+  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+  vertical-align: top;
+  border-bottom: 1px solid var(--stone-2);
+}
+
+.table td:first-child {
+  font-weight: 650;
+}
+
+.matchCell {
+  overflow-wrap: anywhere;
+}
+
+.admins {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+/* Keys that do nothing on Workers. */
+.inert {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-bottom: 1px solid var(--stone-2);
+}
+
+.inertRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--stone-2);
+}
+
+.inertKey {
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.inertReason {
+  grid-column: 1;
+  font-size: var(--text-sm);
+  color: var(--stone-4);
+}
+
+.inertRow > button,
+.inertLink {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.inertLink {
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+
+.inertProblem {
+  grid-column: 1 / -1;
+}
+
+@media (width < 40rem) {
+  .field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .meta {
+    padding-top: 0;
+    text-align: left;
+  }
+
+  .pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .countRow {
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+  }
+
+  .countMeaning {
+    grid-column: 2;
+  }
+
+  /* The error rules stack: the provider, then status and body under it, then what happens. */
+  .table,
+  .table tbody {
+    display: block;
+  }
+
+  .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .table tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--space-1) var(--space-3);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--stone-2);
+  }
+
+  .table td {
+    padding: 0;
+    border: 0;
+  }
+
+  .table td:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .table td:first-child:empty {
+    display: none;
+  }
+
+  .table td:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .table td[data-label]::before {
+    margin-right: var(--space-1);
+    content: attr(data-label) " ";
+    font-weight: 600;
+    color: var(--stone-4);
+  }
+}

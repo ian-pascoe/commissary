@@ -10,19 +10,13 @@ import { KeysPage } from "./pages/Keys.tsx";
 import { ModelRulesPage } from "./pages/ModelRules.tsx";
 import { ModelsPage } from "./pages/Models.tsx";
 import { OverviewPage } from "./pages/Overview.tsx";
-import { NotFound, Placeholder } from "./pages/Placeholder.tsx";
+import { NotFound } from "./pages/NotFound.tsx";
+import { SettingsPage } from "./pages/Settings.tsx";
 import { UsagePage } from "./pages/Usage.tsx";
 import { readNewKeySearch } from "./lib/keys.ts";
 import { readUsageSearch } from "./lib/usage.ts";
 
 const rootRoute = createRootRoute({ component: Shell, notFoundComponent: NotFound });
-
-const page = (path: string, title: string, holds: string) =>
-  createRoute({
-    getParentRoute: () => rootRoute,
-    path,
-    component: () => <Placeholder title={title} holds={holds} />,
-  });
 
 const routeTree = rootRoute.addChildren([
   createRoute({ getParentRoute: () => rootRoute, path: "/", component: OverviewPage }),
@@ -61,11 +55,7 @@ const routeTree = rootRoute.addChildren([
     validateSearch: readUsageSearch,
     component: UsagePage,
   }),
-  page(
-    "/settings",
-    "Settings",
-    "The settings that apply on Workers, and the raw configuration with a diff before saving.",
-  ),
+  createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: SettingsPage }),
 ]);
 
 export const router = createRouter({

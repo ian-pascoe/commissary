@@ -5,8 +5,10 @@ import { FetchHttpClient, HttpClientError } from "effect/http";
 import { Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 import { ManagementApi } from "#contract/api.ts";
 import type { RoutingModels } from "#contract/routing.ts";
+import type { SettingsPatch, SettingsView } from "#contract/settings.ts";
 import { HISTORY_SPAN_MS } from "../lib/history.ts";
 import { type RuleChange, type RuleWrite, saveRuleChange } from "../lib/models.ts";
+import { type Edits, removeNotApplied, saveDraft } from "../lib/settings.ts";
 import {
   type Breakdown,
   filterQuery,
@@ -250,6 +252,58 @@ export const saveRuleAtom = Atom.family((_key: string) =>
           Effect.die,
         ),
       ),
+  ),
+);
+
+/** The Settings page refetches after a mutation tagged with this key. */
+export const SETTINGS = ["settings"] as const;
+
+/** The settings that apply on Workers, their defaults and the config version writes send back. */
+export const settingsAtom = ManagementClient.query("settings", "get", {
+  reactivityKeys: SETTINGS,
+  timeToLive: KEEP,
+});
+
+/** How the settings saves read the view and write a patch. */
+const settingsIo = (client: ManagementClient["Service"]) => ({
+  read: client.settings.get(),
+  write: (patch: SettingsPatch, version: number) =>
+    client.settings.save({ payload: { version, patch } }),
+});
+
+/**
+ * One section's save (key: the section), sent with the view's version and re-applied once to a fresh read on 409
+ * (`saveDraft`). The view refetches afterwards, so the other sections rebase onto it. Transport and decoding failures
+ * become defects, as in the generated mutations, so the failure is a `ManagementError` or none.
+ */
+export const saveSettingsAtom = Atom.family((_section: string) =>
+  ManagementClient.runtime.fn((input: { readonly edits: Edits; readonly base: SettingsView }) =>
+    Effect.gen(function* () {
+      const io = settingsIo(yield* ManagementClient);
+
+      return yield* Reactivity.mutation(saveDraft(input.edits, input.base, io), SETTINGS);
+    }).pipe(
+      Effect.catchIf(
+        (error) => Schema.isSchemaError(error) || HttpClientError.isHttpClientError(error),
+        Effect.die,
+      ),
+    ),
+  ),
+);
+
+/** Removes one not-applied key (key: the config key), retried once on 409 (`removeNotApplied`). */
+export const removeSettingAtom = Atom.family((key: string) =>
+  ManagementClient.runtime.fn((base: SettingsView) =>
+    Effect.gen(function* () {
+      const io = settingsIo(yield* ManagementClient);
+
+      return yield* Reactivity.mutation(removeNotApplied(key, base, io), SETTINGS);
+    }).pipe(
+      Effect.catchIf(
+        (error) => Schema.isSchemaError(error) || HttpClientError.isHttpClientError(error),
+        Effect.die,
+      ),
+    ),
   ),
 );
 
