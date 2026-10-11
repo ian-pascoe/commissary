@@ -11,6 +11,15 @@ colors:
   yellow: "#f5c400"
   yellow-deep: "#dcae00"
   red: "#d52b1e"
+  night-field: "#0e0f0c"
+  night-ground: "#131412"
+  night-raised: "#1a1b18"
+  night-sunk: "#242422"
+  night-hairline: "#30312e"
+  night-step: "#4f504d"
+  night-quiet: "#959692"
+  night-text: "#e1e2de"
+  night-red: "#f45c4a"
 typography:
   totals:
     fontFamily: "Atkinson Hyperlegible Next Variable, Atkinson Hyperlegible Next, system-ui, sans-serif"
@@ -140,13 +149,13 @@ components:
 
 **Creative North Star: "The Trail Signpost"**
 
-Quota is a walk to the next reset. Each account reads like a Swiss Wanderweg signpost: where it stands now, and how long until capacity is back, in walking-sign time. The ground is plain white; the only loud things are the yellow route (the shell bar and the reset blades) and, when something is wrong, red. It is a glance tool for one operator at a desktop monitor between agent runs, usable down to 390 px.
+Quota is a walk to the next reset. Each account reads like a Swiss Wanderweg signpost: where it stands now, and how long until capacity is back, in walking-sign time. By day the ground is plain white; at night (the dark theme) it is a warm near-black. Either way the only loud things are the yellow route (the reset blades, and the shell: a yellow bar by day, a yellow band at night) and, when something is wrong, red. It is a glance tool for one operator at a desktop monitor between agent runs, usable down to 390 px.
 
 Structure comes from hairlines and one ink rule under table headings. There are no cards, no boxes inside boxes, no shadows, and no per-section colour strips. Type is Atkinson Hyperlegible Next with tabular figures throughout.
 
 **Key Characteristics:**
 
-- White ground, yellow shell bar, black sign ink.
+- White ground, yellow shell bar, black sign ink; at night a dark ground, a dark shell on a yellow route band, light stone text.
 - One meaning per colour; stone is the only neutral ramp.
 - Every figure is labelled once, by its column.
 - The reset blade is the memorable object; its unfold is the only authored motion.
@@ -154,7 +163,7 @@ Structure comes from hairlines and one ink rule under table headings. There are 
 
 ## Colors
 
-A signage palette: white, sign ink, one route yellow, one danger red, and a fixed stone ramp.
+A signage palette: white, sign ink, one route yellow, one danger red, and a fixed stone ramp. These paints are defined once in `web/src/styles/tokens.css`; stylesheets never use them directly but through the semantic tokens below, so the dark theme is a remap of roles, not a second set of rules.
 
 ### Primary
 
@@ -173,6 +182,32 @@ A signage palette: white, sign ink, one route yellow, one danger red, and a fixe
 - **Stone 2** (#e3e3df): meter tracks and row hairlines.
 - **Stone 3** (#c4c5c0): strong rules, link underlines, scrollbar.
 - **Stone 4** (#6a6c69): secondary text and captions, 5.4:1 on white; also the edge on the near-limit tip.
+
+### Semantic Tokens
+
+Each token is a `light-dark()` pair (day / night); contrast of text on its ground in `tokens.css`.
+
+- **ground** (white / #131412): the page, secondary and danger button fills, sticky bars. **field** (white / #0e0f0c): text inputs, a well at night. **raised** (white / #1a1b18): dialogs, the theme menu, the night shell. **sunk** (stone-1 / #242422): hover fills and set-apart blocks.
+- **hairline** (stone-2 / #30312e): row hairlines, meter tracks, tab hover. **rule** (stone-3 / stone-4; at night 3.5:1 on the ground, so field frames and chart bars clear WCAG's 3:1 for controls): strong rules, field frames, link underlines, scrollbar, past history bars, the Settings save bar's top edge.
+- **text** (ink / #e1e2de, 17.1 / 14.2): text, figures, meter fills, heading rules, the current bar; **focus** is the same colour. **quiet** (stone-4 / #959692, 5.3 / 6.2): secondary text and captions.
+- **inverse** / **on-inverse** (text on ground, swapped): the ink blocks: primary and Connect buttons, filter chips, the skip link, selection. **inverse-hover** (darker by day, stone-1 at night, so a hovered block brightens rather than greys), **inverse-quiet**, **inverse-muted**, **inverse-muted-quiet**: their hover and secondary text.
+- **route** (yellow, both) with **on-route** (ink, both): the reset blades. The sign keeps its black lettering at night.
+- **danger** (red / #f45c4a, 5.0 / 5.7 as text) with **on-danger** (white / ink): closed blades, marks, failed figures, 100% meters, the danger button.
+- **paint** / **paint-edge**: the white of the white-red-white tip band and its stone-4 edge (no edge at night).
+- **bar**, **on-bar**, **bar-quiet** (the host), **bar-hover**, **bar-pressed**, **bar-route**: the shell. **backdrop**: behind a dialog.
+- **weight-body** / **tracking-body**: body text weight and tracking (400 / normal; 430 / 0.005em at night).
+
+### Dark Theme
+
+The night version of the trail sign, for the same operator checking in after dark. The stone ramp keeps its roles on a dark ground, in the same warm grey (oklch hue 118, chroma 0.005): sunk and raised surfaces sit a step above the ground, hairlines step up from it, rules are stone-4 (3.5:1, so field frames and chart bars stay visible), secondary text is a mid stone (6.2:1) and sign ink becomes a light stone (14.2:1), never pure white. Elevation is still flat: a dialog or menu is one step lighter with a 2px text-colour frame, no shadow. Ink blocks (primary buttons) brighten to stone-1 on hover instead of greying.
+
+- **Yellow stays the route.** The blades keep Wanderweg yellow with ink lettering (10.4:1). The shell becomes a dark board (raised) with a 4px yellow band along its foot, the current page's rule sitting on the band: a full yellow bar is the loudest thing on a dark screen and would outshout the blades, while the band keeps "yellow = route" and reads calmly at night.
+- **Red stays danger.** At night it is a lighter Swiss red, #f45c4a, so red text passes on the dark ground (5.7:1, 4.8 on sunk); red fills take ink lettering (5.3:1), since white on that red would not pass.
+- **The near-limit tip** keeps its white-red-white band in a light stone paint; it needs no edge against a dark page.
+- **Body text** gains a little weight (430) and tracking (0.005em): light text on a dark ground reads thinner.
+- Browser surfaces follow through `color-scheme`: scrollbars, form controls (accent is the text colour), date and select popups, and the `theme-color` (yellow by day, the dark board at night).
+
+**Choosing it.** The theme follows the system (`prefers-color-scheme`) until the operator picks Light or Dark in the shell's theme menu; the choice is kept in `localStorage` and applied before the first paint by a same-origin script (`web/src/theme-boot.ts`), since the CSP allows no inline script.
 
 ### Named Rules
 
@@ -222,7 +257,8 @@ Square signage. Buttons take a 3px radius; meters 1px. Blades have a square tail
 
 ### Shell Bar
 
-- Yellow, min-height 4rem, ink text. Wordmark (800, 1.25rem) over the host in 0.8125rem; page links 0.9375rem; the active link has a 4px ink underline inset, hover a pale one. Connect account is an ink button; refresh is a 2px ink outline square that turns Pressed Yellow on hover and spins while loading.
+- Yellow, min-height 4rem, ink text. Wordmark (800, 1.25rem) over the host in 0.8125rem; page links 0.9375rem; the active link has a 4px ink underline inset, hover a pale one. Connect account is an ink button; refresh is a 2px ink outline square that turns Pressed Yellow on hover and spins while loading. At night the bar is a dark board with a 4px yellow route band along its foot (see Dark Theme).
+- **Theme menu:** the last square on the bar, framed like Refresh so the two read as a pair, showing the choice's icon (sun-and-moon for System, sun, moon) with a "Theme: <choice>" tooltip; it opens a menu framed like the dialog with a "Theme" caption and System, Light and Dark as radio items (the chosen one 750 with a check). Arrows, Home and End move; Enter picks and closes; Escape closes. Under 30rem (phones) Connect account becomes an icon square so the name and host stay in view. Hover fills on the bar's squares apply only where the pointer can hover, so a tap leaves no stuck fill.
 
 ### Buttons
 
@@ -265,7 +301,7 @@ Square signage. Buttons take a 3px radius; meters 1px. Blades have a square tail
 
 ### Dialog
 
-- Native `<dialog>`, 28rem, white, 2px ink border, no shadow; the backdrop is ink at 45%. Title 1.25rem (750), body,
+- Native `<dialog>`, 28rem, white (raised), 2px ink border, no shadow; the backdrop is ink at 45% (night-field at 65% at night). Title 1.25rem (750), body,
   then actions left-aligned (the danger action first, the safe one second).
 - **Focus:** 3px ink outline, 2px offset, on every element.
 
@@ -306,6 +342,7 @@ Square signage. Buttons take a 3px radius; meters 1px. Blades have a square tail
 - **Do** keep yellow to the shell bar and the reset blades.
 - **Do** use red only for closed, failing, and 100%; show near-limit as the tip band plus an ink note.
 - **Do** draw every neutral from stone-1 to stone-4.
+- **Do** colour through the semantic tokens (`--ground`, `--text`, `--quiet`, `--danger`, …), never a paint directly, so both themes follow.
 - **Do** give blades a fixed 12rem length with destination left and time right.
 - **Do** label each figure once, by its column; give the mobile request figure one key line above the list.
 - **Do** separate with 1px stone-2 hairlines and the 2px ink heading rule.

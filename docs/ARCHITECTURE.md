@@ -847,6 +847,11 @@ until the next page load).
   Its client is derived from `contract/` (Effect `HttpApi` groups for the endpoints it uses, imported by the worker tests
   and the browser as `#contract/*`; `test/management-contract.test.ts` decodes real responses through it). Deviation
   from Go: `/` was a public JSON banner there.
+- **Panel theme** (`web/src/lib/theme.ts`, `web/src/theme-boot.ts`, `web/src/styles/tokens.css`): light and dark through
+  semantic `light-dark()` tokens. The theme follows `prefers-color-scheme` until the operator picks Light or Dark in the
+  shell's theme menu (kept in `localStorage` as `cliproxy.theme`). The CSP allows no inline script, so a Vite plugin
+  builds `theme-boot.ts` into a hashed same-origin classic script (`/assets/theme-<hash>.js`) placed in `<head>`; it sets
+  `data-theme`, `color-scheme` and the `theme-color` metas before the first paint, so a stored choice never flashes.
 - **Panel pages** (`web/src/pages/`): Overview (`/`); Accounts (`/accounts`: every account ordered by urgency, filters
   All / Needs attention / Disabled, search, allowance meters); Account (`/accounts/$authIndex`: allowance with reset
   blades, cooldowns with clear, window history, routing priority and note, details, served models, check quota, refresh

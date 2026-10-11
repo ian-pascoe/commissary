@@ -1,0 +1,90 @@
+/* The theme menu: a framed square on the shell (Refresh's twin) over a small framed list. */
+.root {
+  position: relative;
+  display: flex;
+}
+
+.button {
+  display: inline-grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  background: transparent;
+  color: var(--on-bar);
+  border: 2px solid var(--on-bar);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.button[aria-expanded="true"] {
+  background: var(--bar-pressed);
+}
+
+@media (hover: hover) {
+  .button:hover {
+    background: var(--bar-pressed);
+  }
+}
+
+/* Framed like the dialog: 2px rule, no shadow. */
+.menu {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 11rem;
+  padding: 0 0 var(--space-1);
+  background: var(--raised);
+  color: var(--text);
+  border: 2px solid var(--text);
+  border-radius: var(--radius);
+}
+
+.menu[hidden] {
+  display: none;
+}
+
+.caption {
+  padding: var(--space-2) var(--space-4) var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--quiet);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 2.5rem;
+  padding: 0 var(--space-4);
+  background: none;
+  border: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.item:hover {
+  background: var(--sunk);
+}
+
+.item:focus-visible {
+  outline-offset: -3px;
+}
+
+.item[aria-checked="true"] {
+  font-weight: 750;
+}
+
+.check {
+  margin-left: auto;
+}
+
+@media (pointer: coarse) {
+  .item {
+    height: 2.75rem;
+  }
+}

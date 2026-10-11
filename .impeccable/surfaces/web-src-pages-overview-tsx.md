@@ -26,7 +26,7 @@ capacity is.
 Replaced: the "utility statement" world (blue title strips on ruled cards) was rejected by the user as heavy and boxy;
 it is anti-reference: no per-section colour strips, no boxes inside boxes, no repeated per-card labels.
 
-Open decisions: history of past windows (Phase 2, tokens per window); dark theme (not planned).
+Open decisions: history of past windows (Phase 2, tokens per window); dark theme done (DESIGN.md "Dark Theme").
 
 ## Direction contract
 

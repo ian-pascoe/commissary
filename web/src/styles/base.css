@@ -6,28 +6,29 @@
 }
 
 html {
-  color-scheme: light;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  scrollbar-color: var(--stone-3) var(--white);
+  scrollbar-color: var(--rule) var(--ground);
 }
 
 body {
   margin: 0;
-  background: var(--white);
-  color: var(--ink);
+  background: var(--ground);
+  color: var(--text);
   font-family: var(--font);
   font-size: var(--text-md);
+  font-weight: var(--weight-body);
+  letter-spacing: var(--tracking-body);
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  caret-color: var(--ink);
+  caret-color: var(--text);
 }
 
 ::selection {
-  background: var(--ink);
-  color: var(--white);
+  background: var(--inverse);
+  color: var(--on-inverse);
 }
 
 h1,
@@ -46,18 +47,18 @@ h3 {
 }
 
 a {
-  color: var(--ink);
-  text-decoration-color: var(--stone-3);
+  color: var(--text);
+  text-decoration-color: var(--rule);
   text-decoration-thickness: 2px;
   text-underline-offset: 0.22em;
 }
 
 a:hover {
-  text-decoration-color: var(--ink);
+  text-decoration-color: var(--text);
 }
 
 :focus-visible {
-  outline: 3px solid var(--ink);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 

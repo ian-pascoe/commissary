@@ -4,8 +4,8 @@
   top: var(--space-2);
   z-index: 10;
   padding: var(--space-2) var(--space-3);
-  background: var(--ink);
-  color: var(--white);
+  background: var(--inverse);
+  color: var(--on-inverse);
   border-radius: var(--radius);
   transform: translateY(-200%);
 }
@@ -14,10 +14,14 @@
   transform: none;
 }
 
-/* The shell is the yellow of the trail signs; everything on it is sign ink. */
+/*
+ * The shell is the yellow of the trail signs and everything on it is sign ink. At night it is a dark board with the
+ * route as a yellow band along its foot (the band is invisible on the yellow bar); the current page's rule sits on it.
+ */
 .bar {
-  background: var(--yellow);
-  color: var(--ink);
+  background: var(--bar);
+  color: var(--on-bar);
+  box-shadow: inset 0 -4px 0 var(--bar-route);
 }
 
 .inner {
@@ -35,7 +39,7 @@
   flex-direction: column;
   justify-content: center;
   min-width: 0;
-  color: var(--ink);
+  color: var(--on-bar);
   text-decoration: none;
 }
 
@@ -52,7 +56,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--text-xs);
-  color: color-mix(in oklab, var(--ink) 72%, var(--yellow));
+  color: var(--bar-quiet);
 }
 
 .nav ul {
@@ -69,7 +73,7 @@
   align-items: center;
   height: 100%;
   padding: 0 var(--space-3);
-  color: var(--ink);
+  color: var(--on-bar);
   font-size: 0.9375rem;
   font-weight: 500;
   text-decoration: none;
@@ -78,12 +82,12 @@
 }
 
 .navLink:hover {
-  box-shadow: inset 0 -4px 0 color-mix(in oklab, var(--ink) 25%, var(--yellow));
+  box-shadow: inset 0 -4px 0 var(--bar-hover);
 }
 
 .navLink[aria-current="page"] {
   font-weight: 750;
-  box-shadow: inset 0 -4px 0 var(--ink);
+  box-shadow: inset 0 -4px 0 var(--on-bar);
 }
 
 .navLink:focus-visible {
@@ -103,8 +107,8 @@
   gap: var(--space-2);
   height: 2.5rem;
   padding: 0 var(--space-4) 0 var(--space-3);
-  background: var(--ink);
-  color: var(--white);
+  background: var(--inverse);
+  color: var(--on-inverse);
   font-size: var(--text-sm);
   font-weight: 700;
   text-decoration: none;
@@ -113,7 +117,25 @@
 }
 
 .connect:hover {
-  background: color-mix(in oklab, var(--ink) 82%, var(--white));
+  background: var(--inverse-hover);
+}
+
+/* Phones keep the name and host in view: Connect account becomes a square with its label hidden. */
+@media (max-width: 30rem) {
+  .connect {
+    width: 2.5rem;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .connectLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 
 .refresh {
@@ -123,14 +145,16 @@
   height: 2.5rem;
   padding: 0;
   background: transparent;
-  color: var(--ink);
-  border: 2px solid var(--ink);
+  color: var(--on-bar);
+  border: 2px solid var(--on-bar);
   border-radius: var(--radius);
   cursor: pointer;
 }
 
-.refresh:hover {
-  background: var(--yellow-deep);
+@media (hover: hover) {
+  .refresh:hover {
+    background: var(--bar-pressed);
+  }
 }
 
 .spinning {
@@ -157,8 +181,14 @@
 @media (max-width: 64rem) {
   .inner {
     flex-wrap: wrap;
+    column-gap: var(--space-4);
     row-gap: var(--space-1);
     padding-top: var(--space-3);
+  }
+
+  /* The name takes what the actions leave (the host shortens), so the actions never wrap under it. */
+  .brand {
+    flex: 1 1 0;
   }
 
   /* One row of page links that scrolls sideways; an edge with more links beyond it fades out. */

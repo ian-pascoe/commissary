@@ -1,10 +1,11 @@
-// The page frame: the yellow shell bar (name and host, page links, Connect account, Refresh) above the page.
+// The page frame: the shell bar (name and host, page links, Connect account, Refresh, the theme menu) above the page.
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { Link, Outlet, useLocation } from "@tanstack/react-router";
 import { Plus, RefreshCw } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { credentialsAtom, usageEpochAtom, usageLastDayAtom } from "../api/client.ts";
 import styles from "./Shell.module.css";
+import { ThemeMenu } from "./ThemeMenu.tsx";
 
 const PAGES = [
   { to: "/", label: "Overview" },
@@ -115,9 +116,10 @@ export const Shell = () => {
           <div className={styles["actions"]}>
             <Link to="/accounts/connect" className={styles["connect"]}>
               <Plus aria-hidden="true" size={16} strokeWidth={2.5} />
-              Connect account
+              <span className={styles["connectLabel"]}>Connect account</span>
             </Link>
             <RefreshButton />
+            <ThemeMenu />
           </div>
         </div>
       </header>

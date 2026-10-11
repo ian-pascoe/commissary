@@ -18,7 +18,7 @@
 
 .muted {
   font-size: var(--text-sm);
-  color: var(--stone-4);
+  color: var(--quiet);
 }
 
 .problem {
@@ -52,7 +52,7 @@
   font-weight: 600;
 }
 
-/* Buttons: ink primary, outlined secondary, and the destructive one (red outline: it closes something). */
+/* Buttons: ink-block primary, outlined secondary, and the destructive one (red outline: it closes something). */
 .primary,
 .secondary,
 .danger {
@@ -73,35 +73,35 @@
 .primary {
   height: 2.75rem;
   padding: 0 var(--space-5) 0 var(--space-4);
-  background: var(--ink);
-  color: var(--white);
+  background: var(--inverse);
+  color: var(--on-inverse);
   border: 0;
   font-size: var(--text-md);
 }
 
 .primary:hover {
-  background: color-mix(in oklab, var(--ink) 82%, var(--white));
+  background: var(--inverse-hover);
 }
 
 .secondary {
-  background: var(--white);
-  color: var(--ink);
-  border: 2px solid var(--ink);
+  background: var(--ground);
+  color: var(--text);
+  border: 2px solid var(--text);
 }
 
 .secondary:hover {
-  background: var(--stone-1);
+  background: var(--sunk);
 }
 
 .danger {
-  background: var(--white);
-  color: var(--red);
-  border: 2px solid var(--red);
+  background: var(--ground);
+  color: var(--danger);
+  border: 2px solid var(--danger);
 }
 
 .danger:hover {
-  background: var(--red);
-  color: var(--white);
+  background: var(--danger);
+  color: var(--on-danger);
 }
 
 .primary:disabled,
@@ -114,16 +114,16 @@
 }
 
 .primary:disabled:hover {
-  background: var(--ink);
+  background: var(--inverse);
 }
 
 .secondary:disabled:hover {
-  background: var(--white);
+  background: var(--ground);
 }
 
 .danger:disabled:hover {
-  background: var(--white);
-  color: var(--red);
+  background: var(--ground);
+  color: var(--danger);
 }
 
 /* Form fields: a 2px stone-3 frame that goes ink on focus and red when invalid. */
@@ -136,33 +136,33 @@
 .fieldLabel {
   font-size: var(--text-xs);
   font-weight: 600;
-  color: var(--stone-4);
+  color: var(--quiet);
 }
 
 .input {
   height: 2.5rem;
   padding: 0 var(--space-3);
-  background: var(--white);
-  color: var(--ink);
+  background: var(--field);
+  color: var(--text);
   font: inherit;
   font-size: var(--text-md);
-  border: 2px solid var(--stone-3);
+  border: 2px solid var(--rule);
   border-radius: var(--radius);
 }
 
 .input:focus-visible {
-  border-color: var(--ink);
+  border-color: var(--text);
   outline-offset: 0;
 }
 
 .input[aria-invalid="true"] {
-  border-color: var(--red);
+  border-color: var(--danger);
 }
 
 .fieldError {
   font-size: var(--text-xs);
   font-weight: 650;
-  color: var(--red);
+  color: var(--danger);
 }
 
 /* Filter tabs: a row of plain words (with counts); the chosen one carries the shell's ink underline. */
@@ -187,16 +187,16 @@
 }
 
 .tab:hover {
-  border-bottom-color: var(--stone-2);
+  border-bottom-color: var(--hairline);
 }
 
 .tab[aria-checked="true"] {
-  border-bottom-color: var(--ink);
+  border-bottom-color: var(--text);
 }
 
 .tabCount {
-  font-weight: 400;
-  color: var(--stone-4);
+  font-weight: var(--weight-body);
+  color: var(--quiet);
 }
 
 .spinning {
@@ -213,14 +213,14 @@
 .dialog {
   width: min(28rem, calc(100vw - 2 * var(--page-gutter)));
   padding: 0;
-  color: var(--ink);
-  background: var(--white);
-  border: 2px solid var(--ink);
+  color: var(--text);
+  background: var(--raised);
+  border: 2px solid var(--text);
   border-radius: var(--radius);
 }
 
 .dialog::backdrop {
-  background: color-mix(in oklab, var(--ink) 45%, transparent);
+  background: var(--backdrop);
 }
 
 .dialogBody {
