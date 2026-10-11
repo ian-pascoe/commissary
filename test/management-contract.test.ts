@@ -1265,5 +1265,123 @@ describe("management contract", () => {
         assert.isTrue((yield* api.settings.get()).values.routing["session-affinity"]);
       }).pipe(through(harness)),
     );
+
+    it.effect("raw decodes the masked document, checkRaw reviews it and saveRaw stores it", () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(async () => {
+          await controlPlane().putConfig(
+            JSON.stringify({
+              routing: { strategy: "fill-first" },
+              "api-keys": { claude: [{ keys: [{ "api-key": "sk-ant-contract-secret-4242" }] }] },
+            }),
+          );
+        });
+        const api = yield* client;
+        const raw = yield* api.settings.raw();
+
+        assert.strictEqual(raw.secrets, 1);
+        assert.include(raw.yaml, '"[redacted#1]…4242"');
+        assert.notInclude(JSON.stringify(raw), "contract-secret");
+
+        const yaml = raw.yaml.replace("fill-first", "round-robin");
+        const checked = yield* api.settings.checkRaw({ payload: { version: raw.version, yaml } });
+
+        assert.deepStrictEqual(
+          { ...checked, yaml: undefined },
+          {
+            yaml: undefined,
+            dropped: [],
+            not_applied: [],
+            kept_secrets: 1,
+            new_secrets: 0,
+            moved_secrets: [],
+          },
+        );
+        // round-robin is the default: the sparse result omits it.
+        assert.notInclude(checked.yaml, "strategy");
+
+        // A kept key sent to another family and host decodes with its placeholder and both places.
+        const elsewhere = yield* api.settings.checkRaw({
+          payload: {
+            version: raw.version,
+            yaml: `${yaml}  codex:\n    - base-url: https://gateway.test/v1\n      keys:\n        - api-key: "[redacted#1]"\n`,
+          },
+        });
+
+        assert.deepStrictEqual(elsewhere.moved_secrets, [
+          {
+            path: "api-keys.codex[0].keys[0].api-key",
+            placeholder: "[redacted#1]…4242",
+            from: { family: "claude" },
+            to: { family: "codex", host: "gateway.test" },
+          },
+        ]);
+        assert.notInclude(JSON.stringify(elsewhere), "contract-secret");
+        assert.strictEqual((yield* api.settings.raw()).version, raw.version);
+
+        const saved = yield* api.settings.saveRaw({ payload: { version: raw.version, yaml } });
+
+        assert.deepStrictEqual(saved, {
+          status: "ok",
+          version: raw.version + 1,
+          dropped: [],
+          not_applied: [],
+          moved_secrets: [],
+        });
+        assert.strictEqual((yield* api.settings.get()).values.routing.strategy, "round-robin");
+
+        const again = yield* api.settings.saveRaw({ payload: { version: saved.version, yaml } });
+
+        assert.strictEqual(again.version, saved.version);
+      }).pipe(through(harness)),
+    );
+
+    it.effect("raw refusals carry line/column or path in ManagementError", () =>
+      Effect.gen(function* () {
+        const api = yield* client;
+        const { version } = yield* api.settings.raw();
+
+        const syntax = yield* Effect.flip(
+          api.settings.checkRaw({ payload: { version, yaml: "routing:\n  strategy: [a\n" } }),
+        );
+
+        assert.instanceOf(syntax, ManagementError);
+        assert.strictEqual(syntax.error, "invalid_yaml");
+        assert.isString(syntax.message);
+        assert.isNumber(syntax.line);
+        assert.isNumber(syntax.column);
+
+        const invalid = yield* Effect.flip(
+          api.settings.saveRaw({
+            payload: { version, yaml: "routing:\n  retry:\n    request-retry: lots\n" },
+          }),
+        );
+
+        assert.instanceOf(invalid, ManagementError);
+        assert.strictEqual(invalid.error, "invalid_config");
+        assert.strictEqual(invalid.path, "routing.retry.request-retry");
+
+        const stale = yield* Effect.flip(
+          api.settings.saveRaw({ payload: { version: version + 1, yaml: "" } }),
+        );
+
+        assert.instanceOf(stale, ManagementError);
+        assert.strictEqual(stale.error, "conflict");
+      }).pipe(through(harness)),
+    );
+
+    it("no panel endpoint reads the unmasked configuration (GET /config*)", () => {
+      const reads = Object.values(ManagementApi.groups).flatMap((group) =>
+        Object.values(group.endpoints)
+          .filter((endpoint) => endpoint.method === "GET")
+          .map((endpoint) => endpoint.path),
+      );
+
+      assert.isNotEmpty(reads);
+      assert.deepStrictEqual(
+        reads.filter((path) => /^\/config($|[./])/.test(path)),
+        [],
+      );
+    });
   });
 });

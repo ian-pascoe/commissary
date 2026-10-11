@@ -2,8 +2,8 @@
 // .scratch/p5-settings-research.md (c)). A status line says the config version, when it was saved, and whether keys
 // that do nothing on Workers are set; a jump list leads to each section (a sticky rail beside the column on wide
 // screens) and counts each one's unsaved changes. Each section saves on its own (`SettingsForm.tsx`); leaving the page
-// with unsaved changes asks first. Payload and account error rules are read-only here until the configuration editor
-// lands. The view carries no secret, and nothing here shows one.
+// with unsaved changes asks first. Payload and account error rules are read-only here, edited in the raw configuration
+// (/settings/config, linked from the head). The view carries no secret, and nothing here shows one.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link, useBlocker } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
@@ -44,7 +44,12 @@ const settingsCount = (count: number): string =>
 /** The page title, and once the view is in: the version, when it was saved, what needs attention. */
 const Head = ({ view }: { readonly view: SettingsView | undefined }) => (
   <header className={styles["head"]}>
-    <h1 className={styles["title"]}>Settings</h1>
+    <div className={styles["titleRow"]}>
+      <h1 className={styles["title"]}>Settings</h1>
+      <Link to="/settings/config" className={styles["rawLink"]}>
+        Raw configuration
+      </Link>
+    </div>
     {view === undefined ? null : <Status view={view} />}
   </header>
 );

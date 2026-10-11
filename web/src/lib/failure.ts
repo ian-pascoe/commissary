@@ -24,20 +24,30 @@ export const serverError = (cause: Cause.Cause<unknown>): string | undefined => 
     : undefined;
 };
 
-/** The server's own explanation of a failure and the config path it is about, when it sent them. */
+/**
+ * The server's own explanation of a failure, the config path it is about and, for YAML that does not parse, the
+ * 1-based line and column, when it sent them.
+ */
 export interface ServerDetail {
   readonly message?: string;
   readonly path?: string;
+  readonly line?: number;
+  readonly column?: number;
 }
 
-/** The server's `message` and `path` (a refused setting says which and why), when it sent them. */
+/** The server's `message`, `path`, `line` and `column` (a refused setting says which and why), when it sent them. */
 export const serverDetail = (cause: Cause.Cause<unknown>): ServerDetail => {
   const failure = Cause.findErrorOption(cause);
 
   if (Option.isNone(failure) || !(failure.value instanceof ManagementError)) return {};
-  const { message, path } = failure.value;
+  const { message, path, line, column } = failure.value;
 
-  return { ...(message === undefined ? {} : { message }), ...(path === undefined ? {} : { path }) };
+  return {
+    ...(message === undefined ? {} : { message }),
+    ...(path === undefined ? {} : { path }),
+    ...(line === undefined ? {} : { line }),
+    ...(column === undefined ? {} : { column }),
+  };
 };
 
 /** What a failed call's cause tells the operator (a mutation's `Exit` carries one). */

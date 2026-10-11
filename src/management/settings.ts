@@ -331,6 +331,18 @@ export const checkSurvival = (
 
 const ADMIN_KEYS = new Set(["access.admin-emails", "access.admin-service-tokens"]);
 
+const lockedOut = (after: Config, principal: Principal): SettingsProblem | undefined => {
+  if (isAdmin(configAdminLists(after), principal)) return undefined;
+  const key = principal.kind === "user" ? "admin-emails" : "admin-service-tokens";
+
+  return problem(
+    422,
+    "would_remove_your_admin_access",
+    ["access", key],
+    "this change removes your own admin access; a deployment admin (ACCESS_ADMIN_*) can make it",
+  );
+};
+
 /**
  * The lock-out guard: a caller who is an admin only through the config's `access.admin-*` lists must not remove
  * themselves (`alwaysAdmin`: a deployment admin, `ACCESS_ADMIN_*`, or the local dev bypass).
@@ -340,19 +352,26 @@ export const checkAdminLockout = (input: {
   readonly after: Config;
   readonly principal: Principal;
   readonly alwaysAdmin: boolean;
+}): SettingsProblem | undefined =>
+  input.alwaysAdmin || !input.edits.some((edit) => ADMIN_KEYS.has(dotted(edit.path)))
+    ? undefined
+    : lockedOut(input.after, input.principal);
+
+/** {@link checkAdminLockout} for a whole-document write (the raw configuration): `before` is the stored config. */
+export const checkDocumentLockout = (input: {
+  readonly before: Config;
+  readonly after: Config;
+  readonly principal: Principal;
+  readonly alwaysAdmin: boolean;
 }): SettingsProblem | undefined => {
-  if (input.alwaysAdmin || !input.edits.some((edit) => ADMIN_KEYS.has(dotted(edit.path))))
-    return undefined;
+  const lists = (config: Config): Json => [
+    [...config.access["admin-emails"]],
+    [...config.access["admin-service-tokens"]],
+  ];
 
-  if (isAdmin(configAdminLists(input.after), input.principal)) return undefined;
-  const key = input.principal.kind === "user" ? "admin-emails" : "admin-service-tokens";
-
-  return problem(
-    422,
-    "would_remove_your_admin_access",
-    ["access", key],
-    "this change removes your own admin access; a deployment admin (ACCESS_ADMIN_*) can make it",
-  );
+  return input.alwaysAdmin || jsonEquals(lists(input.before), lists(input.after))
+    ? undefined
+    : lockedOut(input.after, input.principal);
 };
 
 // --- view ----------------------------------------------------------------------------------------------------------

@@ -38,7 +38,7 @@ const failIf = (refused: SettingsProblem | undefined) =>
   refused === undefined ? Effect.void : Effect.fail(refuse(refused));
 
 /** The stored config at its version, decoded; a failed decode of the stored document is an internal error. */
-const storedConfig = Effect.gen(function* () {
+export const storedConfig = Effect.gen(function* () {
   const wire = yield* controlPlane("getConfig", (stub) => stub.getConfig());
   const text = wire.document ?? "{}";
 
@@ -77,7 +77,7 @@ const SaveBody = Schema.Struct({ version: ConfigVersion });
 const invalidBody = () => replyError(400, "invalid body");
 
 /** Whether the caller stays an admin whatever the config says (`ACCESS_ADMIN_*` or the local dev bypass). */
-const alwaysAdmin = Effect.gen(function* () {
+export const alwaysAdmin = Effect.gen(function* () {
   const env = yield* WorkerEnv;
   const request = yield* HttpServerRequest.HttpServerRequest;
   const identity = yield* AccessPrincipal;

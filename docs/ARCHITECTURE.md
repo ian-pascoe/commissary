@@ -833,7 +833,61 @@ until the next page load).
     remove themselves (`422 would_remove_your_admin_access`; deployment admins and the dev bypass can). Stored with
     `putConfig(text, version)` without retry: a stale `version` is `409 conflict`. Ok: `{status: "ok", version}`.
   - `ManagementError` decodes the optional `message` and `path` of an error body, so the panel can show the reason
-    and focus the field.
+    and focus the field, and the `line`/`column` of a raw configuration that is not valid YAML.
+- **Raw configuration** (`settings-raw-routes.ts`, `settings-raw.ts`, `config-secrets.ts`, contract `settings.ts`): the
+  control panel's configuration editor. Workers addition (Go's `GET /config.yaml` serves the file with its secrets
+  and writes without a version). The panel never reads `GET /config*`; these routes are its only view of the whole
+  document.
+  - `GET /settings/config`: `{version, yaml, secrets}`, the stored document as sparse YAML (`sparseDocument`, the
+    `/config.yaml` export without defaults) with every secret masked. Secret positions (`config-secrets.ts`, pure):
+    `access.api-keys` entries; every `api-keys` key; every group, key and payload-rule header value except `$Header`
+    copies and a short allow-list of protocol/client headers (`User-Agent`, `Accept`, `Content-Type`,
+    `Anthropic-Version`/`-Beta`, `OpenAI-Beta`, `HTTP-Referer`, `X-Title`, ...), names compared trimmed and
+    lower-cased as the normaliser stores them; strings under payload `params` whose path's last part or inner key
+    looks secret (key, token, secret, sig, auth, pass, pwd, cred, session; `*-raw` JSON text is not looked into); and
+    in URLs (`requests.proxy-url`, model catalogs, group and key `base-url`/`proxy-url`) the user info and the values
+    of secret-looking query and fragment parameters. A whole value becomes `[redacted#n]…abcd` (last four characters
+    only when the value is longer than eight), a URL part `[redacted#n]` without tail; `n` is 1-based in document
+    order.
+  - `POST /settings/config/check` and `PUT /settings/config` take `{version, yaml}`. The body is counted while it is
+    read (chunked too) and refused past 512 KiB (`413 body_too_large`). A stale `version` is `409 conflict` before
+    parsing (placeholders are bound to the version they were read at). The YAML is parsed with the 1.2 core schema
+    without the YAML 1.1 tags it would still resolve (`resolveKnownTags: false`); custom tags (`!!binary`,
+    `!!timestamp`, `!!set`, `!!omap`, `!!pairs`, `!!merge`, ...), merge keys (`<<`) and a `%YAML 1.1` directive are
+    `422 invalid_yaml` with `message`, `line`, `column` (messages that would quote the source are reduced); anchors are
+    expanded. Placeholders are restored by
+    index from the stored document when they sit at a secret position (whatever group they moved to); a placeholder
+    or marker elsewhere, or a stored `$…` secret placed in a header, is `422 masked_value_outside_secret_field`, an
+    index the version does not have `422 unknown_secret_reference`, a malformed one `422 invalid_secret_placeholder`,
+    each with its `path`; plain text at a secret position is a new secret. The result is decoded like a stored
+    document (`422 invalid_config` with `path` when known; messages scrubbed of every secret).
+    Then the admin lock-out check of `PATCH /settings` applies (users and service tokens).
+  - The review is computed from a second decode where unguessable per-request tags stand for the restored secrets
+    (keeping what the normaliser decides on: a JSON secret is stood in for by a JSON string, so `*-raw` payload rules
+    survive alike, and a `dca:` prefix, so Meta drops the same keys), so kept and new secrets (and `dropped`) are told
+    apart by origin, never by comparing values: typing a guess of a stored secret answers the same whether it is right
+    or not. Fail-safe on that decode: a tag the masking would still show (a normaliser rename or move took a restored
+    secret out of a secret position) is `422 masked_value_outside_secret_field` with its path; it never compares real
+    values, so it is no guessing oracle either. `check` stores nothing and answers the masked
+    canonical result (`[new secret]…abcd` for new ones), `dropped` (input paths not stored as written: unknown or
+    legacy keys, entries the normaliser removes or rewrites), `not_applied`, the kept/new secret counts and
+    `moved_secrets`: each kept secret now sent elsewhere than where it was stored (another family, or for
+    `api-keys` keys and headers another key or group `base-url`, for URL credentials another URL; URLs compared without
+    their secrets, path included, host case and a trailing `/` aside: a shared gateway host serves many accounts), as
+    `{path, placeholder, from, to}`: its `[redacted#n]…abcd` and the family (or config section) and upstream host
+    before and after. Only the host (lower-cased, port kept) is named: it is who receives the secret, while user info,
+    path and query can carry secrets or account ids of their own. `PUT` stores with `putConfig(text, version)` and answers `{status: "ok", version, dropped, not_applied,
+    moved_secrets}`; a document whose canonical form equals the stored one is not written and keeps its `version`.
+  - Limitations: only the canonical document is stored, so comments, key order and anchors in the edited text are
+    not kept, and a secret is never shown back once stored. Moving a kept secret to another host is allowed (an admin
+    may re-point an upstream); the panel's review names each moved secret by placeholder with both hosts, marks its line
+    and asks for a confirmation before Save. Saving a typed copy of a stored secret
+    next to it lets the normaliser deduplicate them without the review showing it (the review never compares typed
+    values with stored ones); the next read shows it. Two kept keys with the same stored value whose identities an edit
+    makes equal (e.g. Gemini groups that differ only by `prefix`) are deduplicated too: the review decodes once more
+    with one stand-in per shared value and lists the removed entry in `dropped`. A restored URL secret must stay
+    exactly in the masked part of the URL both as written and as stored (trimmed), unless the field keeps its stored
+    text.
 - **Operational**: `requests/api-call` (`api-call.ts`; `$TOKEN$` resolved in the ControlPlane through `ensureFresh`;
   60 s bound like Go; no `proxy_url`/`Host` override on Workers), `server/latest-version`, `routing/model-definitions/:channel`
   (static catalogs of the model registry), file-log routes answering like Go with file logging disabled.
@@ -880,8 +934,24 @@ until the next page load).
   `409` the delta is re-applied once to a fresh read, and a `422` lands under the field its `path` names (the message
   names the bad value; the hint says what is expected); other save outcomes show in the section's sticky save bar; the
   jump list counts each section's unsaved changes and leaving the page with any asks first (`useBlocker`); payload
-  rules and account error rules are read-only there until the configuration editor, edited meanwhile in the classic
-  panel at `/management.html`). The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
+  rules and account error rules are read-only there, each linking its key in the raw configuration); Raw configuration
+  (`/settings/config`, linked from the Settings head: the whole configuration as masked YAML from
+  `GET /settings/config`, the escape hatch for what has no typed home (payload rules, account error rules,
+  `oauth.settings`), with a list of where each concept lives. A lazy route, its own chunk with CodeMirror 6 and `yaml`:
+  YAML highlighting, line numbers, search, history, bracket matching, no Tab capture, live YAML syntax diagnostics
+  (`web/src/lib/raw-config.ts` parses as the server does), secret placeholders marked and atomic. The editor runs in a
+  shadow root: CodeMirror's `style-mod` writes a `<style>` element into a document, which the panel's
+  `style-src 'self'` refuses, but a constructed stylesheet (`adoptedStyleSheets`) into a shadow root, so the CSP stays
+  as it is; its theme uses the semantic colour tokens, which inherit into the shadow tree. Review changes posts
+  `POST /settings/config/check` and shows the line diff (Myers, unchanged runs folded) from the stored text to the
+  canonical result, what would not be kept, what has no effect on Workers, secrets kept and new, and secrets now sent to
+  another provider or host (each by placeholder with both hosts, its diff line marked), which Save requires confirming; Save is `PUT /settings/config` with the read's `version`
+  and refetches every view that reads the configuration. A `422` marks the line and column (`invalid_yaml`) or the key
+  its `path` names in the editor and moves the cursor there, the message led by a "Line n" button that goes back to it; a `409` (or a newer read while editing) offers Reload or
+  Copy my draft and never merges, since placeholders are bound to the version they were read at, and Reload and a save
+  start the editor over without undo history for the same reason. `#<dotted.path>` in the address (the Settings rule
+  notes, the Keys form's kept-settings notice at `#api-keys.<family>.<index>`) puts the cursor on that key (its line tinted until the next edit or click), or
+  its deepest present ancestor with a note when the key is at its default. Leaving with a draft asks first). The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
   address (`?range=&by=&model=&provider=&account=&user=&failed=`, decoded per parameter by `web/src/lib/usage.ts`
   `readUsageSearch`, a malformed one dropped), reads `GET /observability/usage/summary`, `/series` (provider series
   summed in the browser; no principal filter, so no chart while a user filter is set) and `/records` (pages of 50
@@ -900,8 +970,9 @@ until the next page load).
 - Deviations from Go: `/` serves the control panel (admins only) instead of the public JSON banner; cooldown `reason`s are
   limited to the quota reason / last error code; `GET /credentials` always returns JSON timestamps as RFC 3339 strings;
   `POST /credentials/quota` and the entries' `quota_report` are a Workers addition (see _Quota check_). The API keys
-  and Settings routes are Workers additions (secrets never in their responses, versioned writes, values the
-  normaliser would rewrite refused with `422` instead of silently changed); `GET /config` stays raw (keys
+  and Settings routes, including the raw configuration editor, are Workers additions (secrets never in their
+  responses, masked as `[redacted#n]` placeholders restored on save; versioned writes; values the normaliser would
+  rewrite refused with `422` instead of silently changed); `GET /config` and `GET /config.yaml` stay raw (keys
   included) for the upstream `management.html`, which the control panel does not use. Config API keys can be toggled
   (Go answers the same through `excluded-models`); compat keys cannot, only their endpoint.
 
