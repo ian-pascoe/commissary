@@ -455,7 +455,7 @@ describe("config secrets", () => {
       }),
     );
 
-    expect(review.moved).toEqual([
+    expect(review.moved.map(({ path }) => path)).toEqual([
       "requests.proxy-url",
       "api-keys.codex[1].keys[0].api-key",
       "api-keys.codex[2].keys[0].api-key",
@@ -464,6 +464,29 @@ describe("config secrets", () => {
       "api-keys.openai-compatibility[0].headers.X-Api-Key",
       "api-keys.openai-compatibility[0].keys[0].api-key",
     ]);
+    // Each says which secret (its placeholder) and where it goes: family and host, nothing else of the URL.
+    expect(review.moved[0]).toEqual({
+      path: "requests.proxy-url",
+      placeholder: "[redacted#4]",
+      from: { family: "requests.proxy-url", host: "proxy.test:8080" },
+      to: { family: "requests.proxy-url", host: "evil.test:8080" },
+    });
+    expect(review.moved[1]).toEqual({
+      path: "api-keys.codex[1].keys[0].api-key",
+      placeholder: "[redacted#9]…0004",
+      from: { family: "codex", host: "codex.test" },
+      to: { family: "codex", host: "codex.test" },
+    });
+    expect(review.moved[2]?.to).toEqual({ family: "codex", host: "evil.test" });
+    expect(review.moved[4]?.to).toEqual({ family: "xai", host: "xai.test" });
+    expect(review.moved[4]?.from.family).not.toBe("xai");
+    expect(review.moved[6]).toMatchObject({
+      from: { family: "openai-compatibility", host: "compat.test" },
+      to: { family: "openai-compatibility", host: "evil.test" },
+    });
+    const listed = JSON.stringify(review.moved);
+
+    for (const secret of Object.values(S)) expect(listed).not.toContain(secret);
   });
 
   it("classifies header names as stored: trimmed, no auth-file exemptions", () => {

@@ -1001,9 +1001,23 @@ describe("management raw configuration", () => {
     );
 
     expect(shared).not.toBe(yaml);
-    expect((await send("POST", { version, yaml: shared })).body.moved_secrets).toEqual([
-      "api-keys.claude[0].headers.Authorization",
-      "api-keys.claude[0].keys[0].api-key",
+    const moved = await send("POST", { version, yaml: shared });
+    const place = { family: "claude", host: "api.anthropic.com" };
+
+    expectNoSecret(moved.text);
+    expect(moved.body.moved_secrets).toEqual([
+      {
+        path: "api-keys.claude[0].headers.Authorization",
+        placeholder: expect.stringMatching(/^\[redacted#\d+\]/),
+        from: place,
+        to: place,
+      },
+      {
+        path: "api-keys.claude[0].keys[0].api-key",
+        placeholder: expect.stringMatching(/^\[redacted#\d+\]/),
+        from: place,
+        to: place,
+      },
     ]);
 
     const slash = yaml.replace(
@@ -1046,20 +1060,31 @@ describe("management raw configuration", () => {
     const version = await seed(seeded);
     const { yaml } = await getRaw();
 
-    const edited = `${yaml}  codex:\n    - base-url: https://evil.test\n      keys:\n        - api-key: "[redacted#5]"\n`;
+    const edited = `${yaml}  codex:\n    - base-url: https://user:pass-SECRET@evil.test/v1/tenant-42?key=q-SECRET\n      keys:\n        - api-key: "[redacted#5]"\n`;
 
+    const placeholder = /- api-key: "?(\[redacted#5\][^"\n]*)/.exec(yaml)?.[1];
+
+    const moved = {
+      path: "api-keys.codex[0].keys[0].api-key",
+      placeholder,
+      from: { family: "claude", host: "api.anthropic.com" },
+      // The host only: user info, path and query of the URL never leave the server here.
+      to: { family: "codex", host: "evil.test" },
+    };
+
+    expect(placeholder).toMatch(/^\[redacted#5\]/);
     const checked = await send("POST", { version, yaml: edited });
 
-    expect(checked).toMatchObject({
-      status: 200,
-      body: { moved_secrets: ["api-keys.codex[0].keys[0].api-key"] },
-    });
+    expect(checked).toMatchObject({ status: 200, body: { moved_secrets: [moved] } });
+    expectNoSecret(checked.text);
+    // The masked YAML shows the edited URL's path; the moved list carries the host only.
+    expect(JSON.stringify(checked.body.moved_secrets)).not.toMatch(/tenant-42|user|key=/);
 
     const saved = await send("PUT", { version, yaml: edited });
 
     expect(saved).toMatchObject({
       status: 200,
-      body: { version: version + 1, moved_secrets: ["api-keys.codex[0].keys[0].api-key"] },
+      body: { version: version + 1, moved_secrets: [moved] },
     });
     expectNoSecret(saved.text);
     expect(

@@ -44,7 +44,8 @@
  * their `[redacted#n]`, the others are `[new secret]` (same tail rule): a submitted secret is never echoed. It also
  * lists the kept secrets now sent elsewhere than where they were stored (`moved`: another family, or another
  * upstream base URL for `api-keys` keys and headers, another URL for URL credentials; compared without secrets, path
- * included).
+ * included), each with its placeholder and the family and upstream host it went to and goes to (`SecretPlace`: the
+ * host only, never user info, path or query).
  *
  * `exposedTagPath` is the fail-safe on that same decode: a stand-in the masking would still show (a normaliser rename
  * or move took a restored secret out of a secret position) refuses the edit, without ever comparing real values.
@@ -485,7 +486,7 @@ const withoutTrailingSlash = (text: string): string => text.replace(/\/+$/, "");
  * A URL without its secret parts, to compare destinations: scheme and host lower-cased, path, the rest of the query
  * and fragment kept, trailing `/` of the path dropped (the cut text when it does not parse).
  */
-const urlWithoutSecrets = (text: string): string => {
+const cutSecrets = (text: string): string => {
   let cut = "";
   let cursor = 0;
 
@@ -494,7 +495,11 @@ const urlWithoutSecrets = (text: string): string => {
     cursor = span.end;
   }
 
-  cut += text.slice(cursor);
+  return cut + text.slice(cursor);
+};
+
+const urlWithoutSecrets = (text: string): string => {
+  const cut = cutSecrets(text);
 
   try {
     const url = new URL(cut.trim());
@@ -526,6 +531,56 @@ const destination = (document: JsonObject, path: Path, kind: SecretKind): string
   return kind === "value" ? section : `${section}|${urlWithoutSecrets(stringAt(document, path))}`;
 };
 
+/**
+ * Where a secret goes, for people: the provider family (`api-keys.<family>`) or the config section, and the upstream
+ * host (lower-cased, port kept) when there is one. Only the host: it names who receives the secret, while the
+ * user info, path and query of a URL can carry secrets or account ids of their own.
+ */
+export interface SecretPlace {
+  readonly family: string;
+  readonly host?: string;
+}
+
+const hostOf = (text: string): string | undefined => {
+  if (text === "") return undefined;
+
+  try {
+    const host = new URL(cutSecrets(text).trim()).host.toLowerCase();
+
+    return host === "" ? undefined : host;
+  } catch {
+    return undefined;
+  }
+};
+
+/** {@link destination} for people: family or section and upstream host only. */
+const place = (document: JsonObject, path: Path, kind: SecretKind): SecretPlace => {
+  const [root, family, group] = path;
+  const name = root === "api-keys" ? String(family) : `${String(root)}.${String(family)}`;
+  let url = "";
+
+  if (kind !== "value") url = stringAt(document, path);
+  else if (root === "api-keys" && isIndex(group)) {
+    const keyBase = path[3] === "keys" ? stringAt(document, [...path.slice(0, 5), "base-url"]) : "";
+
+    url = keyBase === "" ? stringAt(document, [...path.slice(0, 3), "base-url"]) : keyBase;
+  }
+
+  const host = hostOf(url);
+
+  return host === undefined ? { family: name } : { family: name, host };
+};
+
+/** A kept secret now sent somewhere else than where it was stored. */
+export interface MovedSecret {
+  /** `configPath` of the secret in the result. */
+  readonly path: string;
+  /** Its placeholder as the review shows it (`[redacted#n]…abcd`). */
+  readonly placeholder: string;
+  readonly from: SecretPlace;
+  readonly to: SecretPlace;
+}
+
 /** The result of an edit masked for the review. */
 export interface ReviewedResult {
   readonly document: JsonObject;
@@ -533,8 +588,8 @@ export interface ReviewedResult {
   readonly kept: number;
   /** Secrets typed in the edit. */
   readonly fresh: number;
-  /** Paths where a kept secret is now sent to another provider family or upstream than where it was stored. */
-  readonly moved: ReadonlyArray<string>;
+  /** Kept secrets now sent to another provider family or upstream than where they were stored. */
+  readonly moved: ReadonlyArray<MovedSecret>;
 }
 
 /**
@@ -548,7 +603,7 @@ export const reviewResult = (
   tags: SecretTags,
 ): ReviewedResult => {
   const slots = rewriteSecrets(stored, () => "").slots;
-  const moved = new Set<string>();
+  const moved = new Map<string, MovedSecret>();
   let kept = 0;
   let fresh = 0;
 
@@ -563,17 +618,23 @@ export const reviewResult = (
     }
 
     kept++;
+    const placeholder = withTail(`[redacted#${index}]`, origin);
 
     if (
       destination(tagged, slot.segments, slot.kind) !==
       destination(stored, origin.segments, origin.kind)
     )
-      moved.add(slot.path);
+      moved.set(slot.path, {
+        path: slot.path,
+        placeholder,
+        from: place(stored, origin.segments, origin.kind),
+        to: place(tagged, slot.segments, slot.kind),
+      });
 
-    return withTail(`[redacted#${index}]`, origin);
+    return placeholder;
   });
 
-  return { document: masked.document, kept, fresh, moved: [...moved] };
+  return { document: masked.document, kept, fresh, moved: [...moved.values()] };
 };
 
 /** Every string of `value` (keys included) with its path. */

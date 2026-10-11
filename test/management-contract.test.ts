@@ -1299,6 +1299,24 @@ describe("management contract", () => {
         );
         // round-robin is the default: the sparse result omits it.
         assert.notInclude(checked.yaml, "strategy");
+
+        // A kept key sent to another family and host decodes with its placeholder and both places.
+        const elsewhere = yield* api.settings.checkRaw({
+          payload: {
+            version: raw.version,
+            yaml: `${yaml}  codex:\n    - base-url: https://gateway.test/v1\n      keys:\n        - api-key: "[redacted#1]"\n`,
+          },
+        });
+
+        assert.deepStrictEqual(elsewhere.moved_secrets, [
+          {
+            path: "api-keys.codex[0].keys[0].api-key",
+            placeholder: "[redacted#1]…4242",
+            from: { family: "claude" },
+            to: { family: "codex", host: "gateway.test" },
+          },
+        ]);
+        assert.notInclude(JSON.stringify(elsewhere), "contract-secret");
         assert.strictEqual((yield* api.settings.raw()).version, raw.version);
 
         const saved = yield* api.settings.saveRaw({ payload: { version: raw.version, yaml } });

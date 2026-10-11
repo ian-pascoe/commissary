@@ -25,8 +25,9 @@
  * known; `422 masked_value_outside_secret_field` / `unknown_secret_reference` / `invalid_secret_placeholder` with
  * the `path` of a placeholder that cannot be restored; `422 would_remove_your_admin_access`; `413` above 512 KiB.
  * `checkRaw` stores nothing and returns the masked canonical result (new secrets as `[new secret]…abcd`, told apart
- * from kept ones by origin, never by value) and `moved_secrets`, the paths where a kept secret is now sent to another
- * provider family or upstream host (also in the `saveRaw` reply). `saveRaw` of a document whose canonical form equals
+ * from kept ones by origin, never by value) and `moved_secrets`, each kept secret now sent to another provider family
+ * or upstream address with its placeholder, path and the family and host before and after (host only: user info,
+ * path and query can carry secrets; also in the `saveRaw` reply). `saveRaw` of a document whose canonical form equals
  * the stored one writes nothing and returns the same `version`.
  */
 import { Schema } from "effect";
@@ -303,6 +304,22 @@ export const RawConfigInput = Schema.Struct({ version: ConfigVersion, yaml: Sche
 
 export type RawConfigInput = typeof RawConfigInput.Type;
 
+/** Where a secret is sent: provider family (or config section) and upstream host, never the rest of the URL. */
+export const SecretPlace = Schema.Struct({ family: Schema.String, host: optional(Schema.String) });
+
+export type SecretPlace = typeof SecretPlace.Type;
+
+/** A kept secret now sent to another provider family or upstream host than where it was stored. */
+export const MovedSecret = Schema.Struct({
+  path: Schema.String,
+  /** `[redacted#n]…abcd`, as the review's `yaml` shows it. */
+  placeholder: Schema.String,
+  from: SecretPlace,
+  to: SecretPlace,
+});
+
+export type MovedSecret = typeof MovedSecret.Type;
+
 /** What a save would store, for the review (nothing is stored). */
 export const RawConfigCheck = Schema.Struct({
   /** The canonical result as sparse YAML, masked: kept secrets `[redacted#n]…`, new ones `[new secret]…`. */
@@ -314,8 +331,8 @@ export const RawConfigCheck = Schema.Struct({
   not_applied: Strings,
   kept_secrets: Schema.Int,
   new_secrets: Schema.Int,
-  /** Paths of kept secrets now sent to another provider family or upstream host than where they were stored. */
-  moved_secrets: Strings,
+  /** Kept secrets now sent to another provider family or upstream address than where they were stored. */
+  moved_secrets: Schema.Array(MovedSecret),
 });
 
 export type RawConfigCheck = typeof RawConfigCheck.Type;
@@ -326,7 +343,7 @@ export const RawConfigSaved = Schema.Struct({
   version: Schema.Int,
   dropped: Strings,
   not_applied: Strings,
-  moved_secrets: Strings,
+  moved_secrets: Schema.Array(MovedSecret),
 });
 
 export type RawConfigSaved = typeof RawConfigSaved.Type;
