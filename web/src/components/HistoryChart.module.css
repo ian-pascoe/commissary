@@ -9,7 +9,7 @@
 .title {
   font-size: var(--text-xs);
   font-weight: 600;
-  color: var(--stone-4);
+  color: var(--quiet);
 }
 
 /* The pointed column's figures, set like a table row: period, tokens, requests. */
@@ -32,7 +32,7 @@
 }
 
 .requests {
-  color: var(--stone-4);
+  color: var(--quiet);
 }
 
 /* Columns are at most 2.75rem wide: a chart of few windows is narrow rather than blocky. */
@@ -46,7 +46,7 @@
   align-items: stretch;
   gap: 2px;
   height: 6rem;
-  border-bottom: 2px solid var(--ink);
+  border-bottom: 2px solid var(--text);
 }
 
 .slot {
@@ -60,12 +60,12 @@
   display: block;
   width: 100%;
   min-height: 2px;
-  background: var(--stone-3);
+  background: var(--rule);
   border-radius: 1px 1px 0 0;
 }
 
 .bar[data-current="true"] {
-  background: var(--ink);
+  background: var(--text);
 }
 
 .bar[data-empty="true"] {
@@ -73,22 +73,22 @@
 }
 
 .slot[data-pointed="true"] .bar {
-  background: var(--stone-4);
+  background: var(--quiet);
 }
 
 .slot[data-pointed="true"] .bar[data-current="true"] {
-  background: var(--ink);
+  background: var(--text);
 }
 
 .axis {
   display: flex;
   justify-content: space-between;
   font-size: var(--text-xs);
-  color: var(--stone-4);
+  color: var(--quiet);
 }
 
 .note {
   max-width: 60ch;
   font-size: var(--text-xs);
-  color: var(--stone-4);
+  color: var(--quiet);
 }

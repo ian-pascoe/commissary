@@ -8,23 +8,23 @@
 .label {
   font-size: var(--text-xs);
   line-height: 1.2;
-  color: var(--stone-4);
+  color: var(--quiet);
 }
 
 .track {
   height: 0.5rem;
-  background: var(--stone-2);
+  background: var(--hairline);
   border-radius: 1px;
   overflow: hidden;
 }
 
 .fill {
   height: 100%;
-  background: var(--ink);
+  background: var(--text);
 }
 
 .fill[data-level="out"] {
-  background: var(--red);
+  background: var(--danger);
 }
 
 .value {
@@ -34,5 +34,5 @@
 }
 
 .value[data-level="out"] {
-  color: var(--red);
+  color: var(--danger);
 }

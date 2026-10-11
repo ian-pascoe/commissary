@@ -36,7 +36,7 @@
   margin: 0;
   padding: 0;
   border: 0;
-  border-top: 2px solid var(--ink);
+  border-top: 2px solid var(--text);
 }
 
 .legend {
@@ -53,20 +53,20 @@
   gap: var(--space-3);
   align-items: baseline;
   padding: var(--space-3) var(--space-2);
-  border-bottom: 1px solid var(--stone-2);
+  border-bottom: 1px solid var(--hairline);
   cursor: pointer;
 }
 
 .option:hover,
 .option:has(input:checked) {
-  background: var(--stone-1);
+  background: var(--sunk);
 }
 
 .option > input {
   width: 1rem;
   height: 1rem;
   margin: 0;
-  accent-color: var(--ink);
+  accent-color: var(--text);
   transform: translateY(0.125rem);
 }
 
@@ -81,7 +81,7 @@
 
 .optionHow {
   font-size: var(--text-sm);
-  color: var(--stone-4);
+  color: var(--quiet);
 }
 
 .panel {
@@ -96,12 +96,12 @@
   padding-bottom: var(--space-3);
   font-size: var(--text-lg);
   font-weight: 750;
-  border-bottom: 2px solid var(--ink);
+  border-bottom: 2px solid var(--text);
 }
 
 .prompt {
   padding-top: var(--space-3);
-  color: var(--stone-4);
+  color: var(--quiet);
 }
 
 .panelBody {
@@ -125,7 +125,7 @@
 }
 
 .check > input {
-  accent-color: var(--ink);
+  accent-color: var(--text);
 }
 
 /* Steps, numbered like stages on a route. */
@@ -156,7 +156,7 @@
   width: 2rem;
   height: 2rem;
   font-weight: 750;
-  border: 2px solid var(--ink);
+  border: 2px solid var(--text);
   border-radius: var(--radius);
 }
 
@@ -173,7 +173,7 @@
 .stepText {
   max-width: 60ch;
   font-size: var(--text-sm);
-  color: var(--stone-4);
+  color: var(--quiet);
 }
 
 /* The device code, large and spaced so it can be read off and typed. */
@@ -247,17 +247,17 @@
   height: 2.5rem;
   margin-right: var(--space-3);
   padding: 0 var(--space-4);
-  background: var(--white);
-  color: var(--ink);
+  background: var(--ground);
+  color: var(--text);
   font: inherit;
   font-weight: 700;
-  border: 2px solid var(--ink);
+  border: 2px solid var(--text);
   border-radius: var(--radius);
   cursor: pointer;
 }
 
 .file::file-selector-button:hover {
-  background: var(--stone-1);
+  background: var(--sunk);
 }
 
 .results {
@@ -267,7 +267,7 @@
   padding: 0;
   list-style: none;
   font-size: var(--text-sm);
-  border-top: 2px solid var(--ink);
+  border-top: 2px solid var(--text);
 }
 
 .results > li {
@@ -275,12 +275,12 @@
   grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
   gap: var(--space-3);
   padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--stone-2);
+  border-bottom: 1px solid var(--hairline);
 }
 
 .results > li[data-bad="true"] > span:last-child {
   font-weight: 650;
-  color: var(--red);
+  color: var(--danger);
 }
 
 .resultName {
