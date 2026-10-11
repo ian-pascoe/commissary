@@ -1,0 +1,336 @@
+/* The Account page's Routing form: three ruled groups of fields, a sticky Save / Discard bar while it has changes. */
+.section {
+  display: grid;
+  scroll-margin-top: var(--space-5);
+}
+
+.section > form {
+  display: grid;
+}
+
+.section :is(input, textarea, fieldset) {
+  scroll-margin-bottom: 5rem;
+}
+
+.state {
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+
+.lead {
+  max-width: 65ch;
+  margin-bottom: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--quiet);
+}
+
+.lead a,
+.hint a {
+  color: var(--text);
+}
+
+.groups {
+  display: grid;
+  border-top: 2px solid var(--text);
+}
+
+.groups > .group {
+  padding: var(--space-4) 0 var(--space-5);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.group {
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* A list field (aliases, headers): legend, hint, rows, error and the add button stay close together. */
+fieldset.group {
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.groupTitle {
+  font-size: var(--text-md);
+  font-weight: 750;
+}
+
+/* The three numbers side by side where they fit. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-4) var(--space-5);
+}
+
+.field {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+
+.hint {
+  max-width: 65ch;
+  font-size: var(--text-xs);
+  color: var(--quiet);
+}
+
+.short {
+  width: 8rem;
+}
+
+.medium {
+  width: min(100%, 18rem);
+}
+
+.long {
+  width: min(100%, 36rem);
+}
+
+.lines {
+  width: min(100%, 36rem);
+  height: auto;
+  min-height: 5.5rem;
+  padding: var(--space-2) var(--space-3);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+/* Cooling: three choices in a row. */
+.choices {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choices > legend,
+.group > legend {
+  float: left;
+  width: 100%;
+  margin-bottom: var(--space-1);
+  padding: 0;
+}
+
+.choiceRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-5);
+}
+
+.choice,
+.check,
+.inlineCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.choice,
+.check {
+  font-weight: 650;
+}
+
+.choice > input,
+.check > input,
+.inlineCheck > input {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  accent-color: var(--text);
+}
+
+.choice > input {
+  width: 1rem;
+  height: 1rem;
+}
+
+.check ~ .hint {
+  padding-left: calc(1.125rem + var(--space-2));
+}
+
+/* Alias and header rows: inputs side by side, the remove button at the end. */
+.rows {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.aliasRow,
+.headerRow {
+  display: grid;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+/* Fixed tracks for the switch and remove columns, so the heads line up with every row. */
+.aliasRow {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 7rem 2.5rem;
+}
+
+/* Column heads, once above the alias rows (captions over each input on narrow screens instead). */
+.heads {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--quiet);
+}
+
+.cell {
+  display: grid;
+  min-width: 0;
+}
+
+.keep {
+  justify-items: start;
+}
+
+.headerRow {
+  grid-template-columns: minmax(0, 14rem) minmax(0, 1fr) 2.5rem;
+}
+
+.rows input {
+  min-width: 0;
+}
+
+/* A stored header with a hidden value: its name as text, what is known about the value, the way to replace it. */
+.headerName {
+  overflow: hidden;
+  font-size: var(--text-sm);
+  font-weight: 650;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hidden {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--quiet);
+}
+
+.hiddenText {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A row the error is about: its inputs ruled in danger, the message under it. */
+.invalid input:not([type="checkbox"]) {
+  border-color: var(--danger);
+}
+
+.rowError {
+  grid-column: 1 / -1;
+}
+
+.add,
+.remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: 2.5rem;
+  padding: 0 var(--space-2);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 650;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.add {
+  justify-self: start;
+  padding-left: 0;
+}
+
+.remove {
+  width: 2.5rem;
+  padding: 0;
+  color: var(--quiet);
+}
+
+.add:hover {
+  color: var(--text);
+  background: var(--sunk);
+}
+
+.remove:hover {
+  color: var(--danger);
+}
+
+/* Save / Discard: stays in view at the bottom while the form has changes. */
+.actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  background: var(--ground);
+  border-top: 1px solid var(--rule);
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (max-width: 40rem) {
+  /* Each alias stacks with a caption over each input: the two names, then its switch; remove at the top right. */
+  .heads {
+    display: none;
+  }
+
+  .aliasRow {
+    grid-template-columns: minmax(0, 1fr) 2.5rem;
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .aliasRow > .cell {
+    grid-column: 1;
+  }
+
+  .cell[data-label]::before {
+    margin-bottom: var(--space-1);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--quiet);
+    content: attr(data-label);
+  }
+
+  .aliasRow > .remove {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .headerRow {
+    grid-template-columns: minmax(0, 1fr) 2.5rem;
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .headerRow > :nth-child(2) {
+    grid-column: 1;
+  }
+
+  .headerRow > .remove {
+    grid-row: 1;
+    grid-column: 2;
+  }
+}

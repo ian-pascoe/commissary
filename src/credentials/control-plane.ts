@@ -394,7 +394,15 @@ export class ControlPlane extends DurableObject<Env> {
 
     const patched = applyFieldPatch(target.credential.metadata, fields);
 
-    if (!patched.ok) return { ok: false, error: "invalid", message: patched.message };
+    if (!patched.ok) {
+      return {
+        ok: false,
+        error: "invalid",
+        message: patched.message,
+        ...(patched.path === undefined ? {} : { path: patched.path }),
+      };
+    }
+
     this.#pool.commitRefresh(target.credential.id, { metadata: patched.metadata });
     await this.#rearm();
 

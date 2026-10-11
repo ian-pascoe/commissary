@@ -24,6 +24,7 @@
     "src",
     "test",
     "tools/panel-sync",
+    "web/src/lib/account-fields.ts",
     "web/src/lib/accounts.ts",
     "web/src/lib/connect.ts",
     "web/src/lib/format.ts",

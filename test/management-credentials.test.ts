@@ -466,7 +466,11 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     expect(after.nested).toEqual({});
 
     expect((await patch({})).body).toEqual({ error: "no fields to update" });
-    expect((await patch({ weight: "3" })).body).toEqual({ error: "weight must be an integer" });
+    // A refused value names its field and answers 422; a malformed request stays 400.
+    expect(await patch({ weight: "3" })).toMatchObject({
+      status: 422,
+      body: { error: "weight must be an integer", path: "weight" },
+    });
     expect((await patch({ "weight.x": 1 })).body).toEqual({
       error: "weight does not support nested fields",
     });
@@ -475,8 +479,9 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     });
     expect((await patch({ request_retry: "x" })).body).toEqual({
       error: "request_retry must be an integer or null",
+      path: "request_retry",
     });
-    expect((await patch({ weight: 2_000_000 })).status).toBe(400);
+    expect((await patch({ weight: 2_000_000 })).status).toBe(422);
     expect((await patch({ access_token: "evil" })).body).toEqual({
       error: "invalid field access_token",
     });
@@ -494,6 +499,117 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     ).toEqual({
       error: "name is required",
     });
+  });
+
+  it("shows routing fields with masked headers and keeps a masked value written back", async () => {
+    const secret = "Bearer sk-ant-api-secret-9876abcd";
+
+    await upload(
+      "r.json",
+      claudeFile({
+        prefix: "team",
+        headers: { Authorization: secret, "User-Agent": "blue" },
+        "excluded-models": ["claude-3-*"],
+        model_aliases: [{ name: "claude-opus-4-5", alias: "opus" }],
+      }),
+    );
+
+    const raw = await (await call("/v8/management/credentials")).text();
+
+    expect(raw).not.toContain("sk-ant-api-secret");
+    expect(raw).not.toContain("sk-ant-oat-secret");
+    expect((await list()).files[0]).toMatchObject({
+      prefix: "team",
+      headers: { Authorization: "[redacted]\u2026abcd", "User-Agent": "blue" },
+      excluded_models: ["claude-3-*"],
+      model_aliases: [{ name: "claude-opus-4-5", alias: "opus" }],
+    });
+
+    const patch = async (fields: Record<string, Json>) => {
+      const response = await call(
+        "/v8/management/credentials/fields",
+        jsonInit("PATCH", { name: "r.json", ...fields }),
+      );
+
+      const text = await response.text();
+
+      // No answer ever carries the secret.
+      expect(text).not.toContain("sk-ant-api-secret");
+
+      return { status: response.status, body: JSON.parse(text) as unknown };
+    };
+
+    // The panel writes the mask back unchanged with an edit of another header: the secret stays.
+    expect(
+      await patch({
+        headers: { Authorization: "[redacted]\u2026abcd", "User-Agent": "red" },
+        disable_cooling: true,
+        websockets: false,
+      }),
+    ).toEqual({ status: 200, body: { status: "ok" } });
+
+    const file = (await json("/v8/management/credentials/download?name=r.json")).body as Record<
+      string,
+      Json
+    >;
+
+    expect(file).toMatchObject({
+      headers: { Authorization: secret, "User-Agent": "red" },
+      disable_cooling: true,
+      websockets: false,
+    });
+    expect((await list()).files[0]).toMatchObject({ disable_cooling: true, websockets: false });
+
+    // The mask under another name, or a header renamed with it, is refused with the field named.
+    for (const [name, value] of [
+      ["X-Auth", "[redacted]\u2026abcd"],
+      ["User-Agent", "[redacted]"],
+    ] as const) {
+      expect(await patch({ headers: { [name]: value } })).toMatchObject({
+        status: 422,
+        body: { path: `headers.${name}` },
+      });
+    }
+
+    // Outer slashes are dropped like Go; the list shows the effective prefix.
+    expect((await patch({ prefix: "/squad/" })).status).toBe(200);
+    expect((await list()).files[0]).toMatchObject({ prefix: "squad" });
+    expect((await patch({ prefix: "team" })).status).toBe(200);
+    expect(await patch({ prefix: "a/b" })).toMatchObject({
+      status: 422,
+      body: { error: "prefix cannot contain /", path: "prefix" },
+    });
+    expect(
+      await patch({
+        model_aliases: [
+          { name: "a", alias: "same" },
+          { name: "b", alias: "Same" },
+        ],
+      }),
+    ).toMatchObject({ status: 422, body: { path: "model_aliases.1" } });
+    // Nothing refused was stored.
+    expect((await list()).files[0]).toMatchObject({
+      prefix: "team",
+      model_aliases: [{ name: "claude-opus-4-5", alias: "opus" }],
+    });
+
+    // null removes the fields again.
+    expect(
+      (
+        await patch({
+          prefix: null,
+          headers: null,
+          excluded_models: null,
+          model_aliases: null,
+          disable_cooling: null,
+        })
+      ).status,
+    ).toBe(200);
+
+    const cleared = (await list()).files[0]!;
+
+    for (const key of ["prefix", "headers", "excluded_models", "model_aliases", "disable_cooling"])
+      expect(cleared).not.toHaveProperty(key);
   });
 
   it("force-refreshes one credential and all credentials", async () => {

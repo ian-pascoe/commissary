@@ -8,9 +8,10 @@
  *
  * - `api-keys.<family>[g].keys[k].api-key`, and `access.api-keys[i]` (legacy client keys): the whole value;
  * - `headers.<name>` of a group or a key, and `requests.payload.<kind>[r].models[m].headers.<name>` (match patterns):
- *   the whole value of every header except a short allow-list of protocol/client headers (`User-Agent`, `Accept`,
- *   `Anthropic-Version`, ...; names compared trimmed and lower-cased, as stored) and `$Header` copies (they name a
- *   client header, not a secret);
+ *   the whole value of every header except the allow-list of protocol/client headers (`User-Agent`, `Accept`,
+ *   `Anthropic-Version`, ...; names compared trimmed and lower-cased, as stored) and pure client copies (`$Header`,
+ *   `$CPA-SESSION-ID`: they name what is sent, not a secret; a template such as `$CPA-SESSION-ID:sk-…` is masked),
+ *   by the rules the Keys and Account pages share (`contract/headers.ts`);
  * - `requests.payload.<kind>[r].params.<path>` (not `filter`): every string under a parameter whose last path part,
  *   or a key inside its value, looks secret (`SECRET_PART`: key, token, secret, sig, auth, pass, pwd, cred, session);
  *   raw (`*-raw`) JSON text is not looked into;
@@ -29,7 +30,7 @@
  *   secret (`masked_value_outside_secret_field` otherwise); _n_ out of range is `unknown_secret_reference`;
  * - a placeholder anywhere else, including a header renamed to an allow-listed name, is
  *   `masked_value_outside_secret_field`, so a secret can never be copied into a field that is shown unmasked; so is a
- *   stored secret starting with `$` placed in a header (it would read as a header copy);
+ *   stored secret that reads as a pure client copy placed in a header (it would be shown unmasked);
  * - any other marker form (`[redacted]…abcd`, `xx[redacted#1]`, `[new secret]…`) is `invalid_secret_placeholder`.
  *
  * Plain strings at secret positions are new secrets (a pasted Go config keeps working). The index, not the position,
@@ -53,6 +54,7 @@
 import { configPath } from "../config/errors.ts";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { setOwn } from "../json/value.ts";
+import { isHeaderCopy, SAFE_HEADER_NAMES } from "./contract/headers.ts";
 
 export type SecretKind = "value" | "userinfo" | "query";
 
@@ -112,27 +114,8 @@ const CATALOGS = new Set(["catalog", "codex-catalog", "devin-catalog"]);
 
 const URL_FIELDS = new Set(["base-url", "proxy-url"]);
 
-/**
- * Header names whose values are never secret (protocol and client identification). Every other header value is a
- * secret: the raw editor cannot know what a custom header carries. Compared trimmed and lower-cased, as the
- * normaliser stores names trimmed (`normalizeHeaders`) and HTTP names are case-insensitive.
- */
-const PLAIN_HEADERS = new Set([
-  "accept",
-  "accept-encoding",
-  "accept-language",
-  "anthropic-beta",
-  "anthropic-version",
-  "content-type",
-  "http-referer",
-  "openai-beta",
-  "referer",
-  "user-agent",
-  "x-title",
-]);
-
 const headerPosition = (name: Segment | undefined): Position | undefined =>
-  isKey(name) && !PLAIN_HEADERS.has(name.trim().toLowerCase()) ? "header" : undefined;
+  isKey(name) && !SAFE_HEADER_NAMES.has(name.trim().toLowerCase()) ? "header" : undefined;
 
 /** A key or path part that looks like it names a secret (URL parameters, payload parameter paths). */
 const SECRET_PART = /key|token|secret|sig|auth|pass|pwd|cred|session/i;
@@ -337,7 +320,8 @@ const secretsAt = (position: Position, text: string): ReadonlyArray<Span> => {
 
   if (position === "url") return urlSpans(text);
 
-  if (position === "header" && text.startsWith("$")) return [];
+  // A pure client copy is shown as is; a template (`$CPA-SESSION-ID:sk-…`) is a secret like any value.
+  if (position === "header" && isHeaderCopy(text)) return [];
 
   return [{ start: 0, end: text.length, kind: "value" }];
 };
@@ -754,12 +738,12 @@ const restoreValue = (
 
   if (!found.ok) return found.problem;
 
-  // A header value starting with `$` copies a client header and is shown as is.
-  if (position === "header" && found.slot.value.trimStart().startsWith("$"))
+  // A pure client copy in a header is shown as is, so a secret that reads as one cannot be restored there.
+  if (position === "header" && isHeaderCopy(found.slot.value))
     return refuse(
       "masked_value_outside_secret_field",
       path,
-      `[redacted#${index}] starts with $, which a header reads as a copy of a client header`,
+      `[redacted#${index}] reads as a copy of a client header, which a header shows unmasked`,
     );
 
   return {

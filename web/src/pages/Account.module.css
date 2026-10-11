@@ -193,20 +193,6 @@
   gap: var(--space-6);
 }
 
-.form {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.form > button {
-  justify-self: start;
-}
-
-.hint {
-  font-size: var(--text-xs);
-  color: var(--quiet);
-}
-
 .details {
   display: grid;
   margin: 0;

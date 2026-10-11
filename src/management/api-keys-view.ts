@@ -9,7 +9,7 @@
  * out (a warning says they exist), and error messages are scrubbed of the key and of token-shaped text.
  */
 import type { ApiKeyGroup, Config, OpenAICompatGroup } from "../config/schema.ts";
-import { isSecretName, maskSecret } from "../credentials/summary.ts";
+import { maskHeaders, maskSecret } from "../credentials/summary.ts";
 import { redactSecrets } from "../credentials/redact.ts";
 import type { RefreshTarget } from "../credentials/pool.ts";
 import { DEFAULT_BASE_URL as CLAUDE_DEFAULT_BASE_URL } from "../executor/claude/credentials.ts";
@@ -41,15 +41,6 @@ const plainObject = <T extends object>(value: T): JsonObject =>
   // SAFETY: only objects (config groups and keys without their secrets) are passed in, and JSON.parse of their
   // serialization is a JSON object.
   JSON.parse(JSON.stringify(value)) as JsonObject;
-
-/** Masks header values whose names look secret; `$name` values copy a client header and are not secrets. */
-export const maskHeaders = (headers: Readonly<Record<string, string>>): Record<string, string> =>
-  Object.fromEntries(
-    Object.entries(headers).map(([name, value]) => [
-      name,
-      isSecretName(name) && value !== "" && !value.startsWith("$") ? maskSecret(value) : value,
-    ]),
-  );
 
 const keyPreview = (key: string): string => (key === "" ? "" : maskSecret(key));
 

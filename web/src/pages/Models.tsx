@@ -2,7 +2,7 @@
 // could serve it) take requests, its providers, where the id comes from and its context length. A row opens its
 // routes: who serves it under which upstream name, each route's state with the time it is back, and why a rule
 // takes it away. The channel rules themselves are edited on their own page (ModelRules.tsx); account and key rules
-// are shown here only, their homes are the Account and API keys pages.
+// are shown here only, their homes are the Account page's Routing section (`#routing`) and the API keys pages.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
@@ -72,6 +72,22 @@ const RulesLink = ({
   </Link>
 );
 
+/** An account's own rules live in its page's Routing section. */
+const AccountRulesLink = ({
+  route,
+  children,
+}: {
+  readonly route: ModelRoute;
+  readonly children: string;
+}) =>
+  route.source === "file" ? (
+    <Link to="/accounts/$authIndex" params={{ authIndex: route.auth_index }} hash="routing">
+      {children}
+    </Link>
+  ) : (
+    children
+  );
+
 /** Why a rule takes the route away or renames it, pointing at the rule's home. */
 const Provenance = ({ route }: { readonly route: ModelRoute }) => {
   const provenance = routeProvenance(route);
@@ -88,7 +104,10 @@ const Provenance = ({ route }: { readonly route: ModelRoute }) => {
             Alias from the <RulesLink channel={channel}>{`${channel} channel rules`}</RulesLink>
           </>
         ) : (
-          "Alias from this account's own rules"
+          <>
+            Alias from{" "}
+            <AccountRulesLink route={route}>this account&rsquo;s own rules</AccountRulesLink>
+          </>
         )}
       </span>
     );
@@ -101,7 +120,9 @@ const Provenance = ({ route }: { readonly route: ModelRoute }) => {
           By the <RulesLink channel={channel}>{`${channel} channel rule`}</RulesLink> {rule}
         </>
       ) : scope === "account" ? (
-        <>By this account&rsquo;s own rule {rule}</>
+        <>
+          By <AccountRulesLink route={route}>this account&rsquo;s own rule</AccountRulesLink> {rule}
+        </>
       ) : scope === "key" ? (
         <>By its key group&rsquo;s rule {rule}</>
       ) : (

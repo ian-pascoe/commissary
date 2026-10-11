@@ -90,6 +90,20 @@ export const IdTokenClaims = Schema.Struct({
   chatgpt_subscription_active_until: optional(Schema.String),
 });
 
+/** One of the account's own model aliases (`model_aliases` in its file; the config's alias wire keys). */
+export const CredentialModelAlias = Schema.Struct({
+  /** Upstream model name. */
+  name: Schema.String,
+  /** The id clients call instead. */
+  alias: Schema.String,
+  /** Keep the original id next to the alias. */
+  fork: optional(Schema.Boolean),
+  "force-mapping": optional(Schema.Boolean),
+  "display-name": optional(Schema.String),
+});
+
+export type CredentialModelAlias = typeof CredentialModelAlias.Type;
+
 export const CredentialEntry = Schema.Struct({
   id: Schema.String,
   auth_index: Schema.String,
@@ -125,6 +139,19 @@ export const CredentialEntry = Schema.Struct({
   weight: optional(Schema.Number),
   request_retry: optional(Schema.Number),
   websockets: optional(Schema.Boolean),
+  /** Model prefix: clients reach this account alone as `<prefix>/<model>`. */
+  prefix: optional(Schema.String),
+  /** The account's own cooling switch; absent when the routing setting applies. */
+  disable_cooling: optional(Schema.Boolean),
+  /**
+   * Extra upstream request headers. Values whose names look secret are masked (`[redacted]…abcd`, `REDACTED_PREFIX`
+   * in `api-keys.ts`); sending the mask back for the same header keeps the stored value.
+   */
+  headers: optional(Schema.Record(Schema.String, Schema.String)),
+  /** The account's own exclusions (lower-case names or `*` patterns), without the channel rules. */
+  excluded_models: optional(Schema.Array(Schema.String)),
+  /** The account's own aliases, before the channel rules. */
+  model_aliases: optional(Schema.Array(CredentialModelAlias)),
   cooldowns: Schema.Array(Cooldown),
 });
 
@@ -137,13 +164,23 @@ export const CredentialList = Schema.Struct({
 
 const Ok = Schema.Struct({ status: Schema.Literal("ok") });
 
-/** The editable fields the panel sends; `null` clears a field (the routing default applies again). */
+/**
+ * The editable fields the panel sends; `null` clears a field (the routing default applies again). `headers` merges
+ * into the stored ones: an empty value removes a header, the masked value of a header keeps it. A refused value
+ * answers `422` with the field's name in `path`.
+ */
 export const CredentialFieldsPatch = Schema.Struct({
   name: Schema.String,
   priority: optional(Schema.NullOr(Schema.Int)),
   note: optional(Schema.NullOr(Schema.String)),
   weight: optional(Schema.NullOr(Schema.Int)),
   request_retry: optional(Schema.NullOr(Schema.Int)),
+  prefix: optional(Schema.NullOr(Schema.String)),
+  disable_cooling: optional(Schema.NullOr(Schema.Boolean)),
+  websockets: optional(Schema.NullOr(Schema.Boolean)),
+  headers: optional(Schema.NullOr(Schema.Record(Schema.String, Schema.String))),
+  excluded_models: optional(Schema.NullOr(Schema.Array(Schema.String))),
+  model_aliases: optional(Schema.NullOr(Schema.Array(CredentialModelAlias))),
 });
 
 export type CredentialFieldsPatch = typeof CredentialFieldsPatch.Type;

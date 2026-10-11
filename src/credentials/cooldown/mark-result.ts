@@ -162,19 +162,22 @@ const parseBoolAny = (value: Json | undefined): boolean | undefined => {
   return undefined;
 };
 
-/** `quotaCooldownDisabledForAuthWithConfig`: per-credential metadata override, then the global switch. */
-export const coolingDisabledFor = (
-  credential: Pick<Credential, "metadata">,
-  settings: CooldownSettings,
-): boolean => {
+/** The credential's own `disable_cooling` (legacy `disable-cooling`), when it sets one. */
+export const coolingOverride = (metadata: Credential["metadata"]): boolean | undefined => {
   for (const key of ["disable_cooling", "disable-cooling"]) {
-    const parsed = parseBoolAny(credential.metadata[key]);
+    const parsed = parseBoolAny(metadata[key]);
 
     if (parsed !== undefined) return parsed;
   }
 
-  return settings.disableCooling;
+  return undefined;
 };
+
+/** `quotaCooldownDisabledForAuthWithConfig`: per-credential metadata override, then the global switch. */
+export const coolingDisabledFor = (
+  credential: Pick<Credential, "metadata">,
+  settings: CooldownSettings,
+): boolean => coolingOverride(credential.metadata) ?? settings.disableCooling;
 
 // --- state helpers --------------------------------------------------------------------------------------------------
 
