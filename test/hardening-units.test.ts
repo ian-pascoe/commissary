@@ -39,7 +39,6 @@ describe("notAppliedSettings", () => {
   it("names the accepted keys that have no effect on Workers", async () => {
     expect(notAppliedSettings(await loadConfig(GO_CONFIG))).toEqual([
       "access.api-keys",
-      "upstream.codex.response-steering",
       "api-keys.claude[].keys[].experimental-cch-signing",
       "observability.logs.request-log",
       "observability.usage.usage-statistics-enabled",
@@ -62,7 +61,9 @@ describe("notAppliedSettings", () => {
     } as unknown as SqlStorage;
 
     const result = new ConfigStore(sql, () => 1).put(GO_CONFIG);
-    expect(result.ok && result.notApplied).toContain("upstream.codex.response-steering");
+    expect(result.ok && result.notApplied).toContain("access.api-keys");
+    // Response steering is ported: an effective key, not reported.
+    expect(result.ok && result.notApplied).not.toContain("upstream.codex.response-steering");
   });
 });
 

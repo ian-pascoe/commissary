@@ -6,7 +6,7 @@
  * key, IP ban and `allow-remote` logic. Routes that are not ported: plugins, Home, file logs (answered like Go with
  * file logging off), the deprecated `/v0/management` tree. OAuth login (`/oauth/*`) is in `oauth-routes.ts`; usage
  * (`/observability/usage/*`) is in `usage-routes.ts`; the per-model routing view (`/routing/models`) in
- * `routing-models.ts`.
+ * `routing-models.ts`; the Settings page (`/settings`) in `settings-routes.ts`.
  */
 import { Effect, Layer } from "effect";
 import {
@@ -29,6 +29,7 @@ import { oauthRoutes } from "./oauth-routes.ts";
 import { panelHandler } from "./panel.ts";
 import { quotaCheckHandler } from "./quota-routes.ts";
 import { routingModelsHandler } from "./routing-models.ts";
+import { settingsRoutes } from "./settings-routes.ts";
 import { PANEL_PAGE_PATHS, webPanelAsset, webPanelPage } from "./web-panel.ts";
 import { usageRoutes } from "./usage-routes.ts";
 import {
@@ -59,6 +60,7 @@ export const ManagementRoutes = HttpRouter.addAll(
     return [
       ...configRoutes,
       ...apiKeysRoutes,
+      ...settingsRoutes,
       ...credentialRoutes,
       ...usageRoutes,
       ...oauthRoutes,

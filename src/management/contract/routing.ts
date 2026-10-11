@@ -16,6 +16,7 @@
  */
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
+import { Saved } from "./config.ts";
 import { managementErrors } from "./errors.ts";
 
 const optional = Schema.optionalKey;
@@ -128,11 +129,6 @@ export const RoutingModels = Schema.Struct({
 });
 
 export type RoutingModels = typeof RoutingModels.Type;
-
-/** A saved config edit: `version` is the new config version. */
-export const Saved = Schema.Struct({ status: Schema.Literal("ok"), version: Schema.Number });
-
-export type Saved = typeof Saved.Type;
 
 /** The `If-Match` request header: the `config_version` the edit was based on (a bare number or `"<number>"`). */
 const IfMatch = { headers: Schema.Struct({ "if-match": Schema.String }) };

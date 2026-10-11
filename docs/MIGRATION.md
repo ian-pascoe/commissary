@@ -45,7 +45,6 @@ effect. Storing a config that sets any of them logs a warning naming the keys (`
 | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
 | `access.api-keys` (legacy top-level `api-keys`)              | Clients authenticate with Cloudflare Access, see [CLIENTS.md](CLIENTS.md)                 |
 | `requests.proxy-url`, per-group/per-key `proxy-url`          | Workers `fetch` cannot use outbound proxies                                               |
-| `upstream.codex.response-steering`                           | Response steering / full-duplex WebSocket is not ported                                   |
 | `api-keys.claude[].keys[].experimental-cch-signing`          | Kept for compatibility (also in Go); signing follows the credential type                  |
 | `observability.logs.debug`, `observability.logs.request-log` | No debug/request-log files; Workers Logs carry one structured line per request            |
 | `observability.usage.usage-statistics-enabled`               | Usage persistence is always on when the `USAGE` D1 binding exists                         |

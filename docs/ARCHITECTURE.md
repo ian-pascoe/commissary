@@ -113,8 +113,8 @@ client -> Cloudflare Access -> Worker
   spellings, see `document.ts`), validates, normalises (`normalize.ts`, port of the Go `Sanitize*` functions) and
   exports YAML (defaults omitted). Added keys without a Go counterpart: `access.admin-emails` and
   `access.admin-service-tokens` (management allow-list merged with the `ACCESS_ADMIN_*` variables, see Authentication).
-  Keys that are accepted but have no effect on Workers are listed in `config/not-applied.ts` (and MIGRATION.md); storing a
-  document that sets one logs a warning. `requests.proxy-url` is accepted but
+  Keys that are accepted but have no effect on Workers are listed in `config/not-applied.ts` with a one-line reason (and
+  MIGRATION.md); storing a document that sets one logs a warning, and the Settings view lists them (names only). `requests.proxy-url` is accepted but
   ignored. Unknown/inapplicable keys are dropped on import.
 - **Storage**: the `ControlPlane` DO (`src/credentials/control-plane.ts`) stores the canonical JSON in a SQLite table
   with a monotonically increasing version. RPC: `getConfig(sinceVersion?)` (returns `unchanged: true` when the caller
@@ -484,14 +484,10 @@ upgrade request like any other (default-deny prefixes); the principal is capture
 Deviations from Go / not ported: no WebSocket ping keep-alives (`streaming.keepalive-seconds` is ignored: the Workers WebSocket API
 cannot send ping frames); terminal failures close with 1011/1012/1009 instead of dropping the TCP connection; credential pinning only
 covers WebSocket-capable credentials and the decision to pass through is based on the previously pinned credential instead of the global
-credential list; no request-log timelines; response steering / full duplex (`codex.response-steering`) and
-non-stream execution over WebSocket. The multi-agent v2 tool preparation and orphan delegation rewrite run on
-each planned frame (`handlers/responses/codex-prepare.ts`), the executors do the rest. Upgrades whose `Origin` is not the Worker's own host are refused by the Access gate (Go: `CheckOrigin` always true; the
-Access cookie makes cross-site WebSocket hijacking possible, see Authentication). CPU limits for
-
 credential list; no request-log timelines. Response steering / full duplex and non-stream execution over WebSocket are ported
 (see the Codex section). The multi-agent v2 tool preparation and orphan delegation rewrite run on
-each planned frame (`handlers/responses/codex-prepare.ts`), the executors do the rest. `Origin` is not checked (Go: `CheckOrigin` always true). CPU limits for
+each planned frame (`handlers/responses/codex-prepare.ts`), the executors do the rest. Upgrades whose `Origin` is not the Worker's own host are refused by the Access gate (Go: `CheckOrigin` always true; the
+Access cookie makes cross-site WebSocket hijacking possible, see Authentication). CPU limits for
 long-lived sockets follow the Workers platform rules (`limits.cpu_ms`).
 
 ## Model registry and `/models` endpoints (`src/registry/`)
@@ -819,6 +815,25 @@ until the next page load).
   - `configKeyIds` (`config-document.ts`) maps config positions to credential ids through the synthesised credentials;
     `auth_index` injection and the keys page share it. `includeDisabledGroups` also addresses the keys of a disabled compat
     group (they have no credentials in the pool).
+- **Settings** (`settings-routes.ts`, `settings.ts`, contract `settings.ts`): the control panel's Settings page. Workers
+  addition, no Go counterpart (Go v8 edits `/config` paths without a version and normalises silently).
+  - `GET /settings`: every Settings-owned value (`SETTINGS_TREE`: routing, retries/cooldowns, requests/streaming,
+    upstream provider flags and header defaults, Codex client flags, refresh concurrency, OAuth provider settings,
+    multimedia, model catalogs, config admin lists) in config spelling with defaults filled (unset Go pointers are
+    `null`), the `defaults`, the config `version` and `updated_at`, `env_admins` (`ACCESS_ADMIN_*`), `payload` rule
+    counts per kind, `prefixed_credentials`, the read-only `request_scoped_errors` map and `not_applied` (key + reason
+    of each inert key that is set). **No secrets**: API keys, proxy URLs and client keys are never in the view.
+  - `PATCH /settings {version, patch}`: `patch` is a deep partial of the values; `null` removes the key from the
+    document (back to its default). The not-applied keys with a mapping path accept `null` only. Unknown paths answer
+    `400 not_a_setting`; invalid values `422 invalid_setting` with `message` and `path` (naming the value, e.g. `“EST” is not an IANA time zone`; type, then rules: Go
+    durations > 0, non-negative counts, strategy literal, `gpt-` model prefix, catalog `""`/`embed`/`disabled`/http(s),
+    IANA time zone or `Local`, email-shaped admin entries); then the edited document is dry-run through the config
+    decoder and every written leaf must come back unchanged (a value the normaliser trims, lower-cases or clamps is
+    refused with its path instead of "succeeding"). A caller who is an admin only through `access.admin-*` cannot
+    remove themselves (`422 would_remove_your_admin_access`; deployment admins and the dev bypass can). Stored with
+    `putConfig(text, version)` without retry: a stale `version` is `409 conflict`. Ok: `{status: "ok", version}`.
+  - `ManagementError` decodes the optional `message` and `path` of an error body, so the panel can show the reason
+    and focus the field.
 - **Operational**: `requests/api-call` (`api-call.ts`; `$TOKEN$` resolved in the ControlPlane through `ensureFresh`;
   60 s bound like Go; no `proxy_url`/`Host` override on Workers), `server/latest-version`, `routing/model-definitions/:channel`
   (static catalogs of the model registry), file-log routes answering like Go with file logging disabled.
@@ -850,7 +865,18 @@ until the next page load).
   section per channel with a live count of the models a pattern matches; reads `GET /routing/models` and writes one
   channel's list with `PUT`/`DELETE /config/oauth/model-alias|excluded-models/:channel` carrying the view's
   `config_version` as `If-Match`; on `409` the edit is re-applied once to a fresh read, and a second refusal or a
-  changed entry offers a reload). The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
+  changed entry offers a reload); Settings (`/settings`: the settings that apply on Workers in sections, Routing,
+  Retries & cooldowns, Requests & streaming, Payload rules, Images & video, Providers, Model catalogs, Admin access,
+  Account refresh, and Not applied on Workers when the configuration sets keys that do nothing here (each removable); one
+  form per section whose draft is a delta of the touched fields (`web/src/lib/settings.ts`), saved with
+  `PATCH /settings` carrying the view's `version` and only the changed leaves (`null` back to the default); inputs
+  are checked and normalised as the server would (trimmed, admin emails lower-case) before sending; after a save the
+  view refetches and the other sections' drafts rebase onto it, listing a changed field that moved on the server; on
+  `409` the delta is re-applied once to a fresh read, and a `422` lands under the field its `path` names (the message
+  names the bad value; the hint says what is expected); other save outcomes show in the section's sticky save bar; the
+  jump list counts each section's unsaved changes and leaving the page with any asks first (`useBlocker`); payload
+  rules and account error rules are read-only there until the configuration editor, edited meanwhile in the classic
+  panel at `/management.html`). The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
   address (`?range=&by=&model=&provider=&account=&user=&failed=`, decoded per parameter by `web/src/lib/usage.ts`
   `readUsageSearch`, a malformed one dropped), reads `GET /observability/usage/summary`, `/series` (provider series
   summed in the browser; no principal filter, so no chart while a user filter is set) and `/records` (pages of 50
@@ -869,7 +895,8 @@ until the next page load).
 - Deviations from Go: `/` serves the control panel (admins only) instead of the public JSON banner; cooldown `reason`s are
   limited to the quota reason / last error code; `GET /credentials` always returns JSON timestamps as RFC 3339 strings;
   `POST /credentials/quota` and the entries' `quota_report` are a Workers addition (see _Quota check_). The API keys
-  routes are a Workers addition (secrets never in their responses, versioned writes); `GET /config` stays raw (keys
+  and Settings routes are Workers additions (secrets never in their responses, versioned writes, values the
+  normaliser would rewrite refused with `422` instead of silently changed); `GET /config` stays raw (keys
   included) for the upstream `management.html`, which the control panel does not use. Config API keys can be toggled
   (Go answers the same through `excluded-models`); compat keys cannot, only their endpoint.
 
