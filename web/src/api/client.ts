@@ -1,10 +1,13 @@
 // The typed management API client (generated from the shared contract) and the atoms the pages read. Calls go to the
 // panel's own origin; Cloudflare Access authenticates them with the session cookie, so no credentials live here.
-import { Clock, Duration, Effect, Schema } from "effect";
+import { Cause, Clock, Duration, Effect, Schema } from "effect";
 import { FetchHttpClient, HttpClientError } from "effect/http";
 import { Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 import { ManagementApi } from "#contract/api.ts";
+import { type BatchAction, batchLimit } from "#contract/credentials.ts";
 import type { RoutingModels } from "#contract/routing.ts";
+import { type ChunkOutcome, chunks, foldOutcomes } from "../lib/batch.ts";
+import { causeMessage } from "../lib/failure.ts";
 import type { SettingsPatch, SettingsView } from "#contract/settings.ts";
 import { HISTORY_SPAN_MS } from "../lib/history.ts";
 import { type RuleChange, type RuleWrite, saveRuleChange } from "../lib/models.ts";
@@ -348,6 +351,35 @@ export const removeAtom = ManagementClient.mutation("credentials", "remove");
 export const uploadAtom = ManagementClient.mutation("credentials", "upload");
 
 export const checkQuotaAtom = ManagementClient.mutation("credentials", "checkQuota");
+
+/** Checks every enabled account's quota now (call with `reactivityKeys: CREDENTIALS`). */
+export const checkAllQuotasAtom = ManagementClient.mutation("credentials", "checkAllQuotas");
+
+/**
+ * One batch action over the selected accounts (file names), sent in requests of at most `batchLimit(action)`, one after
+ * another, and folded into who succeeded and who failed and why (`foldOutcomes`). A request that fails as a whole
+ * fails its accounts with the reason instead of failing the action, so the others' outcomes still show. The credential
+ * list refetches afterwards.
+ */
+export const batchAtom = ManagementClient.runtime.fn(
+  (input: { readonly action: BatchAction; readonly names: ReadonlyArray<string> }) =>
+    Effect.gen(function* () {
+      const client = yield* ManagementClient;
+
+      const outcomes = yield* Effect.forEach(
+        chunks(input.names, batchLimit(input.action)),
+        (names) =>
+          client.credentials.batch({ payload: { action: input.action, names } }).pipe(
+            Effect.map((answer): ChunkOutcome => ({ names, results: answer.results })),
+            Effect.catch((error) =>
+              Effect.succeed<ChunkOutcome>({ names, failure: causeMessage(Cause.fail(error)) }),
+            ),
+          ),
+      );
+
+      return foldOutcomes(outcomes);
+    }).pipe((effect) => Reactivity.mutation(effect, CREDENTIALS)),
+);
 
 export const oauthStartAtom = ManagementClient.mutation("oauth", "start");
 

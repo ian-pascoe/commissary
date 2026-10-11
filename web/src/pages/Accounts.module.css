@@ -28,13 +28,21 @@
 
 .search {
   position: relative;
-  width: min(18rem, 100%);
+  flex: 0 1 18rem;
+  min-width: 0;
 }
 
 .search > input {
   width: 100%;
   padding-left: 2.25rem;
   font-size: var(--text-sm);
+}
+
+/* The search and the Select toggle. */
+.tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .searchIcon {
@@ -85,12 +93,49 @@
   padding-right: 0;
 }
 
-.accounts > thead th:nth-child(1) {
+.accounts > thead .colAccount {
   width: 34%;
 }
 
-.accounts > thead th:nth-child(2) {
+.accounts > thead .colQuota {
   width: 40%;
+}
+
+/* The selection column: a checkbox per row, and the select-all one in the head. */
+.accounts tr > .pick {
+  width: 2.75rem;
+  padding-right: 0;
+  padding-left: var(--space-2);
+}
+
+/* The mobile key and the table, apart on narrow screens. */
+.listBlock {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.check {
+  display: block;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  accent-color: var(--text);
+  cursor: pointer;
+}
+
+.row[data-selected="true"] > * {
+  background: var(--sunk);
+}
+
+.row[data-selecting="true"] .address {
+  cursor: pointer;
+}
+
+/* Why the last action failed for this account, under its name. */
+.rowFailure {
+  font-size: var(--text-xs);
+  font-weight: 650;
+  color: var(--danger);
 }
 
 .accounts .number {
@@ -196,6 +241,162 @@
   color: var(--danger);
 }
 
+/*
+ * What Check all quotas is doing or did: a line under the head, full width. No box until a check starts (the live
+ * region stays in the tree); from then on its line is held, so "Checking" turning into the result does not jump.
+ */
+.sweep {
+  flex-basis: 100%;
+  min-height: 1lh;
+  font-size: var(--text-sm);
+}
+
+.sweep[data-started="false"] {
+  display: contents;
+}
+
+.outcome {
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+/* What was done, in ink; what needs the operator, in red behind the trail mark. */
+.outcomeLine,
+.problemLine {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  max-width: 75ch;
+  font-size: var(--text-sm);
+  font-weight: 650;
+  color: var(--text);
+}
+
+.problemLine {
+  color: var(--danger);
+}
+
+/* While the check runs. */
+.pendingLine {
+  font-weight: 400;
+  color: var(--quiet);
+}
+
+.failures {
+  display: grid;
+  gap: 0.125rem;
+  margin: 0;
+  padding: 0 0 0 calc(1rem + var(--space-3));
+  list-style: none;
+  font-size: var(--text-xs);
+  color: var(--danger);
+}
+
+.failedName {
+  font-weight: 650;
+}
+
+.more {
+  color: var(--quiet);
+}
+
+/* The bar pinned to the bottom of the window while selecting: what is selected, then the actions. */
+.bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  background: var(--ground);
+  border-top: 1px solid var(--rule);
+}
+
+.barOutcome:empty {
+  display: none;
+}
+
+.barRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+}
+
+.barCount {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.selectedCount {
+  font-weight: 750;
+}
+
+.hiddenCount {
+  color: var(--quiet);
+}
+
+.barPicks {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.textButton {
+  padding: 0;
+  font-size: var(--text-sm);
+  font-weight: 650;
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.22em;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.textButton:hover {
+  text-decoration-color: var(--text);
+}
+
+.barActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Delete stands apart from the reversible actions. */
+.barRule {
+  align-self: stretch;
+  width: 1px;
+  margin: 0 var(--space-2);
+  background: var(--rule);
+}
+
+/* The accounts the delete confirmation names. */
+.doomed {
+  display: grid;
+  gap: 0.125rem;
+  max-height: 14rem;
+  margin: 0;
+  padding: var(--space-3) 0;
+  overflow-y: auto;
+  list-style: none;
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.doomedProvider {
+  font-weight: 750;
+}
+
 /* The key to the request figure, which loses its column head on narrow screens. */
 .mobileKey {
   display: none;
@@ -273,11 +474,57 @@
     align-self: center;
   }
 
+  .row[data-selecting="true"] {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "pick account requests"
+      ". quota quota";
+  }
+
+  .row[data-selecting="true"] > .pick {
+    grid-area: pick;
+    width: auto;
+    padding-top: 0.125rem;
+  }
+
+  .row[data-selecting="true"] > .go {
+    display: none;
+  }
+
+  .row[data-selected="true"] {
+    background: var(--sunk);
+  }
+
+  .row[data-selected="true"] > * {
+    background: none;
+  }
+
   .meters {
     max-width: none;
   }
 
+  .tools {
+    width: 100%;
+  }
+
   .search {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 40rem) {
+  .barRule {
+    display: none;
+  }
+
+  /* The failed rows carry their reasons; the bar keeps to its summary. */
+  .bar .failures {
+    display: none;
+  }
+
+  .barActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     width: 100%;
   }
 }

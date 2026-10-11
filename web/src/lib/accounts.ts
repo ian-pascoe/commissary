@@ -1,6 +1,7 @@
 // How an account is named and what the operator needs to know about it, shared by the overview and the Accounts
 // pages. Pure: no DOM, tested in test/web-quota.test.ts.
 import type { CredentialEntry } from "#contract/credentials.ts";
+import { providerName } from "./providers.ts";
 import { type AccountStanding, accountStanding } from "./quota.ts";
 
 /** The account's address or label, whichever it has (the file name as a last resort). */
@@ -48,6 +49,48 @@ export const assess = (entry: CredentialEntry): Assessed => {
   }
 
   return { entry, standing, closed: false, note: undefined, tone: undefined };
+};
+
+/** The Accounts page's filters. */
+export type AccountFilter = "all" | "attention" | "disabled";
+
+const needsAttention = (account: Assessed): boolean =>
+  !account.entry.disabled && (account.closed || account.tone === "near");
+
+export const ACCOUNT_FILTERS: ReadonlyArray<{
+  readonly id: AccountFilter;
+  readonly label: string;
+  readonly keep: (account: Assessed) => boolean;
+}> = [
+  { id: "all", label: "All", keep: () => true },
+  { id: "attention", label: "Needs attention", keep: needsAttention },
+  { id: "disabled", label: "Disabled", keep: (account) => account.entry.disabled },
+];
+
+/** Whether the account matches a search (`query` trimmed and lower-cased; empty matches all). */
+export const matchesQuery = (account: Assessed, query: string): boolean => {
+  if (query === "") return true;
+  const { entry } = account;
+
+  return [
+    providerName(entry.provider),
+    accountName(entry),
+    entry.name,
+    entry.note,
+    entry.project_id,
+    account.note,
+  ].some((field) => field?.toLowerCase().includes(query) === true);
+};
+
+/** The accounts the list shows under a filter and a search, in the given order. */
+export const shownAccounts = (
+  accounts: ReadonlyArray<Assessed>,
+  filter: AccountFilter,
+  query: string,
+): ReadonlyArray<Assessed> => {
+  const keep = ACCOUNT_FILTERS.find((candidate) => candidate.id === filter)?.keep ?? (() => true);
+
+  return accounts.filter((account) => keep(account) && matchesQuery(account, query));
 };
 
 /** Providers whose tokens the server can refresh on request (src/credentials/refresh/registry.ts). */
