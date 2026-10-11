@@ -6,10 +6,13 @@
  * (`PatchAuthFileStatus`, `PatchAuthFileFields`), auth_files_refresh.go (`RefreshAuthFiles`), quota.go (`ResetQuota`).
  * Auth files live in the ControlPlane Durable Object instead of a directory; the credential `id` is the file name.
  * Differences: a field patch refused for its value answers `422 {error, path}` naming the field (Go: `400`), and the
- * list masks secret-looking header values (`field-patch.ts`, `credential-entry.ts`).
+ * list masks secret-looking header values (`field-patch.ts`, `credential-entry.ts`), and the download answers only
+ * service-token administrators (`403 download_requires_service_token` for an email admin): the file carries the
+ * access and refresh tokens, and a service token is the credential meant for automation (`docs/ACCESS.md`).
  */
 import { Clock, Effect } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
+import { AccessPrincipal } from "../access/principal.ts";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { ModelRegistry } from "../registry/service.ts";
 import {
@@ -298,6 +301,13 @@ const deleteCredentials = Effect.gen(function* () {
 // --- download / models -------------------------------------------------------------------------------------------
 
 const downloadCredential = Effect.gen(function* () {
+  const { principal } = yield* AccessPrincipal;
+
+  if (principal.kind !== "service")
+    return yield* replyError(403, "download_requires_service_token", {
+      message:
+        "downloading a credential file discloses its tokens: call this endpoint with an Access service token (see docs/ACCESS.md)",
+    });
   const name = (yield* queryParams).get("name")?.trim() ?? "";
 
   if (unsafeName(name)) return yield* replyError(400, "invalid name");

@@ -4,7 +4,8 @@
  * Workers addition, no Go counterpart (Go's panel edits `/config` paths without a version). Reads go straight to the
  * ControlPlane, so a write shows on the next read. A write carries the `version` of the view it was made from and is
  * stored with `putConfig(text, version)` and no retry: a stale view is `409 conflict`. The patch is checked
- * (`settings.ts`: owned paths, value rules, survival through the config decoder, admin lock-out) before anything is
+ * (`settings.ts`: owned paths, value rules, survival through the config decoder, who may change the admin service
+ * tokens, admin lock-out) before anything is
  * stored; refusals carry `{error, message, path}`.
  */
 import { Effect, Result, Schema } from "effect";
@@ -20,6 +21,7 @@ import { bodyJson, controlPlane, handled, jsonReply, replyError } from "./http.t
 import {
   applySettingsPatch,
   checkAdminLockout,
+  checkServiceTokenAdmins,
   checkSurvival,
   type SettingsProblem,
   settingsView,
@@ -113,6 +115,15 @@ const save = Effect.gen(function* () {
 
   yield* failIf(checkSurvival(edits, normalised));
   const identity = yield* AccessPrincipal;
+
+  yield* failIf(
+    checkServiceTokenAdmins({
+      before: current.config,
+      after: normalised,
+      principal: identity.principal,
+      alwaysAdmin: yield* alwaysAdmin,
+    }),
+  );
 
   yield* failIf(
     checkAdminLockout({

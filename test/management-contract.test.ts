@@ -1008,27 +1008,26 @@ describe("management contract", () => {
         }).pipe(through(harness)),
     );
 
-    it.effect("refuses a duplicate key and deletes a group", () =>
+    it.effect("drops a duplicate key silently, like a new one, and deletes a group", () =>
       Effect.gen(function* () {
         yield* seedKeys({ gemini: [{ keys: [{ "api-key": "gm-one" }] }] });
         const api = yield* client;
         const list = yield* api.apiKeys.list();
 
-        const duplicate = yield* Effect.flip(
-          api.apiKeys.putGroup({
-            payload: {
-              version: list.version,
-              family: "gemini",
-              group: { keys: [{ "api-key": "gm-one" }] },
-            },
-          }),
-        );
+        // Silent: a duplicate of a stored key is accepted (and dropped), so the reply never confirms a guess.
+        const duplicate = yield* api.apiKeys.putGroup({
+          payload: {
+            version: list.version,
+            family: "gemini",
+            group: { keys: [{ "api-key": "gm-one" }] },
+          },
+        });
 
-        assert.instanceOf(duplicate, ManagementError);
-        assert.isAbove(duplicate.error.length, 0);
+        assert.deepStrictEqual(duplicate, { status: "ok", version: list.version + 1 });
+        assert.strictEqual((yield* api.apiKeys.list()).families.gemini.length, 1);
 
         const deleted = yield* api.apiKeys.deleteGroup({
-          payload: { version: list.version, family: "gemini", index: 0 },
+          payload: { version: duplicate.version, family: "gemini", index: 0 },
         });
 
         const after = yield* api.apiKeys.list();

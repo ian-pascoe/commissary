@@ -10,23 +10,27 @@
  * - a stale `version` is `409 conflict` before anything else (placeholders are numbered per version), no retry;
  * - the text is read by `settings-raw.ts` `readRawEdit` (YAML `422 invalid_yaml` with `line`/`column`, config
  *   `422 invalid_config` with `path` when known, placeholders that cannot be restored `422` with their `path`);
- * - the admin lock-out guard of `PATCH /settings` applies to the whole document;
+ * - the guards of `PATCH /settings` apply to the whole document: changing `access.admin-service-tokens` needs a
+ *   service-token administrator or a deployment admin (`403 service_tokens_require_service_admin`), and a caller
+ *   cannot remove their own admin access (`422 would_remove_your_admin_access`);
  * - `check` stores nothing and answers the masked canonical result (new secrets as `[new secret]…`), what is dropped,
  *   what has no effect on Workers and `moved_secrets` (kept secrets now sent to another family or host, also in the
  *   `PUT` reply); `PUT` stores with `putConfig(text, version)`. A document whose canonical form
- *   equals the stored one is not written: the reply keeps the current `version` (no spurious version bump, so other
- *   open pages do not get a `409`).
+ *   equals the stored one and in which no secret was typed is not written: the reply keeps the current `version` (no
+ *   spurious version bump, so other open pages do not get a `409`). When a secret was typed the document is always
+ *   written, even if the typed text equals a stored secret (or is deduplicated with it): a version that stayed put
+ *   would confirm the guess.
  *
  * Bodies above 512 KiB are `413 body_too_large`, counted while the stream is read (chunked bodies included).
  */
 import { Effect, Schema } from "effect";
 import { HttpRouter } from "effect/http";
 import { AccessPrincipal } from "../access/principal.ts";
-import { isJsonObject, type Json, jsonEquals } from "../json/index.ts";
+import { isJsonObject, type Json } from "../json/index.ts";
 import { maskDocument } from "./config-secrets.ts";
 import { RawConfigInput } from "./contract/settings.ts";
 import { boundedBodyText, controlPlane, handled, jsonReply, replyError } from "./http.ts";
-import { checkDocumentLockout } from "./settings.ts";
+import { checkDocumentLockout, checkServiceTokenAdmins } from "./settings.ts";
 import { maskedYaml, type RawEdit, readRawEdit } from "./settings-raw.ts";
 import { alwaysAdmin, storedConfig } from "./settings-routes.ts";
 
@@ -75,17 +79,26 @@ const edit = Effect.gen(function* () {
 
   const identity = yield* AccessPrincipal;
 
-  const lockout = checkDocumentLockout({
-    before: current.config,
-    after: read.config,
-    principal: identity.principal,
-    alwaysAdmin: yield* alwaysAdmin,
-  });
+  const always = yield* alwaysAdmin;
 
-  if (lockout !== undefined)
-    return yield* replyError(lockout.status, lockout.error, {
-      message: lockout.message,
-      path: lockout.path,
+  const refused =
+    checkServiceTokenAdmins({
+      before: current.config,
+      after: read.config,
+      principal: identity.principal,
+      alwaysAdmin: always,
+    }) ??
+    checkDocumentLockout({
+      before: current.config,
+      after: read.config,
+      principal: identity.principal,
+      alwaysAdmin: always,
+    });
+
+  if (refused !== undefined)
+    return yield* replyError(refused.status, refused.error, {
+      message: refused.message,
+      path: refused.path,
     });
 
   return { current, read };
@@ -116,7 +129,7 @@ const save = Effect.gen(function* () {
       moved_secrets: read.review.moved,
     });
 
-  if (jsonEquals(read.canonical, current.document)) return saved(current.version);
+  if (read.unchanged) return saved(current.version);
 
   const result = yield* controlPlane("putConfig", (stub) =>
     stub.putConfig(JSON.stringify(read.document), current.version),

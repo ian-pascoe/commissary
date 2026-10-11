@@ -28,8 +28,12 @@ import {
 
 /** A refused write: the reply's status and `{error, message, path}`. */
 export interface SettingsProblem {
-  readonly status: 400 | 422;
-  readonly error: "not_a_setting" | "invalid_setting" | "would_remove_your_admin_access";
+  readonly status: 400 | 403 | 422;
+  readonly error:
+    | "not_a_setting"
+    | "invalid_setting"
+    | "would_remove_your_admin_access"
+    | "service_tokens_require_service_admin";
   readonly message: string;
   /** Dotted config path. */
   readonly path: string;
@@ -356,6 +360,35 @@ export const checkAdminLockout = (input: {
   input.alwaysAdmin || !input.edits.some((edit) => ADMIN_KEYS.has(dotted(edit.path)))
     ? undefined
     : lockedOut(input.after, input.principal);
+
+const SERVICE_TOKENS_PATH = ["access", "admin-service-tokens"] as const;
+
+/**
+ * Who may change `access.admin-service-tokens`: a service-token principal or a deployment admin (`alwaysAdmin`:
+ * `ACCESS_ADMIN_*`, or the local dev bypass). An email admin who is only an admin through the config could otherwise
+ * grant a service token admin rights (and with it the credential download, which is for service tokens only,
+ * `credentials-routes.ts`). The list is compared as a set: reordering it changes nothing.
+ */
+export const checkServiceTokenAdmins = (input: {
+  readonly before: Config;
+  readonly after: Config;
+  readonly principal: Principal;
+  readonly alwaysAdmin: boolean;
+}): SettingsProblem | undefined => {
+  if (input.alwaysAdmin || input.principal.kind === "service") return undefined;
+
+  const tokens = (config: Config): Json =>
+    [...new Set(config.access["admin-service-tokens"])].toSorted();
+
+  return jsonEquals(tokens(input.before), tokens(input.after))
+    ? undefined
+    : problem(
+        403,
+        "service_tokens_require_service_admin",
+        SERVICE_TOKENS_PATH,
+        "access.admin-service-tokens can only be changed with an Access service token that is an administrator, or by a deployment admin (ACCESS_ADMIN_*); see docs/ACCESS.md",
+      );
+};
 
 /** {@link checkAdminLockout} for a whole-document write (the raw configuration): `before` is the stored config. */
 export const checkDocumentLockout = (input: {

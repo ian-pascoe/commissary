@@ -1,7 +1,7 @@
-// /v8/management/observability/usage/*: api-keys (ControlPlane counters), queue, records and summary (D1).
+// /v8/management/observability/usage/*: queue, records and summary (D1).
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { insertUsageRecord } from "../src/usage/d1.ts";
-import { controlPlane, makeHarness, resetControlPlane, token } from "./support/management.ts";
+import { makeHarness, resetControlPlane, token } from "./support/management.ts";
 import { resetUsageDb, sampleRecord } from "./support/usage.ts";
 
 const harness = makeHarness();
@@ -150,56 +150,5 @@ describe("GET /records and /summary", () => {
     });
     const byModel = await json(`${BASE}/summary`);
     expect((byModel.body as { group_by: string }).group_by).toBe("model");
-  });
-});
-
-describe("GET /api-keys", () => {
-  it("groups API-key credentials by provider and base_url|key with the recent-request ring", async () => {
-    const stub = controlPlane();
-    await stub.putConfig(
-      "api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-secret-key-1234 }]\n",
-    );
-    const request = { providers: ["claude"], model: "claude-sonnet-4-5" };
-
-    for (const success of [true, true, false]) {
-      const picked = await stub.pick(request);
-
-      if (!picked.ok) throw new Error("pick failed");
-      await stub.report(
-        picked.lease,
-        success
-          ? { success: true }
-          : {
-              success: false,
-              httpStatus: 500,
-              error: { message: "boom", retryable: true, httpStatus: 500 },
-            },
-      );
-    }
-
-    const response = await json(`${BASE}/api-keys`);
-    expect(response.status).toBe(200);
-
-    const body = response.body as Record<
-      string,
-      Record<string, { success: number; failed: number; recent_requests: unknown[] }>
-    >;
-
-    expect(Object.keys(body)).toEqual(["claude"]);
-    const entries = Object.entries(body["claude"] ?? {});
-    expect(entries).toHaveLength(1);
-    const [key, entry] = entries[0] as [string, (typeof entries)[number][1]];
-    expect(key.split("|")[1]).toContain("[redacted]");
-    expect(key).not.toContain("sk-ant-secret-key-1234");
-    expect(key.endsWith("1234")).toBe(true);
-    expect(entry).toMatchObject({ success: 2, failed: 1 });
-    expect(entry.recent_requests).toHaveLength(20);
-    const last = entry.recent_requests[19] as { time: string; success: number; failed: number };
-    expect(last).toMatchObject({ success: 2, failed: 1 });
-    expect(last.time).toMatch(/^\d\d:\d\d-\d\d:\d\d$/);
-  });
-
-  it("is empty without API-key credentials", async () => {
-    expect((await json(`${BASE}/api-keys`)).body).toEqual({});
   });
 });

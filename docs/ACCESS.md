@@ -72,7 +72,11 @@ admin list gets 403 on management routes but can still use the proxy endpoints.
 The config document can add admins too: `access.admin-emails` and `access.admin-service-tokens` (same formats) are merged with
 the two variables. The variables always apply and never need the config, so an env admin can repair a broken config or remove
 config admins; config admins are only looked up for principals that are not env admins, and an unreadable config denies them.
-Anyone who can edit the config can add admins this way, which is already admin-only.
+Anyone who can edit the config can add admins this way, which is already admin-only, with one exception: only a **service-token**
+administrator or an env admin (`ACCESS_ADMIN_EMAILS`, `ACCESS_ADMIN_SERVICE_TOKENS`, the local dev bypass) may change
+`access.admin-service-tokens`, through `PATCH /settings`, `PUT /settings/config` (and its `check`) or `/config*`. An email admin who is
+one only through `access.admin-emails` gets `403 {"error":"service_tokens_require_service_admin","message":…}` and nothing is
+stored (writing the same list again is fine). Without it such an admin could grant a service token the credential download below.
 
 `ACCESS_DEV_BYPASS` only applies to requests whose host is `localhost`, `127.0.0.1` or `[::1]`, and is refused (with a logged
 warning) whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set: a Worker wired to Access never skips it.
@@ -137,9 +141,24 @@ put a server-side client in between.
   fixed sentence per error code with line and column; schema errors an expectation and a path) and are not
   scrubbed: they name at most keys the caller wrote, so a refused write reads the same whether a typed value, key
   or alias name equals a stored secret or not.
-- Credential downloads (`GET /v8/management/credentials/download`) are the one way to read a stored token: the auth file
-  verbatim, refresh token included, for moving an account to another deployment. The panel never calls it. Treat admin
-  access as access to every stored token: keep the admin lists short and prefer service tokens scoped to automation.
+- Credential downloads (`GET /v8/management/credentials/download?name=<file>`) are the one way to read a stored token:
+  the auth file verbatim, refresh token included, for moving an account to another deployment. Only a **service
+  token** administrator (`ACCESS_ADMIN_SERVICE_TOKENS`, or `access.admin-service-tokens` in the config, §3) may call
+  it; an email admin gets `403 {"error":"download_requires_service_token","message":…}` before the file is looked up,
+  and a principal that is no admin the gate's `403 Forbidden`. A person's browser session is the credential most
+  exposed to theft, so the tokens are handed only to a client that was set up for automation (curl with
+  `CF-Access-Client-Id`/`-Secret`, [MIGRATION.md](MIGRATION.md) §2). The panel never calls it. This narrows who can read a
+  token; it does not make tokens unreachable to an email admin, who can still point a stored key at a host of their
+  choice (above). Treat admin access as access to every stored token: keep the admin lists short and prefer service tokens scoped to automation.
+- Writes never confirm a guessed secret: the reply does not confirm a guess, the next read does. A typed API key
+  equal to a key stored in another group of its family (gemini, interactions, vertex: the families whose keys are unique
+  across groups) is answered like any other new key: `PUT /api-keys/groups` and the path writes of `/config/*path` drop the
+  typed copy silently and the raw editor's save drops it before storing and advances the version whenever a secret was
+  typed. The same goes for header values, a `proxy-url` or a `base-url` written for a key kept by `auth_index`: they are typed
+  too, so trying them never produces a different reply. (A whole-document `PUT /config` or `PUT /config.yaml` replaces everything and
+  keeps Go's first-wins.) The stored key always
+  wins, so a typed copy never deletes a stored key (or its group); a group left with no key is dropped like any
+  empty group. Configuration error messages never quote a value.
 
 ### Logs and personal data
 
@@ -173,13 +192,15 @@ service token, which does not depend on the device. Check the Cloudflare WARP/Ac
 
 ## Troubleshooting
 
-| Symptom                                | Cause                                                                            |
-| -------------------------------------- | -------------------------------------------------------------------------------- |
-| 302 to `cloudflareaccess.com` in a CLI | Service token headers missing/wrong, or no Service Auth policy for the token     |
-| 403 from Access (before the Worker)    | Token not in the Service Auth policy (name missing from `ACCESS_SERVICE_TOKENS`) |
-| 500 `Authentication service error`     | `ACCESS_TEAM_DOMAIN` wrong (check the team name) or `ACCESS_AUD` empty           |
-| 401 `Missing API key`                  | Request reached the Worker without Access (wrong hostname) or no JWT header      |
-| 401 `Invalid API key`                  | AUD/issuer mismatch, expired JWT                                                 |
-| 403 `Forbidden` on the panel           | Principal not in `ACCESS_ADMIN_EMAILS` / `ACCESS_ADMIN_SERVICE_TOKENS`           |
-| 403 `Cross-site request rejected`      | Browser request from another origin (or a proxy POST from a web app)             |
-| 415 `Unsupported Content-Type`         | Management write without `content-type: application/json` (or YAML/multipart)    |
+| Symptom                                    | Cause                                                                                                                 |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| 302 to `cloudflareaccess.com` in a CLI     | Service token headers missing/wrong, or no Service Auth policy for the token                                          |
+| 403 from Access (before the Worker)        | Token not in the Service Auth policy (name missing from `ACCESS_SERVICE_TOKENS`)                                      |
+| 500 `Authentication service error`         | `ACCESS_TEAM_DOMAIN` wrong (check the team name) or `ACCESS_AUD` empty                                                |
+| 401 `Missing API key`                      | Request reached the Worker without Access (wrong hostname) or no JWT header                                           |
+| 401 `Invalid API key`                      | AUD/issuer mismatch, expired JWT                                                                                      |
+| 403 `Forbidden` on the panel               | Principal not in `ACCESS_ADMIN_EMAILS` / `ACCESS_ADMIN_SERVICE_TOKENS`                                                |
+| 403 `download_requires_service_token`      | Credential download called as an email admin: use a service token administrator                                       |
+| 403 `service_tokens_require_service_admin` | `access.admin-service-tokens` changed by a config-only email admin: use a service token administrator or an env admin |
+| 403 `Cross-site request rejected`          | Browser request from another origin (or a proxy POST from a web app)                                                  |
+| 415 `Unsupported Content-Type`             | Management write without `content-type: application/json` (or YAML/multipart)                                         |

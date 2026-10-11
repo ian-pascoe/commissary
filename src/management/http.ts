@@ -1,8 +1,8 @@
 /**
  * Shared plumbing of the management routes: JSON replies, the ControlPlane stub, request body readers.
  *
- * Go source: internal/api/handlers/management/handler.go (response headers set by the management middleware) and
- * the `c.JSON(status, gin.H{"error": ...})` convention of every management handler.
+ * Go source: internal/api/handlers/management/handler.go (management middleware; its `X-CPA-*` headers are not ported)
+ * and the `c.JSON(status, gin.H{"error": ...})` convention of every management handler.
  */
 import { Data, Effect, Stream } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
@@ -12,10 +12,8 @@ import { WorkerEnv } from "../platform/env.ts";
 
 const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
 
-/** Sent on every management response (`X-CPA-*`): the panel reads the version and hides plugin pages. */
+/** Sent on every management response. Deviation from Go: no `X-CPA-Version` / `X-CPA-Support-Plugin` (the upstream panel read them). */
 export const MANAGEMENT_HEADERS = {
-  "x-cpa-version": "workers",
-  "x-cpa-support-plugin": "false",
   "cache-control": "no-store",
 } as const;
 

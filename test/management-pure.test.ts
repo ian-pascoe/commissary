@@ -19,6 +19,7 @@ import {
   writeAtPath,
 } from "../src/management/config-document.ts";
 import { buildCredentialEntry, cooldownSnapshot } from "../src/management/credential-entry.ts";
+import { keepStoredKeys, typedKeysAt } from "../src/management/key-duplicates.ts";
 import { cred, cooling, state } from "./support/credentials.ts";
 
 const NOW = 1_800_000_000_000;
@@ -713,5 +714,78 @@ describe("access classification of the panel page", () => {
       "/healthz",
     ])
       expect(isPanelPagePath(path), path).toBe(false);
+  });
+});
+
+describe("stored keys win over typed ones (path writes)", () => {
+  const document = (first: ReadonlyArray<string>): JsonObject => ({
+    "api-keys": {
+      gemini: [
+        { "excluded-models": ["m0"], keys: first.map((key) => ({ "api-key": key })) },
+        { "excluded-models": ["m1"], keys: [{ "api-key": "stored-key" }] },
+      ],
+    },
+  });
+
+  it("types the keys at, under or containing the written path, and no other", () => {
+    const two = document(["a", "b"]);
+
+    expect(typedKeysAt(two, "gemini", ["api-keys", "gemini", "0"])).toEqual([
+      [true, true],
+      [false],
+    ]);
+    expect(typedKeysAt(two, "gemini", ["api-keys", "gemini", "0", "keys", "1"])).toEqual([
+      [false, true],
+      [false],
+    ]);
+    expect(typedKeysAt(two, "gemini", ["api-keys", "gemini", "1", "keys", "0", "api-key"])).toEqual(
+      [[false, false], [true]],
+    );
+    // A path that cannot reach into a list (the only ones the routes accept) types the whole family or none of it.
+    expect(typedKeysAt(two, "gemini", ["api-keys", "gemini"])).toEqual([[true, true], [true]]);
+    expect(typedKeysAt(two, "gemini", ["api-keys"])).toEqual([[true, true], [true]]);
+    expect(typedKeysAt(two, "gemini", [])).toEqual([[true, true], [true]]);
+    expect(typedKeysAt(two, "gemini", ["api-keys", "vertex"])).toEqual([[false, false], [false]]);
+    expect(typedKeysAt(two, "gemini", ["routing", "strategy"])).toEqual([[false, false], [false]]);
+  });
+
+  it("drops a typed copy of a later group's key, never the stored one", async () => {
+    const written = document(["stored-key"]);
+
+    const settled = await Effect.runPromise(
+      keepStoredKeys(written, (family) =>
+        family === "gemini" ? typedKeysAt(written, "gemini", ["api-keys", "gemini", "0"]) : [],
+      ),
+    );
+
+    expect(settled).toEqual({
+      "api-keys": {
+        gemini: [
+          { "excluded-models": ["m0"], keys: [] },
+          { "excluded-models": ["m1"], keys: [{ "api-key": "stored-key" }] },
+        ],
+      },
+    });
+  });
+
+  it("is the normaliser's first-wins when every key is typed, and leaves an undecodable document alone", async () => {
+    const written = document(["stored-key"]);
+
+    const all = await Effect.runPromise(
+      keepStoredKeys(written, (family) => typedKeysAt(written, family, ["api-keys"])),
+    );
+
+    expect(all).toEqual({
+      "api-keys": {
+        gemini: [
+          { "excluded-models": ["m0"], keys: [{ "api-key": "stored-key" }] },
+          { "excluded-models": ["m1"], keys: [] },
+        ],
+      },
+    });
+
+    const broken: JsonObject = { "api-keys": { gemini: "nope" } };
+
+    expect(await Effect.runPromise(keepStoredKeys(broken, () => []))).toEqual(broken);
   });
 });

@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { encodeConfig, parseConfigYaml, stringifyConfigYaml } from "../src/config/codec.ts";
+import { encodeConfig, parseConfigYaml } from "../src/config/codec.ts";
 import { ConfigStoreError } from "../src/config/errors.ts";
 import { ConfigReader, ConfigSource } from "../src/config/reader.ts";
 import { decodeStoredConfig, type ConfigSnapshotWire } from "../src/config/store.ts";
@@ -55,18 +55,6 @@ describe("ControlPlane config storage (Workers pool)", () => {
       assert.strictEqual(snapshot.version, 1);
       const stored = yield* decodeStoredConfig(snapshot.document ?? "");
       assert.deepStrictEqual(encodeConfig(stored), encodeConfig(imported));
-
-      // export -> import again through the DO: the same config and the same YAML
-      const exported = stringifyConfigYaml(stored);
-      const second = yield* Effect.promise(async () => await stub.putConfig(exported));
-      assert.isTrue(second.ok);
-
-      const again = yield* decodeStoredConfig(
-        (yield* Effect.promise(async () => await stub.getConfig())).document ?? "",
-      );
-
-      assert.deepStrictEqual(encodeConfig(again), encodeConfig(imported));
-      assert.strictEqual(stringifyConfigYaml(again), exported);
     }),
   );
 

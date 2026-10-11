@@ -2,18 +2,17 @@
  * Usage observability routes (`/v8/management/observability/usage/*`).
  *
  * Go source: internal/api/server_management_v8.go (route table), internal/api/handlers/management/usage.go
- * (`GetUsageQueue`) and api_key_usage.go (`GetAPIKeyUsage`). Records are read from D1 (`src/usage/d1.ts`) instead of
+ * (`GetUsageQueue`). Records are read from D1 (`src/usage/d1.ts`) instead of
  * the in-process RESP queue. `records`, `summary` and `series` are Workers additions that expose the persisted history
  * (`series`: requests/failures/tokens per key × UTC hour or day bucket for the panel's quota-window bars; `since` is
  * required, `until` defaults to now, hour ranges are capped at 31 days and day ranges at 400).
  *
- * Deviations: `api-keys` keys use the masked API key the ControlPlane exposes (`<base_url>|[redacted]…abcd`) rather
- * than the raw key, so keys that share their last four characters and base URL are merged; `queue` pops from the
- * records not yet exported (at most 1000 per call) and the export payload carries the Access principal as `api_key`.
+ * Deviations: `queue` pops from the records not yet exported (at most 1000 per call) and the export payload carries
+ * the Access principal as `api_key`. Go's `GET /observability/usage/api-keys` (`GetAPIKeyUsage`, api_key_usage.go,
+ * per-key counters for the upstream panel) is not ported: the Keys page's `GET /api-keys` carries the same counters.
  */
 import { Clock, Effect } from "effect";
 import { HttpRouter } from "effect/http";
-import type { CredentialSummary } from "../credentials/summary.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import {
   BUCKET_MS,
@@ -32,8 +31,7 @@ import {
   summarizeUsageSeries,
   type UsageFilter,
 } from "../usage/d1.ts";
-import { recentRequestBuckets } from "./credential-entry.ts";
-import { controlPlane, handled, jsonReply, queryParams, replyError } from "./http.ts";
+import { handled, jsonReply, queryParams, replyError } from "./http.ts";
 
 const BASE = "/v8/management/observability/usage";
 
@@ -59,72 +57,6 @@ const query = <A>(label: string, run: () => Promise<A>) =>
       ),
     ),
   );
-
-// --- api-keys ------------------------------------------------------------------------------------------------------
-
-interface RecentBucketJson {
-  time: string;
-  success: number;
-  failed: number;
-}
-
-interface ApiKeyUsageEntry {
-  success: number;
-  failed: number;
-  recent_requests: RecentBucketJson[];
-}
-
-const providerKey = (summary: CredentialSummary): string => {
-  const compat = (summary.attributes["compat_name"] ?? "").trim().toLowerCase();
-  const provider = compat !== "" ? compat : summary.provider.trim().toLowerCase();
-
-  return provider === "" ? "unknown" : provider;
-};
-
-const isApiKey = (summary: CredentialSummary): boolean =>
-  (summary.authKind === "apikey" || summary.authKind === undefined) &&
-  (summary.attributes["api_key"] ?? "") !== "";
-
-/** `mergeRecentRequestBuckets` for buckets of the same window. */
-const mergeBuckets = (into: RecentBucketJson[], from: ReadonlyArray<RecentBucketJson>): void => {
-  const count = Math.min(into.length, from.length);
-
-  for (let index = 0; index < count; index += 1) {
-    const target = into[index];
-    const source = from[index];
-
-    if (target === undefined || source === undefined) continue;
-    target.success += source.success;
-    target.failed += source.failed;
-  }
-};
-
-/** `GetAPIKeyUsage`: per provider, per `base_url|api_key`, the success/failure counters and the recent-request ring. */
-const apiKeyUsage = Effect.gen(function* () {
-  const summaries = yield* controlPlane("listCredentials", (stub) => stub.listCredentials());
-  const now = yield* Clock.currentTimeMillis;
-  const out: Record<string, Record<string, ApiKeyUsageEntry>> = {};
-
-  for (const summary of summaries) {
-    if (!isApiKey(summary)) continue;
-    const baseUrl = (summary.attributes["base_url"] ?? summary.attributes["base-url"] ?? "").trim();
-    const key = `${baseUrl}|${(summary.attributes["api_key"] ?? "").trim()}`;
-    const recent = recentRequestBuckets(summary.recentRequests, now);
-    const bucket = (out[providerKey(summary)] ??= {});
-    const existing = bucket[key];
-
-    if (existing === undefined) {
-      bucket[key] = { success: summary.success, failed: summary.failed, recent_requests: recent };
-      continue;
-    }
-
-    existing.success += summary.success;
-    existing.failed += summary.failed;
-    mergeBuckets(existing.recent_requests, recent);
-  }
-
-  return jsonReply(200, out);
-});
 
 // --- queue ---------------------------------------------------------------------------------------------------------
 
@@ -340,7 +272,6 @@ const usageSeries = Effect.gen(function* () {
 });
 
 export const usageRoutes = [
-  HttpRouter.route("GET", `${BASE}/api-keys`, handled(apiKeyUsage)),
   HttpRouter.route("GET", `${BASE}/queue`, handled(usageQueue)),
   HttpRouter.route("GET", `${BASE}/records`, handled(usageRecords)),
   HttpRouter.route("GET", `${BASE}/series`, handled(usageSeries)),

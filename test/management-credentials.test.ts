@@ -7,6 +7,10 @@ import {
   jsonInit,
   makeHarness,
   resetControlPlane,
+  SERVICE_ADMIN,
+  SERVICE_ADMIN_BINDINGS,
+  serviceToken,
+  token,
 } from "./support/management.ts";
 import type { Json } from "../src/json/index.ts";
 
@@ -21,7 +25,7 @@ let upstream: Upstream = okUpstream;
 
 const realFetch = globalThis.fetch;
 
-const harness = makeHarness();
+const harness = makeHarness(undefined, SERVICE_ADMIN_BINDINGS);
 
 beforeAll(() => {
   globalThis.fetch = async (input: RequestInfo | URL) =>
@@ -39,6 +43,12 @@ beforeEach(async () => {
 });
 
 const { call, json } = harness;
+
+/** Credential downloads answer service-token administrators only. */
+const download = async (name: string) =>
+  await json(`/v8/management/credentials/download?name=${encodeURIComponent(name)}`, {
+    auth: await serviceToken(SERVICE_ADMIN),
+  });
 
 const upload = async (name: string, content: Json) =>
   await json(`/v8/management/credentials?name=${encodeURIComponent(name)}`, {
@@ -216,9 +226,11 @@ describe("management credentials: list and upload", () => {
 });
 
 describe("management credentials: download, delete, models", () => {
-  it("downloads the stored file verbatim, including tokens", async () => {
+  it("downloads the stored file verbatim, including tokens, to a service-token admin", async () => {
     await upload("x.json", claudeFile({ "proxy-url": "http://p" }));
-    const response = await call("/v8/management/credentials/download?name=x.json");
+    const service = { auth: await serviceToken(SERVICE_ADMIN) };
+    const url = "/v8/management/credentials/download";
+    const response = await call(`${url}?name=x.json`, service);
     expect(response.status).toBe(200);
     expect(response.headers.get("content-disposition")).toBe('attachment; filename="x.json"');
     expect(response.headers.get("content-type")).toBe("application/json");
@@ -227,11 +239,36 @@ describe("management credentials: download, delete, models", () => {
       access_token: "sk-ant-oat-secret-access",
       proxy_url: "http://p",
     });
-    expect((await json("/v8/management/credentials/download?name=nope.json")).status).toBe(404);
-    expect((await json("/v8/management/credentials/download?name=a/b.json")).body).toEqual({
-      error: "invalid name",
-    });
-    expect((await json("/v8/management/credentials/download")).status).toBe(400);
+    expect((await download("nope.json")).status).toBe(404);
+    expect((await download("a/b.json")).body).toEqual({ error: "invalid name" });
+    expect((await json(url, service)).status).toBe(400);
+  });
+
+  it("refuses an email admin, before looking at the name or the file", async () => {
+    await upload("x.json", claudeFile());
+
+    const refusal = {
+      status: 403,
+      body: {
+        error: "download_requires_service_token",
+        message: expect.stringContaining("service token") as unknown,
+      },
+    };
+
+    // Same reply for a stored file, a missing one, an unsafe name and no name: it discloses nothing.
+    for (const query of ["?name=x.json", "?name=nope.json", "?name=a/b.json", ""])
+      expect(await json(`/v8/management/credentials/download${query}`)).toMatchObject(refusal);
+    const body = (await json("/v8/management/credentials/download?name=x.json")).body;
+    expect(JSON.stringify(body)).not.toContain("secret");
+  });
+
+  it("leaves a principal that is no administrator at the gate's 403", async () => {
+    await upload("x.json", claudeFile());
+
+    for (const auth of [await token("stranger@example.com"), await serviceToken("other.access")]) {
+      const reply = await json("/v8/management/credentials/download?name=x.json", { auth });
+      expect(reply).toMatchObject({ status: 403, body: { error: "Forbidden" } });
+    }
   });
 
   it("deletes by query, body and all", async () => {
@@ -426,10 +463,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
       }),
     ).toMatchObject({ status: 200, body: { status: "ok" } });
 
-    const file = (await json("/v8/management/credentials/download?name=x.json")).body as Record<
-      string,
-      unknown
-    >;
+    const file = (await download("x.json")).body as Record<string, unknown>;
 
     expect(file).toMatchObject({
       priority: 7,
@@ -455,10 +489,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
       200,
     );
 
-    const after = (await json("/v8/management/credentials/download?name=x.json")).body as Record<
-      string,
-      unknown
-    >;
+    const after = (await download("x.json")).body as Record<string, unknown>;
 
     expect(after).not.toHaveProperty("note");
     expect(after).not.toHaveProperty("request_retry");
@@ -547,10 +578,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
       }),
     ).toEqual({ status: 200, body: { status: "ok" } });
 
-    const file = (await json("/v8/management/credentials/download?name=r.json")).body as Record<
-      string,
-      Json
-    >;
+    const file = (await download("r.json")).body as Record<string, Json>;
 
     expect(file).toMatchObject({
       headers: { Authorization: secret, "User-Agent": "red" },
