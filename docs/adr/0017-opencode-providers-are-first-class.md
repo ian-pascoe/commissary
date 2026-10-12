@@ -1,0 +1,3 @@
+# OpenCode Zen and OpenCode Go are first-class providers
+
+The Go server reaches OpenCode only as an OpenAI-compatible endpoint, which can only speak Chat Completions. The proxy makes OpenCode Zen and OpenCode Go providers of their own. Each model is called in its own provider format (Chat Completions, Responses, Messages or Gemini), taken from OpenCode's catalog or from the model's config. OpenCode's errors map to cooldowns: a Go plan's exhausted usage cools down the whole key until the plan renews. OpenCode Go keys show their allowances like accounts do. This is a deviation with config keys of its own, and it would have to be migrated back if dropped.
