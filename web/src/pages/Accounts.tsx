@@ -10,6 +10,10 @@
 // search show (a token refresh leaves out the accounts that have none); the result says who failed and why, on the bar
 // and on each failed row, and those stay selected. The delete confirmation stays open until the deletion settles.
 // Escape, the bar's Done or the toggle (then reading Done) leaves the selection, focus returning to the toggle.
+//
+// Config API keys whose provider reports quota (OpenCode Go) are listed too, marked "Config key": they take the quota
+// check like any account but live in the config, so a selection leaves them out (their row keeps opening the account,
+// which links to the key's group on the Keys page).
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
@@ -42,7 +46,9 @@ import {
   type Assessed,
   accountName,
   assess,
+  isConfigAccount,
   refreshable,
+  selectable,
   shownAccounts,
 } from "../lib/accounts.ts";
 import {
@@ -174,6 +180,7 @@ const CheckAllQuotas = ({ accounts }: { readonly accounts: ReadonlyArray<Assesse
             reason: failureReason(
               item,
               account === undefined ? undefined : providerName(account.entry.provider),
+              account !== undefined && isConfigAccount(account.entry),
             ),
           },
         ];
@@ -236,13 +243,17 @@ interface RowSelection {
 
 const Row = ({
   account,
+  selecting,
   selection,
 }: {
   readonly account: Assessed;
-  /** Set while the list is a selection. */
+  /** The list is a selection. */
+  readonly selecting: boolean;
+  /** Set while the list is a selection and the account can be selected (not a config key). */
   readonly selection: RowSelection | undefined;
 }) => {
   const { entry, standing, closed, note, tone } = account;
+  const config = isConfigAccount(entry);
   const navigate = useNavigate();
   const pickId = useId();
   const requests = entry.recent_requests.reduce((sum, bucket) => sum + bucket.success, 0);
@@ -266,6 +277,11 @@ const Row = ({
         }
       }}
     >
+      {selecting && selection === undefined ? (
+        <td className={styles["pick"]}>
+          <span className={kit["visuallyHidden"]}>A config key: not part of a selection</span>
+        </td>
+      ) : null}
       {selection === undefined ? null : (
         <td className={styles["pick"]}>
           <input
@@ -285,6 +301,7 @@ const Row = ({
           <span className={styles["who"]}>
             <span id={`${pickId}-provider`} className={styles["provider"]}>
               {providerName(entry.provider)}
+              {config ? <span className={styles["source"]}>Config key</span> : null}
             </span>
             {selection === undefined ? (
               <Link
@@ -632,7 +649,9 @@ const List = ({ accounts }: { readonly accounts: ReadonlyArray<Assessed> }) => {
   const selectToggle = useRef<HTMLButtonElement>(null);
   const query = useDeferredValue(search.trim().toLowerCase());
   const searchId = useId();
-  const shown = shownAccounts(accounts, filter, query);
+  const listed = shownAccounts(accounts, filter, query);
+  // What a selection and its actions see: the shown auth files (config keys are edited on the Keys page).
+  const shown = selectable(listed);
 
   // Accounts deleted here or elsewhere leave the selection.
   const selected = keepExisting(
@@ -761,7 +780,7 @@ const List = ({ accounts }: { readonly accounts: ReadonlyArray<Assessed> }) => {
           </button>
         </div>
       </div>
-      {shown.length === 0 ? (
+      {listed.length === 0 ? (
         <p className={styles["empty"]}>
           {query === ""
             ? filter === "attention"
@@ -809,12 +828,13 @@ const List = ({ accounts }: { readonly accounts: ReadonlyArray<Assessed> }) => {
               </tr>
             </thead>
             <tbody>
-              {shown.map((account) => (
+              {listed.map((account) => (
                 <Row
                   key={account.entry.id}
                   account={account}
+                  selecting={selecting}
                   selection={
-                    selecting
+                    selecting && !isConfigAccount(account.entry)
                       ? {
                           checked: selected.has(account.entry.name),
                           onToggle: () =>

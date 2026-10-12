@@ -6,13 +6,15 @@
  * (`CooldownSnapshotForAuth`) and types.go (`RecentRequestsSnapshot`). Pure: no secrets are included (the Codex
  * `id_token` is reduced to a few claims), so the result can leave the ControlPlane Durable Object.
  *
- * Differences: only auth files are listed (Go lists config API keys as `runtime_only` only for plugin credentials);
- * `recent_requests` come from the credential's recent-requests ring; cooldown reasons are reduced to
- * the quota reason or the last error class. `quota_report` is the stored server-side quota check and `reset_grants`
- * the last Claude reset grant status read (src/quota, Workers additions with no Go counterpart). The account's own routing fields (`prefix`, `disable_cooling`, `headers`,
- * `excluded_models`, `model_aliases`) are a Workers addition for the control panel: the effective prefix, every header
- * value masked except safe headers and pure client copies (`maskHeaders`, as on the API keys page), and the account's
- * own exclusions and aliases, without the channel rules.
+ * Differences: auth files are listed, plus the config API keys whose provider reports quota with the key itself
+ * (`CONFIG_QUOTA_PROVIDERS`, OpenCode Go; Go lists no config API keys, its panel shows them on the providers page
+ * only) as `source: "config"` entries ({@link buildConfigCredentialEntry}); `recent_requests` come from the
+ * credential's recent-requests ring; cooldown reasons are reduced to the quota reason or the last error class.
+ * `quota_report` is the stored server-side quota check and `reset_grants` the last Claude reset grant status read
+ * (src/quota, Workers additions with no Go counterpart). The account's own routing fields (`prefix`, `disable_cooling`,
+ * `headers`, `excluded_models`, `model_aliases`) are a Workers addition for the control panel: the effective prefix,
+ * every header value masked except safe headers and pure client copies (`maskHeaders`, as on the API keys page), and
+ * the account's own exclusions and aliases, without the channel rules.
  */
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { decodeJwtClaims } from "../credentials/expiry.ts";
@@ -24,7 +26,8 @@ import {
 import { coolingOverride } from "../credentials/cooldown/mark-result.ts";
 import { aliasesFromMetadata, extractHeaders, ownExclusions } from "../credentials/derive.ts";
 import type { Credential, CredentialState } from "../credentials/model.ts";
-import { maskHeaders } from "../credentials/summary.ts";
+import { redactSecrets } from "../credentials/redact.ts";
+import { maskHeaders, maskSecret } from "../credentials/summary.ts";
 import { DEFAULT_WEIGHT } from "../credentials/weight.ts";
 import { quotaReportJson } from "../quota/report.ts";
 import { resetGrantStatusJson } from "../quota/reset-grants.ts";
@@ -165,6 +168,81 @@ const websockets = (credential: Credential): boolean | undefined => {
   if (raw === false || raw === "false" || raw === "0") return false;
 
   return undefined;
+};
+
+/** A config key's place in `api-keys`: its family and group index (the panel's `/keys/<family>/<index>`). */
+export interface ConfigKeyGroup {
+  readonly family: string;
+  readonly index: number;
+}
+
+const isDisablingPattern = (pattern: string): boolean => pattern.trim() === "*";
+
+/**
+ * Builds the panel entry of a config API key listed on the Accounts page (`source: "config"`).
+ *
+ * The credential id is an unsalted hash of the key (`credentials/synthesize.ts`), so it is never sent: the entry's `id`
+ * and `name` are the keyed `auth_index`, which is what the quota check, the cron sweep's results and the panel address
+ * the account by. Nothing secret is included: the key appears only as its masked preview (`account`, `[redacted]
+ * …abcd`), headers are left out and the status message is scrubbed like the API keys page's last error. `disabled` is
+ * the API keys page's reading (`*` in the key's `excluded-models`, the only way a config key is disabled); `key_group`
+ * is where the key is edited. The file-only fields (size, file times, note, weight, routing fields) are absent.
+ */
+export const buildConfigCredentialEntry = (
+  credential: Credential,
+  state: CredentialState,
+  now: number,
+  authIndex: AuthIndexer,
+  keyGroup: ConfigKeyGroup | undefined,
+  quotaReport?: QuotaReport,
+): JsonObject => {
+  const index = authIndex(credential.id);
+  const disabled = credential.excludedModels.some(isDisablingPattern);
+  const cooldowns = cooldownSnapshot(state, now);
+  const blocked = state.unavailable || cooldowns.length > 0;
+  const nextRetry = state.nextRetryAfter > now ? state.nextRetryAfter : 0;
+  const key = credential.attributes.api_key?.trim() ?? "";
+
+  // The status message is the last upstream error: scrubbed of the key and token-shaped text like the API keys page.
+  const scrub = (message: string): string =>
+    redactSecrets(key === "" ? message : message.replaceAll(key, "[redacted]"));
+
+  const entry: JsonObject = {
+    id: index,
+    auth_index: index,
+    name: index,
+    type: credential.provider,
+    provider: credential.provider,
+    label: credential.label,
+    status: disabled ? "disabled" : blocked && state.status === "active" ? "error" : state.status,
+    status_message: scrub(state.statusMessage ?? ""),
+    disabled,
+    unavailable: blocked,
+    runtime_only: false,
+    source: "config",
+    size: 0,
+    success: state.success,
+    failed: state.failed,
+    recent_requests: recentRequestBuckets(state.recentRequests, now),
+    quota: {
+      ...(state.quota.observedAt === undefined ? {} : { observed_at: iso(state.quota.observedAt) }),
+      signals: { ...state.quota.signals },
+    },
+    supports_quota: true,
+    account_type: "api_key",
+    ...(key === "" ? {} : { account: maskSecret(key) }),
+    ...(credential.priority === 0 ? {} : { priority: credential.priority }),
+    ...(credential.prefix === undefined ? {} : { prefix: credential.prefix }),
+    ...(nextRetry > 0 ? { next_retry_after: iso(nextRetry) } : {}),
+    ...(keyGroup === undefined
+      ? {}
+      : { key_group: { family: keyGroup.family, index: keyGroup.index } }),
+    cooldowns,
+  };
+
+  if (quotaReport !== undefined) entry.quota_report = quotaReportJson(quotaReport);
+
+  return entry;
 };
 
 /**

@@ -7,37 +7,27 @@
  * done by the conductor through `ControlPlane.ensureFresh` before the attempt (`withCredentialRefresh`).
  *
  * `CountTokens` counts the prepared body locally with `o200k_base`. The apply_patch Responses bridge wraps the event
- * flow (`helps/apply-patch-responses.ts`). Not ported: outbound proxies.
+ * flow (`helps/apply-patch-responses.ts`). The request shaping and the SSE response handling are shared with the
+ * OpenCode executor (`helps/responses-request.ts`, `helps/responses-sse.ts`). Not ported: outbound proxies.
  */
-import { Clock, Effect, Stream } from "effect";
-import { HttpClient, type HttpClientError, HttpClientRequest } from "effect/http";
-import { splitLines } from "../../http/sse.ts";
+import { Clock, Effect } from "effect";
 import {
-  asString,
-  cloneJson,
-  get,
-  isJsonObject,
-  type JsonObject,
-  tryParseJson,
-} from "../../json/index.ts";
+  HttpClient,
+  type HttpClientError,
+  HttpClientRequest,
+  type HttpClientResponse,
+} from "effect/http";
+import { asString, get } from "../../json/index.ts";
 import { builtinTranslators } from "../../translator/builtin.ts";
 import { Formats } from "../../translator/formats.ts";
-import {
-  makeTranslationState,
-  type ResponseContext,
-  type TranslatorRegistry,
-} from "../../translator/registry.ts";
-import { responseModelOf } from "../../usage/record.ts";
-import {
-  ensureResponsesUsageDetails,
-  OutputItemCollector,
-  parseCodexUsage,
-  patchCodexCompletedOutput,
-} from "../codex/output.ts";
+import type { TranslatorRegistry } from "../../translator/registry.ts";
 import { ExecutionError } from "../errors.ts";
-import { APPLY_PATCH_UPSTREAM_ERROR_MESSAGE } from "../helps/apply-patch-responses.ts";
 import { applyCustomHeaders } from "../helps/custom-headers.ts";
-import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts";
+import {
+  collectResponsesSse,
+  type ResponsesSseInput,
+  streamResponsesSse,
+} from "../helps/responses-sse.ts";
 import type { CredentialSnapshot } from "../picker.ts";
 import type {
   ExecutionContext,
@@ -45,18 +35,12 @@ import type {
   ExecutorRequest,
   ExecutorResponse,
   ProviderExecutor,
-  StreamResult,
 } from "../types.ts";
 import { META_CLIENT_ID, META_USER_AGENT, requireMetaToken } from "./credentials.ts";
 import { metaStreamEventError, wrapMetaUpstreamError } from "./errors.ts";
 import { buildResponsesUsageJson, countCodexInputTokens } from "../helps/token-count.ts";
 import { getCodec } from "../../tokenizer/index.ts";
 import { type MetaPrepared, prepareMetaRequest } from "./request.ts";
-
-interface StepResult {
-  readonly chunks: ReadonlyArray<string>;
-  readonly error?: ExecutionError;
-}
 
 export const META_PROVIDER = "meta";
 
@@ -95,35 +79,8 @@ export const metaHeaders = (
   return applyCustomHeaders(headers, credential, clientHeaders, sessionId);
 };
 
-/** `metaAsCompletedEvent`: a plain JSON response body is wrapped as a `response.completed` event. */
-const asCompletedEvent = (data: string): JsonObject | undefined => {
-  const root = tryParseJson(data.trim());
-
-  if (!isJsonObject(root)) return undefined;
-  const type = asString(root["type"]);
-
-  if (type === "response.completed" || type === "response.incomplete") return root;
-
-  if (asString(root["object"]) === "response" || root["output"] !== undefined) {
-    return { type: "response.completed", response: root };
-  }
-
-  return undefined;
-};
-
 export const makeMetaExecutor = (executorOptions: MetaExecutorOptions = {}): ProviderExecutor => {
   const registry = executorOptions.translators ?? builtinTranslators;
-
-  const responseContext = (
-    prepared: MetaPrepared,
-    request: ExecutorRequest,
-    options: ExecutorOptions,
-  ): ResponseContext => ({
-    model: request.model,
-    originalRequest: options.originalRequest ?? request.payload,
-    translatedRequest: prepared.translated,
-    state: makeTranslationState(),
-  });
 
   const unsupported = (options: ExecutorOptions) =>
     options.alt === "responses/compact"
@@ -190,99 +147,33 @@ export const makeMetaExecutor = (executorOptions: MetaExecutorOptions = {}): Pro
     return { response, prepared };
   });
 
+  const sse = (
+    context: ExecutionContext,
+    request: ExecutorRequest,
+    options: ExecutorOptions,
+    sent: {
+      readonly response: HttpClientResponse.HttpClientResponse;
+      readonly prepared: MetaPrepared;
+    },
+  ): ResponsesSseInput => ({
+    registry,
+    context,
+    request,
+    options,
+    prepared: sent.prepared,
+    response: sent.response,
+    eventError: metaStreamEventError,
+    stallMessage: STREAM_STALL,
+  });
+
   const execute = Effect.fnUntraced(function* (
     context: ExecutionContext,
     request: ExecutorRequest,
     options: ExecutorOptions,
   ) {
-    const { response, prepared } = yield* send(context, request, options);
-    const data = yield* response.text.pipe(Effect.mapError(transportError));
-    context.usage.observeResponseModel(responseModelOf(tryParseJson(data)));
-    const collector = new OutputItemCollector();
-    const nowMs = yield* Clock.currentTimeMillis;
+    const sent = yield* send(context, request, options);
 
-    const gatewayError = () =>
-      new ExecutionError({ status: 502, message: APPLY_PATCH_UPSTREAM_ERROR_MESSAGE });
-
-    let completed: JsonObject | undefined;
-
-    for (const line of data.split("\n")) {
-      if (!line.startsWith("data:")) continue;
-      const payload = line.slice(5).trim();
-      const parsed = tryParseJson(payload);
-      const failure = metaStreamEventError(parsed, payload, nowMs);
-
-      if (failure !== undefined) {
-        context.usage.fail(failure.status, failure.message);
-
-        return yield* failure;
-      }
-
-      if (parsed === undefined) continue;
-      const bridged = prepared.applyPatch.transform(parsed);
-
-      if (bridged.error !== undefined) return yield* gatewayError();
-
-      for (const event of bridged.events) {
-        const type = asString(get(event, "type"));
-
-        if (type === "response.output_item.done") collector.collect(event);
-        else if (
-          (type === "response.completed" || type === "response.incomplete") &&
-          isJsonObject(event)
-        ) {
-          completed = event;
-          break;
-        }
-      }
-
-      if (completed !== undefined) break;
-    }
-
-    let event: JsonObject;
-
-    if (completed === undefined) {
-      const fallback = asCompletedEvent(data);
-
-      if (fallback === undefined) {
-        // `Finish`: an unvalidated apply_patch call is a gateway failure before the stall error.
-        if (prepared.applyPatch.finish() !== undefined) return yield* gatewayError();
-        const error = new ExecutionError({ status: 408, message: STREAM_STALL });
-        context.usage.fail(error.status, error.message);
-
-        return yield* error;
-      }
-
-      event = cloneJson(fallback);
-      patchCodexCompletedOutput(event, collector);
-      const bridged = prepared.applyPatch.bridge.transformNonStream(event);
-
-      if ("error" in bridged || !isJsonObject(bridged.body)) return yield* gatewayError();
-      event = bridged.body;
-    } else {
-      event = cloneJson(completed);
-
-      if (isJsonObject(event)) patchCodexCompletedOutput(event, collector);
-    }
-
-    let out = registry.translateNonStream(
-      prepared.responseFormat,
-      Formats.Codex,
-      responseContext(prepared, request, options),
-      JSON.stringify(event),
-    );
-
-    if (out === undefined || out === "") {
-      return yield* new ExecutionError({ status: 502, message: TOOL_INPUT_ERROR_MESSAGE });
-    }
-
-    const detail = parseCodexUsage(event);
-
-    if (detail !== undefined) context.usage.publish(detail);
-
-    if (prepared.responseFormat === Formats.OpenAIResponse) out = ensureResponsesUsageDetails(out);
-
-    return { payload: out, headers: new Headers(response.headers) } satisfies ExecutorResponse;
+    return yield* collectResponsesSse(sse(context, request, options, sent));
   });
 
   const executeStream = Effect.fnUntraced(function* (
@@ -290,106 +181,9 @@ export const makeMetaExecutor = (executorOptions: MetaExecutorOptions = {}): Pro
     request: ExecutorRequest,
     options: ExecutorOptions,
   ) {
-    const { response, prepared } = yield* send(context, request, options);
-    const collector = new OutputItemCollector();
-    const state = responseContext(prepared, request, options);
+    const sent = yield* send(context, request, options);
 
-    const gatewayError = () =>
-      new ExecutionError({ status: 502, message: APPLY_PATCH_UPSTREAM_ERROR_MESSAGE });
-
-    const translate = (line: string): string[] => {
-      const chunks = [
-        ...registry.translateStream(prepared.responseFormat, Formats.Codex, state, line),
-      ];
-
-      return prepared.responseFormat === Formats.OpenAIResponse
-        ? chunks.map((chunk) => ensureResponsesUsageDetails(chunk))
-        : chunks;
-    };
-
-    /** `emitTranslatedLine`: the apply_patch bridge first, then the translator; a retained failure ends the stream. */
-    const emit = (line: string): StepResult => {
-      const bridged = prepared.applyPatch.stream(line);
-      const chunks = bridged.lines.flatMap(translate);
-      const failed = bridged.error !== undefined || state.state.toolInputError !== undefined;
-
-      return { chunks, ...(failed ? { error: gatewayError() } : {}) };
-    };
-
-    let stopped = false;
-
-    const lines = splitLines(response.stream).pipe(
-      Stream.mapError(transportError),
-      Stream.mapEffect((line) =>
-        Effect.gen(function* () {
-          if (stopped) return { chunks: [] };
-
-          if (!line.startsWith("data:")) return emit(line);
-          const payload = line.slice(5).trim();
-          const event = tryParseJson(payload);
-          context.usage.observeResponseModel(responseModelOf(event));
-          const failure = metaStreamEventError(event, payload, yield* Clock.currentTimeMillis);
-
-          if (failure !== undefined) return yield* failure;
-
-          switch (asString(get(event, "type"))) {
-            case "response.output_item.done":
-              collector.collect(event);
-              break;
-            case "response.completed":
-            case "response.incomplete": {
-              if (!isJsonObject(event)) break;
-              const detail = parseCodexUsage(event);
-
-              if (detail !== undefined) context.usage.publish(detail);
-              patchCodexCompletedOutput(event, collector);
-
-              return emit(`data: ${JSON.stringify(event)}`);
-            }
-          }
-
-          return emit(`data: ${payload}`);
-        }),
-      ),
-      Stream.tap((step) =>
-        Effect.sync(() => {
-          if (step.error !== undefined) stopped = true;
-        }),
-      ),
-    );
-
-    // `FinishStream`: EOF without a validated completion emits the local failure once.
-    const tail = Stream.suspend(() => {
-      if (stopped) return Stream.empty;
-      const finished = prepared.applyPatch.finishStream();
-      const chunks = finished.lines.flatMap(translate);
-      const emitted = Stream.fromIterable(chunks);
-
-      return finished.error === undefined
-        ? emitted
-        : Stream.concat(emitted, Stream.fail(gatewayError()));
-    });
-
-    const chunks = Stream.concat(
-      lines.pipe(
-        Stream.takeUntil((step) => step.error !== undefined),
-        Stream.flatMap((step) => {
-          const emitted = Stream.fromIterable(step.chunks);
-
-          return step.error === undefined
-            ? emitted
-            : Stream.concat(emitted, Stream.fail(step.error));
-        }),
-      ),
-      tail,
-    ).pipe(
-      Stream.filter((chunk) => chunk.length > 0),
-      Stream.tapError((error) =>
-        Effect.sync(() => context.usage.fail(error.status, error.message)),
-      ),
-    );
-
-    return { headers: new Headers(response.headers), chunks } satisfies StreamResult;
+    return streamResponsesSse(sse(context, request, options, sent));
   });
 
   /** `CountTokens`: the Responses body that would be sent upstream, counted locally with `o200k_base`. */

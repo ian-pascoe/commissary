@@ -4,7 +4,9 @@
  * the outcome into the stored report (`recordQuotaReport`). Used by `POST /v8/management/credentials/quota`, and for
  * every account at once (`sweepQuotas`) by the `quota-check` cron task (`runQuotaSweep`) and the panel's "Check all
  * quotas" (`POST /v8/management/credentials/quota/all`). A sweep holds the ControlPlane's sweep lease
- * (`sweep-lease.ts`), so only one runs at a time whoever started it.
+ * (`sweep-lease.ts`), so only one runs at a time whoever started it. Accounts are named as the credential list names
+ * them: auth files by file name, config API keys of a provider that reports quota with the key (OpenCode Go) by their
+ * `auth_index`; a sweep covers both (`quotaCheckTargets`).
  *
  * The upstream call runs in the Worker rather than inside the Durable Object so the single-writer object is not held
  * by slow provider endpoints and the Worker's injected `HttpClient` (mocked in tests) is used.
@@ -88,7 +90,8 @@ const record = (id: string, outcome: QuotaOutcome, options: RecordOptions) =>
   });
 
 /**
- * Checks the quota of the auth file `name` (and/or `authIndex`) and returns the stored report. An outcome for tokens
+ * Checks the quota of the account `name` (an auth file name, or a listed config API key's `auth_index`) and/or
+ * `authIndex` and returns the stored report. An outcome for tokens
  * replaced during the check is dropped (`stale`), like a refresh result. `sweep`: part of a sweep, which skips
  * recent Claude reset grant reads (`quotaProbeTarget`).
  */
@@ -194,7 +197,7 @@ const checkForSweep = (token: string) => (id: string) =>
               name: id,
               ok: false,
               error: "not_found",
-              message: "auth file not found",
+              message: "account not found",
             }),
           );
         case "unsupported":
@@ -241,7 +244,8 @@ const keepLease = (token: string): Effect.Effect<void, never, WorkerEnv> =>
   });
 
 /**
- * Checks every enabled auth file of a supported provider, {@link SWEEP_CONCURRENCY} at a time, under the sweep lease:
+ * Checks every enabled account of a supported provider (auth files and the listed config API keys),
+ * {@link SWEEP_CONCURRENCY} at a time, under the sweep lease:
  * `running` without any provider call when another sweep holds it. Each account's outcome renews the lease, and so
  * does a background renewal every {@link LEASE_RENEW_INTERVAL_MS}; when a renewal finds the lease lost the sweep stops
  * (`lost`). Taking the lease is the acquire step of `acquireUseRelease`, so it is given back however the sweep ends

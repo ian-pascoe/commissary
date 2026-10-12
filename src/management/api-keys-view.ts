@@ -19,6 +19,7 @@ import { CODEX_DEFAULT_BASE_URL } from "../executor/codex/headers.ts";
 import { GEMINI_ENDPOINT, VERTEX_DEFAULT_BASE_URL } from "../executor/gemini/targets.ts";
 import { META_DEFAULT_BASE_URL } from "../executor/meta/credentials.ts";
 import { XAI_DEFAULT_API_BASE_URL } from "../executor/xai/credentials.ts";
+import { OPENCODE_SPECS } from "../executor/opencode/providers.ts";
 import type { JsonObject } from "../json/index.ts";
 import type { AuthIndexer } from "./auth-index.ts";
 import { configKeyIds } from "./config-document.ts";
@@ -36,6 +37,8 @@ export const DEFAULT_BASE_URLS: Readonly<
   claude: CLAUDE_DEFAULT_BASE_URL,
   xai: XAI_DEFAULT_API_BASE_URL,
   meta: META_DEFAULT_BASE_URL,
+  "opencode-zen": OPENCODE_SPECS["opencode-zen"].baseUrl,
+  "opencode-go": OPENCODE_SPECS["opencode-go"].baseUrl,
 };
 
 /** Copy through JSON: drops `undefined` and detaches readonly config values from the plain wire shape. */
@@ -221,6 +224,8 @@ export const buildApiKeysList = (
       claude: standard("claude"),
       xai: standard("xai"),
       meta: standard("meta"),
+      "opencode-zen": standard("opencode-zen"),
+      "opencode-go": standard("opencode-go"),
       "openai-compatibility": apiKeys["openai-compatibility"].map((group, index) =>
         compatGroupView(group, index, lookup),
       ),

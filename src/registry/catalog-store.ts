@@ -16,19 +16,24 @@ import {
   withDevinBuiltins,
 } from "./catalog.ts";
 import { parseDevinCatalog } from "./devin.ts";
+import { OPENCODE_CATALOG_KV_KEY, openCodeCatalogFromText } from "./opencode-catalog.ts";
 
 /** KV keys of the refreshed catalogs (raw JSON text) and of the last refresh report. */
 export const CATALOG_KEYS = {
   models: "registry/models.json",
   codexClient: "registry/codex_client_models.json",
   devin: "registry/devin_models.json",
+  /** Not a Go catalog: refreshed by its own cron task (`opencode-refresh.ts`), trimmed JSON. */
+  opencode: OPENCODE_CATALOG_KV_KEY,
   status: "registry/refresh-status.json",
 } as const;
 
 export type CatalogName = "models" | "codexClient" | "devin";
 
 /** Raw KV contents; `null`/`undefined` = nothing stored (use the embedded catalog). */
-export type CatalogTexts = { readonly [N in CatalogName]?: string | null | undefined };
+export type CatalogTexts = {
+  readonly [N in CatalogName | "opencode"]?: string | null | undefined;
+};
 
 /** How long an isolate serves its parsed catalogs before looking at KV again. */
 export const CATALOG_CACHE_TTL_MS = 60_000;
@@ -122,21 +127,29 @@ export const catalogsFromTexts = (texts: CatalogTexts): CatalogsFromTexts => {
       );
   }
 
-  return { catalogs: { models, devin, codexClient }, warnings };
+  const opencode = openCodeCatalogFromText(texts.opencode);
+
+  if (opencode.warning !== undefined) warnings.push(opencode.warning);
+
+  return { catalogs: { models, devin, codexClient, opencode: opencode.catalog }, warnings };
 };
 
 export const readCatalogTexts = async (kv: KVNamespace): Promise<CatalogTexts> => {
-  const [models, codexClient, devin] = await Promise.all([
+  const [models, codexClient, devin, opencode] = await Promise.all([
     kv.get(CATALOG_KEYS.models),
     kv.get(CATALOG_KEYS.codexClient),
     kv.get(CATALOG_KEYS.devin),
+    kv.get(CATALOG_KEYS.opencode),
   ]);
 
-  return { models, codexClient, devin };
+  return { models, codexClient, devin, opencode };
 };
 
 const sameTexts = (a: CatalogTexts, b: CatalogTexts): boolean =>
-  a.models === b.models && a.codexClient === b.codexClient && a.devin === b.devin;
+  a.models === b.models &&
+  a.codexClient === b.codexClient &&
+  a.devin === b.devin &&
+  a.opencode === b.opencode;
 
 interface Cached {
   readonly loadedAt: number;

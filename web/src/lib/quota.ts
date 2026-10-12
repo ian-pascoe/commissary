@@ -146,6 +146,7 @@ const CHECKED_PROVIDERS = new Set([
   "xai",
   "meta",
   "devin",
+  "opencode-go",
 ]);
 
 export const checksQuota = (provider: string): boolean => CHECKED_PROVIDERS.has(provider);

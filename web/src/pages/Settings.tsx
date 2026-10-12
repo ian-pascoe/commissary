@@ -211,7 +211,6 @@ const Body = ({
             {field("routing.cooldown.transient-error-cooldown-seconds")}
             {field("upstream.claude.model-level-cooling")}
             {field("upstream.codex.model-level-cooling")}
-            {field("routing.cooldown.save-cooldown-status")}
             <ErrorRules rules={view.request_scoped_errors} />
           </>
         )}

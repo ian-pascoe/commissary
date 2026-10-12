@@ -10,6 +10,7 @@ import type {
 } from "#contract/api-keys.ts";
 import {
   changesIdentity,
+  choosesProtocol,
   draftOf,
   groupFacts,
   groupTitle,
@@ -19,6 +20,8 @@ import {
   keyTail,
   needsAttention,
   newKeyDraft,
+  newModelDraft,
+  PROTOCOL_CHOICES,
   parsePatterns,
   putGroupRequest,
   recentRequests,
@@ -76,6 +79,8 @@ const list = (families: Partial<ApiKeysList["families"]>): ApiKeysList => ({
     claude: [],
     xai: [],
     meta: [],
+    "opencode-zen": [],
+    "opencode-go": [],
     "openai-compatibility": [],
     ...families,
   },
@@ -273,7 +278,7 @@ describe("the group form", () => {
     expect(
       validateDraft("vertex", {
         ...empty,
-        models: [{ name: "gemini-pro", alias: "", stored: undefined }],
+        models: [{ name: "gemini-pro", alias: "", protocol: "", stored: undefined }],
       }).models,
     ).toBe("Vertex AI models need an alias.");
   });
@@ -339,7 +344,7 @@ describe("the group form", () => {
     const request = putGroupRequest(3, "openai-compatibility", view, {
       ...draftOf(view),
       disabled: true,
-      models: [{ name: "meta-llama/llama-4", alias: "llama", stored: undefined }],
+      models: [{ name: "meta-llama/llama-4", alias: "llama", protocol: "", stored: undefined }],
     });
 
     expect(request).toEqual({
@@ -358,6 +363,38 @@ describe("the group form", () => {
     expect(changesIdentity("openai-compatibility", view, { ...draftOf(view), name: "or" })).toBe(
       true,
     );
+  });
+
+  it("round-trips an OpenCode model's protocol, and auto drops it", () => {
+    const view = group({
+      models: [
+        { name: "claude-haiku-4-5", protocol: "messages", "max-context-length": 200_000 },
+        { name: "gpt-5", protocol: "chat" },
+      ],
+    });
+
+    const draft = draftOf(view);
+    expect(draft.models.map((model) => model.protocol)).toEqual(["messages", "chat"]);
+    expect(choosesProtocol("opencode-zen")).toBe(true);
+    expect(choosesProtocol("claude")).toBe(false);
+    expect(PROTOCOL_CHOICES[0]).toEqual({ value: "", label: "Auto (catalog)" });
+
+    const [haiku, gpt] = draft.models;
+
+    const request = putGroupRequest(4, "opencode-zen", view, {
+      ...draft,
+      models: [
+        ...(haiku === undefined ? [] : [haiku]),
+        ...(gpt === undefined ? [] : [{ ...gpt, protocol: "" }]),
+        { ...newModelDraft("glm-5"), protocol: "responses" },
+      ],
+    });
+
+    expect(request.group.models).toEqual([
+      { name: "claude-haiku-4-5", protocol: "messages", "max-context-length": 200_000 },
+      { name: "gpt-5" },
+      { name: "glm-5", protocol: "responses" },
+    ]);
   });
 
   it("appends a new group without an index", () => {

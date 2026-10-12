@@ -8,6 +8,7 @@
     "#contract/*": "./src/management/contract/*"
   },
   "scripts": {
+    "catalog:opencode": "node tools/sync-opencode-catalog.ts",
     "catalog:sync": "tools/sync-reference-repos.sh && go run ./tools/fixturegen/registry",
     "ci:setup": "alchemy deploy --config stacks/github.ts --stage ci --profile admin --adopt && alchemy state read cliproxy-github/ci/output --profile admin",
     "deploy": "alchemy deploy",

@@ -15,6 +15,7 @@ import { runQuotaSweep } from "./quota/check.ts";
 import { CatalogStore } from "./registry/catalog-store.ts";
 import { refreshXaiClientVersion } from "./executor/xai/version.ts";
 import { refreshCatalogs } from "./registry/refresh.ts";
+import { refreshOpenCodeCatalog } from "./registry/opencode-refresh.ts";
 import { pruneExpiredUsage } from "./usage/retention.ts";
 
 /** Services available to scheduled jobs (provided by {@link ScheduledLayer} and the invocation's bindings). */
@@ -33,6 +34,8 @@ export interface ScheduledTask {
 export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
   // internal/registry catalog updaters (3 h): general, Codex client and Devin catalogs into KV.
   { name: "model-catalog-refresh", run: refreshCatalogs },
+  // Workers addition (no Go counterpart): the OpenCode Zen/Go catalog (models.dev data) trimmed into KV.
+  { name: "opencode-catalog-refresh", run: refreshOpenCodeCatalog() },
   // Antigravity client version (Hub updater manifest, KV `antigravity:version`) and per-credential model entitlements
   // (`fetchAvailableModels`, KV `ag:models:<credential>`); the version first so the probes use the fresh user agent.
   { name: "antigravity-version", run: refreshAntigravityVersion },
@@ -61,8 +64,8 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
       yield* Effect.promise(() => env.CONTROL_PLANE.getByName("global").sweepRefresh());
     }),
   },
-  // Quota check (Workers addition, src/quota): provider usage windows of every enabled auth file that has a usage
-  // endpoint, stored as the credential's `quota_report`.
+  // Quota check (Workers addition, src/quota): provider usage windows of every enabled account that has a usage
+  // endpoint (auth files, and the listed config API keys: OpenCode Go), stored as the credential's `quota_report`.
   // Skipped while the panel's "Check all quotas" holds the sweep lease (src/quota/sweep-lease.ts).
   { name: "quota-check", run: runQuotaSweep },
 ];

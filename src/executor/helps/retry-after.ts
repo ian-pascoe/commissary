@@ -9,6 +9,18 @@ import { get, tryParseJson } from "../../json/index.ts";
 
 const TPM_FALLBACK_MS = 60_000;
 
+/** A `Retry-After` header value in ms: integer seconds or an HTTP date (relative to `now`); `undefined` otherwise. */
+export const parseRetryAfterMs = (header: string | null, now: number): number | undefined => {
+  const raw = (header ?? "").trim();
+
+  if (raw === "") return undefined;
+
+  if (/^\d+$/.test(raw)) return Number(raw) * 1000;
+  const date = Date.parse(raw);
+
+  return !Number.isNaN(date) && /[a-z]/i.test(raw) ? Math.max(0, date - now) : undefined;
+};
+
 export const openAICompatRetryAfterMs = (
   status: number,
   headers: Headers,
@@ -16,14 +28,9 @@ export const openAICompatRetryAfterMs = (
   now: number,
 ): number | undefined => {
   if (status !== 429) return undefined;
-  const raw = (headers.get("retry-after") ?? "").trim();
+  const fromHeader = parseRetryAfterMs(headers.get("retry-after"), now);
 
-  if (raw !== "") {
-    if (/^\d+$/.test(raw)) return Number(raw) * 1000;
-    const date = Date.parse(raw);
-
-    if (!Number.isNaN(date) && /[a-z]/i.test(raw)) return Math.max(0, date - now);
-  }
+  if (fromHeader !== undefined) return fromHeader;
 
   const parsed = tryParseJson(body);
   const code = get(parsed, "error.code");

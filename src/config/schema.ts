@@ -21,6 +21,9 @@ import {
   ModelEntry,
   OpenAICompatGroup,
   OpenAICompatKey,
+  isOpenCodeProtocol,
+  OPENCODE_PROTOCOLS,
+  OpenCodeProtocol,
   RequestScopedErrorRule,
   ThinkingSupport,
 } from "../management/contract/api-keys.ts";
@@ -61,6 +64,9 @@ export {
   ModelEntry,
   OpenAICompatGroup,
   OpenAICompatKey,
+  isOpenCodeProtocol,
+  OPENCODE_PROTOCOLS,
+  OpenCodeProtocol,
   RequestScopedErrorRule,
   ThinkingSupport,
 };
@@ -166,6 +172,8 @@ const apiKeys = section({
   claude: list(ApiKeyGroup),
   xai: list(ApiKeyGroup),
   meta: list(ApiKeyGroup),
+  "opencode-zen": list(ApiKeyGroup),
+  "opencode-go": list(ApiKeyGroup),
   "openai-compatibility": list(OpenAICompatGroup),
 });
 

@@ -22,6 +22,12 @@ import type { JsonObject } from "../json/index.ts";
 import { type Credential, openAICompatibleProviderKey } from "./model.ts";
 import { normalizeExclusions } from "./selection/model-name.ts";
 import { DEFAULT_WEIGHT } from "./weight.ts";
+import {
+  isOpenCodeProvider,
+  OPENCODE_GO,
+  OPENCODE_SPECS,
+  OPENCODE_ZEN,
+} from "../executor/opencode/providers.ts";
 
 /** Go `FormatSortedHeaders`: sorted `name\0value\0` pairs. */
 export const formatSortedHeaders = (
@@ -60,7 +66,16 @@ export class StableIdGenerator {
   }
 }
 
-type Family = "gemini" | "interactions" | "claude" | "codex" | "xai" | "meta" | "vertex";
+type Family =
+  | "gemini"
+  | "interactions"
+  | "claude"
+  | "codex"
+  | "xai"
+  | "meta"
+  | "opencode-zen"
+  | "opencode-go"
+  | "vertex";
 
 interface FamilySpec {
   readonly provider: string;
@@ -91,6 +106,18 @@ const SPECS: Readonly<Record<Family, FamilySpec>> = {
   codex: { provider: "codex", idKind: "codex:apikey", sourceName: "codex", label: "codex-apikey" },
   xai: { provider: "xai", idKind: "xai:apikey", sourceName: "xai", label: "xai-apikey" },
   meta: { provider: "meta", idKind: "meta:apikey", sourceName: "meta", label: "meta-apikey" },
+  "opencode-zen": {
+    provider: OPENCODE_ZEN,
+    idKind: "opencode-zen:apikey",
+    sourceName: "opencode-zen",
+    label: "opencode-zen-apikey",
+  },
+  "opencode-go": {
+    provider: OPENCODE_GO,
+    idKind: "opencode-go:apikey",
+    sourceName: "opencode-go",
+    label: "opencode-go-apikey",
+  },
   vertex: {
     provider: "vertex",
     idKind: "vertex:apikey",
@@ -107,6 +134,9 @@ const FAMILY_ORDER: ReadonlyArray<Family> = [
   "codex",
   "xai",
   "meta",
+  // Not in Go (no OpenCode provider there); after every Go family so Go's duplicate suffixes stay unchanged.
+  "opencode-zen",
+  "opencode-go",
 ];
 
 /** Flattened key entry: the group's settings overlaid with the key's own. */
@@ -204,7 +234,13 @@ const synthesizeKey = (
 ): Credential | undefined => {
   const spec = SPECS[family];
   const key = entry["api-key"].trim();
-  const baseUrl = (entry["base-url"] ?? "").trim();
+  const configuredBase = (entry["base-url"] ?? "").trim();
+
+  // OpenCode keys always carry their gateway endpoint (the executor reads `base_url`).
+  const baseUrl =
+    configuredBase === "" && isOpenCodeProvider(family)
+      ? OPENCODE_SPECS[family].baseUrl
+      : configuredBase;
 
   // Vertex entries are kept even without a key (the base URL may carry the endpoint).
   if (family !== "vertex" && key === "" && baseUrl === "") return undefined;

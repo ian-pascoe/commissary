@@ -56,6 +56,7 @@ effect. Storing a config that sets any of them logs a warning naming the keys (`
 | `observability.logs.debug`, `observability.logs.request-log` | No debug/request-log files; Workers Logs carry one structured line per request            |
 | `observability.usage.usage-statistics-enabled`               | Usage persistence is always on when the `USAGE` D1 binding exists                         |
 | `observability.usage.redis-usage-queue-retention-seconds`    | The queue lives in D1 (`/observability/usage/queue`), retention is `USAGE_RETENTION_DAYS` |
+| `routing.cooldown.save-cooldown-status`                      | Cooldowns always persist: the Durable Object is evicted when idle, which is not a restart |
 
 `requests.streaming.keepalive-seconds` applies to SSE responses but not to the Responses WebSocket (no ping frames).
 
@@ -63,6 +64,32 @@ effect. Storing a config that sets any of them logs a warning naming the keys (`
   Give each client its own service token instead of a shared key.
 - `PATCH $M/config` and `/config/<path>` allow incremental edits for scripts (plain new secrets are stored, placeholders
   refused as above). The panel's raw configuration editor is `/settings/config`.
+
+### OpenCode Zen / OpenCode Go
+
+Go reaches OpenCode only as an `openai-compatibility` entry (`base-url: https://opencode.ai/zen/v1` or `.../zen/go/v1`), which
+sends every model to `/chat/completions`; models the gateway serves on another endpoint answer 400
+`ModelProtocolUnsupported`. The Worker has dedicated providers: move the key to `api-keys.opencode-zen` (Zen) or
+`api-keys.opencode-go` (Go) and drop the compat entry.
+
+```yaml
+api-keys:
+  opencode-go:
+    - keys:
+        - api-key: sk-…
+      # Optional: without `models`, every non-deprecated catalog model is registered (Zen: without its free models).
+      models:
+        - name: minimax-m3
+        - name: deepseek-v4-flash
+          alias: ds-flash
+          protocol: chat # chat | responses | messages | gemini (Zen only); overrides the catalog
+```
+
+`base-url` is optional (defaults to the gateway). Each model is posted to its own endpoint (from the OpenCode catalog, refreshed
+by the cron) with the gateway's session header; see ARCHITECTURE.md "OpenCode Zen and OpenCode Go". Model ids are the same as
+in the compat entry, so clients keep their model names; compat `prefix`/`alias` settings carry over as group/model settings.
+OpenCode Go keys also appear on the panel's Accounts page with their 5-hour, weekly and monthly usage, and a key over one
+of those limits rests until the window resets while other keys take its requests.
 
 ## 2. Auth files (OAuth credentials)
 

@@ -10,6 +10,8 @@ const NAMES = new Map([
   ["xai", "xAI"],
   ["devin", "Devin"],
   ["meta", "Meta"],
+  ["opencode-zen", "OpenCode Zen"],
+  ["opencode-go", "OpenCode Go"],
 ]);
 
 export const providerName = (provider: string): string => {

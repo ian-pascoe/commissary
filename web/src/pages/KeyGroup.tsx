@@ -22,6 +22,7 @@ import {
   type AnyGroupView,
   baseUrlPlaceholder,
   changesIdentity,
+  choosesProtocol,
   defaultBaseUrl,
   draftOf,
   FAMILY_ORDER,
@@ -33,6 +34,8 @@ import {
   keptSettings,
   keyTail,
   newKeyDraft,
+  newModelDraft,
+  PROTOCOL_CHOICES,
   putGroupRequest,
   validateDraft,
   writeProblem,
@@ -53,6 +56,10 @@ const FAMILY_NOTES: Readonly<Record<ApiKeyFamily, string>> = {
   vertex: "Vertex AI express-mode keys; every model needs an alias.",
   xai: "xAI keys for Grok; the endpoint needs a base URL.",
   meta: "Meta Llama API keys.",
+  "opencode-zen":
+    "OpenCode Zen keys; models come from the OpenCode catalog unless listed. A listed model can pin its protocol.",
+  "opencode-go":
+    "OpenCode Go subscription keys; models come from the OpenCode catalog unless listed. A listed model can pin its protocol.",
   "openai-compatibility":
     "Any endpoint that speaks the OpenAI chat API, under a provider name of your own.",
 };
@@ -223,6 +230,7 @@ const GroupForm = ({
   const errors = validateDraft(family, draft);
   const shown = tried ? errors : { keyErrors: {} };
   const compat = family === "openai-compatibility";
+  const protocols = choosesProtocol(family);
   const kept = keptSettings(view);
 
   const probeWith = draft.keys.find((key) => key.stored?.auth_index !== undefined)?.stored
@@ -501,6 +509,7 @@ const GroupForm = ({
               <tr>
                 <th scope="col">Provider's name</th>
                 <th scope="col">Alias for clients</th>
+                {protocols ? <th scope="col">Protocol</th> : null}
                 <th scope="col">
                   <span className={kit["visuallyHidden"]}>Remove</span>
                 </th>
@@ -508,7 +517,7 @@ const GroupForm = ({
             </thead>
             <tbody>
               {draft.models.map((model, position) => {
-                const update = (patch: { name?: string; alias?: string }) =>
+                const update = (patch: { name?: string; alias?: string; protocol?: string }) =>
                   set(
                     "models",
                     draft.models.map((row, at) => (at === position ? { ...row, ...patch } : row)),
@@ -539,6 +548,22 @@ const GroupForm = ({
                         onChange={(event) => update({ alias: event.target.value })}
                       />
                     </td>
+                    {protocols ? (
+                      <td data-label="Protocol">
+                        <select
+                          className={kit["input"]}
+                          aria-label={`Model ${position + 1}, protocol`}
+                          value={model.protocol}
+                          onChange={(event) => update({ protocol: event.target.value })}
+                        >
+                          {PROTOCOL_CHOICES.map((choice) => (
+                            <option key={choice.value} value={choice.value}>
+                              {choice.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    ) : null}
                     <td className={styles["removeCell"]}>
                       <button
                         type="button"
@@ -564,9 +589,7 @@ const GroupForm = ({
           <button
             type="button"
             className={kit["secondary"]}
-            onClick={() =>
-              set("models", [...draft.models, { name: "", alias: "", stored: undefined }])
-            }
+            onClick={() => set("models", [...draft.models, newModelDraft()])}
           >
             <Plus aria-hidden="true" size={16} strokeWidth={2.25} />
             Add a model
@@ -576,10 +599,7 @@ const GroupForm = ({
               authIndex={probeWith}
               known={new Set(draft.models.map((model) => model.name.trim()))}
               onAdd={(names) =>
-                set("models", [
-                  ...draft.models,
-                  ...names.map((name) => ({ name, alias: "", stored: undefined })),
-                ])
+                set("models", [...draft.models, ...names.map((name) => newModelDraft(name))])
               }
             />
           )}

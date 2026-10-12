@@ -92,8 +92,6 @@ export const SETTINGS_TREE = {
     },
     cooldown: {
       "disable-cooling": Schema.Boolean,
-      /** Kept in the ControlPlane Durable Object on Workers. */
-      "save-cooldown-status": Schema.Boolean,
       /** 0 = 60 s, negative disables. */
       "transient-error-cooldown-seconds": Schema.Int,
     },
@@ -237,6 +235,17 @@ const removeOnly = optional(Schema.Null);
  */
 export const SettingsPatch = Schema.Struct({
   ...patchFields(SETTINGS_TREE),
+  routing: optional(
+    Schema.Struct({
+      ...patchFields(SETTINGS_TREE.routing),
+      cooldown: optional(
+        Schema.Struct({
+          ...patchFields(SETTINGS_TREE.routing.cooldown),
+          "save-cooldown-status": removeOnly,
+        }),
+      ),
+    }),
+  ),
   requests: optional(
     Schema.Struct({ ...patchFields(SETTINGS_TREE.requests), "proxy-url": removeOnly }),
   ),

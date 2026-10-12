@@ -113,8 +113,11 @@ describe("ControlPlane credentials (Workers pool)", () => {
     ]);
     expect(list[0]).toMatchObject({ failed: 1, lastError: { httpStatus: 500, retryable: true } });
     expect(JSON.stringify(list[0]?.lastError)).not.toContain("abcdefghijklmnop");
-    // the disabled credential stays out of selection after the restart
-    const after = picked(await fresh.pick({ providers: ["claude"], model: "claude-sonnet-4-5" }));
+    // The 500's model cooldown survives the eviction too (cooldowns are always persisted)...
+    const cooling = await fresh.pick({ providers: ["claude"], model: "claude-sonnet-4-5" });
+    expect(cooling.ok).toBe(false);
+    // ...and the disabled credential stays out of selection for another model.
+    const after = picked(await fresh.pick({ providers: ["claude"], model: "claude-opus-4-5" }));
     expect(after.credential.id).toBe("claude-a.json");
   });
 

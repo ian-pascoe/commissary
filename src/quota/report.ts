@@ -27,6 +27,7 @@ export const QUOTA_PROVIDERS = [
   "xai",
   "meta",
   "devin",
+  "opencode-go",
 ] as const;
 
 export type QuotaProvider = (typeof QUOTA_PROVIDERS)[number];
@@ -35,6 +36,21 @@ const SUPPORTED: ReadonlySet<string> = new Set(QUOTA_PROVIDERS);
 
 export const isQuotaProvider = (provider: string): provider is QuotaProvider =>
   SUPPORTED.has(provider);
+
+/**
+ * Executor keys whose config API keys (`api-keys.<family>`) can be checked with the key itself: they are listed on the
+ * Accounts page as config-sourced accounts and swept by the `quota-check` cron task. Other config keys (Codex, Claude,
+ * OpenCode Zen, …) have no usage endpoint that takes an API key and stay off the list. A later kind is one entry here
+ * (plus its target and probe).
+ */
+export const CONFIG_QUOTA_PROVIDERS = [
+  "opencode-go",
+] as const satisfies ReadonlyArray<QuotaProvider>;
+
+const CONFIG_SUPPORTED: ReadonlySet<string> = new Set(CONFIG_QUOTA_PROVIDERS);
+
+export const isConfigQuotaProvider = (provider: string): provider is QuotaProvider =>
+  CONFIG_SUPPORTED.has(provider);
 
 /**
  * The result of one check: the windows (and plan) the provider reported, or why the check failed (no secrets).

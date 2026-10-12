@@ -39,7 +39,6 @@ const DEFAULTS: SettingsValues = {
     retry: { "request-retry": 0, "max-retry-credentials": 0, "max-retry-interval": 0 },
     cooldown: {
       "disable-cooling": false,
-      "save-cooldown-status": false,
       "transient-error-cooldown-seconds": 0,
     },
   },

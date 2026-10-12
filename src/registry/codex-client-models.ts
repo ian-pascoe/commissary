@@ -44,6 +44,8 @@ const APPLY_PATCH_PROVIDERS = new Set([
   "meta",
   "kimi",
   "kimi-ai",
+  "opencode-zen",
+  "opencode-go",
   "openai-compatibility",
 ]);
 

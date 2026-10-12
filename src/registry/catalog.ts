@@ -15,6 +15,7 @@ import builtinsJson from "./catalog/builtins.json";
 import codexClientJson from "./catalog/codex_client_models.json";
 import devinJson from "./catalog/devin_models.json";
 import modelsJson from "./catalog/models.json";
+import { embeddedOpenCodeCatalog, type OpenCodeCatalog } from "./opencode-catalog.ts";
 import { type CatalogResult, parseDevinCatalog } from "./devin.ts";
 import { cloneModelInfo, fromWire, type ModelInfo, WireModel } from "./model-info.ts";
 
@@ -51,6 +52,8 @@ export interface ModelCatalogs {
   readonly devin: ReadonlyArray<ModelInfo>;
   /** Codex client catalog (`codex_client_models.json`), validated JSON. Served by the Codex client listing. */
   readonly codexClient: Json;
+  /** OpenCode Zen/Go catalog (models.dev data, `opencode_models.json`); not a Go catalog. */
+  readonly opencode: OpenCodeCatalog;
 }
 
 const SectionList = Schema.optionalKey(Schema.NullOr(Schema.Array(Schema.NullOr(WireModel))));
@@ -311,6 +314,7 @@ export const embeddedCatalogs = (): ModelCatalogs => {
       models: parseEmbeddedModels(),
       devin: parseEmbeddedDevin(),
       codexClient: codexClient.value,
+      opencode: embeddedOpenCodeCatalog(),
     };
   }
 

@@ -34,6 +34,8 @@ export const FAMILY_ORDER: ReadonlyArray<ApiKeyFamily> = [
   "vertex",
   "xai",
   "meta",
+  "opencode-zen",
+  "opencode-go",
   "openai-compatibility",
 ];
 
@@ -45,6 +47,8 @@ const FAMILY_NAMES: Readonly<Record<ApiKeyFamily, string>> = {
   vertex: "Vertex AI",
   xai: "xAI",
   meta: "Meta",
+  "opencode-zen": "OpenCode Zen",
+  "opencode-go": "OpenCode Go",
   "openai-compatibility": "OpenAI-compatible",
 };
 
@@ -62,6 +66,8 @@ const DEFAULT_BASE: Readonly<Record<ApiKeyFamily, string | undefined>> = {
   vertex: "https://aiplatform.googleapis.com",
   xai: undefined,
   meta: "https://api.meta.ai/v1",
+  "opencode-zen": "https://opencode.ai/zen/v1",
+  "opencode-go": "https://opencode.ai/zen/go/v1",
   "openai-compatibility": undefined,
 };
 
@@ -297,9 +303,32 @@ export const keyMatches = (ref: GroupRef, key: AnyKeyView, title: string, query:
 export interface ModelDraft {
   readonly name: string;
   readonly alias: string;
+  /** OpenCode Zen/Go only: the upstream protocol; empty follows the OpenCode catalog. */
+  readonly protocol: string;
   /** The stored entry, so its other settings (display name, thinking, ...) survive the edit. */
   readonly stored: ModelEntry | undefined;
 }
+
+/** A new, empty model row. */
+export const newModelDraft = (name = ""): ModelDraft => ({
+  name,
+  alias: "",
+  protocol: "",
+  stored: undefined,
+});
+
+/** The families whose model rows choose an upstream protocol. */
+export const choosesProtocol = (family: ApiKeyFamily | undefined): boolean =>
+  family === "opencode-zen" || family === "opencode-go";
+
+/** The protocol choices of an OpenCode model row (`""`: what the OpenCode catalog says). */
+export const PROTOCOL_CHOICES: ReadonlyArray<{ readonly value: string; readonly label: string }> = [
+  { value: "", label: "Auto (catalog)" },
+  { value: "chat", label: "Chat Completions" },
+  { value: "responses", label: "Responses" },
+  { value: "messages", label: "Anthropic Messages" },
+  { value: "gemini", label: "Gemini (Zen only)" },
+];
 
 export interface KeyDraft {
   /** Stable React key. */
@@ -370,6 +399,7 @@ export const draftOf = (view: AnyGroupView | undefined): GroupDraft => {
     models: (group.models ?? []).map((model) => ({
       name: model.name,
       alias: model.alias ?? "",
+      protocol: model.protocol ?? "",
       stored: model,
     })),
     excluded: "excluded-models" in group ? (group["excluded-models"] ?? []).join("\n") : "",
@@ -500,10 +530,17 @@ const modelEntries = (drafts: ReadonlyArray<ModelDraft>): ReadonlyArray<ModelEnt
     const name = draft.name.trim();
 
     if (name === "") return [];
-    const { alias: _alias, name: _name, ...rest } = draft.stored ?? { name };
+    const { alias: _alias, name: _name, protocol: _protocol, ...rest } = draft.stored ?? { name };
     const alias = draft.alias.trim();
 
-    return [{ ...rest, name, ...(alias === "" ? {} : { alias }) }];
+    return [
+      {
+        ...rest,
+        name,
+        ...(alias === "" ? {} : { alias }),
+        ...(draft.protocol === "" ? {} : { protocol: draft.protocol }),
+      },
+    ];
   });
 
 /** A key row as written: the stored key by `auth_index` (all its visible settings), plus a new secret and weight. */

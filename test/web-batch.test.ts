@@ -2,7 +2,15 @@
 // (web/src/lib/batch.ts).
 import { describe, expect, it } from "vitest";
 import type { CredentialEntry } from "#contract/credentials.ts";
-import { assess, shownAccounts } from "../web/src/lib/accounts.ts";
+import {
+  accountActions,
+  accountName,
+  assess,
+  isConfigAccount,
+  keyHome,
+  selectable,
+  shownAccounts,
+} from "../web/src/lib/accounts.ts";
 import {
   actionSummary,
   afterAction,
@@ -310,5 +318,75 @@ describe("summaries", () => {
       done: "",
       problem: "The quota check failed for all 2 accounts.",
     });
+  });
+});
+
+describe("config accounts (OpenCode Go keys)", () => {
+  const goKey = entry({
+    name: "0123456789abcdef",
+    provider: "opencode-go",
+    source: "config",
+    account: "[redacted]…0001",
+    supports_quota: true,
+    key_group: { family: "opencode-go", index: 2 },
+  });
+
+  it("offers the quota check only, and links the key's group", () => {
+    expect(accountActions(goKey)).toEqual({
+      checkQuota: true,
+      refresh: false,
+      toggle: false,
+      routing: false,
+      remove: false,
+    });
+    expect(keyHome(goKey)).toEqual({
+      to: "/keys/$family/$index",
+      params: { family: "opencode-go", index: "2" },
+    });
+    expect(
+      keyHome(entry({ name: "fedcba9876543210", provider: "opencode-go", source: "config" })),
+    ).toEqual({ to: "/keys" });
+    expect(isConfigAccount(goKey)).toBe(true);
+  });
+
+  it("names a config key by its last characters", () => {
+    expect(accountName(goKey)).toBe("Key …0001");
+    expect(
+      accountName(entry({ name: "fedcba9876543210", provider: "opencode-go", source: "config" })),
+    ).toBe("fedcba9876543210");
+  });
+
+  it("leaves auth files as they were", () => {
+    const [claude] = ACCOUNTS;
+
+    expect(accountActions(claude!.entry)).toEqual({
+      checkQuota: true,
+      refresh: true,
+      toggle: true,
+      routing: true,
+      remove: true,
+    });
+    expect(keyHome(claude!.entry)).toBeUndefined();
+  });
+
+  it("keeps config keys out of a selection and its actions", () => {
+    const shown = [...ACCOUNTS, assess(goKey)];
+
+    expect(names(selectable(shown))).toEqual(["a.json", "b.json", "c.json", "d.json"]);
+    expect(planAction("disable", new Set(["0123456789abcdef"]), selectable(shown))).toMatchObject({
+      send: [],
+      hidden: 1,
+    });
+  });
+
+  it("names the key, not a sign-in, when the provider refuses a check", () => {
+    const refused = { error: "check_failed", message: "unauthorized", status: 401 } as const;
+
+    expect(failureReason(refused, "OpenCode Go", true)).toBe(
+      "OpenCode Go refused the API key. Check it on the Keys page.",
+    );
+    expect(failureReason(refused, "Claude")).toBe(
+      "Claude refused the saved sign-in. Refresh the tokens or reconnect.",
+    );
   });
 });

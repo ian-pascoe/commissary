@@ -10,7 +10,7 @@ import {
 import type { Config } from "../config/schema.ts";
 import type { JsonObject } from "../json/index.ts";
 import { isTokenPayloadKey } from "./merge.ts";
-import { CredentialPool, type ConfigView, type UpsertResult } from "./pool.ts";
+import { CredentialPool, type ConfigView, type RefreshTarget, type UpsertResult } from "./pool.ts";
 import { type Credential, executorKey } from "./model.ts";
 import {
   RefreshManager,
@@ -37,7 +37,10 @@ import {
 import { buildApiKeysList } from "../management/api-keys-view.ts";
 import { locateKey, setKeyExcludedAll } from "../management/api-keys-write.ts";
 import { configKeyIds } from "../management/config-document.ts";
-import { buildCredentialEntry } from "../management/credential-entry.ts";
+import {
+  buildConfigCredentialEntry,
+  buildCredentialEntry,
+} from "../management/credential-entry.ts";
 import {
   apiCallToken,
   findCredential,
@@ -65,7 +68,12 @@ import type {
   QuotaReport,
   ResetGrantStatus,
 } from "../management/contract/credentials.ts";
-import { isQuotaProvider, mergeQuotaReport, type QuotaOutcome } from "../quota/report.ts";
+import {
+  isConfigQuotaProvider,
+  isQuotaProvider,
+  mergeQuotaReport,
+  type QuotaOutcome,
+} from "../quota/report.ts";
 import { QuotaReportStore } from "../quota/store.ts";
 import { type SweepSource, SweepLeaseStore, type TakeLease } from "../quota/sweep-lease.ts";
 import {
@@ -120,6 +128,23 @@ const NOT_FOUND: Omit<AccountResult, "name"> = {
   error: "not_found",
   message: "auth file not found",
 };
+
+/** A batch named a config API key (by its `auth_index`, the name the Accounts page lists it under). */
+const CONFIG_CREDENTIAL: Omit<AccountResult, "name"> = {
+  ok: false,
+  error: "config_credential",
+  message: "config API keys are managed on the API keys page",
+};
+
+/** The shape of an `auth_index` (`management/auth-index.ts`): only such names are looked up as one. */
+const AUTH_INDEX_PATTERN = /^[0-9a-f]{16}$/;
+
+const isDisablingPattern = (pattern: string): boolean => pattern.trim() === "*";
+
+/** On the Accounts page: auth files, and config API keys whose provider reports quota with the key. */
+const listed = ({ credential }: RefreshTarget): boolean =>
+  credential.source === "file" ||
+  (credential.source === "config" && isConfigQuotaProvider(executorKey(credential)));
 
 /**
  * A failed batch refresh as the panel shows it: a fixed reason per failure code plus the upstream status. The
@@ -490,25 +515,77 @@ export class ControlPlane extends DurableObject<Env> {
 
   // --- management API (src/management) -------------------------------------------------------------------------
 
-  /** Panel entries of all stored auth files (no secrets). Config API keys are not listed. */
+  /**
+   * Panel entries of all stored auth files, plus the config API keys whose provider reports quota with the key
+   * (`CONFIG_QUOTA_PROVIDERS`, listed by their `auth_index`, `buildConfigCredentialEntry`). No secrets.
+   */
   listCredentialEntries(): WireJsonObject[] {
     const now = Date.now();
     const reports = this.#quota.all();
     const grants = this.#grants.statuses();
+    const entries = this.#pool.entries();
 
-    return this.#pool
-      .entries()
-      .filter(({ credential }) => credential.source === "file")
-      .map(({ credential, state }) =>
-        buildCredentialEntry(
+    const ids = entries.some(({ credential }) => credential.source === "config")
+      ? configKeyIds(this.#currentConfig().config)
+      : undefined;
+
+    return entries.filter(listed).map(({ credential, state }) => {
+      if (credential.source === "config") {
+        const position = ids === undefined ? undefined : locateKey(ids, credential.id);
+
+        return buildConfigCredentialEntry(
           credential,
           state,
           now,
           this.#authIndex,
+          position === undefined ? undefined : { family: position.family, index: position.group },
           reports.get(credential.id),
-          grants.get(credential.id),
-        ),
+        );
+      }
+
+      return buildCredentialEntry(
+        credential,
+        state,
+        now,
+        this.#authIndex,
+        reports.get(credential.id),
+        grants.get(credential.id),
       );
+    });
+  }
+
+  /**
+   * The listed config account (`CONFIG_QUOTA_PROVIDERS`) whose listed name, its keyed `auth_index`, is `name`. An index
+   * reveals nothing about the key, so resolving one confirms no guess.
+   */
+  #configAccount(name: string): RefreshTarget | undefined {
+    const index = name.trim().toLowerCase();
+
+    if (!AUTH_INDEX_PATTERN.test(index)) return undefined;
+
+    return this.#pool
+      .entries()
+      .find(
+        ({ credential }) =>
+          credential.source === "config" &&
+          isConfigQuotaProvider(executorKey(credential)) &&
+          this.#authIndex(credential.id) === index,
+      );
+  }
+
+  /**
+   * Whether `name` is the `auth_index` of a config API key: the management routes answer a file-only operation on one
+   * (delete, download, refresh, field edits) with a clear refusal instead of "not found".
+   */
+  isConfigKey(name: string): boolean {
+    const index = name.trim().toLowerCase();
+
+    if (!AUTH_INDEX_PATTERN.test(index)) return false;
+
+    return (
+      findCredential(this.#pool.entries(), { authIndex: index }, this.#authIndex)?.credential
+        .source === "config"
+    );
   }
 
   /** The stored auth file verbatim, for download. */
@@ -705,6 +782,9 @@ export class ControlPlane extends DurableObject<Env> {
   ): Promise<AccountResult[]> {
     const stored = new Set(this.#pool.refreshTargets().map(({ credential }) => credential.id));
 
+    // Config API keys listed on the Accounts page by their `auth_index` (public, so a clear answer confirms nothing).
+    const configKeys = new Set(names.filter((name) => !stored.has(name) && this.isConfigKey(name)));
+
     if (action === "refresh") {
       return await Effect.runPromise(
         Effect.forEach(
@@ -712,7 +792,10 @@ export class ControlPlane extends DurableObject<Env> {
           (name) =>
             stored.has(name)
               ? Effect.promise(() => this.#refreshForBatch(name))
-              : Effect.succeed<AccountResult>({ name, ...NOT_FOUND }),
+              : Effect.succeed<AccountResult>({
+                  name,
+                  ...(configKeys.has(name) ? CONFIG_CREDENTIAL : NOT_FOUND),
+                }),
           { concurrency: BATCH_REFRESH_CONCURRENCY },
         ),
       );
@@ -732,6 +815,8 @@ export class ControlPlane extends DurableObject<Env> {
 
     return names.map((name): AccountResult => {
       if (applied.has(name)) return { name, ok: true };
+
+      if (configKeys.has(name)) return { name, ...CONFIG_CREDENTIAL };
 
       // Gone already (here or in a concurrent call), or never an auth file: no auth file of that name is stored, as a
       // delete asked. A config id reads like any other such name, so the reply does not confirm a guessed key.
@@ -775,14 +860,31 @@ export class ControlPlane extends DurableObject<Env> {
     ref: CredentialRef,
     options?: { readonly sweep?: boolean },
   ): Promise<QuotaTargetResult> {
-    const target = findCredential(this.#pool.entries(), ref, this.#authIndex);
+    const target =
+      findCredential(this.#pool.entries(), ref, this.#authIndex) ??
+      (ref.name === undefined ||
+      (ref.authIndex !== undefined &&
+        ref.authIndex.trim().toLowerCase() !== ref.name.trim().toLowerCase())
+        ? undefined
+        : this.#configAccount(ref.name));
 
-    if (target === undefined || target.credential.source !== "file")
-      return { ok: false, error: "not_found" };
+    if (target === undefined || !listed(target)) return { ok: false, error: "not_found" };
     const provider = executorKey(target.credential);
 
     if (!isQuotaProvider(provider)) return { ok: false, error: "unsupported", provider };
     const id = target.credential.id;
+
+    // A config key needs no refresh: the target is built from the pool's credential, named by its `auth_index`.
+    if (target.credential.source === "config") {
+      const built = buildQuotaTarget(target.credential, provider);
+      const credentialVersion = target.credential.credentialVersion;
+      const handle = this.#authIndex(id);
+
+      if (!built.ok) return built.error === "unavailable" ? { ...built, credentialVersion } : built;
+
+      return { ok: true, target: { ...built.target, handle, credentialVersion } };
+    }
+
     const fresh = await this.#refresh.ensureFresh(id);
 
     if (!fresh.ok) {
@@ -800,7 +902,8 @@ export class ControlPlane extends DurableObject<Env> {
 
     if (!built.ok) return built.error === "unavailable" ? { ...built, credentialVersion } : built;
 
-    if (provider !== "claude") return { ok: true, target: { ...built.target, credentialVersion } };
+    if (provider !== "claude")
+      return { ok: true, target: { ...built.target, handle: id, credentialVersion } };
     const stored = this.#grants.status(id);
 
     const skip =
@@ -813,6 +916,7 @@ export class ControlPlane extends DurableObject<Env> {
       ok: true,
       target: {
         ...built.target,
+        handle: id,
         credentialVersion,
         ...(skip ? { skipResetGrants: true } : {}),
       },
@@ -996,17 +1100,30 @@ export class ControlPlane extends DurableObject<Env> {
     };
   }
 
-  /** Ids of the enabled auth files whose provider has a usage endpoint (cron `quota-check`). */
+  /**
+   * Listed names of the enabled accounts whose provider has a usage endpoint (cron `quota-check`, "Check all
+   * quotas"): auth file names, and the `auth_index` of each listed config API key without `*` in its
+   * `excluded-models` ({@link quotaProbeTarget} resolves both). Reports of credentials that no longer exist (a config
+   * key whose identity changed with an edit, its id being content-addressed) are dropped here.
+   */
   quotaCheckTargets(): string[] {
-    return this.#pool
-      .entries()
-      .filter(
-        ({ credential }) =>
-          credential.source === "file" &&
-          !credential.disabled &&
-          isQuotaProvider(executorKey(credential)),
-      )
-      .map(({ credential }) => credential.id);
+    const entries = this.#pool.entries();
+
+    this.#quota.retain(new Set(entries.map(({ credential }) => credential.id)));
+
+    return entries
+      .filter((entry) => {
+        const { credential } = entry;
+
+        if (!listed(entry) || !isQuotaProvider(executorKey(credential))) return false;
+
+        return credential.source === "config"
+          ? !credential.excludedModels.some(isDisablingPattern)
+          : !credential.disabled;
+      })
+      .map(({ credential }) =>
+        credential.source === "config" ? this.#authIndex(credential.id) : credential.id,
+      );
   }
 
   /**

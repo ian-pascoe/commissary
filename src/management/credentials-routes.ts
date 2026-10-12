@@ -9,6 +9,11 @@
  * list masks secret-looking header values (`field-patch.ts`, `credential-entry.ts`), and the download answers only
  * service-token administrators (`403 download_requires_service_token` for an email admin): the file carries the
  * access and refresh tokens, and a service token is the credential meant for automation (`docs/ACCESS.md`).
+ *
+ * The list also carries the config API keys whose provider reports quota with the key (OpenCode Go, `source:
+ * "config"`, named by their `auth_index`; `credential-entry.ts`). File-only operations naming one of them (delete,
+ * download, field edits, token refresh) answer `409 config_credential`: the key lives in the config and is edited on
+ * the API keys page. Its models are listed by the same name.
  */
 import { Clock, Effect } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
@@ -68,6 +73,22 @@ const parsePagination = (
 };
 
 const entryName = (entry: JsonObject): string => text(entry.name);
+
+/**
+ * Fails with `409 config_credential` when `name` is a config API key's `auth_index` (the name the list gives it), so a
+ * file-only operation says why it does not apply instead of answering "not found". Indexes are public: answering for
+ * one confirms no key guess.
+ */
+const refuseConfigKey = (name: string) =>
+  Effect.gen(function* () {
+    const config = yield* controlPlane("isConfigKey", (stub) => stub.isConfigKey(name));
+
+    if (config) {
+      return yield* replyError(409, "config_credential", {
+        message: "this account is a config API key: edit or remove it on the API keys page",
+      });
+    }
+  });
 
 const listCredentials = Effect.gen(function* () {
   const params = yield* queryParams;
@@ -268,7 +289,7 @@ const deleteCredentials = Effect.gen(function* () {
       stub.listCredentialEntries(),
     );
 
-    const ids = entries.map((entry) => text(entry.id));
+    const ids = entries.filter((entry) => entry.source === "file").map((entry) => text(entry.id));
     const removed = yield* controlPlane("removeCredentials", (stub) => stub.removeCredentials(ids));
 
     return jsonReply(200, { status: "ok", deleted: removed.length });
@@ -284,14 +305,25 @@ const deleteCredentials = Effect.gen(function* () {
   const removed = yield* controlPlane("removeCredentials", (stub) => stub.removeCredentials(safe));
 
   if (names.length === 1) {
-    return removed.length === 1
-      ? jsonReply(200, { status: "ok" })
-      : yield* replyError(404, "auth file not found");
+    if (removed.length === 1) return jsonReply(200, { status: "ok" });
+
+    yield* refuseConfigKey(names[0] ?? "");
+
+    return yield* replyError(404, "auth file not found");
   }
 
-  const failed = names
-    .filter((name) => !removed.includes(name))
-    .map((name) => ({ name, error: unsafeName(name) ? "invalid name" : "auth file not found" }));
+  const failed = yield* Effect.forEach(
+    names.filter((name) => !removed.includes(name)),
+    (name) =>
+      unsafeName(name)
+        ? Effect.succeed({ name, error: "invalid name" })
+        : controlPlane("isConfigKey", (stub) => stub.isConfigKey(name)).pipe(
+            Effect.map((config) => ({
+              name,
+              error: config ? "config_credential" : "auth file not found",
+            })),
+          ),
+  );
 
   if (failed.length > 0)
     return jsonReply(207, { status: "partial", deleted: removed.length, files: removed, failed });
@@ -314,7 +346,11 @@ const downloadCredential = Effect.gen(function* () {
   if (unsafeName(name)) return yield* replyError(400, "invalid name");
   const file = yield* controlPlane("getCredentialFile", (stub) => stub.getCredentialFile(name));
 
-  if (file === undefined) return yield* replyError(404, "file not found");
+  if (file === undefined) {
+    yield* refuseConfigKey(name);
+
+    return yield* replyError(404, "file not found");
+  }
 
   return HttpServerResponse.text(JSON.stringify(file, null, 2), {
     contentType: "application/json",
@@ -332,10 +368,26 @@ const credentialModels = Effect.gen(function* () {
     Effect.mapError(() => replyError(502, "model registry unavailable")),
   );
 
-  // Auth files only: a config credential id is derived from its key, so answering for one would confirm guesses.
+  // Auth files by id; config keys only by their `auth_index` (the name the list gives them): a config credential id is
+  // derived from its key, so answering for one would confirm guesses.
   const file = snapshot.sources.some((source) => source.source === "file" && source.id === name);
 
-  const models = (file ? snapshot.modelsForCredential(name) : []).map((model) => ({
+  const configId =
+    file || !/^[0-9a-f]{16}$/i.test(name)
+      ? undefined
+      : yield* controlPlane("credentialIdOfAuthIndex", (stub) =>
+          stub.credentialIdOfAuthIndex(name.toLowerCase()),
+        );
+
+  const id =
+    configId !== undefined &&
+    snapshot.sources.some((source) => source.source === "config" && source.id === configId)
+      ? configId
+      : file
+        ? name
+        : undefined;
+
+  const models = (id === undefined ? [] : snapshot.modelsForCredential(id)).map((model) => ({
     id: model.id,
     ...(model.displayName === undefined || model.displayName === ""
       ? {}
@@ -395,6 +447,9 @@ const patchStatus = Effect.gen(function* () {
 
   if (result.error === "invalid") return yield* replyError(422, result.message ?? "invalid config");
 
+  // A listed config account named by its `auth_index` (the toggle goes through the `auth_index` field instead).
+  if (text(body.name) !== "") yield* refuseConfigKey(text(body.name));
+
   return yield* replyError(404, "auth file not found");
 });
 
@@ -411,7 +466,11 @@ const patchFields = Effect.gen(function* () {
 
   if (result.ok) return jsonReply(200, { status: "ok" });
 
-  if (result.error === "not_found") return yield* replyError(404, result.message);
+  if (result.error === "not_found") {
+    yield* refuseConfigKey(name);
+
+    return yield* replyError(404, result.message);
+  }
 
   // A refused value names its field (`422`, like the settings writes); a malformed request stays `400`.
   return yield* result.path === undefined
@@ -454,9 +513,11 @@ const refreshCredentials = Effect.gen(function* () {
 
   if (result.ok) return jsonReply(200, { ok: true, auth: result.entry });
 
-  return yield* result.error === "not_found"
-    ? replyError(404, "auth file not found")
-    : replyError(500, result.message);
+  if (result.error !== "not_found") return yield* replyError(500, result.message);
+
+  yield* refuseConfigKey(name);
+
+  return yield* replyError(404, "auth file not found");
 });
 
 const resetCooldown = Effect.gen(function* () {

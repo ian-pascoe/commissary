@@ -1,10 +1,23 @@
 // One account: its allowance (each window with its reset blade), Claude reset grants (use one, with a confirmation),
 // cooldowns, tokens per past window, its own routing fields (`AccountRouting.tsx`, `#routing`), details, the models it
 // serves, and the actions on it (check quota, refresh tokens, enable or disable, delete).
+//
+// A config API key listed for its quota (OpenCode Go, `source: "config"`) keeps the allowance, the quota check, the
+// cooldowns, the history and the models; what changes the key (enable or disable, routing fields, delete) lives on
+// the Keys page, which the page links to instead.
 import { useAtomValue } from "@effect/atom-react";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
-import { ArrowLeft, ChevronRight, Gauge, Power, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronRight,
+  Gauge,
+  KeyRound,
+  Power,
+  RefreshCw,
+  RotateCcw,
+  Trash2,
+} from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
 import type { CredentialEntry, PendingResetClaim } from "#contract/credentials.ts";
 import {
@@ -25,7 +38,15 @@ import { HistoryChart } from "../components/HistoryChart.tsx";
 import { kit, Problem, Section } from "../components/Kit.tsx";
 import { Meter } from "../components/Meter.tsx";
 import { ResetBlade, TrailMark } from "../components/Signs.tsx";
-import { accountName, assess, cooldownReason, refreshable } from "../lib/accounts.ts";
+import {
+  accountActions,
+  accountName,
+  assess,
+  cooldownReason,
+  isConfigAccount,
+  type KeyHome,
+  keyHome,
+} from "../lib/accounts.ts";
 import { failureMessage } from "../lib/failure.ts";
 import {
   formatAgo,
@@ -555,7 +576,7 @@ const Details = ({ entry, now }: { readonly entry: CredentialEntry; readonly now
     ["Changed", updated === undefined ? undefined : formatDate(updated)],
     ["Requests served", formatCount(entry.success)],
     ["Requests failed", formatCount(entry.failed)],
-    ["File", entry.name],
+    isConfigAccount(entry) ? ["Source", "Config API key"] : ["File", entry.name],
     ["Index", entry.auth_index],
   ];
 
@@ -696,6 +717,42 @@ const Remove = ({
 };
 
 // ---------------------------------------------------------------------------------------------------------------
+// A config key's home
+
+const KeyLink = ({
+  home,
+  className,
+  children,
+}: {
+  readonly home: KeyHome;
+  readonly className: string | undefined;
+  readonly children: ReactNode;
+}) =>
+  home.to === "/keys" ? (
+    <Link to="/keys" className={className}>
+      {children}
+    </Link>
+  ) : (
+    <Link to={home.to} params={home.params} className={className}>
+      {children}
+    </Link>
+  );
+
+/** In place of Delete for a config key: where it is edited, disabled and removed. */
+const InConfig = ({ entry, home }: { readonly entry: CredentialEntry; readonly home: KeyHome }) => (
+  <Section title="In the config">
+    <p className={styles["lead"]}>
+      This {providerName(entry.provider)} account is an API key from the config. Edit, disable or
+      remove it with its group on the Keys page.
+    </p>
+    <KeyLink home={home} className={kit["secondary"]}>
+      <KeyRound aria-hidden="true" size={16} strokeWidth={2.25} />
+      Open its key group
+    </KeyLink>
+  </Section>
+);
+
+// ---------------------------------------------------------------------------------------------------------------
 // Page
 
 const Actions = ({
@@ -711,10 +768,11 @@ const Actions = ({
   const check = useAction(checkQuotaAtom);
   const refresh = useAction(refreshAtom);
   const toggle = useAction(setDisabledAtom);
+  const offered = accountActions(entry);
 
   return (
     <div className={styles["actions"]}>
-      {checksQuota(entry.provider) ? (
+      {offered.checkQuota ? (
         <button
           type="button"
           className={kit["secondary"]}
@@ -747,7 +805,7 @@ const Actions = ({
           {check.busy ? "Checking…" : "Check quota"}
         </button>
       ) : null}
-      {refreshable(entry.provider) ? (
+      {offered.refresh ? (
         <button
           type="button"
           className={kit["secondary"]}
@@ -775,36 +833,38 @@ const Actions = ({
           {refresh.busy ? "Refreshing…" : "Refresh tokens"}
         </button>
       ) : null}
-      <button
-        type="button"
-        className={kit["secondary"]}
-        disabled={toggle.busy}
-        onClick={async () => {
-          const disabled = !entry.disabled;
+      {offered.toggle ? (
+        <button
+          type="button"
+          className={kit["secondary"]}
+          disabled={toggle.busy}
+          onClick={async () => {
+            const disabled = !entry.disabled;
 
-          const outcome = await toggle.run({
-            payload: { name: entry.name, disabled },
-            reactivityKeys: CREDENTIALS,
-          });
+            const outcome = await toggle.run({
+              payload: { name: entry.name, disabled },
+              reactivityKeys: CREDENTIALS,
+            });
 
-          onNotice(
-            outcome.ok
-              ? {
-                  tone: "done",
-                  text: disabled
-                    ? "Account disabled. The proxy sends it no requests."
-                    : "Account enabled. The proxy sends it requests again.",
-                }
-              : {
-                  tone: "problem",
-                  text: `Could not ${disabled ? "disable" : "enable"} the account. ${outcome.message}`,
-                },
-          );
-        }}
-      >
-        <Power aria-hidden="true" size={16} strokeWidth={2.25} />
-        {entry.disabled ? "Enable" : "Disable"}
-      </button>
+            onNotice(
+              outcome.ok
+                ? {
+                    tone: "done",
+                    text: disabled
+                      ? "Account disabled. The proxy sends it no requests."
+                      : "Account enabled. The proxy sends it requests again.",
+                  }
+                : {
+                    tone: "problem",
+                    text: `Could not ${disabled ? "disable" : "enable"} the account. ${outcome.message}`,
+                  },
+            );
+          }}
+        >
+          <Power aria-hidden="true" size={16} strokeWidth={2.25} />
+          {entry.disabled ? "Enable" : "Disable"}
+        </button>
+      ) : null}
       {children}
     </div>
   );
@@ -814,6 +874,8 @@ const AccountView = ({ entry }: { readonly entry: CredentialEntry }) => {
   const now = useAtomValue(nowAtom);
   const { closed, note, tone } = assess(entry);
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
+  const offered = accountActions(entry);
+  const home = keyHome(entry);
   usePageTitle(accountName(entry));
 
   return (
@@ -826,7 +888,10 @@ const AccountView = ({ entry }: { readonly entry: CredentialEntry }) => {
         <div className={styles["identity"]}>
           <span className={styles["markSlot"]}>{closed ? <TrailMark /> : null}</span>
           <div className={styles["who"]}>
-            <p className={styles["provider"]}>{providerName(entry.provider)}</p>
+            <p className={styles["provider"]}>
+              {providerName(entry.provider)}
+              {home === undefined ? null : <span className={styles["source"]}>Config key</span>}
+            </p>
             <h1 className={styles["name"]}>{accountName(entry)}</h1>
             {note === undefined ? null : (
               <p className={styles["note"]} data-tone={tone}>
@@ -853,12 +918,13 @@ const AccountView = ({ entry }: { readonly entry: CredentialEntry }) => {
           {entry.provider === "claude" ? <Resets entry={entry} now={now} /> : null}
           <Cooldowns entry={entry} now={now} onNotice={setNotice} />
           <History entry={entry} now={now} />
-          <Routing entry={entry} />
+          {offered.routing ? <Routing entry={entry} /> : null}
         </div>
         <div className={styles["side"]}>
           <Details entry={entry} now={now} />
           <Models entry={entry} />
-          <Remove entry={entry} onNotice={setNotice} />
+          {offered.remove ? <Remove entry={entry} onNotice={setNotice} /> : null}
+          {home === undefined ? null : <InConfig entry={entry} home={home} />}
         </div>
       </div>
     </div>

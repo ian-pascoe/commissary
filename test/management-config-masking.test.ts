@@ -33,6 +33,9 @@ const makeSecrets = () => {
     fragmentToken: `frag${random()}`,
     paramKey: `pk-${random()}`,
     rawKey: `sk-raw-${random()}`,
+    zenKey: `sk-zen-${random()}`,
+    goKey: `sk-go-${random()}`,
+    zenHeader: `Bearer ${random()}`,
   };
 };
 
@@ -70,6 +73,14 @@ const seededDocument = (secrets: Secrets): JsonObject => ({
         keys: [{ "api-key": secrets.key }, { "api-key": secrets.keyTwo }],
       },
     ],
+    "opencode-zen": [
+      {
+        headers: { Authorization: secrets.zenHeader },
+        models: [{ name: "claude-haiku-4-5", protocol: "messages" }],
+        keys: [{ "api-key": secrets.zenKey }],
+      },
+    ],
+    "opencode-go": [{ keys: [{ "api-key": secrets.goKey }] }],
     "openai-compatibility": [
       {
         name: "Router",
@@ -178,8 +189,10 @@ describe("GET /config* masking", () => {
     );
 
     expect(count).toBe(raw.secrets);
-    // 11 + the payload parameter and the raw parameter's JSON text.
-    expect(raw.secrets).toBe(13);
+    // 11 + the payload parameter and the raw parameter's JSON text + the two OpenCode keys and the Zen header.
+    expect(raw.secrets).toBe(16);
+    expect(shown.get("api-keys.opencode-zen[0].keys[0].api-key")).toMatch(/^\[redacted#\d+\]…/);
+    expect(shown.get("api-keys.opencode-go[0].keys[0].api-key")).toMatch(/^\[redacted#\d+\]…/);
     expect(shown.get("requests.payload.override-raw[0].params.extra_body")).toMatch(
       /^\[redacted#\d+\]…/,
     );
