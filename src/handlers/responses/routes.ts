@@ -1,6 +1,7 @@
 /**
- * Responses API routes: `POST /v1/responses`, `POST /v1/responses/compact` and the Codex aliases under
- * `/backend-api/codex/*` (entry protocol `openai-response`).
+ * Responses API routes: `POST /v1/responses`, `POST /v1/responses/compact`, the Codex aliases under
+ * `/backend-api/codex/*` and the unprefixed `/responses` aliases (entry protocol `openai-response`). Difference: Go
+ * has no unprefixed aliases; see handlers/openai/routes.ts for why they exist.
  *
  * Go source: sdk/api/handlers/openai/openai_responses_handlers.go (Responses, Compact, handleNonStreamingResponse,
  * handleStreamingResponse), internal/api/server_routes.go (route table). The websocket variants (`GET /v1/responses`,
@@ -92,11 +93,13 @@ const handle = (compact: boolean) =>
 const ROUTES = [
   ["/v1/responses", false],
   ["/v1/responses/compact", true],
+  ["/responses", false],
+  ["/responses/compact", true],
   ["/backend-api/codex/responses", false],
   ["/backend-api/codex/responses/compact", true],
 ] as const;
 
-const SOCKET_ROUTES = ["/v1/responses", "/backend-api/codex/responses"] as const;
+const SOCKET_ROUTES = ["/v1/responses", "/responses", "/backend-api/codex/responses"] as const;
 
 /** Route layer; requires the {@link ProxyServices} and `AccessPrincipal` (see `handlers/layer.ts`). */
 export const ResponsesRoutes = HttpRouter.use((router) =>

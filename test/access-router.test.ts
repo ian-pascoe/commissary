@@ -89,6 +89,11 @@ describe("Access gate through the router", () => {
     ["GET", "/v1beta/models"],
     ["GET", "/openai/v1/videos"],
     ["POST", "/backend-api/codex/responses"],
+    ["POST", "/chat/completions"],
+    ["POST", "/completions"],
+    ["POST", "/responses"],
+    ["POST", "/responses/compact"],
+    ["GET", "//Responses"],
   ])(
     "rejects %s %s without a token (flat Go-style body, CORS headers kept)",
     async (method, path) => {

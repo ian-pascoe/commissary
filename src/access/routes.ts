@@ -1,11 +1,18 @@
 // Route policy: which paths need Cloudflare Access authentication (mirrors the Go route groups in
 // internal/api/server_routes.go that use AuthMiddleware) and which need an administrator.
 
-/** Paths under these prefixes require a verified Access principal. `/v1` also covers `/v1beta*` and `/v1internal`. */
+/**
+ * Paths under these prefixes require a verified Access principal. `/v1` also covers `/v1beta*` and `/v1internal`;
+ * `/chat/completions`, `/completions` and `/responses` are the unprefixed aliases of the `/v1` routes (not in Go, see
+ * handlers/openai/routes.ts).
+ */
 export const PROTECTED_PREFIXES = [
   "/v1",
   "/openai/v1",
   "/backend-api/codex",
+  "/chat/completions",
+  "/completions",
+  "/responses",
   "/v8/management",
 ] as const;
 

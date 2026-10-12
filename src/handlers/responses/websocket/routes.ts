@@ -1,5 +1,5 @@
 /**
- * `GET /v1/responses` and `GET /backend-api/codex/responses` with `Upgrade: websocket`: the inbound Responses WebSocket.
+ * `GET /v1/responses` (also unprefixed `/responses`) and `GET /backend-api/codex/responses` with `Upgrade: websocket`: the inbound Responses WebSocket.
  *
  * Go source: sdk/api/handlers/openai/openai_responses_websocket.go (ResponsesWebsocket, responsesWebsocketUpgrader,
  * websocketUpgradeHeaders), internal/api/server_routes.go (route table).

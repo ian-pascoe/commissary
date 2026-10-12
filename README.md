@@ -44,7 +44,9 @@ The matrix is indicative: which (client protocol, provider) pairs work follows t
 Endpoints: `POST /v1/chat/completions`, `/v1/completions`, `/v1/messages`, `/v1/messages/count_tokens`, `/v1/responses`
 (+ `/compact`, `GET` WebSocket upgrade), `GET /v1/models`, `/v1beta/models/*` (`:generateContent`, `:streamGenerateContent`, …),
 `POST /v1beta/interactions`, images, videos and speech under `/v1`, plus `/openai/v1/videos` and
-`/backend-api/codex/{responses,responses/compact,alpha/search}`. `GET /healthz` and `/` are public from the Worker's point of
+`/backend-api/codex/{responses,responses/compact,alpha/search}`. `/chat/completions`, `/completions` and `/responses`
+(+ `/compact`, WebSocket) are also served without `/v1`, so one base URL fits clients that append `/v1/messages` for
+Anthropic models and `/chat/completions` for OpenAI models (pi's `opencode-go`). `GET /healthz` and `/` are public from the Worker's point of
 view (an Access application on the whole hostname still protects them).
 
 ### Known limitations
