@@ -10,9 +10,9 @@ import { uuidV5Oid } from "../helps/uuid.ts";
 import { applyCustomHeaders } from "../helps/custom-headers.ts";
 import type { CredentialSnapshot } from "../picker.ts";
 
-export const KIMI_VERSION = "cliproxy-workers";
+export const KIMI_VERSION = "cf-llm-proxy";
 
-const DEVICE_NAME = "cliproxy-workers";
+const DEVICE_NAME = "cf-llm-proxy";
 
 const DEVICE_MODEL = "Cloudflare Workers";
 

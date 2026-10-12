@@ -40,7 +40,7 @@ export class CredentialRefresher extends Context.Service<
     ) => Effect.Effect<RefreshResult, never, WorkerEnv>;
     readonly ensureFresh: (credentialId: string) => Effect.Effect<RefreshResult, never, WorkerEnv>;
   }
->()("cliproxy/executor/CredentialRefresher") {
+>()("cf-llm-proxy/executor/CredentialRefresher") {
   /** Calls the ControlPlane through `api(env)`; transport failures become structured `refresh_failed` results. */
   static readonly layerFor = (api: (env: Env) => RefreshApi) => {
     const call = (run: (api: RefreshApi) => PromiseLike<RefreshResult>) =>

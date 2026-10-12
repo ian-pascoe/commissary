@@ -7,7 +7,7 @@ related_targets: ["web/src/components/Shell.tsx","web/src/pages/Placeholder.tsx"
 
 # Control panel (all pages)
 
-Scope: the whole cliproxy control panel in `web/`, served at `/` behind the Access admin gate. Primary surface: Overview;
+Scope: the whole cf-llm-proxy control panel in `web/`, served at `/` behind the Access admin gate. Primary surface: Overview;
 the same world covers Accounts, API keys, Models, Usage, Settings. Visitor mode: Operate. Build path: code-led.
 
 Audience and job: the single operator (PRODUCT.md). Weekly: which account is closest to its limit, when it frees up,

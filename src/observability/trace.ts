@@ -35,7 +35,7 @@ export interface RequestTraceState {
 
 /** The trace of the current request; `undefined` outside the Worker's router (tests, scheduled jobs). */
 export const RequestTrace = Context.Reference<RequestTraceState | undefined>(
-  "cliproxy/observability/RequestTrace",
+  "cf-llm-proxy/observability/RequestTrace",
   {
     defaultValue: () => undefined,
   },

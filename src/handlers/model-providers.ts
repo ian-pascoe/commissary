@@ -35,7 +35,7 @@ export class ModelProviders extends Context.Service<
      */
     readonly spawnAgentSource?: Effect.Effect<SpawnAgentSource, ExecutionError, WorkerEnv>;
   }
->()("cliproxy/handlers/ModelProviders") {
+>()("cf-llm-proxy/handlers/ModelProviders") {
   /**
    * The model registry: every credential's catalog (prefixes, aliases, exclusions, cooling state) as of the current
    * snapshot (requires `ModelRegistry`).

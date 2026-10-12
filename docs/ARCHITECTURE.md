@@ -1098,7 +1098,7 @@ panel paths and `/management.html` as `management`); there is no management key.
   from Go: `/` was a public JSON banner there.
 - **Panel theme** (`web/src/lib/theme.ts`, `web/src/theme-boot.ts`, `web/src/styles/tokens.css`): light and dark through
   semantic `light-dark()` tokens. The theme follows `prefers-color-scheme` until the operator picks Light or Dark in the
-  shell's theme menu (kept in `localStorage` as `cliproxy.theme`). The CSP allows no inline script, so a Vite plugin
+  shell's theme menu (kept in `localStorage` as `cf-llm-proxy.theme`). The CSP allows no inline script, so a Vite plugin
   builds `theme-boot.ts` into a hashed same-origin classic script (`/assets/theme-<hash>.js`) placed in `<head>`; it sets
   `data-theme`, `color-scheme` and the `theme-color` metas before the first paint, so a stored choice never flashes.
 - **Panel pages** (`web/src/pages/`): Overview (`/`); Accounts (`/accounts`: every account ordered by urgency, filters
@@ -1471,8 +1471,8 @@ select ("Auto (catalog)" when unset).
   `openai`, `openai-response`, `claude` or the Gemini engine's). Token counting is local for every protocol (Gemini bodies are counted
   as chat). Images/video/speech entry formats and `/responses/compact` answer 501.
 - **Headers** (`headers.ts`): each protocol's native auth (`Authorization: Bearer` for chat/Responses, `x-api-key` +
-  `anthropic-version: 2023-06-01` for Messages, `x-goog-api-key` for Gemini); `User-Agent: cliproxy/workers`,
-  `x-opencode-client: cliproxy`; `x-opencode-session` = the client's own `x-opencode-session` unchanged, else a UUIDv5
+  `anthropic-version: 2023-06-01` for Messages, `x-goog-api-key` for Gemini); `User-Agent: cf-llm-proxy`,
+  `x-opencode-client: cf-llm-proxy`; `x-opencode-session` = the client's own `x-opencode-session` unchanged, else a UUIDv5
   (`providerSessionUuid("opencode", …)`) of the explicit session identity, the WebSocket execution session or the derived
   conversation identity (stable across turns, distinct across conversations), else a random UUID (OpenCode Go answers 400
   `MissingSessionID` without the header). Another client's raw session id is never forwarded. Custom headers apply last and win.
@@ -1501,7 +1501,7 @@ select ("Auto (catalog)" when unset).
   5-hour, weekly and monthly windows of `GET {base}/usage` (see _Quota check_ and _Management API_ "Credentials").
   OpenCode Zen has no usage endpoint.
 - **Key test** (`management/api-keys-probe.ts`): the gateways list models without authentication, so the panel's key test
-  POSTs `{base}/chat/completions` with the key, the gateway headers and the model `cliproxy-key-check` (`max_tokens: 1`); any
+  POSTs `{base}/chat/completions` with the key, the gateway headers and the model `cf-llm-proxy-key-check` (`max_tokens: 1`); any
   2xx or 400 ("Model is unavailable": the key was accepted, nothing is billed) passes, 401 and other statuses fail.
 - **Catalog** (`opencode-catalog.ts`): the gateways read the same models.dev document as every other provider (`opencode` and
   `opencode-go`, ADR 0020), bundled in `catalog/models-dev.json` and refreshed into KV by the one `model-catalog-refresh` task

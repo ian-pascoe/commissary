@@ -23,7 +23,7 @@ import {
 } from "../lib/usage.ts";
 
 export class ManagementClient extends AtomHttpApi.Service<ManagementClient>()(
-  "cliproxy/ManagementClient",
+  "cf-llm-proxy/ManagementClient",
   {
     api: ManagementApi,
     httpClient: FetchHttpClient.layer,

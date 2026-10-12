@@ -11,7 +11,7 @@ const app = makeWebHandler();
 afterAll(app.dispose);
 
 const PANEL_HTML =
-  "<!doctype html><html><head><title>cliproxy panel</title></head><body></body></html>";
+  "<!doctype html><html><head><title>cf-llm-proxy panel</title></head><body></body></html>";
 
 const bindings = {
   ...env,

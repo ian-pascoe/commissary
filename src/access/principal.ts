@@ -23,7 +23,7 @@ export interface AccessIdentity {
  * `/v1*`, `/v1beta*`, `/openai/v1*`, `/backend-api/codex*` and `/v8/management*` can `yield* AccessPrincipal`.
  */
 export class AccessPrincipal extends Context.Service<AccessPrincipal, AccessIdentity>()(
-  "cliproxy/access/AccessPrincipal",
+  "cf-llm-proxy/access/AccessPrincipal",
 ) {}
 
 export const principalId = (principal: Principal): string =>

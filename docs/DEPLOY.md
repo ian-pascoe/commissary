@@ -4,7 +4,7 @@
 
 | Event                                    | Stage         | Where                                                        |
 | ---------------------------------------- | ------------- | ------------------------------------------------------------ |
-| Push to `main`                           | `prod`        | `CLIPROXY_DOMAIN`, GitHub environment `production`           |
+| Push to `main`                           | `prod`        | `CF_LLM_PROXY_DOMAIN`, GitHub environment `production`       |
 | Pull request from a branch of this repo  | `pr-<number>` | the Worker's `workers.dev` URL, GitHub environment `preview` |
 | That pull request closed (merged or not) | `pr-<number>` | destroyed                                                    |
 
@@ -26,7 +26,7 @@ A stage named `pr-<number>` is a preview (`infra/settings.ts`):
   admins (`ACCESS_ADMIN_EMAILS`).
 - Empty KV, D1 and Durable Objects, and no cron trigger. A preview has no provider credentials, so it serves the panel,
   the management API and the routes but cannot proxy real requests. Add credentials through its panel if you need to.
-- `CLIPROXY_DOMAIN`, `ACCESS_AUD` and `ACCESS_SERVICE_TOKENS` are ignored.
+- `CF_LLM_PROXY_DOMAIN`, `ACCESS_AUD` and `ACCESS_SERVICE_TOKENS` are ignored.
 
 Any machine with the deploy settings can deploy a preview by hand: `pnpm run deploy --stage pr-123`, and remove it with
 `pnpm run destroy --stage pr-123`.
@@ -38,13 +38,13 @@ It manages:
 
 - the GitHub environments `production` (deployments from `main` only, no reviewers: a green push deploys) and
   `preview`;
-- `cliproxy-ci-deploy`, an account-owned Cloudflare API token limited to what `alchemy.run.ts` deploys: Workers Scripts,
+- `cf-llm-proxy-ci-deploy`, an account-owned Cloudflare API token limited to what `alchemy.run.ts` deploys: Workers Scripts,
   Workers KV Storage, D1, Secrets Store (Alchemy's state store) and Access: Apps and Policies (Write), Account Settings
-  (Read), and Zone Read, DNS Write and Workers Routes Write on the zone of `CLIPROXY_DOMAIN`;
-- `cliproxy-ci-check`, the Access service token of the post-deploy check;
+  (Read), and Zone Read, DNS Write and Workers Routes Write on the zone of `CF_LLM_PROXY_DOMAIN`;
+- `cf-llm-proxy-ci-check`, the Access service token of the post-deploy check;
 - in both environments, the secrets `CLOUDFLARE_API_TOKEN`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` and the
   variables `CLOUDFLARE_ACCOUNT_ID`, `ACCESS_*` (from `.env`) and `ACCESS_ALLOW_SERVICE_TOKEN_IDS` (the check token's
-  ID); in `production` also `CLIPROXY_DOMAIN`.
+  ID); in `production` also `CF_LLM_PROXY_DOMAIN`.
 
 Raw secrets never leave Alchemy: Cloudflare returns them once, they go to the encrypted state store and are encrypted
 again for GitHub.

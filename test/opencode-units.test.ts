@@ -191,13 +191,13 @@ describe("gateway headers", () => {
 
     expect(headers).toMatchObject({
       authorization: "Bearer k",
-      "x-opencode-client": "cliproxy",
+      "x-opencode-client": "cf-llm-proxy",
       accept: "text/event-stream",
       "User-Agent": "mine/1",
       "X-Opencode-Session": "fixed",
     });
     expect(headers["user-agent"]).toBeUndefined();
-    expect(OPENCODE_USER_AGENT).toMatch(/^cliproxy\//);
+    expect(OPENCODE_USER_AGENT).toBe("cf-llm-proxy");
   });
 });
 

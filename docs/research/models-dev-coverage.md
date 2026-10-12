@@ -1,4 +1,4 @@
-# models.dev coverage of the ai-proxy model catalog
+# models.dev coverage of the cf-llm-proxy model catalog
 
 Data: models.dev `api.json` (226 providers, 8,466 models, downloaded 2026-10-12). Catalog: `src/registry/catalog/*.json` (identical in the worktree and the main checkout). All counts below were computed with scripts over those files.
 

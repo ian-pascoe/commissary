@@ -23,7 +23,7 @@ export const CRONS = ["0 */3 * * *"];
 const state = process.env["ALCHEMY_STATE"] === "local" ? Alchemy.localState() : Cloudflare.state();
 
 export default Alchemy.Stack(
-  "cliproxy",
+  "cf-llm-proxy",
   { providers: Cloudflare.providers(), state },
   Effect.gen(function* () {
     const dev = yield* Alchemy.ALCHEMY_DEV;

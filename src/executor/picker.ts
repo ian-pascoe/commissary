@@ -123,4 +123,4 @@ export class CredentialPicker extends Context.Service<
     readonly report: (lease: Lease, result: AttemptResult) => Effect.Effect<void, never, WorkerEnv>;
     readonly planRetry: (query: RetryQuery) => Effect.Effect<RetryPlan, never, WorkerEnv>;
   }
->()("cliproxy/executor/CredentialPicker") {}
+>()("cf-llm-proxy/executor/CredentialPicker") {}

@@ -86,7 +86,12 @@ const listed = async () => {
 
   expect(response.status).toBe(200);
 
-  return { text, files: decodeListed(JSON.parse(text)).files };
+  // The panel lists accounts by `auth_index` (an HMAC of the test key); put them in config order for the assertions.
+  const files = decodeListed(JSON.parse(text)).files.toSorted(
+    (a, b) => (a.key_group?.index ?? 0) - (b.key_group?.index ?? 0),
+  );
+
+  return { text, files };
 };
 
 /** The credential ids with a stored quota report (the ControlPlane's `credential_quota_report` rows). */

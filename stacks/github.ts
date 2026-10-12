@@ -6,7 +6,7 @@
  *
  *   pnpm ci:setup        # alchemy deploy --config stacks/github.ts --profile admin --stage ci
  *
- * The deploy settings (CLIPROXY_DOMAIN, ACCESS_*) come from `.env`, like `alchemy.run.ts`.
+ * The deploy settings (CF_LLM_PROXY_DOMAIN, ACCESS_*) come from `.env`, like `alchemy.run.ts`.
  */
 import * as zones from "@distilled.cloud/cloudflare/zones";
 import * as Alchemy from "alchemy";
@@ -40,7 +40,7 @@ const zoneFor = (accountId: string, domain: string) =>
   );
 
 export default Alchemy.Stack(
-  "cliproxy-github",
+  "cf-llm-proxy-github",
   {
     providers: Layer.mergeAll(Cloudflare.providers(), GitHub.providers()),
     state: Cloudflare.state(),
@@ -50,7 +50,7 @@ export default Alchemy.Stack(
     const settings = yield* readSettings(false, "prod");
 
     const [owner = "", repository = ""] = (yield* Config.String("GITHUB_REPOSITORY").pipe(
-      Config.withDefault("ian-pascoe/ai-proxy"),
+      Config.withDefault("ian-pascoe/cf-llm-proxy"),
     )).split("/");
 
     const repo = { owner, repository };
@@ -67,7 +67,7 @@ export default Alchemy.Stack(
     // Everything `alchemy deploy`/`destroy` of alchemy.run.ts touches, for any stage. Alchemy's state store needs
     // Secrets Store Write (it binds its token secret to a short-lived preview Worker on every run).
     const deployToken = yield* Cloudflare.ApiToken.AccountApiToken("DeployToken", {
-      name: "cliproxy-ci-deploy",
+      name: "cf-llm-proxy-ci-deploy",
       accountId,
       policies: [
         {
@@ -98,7 +98,7 @@ export default Alchemy.Stack(
     // The post-deploy check (tools/check-deploy.sh) authenticates with this token; ACCESS_ALLOW_SERVICE_TOKEN_IDS
     // admits it on every stage's Access application.
     const checkToken = yield* Cloudflare.Access.ServiceToken("CheckToken", {
-      name: "cliproxy-ci-check",
+      name: "cf-llm-proxy-ci-check",
     });
 
     const checkSecret = checkToken.clientSecret.pipe(
@@ -130,7 +130,7 @@ export default Alchemy.Stack(
       ["Preview", preview],
     ] as const) {
       const scoped =
-        label === "Production" ? { ...variables, CLIPROXY_DOMAIN: settings.domain } : variables;
+        label === "Production" ? { ...variables, CF_LLM_PROXY_DOMAIN: settings.domain } : variables;
 
       for (const [name, value] of Object.entries(scoped)) {
         // GitHub rejects empty variables; an unset variable reads as "" in the workflow anyway.

@@ -4,7 +4,7 @@
  */
 
 /** `auth_index` key of `alchemy dev`; public, so the Worker refuses it on a deployed stage. */
-export const DEV_AUTH_INDEX_KEY = "cliproxy-dev-auth-index-key";
+export const DEV_AUTH_INDEX_KEY = "cf-llm-proxy-dev-auth-index-key";
 
 /** Shortest key accepted anywhere (tests and `alchemy dev` included). */
 export const MIN_AUTH_INDEX_KEY_LENGTH = 16;

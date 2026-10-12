@@ -26,7 +26,7 @@ export interface AccessWiring {
  * application's `updatedAt` is part of the input so this runs again after each such update.
  */
 const ApplicationSettings = Alchemy.Action(
-  "CliproxyAccessApplicationSettings",
+  "CfLlmProxyAccessApplicationSettings",
   Effect.fn(function* (input: {
     readonly accountId: string;
     readonly applicationId: string;
@@ -96,7 +96,7 @@ const ApplicationSettings = Alchemy.Action(
 
 /** Writes the client credentials of the stack's service tokens to {@link SERVICE_TOKENS_FILE} on the deploying machine. */
 const WriteServiceTokens = Alchemy.Action(
-  "CliproxyWriteServiceTokens",
+  "CfLlmProxyWriteServiceTokens",
   Effect.fn(function* (input: {
     readonly tokens: ReadonlyArray<{
       readonly name: string;

@@ -38,7 +38,7 @@ export class ModelCapabilities extends Context.Service<
       credential: CredentialSnapshot,
     ) => Effect.Effect<ThinkingResolution, never, WorkerEnv>;
   }
->()("cliproxy/handlers/ModelCapabilities") {
+>()("cf-llm-proxy/handlers/ModelCapabilities") {
   /**
    * The model registry snapshot (requires `ModelRegistry`): the credential's own registration first (prefix/alias
    * aware, config `models` included), then the static catalogs; the snapshot's lookup is handed to the pipeline.

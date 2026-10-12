@@ -113,7 +113,7 @@ export class CatalogStore extends Context.Service<
     /** Drops the isolate cache (after a refresh wrote a new text). */
     readonly invalidate: Effect.Effect<void>;
   }
->()("cliproxy/registry/CatalogStore") {
+>()("cf-llm-proxy/registry/CatalogStore") {
   static readonly layer = Layer.effect(
     CatalogStore,
     Effect.gen(function* () {

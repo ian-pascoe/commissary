@@ -147,7 +147,7 @@ export class ModelRegistry extends Context.Service<
       WorkerEnv
     >;
   }
->()("cliproxy/registry/ModelRegistry") {
+>()("cf-llm-proxy/registry/ModelRegistry") {
   /** Needs `ConfigReader` and `CatalogStore`. */
   static readonly layer = Layer.effect(
     ModelRegistry,

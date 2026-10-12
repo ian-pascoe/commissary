@@ -36,7 +36,7 @@ export default defineConfig({
           META_MINT_URL: "",
           // Fixed test key of the keyed `auth_index` (deployed: an Alchemy `Random`, alchemy.run.ts); 64 characters, so
           // tests that configure Access (where shorter keys are refused, src/management/auth-index.ts) can use it too.
-          AUTH_INDEX_KEY: "cliproxy-test-auth-index-key-0123456789abcdef0123456789abcdef012",
+          AUTH_INDEX_KEY: "cf-llm-proxy-test-auth-index-key-0123456789abcdef0123456789abcdef012",
         },
       },
     }),

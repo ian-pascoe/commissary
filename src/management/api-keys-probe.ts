@@ -271,7 +271,7 @@ const countTokens = Effect.fnUntraced(function* (
 });
 
 /** A model id no gateway serves: the check never runs (or bills) a completion. */
-export const OPENCODE_PROBE_MODEL = "cliproxy-key-check";
+export const OPENCODE_PROBE_MODEL = "cf-llm-proxy-key-check";
 
 const openCodeAuthCheck = Effect.fnUntraced(function* (
   target: ApiKeyProbeTarget,

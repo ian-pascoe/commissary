@@ -9,14 +9,14 @@ import { build, defineConfig, type Plugin } from "vite";
 const outDir = fileURLToPath(new URL("../public", import.meta.url));
 
 /** `pnpm dev` Worker the dev server forwards API calls to. */
-const workerUrl = process.env["CLIPROXY_DEV_URL"] ?? "http://localhost:1337";
+const workerUrl = process.env["CF_LLM_PROXY_DEV_URL"] ?? "http://localhost:1337";
 
 /**
  * `public/` also holds the tracked `.gitkeep` (and whatever else is put there), so the build cannot empty its output
  * directory: remove only the previous panel build (stale hashed bundles would otherwise be deployed).
  */
 const cleanPreviousBuild = (): Plugin => ({
-  name: "cliproxy:clean-previous-build",
+  name: "cf-llm-proxy:clean-previous-build",
   apply: "build",
   async buildStart() {
     await rm(`${outDir}/assets`, { recursive: true, force: true });
@@ -66,7 +66,7 @@ const themeBoot = (): Plugin => {
   let building = false;
 
   return {
-    name: "cliproxy:theme-boot",
+    name: "cf-llm-proxy:theme-boot",
     configResolved(config) {
       building = config.command === "build";
     },

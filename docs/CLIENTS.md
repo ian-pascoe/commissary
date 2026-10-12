@@ -73,11 +73,11 @@ The built-in ChatGPT provider has no setting for extra headers, so define a cust
 (see the [config reference](https://developers.openai.com/codex/config-reference)):
 
 ```toml
-model_provider = "cliproxy"
+model_provider = "cf-llm-proxy"
 model = "gpt-5-codex"            # any model id from /v1/models
 
-[model_providers.cliproxy]
-name = "CLIProxy Workers"
+[model_providers.cf-llm-proxy]
+name = "cf-llm-proxy"
 base_url = "https://proxy.example.com/v1"
 wire_api = "responses"           # the only supported value
 # Header name -> environment variable holding its value (keeps the secret out of the file):

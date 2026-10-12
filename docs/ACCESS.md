@@ -11,7 +11,7 @@ settings in `.env` (template: `.env.example`):
 
 | Setting                                              | Creates / sets                                                                                                  |
 | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `CLIPROXY_DOMAIN`                                    | A **self-hosted application** on that hostname (empty path: the whole hostname), and the Worker's custom domain |
+| `CF_LLM_PROXY_DOMAIN`                                | A **self-hosted application** on that hostname (empty path: the whole hostname), and the Worker's custom domain |
 | `ACCESS_ALLOW_EMAILS`, `ACCESS_ALLOW_EMAIL_DOMAINS`  | A reusable **Allow** policy (interactive login with your identity providers)                                    |
 | `ACCESS_SERVICE_TOKENS` (names)                      | One **service token** per name and a **Service Auth** policy that admits exactly those tokens                   |
 | `ACCESS_ALLOW_SERVICE_TOKEN_IDS`                     | Adds service tokens managed elsewhere (by token ID, e.g. CI's) to the **Service Auth** policy                   |

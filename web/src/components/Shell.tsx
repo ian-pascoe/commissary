@@ -93,7 +93,7 @@ export const Shell = () => {
       <header className={styles["bar"]}>
         <div className={styles["inner"]}>
           <Link to="/" className={styles["brand"]}>
-            <span className={styles["name"]}>cliproxy</span>
+            <span className={styles["name"]}>cf-llm-proxy</span>
             <span className={styles["host"]} title={window.location.host}>
               {window.location.host}
             </span>

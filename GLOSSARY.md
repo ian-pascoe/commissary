@@ -1,4 +1,4 @@
-# CLIProxyAPI on Workers
+# cf-llm-proxy
 
 A personal LLM proxy: it pools one operator's provider accounts and API keys and serves them through OpenAI-, Claude-
 and Gemini-compatible APIs, behind Cloudflare Access. It began as a port of the Go server CLIProxyAPI, which it now

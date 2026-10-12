@@ -13,7 +13,7 @@ export class UsageSink extends Context.Service<
     /** Must not fail or block the response; implementations defer slow work (e.g. `waitUntil`). */
     readonly publish: (record: UsageRecord) => Effect.Effect<void>;
   }
->()("cliproxy/usage/UsageSink") {
+>()("cf-llm-proxy/usage/UsageSink") {
   /** Drops records. */
   static readonly noop = Layer.succeed(UsageSink, UsageSink.of({ publish: () => Effect.void }));
 

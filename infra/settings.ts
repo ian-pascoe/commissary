@@ -60,7 +60,7 @@ export const readSettings = (dev: boolean, stage: string) =>
 
     const settings: Settings = {
       preview,
-      domain: (yield* text("CLIPROXY_DOMAIN")).trim(),
+      domain: (yield* text("CF_LLM_PROXY_DOMAIN")).trim(),
       teamDomain: (yield* text("ACCESS_TEAM_DOMAIN")).trim(),
       existingAud: preview ? "" : (yield* text("ACCESS_AUD")).trim(),
       allowEmails: yield* list("ACCESS_ALLOW_EMAILS"),
@@ -73,7 +73,7 @@ export const readSettings = (dev: boolean, stage: string) =>
       serviceTokenHeader: (yield* text("ACCESS_SERVICE_TOKEN_HEADER")).trim(),
       usageRetentionDays: (yield* text("USAGE_RETENTION_DAYS", "30")).trim(),
       metaMintUrl: (yield* text("META_MINT_URL")).trim(),
-      cpuMs: yield* Config.Number("CLIPROXY_CPU_MS").pipe(Config.withDefault(300_000)),
+      cpuMs: yield* Config.Number("CF_LLM_PROXY_CPU_MS").pipe(Config.withDefault(300_000)),
       devBypass: (yield* text("ACCESS_DEV_BYPASS", "dev@example.com")).trim(),
     };
 
@@ -81,7 +81,7 @@ export const readSettings = (dev: boolean, stage: string) =>
     const problems: Array<string> = [];
 
     if (settings.domain === "" && !preview)
-      problems.push("CLIPROXY_DOMAIN is required (the Worker's custom hostname)");
+      problems.push("CF_LLM_PROXY_DOMAIN is required (the Worker's custom hostname)");
 
     if (settings.teamDomain === "")
       problems.push("ACCESS_TEAM_DOMAIN is required (your Zero Trust team name)");

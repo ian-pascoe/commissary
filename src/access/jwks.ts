@@ -31,7 +31,7 @@ export class AccessJwks extends Context.Service<
       kid: string,
     ) => Effect.Effect<CryptoKey, JwksFetchError | UnknownKeyError>;
   }
->()("cliproxy/access/AccessJwks") {
+>()("cf-llm-proxy/access/AccessJwks") {
   static readonly layer = Layer.effect(
     AccessJwks,
     Effect.gen(function* () {

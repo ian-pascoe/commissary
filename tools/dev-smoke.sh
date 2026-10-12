@@ -11,7 +11,7 @@ pid=$!
 cleanup() {
   kill "$pid" 2>/dev/null || true
   wait "$pid" 2>/dev/null || true
-  rm -rf .alchemy/state/cliproxy/smoke .alchemy/local
+  rm -rf .alchemy/state/cf-llm-proxy/smoke .alchemy/local
 }
 trap cleanup EXIT INT TERM
 

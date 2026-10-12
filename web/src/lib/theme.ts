@@ -8,7 +8,7 @@ export const THEME_CHOICES = ["system", "light", "dark"] as const;
 export type ThemeChoice = (typeof THEME_CHOICES)[number];
 
 /** The localStorage key of a Light or Dark choice; following the system stores nothing. */
-export const THEME_STORAGE_KEY = "cliproxy.theme";
+export const THEME_STORAGE_KEY = "cf-llm-proxy.theme";
 
 /** A stored value as a choice; anything else (nothing stored, an old or foreign value) follows the system. */
 export const parseThemeChoice = (stored: string | null): ThemeChoice =>

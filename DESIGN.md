@@ -1,5 +1,5 @@
 ---
-name: cliproxy control panel
+name: cf-llm-proxy control panel
 description: A personal LLM gateway panel set as Swiss hiking trail signage (Wanderweg), where quota is a walk to the next reset.
 colors:
   white: "#ffffff"
@@ -147,7 +147,7 @@ components:
     rounded: "{rounded.default}"
 ---
 
-# Design System: cliproxy control panel
+# Design System: cf-llm-proxy control panel
 
 ## Overview
 

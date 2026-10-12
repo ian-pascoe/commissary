@@ -1,15 +1,15 @@
 {
-  "name": "cliproxy",
+  "name": "cf-llm-proxy",
   "version": "0.0.0",
   "private": true,
-  "description": "CLIProxyAPI TypeScript/Effect port for Cloudflare Workers",
+  "description": "Personal LLM proxy for Cloudflare Workers: pool your Claude, Codex, Gemini and other accounts behind OpenAI-, Claude- and Gemini-compatible APIs",
   "type": "module",
   "imports": {
     "#contract/*": "./src/management/contract/*"
   },
   "scripts": {
     "catalog:sync": "node tools/sync-models-dev-catalog.ts",
-    "ci:setup": "alchemy deploy --config stacks/github.ts --stage ci --profile admin --adopt && alchemy state read cliproxy-github/ci/output --profile admin",
+    "ci:setup": "alchemy deploy --config stacks/github.ts --stage ci --profile admin --adopt && alchemy state read cf-llm-proxy-github/ci/output --profile admin",
     "deploy": "alchemy deploy",
     "destroy": "alchemy destroy",
     "dev": "alchemy dev",

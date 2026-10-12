@@ -30,7 +30,7 @@ export class ExecutorRegistry extends Context.Service<
     /** The executor for a credential's provider key, if any. */
     readonly get: (provider: string) => ProviderExecutor | undefined;
   }
->()("cliproxy/executor/ExecutorRegistry") {
+>()("cf-llm-proxy/executor/ExecutorRegistry") {
   static readonly layer = Layer.sync(ExecutorRegistry, () =>
     ExecutorRegistry.of(makeExecutorRegistry()),
   );

@@ -69,7 +69,7 @@ const seededDocument = (secrets: Secrets): JsonObject => ({
       {
         name: "main",
         "base-url": "https://api.anthropic.com",
-        headers: { Authorization: secrets.header, "User-Agent": "cliproxy-test" },
+        headers: { Authorization: secrets.header, "User-Agent": "cf-llm-proxy-test" },
         keys: [{ "api-key": secrets.key }, { "api-key": secrets.keyTwo }],
       },
     ],

@@ -73,7 +73,7 @@ describe("OpenCode key test", () => {
       expect(call?.url).toBe(`${target(family).baseUrl}/chat/completions`);
       expect(call?.headers).toMatchObject({
         authorization: "Bearer sk-probe",
-        "x-opencode-client": "cliproxy",
+        "x-opencode-client": "cf-llm-proxy",
         "x-team": "a",
       });
       expect(call?.headers["x-opencode-session"]).toMatch(/^[0-9a-f-]{36}$/);

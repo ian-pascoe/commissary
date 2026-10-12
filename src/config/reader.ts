@@ -25,7 +25,7 @@ export class ConfigSource extends Context.Service<
       sinceVersion: number | undefined,
     ) => Effect.Effect<ConfigSnapshotWire, ConfigStoreError, WorkerEnv>;
   }
->()("cliproxy/config/ConfigSource") {
+>()("cf-llm-proxy/config/ConfigSource") {
   static readonly controlPlane = Layer.succeed(
     ConfigSource,
     ConfigSource.of({
@@ -61,7 +61,7 @@ export class ConfigReader extends Context.Service<
     /** Drops the cached snapshot so the next `get` re-reads (use after a local write). */
     readonly invalidate: Effect.Effect<void>;
   }
->()("cliproxy/config/ConfigReader") {
+>()("cf-llm-proxy/config/ConfigReader") {
   /** Requires a {@link ConfigSource}. */
   static readonly layer = (options: ConfigReaderOptions = {}) =>
     Layer.effect(ConfigReader, makeConfigReader(options));
