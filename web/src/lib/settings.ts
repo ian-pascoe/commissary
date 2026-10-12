@@ -85,7 +85,6 @@ export const FIELDS: ReadonlyArray<FieldSpec> = [
   field("retries", "routing.retry.max-retry-credentials", "int", "Credentials per round"),
   field("retries", "routing.retry.max-retry-interval", "int", "Longest wait for a cooldown"),
   field("retries", "routing.cooldown.disable-cooling", "bool", "Cooldowns"),
-  field("retries", "routing.cooldown.save-cooldown-status", "bool", "Keep cooldowns"),
   field(
     "retries",
     "routing.cooldown.transient-error-cooldown-seconds",

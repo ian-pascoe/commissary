@@ -98,10 +98,6 @@ const COPY = {
     "Never cool a credential down after a failure",
     "Keys and accounts with their own setting keep it.",
   ),
-  "routing.cooldown.save-cooldown-status": flag(
-    "Keep cooldowns across deploys",
-    "Kept in the control plane instead of memory, so a new version of the Worker remembers them.",
-  ),
   "routing.cooldown.transient-error-cooldown-seconds": {
     label: "Cooldown after a provider error",
     options: [

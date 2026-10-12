@@ -49,6 +49,16 @@ export const ThinkingSupport = Schema.Struct({
 
 export type ThinkingSupport = typeof ThinkingSupport.Type;
 
+/** Upstream protocols of the OpenCode gateways (`/chat/completions`, `/responses`, `/messages`, Gemini native). */
+export const OPENCODE_PROTOCOLS = ["chat", "responses", "messages", "gemini"] as const;
+
+export const OpenCodeProtocol = Schema.Literals(OPENCODE_PROTOCOLS);
+
+export type OpenCodeProtocol = typeof OpenCodeProtocol.Type;
+
+export const isOpenCodeProtocol = (value: string | undefined): value is OpenCodeProtocol =>
+  OPENCODE_PROTOCOLS.some((protocol) => protocol === value);
+
 /** Model entry of an API-key group (the union of the per-provider Go model structs). */
 export const ModelEntry = Schema.Struct({
   /** Upstream model name. */
@@ -67,6 +77,12 @@ export const ModelEntry = Schema.Struct({
   "input-modalities": optional(Strings),
   "output-modalities": optional(Strings),
   "use-max-completion-tokens": optional(Schema.Boolean),
+  /**
+   * OpenCode Zen/Go only: the upstream protocol (`OPENCODE_PROTOCOLS`), overriding the model catalog. Decoded as any
+   * string so a stray value on another provider never breaks the document: the normaliser drops it there, and
+   * `decodeRawConfig` rejects an unknown value in the OpenCode sections.
+   */
+  protocol: optional(Schema.String),
 });
 
 export type ModelEntry = typeof ModelEntry.Type;
@@ -175,6 +191,8 @@ export const API_KEY_FAMILIES = [
   "claude",
   "xai",
   "meta",
+  "opencode-zen",
+  "opencode-go",
   "openai-compatibility",
 ] as const;
 
@@ -191,6 +209,8 @@ export const KeyGroupFamily = Schema.Literals([
   "claude",
   "xai",
   "meta",
+  "opencode-zen",
+  "opencode-go",
 ]);
 
 export type KeyGroupFamily = typeof KeyGroupFamily.Type;
@@ -309,6 +329,8 @@ export const ApiKeysList = Schema.Struct({
     claude: Schema.Array(GroupView),
     xai: Schema.Array(GroupView),
     meta: Schema.Array(GroupView),
+    "opencode-zen": Schema.Array(GroupView),
+    "opencode-go": Schema.Array(GroupView),
     "openai-compatibility": Schema.Array(CompatGroupView),
   }),
 });

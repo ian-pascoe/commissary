@@ -12,12 +12,13 @@
  * credential (`ModelSource.models`), so Go's config-entry lookup by index/key is not needed.
  */
 import type { Types } from "effect";
-import type {
-  Config,
-  ModelEntry,
-  OAuthModelAlias,
-  OAuthModelSetting,
-  ThinkingSupport as ConfigThinking,
+import {
+  type Config,
+  isOpenCodeProtocol,
+  type ModelEntry,
+  type OAuthModelAlias,
+  type OAuthModelSetting,
+  type ThinkingSupport as ConfigThinking,
 } from "../config/schema.ts";
 import { matchWildcard, parseModelSuffix } from "../credentials/selection/model-name.ts";
 import {
@@ -29,6 +30,17 @@ import {
   type Section,
 } from "./catalog.ts";
 import { applyAntigravityHints } from "./antigravity-hints.ts";
+import {
+  OPENCODE_GO,
+  OPENCODE_ZEN,
+  type OpenCodeProvider,
+} from "../executor/opencode/providers.ts";
+import {
+  catalogModelInfo,
+  defaultCatalogModels,
+  findCatalogModel,
+  openCodeProtocolType,
+} from "./opencode-catalog.ts";
 import { cloneModelInfo, type ModelInfo, type ThinkingSupport } from "./model-info.ts";
 import type { ModelSource } from "./source.ts";
 
@@ -288,6 +300,64 @@ const buildCodexConfigModels = (
   }
 
   return models;
+};
+
+/**
+ * OpenCode Zen/Go config models (no Go counterpart): `buildConfigModels`, then the catalog's limits, modalities and
+ * reasoning support for names the catalog knows (an explicit `max-context-length`, `display-name` or `thinking` wins).
+ * The registry `type` follows the model's protocol (`protocol` override, else the catalog).
+ */
+const buildOpenCodeConfigModels = (
+  entries: ReadonlyArray<ModelEntry>,
+  provider: OpenCodeProvider,
+  options: AssemblyOptions,
+): ModelInfo[] => {
+  const catalog = options.catalogs.opencode;
+  const byAlias = new Map<string, ModelEntry>();
+
+  for (const entry of entries) {
+    const alias = ((entry.alias ?? "").trim() || entry.name.trim()).toLowerCase();
+
+    if (alias !== "" && !byAlias.has(alias)) byAlias.set(alias, entry);
+  }
+
+  return buildConfigModels(entries, "opencode", "openai", provider, options).map((model) => {
+    const entry = byAlias.get(model.id.toLowerCase());
+
+    if (entry === undefined) return model;
+    const name = parseModelSuffix(entry.name.trim()).modelName.trim();
+    const known = findCatalogModel(catalog, provider, name);
+    const out: Types.Mutable<ModelInfo> = { ...model };
+
+    if (known !== undefined) {
+      const fromCatalog = catalogModelInfo(catalog, provider, known);
+      out.type = fromCatalog.type;
+
+      if ((entry["display-name"] ?? "").trim() === "" && fromCatalog.displayName !== undefined)
+        out.displayName = fromCatalog.displayName;
+
+      if (out.contextLength === undefined && fromCatalog.contextLength !== undefined)
+        out.contextLength = fromCatalog.contextLength;
+
+      if (fromCatalog.maxCompletionTokens !== undefined)
+        out.maxCompletionTokens = fromCatalog.maxCompletionTokens;
+
+      if (fromCatalog.supportedInputModalities !== undefined)
+        out.supportedInputModalities = fromCatalog.supportedInputModalities;
+
+      if (fromCatalog.supportedOutputModalities !== undefined)
+        out.supportedOutputModalities = fromCatalog.supportedOutputModalities;
+
+      if (entry.thinking === undefined) {
+        if (fromCatalog.thinking === undefined) delete out.thinking;
+        else out.thinking = fromCatalog.thinking;
+      }
+    }
+
+    if (isOpenCodeProtocol(entry.protocol)) out.type = openCodeProtocolType(entry.protocol);
+
+    return out;
+  });
 };
 
 // --- filters and rewrites ------------------------------------------------------------------------------------------
@@ -608,6 +678,14 @@ const baseModels = (source: ModelSource, options: AssemblyOptions): ModelInfo[] 
         configured.length > 0
           ? buildConfigModels(configured, "meta", "meta", "meta", options)
           : sectionModels(catalogs, "meta"),
+        excluded,
+      );
+    case OPENCODE_ZEN:
+    case OPENCODE_GO:
+      return applyExcludedModels(
+        configured.length > 0
+          ? buildOpenCodeConfigModels(configured, provider, options)
+          : defaultCatalogModels(catalogs.opencode, provider),
         excluded,
       );
     default:

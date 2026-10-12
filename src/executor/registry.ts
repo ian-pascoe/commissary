@@ -19,6 +19,8 @@ import { withApiKeyScope } from "./helps/oauth-scope.ts";
 import { makeKimiExecutor } from "./kimi/executor.ts";
 import { makeMetaExecutor } from "./meta/executor.ts";
 import { makeOpenAICompatExecutor } from "./openai-compat/executor.ts";
+import { makeOpenCodeExecutor } from "./opencode/executor.ts";
+import { OPENCODE_GO, OPENCODE_ZEN } from "./opencode/providers.ts";
 import { makeXaiExecutor } from "./xai/executor.ts";
 import type { ProviderExecutor } from "./types.ts";
 
@@ -50,6 +52,8 @@ const FIXED_EXECUTORS = new Map<string, () => ProviderExecutor>([
   ["meta", makeMetaExecutor],
   ["kimi", makeKimiExecutor],
   ["kimi-ai", makeKimiExecutor],
+  [OPENCODE_ZEN, () => makeOpenCodeExecutor(OPENCODE_ZEN)],
+  [OPENCODE_GO, () => makeOpenCodeExecutor(OPENCODE_GO)],
 ]);
 
 export const makeExecutorRegistry = () => {

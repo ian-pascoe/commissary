@@ -129,6 +129,18 @@ describe("session extraction (sdk/cliproxy/session/info.go)", () => {
       extractSessionInfo(headers({ "x-session-affinity": "a" }), undefined)?.sessionId,
       "affinity:a",
     );
+    // Not in Go: OpenCode / pi send x-opencode-session for OpenCode Zen/Go.
+    assert.deepInclude(extractSessionInfo(headers({ "x-opencode-session": "o" }), undefined), {
+      sessionId: "affinity:o",
+      clientType: "opencode",
+    });
+    assert.strictEqual(
+      extractSessionInfo(
+        headers({ "x-session-affinity": "a", "x-opencode-session": "o" }),
+        undefined,
+      )?.sessionId,
+      "affinity:a",
+    );
     assert.strictEqual(
       extractSessionInfo(headers({ "x-slot-session-id": "s" }), undefined)?.sessionId,
       "slot:s",

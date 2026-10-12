@@ -93,6 +93,8 @@ export interface Folded {
 export const failureReason = (
   result: Pick<AccountResult, "error" | "message" | "status">,
   provider?: string,
+  /** The account is a config API key (no sign-in to refresh: the key itself was refused). */
+  configKey = false,
 ): string => {
   switch (result.error) {
     case "not_found":
@@ -100,6 +102,9 @@ export const failureReason = (
     case "unavailable":
       return "The proxy could not reach its account store. Try again.";
     case "check_failed":
+      if ((result.status === 401 || result.status === 403) && provider !== undefined && configKey)
+        return `${provider} refused the API key. Check it on the Keys page.`;
+
       if ((result.status === 401 || result.status === 403) && provider !== undefined)
         return `${provider} refused the saved sign-in. Refresh the tokens or reconnect.`;
 

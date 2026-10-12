@@ -5,7 +5,8 @@
  *
  * A separate table rather than a field of `CredentialState`: the report is written by the quota check only, must
  * survive restarts whatever `save-cooldown-status` says, and is not touched by the cooldown state machine or a
- * cooldown reset. It is deleted with its credential and when a re-login replaces the credential's tokens.
+ * cooldown reset. It is deleted with its credential, when a re-login replaces the credential's tokens, and by the sweep
+ * once its credential is gone (`retain`: an edited config key gets a new id).
  *
  * All methods are synchronous so read-modify-write sequences are atomic under the Durable Object input gate.
  */
@@ -82,5 +83,17 @@ export class QuotaReportStore {
 
   delete(id: string): void {
     this.#sql.exec("DELETE FROM credential_quota_report WHERE id = ?", id);
+  }
+
+  /**
+   * Drops the reports of every credential not in `ids`: a config API key's id is content-addressed, so editing the key
+   * leaves its old report behind (auth files drop theirs when deleted).
+   */
+  retain(ids: ReadonlySet<string>): void {
+    for (const row of this.#sql
+      .exec<{ id: string }>("SELECT id FROM credential_quota_report")
+      .toArray()) {
+      if (!ids.has(row.id)) this.delete(row.id);
+    }
   }
 }

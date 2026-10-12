@@ -41,6 +41,13 @@ export const NOT_APPLIED_RULES: ReadonlyArray<NotAppliedRule> = [
       claudeKeys(config).some((key) => key["experimental-cch-signing"] !== undefined),
   },
   {
+    key: "routing.cooldown.save-cooldown-status",
+    reason:
+      "Cooldowns are always kept in the control plane: it is evicted when idle, which is not a restart.",
+    path: ["routing", "cooldown", "save-cooldown-status"],
+    isSet: (config) => config.routing.cooldown["save-cooldown-status"],
+  },
+  {
     key: "observability.logs.debug",
     reason: "No debug log files; Workers Logs carry one structured line per request.",
     path: ["observability", "logs", "debug"],

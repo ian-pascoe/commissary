@@ -5,6 +5,12 @@
  * Go counterpart: the `Manager` parts that register credentials and select them (sdk/cliproxy/auth/conductor*.go).
  * The class is free of Cloudflare types so it can be unit tested with a fake store and an injected clock. The
  * Durable Object guarantees single-threaded access, which replaces the Go mutexes.
+ *
+ * Deviation from Go: every report persists the whole runtime state, cooldowns included, whatever
+ * `routing.cooldown.save-cooldown-status` says. The Durable Object is evicted after a short idle time (seconds in
+ * workerd, minutes in production) and on deploys; an eviction is not an operator restart, and Go's in-process cooldowns
+ * live as long as the process. Workers cannot tell an eviction from a deploy, so the flag has no effect
+ * (docs/MIGRATION.md "Not applied on Workers").
  */
 import type { Config } from "../config/schema.ts";
 import { sessionAffinityTtlMs } from "../config/accessors.ts";
@@ -14,8 +20,7 @@ import { type StoredCredential, deriveFileCredential, sanitizeAliases } from "./
 import { parseAuthFile, type ImportFailureReason } from "./import.ts";
 import { type CooldownSettings, coolingDisabledFor, markResult } from "./cooldown/mark-result.ts";
 import { shouldSkipCredentialCooldown } from "./cooldown/classify.ts";
-import { type Credential, type CredentialState, emptyQuota, emptyState } from "./model.ts";
-import { hasUnauthorizedFailure } from "./selection/availability.ts";
+import { type Credential, type CredentialState, emptyState } from "./model.ts";
 import { MerklePrefixMatcher } from "../session-routing/matcher.ts";
 import { SessionCache } from "./selection/affinity.ts";
 import { canonicalModelKey } from "./selection/model-name.ts";
@@ -101,8 +106,6 @@ interface View {
   readonly configVersion: number;
   readonly settings: SelectionSettings;
   readonly cooldown: CooldownSettings;
-  /** `routing.cooldown.save-cooldown-status`: cooldown state survives Durable Object restarts. */
-  readonly saveCooldown: boolean;
   readonly credentials: ReadonlyMap<string, Credential>;
 }
 
@@ -178,7 +181,6 @@ export class CredentialPool {
         disableCooling: config.routing.cooldown["disable-cooling"],
         transientErrorCooldownSeconds: config.routing.cooldown["transient-error-cooldown-seconds"],
       },
-      saveCooldown: config.routing.cooldown["save-cooldown-status"],
     };
 
     return this.#view;
@@ -293,7 +295,7 @@ export class CredentialPool {
     });
 
     this.#states.set(credential.id, next);
-    this.#persistState(credential.id, next, view.saveCooldown);
+    this.#store.saveState(credential.id, next);
 
     if (result.success) {
       for (const key of lease.affinityKeys ?? []) this.#affinity.touch(key, credential.id, now);
@@ -374,29 +376,6 @@ export class CredentialPool {
       message: error?.message ?? "",
       code: result.requestScoped === true ? "request_scoped" : result.error?.code,
     };
-  }
-
-  /**
-   * Persists runtime state. Counters and the last error always survive restarts; cooldown fields only with
-   * `save-cooldown-status` (credentials.md §8.7) or for a terminal 401, which must stay blocked.
-   */
-  #persistState(id: string, state: CredentialState, saveCooldown: boolean): void {
-    if (saveCooldown || hasUnauthorizedFailure(state)) {
-      this.#store.saveState(id, state);
-
-      return;
-    }
-
-    this.#store.saveState(id, {
-      ...state,
-      unavailable: false,
-      nextRetryAfter: 0,
-      quota: {
-        ...emptyQuota(),
-        ...(state.quota.signals === undefined ? {} : { signals: state.quota.signals }),
-      },
-      modelStates: {},
-    });
   }
 
   /** Should another retry round start, and after how long? (credentials.md §7.1 steps 3-5). */

@@ -6,6 +6,9 @@
  * Docs: credentials.md §6.9. Only *explicit* identities are extracted (headers, body fields, Claude `metadata.user_id`);
  * requests without any session marker get the derived content-hash identity and the LCP conversation matcher from
  * `src/session-routing`.
+ *
+ * Deviation from Go: `X-Opencode-Session` (sent by OpenCode and pi for OpenCode Zen/Go) is an explicit identity in the
+ * `X-Session-Affinity` slot (`affinity:<id>`, client type `opencode`); Go ignores it and derives a content hash.
  */
 import { type Json, get } from "../json/index.ts";
 
@@ -561,7 +564,7 @@ export const extractSessionInfo = (
   const xSession = header("X-Session-ID");
 
   if (xSession !== "") return headerSession("generic", "header", xSession, PARENT_SESSION);
-  const affinity = header("X-Session-Affinity");
+  const affinity = header("X-Session-Affinity", "X-Opencode-Session");
 
   if (affinity !== "") {
     return headerSession("opencode", "affinity", affinity, [

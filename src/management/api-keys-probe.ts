@@ -13,7 +13,11 @@
  *   (and for OAuth tokens), as the executor authenticates;
  * - codex / xai / meta: `GET {base}/models` when the base ends with `/v1`, else `{base}/v1/models` (Bearer);
  * - openai-compatibility: `GET {base}/models` (Bearer);
- * - vertex: `POST {base}/v1/publishers/google/models/{first configured model}:countTokens` (`x-goog-api-key`).
+ * - vertex: `POST {base}/v1/publishers/google/models/{first configured model}:countTokens` (`x-goog-api-key`);
+ * - opencode-zen / opencode-go: `POST {base}/chat/completions` (Bearer, the gateway's client headers and a random
+ *   `x-opencode-session`) with a body naming no real model, so a working key costs nothing. The gateways' `GET /models`
+ *   is public and proves nothing about the key: a 401 means a bad key, and a 400 (the gateway rejected the body or
+ *   the model after authenticating) counts as success. No models are listed.
  *
  * The call is not reported to the credential pool (no counters, no cooldown) and is bounded to 30 s in total. Failures
  * carry a fixed message and the upstream status only: response bodies are never copied (an upstream can echo a key).
@@ -23,6 +27,11 @@ import { Clock, Effect, Result } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import type { Credential } from "../credentials/model.ts";
 import { isAnthropicUpstreamURL, isClaudeOAuthToken } from "../executor/claude/credentials.ts";
+import {
+  OPENCODE_CLIENT,
+  OPENCODE_SESSION_HEADER,
+  OPENCODE_USER_AGENT,
+} from "../executor/opencode/headers.ts";
 import { isJsonObject, type Json, tryParseJson } from "../json/index.ts";
 import { DEFAULT_BASE_URLS } from "./api-keys-view.ts";
 import type { ApiKeyFamily, ProbeResult } from "./contract/api-keys.ts";
@@ -52,6 +61,8 @@ const PROVIDER_FAMILIES = {
   claude: "claude",
   xai: "xai",
   meta: "meta",
+  "opencode-zen": "opencode-zen",
+  "opencode-go": "opencode-go",
 } as const satisfies Readonly<Record<string, ApiKeyFamily>>;
 
 /** The probe target of a config credential; `undefined` for a credential of another provider. */
@@ -100,6 +111,8 @@ type ProbedModel = { id: string; display_name?: string };
 /** An answered probe request with the models its body listed. */
 interface Probed extends Exchange {
   readonly models: ReadonlyArray<ProbedModel>;
+  /** Overrides the 2xx-and-JSON rule: the status alone decides (the OpenCode auth check). */
+  readonly accepted?: boolean;
 }
 
 /** A failed probe: a fixed message safe to show, and the upstream status when there was one. */
@@ -257,6 +270,36 @@ const countTokens = Effect.fnUntraced(function* (
   return { ...exchange, models: [] };
 });
 
+/** A model id no gateway serves: the check never runs (or bills) a completion. */
+export const OPENCODE_PROBE_MODEL = "cliproxy-key-check";
+
+const openCodeAuthCheck = Effect.fnUntraced(function* (
+  target: ApiKeyProbeTarget,
+): Effect.fn.Return<Probed, Failure, HttpClient.HttpClient> {
+  const request = HttpClientRequest.post(`${trimSlash(target.baseUrl)}/chat/completions`).pipe(
+    HttpClientRequest.setHeaders(
+      headersOf(target, {
+        ...bearer(target.apiKey),
+        "user-agent": OPENCODE_USER_AGENT,
+        "x-opencode-client": OPENCODE_CLIENT,
+        [OPENCODE_SESSION_HEADER]: crypto.randomUUID(),
+      }),
+    ),
+    HttpClientRequest.bodyText(
+      JSON.stringify({
+        model: OPENCODE_PROBE_MODEL,
+        messages: [{ role: "user", content: "hi" }],
+        max_tokens: 1,
+      }),
+      "application/json",
+    ),
+  );
+
+  const exchange = yield* send(request);
+
+  return { ...exchange, models: [], accepted: ok(exchange) || exchange.status === 400 };
+});
+
 const validBase = (value: string): boolean => {
   try {
     const url = new URL(value);
@@ -283,6 +326,9 @@ const run = Effect.fnUntraced(function* (
 
     return yield* countTokens(target, model);
   }
+
+  if (target.family === "opencode-zen" || target.family === "opencode-go")
+    return yield* openCodeAuthCheck(target);
 
   return yield* listing(target);
 });
@@ -316,6 +362,10 @@ export const probeApiKey = (
     }
 
     const exchange = outcome.success;
+
+    if (exchange.accepted === true) {
+      return { ok: true, status_code: exchange.status, latency_ms: latency } satisfies ProbeResult;
+    }
 
     if (!ok(exchange)) {
       return {

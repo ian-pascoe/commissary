@@ -3,6 +3,8 @@
  *
  * Go source: internal/config/config_load.go (clamps), config_normalization.go (Sanitize*), config_validation.go
  * (SanitizePayloadRules). Applied once when a document is imported/stored so readers see canonical values.
+ * Workers additions (no Go counterpart): OpenCode keys without a secret are dropped, and a model entry's `protocol`
+ * (OpenCode-only) is dropped in every other provider section.
  */
 import { tryParseJson } from "../json/index.ts";
 import type {
@@ -219,6 +221,19 @@ export const keyIdentities = (
     return group.keys.map((key) => IDENTITY[family](group, key));
   });
 
+/** Model entries without `protocol` (an OpenCode-only field, ignored elsewhere). */
+const withoutProtocol = (models: readonly ModelEntry[] | undefined): ModelEntry[] | undefined =>
+  models?.map(({ protocol: _ignored, ...model }) => model);
+
+const groupWithoutProtocol = (group: ApiKeyGroup): ApiKeyGroup =>
+  compact<ApiKeyGroup>({
+    ...group,
+    models: withoutProtocol(group.models),
+    keys: group.keys.map((key) =>
+      compact<ApiKeyEntry>({ ...key, models: withoutProtocol(key.models) }),
+    ),
+  });
+
 /** Applies the per-family rules of config_normalization.go to the grouped layout. */
 const normalizeFamily = (
   family: Exclude<ApiKeyFamily, "openai-compatibility">,
@@ -227,7 +242,13 @@ const normalizeFamily = (
   const out: ApiKeyGroup[] = [];
 
   for (const raw of groups) {
-    const group = compact<ApiKeyGroup>(normalizeGroup(raw));
+    const normalized = compact<ApiKeyGroup>(normalizeGroup(raw));
+
+    // Deviation (no Go counterpart): `protocol` only means something to the OpenCode gateways.
+    const group =
+      family === "opencode-zen" || family === "opencode-go"
+        ? normalized
+        : groupWithoutProtocol(normalized);
 
     if ((family === "codex" || family === "xai") && group["base-url"] === undefined) continue;
 
@@ -251,6 +272,16 @@ const normalizeFamily = (
       const keys = group.keys.filter(
         (key) => key["api-key"] !== "" || group["base-url"] !== undefined,
       );
+
+      if (keys.length === 0) continue;
+      out.push({ ...group, keys });
+      continue;
+    }
+
+    if (family === "opencode-zen" || family === "opencode-go") {
+      // Deviation (no Go counterpart): an OpenCode key without a secret cannot authenticate; the base URL defaults
+      // per provider when the credential is synthesised.
+      const keys = group.keys.filter((key) => key["api-key"] !== "");
 
       if (keys.length === 0) continue;
       out.push({ ...group, keys });
@@ -289,6 +320,7 @@ const normalizeCompat = (groups: readonly OpenAICompatGroup[]): OpenAICompatGrou
         "base-url": baseUrl,
         prefix: group.prefix === undefined ? undefined : normalizeModelPrefix(group.prefix),
         headers: normalizeHeaders(group.headers),
+        models: withoutProtocol(group.models),
         "request-scoped-errors": normalizeScopedErrors(group["request-scoped-errors"]),
       }),
     );
@@ -478,6 +510,8 @@ export const normalizeConfig = (config: Config): Config => {
       claude: normalizeFamily("claude", apiKeys.claude),
       xai: normalizeFamily("xai", apiKeys.xai),
       meta: normalizeFamily("meta", apiKeys.meta),
+      "opencode-zen": normalizeFamily("opencode-zen", apiKeys["opencode-zen"]),
+      "opencode-go": normalizeFamily("opencode-go", apiKeys["opencode-go"]),
       "openai-compatibility": normalizeCompat(apiKeys["openai-compatibility"]),
     },
     oauth: {

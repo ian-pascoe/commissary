@@ -21,7 +21,9 @@
  * is read up to {@link MAX_BODY_BYTES}, `413` beyond); the panel sends larger selections in several requests. Unknown
  * names and config API keys (not auth files) are `not_found` results, not a failed request, except for a delete, which
  * answers every name that is no stored auth file `ok`: a config id must read like any unknown name, or the reply would
- * confirm a guessed id and with it a guessed API key (`auth-index.ts`).
+ * confirm a guessed id and with it a guessed API key (`auth-index.ts`). A config API key named by its `auth_index`
+ * (the name the credential list gives OpenCode Go keys) answers `config_credential` for every action: it lives in the
+ * config, and an index is public, so the clear answer confirms nothing.
  */
 import { Effect, Option, Schema } from "effect";
 import { BatchAction, batchLimit } from "./contract/credentials.ts";

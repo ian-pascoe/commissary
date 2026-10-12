@@ -181,9 +181,8 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
   metadata, then `routing.cooldown.disable-cooling`. Also kept per credential: counters, a 20x10 min recent-requests ring
   and the passive quota header snapshot (claude/codex/devin). Alias pools report each attempt under its upstream model
   (`ReportResult.model`, `route.pooled`) and `pick` drops cooling upstream models (a credential without any usable one is
-  skipped). Persistence: counters and the last error always survive restarts; cooldown fields only with
-  `routing.cooldown.save-cooldown-status` (or for a terminal 401), as plain `credential_state` rows instead of the Go `.cds`
-  files.
+  skipped). Persistence: counters, the last error and the cooldown fields (credential and per-model) are always saved,
+  as plain `credential_state` rows instead of the Go `.cds` files; `routing.cooldown.save-cooldown-status` has no effect.
 - **Retry planning** (`selection/retry.ts`, `retryAllowed` + `closestCooldownWait`): per-credential `request_retry`,
   `max-retry-interval`, the 10 s floor for an already-attempted 429 credential. `PickRequest.retryRound`/`requestRetry`
   make credentials with an exhausted budget age out of later rounds. Alias pools count as available when any upstream model
@@ -192,6 +191,9 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
 - Deviations from Go: several providers are selected from one ID-sorted union (no per-provider slot cursor); alias groups
   of the session cache are independent keys (the LCP matcher is ported, see Sessions below). `PickRequest.session` carries the
   explicit id extracted by `handlers/session.ts`; `lcp` and `fallbackSession` carry the content-based identities.
+  Cooldowns are always persisted (Go only with `save-cooldown-status`, for its restarts): workerd evicts an idle ControlPlane
+  after seconds, which is not a restart, and a Worker cannot tell an eviction from a deploy. Without this a cooling model
+  (for example an OpenCode "Model access is disabled" answer) was picked again after the first idle gap.
 
 ## Request pipeline
 
@@ -812,9 +814,19 @@ panel paths and `/management.html` as `management`); there is no management key.
   pagination), upload (multipart or raw JSON + `?name=`), delete (`name`/`names`/`all`), download (the stored file,
   tokens included; deviation from Go: only a service-token admin may call it, an email admin gets
   `403 download_requires_service_token`: the response is the one place a stored refresh token leaves the Worker, and
-  a service token is the credential meant for scripts, see `ACCESS.md`), `models`, `status`, `fields`, `refresh`, `routing/cooldown/reset`. Credential id = file name; only
-  auth files are listed (config API keys are not auth files; `status` toggles one through its `excluded-models`, see
-  _API keys_ below). `auth_index` = `hex(HMAC-SHA256(AUTH_INDEX_KEY, "auth-index:" + id))[:16]` (`auth-index.ts`).
+  a service token is the credential meant for scripts, see `ACCESS.md`), `models`, `status`, `fields`, `refresh`, `routing/cooldown/reset`. Credential id = file name; the
+  list holds the auth files plus the config API keys whose provider reports quota with the key itself (`source:
+  "config"`, `quota/report.ts` `CONFIG_QUOTA_PROVIDERS`: OpenCode Go only; `status` toggles any config key through its
+  `excluded-models`, see _API keys_ below). Deviation from Go, which lists no config API keys in `/auth-files` (its
+  panel shows them on the providers page only): the panel's Accounts page needs them for the OpenCode Go usage windows
+  (see _Quota check_). Such an entry is named by its `auth_index` (`id` and `name`; the content-addressed credential id
+  is never sent), `account` is the masked key (`[redacted]…abcd`), `supports_quota` is true, `key_group` (`{family,
+  index}`) is where the key is edited on the Keys page, `disabled` means `*` in its `excluded-models`, and the status
+  message is scrubbed of the key; the file-only fields (size, file times, note, weight, routing fields, headers) are
+  absent. The quota check, `models` and the cooldown reset take its `auth_index`; the file-only operations naming it
+  (delete, download, `fields`, `refresh`, `status` by `name`) answer `409 config_credential`, a several-name delete
+  reports that `error` for it in its `207`, and a batch answers that `error` per account.
+  Other config keys stay off the list (OpenCode Zen and the rest have no usage endpoint that takes the key). `auth_index` = `hex(HMAC-SHA256(AUTH_INDEX_KEY, "auth-index:" + id))[:16]` (`auth-index.ts`).
   Deviation from Go (security): Go's index is the unsalted `sha256(seed)[:16 hex]`, and a config credential id is
   itself `kind:sha256(kind␀key␀base␀proxy␀prefix␀headers)[:12]` (`credentials/synthesize.ts`), so anyone holding
   either could confirm guessed API keys offline and brute-force low-entropy ones (self-hosted or compat endpoints),
@@ -836,9 +848,10 @@ panel paths and `/management.html` as `management`); there is no management key.
   `POST /credentials/batch {action: enable|disable|refresh|delete, names}` (`credentials-batch.ts`, Workers addition
   for the Accounts page's selection) answers `200 {action, results, succeeded, failed, skipped}` with one `{name, ok,
   skipped?, error?, message?, status?}` per distinct name (names are exact file names, not trimmed), so a partial
-  failure names who failed and why: `not_found` for unknown names and config API keys (a delete of a name already gone
-  counts as done, as the single delete would leave it; so does a config id, which must read like any unknown name or
-  the reply would confirm a guessed API key), `refresh_failed` with a fixed message and the upstream status
+  failure names who failed and why: `not_found` for unknown names and config credential ids (a delete of a name
+  already gone counts as done, as the single delete would leave it; so does a config id, which must read like any
+  unknown name or the reply would confirm a guessed API key), `config_credential` for a listed config account named by
+  its `auth_index` (indexes are public, so this confirms nothing), `refresh_failed` with a fixed message and the upstream status
   (never the token endpoint's body, which can echo the refresh token), and `skipped` + `not_refreshable` for an account
   without a refresh token. At most `MAX_BATCH_NAMES` (100) names, `MAX_BATCH_REFRESH_NAMES` (20) for a refresh (each
   name is an upstream call), `400` beyond or when empty; the body is read up to 64 KiB (`413` beyond). One endpoint
@@ -1027,12 +1040,14 @@ panel paths and `/management.html` as `management`); there is no management key.
   filter shows, through `POST /credentials/batch` in requests of 100 (20 for a refresh, which leaves out providers
   without one); failed and left-out accounts stay selected with their reason on the bar and on the row; the delete
   confirmation stays open until the deletion settles, then focus moves to the result; the Select toggle reads Done
-  while selecting, and leaving returns focus to it); Account (`/accounts/$authIndex`: allowance with reset
+  while selecting, and leaving returns focus to it; config accounts (OpenCode Go keys) carry a "Config key" mark,
+  take part in "Check all quotas" and stay out of a selection); Account (`/accounts/$authIndex`: allowance with reset
   blades, cooldowns with clear, window history, the Routing section (`#routing`: priority, weight, retry rounds,
   cooling, Codex WebSocket preference, model prefix, exclusions, aliases, extra headers with secret values kept masked,
   note; only the fields that apply to the provider; one save of the changed fields with a change count, a leave guard
   and a `422` under the row it names; Models links an account's own rules here), details, served models, check quota, refresh
-  tokens, enable/disable, delete); Connect (`/accounts/connect`: OAuth sign-in by pasted callback address or device
+  tokens, enable/disable, delete; a config account keeps the allowance, quota check, cooldowns, history and models,
+  and links its key group on the Keys page in place of routing, enable/disable and delete); Connect (`/accounts/connect`: OAuth sign-in by pasted callback address or device
   code, Vertex service-account import, auth-file upload); Usage (`/usage`: totals, tokens per hour or day, a breakdown
   by model, account, provider, user or endpoint whose rows narrow the page, and the request log with each request's
   details and failure body); API keys (`/keys`: every `api-keys` group by provider, each OpenAI-compatible endpoint
@@ -1110,15 +1125,18 @@ Workers addition with no Go counterpart: the upstream panel asks the provider us
 through Go's `POST /requests/api-call` (not ported). Here the server does it, so tokens never reach the browser and the
 result is stored.
 
-- **Flow** (`check.ts`): the ControlPlane resolves the auth file and its token (`quotaProbeTarget`: `ensureFresh`, then
-  `target.ts`; the token Go's api-call substitutes for `$TOKEN$`, the Meta `dca_token`, the Devin session token). The
+- **Flow** (`check.ts`): the ControlPlane resolves the account and its token (`quotaProbeTarget`: `ensureFresh`, then
+  `target.ts`; the token Go's api-call substitutes for `$TOKEN$`, the Meta `dca_token`, the Devin session token; for a
+  listed config API key, named by its `auth_index`, the key itself without a refresh). The
   **Worker** then calls the usage endpoint with its `HttpClient` (`probe.ts`, 15 s per call), so the single-writer
   object is never held by a slow provider. Finally the ControlPlane merges the outcome into the stored report
   (`recordQuotaReport`, `report.ts`).
 - **Routes**:
   - `POST /v8/management/credentials/quota {name}` answers `200 {status: "ok", report}`, including when the upstream call
     failed; the report then carries `error`.
-  - `404` for an unknown auth file; `422 quota check is not supported for <provider>` for providers without a usage
+  - `name` is the listed name: an auth file name, or a listed config key's `auth_index` (a config credential id is
+    never accepted, so a check confirms no guessed key).
+  - `404` for an unknown account; `422 quota check is not supported for <provider>` for providers without a usage
     endpoint.
   - `POST /v8/management/credentials/quota/all` (the panel's "Check all quotas") runs the sweep below now and answers
     `200 {started_at, finished_at, results, checked, failed}` (`results`: `{name, ok, error?, message?, status?}` per
@@ -1127,7 +1145,8 @@ result is stored.
   - A single check whose account's tokens changed while the provider answered (`credentialVersion` changed: a
     re-login or a token refresh) answers `409 stale`: the outcome describes the old tokens and is dropped, like a refresh
     result for replaced tokens.
-- **Sweep** (`sweepQuotas`): every enabled auth file of a supported provider, two accounts at a time. A Claude check
+- **Sweep** (`sweepQuotas`): every enabled account of a supported provider (auth files, and the listed config keys
+  without `*` in their `excluded-models`, named by `auth_index`), two accounts at a time. A Claude check
   opens up to three upstream connections at once (usage, profile, reset grants), so two checks stay within the six
   connections a Workers invocation may have waiting for response headers (more are queued, and could run into the
   15 s bound). An outcome for replaced tokens is dropped (`stale`), its reset grant status with it. One sweep at a time across isolates: it takes a lease in the
@@ -1156,9 +1175,10 @@ result is stored.
   - `windows` and `plan` survive a failed check, and a success without a plan keeps the previous plan.
   - `error` is a fixed message plus the upstream status, never a response body.
 - **Storage** (`store.ts`): a separate SQLite table `credential_quota_report` in the ControlPlane, one JSON row per
-  credential. It is not part of the cooldown state (`credential_state`), so `save-cooldown-status` and cooldown resets
-  do not touch it. A row is deleted with its credential and when an upsert replaces an existing credential's token
-  material (a re-login). `listCredentialEntries`/`refreshCredential` add it to the entry as `quota_report`.
+  credential. It is not part of the cooldown state (`credential_state`), so cooldown resets do not touch it. A row is deleted with its credential and when an upsert replaces an existing credential's token
+  material (a re-login). A config key's credential id is content-addressed, so editing the key gives it a new id and a
+  fresh report; the old row is dropped by the next sweep (`quotaCheckTargets` keeps only the rows of current
+  credentials). `listCredentialEntries`/`refreshCredential` add it to the entry as `quota_report`.
 - **Providers and window ids**:
 
 | Executor key      | Endpoint                                                                                                            | Window ids                                                                                                                                                         |
@@ -1170,6 +1190,7 @@ result is stored.
 | `xai`             | `GET cli-chat-proxy.grok.com/v1/billing` (`?format=credits` for weekly)                                             | `weekly`, `monthly`                                                                                                                                                |
 | `meta`            | `POST api.meta.ai/muse-code/key` with the `dca_token`                                                               | `window`, `weekly`                                                                                                                                                 |
 | `devin`           | `GetUserStatus` (the `devin-user-status` call)                                                                      | `daily`, `weekly` (`used = 100 - remaining`)                                                                                                                       |
+| `opencode-go`     | `GET {base}/usage` (default `opencode.ai/zen/go/v1/usage`, `Authorization: Bearer <config key>`, no redirects)      | `rolling` → `five_hour` ("5-hour"), `weekly`, `monthly` (`percent` used; a status other than `ok` reads as used up)                                                |
 
 - **Differences from the upstream panel**:
   - xAI never makes its paid-account fallback (`/v1/me` plus a real chat completion).
@@ -1319,7 +1340,8 @@ helpers; `oauth_scope_executor.go` is `executor/helps/oauth-scope.ts`.
 - **Meta** is the Codex Responses pipeline without replay/images: `meta/request.ts` (translate to `codex`, thinking, model/stream,
   field deletions, instructions, keep-foreign reasoning sanitising via `codex/request.ts`, `search_content_types` removal,
   payload rules with protocol `meta`), `meta/errors.ts` (`resets_at` retry, 5 min 404 cooldown, credential-scoped
-  subscription quota), always-streaming upstream aggregated for non-stream callers. The lazy DCA -> API-key mint is the
+  subscription quota), always-streaming upstream aggregated for non-stream callers. The shaping and the SSE response handling
+  live in `helps/responses-request.ts` / `helps/responses-sse.ts`, shared with the OpenCode `responses` protocol. The lazy DCA -> API-key mint is the
   conductor's `ensureFresh` (see Token refresh); the executor only reads the minted key.
 - **Devin** (`devin/`): `protobuf.ts` (varint/bytes/fixed codec), `wire.ts` (`GetChatMessageRequest`, frame decoding, trailer
   mapping, system prompt sanitising), `connect.ts` (streaming 5-byte frame parser, gzip via `DecompressionStream`),
@@ -1352,6 +1374,80 @@ generic abort events. `GetUserStatus` quota/profile refresh is the cron task `de
 The catalog refresh is the existing `model-catalog-refresh` Devin source; the executor now resolves effort variants and max tokens through
 the registry snapshot (`modelLookup`, ids `devin/<id>`) before the embedded catalog. Not ported: the Kimi
 `X-Msh-Device-Name/Model` of the real host, request/response debug logs, the developer-only `cmd/fetch_devin_models` live catalog probe.
+
+## OpenCode Zen and OpenCode Go (`src/executor/opencode/`, `src/registry/opencode-*.ts`)
+
+No Go counterpart: CLIProxyAPI reaches OpenCode only through an `openai-compatibility` entry (chat only). The Workers port has two
+API-key providers, `opencode-zen` (`https://opencode.ai/zen/v1`) and `opencode-go` (`https://opencode.ai/zen/go/v1`), configured
+under `api-keys.opencode-zen` / `api-keys.opencode-go` (same group/key shape as the other API-key families; `models[].protocol`
+is `chat`, `responses`, `messages` or `gemini`). One executor (`executor.ts`) serves both keys. `models[].protocol` decodes as
+any string: the normaliser drops it in every other provider section (a stray value never breaks a document), and
+`decodeRawConfig` rejects an unknown value in the OpenCode sections, naming its path. The panel's OpenCode model rows offer it as a
+select ("Auto (catalog)" when unset).
+
+- **Protocol per model** (`protocol.ts`): the `protocol` of the credential's config model entry (key `models`, else group
+  `models`; the key is found by `config_index` and checked against its secret), else the model's AI SDK package in the OpenCode
+  catalog, mapped as OpenCode's own client does (`@ai-sdk/openai` -> `responses`, `@ai-sdk/anthropic` -> `messages`,
+  `@ai-sdk/google` -> `gemini`, `@ai-sdk/openai-compatible`/`@ai-sdk/mistral` -> `chat`), else `chat` with a logged warning (unknown
+  model or package). Gemini exists only on Zen; on Go a Gemini protocol falls back to chat.
+- **Paths**: `chat` -> `{base}/chat/completions` (`chat.ts`: openai-compat shaping, max-token normalisation from the entry's
+  `use-max-completion-tokens`, `stream_options.include_usage`, `OpenAICompatStreamReader`); `responses` -> `{base}/responses`, always
+  streamed upstream and aggregated for non-stream callers (the Responses shaping and SSE handling shared with Meta:
+  `helps/responses-request.ts`, `helps/responses-sse.ts`, incl. the apply_patch bridge); `messages` -> `{base}/messages`
+  (`messages.ts`: translate to Claude, non-Claude non-stream clients read a streamed answer that is validated and translated in one
+  piece, `ClaudeStreamReader`); `gemini` -> `{base}/models/{model}:generateContent|streamGenerateContent` (`gemini.ts`: the shared
+  Google engine as an API-key Gemini variant). Thinking and payload rules run as everywhere (payload rules last; protocol
+  `openai`, `openai-response`, `claude` or the Gemini engine's). Token counting is local for every protocol (Gemini bodies are counted
+  as chat). Images/video/speech entry formats and `/responses/compact` answer 501.
+- **Headers** (`headers.ts`): each protocol's native auth (`Authorization: Bearer` for chat/Responses, `x-api-key` +
+  `anthropic-version: 2023-06-01` for Messages, `x-goog-api-key` for Gemini); `User-Agent: cliproxy/workers`,
+  `x-opencode-client: cliproxy`; `x-opencode-session` = the client's own `x-opencode-session` unchanged, else a UUIDv5
+  (`providerSessionUuid("opencode", …)`) of the explicit session identity, the WebSocket execution session or the derived
+  conversation identity (stable across turns, distinct across conversations), else a random UUID (OpenCode Go answers 400
+  `MissingSessionID` without the header). Another client's raw session id is never forwarded. Custom headers apply last and win.
+  Client `anthropic-beta` headers are not forwarded. On the Messages protocol a client's `metadata.user_id` (Claude Code's device,
+  account and session ids) is replaced by a stable UUIDv5 of it before the payload rules, so no raw client identity reaches the
+  gateway.
+- **Errors** (`errors.ts`): `ModelProtocolUnsupported`, "Model is unavailable", "Model access is disabled" (Zen workspace
+  setting) and `FreeTierError` (Zen free models outside OpenCode) concern one model: they become `code: model_not_found` with a
+  cooldown hint (5 min for the protocol mismatch, 30 min otherwise), so the conductor cools only that model of the credential and
+  tries the next credential. 401 (bad key) and 402 (no balance) are credential-scoped (the conductor skips the rest of an alias
+  pool; the cooldown itself is the model-level hard cooldown of a 401/402); a Go 429 (subscription limit) is credential-scoped, a
+  Zen 429 stays model-level; `Retry-After` (seconds or an HTTP date) is honoured on 429 and 5xx. Gemini engine errors are
+  re-classified with the same rules, before the stream and mid-stream.
+- **Usage limits** (`usage-limit.ts`, OpenCode Go): over a subscription window the gateway answers `429` with
+  `Retry-After: <seconds to the reset>` and `{"error":{"type":"GoUsageLimitError","message":"5-hour usage limit reached.
+  Resets in 2hr 13min. …"},"metadata":{"limitName":"5 hour"}}` (opencode console handler, last public before the
+  inference gateway went closed source; "Weekly"/"Monthly" likewise). Only OpenCode Go answers are classified, and
+  narrowly: the `GoUsageLimitError` type on any status, or a message that starts with "5-hour"/"Weekly"/"Monthly usage
+  limit reached" on a `402`, `403` or `429` (a message merely containing the phrase, such as a `400` echoing the
+  prompt, is not a limit). On a stream it applies to the error event too. It is checked before the rules above and
+  becomes a credential-scoped `429` whose cooldown is the longer of `Retry-After` and the "Resets in …" duration ("2hr
+  13min", "3 days", "45min", "2h 13m"; read up to the sentence's end or "To continue"), else 30 min, and at most 32
+  days (a bogus header cannot park a key for longer than a monthly window): the whole key is cooled (`credential_quota`) until the window resets, so the next request goes to another key or the fallback
+  without asking the gateway again. No usage fetch on the request path; the quota check reads the windows.
+- **Quota** (`src/quota/opencode-go.ts`): OpenCode Go keys are listed on the Accounts page as config accounts with the
+  5-hour, weekly and monthly windows of `GET {base}/usage` (see _Quota check_ and _Management API_ "Credentials").
+  OpenCode Zen has no usage endpoint.
+- **Key test** (`management/api-keys-probe.ts`): the gateways list models without authentication, so the panel's key test
+  POSTs `{base}/chat/completions` with the key, the gateway headers and the model `cliproxy-key-check` (`max_tokens: 1`); any
+  2xx or 400 ("Model is unavailable": the key was accepted, nothing is billed) passes, 401 and other statuses fail.
+- **Catalog** (`opencode-catalog-trim.ts`, `opencode-catalog.ts`, `opencode-refresh.ts`): `pnpm catalog:opencode`
+  (`tools/sync-opencode-catalog.ts`) trims `https://models.opencode.ai/api.json` (≈5 MB, models.dev) to the two gateways and the fields
+  read here into `src/registry/catalog/opencode_models.json`. The cron task `opencode-catalog-refresh` fetches, trims and stores it in KV
+  (`registry/opencode_models.json`, only when it changed, then drops the isolate cache; a failed fetch or invalid document keeps the
+  stored copy). The 16 MiB limit is checked on `content-length` and while the body streams in (the read is cancelled past it). The request
+  path reads the KV copy (per isolate, re-read at most once a minute) and falls back to the bundled snapshot when KV is empty or
+  invalid. Without config `models` a gateway registers every non-deprecated catalog model (Zen without its free models, which the
+  gateway rejects outside OpenCode); listed models get the catalog's context/output limits, input modalities, reasoning levels and
+  the protocol's registry type.
+
+Deviations (the whole provider is one): the session header is derived per conversation instead of OpenCode's per-chat id; the
+`openai-compatibility` executor is not reused (its settings come from the compat group of the credential and its User-Agent is
+fixed); no `prompt_cache_key` is derived; model-scoped gateway errors use the model-not-found cooldown instead of a plain client
+error; `X-Opencode-Session` from a client is also an explicit session identity for routing and usage (`handlers/session.ts`); the
+OpenCode Go keys are listed as Accounts (config-sourced) for their usage windows. Not ported/added: the `jev`/systemone
+endpoint.
 
 ## SessionState Durable Object (`src/session-state/`)
 

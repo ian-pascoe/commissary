@@ -23,7 +23,7 @@ import {
 import { ConfigValidationError, configPath } from "./errors.ts";
 import { normalizeConfig } from "./normalize.ts";
 import { prepareDocument } from "./document.ts";
-import { Config, type ConfigEncoded } from "./schema.ts";
+import { Config, type ConfigEncoded, isOpenCodeProtocol, OPENCODE_PROTOCOLS } from "./schema.ts";
 import { yamlMessage } from "./yaml-message.ts";
 
 const decodeSchema = Schema.decodeUnknownEffect(Config);
@@ -85,6 +85,35 @@ const issueEntries = (
     }),
   );
 
+/**
+ * The first model `protocol` of the OpenCode sections that is not a known protocol (Workers addition: the schema
+ * accepts any string so other providers can carry a stray value, which the normaliser drops).
+ */
+const unknownOpenCodeProtocol = (config: Config): ConfigValidationError | undefined => {
+  for (const family of ["opencode-zen", "opencode-go"] as const) {
+    for (const [g, group] of config["api-keys"][family].entries()) {
+      const lists = [
+        { path: [g, "models"], models: group.models },
+        ...group.keys.map((key, k) => ({ path: [g, "keys", k, "models"], models: key.models })),
+      ];
+
+      for (const { path, models } of lists) {
+        for (const [m, model] of (models ?? []).entries()) {
+          if (model.protocol === undefined || isOpenCodeProtocol(model.protocol)) continue;
+          const at = configPath(["api-keys", family, ...path, m, "protocol"]);
+
+          return new ConfigValidationError({
+            message: `Expected one of ${OPENCODE_PROTOCOLS.map((p) => `"${p}"`).join(", ")} at ${at}`,
+            path: at,
+          });
+        }
+      }
+    }
+  }
+
+  return undefined;
+};
+
 const entryPath = (path: ReadonlyArray<PropertyKey>): string =>
   configPath(path.map((segment) => (typeof segment === "object" ? String(segment) : segment)));
 
@@ -120,6 +149,10 @@ export const decodeRawConfig = (raw: Json): Effect.Effect<Config, ConfigValidati
         });
       }),
     );
+
+    const protocolError = unknownOpenCodeProtocol(decoded);
+
+    if (protocolError !== undefined) return yield* protocolError;
 
     return decoded;
   });

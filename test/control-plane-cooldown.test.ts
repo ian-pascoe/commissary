@@ -93,31 +93,53 @@ describe("ControlPlane report -> cooldown (Workers pool)", () => {
     expect(await stub.planRetry({ ...query, round: 1 })).toEqual({ retry: false });
   });
 
-  it("keeps cooldowns across Durable Object evictions only with save-cooldown-status", async () => {
-    const withSave = crypto.randomUUID();
-    const without = crypto.randomUUID();
-
-    for (const [name, yaml] of [
-      [withSave, "routing: { cooldown: { save-cooldown-status: true } }"],
-      [without, "routing: {}"],
-    ] as const) {
+  it("keeps cooldowns across Durable Object evictions, whatever save-cooldown-status says", async () => {
+    for (const yaml of [
+      "routing: { cooldown: { save-cooldown-status: true } }",
+      "routing: { cooldown: { save-cooldown-status: false } }",
+      "routing: {}",
+    ]) {
+      const name = crypto.randomUUID();
       const stub = plane(name);
       await stub.putConfig(yaml);
       await stub.importAuthFile("claude-a.json", claudeFile());
       const first = picked(await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" }));
       await stub.report(first.lease, fail(500));
       await evictDurableObject(stub);
-    }
 
-    expect(
-      await plane(withSave).pick({ providers: ["claude"], model: "claude-sonnet-4-5" }),
-    ).toMatchObject({
-      ok: false,
-      failure: { code: "auth_unavailable", httpStatus: 503 },
+      expect(
+        await plane(name).pick({ providers: ["claude"], model: "claude-sonnet-4-5" }),
+      ).toMatchObject({
+        ok: false,
+        failure: { code: "auth_unavailable", httpStatus: 503 },
+      });
+    }
+  });
+
+  it("keeps a model-level cooldown across an eviction: only that model of the key cools", async () => {
+    const name = crypto.randomUUID();
+    const stub = plane(name);
+    await stub.putConfig("api-keys:\n  opencode-zen:\n    - keys: [{ api-key: sk-zen-evict }]\n");
+    const request = { providers: ["opencode-zen"], model: "claude-haiku-4-5" };
+    const first = picked(await stub.pick(request));
+    await stub.report(first.lease, {
+      success: false,
+      httpStatus: 403,
+      retryAfterMs: 30 * 60_000,
+      error: {
+        message: "Model access is disabled",
+        retryable: false,
+        code: "model_not_found",
+        httpStatus: 403,
+      },
     });
-    expect(
-      (await plane(without).pick({ providers: ["claude"], model: "claude-sonnet-4-5" })).ok,
-    ).toBe(true);
+    await evictDurableObject(stub);
+
+    expect(await plane(name).pick(request)).toMatchObject({
+      ok: false,
+      failure: { code: "auth_unavailable" },
+    });
+    expect((await plane(name).pick({ ...request, model: "glm-5.3-flash" })).ok).toBe(true);
   });
 });
 

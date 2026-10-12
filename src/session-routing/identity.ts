@@ -114,6 +114,8 @@ const EXPLICIT_HEADERS = [
   "X-Http-Session-Id",
   "X-Session-ID",
   "X-Session-Affinity",
+  // Not in Go: see the header of handlers/session.ts.
+  "X-Opencode-Session",
   "X-Parent-Session-ID",
   "X-Parent-Session-Affinity",
   "X-Parent-ID",

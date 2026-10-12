@@ -20,24 +20,25 @@ Go paths cited in code and docs (`internal/...`, `sdk/...`) are relative to that
 
 Run from the repository root:
 
-| Script              | Purpose                                                                                                                     |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install`      | Install dependencies and clone/update the Go reference checkout (`.repos/`)                                                 |
-| `pnpm repos:sync`   | Clone or fast-forward the reference repositories in `.repos/` (`tools/sync-reference-repos.sh`)                             |
-| `pnpm dev`          | `alchemy dev`: local Worker in workerd with emulated DO/KV/D1, hot reload (`ALCHEMY_STATE=local` avoids a Cloudflare login) |
-| `pnpm web:build`    | Build the control panel (`web/`) into `public/index.html` and `public/assets/` (served at `/`)                              |
-| `pnpm web:dev`      | Vite dev server for the panel on :5173 with hot reload, forwarding `/v8` to `pnpm dev` (`CLIPROXY_DEV_URL`, default :1337)  |
-| `pnpm typecheck`    | `tsc -b`: Worker (`tsconfig.worker.json`), deploy code (`tsconfig.infra.json`), panel (`tsconfig.web.json`)                 |
-| `pnpm lint`         | `oxlint` (type-aware, with type checking, Effect and anti-slop rules) + `oxfmt --check`                                     |
-| `pnpm format`       | `oxfmt`                                                                                                                     |
-| `pnpm test`         | `vitest run` inside the Workers runtime (`@cloudflare/vitest-plugin`)                                                       |
-| `pnpm smoke`        | Builds the panel, boots `alchemy dev` with local state, checks a few routes, stops it (bundle + startup check)              |
-| `pnpm plan`         | `alchemy plan`: preview infrastructure changes (needs a Cloudflare profile)                                                 |
-| `pnpm run deploy`   | `alchemy deploy` (`pnpm deploy` is a pnpm built-in; use `run`)                                                              |
-| `pnpm destroy`      | `alchemy destroy`: delete every resource of a stage                                                                         |
-| `pnpm logs`         | `alchemy logs` (`--tail`)                                                                                                   |
-| `pnpm ci:setup`     | Deploy `stacks/github.ts`: CI's Cloudflare token, check service token and GitHub environments (`docs/DEPLOY.md`)            |
-| `pnpm catalog:sync` | Regenerate the embedded model catalogs from the Go registry (reference checkout)                                            |
+| Script                  | Purpose                                                                                                                     |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`          | Install dependencies and clone/update the Go reference checkout (`.repos/`)                                                 |
+| `pnpm repos:sync`       | Clone or fast-forward the reference repositories in `.repos/` (`tools/sync-reference-repos.sh`)                             |
+| `pnpm dev`              | `alchemy dev`: local Worker in workerd with emulated DO/KV/D1, hot reload (`ALCHEMY_STATE=local` avoids a Cloudflare login) |
+| `pnpm web:build`        | Build the control panel (`web/`) into `public/index.html` and `public/assets/` (served at `/`)                              |
+| `pnpm web:dev`          | Vite dev server for the panel on :5173 with hot reload, forwarding `/v8` to `pnpm dev` (`CLIPROXY_DEV_URL`, default :1337)  |
+| `pnpm typecheck`        | `tsc -b`: Worker (`tsconfig.worker.json`), deploy code (`tsconfig.infra.json`), panel (`tsconfig.web.json`)                 |
+| `pnpm lint`             | `oxlint` (type-aware, with type checking, Effect and anti-slop rules) + `oxfmt --check`                                     |
+| `pnpm format`           | `oxfmt`                                                                                                                     |
+| `pnpm test`             | `vitest run` inside the Workers runtime (`@cloudflare/vitest-plugin`)                                                       |
+| `pnpm smoke`            | Builds the panel, boots `alchemy dev` with local state, checks a few routes, stops it (bundle + startup check)              |
+| `pnpm plan`             | `alchemy plan`: preview infrastructure changes (needs a Cloudflare profile)                                                 |
+| `pnpm run deploy`       | `alchemy deploy` (`pnpm deploy` is a pnpm built-in; use `run`)                                                              |
+| `pnpm destroy`          | `alchemy destroy`: delete every resource of a stage                                                                         |
+| `pnpm logs`             | `alchemy logs` (`--tail`)                                                                                                   |
+| `pnpm ci:setup`         | Deploy `stacks/github.ts`: CI's Cloudflare token, check service token and GitHub environments (`docs/DEPLOY.md`)            |
+| `pnpm catalog:sync`     | Regenerate the embedded model catalogs from the Go registry (reference checkout)                                            |
+| `pnpm catalog:opencode` | Regenerate the bundled OpenCode Zen/Go catalog from `models.opencode.ai` (`tools/sync-opencode-catalog.ts`)                 |
 
 ## Infrastructure
 

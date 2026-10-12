@@ -612,6 +612,8 @@ describe("who serves a route", () => {
       ],
       xai: [],
       meta: [],
+      "opencode-zen": [],
+      "opencode-go": [],
       "openai-compatibility": [
         {
           index: 0,

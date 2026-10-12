@@ -181,6 +181,8 @@ const FAMILY_PROVIDERS: Readonly<Record<Exclude<ApiKeyFamily, "openai-compatibil
   claude: "claude",
   xai: "xai",
   meta: "meta",
+  "opencode-zen": "opencode-zen",
+  "opencode-go": "opencode-go",
 };
 
 /** Credential ids of one group: one per key (`undefined` when the key produced no credential). */
@@ -263,6 +265,8 @@ export const configKeyIds = (
     claude: grouped("claude"),
     xai: grouped("xai"),
     meta: grouped("meta"),
+    "opencode-zen": grouped("opencode-zen"),
+    "opencode-go": grouped("opencode-go"),
     "openai-compatibility": apiKeys["openai-compatibility"].map((group, index) => {
       const ids = compat.get(String(index)) ?? [];
 

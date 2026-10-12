@@ -1,0 +1,148 @@
+/**
+ * Upstream protocol of an OpenCode Zen/Go model and the config entry behind an OpenCode credential.
+ *
+ * Deliberate deviation from Go (no OpenCode provider there; see docs/ARCHITECTURE.md "OpenCode Zen and OpenCode
+ * Go"). Per attempt the protocol is, in order: the `protocol` of the credential's config `models` entry for the model,
+ * the model's AI SDK package in the OpenCode catalog (`opencode-catalog.ts`, as OpenCode's own client decides), else
+ * `chat` (`/chat/completions`) with a warning for a model the catalog does not know or a package without a gateway
+ * protocol. Gemini exists only on Zen; a Go model configured or catalogued as Gemini falls back to chat.
+ */
+import {
+  type Config,
+  isOpenCodeProtocol,
+  type ModelEntry,
+  type OpenCodeProtocol,
+} from "../../config/schema.ts";
+import {
+  catalogModelNpm,
+  findCatalogModel,
+  type OpenCodeCatalog,
+  type OpenCodeCatalogModel,
+  protocolForNpm,
+} from "../../registry/opencode-catalog.ts";
+import type { CredentialSnapshot } from "../picker.ts";
+import { parseSuffix } from "../suffix.ts";
+import { OPENCODE_SPECS, OPENCODE_ZEN, type OpenCodeProvider } from "./providers.ts";
+
+export interface OpenCodeKeyConfig {
+  readonly apiKey: string;
+  readonly models: ReadonlyArray<ModelEntry>;
+}
+
+/** The keys of `api-keys.<provider>` in the flat order the credential synthesiser numbers them (`config_index`). */
+const flatKeys = (config: Config, provider: OpenCodeProvider): OpenCodeKeyConfig[] =>
+  config["api-keys"][provider].flatMap((group) =>
+    group.keys.map((key) => ({
+      apiKey: key["api-key"].trim(),
+      models: key.models ?? group.models ?? [],
+    })),
+  );
+
+/** The config key behind a credential: `config_index` when its secret matches, else the first key with that secret. */
+export const resolveOpenCodeKeyConfig = (
+  config: Config,
+  credential: CredentialSnapshot,
+  provider: OpenCodeProvider,
+): OpenCodeKeyConfig | undefined => {
+  const keys = flatKeys(config, provider);
+  const apiKey = (credential.attributes["api_key"] ?? "").trim();
+  const rawIndex = (credential.attributes["config_index"] ?? "").trim();
+
+  if (/^\d+$/.test(rawIndex)) {
+    const entry = keys[Number(rawIndex)];
+
+    if (entry !== undefined && (apiKey === "" || entry.apiKey === apiKey)) return entry;
+  }
+
+  return apiKey === "" ? undefined : keys.find((entry) => entry.apiKey === apiKey);
+};
+
+const eq = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
+
+/** The `models` entry of the upstream model: upstream `name` first, then `alias`. */
+export const findModelEntry = (
+  models: ReadonlyArray<ModelEntry>,
+  model: string,
+): ModelEntry | undefined => {
+  const base = parseSuffix(model.trim()).modelName.trim();
+
+  if (base === "") return undefined;
+
+  return (
+    models.find((entry) => eq(parseSuffix(entry.name.trim()).modelName.trim(), base)) ??
+    models.find((entry) => eq((entry.alias ?? "").trim(), base))
+  );
+};
+
+export interface ResolvedProtocol {
+  readonly protocol: OpenCodeProtocol;
+  /** Where the protocol came from (`fallback` = chat for want of a better answer). */
+  readonly source: "config" | "catalog" | "fallback";
+  /** Why the request falls back to chat (logged by the executor). */
+  readonly warning?: string;
+  /** The config `models` entry of the model, if any. */
+  readonly entry?: ModelEntry;
+  /** The catalog model, if the catalog knows it. */
+  readonly catalogModel?: OpenCodeCatalogModel;
+}
+
+const supports = (provider: OpenCodeProvider, protocol: OpenCodeProtocol): boolean =>
+  protocol !== "gemini" || provider === OPENCODE_ZEN;
+
+/** The protocol an attempt uses for `model` (suffix allowed) on `provider`. */
+export const resolveOpenCodeProtocol = (input: {
+  readonly config: Config;
+  readonly credential: CredentialSnapshot;
+  readonly provider: OpenCodeProvider;
+  readonly model: string;
+  readonly catalog: OpenCodeCatalog;
+}): ResolvedProtocol => {
+  const { provider, catalog } = input;
+  const base = parseSuffix(input.model.trim()).modelName.trim();
+  const key = resolveOpenCodeKeyConfig(input.config, input.credential, provider);
+  const entry = key === undefined ? undefined : findModelEntry(key.models, base);
+  const catalogModel = findCatalogModel(catalog, provider, base);
+
+  const known = {
+    ...(entry === undefined ? {} : { entry }),
+    ...(catalogModel === undefined ? {} : { catalogModel }),
+  };
+
+  const name = OPENCODE_SPECS[provider].displayName;
+
+  // Validated at config load; anything else (only reachable with an unvalidated config) is ignored.
+  if (isOpenCodeProtocol(entry?.protocol)) {
+    if (supports(provider, entry.protocol))
+      return { protocol: entry.protocol, source: "config", ...known };
+
+    return {
+      protocol: "chat",
+      source: "fallback",
+      warning: `${name} has no ${entry.protocol} endpoint (model ${base}); using /chat/completions`,
+      ...known,
+    };
+  }
+
+  if (catalogModel === undefined) {
+    return {
+      protocol: "chat",
+      source: "fallback",
+      warning: `model ${base} is not in the ${name} catalog; using /chat/completions`,
+      ...known,
+    };
+  }
+
+  const npm = catalogModelNpm(catalog, provider, catalogModel);
+  const protocol = protocolForNpm(npm, provider);
+
+  if (protocol === undefined) {
+    return {
+      protocol: "chat",
+      source: "fallback",
+      warning: `${name} model ${base} uses the unknown AI SDK package ${npm}; using /chat/completions`,
+      ...known,
+    };
+  }
+
+  return { protocol, source: "catalog", ...known };
+};

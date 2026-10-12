@@ -159,7 +159,8 @@
   border-bottom: 2px solid var(--text);
 }
 
-.models input {
+.models input,
+.models select {
   width: 100%;
 }
 

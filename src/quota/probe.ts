@@ -32,6 +32,7 @@ import { CODEX_HEADERS, CODEX_USAGE_URL, parseCodexUsage } from "./codex.ts";
 import { devinUsage } from "./devin.ts";
 import { parseKimiUsage } from "./kimi.ts";
 import { META_HEADERS, META_QUOTA_URL, parseMetaUsage } from "./meta.ts";
+import { parseOpenCodeGoUsage } from "./opencode-go.ts";
 import type { QuotaOutcome } from "./report.ts";
 import { parseResetGrantStatus, RESET_GRANT_STATUS_URL } from "./reset-grants.ts";
 import type { QuotaProbeTarget } from "./target.ts";
@@ -253,6 +254,19 @@ const meta = Effect.fnUntraced(function* (target: QuotaProbeTarget) {
   return usage === undefined ? yield* Effect.fail(invalid) : (usage satisfies Usage);
 });
 
+/** OpenCode Go `{base}/usage` with the config API key; never followed to another host (the key is in the header). */
+const opencodeGo = Effect.fnUntraced(function* (target: QuotaProbeTarget) {
+  const answer = yield* get(target.usageUrl ?? "", {
+    authorization: bearer(target.token),
+    accept: "application/json",
+  }).pipe(Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual" }));
+
+  const body = yield* expectOk(answer);
+  const windows = body === undefined ? undefined : parseOpenCodeGoUsage(body);
+
+  return windows === undefined ? yield* Effect.fail(invalid) : ({ windows } satisfies Usage);
+});
+
 const devin = Effect.fnUntraced(function* (target: QuotaProbeTarget) {
   const status = yield* fetchDevinUserStatus({
     sessionToken: target.token,
@@ -281,6 +295,7 @@ const probes: Record<
   xai,
   meta,
   devin,
+  "opencode-go": opencodeGo,
 };
 
 /** Calls the provider's usage endpoint for `target`; never fails (a failed check is an outcome). */
@@ -291,7 +306,7 @@ export const probeQuota = (
     Effect.map((usage): QuotaOutcome => ({ ok: true, ...usage })),
     Effect.catch((error) =>
       Effect.logWarning(
-        `quota check for ${target.id} (${target.provider}) failed: ${error.message}`,
+        `quota check for ${target.handle ?? target.id} (${target.provider}) failed: ${error.message}`,
       ).pipe(
         Effect.as<QuotaOutcome>(
           error.status === undefined

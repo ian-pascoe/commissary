@@ -283,38 +283,30 @@ describe("alias pools (TestManager alias cooldown, openai_compat_pool_test.go)",
   });
 });
 
-describe("cooldown persistence (save-cooldown-status)", () => {
+describe("cooldown persistence (always on: an eviction is not a restart)", () => {
   const failure = {
     success: false,
     httpStatus: 500,
     error: { message: "boom", retryable: true, httpStatus: 500 },
   } as const;
 
-  it("keeps cooldowns in memory by default but persists counters and the last error", async () => {
+  it.each([
+    ["by default", config(group("a"))],
+    [
+      "with save-cooldown-status: false",
+      config(group("a"), "routing:\n  cooldown:\n    save-cooldown-status: false"),
+    ],
+  ])("persists counters, the last error and active cooldowns %s", async (_label, yaml) => {
     const store = new MemoryPoolStore();
     const clock = new TestNow();
-    const { pool } = await makePool(config(group("a")), { store, clock });
-    const picked = ok(pool.pick({ providers: providers(["a"]), model: "m" }));
-    pool.report(picked.lease, failure);
-    const saved = store.states.get(picked.credential.id);
-    expect(saved).toMatchObject({
-      failed: 1,
-      lastError: { httpStatus: 500 },
-      unavailable: false,
-      modelStates: {},
-    });
-
-    const restarted = await makePool(config(group("a")), { store, clock });
-    expect(restarted.pool.pick({ providers: providers(["a"]), model: "m" }).ok).toBe(true);
-  });
-
-  it("restores active cooldowns after a restart when enabled", async () => {
-    const store = new MemoryPoolStore();
-    const clock = new TestNow();
-    const yaml = config(group("a"), "routing:\n  cooldown:\n    save-cooldown-status: true");
     const { pool } = await makePool(yaml, { store, clock });
     const picked = ok(pool.pick({ providers: providers(["a"]), model: "m" }));
     pool.report(picked.lease, failure);
+    expect(store.states.get(picked.credential.id)).toMatchObject({
+      failed: 1,
+      lastError: { httpStatus: 500 },
+      unavailable: true,
+    });
 
     const restarted = await makePool(yaml, { store, clock });
     expect(restarted.pool.pick({ providers: providers(["a"]), model: "m" })).toMatchObject({

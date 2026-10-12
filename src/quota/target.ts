@@ -5,21 +5,27 @@
  * Token per provider: the `$TOKEN$` value of Go's `POST /requests/api-call` (`apiCallToken`; the route itself is not
  * ported) for Claude, Codex, Antigravity, Kimi and xAI; the `dca_token` for Meta (the usage endpoint refuses the
  * minted API key, upstream panel features/quota/providers/meta/requests.ts); the session token for Devin
- * (`devinCredentials`). The target carries token material, so it only ever crosses the RPC boundary to the Worker and
- * is never logged or returned to clients.
+ * (`devinCredentials`); the config API key itself for OpenCode Go (`attributes.api_key`, usage URL from the key's
+ * `base_url`). The target carries token material, so it only ever crosses the RPC boundary to the Worker and is never
+ * logged or returned to clients.
  */
 import { decodeJwtClaims } from "../credentials/expiry.ts";
 import type { Credential } from "../credentials/model.ts";
 import { devinCredentials } from "../executor/devin/credentials.ts";
+import { OPENCODE_GO, OPENCODE_SPECS } from "../executor/opencode/providers.ts";
 import { isJsonObject, type Json } from "../json/index.ts";
 import { apiCallToken } from "../management/credential-ops.ts";
 import { kimiUsageUrl } from "./kimi.ts";
 import { isDcaToken } from "./meta.ts";
+import { openCodeGoUsageUrl } from "./opencode-go.ts";
 import type { QuotaProvider } from "./report.ts";
 import type { ResetGrantMark } from "./reset-grant-store.ts";
 
 export interface QuotaProbeTarget {
+  /** The stored credential id (never logged: a config key's id is derived from the key). */
   readonly id: string;
+  /** What logs name the account by: the auth file name, or a config key's `auth_index`. */
+  readonly handle?: string;
   readonly provider: QuotaProvider;
   /** Bearer token (Meta: the `dca_token`; Devin: the session token). */
   readonly token: string;
@@ -27,7 +33,7 @@ export interface QuotaProbeTarget {
   readonly accountId?: string;
   /** Antigravity Cloud project. */
   readonly projectId?: string;
-  /** Kimi usage URL (`api.kimi.com` or `api.kimi.ai`). */
+  /** Kimi usage URL (`api.kimi.com` or `api.kimi.ai`); OpenCode Go `{base}/usage`. */
   readonly usageUrl?: string;
   /** xAI subject (`x-userid`). */
   readonly userId?: string;
@@ -132,6 +138,15 @@ export const buildQuotaTarget = (
           deviceSeed: devin.deviceSeed,
         },
       };
+    }
+
+    case "opencode-go": {
+      const token = credential.attributes.api_key?.trim() ?? "";
+
+      if (token === "") return unavailable(id, "credential has no api key");
+      const baseUrl = credential.attributes.base_url?.trim() || OPENCODE_SPECS[OPENCODE_GO].baseUrl;
+
+      return { ok: true, target: { id, provider, token, usageUrl: openCodeGoUsageUrl(baseUrl) } };
     }
 
     default:

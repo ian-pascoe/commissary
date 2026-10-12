@@ -2,13 +2,25 @@
 // pages. Pure: no DOM, tested in test/web-quota.test.ts.
 import type { CredentialEntry } from "#contract/credentials.ts";
 import { providerName } from "./providers.ts";
-import { type AccountStanding, accountStanding } from "./quota.ts";
+import { type AccountStanding, accountStanding, checksQuota } from "./quota.ts";
 
-/** The account's address or label, whichever it has (the file name as a last resort). */
-export const accountName = (entry: CredentialEntry): string =>
-  [entry.email, entry.account, entry.label].find(
-    (name) => name !== undefined && name !== "" && name !== entry.provider,
-  ) ?? entry.name;
+/** The server's mask before the last characters of a config API key (`[redacted]…abcd`). */
+const KEY_MASK = /^\[redacted\]/;
+
+/**
+ * The account's address or label, whichever it has (the file name as a last resort); a config API key reads
+ * "Key …abcd".
+ */
+export const accountName = (entry: CredentialEntry): string => {
+  if (entry.source === "config" && entry.account !== undefined && KEY_MASK.test(entry.account))
+    return `Key ${entry.account.replace(KEY_MASK, "").trim()}`;
+
+  return (
+    [entry.email, entry.account, entry.label].find(
+      (name) => name !== undefined && name !== "" && name !== entry.provider,
+    ) ?? entry.name
+  );
+};
 
 export interface Assessed {
   readonly entry: CredentialEntry;
@@ -106,6 +118,57 @@ const REFRESHABLE = new Set([
 ]);
 
 export const refreshable = (provider: string): boolean => REFRESHABLE.has(provider);
+
+/**
+ * A config API key listed for its quota (`source: "config"`, OpenCode Go): it lives in the config, so it is edited,
+ * disabled and removed on the Keys page, not here.
+ */
+export const isConfigAccount = (entry: CredentialEntry): boolean => entry.source === "config";
+
+/** What the account page offers for an account; a config key keeps the quota check and the cooldowns only. */
+export interface AccountActions {
+  readonly checkQuota: boolean;
+  readonly refresh: boolean;
+  /** Enable or disable. */
+  readonly toggle: boolean;
+  /** The account's own routing fields (`AccountRouting.tsx`). */
+  readonly routing: boolean;
+  readonly remove: boolean;
+}
+
+export const accountActions = (entry: CredentialEntry): AccountActions => {
+  const file = !isConfigAccount(entry);
+
+  return {
+    checkQuota: checksQuota(entry.provider),
+    refresh: file && refreshable(entry.provider),
+    toggle: file,
+    routing: file,
+    remove: file,
+  };
+};
+
+/** Where a config account's key is edited: its group on the Keys page, else the Keys page itself. */
+export type KeyHome =
+  | { readonly to: "/keys/$family/$index"; readonly params: { family: string; index: string } }
+  | { readonly to: "/keys" };
+
+export const keyHome = (entry: CredentialEntry): KeyHome | undefined => {
+  if (!isConfigAccount(entry)) return undefined;
+  const group = entry.key_group;
+
+  return group === undefined
+    ? { to: "/keys" }
+    : {
+        to: "/keys/$family/$index",
+        params: { family: group.family, index: String(group.index) },
+      };
+};
+
+/** The accounts a selection can hold: batch actions (enable, disable, refresh, delete) apply to auth files only. */
+export const selectable = <A extends { readonly entry: CredentialEntry }>(
+  accounts: ReadonlyArray<A>,
+): ReadonlyArray<A> => accounts.filter((account) => !isConfigAccount(account.entry));
 
 /** A cooldown's reason as the operator reads it. */
 export const cooldownReason = (reason: string): string => {
