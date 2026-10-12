@@ -233,6 +233,11 @@ Core contracts every provider slice implements (Go references in each module hea
   the final body (errors included) follows under a committed `200 application/json`, like Go. Video content downloads and `/v1/responses` are
   not wrapped (Go does not either).
   Route layers close over the services (`handlers/layer.ts`, `makeProxyRoutes` for tests) and are Access-gated.
+  Deviation: `POST /chat/completions`, `/completions`, `/responses`, `/responses/compact` and the `GET /responses`
+  WebSocket are unprefixed aliases of the `/v1` routes (Go serves only `/v1`). A client whose Anthropic models append
+  `/v1/messages` and whose OpenAI models append `/chat/completions` to the same base URL (pi's `opencode-go` catalog)
+  then needs a single base URL. The aliases are in `PROTECTED_PREFIXES` (`access/routes.ts`). `GET /models` is not
+  aliased, because it is a control panel page.
   Request bodies (`handlers/request.ts`, `http/body.ts`) decode `Content-Encoding: zstd` with a 32 MiB cap on the decoded
   size (`http/zstd.ts`: frame windows/content sizes are checked before fzstd allocates, the streaming decoder stops past the
   cap); a larger body answers 413 (deviation: Go reads it unbounded).

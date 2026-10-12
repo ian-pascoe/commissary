@@ -206,6 +206,25 @@ describe("production Worker end to end", () => {
     expect(await reportedCounts()).toEqual({ success: before.success + 1, failed: before.failed });
   });
 
+  it.each([
+    ["/chat/completions", { messages: [{ role: "user", content: "hi" }] }, "chat.completion"],
+    ["/responses", { input: "hi" }, "response"],
+  ])("serves the unprefixed alias %s like its /v1 route", async (path, body, object) => {
+    upstream = () => Response.json(COMPLETION);
+
+    const response = await exports.default.fetch(
+      new Request(`http://localhost${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ model: "alias-model", ...body }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as { object: string }).object).toBe(object);
+    expect(upstreamCalls).toEqual(["POST https://upstream.test/v1/chat/completions"]);
+  });
+
   // A client disconnect is not propagated through the `exports.default.fetch` loopback of the test pool (neither the
   // body cancel nor `request.signal` reaches the Worker), so this test calls the production default export directly
   // with a recording ExecutionContext and cancels the very stream the runtime would cancel.

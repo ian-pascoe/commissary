@@ -1,9 +1,12 @@
 /**
- * OpenAI-compatible inbound routes: `POST /v1/chat/completions` and `POST /v1/completions` (entry protocol `openai`).
+ * OpenAI-compatible inbound routes: `POST /v1/chat/completions` and `POST /v1/completions` (entry protocol `openai`),
+ * also served without the `/v1` prefix.
  *
  * Go source: sdk/api/handlers/openai/openai_handlers.go (ChatCompletions, shouldTreatAsResponsesFormat, Completions,
- * handleNonStreamingResponse, handleStreamingResponse, handleCompletions*). Difference: a body that is not JSON is
- * rejected with `400 Invalid request` instead of being forwarded and failing model resolution.
+ * handleNonStreamingResponse, handleStreamingResponse, handleCompletions*). Differences: a body that is not JSON is
+ * rejected with `400 Invalid request` instead of being forwarded and failing model resolution; the unprefixed
+ * aliases (`/chat/completions`, `/completions`) do not exist in Go. They let a client whose Anthropic models append
+ * `/v1/messages` and whose OpenAI models append `/chat/completions` (pi's opencode-go catalog) share one base URL.
  */
 import { Effect, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
@@ -156,7 +159,11 @@ const completions = handle({
 export const OpenAIRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
     const services = yield* routeServices<ProxyServices>();
-    yield* router.add("POST", "/v1/chat/completions", Effect.provide(chatCompletions, services));
-    yield* router.add("POST", "/v1/completions", Effect.provide(completions, services));
+
+    for (const path of ["/v1/chat/completions", "/chat/completions"] as const)
+      yield* router.add("POST", path, Effect.provide(chatCompletions, services));
+
+    for (const path of ["/v1/completions", "/completions"] as const)
+      yield* router.add("POST", path, Effect.provide(completions, services));
   }),
 );
