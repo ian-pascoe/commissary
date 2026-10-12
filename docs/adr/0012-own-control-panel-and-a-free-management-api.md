@@ -1,0 +1,3 @@
+# The proxy has its own control panel; the upstream panel is retired
+
+The proxy serves its own control panel at `/`, behind the admin check. The Worker handles every request before static assets, so panel files are gated like the management API and never shadow a proxy route. The Go server's panel was served with an automatic login at first. It was replaced, and its address now redirects to the new panel. The management API serves this panel and may change incompatibly. Routes keep the Go server's response shapes only where that is cheap, so scripts written for the Go server are not guaranteed to keep working.

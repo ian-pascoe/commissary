@@ -1,0 +1,3 @@
+# Conversation state lives in one object per session, isolated per principal
+
+State that must outlive a single request is kept in a SessionState durable object, one per kind of state, caller scope and session. This covers reasoning replay, Claude continuity and Interactions continuation, each with a time to live and compare-and-swap writes. The Go server keeps these maps in process memory. Here they must be shared across isolates, and principals must never see each other's conversations. Losing this state only means a cache miss. Best-effort caches that need neither atomic writes nor per-session isolation, such as model catalogs and the signature cache, stay in KV.

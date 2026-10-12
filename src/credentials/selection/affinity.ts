@@ -3,7 +3,8 @@
  *
  * Go source: sdk/cliproxy/auth/session_cache.go (`SessionCache`), selector.go (`SessionAffinitySelector.Pick/OnResult`,
  * `isSubagentSession`), home_session_alias.go (`isHierarchyParent`). Docs: credentials.md §6.9.
- * Differences: alias groups are replaced by independent keys, the LCP conversation matcher is not ported, and the
+ * Differences: alias groups are replaced by independent keys, the LCP conversation matcher lives in
+ * session-routing/matcher.ts (wired in pick.ts), and the
  * cache key additionally carries the caller scope so principals never share bindings.
  */
 
