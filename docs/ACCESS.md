@@ -89,7 +89,8 @@ characters; a missing key is refused everywhere.
 
 ## 4. How the Worker validates requests
 
-1. The path is classified (`src/access/routes.ts`): `/v1*` (incl. `/v1beta`, `/v1internal`), `/openai/v1*`, `/backend-api/codex*` need a
+1. The path is classified (`src/access/routes.ts`): `/v1*` (incl. `/v1beta`, `/v1internal`), `/openai/v1*`, `/backend-api/codex*` and the unprefixed
+   aliases `/chat/completions`, `/completions`, `/responses` need a
    principal; `/v8/management*`, the control panel (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/settings` with their
    sub-paths, `/assets/*`) and `/management.html` (the upstream panel's old address, a redirect to `/`) need an admin;
    everything else (`/healthz`, the OAuth browser callbacks `/anthropic/callback`, `/codex/callback`,
@@ -110,7 +111,8 @@ Because the Worker trusts only the signed JWT, requests that skip Access (e.g. a
 Browsers attach the Access session cookie automatically, so without further checks a page on another site could drive an
 admin's session. Before authentication the gate (`src/access/csrf.ts`) refuses, with 403 `Cross-site request rejected`:
 
-- state-changing requests (anything but `GET`/`HEAD`/`OPTIONS`) to `/v1*`, `/openai/v1*`, `/backend-api/codex*` and the
+- state-changing requests (anything but `GET`/`HEAD`/`OPTIONS`) to `/v1*`, `/openai/v1*`, `/backend-api/codex*`, the
+  unprefixed `/chat/completions`, `/completions`, `/responses` and the
   management zone when `Sec-Fetch-Site` is `cross-site`/`same-site` or `Origin` names another host;
 - any management request (`/v8/management*`, the panel paths) with a foreign `Origin` or a cross-site `Sec-Fetch-Site`,
   except a top-level document navigation (`GET`/`HEAD` with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document`)

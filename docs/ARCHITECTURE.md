@@ -14,7 +14,7 @@ Goals:
   Interactions APIs from a Worker, backed by the same provider credentials (OAuth and API key) as the Go server.
 - Faithful port of model resolution, credential selection/cooldowns/refresh, translators, the thinking pipeline and
   user payload rules.
-- Cloudflare Access is the only client authentication mechanism (optional legacy API keys for migration).
+- Cloudflare Access is the only client authentication mechanism (legacy proxy API keys are imported but never enforced).
 
 Non-goals (not ported): plugins (`internal/pluginhost`), CLIProxyAPIHome mode, TUI, mDNS discovery, pprof, git/Postgres/
 object stores, request-log files, per-credential outbound proxies (`proxy-url`), uTLS TLS fingerprinting, Codex live /
@@ -64,8 +64,9 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
 - **KV `CACHE`**: model catalogs refreshed by cron, best-effort caches (signature cache) with `expirationTtl`.
 - **D1 `USAGE`**: usage records written with `ctx.waitUntil`.
 - **Static assets** (`public/`, Worker runs first): the control panel (`web/` build).
-- **Cron trigger**: model catalog refresh (3 h in Go), the quota check of connected accounts and a safety sweep that
-  re-arms credential refresh alarms.
+- **Cron trigger** (every 3 h, production only; `src/scheduled.ts`): model catalog refreshes (general/Codex/Devin,
+  OpenCode, Antigravity version and model entitlements, xAI client version), usage retention, the Devin user status, a
+  safety sweep that re-arms credential refresh alarms, and the quota check of connected accounts.
 
 Request flow:
 
@@ -223,8 +224,8 @@ Core contracts every provider slice implements (Go references in each module hea
   for tests (`makePipeline` uses it; `test/support/pool.ts` runs the real `CredentialPool` in-process with an injected
   clock). The route returned by `pick` (`PickedRoute`: upstream model pool, `originalAlias`, `forceMapping`, `pooled`) is
   computed in the DO; `executor/models.ts` is only used by the static picker.
-- **Handlers (`src/handlers/`)**: `execute.ts` runs resolve (`ModelProviders` service: config-backed until the
-  registry slice) -> pick -> executor -> report -> usage (one record per attempt via `UsageSink`, published when the
+- **Handlers (`src/handlers/`)**: `execute.ts` runs resolve (`ModelProviders` service: the model registry;
+  `ModelProviders.configLayer` serves tests without one) -> pick -> executor -> report -> usage (one record per attempt via `UsageSink`, published when the
   stream ends). `respond.ts` peeks the first stream chunk inside the request scope (the web handler keeps the scope
   open for streamed bodies) so pre-stream failures become real HTTP errors, then frames with a per-protocol
   `StreamFramer` (`framing.ts`), with optional keep-alives. Error bodies per protocol are in `http/errors.ts`. Non-stream answers of Claude, OpenAI chat/completions,
@@ -448,7 +449,7 @@ upgrade request like any other (default-deny prefixes); the principal is capture
   like the goroutine-per-connection state in Go. A DO with the hibernation API would add nothing: the outbound upstream
   WebSocket and the running turn keep the object awake anyway and outbound sockets cannot hibernate; it would only add an RPC hop
   per frame. The cost is that an isolate restart (deploy) drops live sockets; clients reconnect and replay full input, which is
-  also what happens when Go restarts. The `SessionState` class stays a stub.
+  also what happens when Go restarts. The `SessionState` object holds no socket state.
 - **Loop** (`socket.ts`): one fiber per socket, started with `Effect.runForkWith(context)` from the upgrade handler (the services of the
   request are captured once; every turn runs in its own `Effect.scoped`). A second fiber is the only reader of the client socket so
   `response.interrupt` reaches the running upstream socket (or cancels a local HTTP turn) without waiting behind the response.
@@ -763,9 +764,9 @@ claude/gemini/openai-response -> openai, interactions <-> openai (Chat Completio
 
 ## Management API and control panel (`src/management/`)
 
-Port of `internal/api/handlers/management` for the `/v8/management` routes that apply on Workers; the Go-compatible
-routes keep Go's response shapes (scripts written for the Go server keep working), while the control panel at `/`
-(`web/`) talks to the API through `contract/`. The upstream panel (`Cli-Proxy-API-Management-Center`) is not served:
+Port of `internal/api/handlers/management` for the `/v8/management` routes that apply on Workers. The API serves the
+control panel at `/` (`web/`, through `contract/`) and may change incompatibly: routes keep Go's response shapes where
+that is cheap, but scripts written for the Go server are not guaranteed to keep working. The upstream panel (`Cli-Proxy-API-Management-Center`) is not served:
 its address redirects to `/` (_Legacy panel address_ below), and the routes only it needed are gone (`requests/api-call`,
 the operational and log routes listed under _Also not ported_) or masked (`GET /config*`). Auth is the Access admin gate only (`access/routes.ts` classifies `/v8/management*`, the
 panel paths and `/management.html` as `management`); there is no management key.
@@ -1471,7 +1472,7 @@ Access `callerScope` into the key (Codex, xAI, Kimi, Antigravity), by prefixing 
   because a SQLite row is limited to 2 MiB while the Go caches allow 16 MiB per entry) and `MemoryStateTable` for the in-process
   backend and unit tests. Expiry is lazy (an expired entry reads as absent) plus an alarm armed at the earliest expiry that
   deletes expired entries and, when nothing is left, the whole instance storage (`deleteAll`, tables re-created). Bounds: TTL
-  clamp 1 s .. 24 h, value <= 20 Mi units, `maxEntries` per instance (oldest writes evicted, expired purged first).
+  clamp 1 s .. 7 d, value <= 20 Mi units, `maxEntries` per instance (oldest writes evicted, expired purged first).
 - **Client** (`client.ts`): `SessionStateBackend.run(address, ops)`; `durableObjectBackend` (per-request stubs from `WorkerEnv`,
   never captured), `makeMemoryBackend(now?)` (bounded to 10240 instances) and `resolveBackend()` = the DO when `WorkerEnv`
   binds `SESSION_STATE`, else the per-isolate memory backend (unit tests, local runs without the binding).
@@ -1677,7 +1678,8 @@ Grok/GPT/recognised checks, Gemini replay, ~500 sanitiser runs over synthetic hi
   JSON (multipart for `POST /credentials`, YAML for `PUT /config.yaml`) or no body (415). The CORS middleware adds no headers in
   the management zone (deviation from Go's `*`).
 - Implementation notes (`src/access/`): the gate is a _global_ router middleware that matches protected path
-  prefixes (default-deny for `/v1*`, `/openai/v1*`, `/backend-api/codex*`, `/v8/management*`, normalising case, duplicate
+  prefixes (default-deny for `/v1*`, `/openai/v1*`, `/backend-api/codex*`, the unprefixed `/chat/completions`,
+  `/completions`, `/responses`, `/v8/management*`, normalising case, duplicate
   slashes and percent-encoding) and provides `AccessPrincipal`; route layers that read it use `withAccess(...)` for typing.
   JWKS keys are cached per isolate and refreshed on unknown `kid` at most once per 30 s (no cross-request locks, which
   workerd forbids). `ACCESS_DEV_BYPASS` only applies when the request host is loopback (i.e. `alchemy dev`) and is refused (warning logged once
