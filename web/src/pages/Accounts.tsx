@@ -73,7 +73,7 @@ import {
 import { failureMessage } from "../lib/failure.ts";
 import { formatCount, formatDuration } from "../lib/format.ts";
 import { providerName } from "../lib/providers.ts";
-import { checksQuota, windowLevel } from "../lib/quota.ts";
+import { checksQuota, windowLevel, windowPace } from "../lib/quota.ts";
 import { resetsBrief } from "../lib/reset-grants.ts";
 import { useAction } from "../lib/use-action.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
@@ -258,7 +258,8 @@ const Row = ({
   const pickId = useId();
   const requests = entry.recent_requests.reduce((sum, bucket) => sum + bucket.success, 0);
   const failed = entry.recent_requests.reduce((sum, bucket) => sum + bucket.failed, 0);
-  const resets = resetsBrief(entry.reset_grants, useAtomValue(nowAtom));
+  const now = useAtomValue(nowAtom);
+  const resets = resetsBrief(entry.reset_grants, now);
 
   return (
     <tr
@@ -349,6 +350,7 @@ const Row = ({
                 label={window.label}
                 percent={window.usedPercent}
                 level={windowLevel(window)}
+                pace={windowPace(window, standing.readAt, now)}
               />
             ))}
           </div>

@@ -263,6 +263,12 @@ A usage limit that the provider reports for an account over a period (five-hour,
 and the time it renews.
 _Avoid_: quota window, usage window, bucket, quota
 
+**Pace**:
+How an allowance's share used compares with the share of its period that has passed. An allowance _ahead of pace_ would
+reach the limit before the allowance renews at its rate so far, one _behind pace_ would leave part of it unused, and one
+_on pace_ is within a few points of an even rate.
+_Avoid_: burn rate, velocity, utilization rate
+
 **Quota check**:
 Asking a provider for an account's current allowances.
 _Avoid_: probe, quota (on its own)

@@ -14,7 +14,13 @@ import { type Assessed, accountName, assess } from "../lib/accounts.ts";
 import { failureMessage } from "../lib/failure.ts";
 import { formatClock, formatCount, formatDuration, formatTokens } from "../lib/format.ts";
 import { providerName } from "../lib/providers.ts";
-import { type AccountStanding, byUrgency, checksQuota, windowLevel } from "../lib/quota.ts";
+import {
+  type AccountStanding,
+  byUrgency,
+  checksQuota,
+  windowLevel,
+  windowPace,
+} from "../lib/quota.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
 import styles from "./Overview.module.css";
 
@@ -89,6 +95,7 @@ const noQuotaNote = (entry: CredentialEntry): string =>
 
 const AccountRow = ({ account, index }: { readonly account: Assessed; readonly index: number }) => {
   const { entry, standing, closed, note, tone } = account;
+  const now = useAtomValue(nowAtom);
 
   const requests = entry.recent_requests.reduce(
     (sum, bucket) => sum + bucket.success + bucket.failed,
@@ -124,6 +131,7 @@ const AccountRow = ({ account, index }: { readonly account: Assessed; readonly i
                 label={window.label}
                 percent={window.usedPercent}
                 level={windowLevel(window)}
+                pace={windowPace(window, standing.readAt, now)}
               />
             ))}
           </div>

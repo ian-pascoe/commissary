@@ -11,6 +11,11 @@
   color: var(--quiet);
 }
 
+/* Holds the track and the pace tick, which stands proud of the track and so sits outside its clipping. */
+.gauge {
+  position: relative;
+}
+
 .track {
   height: 0.5rem;
   background: var(--hairline);
@@ -25,6 +30,26 @@
 
 .fill[data-level="out"] {
   background: var(--danger);
+}
+
+/* The share of the period passed: ink, taller than the track, with a ground-coloured edge so it reads over the fill. */
+.tick {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 0.875rem;
+  background: var(--text);
+  outline: 1px solid var(--ground);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.pace {
+  grid-column: 2;
+  margin-top: calc(-1 * var(--space-2));
+  font-size: var(--text-xs);
+  line-height: 1.2;
+  color: var(--quiet);
 }
 
 .value {
