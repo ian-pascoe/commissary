@@ -25,8 +25,8 @@
     "infra",
     "stacks",
     "web/vite.config.ts",
-    "tools/sync-opencode-catalog.ts",
-    "src/registry/opencode-catalog-trim.ts",
+    "tools/sync-models-dev-catalog.ts",
+    "src/registry/models-dev.ts",
     "src/management/auth-index-key.ts"
   ]
 }

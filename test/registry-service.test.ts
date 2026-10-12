@@ -194,7 +194,8 @@ describe("static lookups agree with the thinking fixtures' Go catalog", () => {
     const ids = Object.keys(thinkingFixture.catalog);
     expect(ids.length).toBeGreaterThan(100);
 
-    for (const id of ids) {
+    // Go resolves Devin models from the raw section; the catalog has the aggregated list only (ADR 0020).
+    for (const id of ids.filter((entry) => !entry.startsWith("devin/"))) {
       const expected = thinkingFixture.catalog[id];
       const actual = lookupStaticModelInfo(catalogs, id);
       expect(actual, id).toBeDefined();

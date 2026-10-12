@@ -16,7 +16,8 @@
  * `credentials-batch.ts`; usage (`/observability/usage/*`) is in `usage-routes.ts`; the
  * per-model routing view (`/routing/models`) in `routing-models.ts`; the Settings page (`/settings`) in
  * `settings-routes.ts` and its raw configuration editor (`/settings/config`) in `settings-raw-routes.ts`; Claude reset
- * grants (`/credentials/reset-grants`) in `reset-grant-routes.ts`.
+ * grants (`/credentials/reset-grants`) in `reset-grant-routes.ts`; the model catalog's status and on-demand refresh (`/models/catalog`) in
+ * `catalog-routes.ts`.
  */
 import { Effect, Layer } from "effect";
 import {
@@ -29,9 +30,11 @@ import {
 import { LEGACY_PANEL_PATH } from "../access/routes.ts";
 import { routeServices } from "../http/route-services.ts";
 import type { WorkerEnv } from "../platform/env.ts";
+import { CatalogStore } from "../registry/catalog-store.ts";
 import { ModelRegistryLive } from "../registry/live.ts";
 import type { ModelRegistry } from "../registry/service.ts";
 import { apiKeyProbeHandler, apiKeysRoutes } from "./api-keys-routes.ts";
+import { catalogRefreshHandler, catalogStatusHandler } from "./catalog-routes.ts";
 import { configRoutes } from "./config-routes.ts";
 import { credentialsBatchHandler } from "./credentials-batch.ts";
 import { credentialModelsHandler, credentialRoutes } from "./credentials-routes.ts";
@@ -51,16 +54,17 @@ import { usageRoutes } from "./usage-routes.ts";
 
 const BASE = "/v8/management";
 
-/** All management routes; needs `ModelRegistry` and an `HttpClient`. */
+/** All management routes; needs `ModelRegistry`, the `CatalogStore` and an `HttpClient`. */
 export const ManagementRoutes = HttpRouter.addAll(
   Effect.gen(function* () {
     // Handlers run per request: bind the isolate-wide services once instead of leaking them into the request context.
-    const services = yield* routeServices<ModelRegistry | HttpClient.HttpClient>();
+    const services = yield* routeServices<ModelRegistry | HttpClient.HttpClient | CatalogStore>();
 
     const bound = <
       R extends
         | ModelRegistry
         | HttpClient.HttpClient
+        | CatalogStore
         | WorkerEnv
         | HttpServerRequest.HttpServerRequest,
     >(
@@ -87,6 +91,8 @@ export const ManagementRoutes = HttpRouter.addAll(
       ),
       HttpRouter.route("POST", `${BASE}/api-keys/probe`, bound(apiKeyProbeHandler)),
       HttpRouter.route("GET", `${BASE}/routing/models`, bound(routingModelsHandler)),
+      HttpRouter.route("GET", `${BASE}/models/catalog`, bound(catalogStatusHandler)),
+      HttpRouter.route("POST", `${BASE}/models/catalog/refresh`, bound(catalogRefreshHandler)),
       HttpRouter.route("GET", LEGACY_PANEL_PATH, LEGACY_PANEL_REDIRECT),
       ...PANEL_PAGE_PATHS.map((path) => HttpRouter.route("GET", path, webPanelPage)),
       HttpRouter.route("GET", "/assets/*", webPanelAsset),
@@ -96,5 +102,5 @@ export const ManagementRoutes = HttpRouter.addAll(
 
 /** Production wiring: ControlPlane-backed model registry and the global `fetch`. Wrap with `withAccess(...)`. */
 export const ManagementRoutesLive = ManagementRoutes.pipe(
-  Layer.provide(Layer.mergeAll(ModelRegistryLive, FetchHttpClient.layer)),
+  Layer.provide(Layer.mergeAll(ModelRegistryLive, FetchHttpClient.layer, CatalogStore.layer)),
 );

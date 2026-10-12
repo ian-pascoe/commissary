@@ -1,37 +1,28 @@
 /**
- * The OpenCode model catalog (models.dev data for OpenCode Zen and OpenCode Go): which models each gateway serves,
- * which upstream protocol each speaks, and their limits, modalities and reasoning support.
+ * The OpenCode gateways' view of the models.dev document: which models each gateway serves, which upstream protocol
+ * each speaks, and their limits, modalities and reasoning support (ADR 0020: one document feeds every provider).
  *
- * Deliberate deviation from Go: CLIProxyAPI has no OpenCode provider. OpenCode's own client picks a model's protocol
- * from the catalog's AI SDK package (`provider.npm`, else the provider's `npm`; sst/opencode
- * `packages/core/src/aisdk-native.ts`) and so does the proxy. The catalog is bundled
- * (`catalog/opencode_models.json`, `pnpm catalog:opencode`) and refreshed into KV by the cron job
- * (`opencode-refresh.ts`); readers use the KV copy when it is valid, else the bundled one. Requests never fetch it.
- * See docs/ARCHITECTURE.md "OpenCode Zen and OpenCode Go".
+ * OpenCode's own client picks a model's protocol from the catalog's AI SDK package (`provider.npm`, else the
+ * provider's `npm`; sst/opencode `packages/core/src/aisdk-native.ts`) and so does the proxy. The document is bundled
+ * (`catalog/models-dev.json`, `pnpm catalog:sync`) and refreshed into KV by the cron job (`refresh.ts`); readers use
+ * the KV copy when it is valid, else the bundled one. Requests never fetch it. See docs/ARCHITECTURE.md "OpenCode Zen
+ * and OpenCode Go".
  */
 import { Clock, Effect, Option, type Types } from "effect";
 import type { OpenCodeProtocol } from "../config/schema.ts";
 import { OPENCODE_SPECS, type OpenCodeProvider } from "../executor/opencode/providers.ts";
 import { WorkerEnv } from "../platform/env.ts";
-import openCodeJson from "./catalog/opencode_models.json";
-import type { ModelInfo, ThinkingSupport } from "./model-info.ts";
-import {
-  type CatalogModel,
-  type CatalogProvider,
-  type TrimmedCatalog,
-  trimOpenCodeCatalog,
-} from "./opencode-catalog-trim.ts";
+import { embeddedModelsDev, modelsDevFromText } from "./catalog.ts";
+import { usesEmbeddedCatalog } from "./catalog-source.ts";
+import { CATALOG_KEYS } from "./catalog-store.ts";
+import { isDeprecatedModel, thinkingFromModelsDev } from "./catalog-build.ts";
+import type { ModelInfo } from "./model-info.ts";
+import type { ModelsDevCatalog, ModelsDevModel, ModelsDevProvider } from "./models-dev.ts";
 
-export type { CatalogModel as OpenCodeCatalogModel } from "./opencode-catalog-trim.ts";
+export type { ModelsDevModel as OpenCodeCatalogModel } from "./models-dev.ts";
 
-/** The OpenCode part of the models.dev catalog, trimmed (`opencode-catalog-trim.ts`). */
-export type OpenCodeCatalog = TrimmedCatalog;
-
-/** Where OpenCode itself reads the catalog (the cron source). */
-export const OPENCODE_CATALOG_URL = "https://models.opencode.ai/api.json";
-
-/** KV key of the refreshed (trimmed) catalog in `CACHE`. */
-export const OPENCODE_CATALOG_KV_KEY = "registry/opencode_models.json";
+/** The models.dev document the gateways read (`opencode` and `opencode-go` are the providers they use). */
+export type OpenCodeCatalog = ModelsDevCatalog;
 
 /** AI SDK package of providers and models that name none (models.dev default). */
 export const DEFAULT_OPENCODE_NPM = "@ai-sdk/openai-compatible";
@@ -45,20 +36,6 @@ const NPM_PROTOCOLS: ReadonlyMap<string, OpenCodeProtocol> = new Map([
   ["@ai-sdk/google", "gemini"],
 ]);
 
-let embedded: OpenCodeCatalog | undefined;
-
-/** The catalog compiled into the Worker (parsed once per isolate). */
-export const embeddedOpenCodeCatalog = (): OpenCodeCatalog => {
-  if (embedded === undefined) {
-    const trimmed = trimOpenCodeCatalog(JSON.stringify(openCodeJson));
-
-    if (!trimmed.ok) throw new Error(`embedded opencode_models.json is invalid: ${trimmed.error}`);
-    embedded = trimmed.value;
-  }
-
-  return embedded;
-};
-
 export interface OpenCodeCatalogFromText {
   readonly catalog: OpenCodeCatalog;
   /** Why a stored text was not used (the bundled catalog was used instead). */
@@ -69,14 +46,14 @@ export interface OpenCodeCatalogFromText {
 export const openCodeCatalogFromText = (
   text: string | null | undefined,
 ): OpenCodeCatalogFromText => {
-  if (text === undefined || text === null) return { catalog: embeddedOpenCodeCatalog() };
-  const trimmed = trimOpenCodeCatalog(text);
+  if (text === undefined || text === null) return { catalog: embeddedModelsDev() };
+  const parsed = modelsDevFromText(text);
 
-  if (trimmed.ok) return { catalog: trimmed.value };
+  if (parsed.ok) return { catalog: parsed.value };
 
   return {
-    catalog: embeddedOpenCodeCatalog(),
-    warning: `stored opencode catalog rejected, using the bundled one: ${trimmed.error}`,
+    catalog: embeddedModelsDev(),
+    warning: `stored models.dev catalog rejected, using the bundled one: ${parsed.error}`,
   };
 };
 
@@ -103,15 +80,15 @@ export const currentOpenCodeCatalog: Effect.Effect<OpenCodeCatalog> = Effect.gen
   if (cached !== undefined && now - cached.loadedAt < LOCAL_CACHE_MS) return cached.catalog;
   const env = yield* Effect.serviceOption(WorkerEnv);
 
-  if (Option.isNone(env)) return embeddedOpenCodeCatalog();
+  if (Option.isNone(env)) return embeddedModelsDev();
 
-  const stored = yield* Effect.tryPromise(() => env.value.CACHE.get(OPENCODE_CATALOG_KV_KEY)).pipe(
+  const stored = yield* Effect.tryPromise(() => env.value.CACHE.get(CATALOG_KEYS.modelsDev)).pipe(
     Effect.asSome,
     Effect.orElseSucceed(() => Option.none<string | null>()),
   );
 
   // A failed read keeps the previous copy.
-  if (Option.isNone(stored)) return cached?.catalog ?? embeddedOpenCodeCatalog();
+  if (Option.isNone(stored)) return cached?.catalog ?? embeddedModelsDev();
 
   if (cached !== undefined && cached.text === stored.value) {
     cached = { ...cached, loadedAt: now };
@@ -127,20 +104,24 @@ export const currentOpenCodeCatalog: Effect.Effect<OpenCodeCatalog> = Effect.gen
   return built.catalog;
 });
 
+/** The catalog the gateways read under the `models.catalog` setting: `embed` ignores the stored copy. */
+export const openCodeCatalogFor = (configured: string): Effect.Effect<OpenCodeCatalog> =>
+  usesEmbeddedCatalog(configured) ? Effect.sync(embeddedModelsDev) : currentOpenCodeCatalog;
+
 // --- lookups --------------------------------------------------------------------------------------------------------
 
 /** The catalog section of a gateway. */
 export const catalogProvider = (
   catalog: OpenCodeCatalog,
   provider: OpenCodeProvider,
-): CatalogProvider => catalog[OPENCODE_SPECS[provider].catalogId];
+): ModelsDevProvider => catalog[OPENCODE_SPECS[provider].catalogId];
 
 /** A model of a gateway by id (exact, then case-insensitive). */
 export const findCatalogModel = (
   catalog: OpenCodeCatalog,
   provider: OpenCodeProvider,
   modelId: string,
-): CatalogModel | undefined => {
+): ModelsDevModel | undefined => {
   const { models } = catalogProvider(catalog, provider);
   const id = modelId.trim();
   const exact = models[id];
@@ -155,7 +136,7 @@ export const findCatalogModel = (
 export const catalogModelNpm = (
   catalog: OpenCodeCatalog,
   provider: OpenCodeProvider,
-  model: CatalogModel,
+  model: ModelsDevModel,
 ): string => model.provider?.npm ?? catalogProvider(catalog, provider).npm ?? DEFAULT_OPENCODE_NPM;
 
 /**
@@ -171,12 +152,8 @@ export const protocolForNpm = (
   return protocol === "gemini" && provider !== "opencode-zen" ? undefined : protocol;
 };
 
-export const isDeprecatedModel = (model: CatalogModel): boolean =>
-  (model.status ?? "").trim().toLowerCase() === "deprecated";
-
-/** Both prices are zero (OpenCode's free tier). */
-export const isFreeModel = (model: CatalogModel): boolean =>
-  model.cost?.input === 0 && model.cost.output === 0;
+/** OpenCode's free tier (both prices zero), flagged by the trim (`models-dev.ts`). */
+export const isFreeModel = (model: ModelsDevModel): boolean => model.free === true;
 
 /** The registry `type` of a protocol: the format family the thinking pipeline validates against. */
 export const openCodeProtocolType = (protocol: OpenCodeProtocol | undefined): string => {
@@ -190,48 +167,11 @@ export const openCodeProtocolType = (protocol: OpenCodeProtocol | undefined): st
   }
 };
 
-const DEFAULT_LEVELS: ReadonlyArray<string> = ["low", "medium", "high"];
-
-/**
- * Thinking support from `reasoning`/`reasoning_options`: `effort` values become levels, `budget_tokens` a budget range
- * (minimum 1024 and the output limit by default), `toggle` (or no options) the standard low/medium/high levels.
- * Models without reasoning support none, so reasoning settings are stripped for them.
- */
-export const catalogThinking = (model: CatalogModel): ThinkingSupport | undefined => {
-  if (model.reasoning !== true) return undefined;
-  const out: Types.Mutable<ThinkingSupport> = {};
-  const levels: string[] = [];
-
-  for (const option of model.reasoning_options ?? []) {
-    if (option.type === "effort") {
-      for (const value of option.values ?? []) {
-        const level = value.trim().toLowerCase();
-
-        if (level === "none") out.zeroAllowed = true;
-        else if (level === "auto") out.dynamicAllowed = true;
-
-        if (level !== "" && !levels.includes(level)) levels.push(level);
-      }
-    } else if (option.type === "budget_tokens") {
-      out.min = option.min ?? 1024;
-      const max = option.max ?? model.limit?.output;
-
-      if (max !== undefined && max > 0) out.max = max;
-      out.zeroAllowed = true;
-    }
-  }
-
-  if (levels.length > 0) out.levels = levels;
-  else if (out.min === undefined) out.levels = [...DEFAULT_LEVELS];
-
-  return out;
-};
-
 /** `ModelInfo` of a catalog model as the gateway `provider` serves it. */
 export const catalogModelInfo = (
   catalog: OpenCodeCatalog,
   provider: OpenCodeProvider,
-  model: CatalogModel,
+  model: ModelsDevModel,
 ): ModelInfo => {
   const protocol = protocolForNpm(catalogModelNpm(catalog, provider, model), provider);
 
@@ -256,7 +196,7 @@ export const catalogModelInfo = (
   const outputModalities = model.modalities?.output ?? [];
 
   if (outputModalities.length > 0) info.supportedOutputModalities = [...outputModalities];
-  const thinking = catalogThinking(model);
+  const thinking = thinkingFromModelsDev(model);
 
   if (thinking !== undefined) info.thinking = thinking;
 

@@ -2,7 +2,9 @@
 import { asString, isJsonObject, type Json, type JsonObject } from "../../src/json/index.ts";
 import {
   type ModelCatalogs,
+  type ModelsCatalog,
   embeddedCatalogs,
+  SECTIONS,
   sectionModels,
   type Section,
 } from "../../src/registry/catalog.ts";
@@ -71,9 +73,22 @@ export interface RegistryFixture {
 
 export const fixture: RegistryFixture = JSON.parse(raw) as RegistryFixture;
 
-export const catalogs: ModelCatalogs = embeddedCatalogs();
-
 export const fromGo = (wire: Json): ModelInfo => fromWire(decodeWireModel(wire));
+
+/**
+ * The Go registry's catalogs (the fixture's sections, built-ins included) in place of the bundled ones: the listing
+ * fixtures are Go parity data (ADR 0019) and must not move with models.dev.
+ */
+export const catalogs: ModelCatalogs = (() => {
+  const base = embeddedCatalogs();
+
+  // SAFETY: the fixture has a section for every key of ModelsCatalog (generated from the Go catalogs).
+  const models = Object.fromEntries(
+    SECTIONS.map((section) => [section, (fixture.sections[section] ?? []).map(fromGo)]),
+  ) as unknown as ModelsCatalog;
+
+  return { ...base, models };
+})();
 
 /** Drops Go zero values (`omitempty`) so records from different decoders compare equal. */
 export const canon = (value: Json | undefined): Json | undefined => {

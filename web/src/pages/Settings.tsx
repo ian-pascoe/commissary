@@ -27,7 +27,7 @@ const JUMPS: ReadonlyArray<readonly [SectionId | "payload", string]> = [
   ["payload", "Payload rules"],
   ["images", "Images & video"],
   ["providers", "Providers"],
-  ["catalogs", "Model catalogs"],
+  ["catalogs", "Model catalog"],
   ["admin", "Admin access"],
   ["refresh", "Account refresh"],
 ];
@@ -299,13 +299,15 @@ const Body = ({
 
       <SettingsSection
         id="catalogs"
-        title="Model catalogs"
+        title="Model catalog"
         {...common}
         lead={
           <>
             <p className={styles["lead"]}>
-              Where the model lists come from. Fetched lists refresh every 3 hours; a change applies
-              at the next refresh.
+              Where the model list comes from: models.dev, which the models of Claude, Gemini,
+              Vertex, Codex, Kimi, xAI, Meta and OpenCode are read from (Antigravity and Devin
+              models are built in). A fetched list refreshes every 3 hours; a change applies at the
+              next refresh.
             </p>
             <ul className={styles["legend"]}>
               {CATALOG_OPTIONS.map((option) => (
@@ -318,13 +320,7 @@ const Body = ({
           </>
         }
       >
-        {({ field }) => (
-          <>
-            {field("models.catalog")}
-            {field("models.codex-catalog")}
-            {field("models.devin-catalog")}
-          </>
-        )}
+        {({ field }) => <>{field("models.catalog")}</>}
       </SettingsSection>
 
       <SettingsSection

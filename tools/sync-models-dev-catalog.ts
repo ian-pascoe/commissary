@@ -1,21 +1,20 @@
 #!/usr/bin/env node
 /**
- * Regenerates the bundled OpenCode catalog snapshot (`src/registry/catalog/opencode_models.json`): the `opencode` (Zen)
- * and `opencode-go` providers of the models.dev catalog, trimmed to the fields the proxy reads.
+ * Regenerates the bundled models.dev snapshot (`src/registry/catalog/models-dev.json`): the providers the proxy reads
+ * from the models.dev document, trimmed to the fields it uses (ADR 0020). The catalog additions
+ * (`src/registry/catalog/additions.json`) are maintained by hand and untouched.
  *
- * Usage: `pnpm catalog:opencode [source]`, where `source` is an http(s) URL or a local file (for instance OpenCode's
- * own cache, `~/.cache/opencode/models.json`). Defaults to the URL OpenCode itself reads. Run by Node directly (type
- * stripping), so it only imports the dependency-free trim module.
+ * Usage: `pnpm catalog:sync [source]`, where `source` is an http(s) URL or a local file (for instance a saved
+ * `api.json`). Defaults to `https://models.dev/api.json`. Run by Node directly (type stripping), so it only imports the
+ * dependency-light trim module. Idempotent: syncing a trimmed document rewrites it unchanged.
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { trimOpenCodeCatalog } from "../src/registry/opencode-catalog-trim.ts";
+import { trimModelsDev } from "../src/registry/models-dev.ts";
 
-const DEFAULT_SOURCE = "https://models.opencode.ai/api.json";
+const DEFAULT_SOURCE = "https://models.dev/api.json";
 
-const OUTPUT = fileURLToPath(
-  new URL("../src/registry/catalog/opencode_models.json", import.meta.url),
-);
+const OUTPUT = fileURLToPath(new URL("../src/registry/catalog/models-dev.json", import.meta.url));
 
 const source = process.argv[2] ?? DEFAULT_SOURCE;
 
@@ -31,7 +30,7 @@ const load = async (from: string): Promise<string> => {
   return readFile(from, "utf8");
 };
 
-const trimmed = trimOpenCodeCatalog(await load(source));
+const trimmed = trimModelsDev(await load(source));
 
 if (!trimmed.ok) {
   process.stderr.write(`catalog rejected: ${trimmed.error}\n`);

@@ -22,7 +22,6 @@ import {
 } from "../config/schema.ts";
 import { matchWildcard, parseModelSuffix } from "../credentials/selection/model-name.ts";
 import {
-  devinModels,
   type ModelCatalogs,
   lookupStaticModelInfo,
   lookupStaticModelInfoByChannel,
@@ -312,7 +311,7 @@ const buildOpenCodeConfigModels = (
   provider: OpenCodeProvider,
   options: AssemblyOptions,
 ): ModelInfo[] => {
-  const catalog = options.catalogs.opencode;
+  const catalog = options.catalogs.modelsDev;
   const byAlias = new Map<string, ModelEntry>();
 
   for (const entry of entries) {
@@ -672,7 +671,7 @@ const baseModels = (source: ModelSource, options: AssemblyOptions): ModelInfo[] 
         excluded,
       );
     case "devin":
-      return applyExcludedModels(devinModels(catalogs), excluded);
+      return applyExcludedModels(sectionModels(catalogs, "devin"), excluded);
     case "meta":
       return applyExcludedModels(
         configured.length > 0
@@ -685,7 +684,7 @@ const baseModels = (source: ModelSource, options: AssemblyOptions): ModelInfo[] 
       return applyExcludedModels(
         configured.length > 0
           ? buildOpenCodeConfigModels(configured, provider, options)
-          : defaultCatalogModels(catalogs.opencode, provider),
+          : defaultCatalogModels(catalogs.modelsDev, provider),
         excluded,
       );
     default:

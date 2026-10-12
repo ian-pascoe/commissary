@@ -76,7 +76,7 @@ const WireThinking = Schema.Struct({
   levels: optionalNull(Strings),
 });
 
-/** One catalog entry (`models.json` sections, `devin_models.json`). Unknown keys are ignored like Go does. */
+/** One catalog entry (a section of the built model catalog, `catalog-build.ts`). Unknown keys are ignored like Go does. */
 export const WireModel = Schema.Struct({
   id: Schema.String,
   object: optionalNull(Schema.String),

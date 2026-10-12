@@ -29,11 +29,11 @@ const flag = (check: string, hint?: string): FieldCopy => ({
 });
 
 export const CATALOG_OPTIONS: ReadonlyArray<Option> = [
-  { value: "official", name: "Official", hint: "Fetched from the upstream project." },
+  { value: "official", name: "Official", hint: "Fetched from models.dev." },
   {
     value: "embed",
     name: "Embedded copy",
-    hint: "The copy built into this deployment; never fetched.",
+    hint: "The snapshot built into this deployment; never fetched.",
   },
   { value: "disabled", name: "Off", hint: "Not refreshed; the last catalog stays in use." },
   { value: "custom", name: "Custom address", hint: "Fetched from your own URL." },
@@ -254,8 +254,6 @@ const COPY = {
   },
 
   "models.catalog": { label: "Models", options: CATALOG_OPTIONS, inline: true },
-  "models.codex-catalog": { label: "Codex clients", options: CATALOG_OPTIONS, inline: true },
-  "models.devin-catalog": { label: "Devin", options: CATALOG_OPTIONS, inline: true },
 
   "access.admin-emails": {
     label: "Admin emails",

@@ -1,10 +1,8 @@
-// Command registry emits the model catalog data and golden fixtures for the TypeScript model registry
-// (src/registry).
-//
-// It (1) copies the embedded Go catalogs (internal/registry/models/*.json of the reference checkout) into src/registry/catalog and
-// writes builtins.json with the hard-coded Go model definitions (Codex/xAI/Devin built-ins), and (2) registers
-// clients in the real registry.ModelRegistry and records what the real /v1/models, /v1beta/models handlers answer,
-// so the TypeScript tests can verify listing parity. Run from the repository root:
+// Command registry emits the golden fixture for the TypeScript model registry's listings (test/fixtures/registry.json):
+// it registers clients in the real registry.ModelRegistry and records what the real /v1/models, /v1beta/models handlers
+// answer, so the TypeScript tests can verify listing parity. The model catalogs themselves are not generated from Go
+// any more: they come from models.dev plus the catalog additions (`pnpm catalog:sync`, ADR 0020); the fixture's
+// sections stay Go parity data. Run from the repository root:
 //
 //	go run ./tools/fixturegen/registry
 package main
@@ -85,13 +83,6 @@ var sectionProvider = map[string]string{
 	"claude": "claude", "gemini": "gemini", "vertex": "vertex", "aistudio": "aistudio",
 	"codex-free": "codex", "codex-team": "codex", "codex-plus": "codex", "codex-pro": "codex",
 	"kimi": "kimi", "antigravity": "antigravity", "xai": "xai", "devin": "devin", "meta": "meta",
-}
-
-// staticDevinIDs are the hard-coded registry.staticDevinModels entries (unexported in Go).
-var staticDevinIDs = []string{
-	"devin/swe-1-6-slow", "devin/swe-2", "devin/claude-fable-5-1", "devin/gpt-6-astra", "devin/glm-5-2", "devin/glm-5-3",
-	"devin/glm-5-3-flash", "devin/gpt-5-6-sol", "devin/gemini-3-8-flash", "devin/grok-4-6",
-	"devin/deepseek-v4-flash", "devin/deepseek-v4-1-flash",
 }
 
 type clientSpec struct {
@@ -513,48 +504,11 @@ func writeJSON(path string, v any, indent bool) error {
 	return os.WriteFile(path, append(data, '\n'), 0o644)
 }
 
-func syncCatalogs(goRoot, dir string) error {
-	for _, name := range []string{"models.json", "codex_client_models.json", "devin_models.json"} {
-		data, err := os.ReadFile(filepath.Join(goRoot, "internal", "registry", "models", name))
-		if err != nil {
-			return err
-		}
-		if err = os.MkdirAll(dir, 0o755); err != nil {
-			return err
-		}
-		if err = os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
-			return err
-		}
-	}
-	staticDevin := make([]*registry.ModelInfo, 0, len(staticDevinIDs))
-	for _, id := range staticDevinIDs {
-		info := registry.LookupStaticModelInfo(id)
-		if info == nil {
-			return fmt.Errorf("static devin model %q not found", id)
-		}
-		staticDevin = append(staticDevin, info)
-	}
-	builtins := map[string]any{
-		"codex":       wire(registry.WithCodexBuiltins(nil)),
-		"xai":         wire(registry.WithXAIBuiltins(nil)),
-		"devin":       wire(registry.WithDevinBuiltins(nil)),
-		"staticDevin": wire(staticDevin),
-	}
-	return writeJSON(filepath.Join(dir, "builtins.json"), builtins, true)
-}
-
 func main() {
 	outPath := flag.String("out", "test/fixtures/registry.json", "fixture output file")
-	catalogDir := flag.String("catalog-dir", "src/registry/catalog", "directory receiving the catalogs and builtins.json")
-	goRoot := flag.String("go-root", ".repos/CLIProxyAPI", "checkout of the Go server (reference repository)")
 	flag.Parse()
 	log.SetLevel(log.ErrorLevel)
 	gin.SetMode(gin.TestMode)
-
-	if err := syncCatalogs(*goRoot, *catalogDir); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
 
 	result := output{GeneratedAt: time.Now().UnixMilli(), Sections: map[string][]wireModel{}}
 	for name, load := range sections {
@@ -567,5 +521,5 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Printf("wrote %s and %s\n", *outPath, *catalogDir)
+	fmt.Printf("wrote %s\n", *outPath)
 }

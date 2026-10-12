@@ -29,6 +29,18 @@ export const NOT_APPLIED_RULES: ReadonlyArray<NotAppliedRule> = [
     isSet: (config) => config.access["api-keys"].length > 0,
   },
   {
+    key: "models.codex-catalog",
+    reason: "The Codex client catalog is bundled with the Worker; it is not fetched.",
+    path: ["models", "codex-catalog"],
+    isSet: (config) => config.models["codex-catalog"].trim() !== "",
+  },
+  {
+    key: "models.devin-catalog",
+    reason: "Devin models are part of the bundled catalog additions; they are not fetched.",
+    path: ["models", "devin-catalog"],
+    isSet: (config) => config.models["devin-catalog"].trim() !== "",
+  },
+  {
     key: "requests.proxy-url",
     reason: "Workers fetch cannot use outbound proxies.",
     path: ["requests", "proxy-url"],

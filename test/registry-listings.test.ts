@@ -15,25 +15,14 @@ import {
   respondGeminiList,
   respondModels,
 } from "../src/registry/models-api.ts";
-import { sectionModels, SECTIONS } from "../src/registry/catalog.ts";
 import {
-  canonOf,
   catalogs,
   fixture,
   fixtureNow,
-  fromGo,
   type FixtureRequest,
   scenarioIndex,
   sortedBody,
 } from "./support/registry.ts";
-
-describe("embedded catalogs match the Go registry", () => {
-  it.each(SECTIONS)("section %s (incl. built-ins)", (section) => {
-    const expected = (fixture.sections[section] ?? []).map((model) => canonOf(fromGo(model)));
-    const actual = sectionModels(catalogs, section).map((model) => canonOf(model));
-    expect(actual).toEqual(expected);
-  });
-});
 
 const sha256Hex = async (text: string): Promise<string> => {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));

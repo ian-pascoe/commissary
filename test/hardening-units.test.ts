@@ -47,6 +47,16 @@ describe("notAppliedSettings", () => {
     expect(notAppliedSettings(await loadConfig("routing:\n  strategy: fill-first\n"))).toEqual([]);
   });
 
+  it("names the catalog keys that no longer fetch anything", async () => {
+    expect(
+      notAppliedSettings(
+        await loadConfig(
+          "models:\n  codex-catalog: embed\n  devin-catalog: https://x.test/d.json\n",
+        ),
+      ),
+    ).toEqual(["models.codex-catalog", "models.devin-catalog"]);
+  });
+
   it("is reported by the config store on write", async () => {
     const rows: unknown[] = [];
 

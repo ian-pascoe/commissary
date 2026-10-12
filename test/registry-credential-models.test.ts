@@ -9,9 +9,8 @@ import {
   assembleCredentialModels,
   oauthModelAliasChannel,
 } from "../src/registry/credential-models.ts";
-import { sectionModels } from "../src/registry/catalog.ts";
+import { embeddedCatalogs, sectionModels } from "../src/registry/catalog.ts";
 import type { ModelInfo } from "../src/registry/model-info.ts";
-import { catalogs } from "./support/registry.ts";
 import { ids, options, source } from "./support/registry-sources.ts";
 
 const model = (id: string, extra: Partial<ModelInfo> = {}): ModelInfo => ({
@@ -22,6 +21,8 @@ const model = (id: string, extra: Partial<ModelInfo> = {}): ModelInfo => ({
   type: "x",
   ...extra,
 });
+
+const catalogs = embeddedCatalogs();
 
 describe("applyOAuthModelAliasEntries", () => {
   it("renames and rewrites the Gemini-style name and display name", () => {

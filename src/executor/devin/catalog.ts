@@ -1,11 +1,10 @@
 /**
  * Devin catalog lookups for model UID resolution.
  *
- * Go source: internal/registry/devin_models.go (`LookupDevinModel`: active catalog, then built-ins). The Workers port
- * reads the embedded catalog (`registry/catalog/devin_models.json`); the cron-refreshed KV copy reaches executors
+ * Reads the bundled Devin models (`devin` section of the catalog additions); the registry's copy reaches executors
  * through `ExecutorRequest.modelLookup` where wired.
  */
-import { devinModels, embeddedCatalogs } from "../../registry/catalog.ts";
+import { embeddedCatalogs, sectionModels } from "../../registry/catalog.ts";
 
 interface CatalogEntry {
   readonly levels: ReadonlyArray<string>;
@@ -24,7 +23,7 @@ const catalog = (): ReadonlyMap<string, CatalogEntry> => {
   if (entries === undefined) {
     const map = new Map<string, CatalogEntry>();
 
-    for (const model of devinModels(embeddedCatalogs())) {
+    for (const model of sectionModels(embeddedCatalogs(), "devin")) {
       map.set(bareId(model.id), {
         levels: model.thinking?.levels ?? [],
         maxCompletionTokens: model.maxCompletionTokens ?? 0,
@@ -41,6 +40,6 @@ const catalog = (): ReadonlyMap<string, CatalogEntry> => {
 export const devinLevelLookup = (modelId: string): ReadonlyArray<string> | undefined =>
   catalog().get(bareId(modelId))?.levels;
 
-/** `registry.LookupModelInfo(model, "devin").MaxCompletionTokens` from the embedded catalog (0 = unknown). */
+/** `registry.LookupModelInfo(model, "devin").MaxCompletionTokens` from the bundled catalog (0 = unknown). */
 export const devinMaxCompletionTokens = (modelId: string): number =>
   catalog().get(bareId(modelId))?.maxCompletionTokens ?? 0;

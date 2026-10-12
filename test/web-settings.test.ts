@@ -92,7 +92,7 @@ const DEFAULTS: SettingsValues = {
     "gpt-image-2-base-model": "",
     "video-result-auth-cache-ttl": "3h",
   },
-  models: { catalog: "", "codex-catalog": "", "devin-catalog": "" },
+  models: { catalog: "" },
   access: { "admin-emails": [], "admin-service-tokens": [] },
 };
 

@@ -79,7 +79,7 @@ const TRUNCATED_STREAM = "devin stream terminated prematurely before EOS trailer
 
 export interface DevinExecutorOptions {
   readonly translators?: TranslatorRegistry;
-  /** Catalog lookup for thinking levels (defaults to the embedded `devin_models.json`). */
+  /** Catalog lookup for thinking levels (defaults to the embedded catalog's `devin` section). */
   readonly levelsOf?: (modelId: string) => ReadonlyArray<string> | undefined;
 }
 

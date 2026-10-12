@@ -7,6 +7,7 @@ import { RootRoutes } from "../../src/http/routes.ts";
 import { ManagementRoutes } from "../../src/management/routes.ts";
 import { OAuthCallbackRoutes } from "../../src/oauth/public-routes.ts";
 import { requestContext } from "../../src/platform/env.ts";
+import { CatalogStore } from "../../src/registry/catalog-store.ts";
 import { ModelRegistryLive } from "../../src/registry/live.ts";
 import {
   AUD,
@@ -79,7 +80,7 @@ export const makeHarness = (
   const access = makeAccessLayer(fakeJwksLayer(makeFakeJwks([key])));
 
   const routes = ManagementRoutes.pipe(
-    Layer.provide(Layer.mergeAll(ModelRegistryLive, outbound.layer)),
+    Layer.provide(Layer.mergeAll(ModelRegistryLive, outbound.layer, CatalogStore.layer)),
   );
 
   const web = HttpRouter.toWebHandler(
