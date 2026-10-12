@@ -42,3 +42,17 @@ Run `pnpm repos:sync` (`./tools/sync-reference-repos.sh`) to refresh them; `pnpm
 | Repository                                                                  | Path                 | Useful for                                                                                                                                                                                                                                                                                  |
 | --------------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`router-for-me/CLIProxyAPI`](https://github.com/router-for-me/CLIProxyAPI) | `.repos/CLIProxyAPI` | The Go server this project ports: behavioural source of truth for translators, thinking, payload rules, executors, credential selection/refresh and the management API; `tools/fixturegen` builds against it to generate golden fixtures and `pnpm catalog:sync` copies its model catalogs. |
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `ian-pascoe/ai-proxy`, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `GLOSSARY.md` + `docs/adr/`, created lazily. See `docs/agents/domain.md`.
