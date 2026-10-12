@@ -4,11 +4,13 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { HttpApiClient } from "effect/http-api";
+import { env } from "cloudflare:workers";
 import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import { ManagementApi } from "../src/management/contract/api.ts";
 import type { ApiKeysList, GroupView } from "../src/management/contract/api-keys.ts";
 import { ManagementError } from "../src/management/contract/errors.ts";
 import { UsageGroupBy } from "../src/management/contract/usage.ts";
+import { CATALOG_KEYS } from "../src/registry/catalog-store.ts";
 import { GROUP_BY, insertUsageRecord } from "../src/usage/d1.ts";
 import {
   claudeFile,
@@ -17,6 +19,7 @@ import {
   makeHarness,
   resetControlPlane,
 } from "./support/management.ts";
+import { documentText } from "./support/models-dev.ts";
 import { authIndexOf } from "./support/auth-index.ts";
 import type { MockHandler, RecordedRequest } from "./support/refresh.ts";
 import { resetUsageDb, sampleRecord } from "./support/usage.ts";
@@ -518,6 +521,37 @@ describe("management contract", () => {
         assert.instanceOf(error, ManagementError);
         assert.strictEqual(error.error, "name is required");
       }).pipe(through(harness)),
+    );
+  });
+
+  describe("model catalog", () => {
+    it.effect("status and refresh decode; a refused refresh is a ManagementError", () =>
+      Effect.gen(function* () {
+        probeReply = () => ({ status: 200, body: documentText() });
+        yield* Effect.promise(() => env.CACHE.delete(CATALOG_KEYS.modelsDev));
+        yield* Effect.promise(() => env.CACHE.delete(CATALOG_KEYS.status));
+
+        const api = yield* client;
+        const before = yield* api.catalog.status();
+
+        assert.strictEqual(before.mode, "official");
+        assert.isFalse(before.stored);
+
+        const refreshed = yield* api.catalog.refresh();
+
+        assert.strictEqual(refreshed.status, "updated");
+        assert.isTrue(refreshed.catalog.stored);
+        assert.strictEqual(refreshed.catalog.last_attempt?.status, "updated");
+        assert.strictEqual((yield* api.catalog.refresh()).status, "unchanged");
+
+        yield* Effect.promise(async () => {
+          assert.isTrue((await controlPlane().putConfig("models:\n  catalog: embed\n")).ok);
+        });
+        const refused = yield* Effect.flip(api.catalog.refresh());
+
+        assert.instanceOf(refused, ManagementError);
+        assert.strictEqual(refused.error, "catalog_not_fetched");
+      }).pipe(through(probing)),
     );
   });
 

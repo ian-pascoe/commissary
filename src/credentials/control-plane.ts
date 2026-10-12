@@ -227,6 +227,7 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #oauth: OAuthService;
   readonly #quota: QuotaReportStore;
   readonly #sweepLease: SweepLeaseStore;
+  readonly #catalogLease: SweepLeaseStore;
   readonly #grants: ResetGrantStore;
   /**
    * The deployment's keyed `auth_index` (`AUTH_INDEX_KEY`, indexer cached per isolate). Resolved per call so a refused
@@ -241,6 +242,12 @@ export class ControlPlane extends DurableObject<Env> {
     this.#config = new ConfigStore(ctx.storage.sql);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
+
+    this.#catalogLease = new SweepLeaseStore(
+      ctx.storage.sql,
+      () => Date.now(),
+      "catalog_refresh_lease",
+    );
     this.#grants = new ResetGrantStore(ctx.storage.sql);
     this.#pool = new CredentialPool({
       store: new CredentialStore(ctx.storage.sql),
@@ -1142,6 +1149,19 @@ export class ControlPlane extends DurableObject<Env> {
   /** Gives back the lease taken with `token` (a lease taken over meanwhile is left alone). */
   releaseQuotaSweepLease(token: string): void {
     this.#sweepLease.release(token);
+  }
+
+  /**
+   * Takes the lease of a model catalog refresh (src/registry/refresh.ts) at this object's own time; refused while a
+   * live refresh (the scheduled one or the panel's) holds it.
+   */
+  takeCatalogRefreshLease(source: SweepSource): TakeLease {
+    return this.#catalogLease.take(source);
+  }
+
+  /** Gives back the catalog refresh lease taken with `token`. */
+  releaseCatalogRefreshLease(token: string): void {
+    this.#catalogLease.release(token);
   }
 
   // --- provider OAuth logins (src/oauth) ------------------------------------------------------------------------

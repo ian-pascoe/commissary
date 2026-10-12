@@ -15,7 +15,6 @@ import { runQuotaSweep } from "./quota/check.ts";
 import { CatalogStore } from "./registry/catalog-store.ts";
 import { refreshXaiClientVersion } from "./executor/xai/version.ts";
 import { refreshCatalogs } from "./registry/refresh.ts";
-import { refreshOpenCodeCatalog } from "./registry/opencode-refresh.ts";
 import { pruneExpiredUsage } from "./usage/retention.ts";
 
 /** Services available to scheduled jobs (provided by {@link ScheduledLayer} and the invocation's bindings). */
@@ -32,10 +31,9 @@ export interface ScheduledTask {
 }
 
 export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
-  // internal/registry catalog updaters (3 h): general, Codex client and Devin catalogs into KV.
+  // The model catalog (3 h): the models.dev document, trimmed to the providers the proxy reads, into KV. One document
+  // feeds every provider's models and the OpenCode gateways (ADR 0020).
   { name: "model-catalog-refresh", run: refreshCatalogs },
-  // Workers addition (no Go counterpart): the OpenCode Zen/Go catalog (models.dev data) trimmed into KV.
-  { name: "opencode-catalog-refresh", run: refreshOpenCodeCatalog() },
   // Antigravity client version (Hub updater manifest, KV `antigravity:version`) and per-credential model entitlements
   // (`fetchAvailableModels`, KV `ag:models:<credential>`); the version first so the probes use the fresh user agent.
   { name: "antigravity-version", run: refreshAntigravityVersion },

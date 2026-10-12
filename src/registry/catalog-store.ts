@@ -1,170 +1,116 @@
 /**
- * Catalogs as the Worker sees them: the copies refreshed into KV by the cron job, falling back per catalog to the
- * embedded ones.
+ * Catalogs as the Worker sees them: the models.dev document refreshed into KV by the cron job, falling back to the
+ * bundled snapshot, merged with the bundled catalog additions (`catalog.ts`).
  *
- * Go counterpart: the `modelsCatalogStore` / `codexClientCatalogStore` / `devinCatalogStore` globals that the catalog
- * updaters (internal/registry/catalog_sources.go) publish into. Here the "published" catalog is the KV entry.
+ * The KV entry holds the trimmed models.dev document only (`refresh.ts` writes it, `models-dev.ts` defines it).
+ * Everything derived from it (the provider catalogs, the OpenCode gateways' models) is built per isolate when the
+ * stored text changes.
  */
-import { Clock, Context, Effect, Layer, Ref, Result } from "effect";
-import type { Json } from "../json/index.ts";
+import { Clock, Context, Effect, Layer, Ref, Result, Schema } from "effect";
 import { WorkerEnv } from "../platform/env.ts";
 import {
+  catalogsFromModelsDev,
   embeddedCatalogs,
   type ModelCatalogs,
-  parseModelsCatalog,
-  validateCodexClientModels,
-  withDevinBuiltins,
+  modelsDevFromText,
 } from "./catalog.ts";
-import { parseDevinCatalog } from "./devin.ts";
-import { OPENCODE_CATALOG_KV_KEY, openCodeCatalogFromText } from "./opencode-catalog.ts";
 
-/** KV keys of the refreshed catalogs (raw JSON text) and of the last refresh report. */
+/** KV key of the refreshed models.dev document (trimmed JSON text) and of the last refresh report. */
 export const CATALOG_KEYS = {
-  models: "registry/models.json",
-  codexClient: "registry/codex_client_models.json",
-  devin: "registry/devin_models.json",
-  /** Not a Go catalog: refreshed by its own cron task (`opencode-refresh.ts`), trimmed JSON. */
-  opencode: OPENCODE_CATALOG_KV_KEY,
+  modelsDev: "registry/models-dev.json",
   status: "registry/refresh-status.json",
 } as const;
 
-export type CatalogName = "models" | "codexClient" | "devin";
+/** What the last refresh attempt left in KV (`CATALOG_KEYS.status`), for the panel. */
+export interface RefreshStatusRecord {
+  /** ms. */
+  readonly attemptedAt: number;
+  readonly status: "updated" | "unchanged" | "failed";
+  readonly message?: string;
+  /** ms the stored catalog was last confirmed current; absent while the shipped copy is in use. */
+  readonly refreshedAt?: number;
+}
 
-/** Raw KV contents; `null`/`undefined` = nothing stored (use the embedded catalog). */
-export type CatalogTexts = {
-  readonly [N in CatalogName | "opencode"]?: string | null | undefined;
+const StatusDocument = Schema.Struct({
+  attempted_at: Schema.Finite,
+  status: Schema.Literals(["updated", "unchanged", "failed"]),
+  message: Schema.optionalKey(Schema.String),
+  refreshed_at: Schema.optionalKey(Schema.Finite),
+});
+
+const decodeStatus = Schema.decodeUnknownResult(Schema.fromJsonString(StatusDocument));
+
+/** The stored status record; `undefined` when absent or unreadable. */
+export const readRefreshStatus = async (
+  kv: KVNamespace,
+): Promise<RefreshStatusRecord | undefined> => {
+  const text = await kv.get(CATALOG_KEYS.status);
+
+  if (text === null) return undefined;
+  const decoded = decodeStatus(text);
+
+  if (Result.isFailure(decoded)) return undefined;
+  const { attempted_at: attemptedAt, status, message, refreshed_at: refreshedAt } = decoded.success;
+
+  return {
+    attemptedAt,
+    status,
+    ...(message === undefined ? {} : { message }),
+    ...(refreshedAt === undefined ? {} : { refreshedAt }),
+  };
 };
+
+export const writeRefreshStatus = (kv: KVNamespace, record: RefreshStatusRecord): Promise<void> =>
+  kv.put(
+    CATALOG_KEYS.status,
+    JSON.stringify({
+      attempted_at: record.attemptedAt,
+      status: record.status,
+      ...(record.message === undefined ? {} : { message: record.message }),
+      ...(record.refreshedAt === undefined ? {} : { refreshed_at: record.refreshedAt }),
+    }),
+  );
 
 /** How long an isolate serves its parsed catalogs before looking at KV again. */
 export const CATALOG_CACHE_TTL_MS = 60_000;
 
-const tryParse = (
-  text: string,
-): { readonly ok: true; readonly value: Json } | { readonly ok: false; readonly error: string } => {
-  try {
-    const value: Json = JSON.parse(text);
-
-    return { ok: true, value };
-  } catch (cause) {
-    return { ok: false, error: cause instanceof Error ? cause.message : "invalid JSON" };
-  }
-};
-
-const parseCatalog = (name: CatalogName, value: Json) => {
-  switch (name) {
-    case "models":
-      return parseModelsCatalog(value);
-    case "devin":
-      return parseDevinCatalog(value);
-    default:
-      return validateCodexClientModels(value);
-  }
-};
-
-/** Validates `text` as catalog `name` (the same checks the refresh applies before publishing). */
-export const validateCatalogText = (name: CatalogName, text: string): string | undefined => {
-  const parsed = tryParse(text);
-
-  if (!parsed.ok) return parsed.error;
-
-  const result = parseCatalog(name, parsed.value);
-
-  return result.ok ? undefined : result.error;
-};
-
-export interface CatalogsFromTexts {
+export interface CatalogsFromText {
   readonly catalogs: ModelCatalogs;
-  readonly warnings: ReadonlyArray<string>;
+  /** Why a stored text was not used (the bundled catalogs were used instead). */
+  readonly warning?: string;
 }
 
-/** Builds the catalogs from KV texts; invalid texts are reported in `warnings` and replaced by the embedded copy. */
-export const catalogsFromTexts = (texts: CatalogTexts): CatalogsFromTexts => {
-  const base = embeddedCatalogs();
-  const warnings: string[] = [];
-  let { models, devin, codexClient } = base;
+/** The catalogs of a stored models.dev text; nothing stored or an invalid text yields the bundled catalogs. */
+export const catalogsFromText = (text: string | null | undefined): CatalogsFromText => {
+  if (text === undefined || text === null) return { catalogs: embeddedCatalogs() };
+  const parsed = modelsDevFromText(text);
 
-  const usable = (name: CatalogName): Json | undefined => {
-    const text = texts[name];
+  if (parsed.ok) return { catalogs: catalogsFromModelsDev(parsed.value) };
 
-    if (text === undefined || text === null) return undefined;
-    const parsed = tryParse(text);
-
-    if (parsed.ok) return parsed.value;
-    warnings.push(
-      `stored ${name} catalog is not valid JSON, using the embedded one: ${parsed.error}`,
-    );
-
-    return undefined;
+  return {
+    catalogs: embeddedCatalogs(),
+    warning: `stored models.dev catalog rejected, using the bundled one: ${parsed.error}`,
   };
-
-  const modelsJson = usable("models");
-
-  if (modelsJson !== undefined) {
-    const parsed = parseModelsCatalog(modelsJson);
-
-    if (parsed.ok) models = parsed.value;
-    else warnings.push(`stored models catalog rejected, using the embedded one: ${parsed.error}`);
-  }
-
-  const devinJson = usable("devin");
-
-  if (devinJson !== undefined) {
-    const parsed = parseDevinCatalog(devinJson);
-
-    if (parsed.ok) devin = withDevinBuiltins(parsed.value);
-    else warnings.push(`stored devin catalog rejected, using the embedded one: ${parsed.error}`);
-  }
-
-  const codexJson = usable("codexClient");
-
-  if (codexJson !== undefined) {
-    const parsed = validateCodexClientModels(codexJson);
-
-    if (parsed.ok) codexClient = parsed.value;
-    else
-      warnings.push(
-        `stored codex client catalog rejected, using the embedded one: ${parsed.error}`,
-      );
-  }
-
-  const opencode = openCodeCatalogFromText(texts.opencode);
-
-  if (opencode.warning !== undefined) warnings.push(opencode.warning);
-
-  return { catalogs: { models, devin, codexClient, opencode: opencode.catalog }, warnings };
 };
-
-export const readCatalogTexts = async (kv: KVNamespace): Promise<CatalogTexts> => {
-  const [models, codexClient, devin, opencode] = await Promise.all([
-    kv.get(CATALOG_KEYS.models),
-    kv.get(CATALOG_KEYS.codexClient),
-    kv.get(CATALOG_KEYS.devin),
-    kv.get(CATALOG_KEYS.opencode),
-  ]);
-
-  return { models, codexClient, devin, opencode };
-};
-
-const sameTexts = (a: CatalogTexts, b: CatalogTexts): boolean =>
-  a.models === b.models &&
-  a.codexClient === b.codexClient &&
-  a.devin === b.devin &&
-  a.opencode === b.opencode;
 
 interface Cached {
   readonly loadedAt: number;
-  readonly texts: CatalogTexts;
+  /** KV text the catalogs were built from (`null` = nothing stored). */
+  readonly text: string | null;
   readonly catalogs: ModelCatalogs;
 }
 
 export class CatalogStore extends Context.Service<
   CatalogStore,
   {
-    /** The active catalogs (cached per isolate, re-read from KV every minute). Never fails: KV errors keep the last value. */
-    readonly load: Effect.Effect<ModelCatalogs, never, WorkerEnv>;
-    /** Raw stored texts (for the refresh job, which compares against and replaces them). */
-    readonly stored: Effect.Effect<CatalogTexts, Error, WorkerEnv>;
-    /** Drops the isolate cache (after a refresh wrote new texts). */
+    /**
+     * The active catalogs (cached per isolate, re-read from KV every minute). Never fails: KV errors keep the last
+     * value. `embed` (`models.catalog` is `embed`) ignores the stored copy: the catalogs compiled into the Worker.
+     */
+    readonly load: (embed: boolean) => Effect.Effect<ModelCatalogs, never, WorkerEnv>;
+    /** Raw stored models.dev text (for the refresh job, which compares against and replaces it). */
+    readonly stored: Effect.Effect<string | null, Error, WorkerEnv>;
+    /** Drops the isolate cache (after a refresh wrote a new text). */
     readonly invalidate: Effect.Effect<void>;
   }
 >()("cliproxy/registry/CatalogStore") {
@@ -177,40 +123,41 @@ export class CatalogStore extends Context.Service<
         const env = yield* WorkerEnv;
 
         return yield* Effect.tryPromise({
-          try: () => readCatalogTexts(env.CACHE),
+          try: () => env.CACHE.get(CATALOG_KEYS.modelsDev),
           catch: (cause) =>
-            cause instanceof Error ? cause : new Error("failed to read catalogs from KV"),
+            cause instanceof Error ? cause : new Error("failed to read the catalog from KV"),
         });
       });
 
-      const load = Effect.gen(function* () {
+      const load = Effect.fnUntraced(function* (embed: boolean) {
+        if (embed) return embeddedCatalogs();
         const now = yield* Clock.currentTimeMillis;
         const cached = yield* Ref.get(cache);
 
         if (cached !== undefined && now - cached.loadedAt < CATALOG_CACHE_TTL_MS)
           return cached.catalogs;
-        const texts = yield* stored.pipe(Effect.result);
+        const text = yield* stored.pipe(Effect.result);
 
-        if (Result.isFailure(texts)) {
+        if (Result.isFailure(text)) {
           yield* Effect.logWarning(
-            `catalog KV read failed, keeping the previous catalogs: ${texts.failure.message}`,
+            `catalog KV read failed, keeping the previous catalogs: ${text.failure.message}`,
           );
           const fallback = cached?.catalogs ?? embeddedCatalogs();
-          yield* Ref.set(cache, { loadedAt: now, texts: cached?.texts ?? {}, catalogs: fallback });
+          yield* Ref.set(cache, { loadedAt: now, text: cached?.text ?? null, catalogs: fallback });
 
           return fallback;
         }
 
-        if (cached !== undefined && sameTexts(cached.texts, texts.success)) {
+        if (cached !== undefined && cached.text === text.success) {
           yield* Ref.set(cache, { ...cached, loadedAt: now });
 
           return cached.catalogs;
         }
 
-        const built = catalogsFromTexts(texts.success);
+        const built = catalogsFromText(text.success);
 
-        for (const warning of built.warnings) yield* Effect.logWarning(warning);
-        yield* Ref.set(cache, { loadedAt: now, texts: texts.success, catalogs: built.catalogs });
+        if (built.warning !== undefined) yield* Effect.logWarning(built.warning);
+        yield* Ref.set(cache, { loadedAt: now, text: text.success, catalogs: built.catalogs });
 
         return built.catalogs;
       });

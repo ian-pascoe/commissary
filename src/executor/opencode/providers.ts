@@ -19,7 +19,7 @@ export interface OpenCodeProviderSpec {
   readonly provider: OpenCodeProvider;
   /** Default `base-url`. */
   readonly baseUrl: string;
-  /** Provider id in the models.dev catalog (`https://models.opencode.ai/api.json`). */
+  /** Provider id in the models.dev catalog (`https://models.dev/api.json`). */
   readonly catalogId: "opencode" | "opencode-go";
   /** Human-readable name (`owned_by`, panel). */
   readonly displayName: string;

@@ -183,8 +183,6 @@ export const FIELDS: ReadonlyArray<FieldSpec> = [
   field("providers", "oauth.providers.devin.sensitive-words", "words", "Devin sensitive words"),
 
   field("catalogs", "models.catalog", "catalog", "Model catalog"),
-  field("catalogs", "models.codex-catalog", "catalog", "Codex client catalog"),
-  field("catalogs", "models.devin-catalog", "catalog", "Devin catalog"),
 
   field("admin", "access.admin-emails", "emails", "Admin emails"),
   field("admin", "access.admin-service-tokens", "tokens", "Admin service tokens"),

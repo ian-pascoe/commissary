@@ -2,8 +2,8 @@
  * Devin chat model UID resolution.
  *
  * Go source: internal/runtime/executor/helps/devin_models.go (`ResolveDevinChatModelUID`, `HasDevinEffortSuffix`,
- * `NormalizeThinkingLevel`, `selectDefaultDevinEffort`, `clampEffort`). The catalog (`devin_models.json`, model
- * `Thinking.Levels`) is reached through a lookup so the executor can use the live registry snapshot with the embedded
+ * `NormalizeThinkingLevel`, `selectDefaultDevinEffort`, `clampEffort`). The catalog (the Devin additions of the model catalog, model
+ * `thinking.levels`) is reached through a lookup so the executor can use the live registry snapshot with the embedded
  * catalog as fallback.
  */
 import { Match } from "effect";

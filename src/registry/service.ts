@@ -17,6 +17,7 @@ import { WorkerEnv } from "../platform/env.ts";
 import { projectModel } from "./availability.ts";
 import { assembleCredentialModels } from "./credential-models.ts";
 import { CatalogStore } from "./catalog-store.ts";
+import { usesEmbeddedCatalog } from "./catalog-source.ts";
 import { withAntigravityHints } from "../executor/antigravity/models.ts";
 import type { ModelCatalogs } from "./catalog.ts";
 import type { ModelInfo } from "./model-info.ts";
@@ -158,10 +159,11 @@ export class ModelRegistry extends Context.Service<
       const build = Effect.gen(function* () {
         const env = yield* WorkerEnv;
 
-        const [{ config, version }, catalogs, sources] = yield* Effect.all(
+        const { config, version } = yield* configReader.get;
+
+        const [catalogs, sources] = yield* Effect.all(
           [
-            configReader.get,
-            catalogStore.load,
+            catalogStore.load(usesEmbeddedCatalog(config.models.catalog)),
             Effect.tryPromise({
               try: async () => await env.CONTROL_PLANE.getByName("global").listModelSources(),
               catch: (cause) =>

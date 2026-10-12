@@ -2,8 +2,8 @@
 
 This document records the binding decisions for the TypeScript/Effect rewrite of CLIProxyAPI that runs on plain
 Cloudflare Workers behind Cloudflare Zero Trust Access. Behavioural references for the Go implementation live in
-`docs/research/*.md`; the Go code remains the source of truth for behaviour. It is the read-only reference checkout in
-`.repos/CLIProxyAPI` (upstream [router-for-me/CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI), cloned by
+`docs/research/*.md`. The Go code is a reference, not the authority (ADR 0019): the proxy copies its behaviour where that
+is the better design and differs where it is not. It is the read-only reference checkout in `.repos/CLIProxyAPI` (upstream [router-for-me/CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI), cloned by
 `pnpm install`); Go paths cited here (`internal/...`, `sdk/...`) are relative to it.
 
 ## Goals and non-goals
@@ -61,11 +61,12 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
   counter, Antigravity Interactions continuation) with TTL and compare-and-swap semantics, see "SessionState Durable Object".
   The Responses WebSocket does **not** use it: that state lives in the Worker invocation that accepted the socket (see
   "Responses WebSocket transports").
-- **KV `CACHE`**: model catalogs refreshed by cron, best-effort caches (signature cache) with `expirationTtl`.
+- **KV `CACHE`**: the model catalog (one trimmed models.dev document, refreshed by cron or on demand) and the status of its
+  last refresh, best-effort caches (signature cache) with `expirationTtl`.
 - **D1 `USAGE`**: usage records written with `ctx.waitUntil`.
 - **Static assets** (`public/`, Worker runs first): the control panel (`web/` build).
-- **Cron trigger** (every 3 h, production only; `src/scheduled.ts`): model catalog refreshes (general/Codex/Devin,
-  OpenCode, Antigravity version and model entitlements, xAI client version), usage retention, the Devin user status, a
+- **Cron trigger** (every 3 h, production only; `src/scheduled.ts`): the model catalog refresh (the one
+  models.dev document: every provider's models, OpenCode's included), Antigravity version and model entitlements, xAI client version, usage retention, the Devin user status, a
   safety sweep that re-arms credential refresh alarms, and the quota check of connected accounts.
 
 Request flow:
@@ -508,14 +509,75 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
   plan tier, exclusions, per-account aliases, the `models:` of config entries, credential/model runtime state; no secrets).
 - **Config**: `ConfigReader` (global `oauth.model-alias`, `oauth.settings`, `routing.force-model-prefix`,
   `upstream.claude.disable-cloaking-model-list`).
-- **Catalogs**: `models.json`, `codex_client_models.json`, `devin_models.json`. Embedded copies live in
-  `src/registry/catalog/` (checked in; `pnpm catalog:sync` = `go run ./tools/fixturegen/registry` re-copies them
-  from `internal/registry/models/` and regenerates `builtins.json`, the hard-coded Codex/xAI/Devin definitions that Go
-  upserts into every catalog). The cron job (`src/scheduled.ts`, every 3 h like `ModelsRefreshInterval`) fetches the
-  official URLs (or the single `models.<x>` URL), validates them like Go (`validateModelsCatalog`,
-  `ValidateCodexClientModelsJSON`, `ValidateDevinModelsJSON`; 8 MiB limit), keeps the previous `meta` section when the new
-  catalog has none, and stores the text in KV `CACHE` (`registry/*.json`). Invalid/unreachable sources keep the last valid
-  catalog; a KV entry that fails validation falls back per catalog to the embedded copy. Isolates re-read KV every minute.
+- **Catalogs** (ADR 0019, ADR 0020): every provider's models come from **models.dev** plus the **catalog additions**, not
+  from the Go server's embedded JSON.
+  - _Document_ (`models-dev.ts`): the models.dev `api.json` (≈5.4 MB) trimmed to the nine providers the proxy reads
+    (`anthropic`, `google`, `google-vertex`, `xai`, `meta`, `kimi-code-plan-global`, `openai`, `opencode`, `opencode-go`)
+    and to the fields it uses: no prices (only a `free` flag where the OpenCode gateways list a model at 0/0), no
+    knowledge cut-off or other metadata. A document missing a provider or with a provider without models is invalid
+    (the one-document rule: it feeds every provider, so it is all or nothing); a single malformed model is skipped and
+    counted (the refresh reports and logs the number). `reasoning_options: null` (models.dev's way to say a model reasons
+    without settings) is kept as an empty list.
+  - _Additions_ (`catalog-additions.ts`, `catalog/additions.json`): what the proxy owns on top, versioned data that is
+    never fetched: full records for models models.dev does not list (Antigravity and Devin entirely, models models.dev
+    dropped), per-model `facts` models.dev lacks (thinking `dynamicAllowed`, web search, ...), per-provider `defaults`,
+    `include`/`exclude` patterns and the Codex `plans` (which model ids each plan offers). Seeded once from the Go
+    catalog. An addition only **fills gaps**: where models.dev has a value it wins (a wrong value is fixed at models.dev).
+    Context length, output limit, modalities and the reasoning levels of a model models.dev lists follow models.dev, so
+    some limits differ from Go's (Codex context windows grow to models.dev's figure; thinking levels come from
+    `reasoning_options`, falling back to the additions' ranges). Thinking rules: a `budget_tokens` option gives a range
+    but allows a budget of 0 (`zeroAllowed`) only with `min: 0` or a `toggle` option; an `effort` value `none` allows it
+    too; a model that reasons with an empty or null `reasoning_options` has no thinking settings of its own (the
+    additions' facts may still fill some, but no levels are invented); a model models.dev marks `reasoning: false` has no
+    thinking at all, whatever the additions say (so `vertex/gemini-2.5-flash-image` no longer reports a budget). Every
+    Codex plan id has a full record in the additions: it fills gaps and stands in if models.dev stops listing the id, so
+    a refresh cannot empty a plan, and the provider `defaults` are not applied to plan models. Intended behaviour
+    change: models.dev's `none` effort now reaches the Codex plan models (`gpt-5.5`, `gpt-6-*`, `gpt-5.6-*`), so
+    `reasoning.effort: "none"` is forwarded upstream instead of being lowered to `low`. The Codex client catalog
+    (`catalog/codex_client_models.json`) keeps its own format and stays bundled.
+  - _Build_ (`catalog-build.ts`, `catalog.ts`): `buildModelsCatalog(document, additions)` makes the 13 sections (`claude`,
+    `gemini`, `vertex`, `aistudio`, `codex-free|team|plus|pro`, `kimi`, `antigravity`, `xai`, `devin`, `meta`). A provider
+    offers every current (not `deprecated`) text-output model models.dev lists for it, minus its `exclude`s, then the
+    additions' own records. `aistudio` and `gemini` share `google`, `vertex` takes `google-vertex`, Codex plans take
+    `openai`. Differences from Go: Devin is one aggregated section (a `devin/<id>` lookup resolves the whole section, Go's raw-section
+    quirk is not repeated for `devin/` ids in `lookupModelInfo`), and Go's hard-coded Codex/xAI/Devin built-ins
+    (`builtins.json`) are now additions.
+  - _Bundled and stored copies_: `catalog/models-dev.json` is the trimmed snapshot shipped with the Worker (regenerated
+    with `pnpm catalog:sync [url|file]`, `tools/sync-models-dev-catalog.ts`, idempotent). The same document is stored in KV
+    `CACHE` (`registry/models-dev.json`) by the refresh; `CatalogStore` (`catalog-store.ts`) serves the KV copy per isolate,
+    re-read at most once a minute, and falls back to the bundled one when KV is empty, unreadable or invalid. `models.catalog: embed` ignores the KV copy (the registry
+    and the OpenCode executor read the bundled one at once, whatever KV still holds). The request path never fetches.
+  - _Refresh_ (`refresh.ts`, `refreshModelsDev`): one operation for the cron task `model-catalog-refresh` (every 3 h like
+    `ModelsRefreshInterval`) and the panel's on-demand refresh. It downloads the document (default
+    `https://models.dev/api.json`, 30 s timeout, 16 MiB limit checked on `content-length` and while streaming), validates
+    and trims it, stores it only when it changed (then drops the isolate cache) and records the attempt in KV
+    (`registry/refresh-status.json`: time, outcome, reason, and the time the stored copy was last confirmed current). A failed,
+    oversized or invalid download keeps the stored catalog. `models.catalog` chooses the source: empty = official,
+    `embed` = delete the stored copy and serve the bundled snapshot, `disabled` = never refresh, otherwise one http(s)
+    URL. `models.codex-catalog` and `models.devin-catalog` are accepted and no longer have an effect (listed under
+    _Not applied_).
+  - _One refresh at a time_: a download takes the **catalog refresh lease** in the ControlPlane
+    (`takeCatalogRefreshLease` / `releaseCatalogRefreshLease`: the same `SweepLeaseStore` as the quota sweep, table
+    `catalog_refresh_lease`, atomic on the object's clock, 2 min expiry, given back with its token; the refresh is bounded
+    by its 30 s timeout so it is not renewed). The cron task and the panel therefore never download at once, in whichever
+    isolates they run; the second gets `running` without a request being made. The invocation is held open with
+    `waitUntil` until the lease is given back. A ControlPlane that cannot be reached fails the refresh (exclusivity
+    cannot be shown); `embed` and `disabled` need no lease.
+- **Catalog status and on-demand refresh** (`management/catalog-routes.ts`, `contract/catalog.ts`; no Go counterpart):
+  `GET /v8/management/models/catalog` answers `{mode, source_host?, source_problem?, stored, refreshed_at?, last_attempt?,
+  models}`: the `models.catalog` mode (`official`, `embed`, `disabled`, `custom` with the host of the address, never the
+  URL; an address that is not http(s) reads `disabled` with `source_problem` saying why), whether a refreshed copy from KV
+  (`stored`) or the copy shipped with the Worker is in use (`embed` always reports the shipped copy: the stored one is not
+  read), when the stored copy was last confirmed current, the latest attempt (`{at, status: updated|unchanged|failed,
+  message?}`, the cron's or the panel's) and the model count per models.dev provider. `POST
+  /v8/management/models/catalog/refresh` runs the cron task's operation now with the stored `models.catalog` setting and
+  answers `200 {status: updated|unchanged|failed, message?, added?, removed?, skipped?, catalog}` (`added`/`removed`: models
+  clients can call that appeared/disappeared, computed on the built catalogs per provider and counted once across Codex
+  plans, so a deprecated or gateway-only change does not count; the removed ids are logged at warning level; `skipped`:
+  malformed entries of the document that were left out; a failed download, size or validation problem is a `200` with
+  `status: "failed"` and a fixed `message`, the stored catalog stays); `409 catalog_refresh_running` while another refresh
+  (the scheduled one included) holds the lease, nothing is downloaded; `409 catalog_not_fetched` when `models.catalog` is
+  `embed`, `disabled` or not an http(s) address. Admin only, CSRF rules as every write.
 - **Assembly** (`credential-models.ts`): `registerModelsForAuth` per credential: base list (provider catalog, Codex plan
   tier, config `models:`), exclusions, OAuth aliases (`fork`, display names, per-credential first), `oauth.settings`
   context length, prefixes (`force-model-prefix`). OpenAI-compatibility models keep duplicate aliases (model pools) and skip
@@ -1064,12 +1126,15 @@ panel paths and `/management.html` as `management`); there is no management key.
   show kept as stored; a `409` offers a reload); Models (`/models`: every model clients can call, plus the hidden ones
   no account serves now, ordered by standing, filters All / Needs attention / Hidden, search over names, aliases and
   accounts, each model's routes with their account or key, upstream name, alias or exclusion and the rule's channel,
-  cooldowns with clear; `/models/rules` edits the channel rules `oauth-model-alias` and `oauth-excluded-models`, one
+  cooldowns with clear; a catalog line under the title ("Catalog refreshed 2 h ago · from models.dev", "shipped copy" while
+  nothing is stored, the host of a custom address) with a **Refresh catalog** button that calls `POST /models/catalog/refresh` and says the outcome inline
+  (models added/removed, already up to date, the failure reason, "already running"); the button is off, with the reason, while
+  the source is Embedded copy or Off; `/models/rules` edits the channel rules `oauth-model-alias` and `oauth-excluded-models`, one
   section per channel with a live count of the models a pattern matches; reads `GET /routing/models` and writes one
   channel's list with `PUT`/`DELETE /config/oauth/model-alias|excluded-models/:channel` carrying the view's
   `config_version` as `If-Match`; on `409` the edit is re-applied once to a fresh read, and a second refusal or a
   changed entry offers a reload); Settings (`/settings`: the settings that apply on Workers in sections, Routing,
-  Retries & cooldowns, Requests & streaming, Payload rules, Images & video, Providers, Model catalogs, Admin access,
+  Retries & cooldowns, Requests & streaming, Payload rules, Images & video, Providers, Model catalog (one source field), Admin access,
   Account refresh, and Not applied on Workers when the configuration sets keys that do nothing here (each removable); one
   form per section whose draft is a delta of the touched fields (`web/src/lib/settings.ts`), saved with
   `PATCH /settings` carrying the view's `version` and only the changed leaves (`null` back to the default); inputs
@@ -1377,7 +1442,7 @@ the sanitised 502; a patch-enabled Responses stream that ends without its termin
 generic abort events. `GetUserStatus` quota/profile refresh is the cron task `devin-user-status` (`credentials/devin-status.ts`,
 `ControlPlane.refreshDevinStatus`): per stored credential it writes email/user/team/plan/org into the auth file, `quota.signals`
 (`daily|weekly_quota_remaining_percent`, `*_reset_at`, `plan`, `plan_start|end`) and `last_refresh`; failures leave the credential untouched.
-The catalog refresh is the existing `model-catalog-refresh` Devin source; the executor now resolves effort variants and max tokens through
+Devin's models are catalog additions (`devin/<id>` records, no source to fetch); the executor now resolves effort variants and max tokens through
 the registry snapshot (`modelLookup`, ids `devin/<id>`) before the embedded catalog. Not ported: the Kimi
 `X-Msh-Device-Name/Model` of the real host, request/response debug logs, the developer-only `cmd/fetch_devin_models` live catalog probe.
 
@@ -1438,15 +1503,13 @@ select ("Auto (catalog)" when unset).
 - **Key test** (`management/api-keys-probe.ts`): the gateways list models without authentication, so the panel's key test
   POSTs `{base}/chat/completions` with the key, the gateway headers and the model `cliproxy-key-check` (`max_tokens: 1`); any
   2xx or 400 ("Model is unavailable": the key was accepted, nothing is billed) passes, 401 and other statuses fail.
-- **Catalog** (`opencode-catalog-trim.ts`, `opencode-catalog.ts`, `opencode-refresh.ts`): `pnpm catalog:opencode`
-  (`tools/sync-opencode-catalog.ts`) trims `https://models.opencode.ai/api.json` (≈5 MB, models.dev) to the two gateways and the fields
-  read here into `src/registry/catalog/opencode_models.json`. The cron task `opencode-catalog-refresh` fetches, trims and stores it in KV
-  (`registry/opencode_models.json`, only when it changed, then drops the isolate cache; a failed fetch or invalid document keeps the
-  stored copy). The 16 MiB limit is checked on `content-length` and while the body streams in (the read is cancelled past it). The request
-  path reads the KV copy (per isolate, re-read at most once a minute) and falls back to the bundled snapshot when KV is empty or
-  invalid. Without config `models` a gateway registers every non-deprecated catalog model (Zen without its free models, which the
-  gateway rejects outside OpenCode); listed models get the catalog's context/output limits, input modalities, reasoning levels and
-  the protocol's registry type.
+- **Catalog** (`opencode-catalog.ts`): the gateways read the same models.dev document as every other provider (`opencode` and
+  `opencode-go`, ADR 0020), bundled in `catalog/models-dev.json` and refreshed into KV by the one `model-catalog-refresh` task
+  (see _Model registry_, "Catalogs"); there is no separate OpenCode catalog task, file or script any more. The request path
+  reads the KV copy (per isolate, re-read at most once a minute) and falls back to the bundled snapshot when KV is empty or
+  invalid. Without config `models` a gateway registers every non-deprecated catalog model (Zen without its free models,
+  flagged `free` in the trimmed document, which the gateway rejects outside OpenCode); listed models get the catalog's
+  context/output limits, input modalities, reasoning levels and the protocol's registry type.
 
 Deviations (the whole provider is one): the session header is derived per conversation instead of OpenCode's per-chat id; the
 `openai-compatibility` executor is not reused (its settings come from the compat group of the credential and its User-Agent is

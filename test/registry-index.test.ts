@@ -36,7 +36,11 @@ describe("registry index parity with Go (model_registry.go)", () => {
       });
 
       it("LookupModelInfo falls back to the static catalogs", () => {
-        for (const query of scenario.registry.lookups) {
+        // Go looks Devin models up in the raw `devin` section, not the aggregated list the registry serves; the
+        // catalog has the aggregated list only (ADR 0020), so those queries are not comparable.
+        for (const query of scenario.registry.lookups.filter(
+          (entry) => !entry.model.startsWith("devin/"),
+        )) {
           expect(
             canonOf(index.lookupModelInfo(catalogs, query.model, query.provider)),
             `${query.model}@${query.provider}`,
@@ -65,9 +69,9 @@ describe("registry index parity with Go (model_registry.go)", () => {
 });
 
 describe("LookupStaticModelInfo", () => {
-  it("does not include built-in definitions that are not part of the raw sections", () => {
+  it("finds a model of any provider catalog, additions included", () => {
     const empty = new ModelRegistryIndex([], fixtureNow());
-    expect(empty.lookupModelInfo(catalogs, "gpt-image-2")).toBeUndefined();
+    expect(empty.lookupModelInfo(catalogs, "gpt-image-2")?.id).toBe("gpt-image-2");
     expect(empty.lookupModelInfo(catalogs, "devin/swe-2")?.ownedBy).toBe("cognition");
     expect(empty.lookupModelInfo(catalogs, "gpt-5.5", "codex")?.id).toBe("gpt-5.5");
   });

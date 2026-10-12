@@ -2,43 +2,41 @@
 
 Developer notes for the TypeScript/Effect Worker. User-facing docs: [`README.md`](../README.md).
 Design decisions: [`ARCHITECTURE.md`](ARCHITECTURE.md) (module layout, runtime topology, per-subsystem behaviour and
-deviations from Go).
+where it differs from Go).
 
-The Go server ([router-for-me/CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI)) is the behavioural source of
-truth. It is not part of this repository: `pnpm install` (the `prepare` script, skipped when `CI` is set) clones it into
+The Go server ([router-for-me/CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI)) is a reference, not the
+authority (ADR 0019). It is not part of this repository: `pnpm install` (the `prepare` script, skipped when `CI` is set) clones it into
 `.repos/CLIProxyAPI` as a read-only reference. pnpm skips `prepare` when dependencies are already up to date, so refresh
-it with `pnpm repos:sync` (`tools/sync-reference-repos.sh`, a fast-forward of upstream `main`; `pnpm catalog:sync` runs it
-first).
+it with `pnpm repos:sync` (`tools/sync-reference-repos.sh`, a fast-forward of upstream `main`).
 Go paths cited in code and docs (`internal/...`, `sdk/...`) are relative to that checkout.
 
 ## Requirements
 
 - Node.js 22+ (CI uses the version in `.node-version`) and pnpm (`devEngines.packageManager` in `package.json`).
-- Go (only for `tools/fixturegen` and `pnpm catalog:sync`) and the reference checkout above.
+- Go (only for `tools/fixturegen`) and the reference checkout above.
 
 ## Commands
 
 Run from the repository root:
 
-| Script                  | Purpose                                                                                                                     |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install`          | Install dependencies and clone/update the Go reference checkout (`.repos/`)                                                 |
-| `pnpm repos:sync`       | Clone or fast-forward the reference repositories in `.repos/` (`tools/sync-reference-repos.sh`)                             |
-| `pnpm dev`              | `alchemy dev`: local Worker in workerd with emulated DO/KV/D1, hot reload (`ALCHEMY_STATE=local` avoids a Cloudflare login) |
-| `pnpm web:build`        | Build the control panel (`web/`) into `public/index.html` and `public/assets/` (served at `/`)                              |
-| `pnpm web:dev`          | Vite dev server for the panel on :5173 with hot reload, forwarding `/v8` to `pnpm dev` (`CLIPROXY_DEV_URL`, default :1337)  |
-| `pnpm typecheck`        | `tsc -b`: Worker (`tsconfig.worker.json`), deploy code (`tsconfig.infra.json`), panel (`tsconfig.web.json`)                 |
-| `pnpm lint`             | `oxlint` (type-aware, with type checking, Effect and anti-slop rules) + `oxfmt --check`                                     |
-| `pnpm format`           | `oxfmt`                                                                                                                     |
-| `pnpm test`             | `vitest run` inside the Workers runtime (`@cloudflare/vitest-plugin`)                                                       |
-| `pnpm smoke`            | Builds the panel, boots `alchemy dev` with local state, checks a few routes, stops it (bundle + startup check)              |
-| `pnpm plan`             | `alchemy plan`: preview infrastructure changes (needs a Cloudflare profile)                                                 |
-| `pnpm run deploy`       | `alchemy deploy` (`pnpm deploy` is a pnpm built-in; use `run`)                                                              |
-| `pnpm destroy`          | `alchemy destroy`: delete every resource of a stage                                                                         |
-| `pnpm logs`             | `alchemy logs` (`--tail`)                                                                                                   |
-| `pnpm ci:setup`         | Deploy `stacks/github.ts`: CI's Cloudflare token, check service token and GitHub environments (`docs/DEPLOY.md`)            |
-| `pnpm catalog:sync`     | Regenerate the embedded model catalogs from the Go registry (reference checkout)                                            |
-| `pnpm catalog:opencode` | Regenerate the bundled OpenCode Zen/Go catalog from `models.opencode.ai` (`tools/sync-opencode-catalog.ts`)                 |
+| Script              | Purpose                                                                                                                                                                      |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`      | Install dependencies and clone/update the Go reference checkout (`.repos/`)                                                                                                  |
+| `pnpm repos:sync`   | Clone or fast-forward the reference repositories in `.repos/` (`tools/sync-reference-repos.sh`)                                                                              |
+| `pnpm dev`          | `alchemy dev`: local Worker in workerd with emulated DO/KV/D1, hot reload (`ALCHEMY_STATE=local` avoids a Cloudflare login)                                                  |
+| `pnpm web:build`    | Build the control panel (`web/`) into `public/index.html` and `public/assets/` (served at `/`)                                                                               |
+| `pnpm web:dev`      | Vite dev server for the panel on :5173 with hot reload, forwarding `/v8` to `pnpm dev` (`CLIPROXY_DEV_URL`, default :1337)                                                   |
+| `pnpm typecheck`    | `tsc -b`: Worker (`tsconfig.worker.json`), deploy code (`tsconfig.infra.json`), panel (`tsconfig.web.json`)                                                                  |
+| `pnpm lint`         | `oxlint` (type-aware, with type checking, Effect and anti-slop rules) + `oxfmt --check`                                                                                      |
+| `pnpm format`       | `oxfmt`                                                                                                                                                                      |
+| `pnpm test`         | `vitest run` inside the Workers runtime (`@cloudflare/vitest-plugin`)                                                                                                        |
+| `pnpm smoke`        | Builds the panel, boots `alchemy dev` with local state, checks a few routes, stops it (bundle + startup check)                                                               |
+| `pnpm plan`         | `alchemy plan`: preview infrastructure changes (needs a Cloudflare profile)                                                                                                  |
+| `pnpm run deploy`   | `alchemy deploy` (`pnpm deploy` is a pnpm built-in; use `run`)                                                                                                               |
+| `pnpm destroy`      | `alchemy destroy`: delete every resource of a stage                                                                                                                          |
+| `pnpm logs`         | `alchemy logs` (`--tail`)                                                                                                                                                    |
+| `pnpm ci:setup`     | Deploy `stacks/github.ts`: CI's Cloudflare token, check service token and GitHub environments (`docs/DEPLOY.md`)                                                             |
+| `pnpm catalog:sync` | Regenerate the bundled models.dev snapshot `src/registry/catalog/models-dev.json` (`tools/sync-models-dev-catalog.ts [url\|file]`); the catalog additions are edited by hand |
 
 ## Infrastructure
 
@@ -70,6 +68,22 @@ Durable Object, token refresh), `src/session-state` (SessionState Durable Object
 `src/observability` (D1 usage records, trace ids), `migrations/` (D1 schema), `web/` (control panel, below) and
 `tools/fixturegen` (Go programs that emit golden fixtures, see below).
 
+## Model catalog
+
+Every provider's models come from models.dev plus the catalog additions (ADR 0020; `docs/ARCHITECTURE.md`, "Model registry
+and `/models` endpoints"). Three things are checked in under `src/registry/catalog/`:
+
+- `models-dev.json`: the trimmed models.dev snapshot a fresh deploy starts from. `pnpm catalog:sync` regenerates it from
+  `https://models.dev/api.json` (or a URL or saved file given as argument); syncing a trimmed file rewrites it unchanged.
+  A deployed Worker refreshes its own copy every 3 hours and from the Models page ("Refresh catalog").
+- `additions.json`: what models.dev lacks (models it does not list, facts such as `thinking.dynamicAllowed`, Codex plans,
+  `include`/`exclude` patterns). Edited by hand; the format and precedence ("an addition only fills gaps") are in the header
+  of `src/registry/catalog-additions.ts`. A wrong value for a model models.dev lists is fixed at models.dev, not overridden here.
+- `codex_client_models.json`: the Codex client catalog, kept in its own format.
+
+`test/catalog-build.test.ts` checks the trim, the build, the additions' rules and that every id the Go server served is
+still served.
+
 ## Control panel (`web/`)
 
 React 19 + Vite, Effect Atom (`effect/reactivity`, `@effect/atom-react`) for server state and TanStack Router (code-based
@@ -85,14 +99,15 @@ its path segment in `PANEL_SECTIONS` (`src/access/routes.ts`) so the Worker serv
 
 ## Golden fixtures (`tools/fixturegen`)
 
-The generators run the real Go code of the reference checkout and write `test/fixtures/` (and, for the registry,
-`src/registry/catalog/`). They form their own Go module (`tools/fixturegen/go.mod`, module path under the server's so they
+The generators run the real Go code of the reference checkout and write `test/fixtures/`. They form their own Go module (`tools/fixturegen/go.mod`, module path under the server's so they
 may import its `internal/` packages) tied to `.repos/CLIProxyAPI` by a `replace` and the root `go.work`. Run them from the
-repository root, e.g. `go run ./tools/fixturegen/translator` (use `TZ=UTC` for the translator); `pnpm catalog:sync` runs
-`…/registry`.
+repository root, e.g. `go run ./tools/fixturegen/translator` (use `TZ=UTC` for the translator). The model catalogs are no
+longer generated from Go (ADR 0020): `…/registry` only records the listing fixtures, and `test/fixtures/go-catalog-served.json`
+(the ids Go served when the catalog moved to models.dev) is pinned, it does not follow the reference checkout.
 
 The reference checkout follows upstream `main`, so regenerating after `pnpm repos:sync` shows what changed upstream: a
-fixture diff is a porting task (port the Go change, then commit the new fixtures), not noise to commit blindly. Some
+fixture diff is a change to consider (port the Go change and commit the new fixtures, or keep the proxy's behaviour and
+leave the fixture as it is), not noise to commit blindly. Some
 fixtures contain generated ids or timestamps that differ on every run; the tests mask those.
 
 `tools/fixturegen/UPSTREAM_COMMIT` records the reference commit the committed fixtures were generated from (the last

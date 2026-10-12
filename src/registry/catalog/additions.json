@@ -1,0 +1,4007 @@
+{
+  "version": 1,
+  "providers": {
+    "claude": {
+      "facts": {
+        "claude-haiku-4-5-20251001": {
+          "thinking": {
+            "max": 128000,
+            "zeroAllowed": true
+          }
+        },
+        "claude-sonnet-4-5-20250929": {
+          "thinking": {
+            "max": 128000,
+            "zeroAllowed": true
+          }
+        },
+        "claude-sonnet-4-6": {
+          "thinking": {
+            "max": 128000,
+            "zeroAllowed": true
+          }
+        },
+        "claude-opus-4-6": {
+          "thinking": {
+            "max": 128000,
+            "zeroAllowed": true
+          }
+        },
+        "claude-opus-4-7": {
+          "thinking": {
+            "min": 1024,
+            "max": 128000,
+            "zeroAllowed": true
+          }
+        },
+        "claude-opus-4-8": {
+          "thinking": {
+            "min": 1024,
+            "max": 128000,
+            "zeroAllowed": true
+          }
+        },
+        "claude-opus-5": {
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "zeroAllowed": true,
+            "dynamicAllowed": true
+          }
+        },
+        "claude-sonnet-5": {
+          "thinking": {
+            "zeroAllowed": true,
+            "dynamicAllowed": true
+          }
+        },
+        "claude-fable-5": {
+          "thinking": {
+            "min": 1024,
+            "max": 128000,
+            "zeroAllowed": true
+          }
+        },
+        "claude-fable-5-1": {
+          "thinking": {
+            "min": 1024,
+            "max": 128000,
+            "zeroAllowed": true
+          }
+        },
+        "claude-opus-5-5": {
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "zeroAllowed": true,
+            "dynamicAllowed": true
+          }
+        },
+        "claude-sonnet-5-5": {
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "zeroAllowed": true,
+            "dynamicAllowed": true
+          }
+        },
+        "claude-opus-4-5-20251101": {
+          "thinking": {
+            "min": 1024,
+            "max": 128000,
+            "zeroAllowed": true
+          }
+        }
+      },
+      "models": [
+        {
+          "id": "claude-opus-4-1-20250805",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "claude",
+          "created": 1722945600,
+          "displayName": "Claude 4.1 Opus",
+          "contextLength": 200000,
+          "maxCompletionTokens": 32000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "min": 1024,
+            "max": 128000
+          }
+        },
+        {
+          "id": "claude-opus-4-20250514",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "claude",
+          "created": 1715644800,
+          "displayName": "Claude 4 Opus",
+          "contextLength": 200000,
+          "maxCompletionTokens": 32000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "min": 1024,
+            "max": 128000
+          }
+        },
+        {
+          "id": "claude-sonnet-4-20250514",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "claude",
+          "created": 1715644800,
+          "displayName": "Claude 4 Sonnet",
+          "contextLength": 200000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "min": 1024,
+            "max": 128000
+          }
+        },
+        {
+          "id": "claude-3-7-sonnet-20250219",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "claude",
+          "created": 1708300800,
+          "displayName": "Claude 3.7 Sonnet",
+          "contextLength": 128000,
+          "maxCompletionTokens": 8192,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "min": 1024,
+            "max": 128000
+          }
+        },
+        {
+          "id": "claude-3-5-haiku-20241022",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "claude",
+          "created": 1729555200,
+          "displayName": "Claude 3.5 Haiku",
+          "contextLength": 128000,
+          "maxCompletionTokens": 8192
+        }
+      ]
+    },
+    "gemini": {
+      "exclude": [
+        "gemini-embedding-*",
+        "*-live-*",
+        "lyria-*",
+        "deep-research-*",
+        "*computer-use*"
+      ],
+      "facts": {
+        "gemini-2.5-pro": {
+          "version": "2.5"
+        },
+        "gemini-2.5-flash": {
+          "version": "001"
+        },
+        "gemini-2.5-flash-lite": {
+          "version": "2.5"
+        },
+        "gemini-3.1-pro-preview": {
+          "version": "3.1",
+          "thinking": {
+            "min": 128,
+            "max": 32768
+          }
+        },
+        "gemini-3.1-flash-image-preview": {
+          "version": "3.1",
+          "thinking": {
+            "min": 128,
+            "max": 32768
+          }
+        },
+        "gemini-3-flash-preview": {
+          "version": "3.0",
+          "thinking": {
+            "min": 128,
+            "max": 32768
+          }
+        },
+        "gemini-3-pro-image-preview": {
+          "version": "3.0",
+          "thinking": {
+            "min": 128,
+            "max": 32768,
+            "levels": [
+              "low",
+              "high"
+            ],
+            "dynamicAllowed": true
+          }
+        },
+        "gemini-3.5-flash": {
+          "version": "3.5",
+          "thinking": {
+            "min": 128,
+            "max": 32768
+          }
+        },
+        "gemini-3.5-flash-lite": {
+          "version": "3.5",
+          "thinking": {
+            "min": 128,
+            "max": 32768
+          }
+        },
+        "gemini-3.6-flash": {
+          "version": "3.6",
+          "thinking": {
+            "min": 128,
+            "max": 32768
+          }
+        },
+        "gemini-3.7-flash": {
+          "version": "3.7",
+          "thinking": {
+            "min": 128,
+            "max": 65535
+          }
+        },
+        "gemini-3.8-flash": {
+          "version": "3.8",
+          "thinking": {
+            "min": 128,
+            "max": 65535
+          }
+        }
+      },
+      "models": [
+        {
+          "id": "gemini-3-pro-preview",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "gemini",
+          "created": 1737158400,
+          "displayName": "Gemini 3 Pro Preview",
+          "name": "models/gemini-3-pro-preview",
+          "version": "3.0",
+          "description": "Gemini 3 Pro Preview",
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 65536,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens",
+            "createCachedContent",
+            "batchGenerateContent"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 128,
+            "max": 32768,
+            "dynamicAllowed": true,
+            "levels": [
+              "low",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "gemini-3.1-flash-lite-preview",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "gemini",
+          "created": 1776288000,
+          "displayName": "Gemini 3.1 Flash Lite Preview",
+          "name": "models/gemini-3.1-flash-lite-preview",
+          "version": "3.1",
+          "description": "Our smallest and most cost effective model, built for at scale usage.",
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 65536,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens",
+            "createCachedContent",
+            "batchGenerateContent"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 128,
+            "max": 32768,
+            "dynamicAllowed": true,
+            "levels": [
+              "minimal",
+              "high"
+            ]
+          }
+        }
+      ],
+      "defaults": {
+        "supportedGenerationMethods": [
+          "generateContent",
+          "countTokens",
+          "createCachedContent",
+          "batchGenerateContent"
+        ],
+        "nativeCapabilities": {
+          "webSearch": true
+        },
+        "thinking": {
+          "dynamicAllowed": true
+        }
+      }
+    },
+    "vertex": {
+      "include": [
+        "gemini-*"
+      ],
+      "exclude": [
+        "gemini-embedding-*"
+      ],
+      "facts": {
+        "gemini-2.5-flash-image": {
+          "version": "001",
+          "thinking": {
+            "max": 24576,
+            "zeroAllowed": true
+          }
+        },
+        "gemini-3.1-pro-preview": {
+          "version": "3.1",
+          "thinking": {
+            "min": 128,
+            "max": 32768
+          }
+        },
+        "gemini-3.1-flash-image": {
+          "version": "3.1",
+          "thinking": {
+            "min": 128,
+            "max": 32768
+          }
+        },
+        "gemini-3.1-flash-lite": {
+          "version": "3.1",
+          "thinking": {
+            "min": 128,
+            "max": 32768
+          }
+        },
+        "gemini-3-pro-image": {
+          "version": "3.0",
+          "thinking": {
+            "min": 128,
+            "max": 32768,
+            "levels": [
+              "low",
+              "high"
+            ],
+            "dynamicAllowed": true
+          }
+        },
+        "gemini-3.5-flash": {
+          "version": "3.5",
+          "thinking": {
+            "min": 128,
+            "max": 32768
+          }
+        },
+        "gemini-3.5-flash-lite": {
+          "version": "3.5",
+          "thinking": {
+            "min": 128,
+            "max": 32768
+          }
+        },
+        "gemini-3.7-flash": {
+          "thinking": {
+            "min": 128,
+            "max": 65535
+          }
+        },
+        "gemini-3.8-flash": {
+          "thinking": {
+            "min": 128,
+            "max": 65535
+          }
+        }
+      },
+      "models": [
+        {
+          "id": "gemini-2.5-pro",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "gemini",
+          "created": 1750118400,
+          "displayName": "Gemini 2.5 Pro",
+          "name": "models/gemini-2.5-pro",
+          "version": "2.5",
+          "description": "Stable release (June 17th, 2025) of Gemini 2.5 Pro",
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 65536,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens",
+            "createCachedContent",
+            "batchGenerateContent"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 128,
+            "max": 32768,
+            "dynamicAllowed": true
+          }
+        },
+        {
+          "id": "gemini-2.5-flash",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "gemini",
+          "created": 1750118400,
+          "displayName": "Gemini 2.5 Flash",
+          "name": "models/gemini-2.5-flash",
+          "version": "001",
+          "description": "Stable version of Gemini 2.5 Flash, our mid-size multimodal model that supports up to 1 million tokens, released in June of 2025.",
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 65536,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens",
+            "createCachedContent",
+            "batchGenerateContent"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "max": 24576,
+            "zeroAllowed": true,
+            "dynamicAllowed": true
+          }
+        },
+        {
+          "id": "gemini-2.5-flash-lite",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "gemini",
+          "created": 1753142400,
+          "displayName": "Gemini 2.5 Flash Lite",
+          "name": "models/gemini-2.5-flash-lite",
+          "version": "2.5",
+          "description": "Our smallest and most cost effective model, built for at scale usage.",
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 65536,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens",
+            "createCachedContent",
+            "batchGenerateContent"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "max": 24576,
+            "zeroAllowed": true,
+            "dynamicAllowed": true
+          }
+        },
+        {
+          "id": "gemini-3-pro",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "gemini",
+          "created": 1737158400,
+          "displayName": "Gemini 3 Pro",
+          "name": "models/gemini-3-pro",
+          "version": "3.0",
+          "description": "Gemini 3 Pro",
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 65536,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens",
+            "createCachedContent",
+            "batchGenerateContent"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 128,
+            "max": 32768,
+            "dynamicAllowed": true,
+            "levels": [
+              "low",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "gemini-3-flash",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "gemini",
+          "created": 1765929600,
+          "displayName": "Gemini 3 Flash",
+          "name": "models/gemini-3-flash",
+          "version": "3.0",
+          "description": "Our most intelligent model built for speed, combining frontier intelligence with superior search and grounding.",
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 65536,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens",
+            "createCachedContent",
+            "batchGenerateContent"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 128,
+            "max": 32768,
+            "dynamicAllowed": true,
+            "levels": [
+              "minimal",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "gemini-3.1-pro",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "gemini",
+          "created": 1771459200,
+          "displayName": "Gemini 3.1 Pro",
+          "name": "models/gemini-3.1-pro",
+          "version": "3.1",
+          "description": "Gemini 3.1 Pro",
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 65536,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens",
+            "createCachedContent",
+            "batchGenerateContent"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 128,
+            "max": 32768,
+            "dynamicAllowed": true,
+            "levels": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "imagen-4.0-generate-001",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "gemini",
+          "created": 1750000000,
+          "displayName": "Imagen 4.0 Generate",
+          "name": "models/imagen-4.0-generate-001",
+          "version": "4.0",
+          "description": "Imagen 4.0 image generation model",
+          "supportedGenerationMethods": [
+            "predict"
+          ],
+          "supportedInputModalities": [
+            "text"
+          ],
+          "supportedOutputModalities": [
+            "image"
+          ]
+        },
+        {
+          "id": "imagen-4.0-ultra-generate-001",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "gemini",
+          "created": 1750000000,
+          "displayName": "Imagen 4.0 Ultra Generate",
+          "name": "models/imagen-4.0-ultra-generate-001",
+          "version": "4.0",
+          "description": "Imagen 4.0 Ultra high-quality image generation model",
+          "supportedGenerationMethods": [
+            "predict"
+          ],
+          "supportedInputModalities": [
+            "text"
+          ],
+          "supportedOutputModalities": [
+            "image"
+          ]
+        },
+        {
+          "id": "imagen-3.0-generate-002",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "gemini",
+          "created": 1740000000,
+          "displayName": "Imagen 3.0 Generate",
+          "name": "models/imagen-3.0-generate-002",
+          "version": "3.0",
+          "description": "Imagen 3.0 image generation model",
+          "supportedGenerationMethods": [
+            "predict"
+          ],
+          "supportedInputModalities": [
+            "text"
+          ],
+          "supportedOutputModalities": [
+            "image"
+          ]
+        },
+        {
+          "id": "imagen-3.0-fast-generate-001",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "gemini",
+          "created": 1740000000,
+          "displayName": "Imagen 3.0 Fast Generate",
+          "name": "models/imagen-3.0-fast-generate-001",
+          "version": "3.0",
+          "description": "Imagen 3.0 fast image generation model",
+          "supportedGenerationMethods": [
+            "predict"
+          ],
+          "supportedInputModalities": [
+            "text"
+          ],
+          "supportedOutputModalities": [
+            "image"
+          ]
+        },
+        {
+          "id": "imagen-4.0-fast-generate-001",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "gemini",
+          "created": 1750000000,
+          "displayName": "Imagen 4.0 Fast Generate",
+          "name": "models/imagen-4.0-fast-generate-001",
+          "version": "4.0",
+          "description": "Imagen 4.0 fast image generation model",
+          "supportedGenerationMethods": [
+            "predict"
+          ],
+          "supportedInputModalities": [
+            "text"
+          ],
+          "supportedOutputModalities": [
+            "image"
+          ]
+        },
+        {
+          "id": "gemini-3.6-flash",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "gemini",
+          "created": 1782864000,
+          "displayName": "Gemini 3.6 Flash",
+          "name": "models/gemini-3.6-flash",
+          "version": "3.6",
+          "description": "Gemini 3.6 Flash",
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 65536,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens",
+            "createCachedContent",
+            "batchGenerateContent"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 128,
+            "max": 32768,
+            "dynamicAllowed": true,
+            "levels": [
+              "minimal",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        }
+      ],
+      "defaults": {
+        "supportedGenerationMethods": [
+          "generateContent",
+          "countTokens",
+          "createCachedContent",
+          "batchGenerateContent"
+        ],
+        "nativeCapabilities": {
+          "webSearch": true
+        },
+        "thinking": {
+          "dynamicAllowed": true
+        }
+      }
+    },
+    "aistudio": {
+      "exclude": [
+        "gemini-embedding-*",
+        "*-live-*",
+        "lyria-*",
+        "deep-research-*",
+        "*computer-use*"
+      ],
+      "facts": {
+        "gemini-2.5-pro": {
+          "version": "2.5"
+        },
+        "gemini-2.5-flash": {
+          "version": "001"
+        },
+        "gemini-2.5-flash-lite": {
+          "version": "2.5"
+        },
+        "gemini-3.1-pro-preview": {
+          "version": "3.1",
+          "thinking": {
+            "min": 128,
+            "max": 32768
+          }
+        },
+        "gemini-3-flash-preview": {
+          "version": "3.0",
+          "thinking": {
+            "min": 128,
+            "max": 32768
+          }
+        },
+        "gemini-flash-latest": {
+          "version": "2.5",
+          "thinking": {
+            "max": 24576,
+            "zeroAllowed": true
+          }
+        },
+        "gemini-flash-lite-latest": {
+          "version": "2.5",
+          "thinking": {
+            "min": 512,
+            "max": 24576,
+            "zeroAllowed": true
+          }
+        },
+        "gemini-2.5-flash-image": {
+          "version": "2.5"
+        },
+        "gemini-3.5-flash": {
+          "version": "3.5",
+          "thinking": {
+            "min": 128,
+            "max": 32768
+          }
+        },
+        "gemini-3.5-flash-lite": {
+          "version": "3.5",
+          "thinking": {
+            "min": 128,
+            "max": 32768
+          }
+        },
+        "gemini-3.6-flash": {
+          "version": "3.6",
+          "thinking": {
+            "min": 128,
+            "max": 32768
+          }
+        },
+        "gemini-3.7-flash": {
+          "version": "3.7",
+          "thinking": {
+            "min": 128,
+            "max": 65535
+          }
+        },
+        "gemini-3.8-flash": {
+          "version": "3.8",
+          "thinking": {
+            "min": 128,
+            "max": 65535
+          }
+        }
+      },
+      "models": [
+        {
+          "id": "gemini-3-pro-preview",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "gemini",
+          "created": 1737158400,
+          "displayName": "Gemini 3 Pro Preview",
+          "name": "models/gemini-3-pro-preview",
+          "version": "3.0",
+          "description": "Gemini 3 Pro Preview",
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 65536,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens",
+            "createCachedContent",
+            "batchGenerateContent"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 128,
+            "max": 32768,
+            "dynamicAllowed": true
+          }
+        },
+        {
+          "id": "gemini-3.1-flash-lite-preview",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "gemini",
+          "created": 1776288000,
+          "displayName": "Gemini 3.1 Flash Lite Preview",
+          "name": "models/gemini-3.1-flash-lite-preview",
+          "version": "3.1",
+          "description": "Our smallest and most cost effective model, built for at scale usage.",
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 65536,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens",
+            "createCachedContent",
+            "batchGenerateContent"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 128,
+            "max": 32768,
+            "dynamicAllowed": true,
+            "levels": [
+              "minimal",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "gemini-pro-latest",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "gemini",
+          "created": 1750118400,
+          "displayName": "Gemini Pro Latest",
+          "name": "models/gemini-pro-latest",
+          "version": "2.5",
+          "description": "Latest release of Gemini Pro",
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 65536,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens",
+            "createCachedContent",
+            "batchGenerateContent"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 128,
+            "max": 32768,
+            "dynamicAllowed": true
+          }
+        }
+      ],
+      "defaults": {
+        "supportedGenerationMethods": [
+          "generateContent",
+          "countTokens",
+          "createCachedContent",
+          "batchGenerateContent"
+        ],
+        "nativeCapabilities": {
+          "webSearch": true
+        },
+        "thinking": {
+          "dynamicAllowed": true
+        }
+      }
+    },
+    "xai": {
+      "facts": {
+        "grok-4.7": {
+          "name": "grok-4.7",
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "zeroAllowed": false
+          }
+        },
+        "grok-4.6": {
+          "name": "grok-4.6",
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "zeroAllowed": false
+          }
+        },
+        "grok-build-0.1": {
+          "name": "grok-build-0.1"
+        },
+        "grok-4.5": {
+          "name": "grok-4.5",
+          "thinking": {
+            "zeroAllowed": false
+          }
+        },
+        "grok-4.3": {
+          "name": "grok-4.3"
+        },
+        "grok-4.20-0309-reasoning": {
+          "name": "grok-4.20-0309-reasoning"
+        },
+        "grok-4.20-0309-non-reasoning": {
+          "name": "grok-4.20-0309-non-reasoning"
+        },
+        "grok-4.20-multi-agent-0309": {
+          "name": "grok-4.20-multi-agent-0309"
+        }
+      },
+      "models": [
+        {
+          "id": "grok-4.7-build-fast",
+          "object": "model",
+          "ownedBy": "xai",
+          "type": "xai",
+          "created": 1789948800,
+          "displayName": "Grok 4.7 Fast",
+          "name": "grok-4.7-build-fast",
+          "description": "Grok 4.7 Fast as served by the Grok Build chat-proxy. Same model as grok-4.7 on the faster tier.",
+          "contextLength": 500000,
+          "maxCompletionTokens": 500000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "zeroAllowed": false,
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        },
+        {
+          "id": "grok-3-mini",
+          "object": "model",
+          "ownedBy": "xai",
+          "type": "xai",
+          "created": 1740960000,
+          "displayName": "Grok 3 Mini",
+          "name": "grok-3-mini",
+          "description": "xAI Grok 3 Mini model for the Responses API.",
+          "contextLength": 131072,
+          "maxCompletionTokens": 32768,
+          "supportedInputModalities": [
+            "text"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "grok-3-mini-fast",
+          "object": "model",
+          "ownedBy": "xai",
+          "type": "xai",
+          "created": 1740960000,
+          "displayName": "Grok 3 Mini Fast",
+          "name": "grok-3-mini-fast",
+          "description": "xAI Grok 3 Mini Fast model for the Responses API.",
+          "contextLength": 131072,
+          "maxCompletionTokens": 32768,
+          "supportedInputModalities": [
+            "text"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "grok-composer-2.5-fast",
+          "object": "model",
+          "ownedBy": "xai",
+          "type": "xai",
+          "created": 1740960000,
+          "displayName": "Composer 2.5 Fast",
+          "name": "grok-composer-2.5-fast",
+          "description": "xAI Composer 2.5 Fast model for the Responses API.",
+          "contextLength": 200000,
+          "maxCompletionTokens": 32768
+        },
+        {
+          "id": "grok-imagine-image",
+          "object": "model",
+          "ownedBy": "xai",
+          "type": "xai",
+          "created": 1735689600,
+          "displayName": "Grok Imagine Image",
+          "name": "grok-imagine-image",
+          "description": "xAI Grok image generation model."
+        },
+        {
+          "id": "grok-imagine-image-quality",
+          "object": "model",
+          "ownedBy": "xai",
+          "type": "xai",
+          "created": 1735689600,
+          "displayName": "Grok Imagine Image Quality",
+          "name": "grok-imagine-image-quality",
+          "description": "xAI Grok higher-fidelity image generation model."
+        },
+        {
+          "id": "grok-imagine-image-2.0",
+          "object": "model",
+          "ownedBy": "xai",
+          "type": "xai",
+          "created": 1786060800,
+          "displayName": "Grok Imagine Image 2.0",
+          "name": "grok-imagine-image-2.0",
+          "description": "xAI Grok image generation model."
+        },
+        {
+          "id": "grok-imagine-video",
+          "object": "model",
+          "ownedBy": "xai",
+          "type": "xai",
+          "created": 1735689600,
+          "displayName": "Grok Imagine Video",
+          "name": "grok-imagine-video",
+          "description": "xAI Grok video generation model."
+        },
+        {
+          "id": "grok-imagine-video-1.5",
+          "object": "model",
+          "ownedBy": "xai",
+          "type": "xai",
+          "created": 1735689600,
+          "displayName": "Grok Imagine Video 1.5",
+          "name": "grok-imagine-video-1.5",
+          "description": "xAI Grok video generation model."
+        },
+        {
+          "id": "grok-imagine-video-1.5-preview",
+          "object": "model",
+          "ownedBy": "xai",
+          "type": "xai",
+          "created": 1735689600,
+          "displayName": "Grok Imagine Video 1.5 Preview",
+          "name": "grok-imagine-video-1.5-preview",
+          "description": "Compatibility alias for the xAI Grok video generation model."
+        },
+        {
+          "id": "grok-tts",
+          "object": "model",
+          "ownedBy": "xai",
+          "type": "xai",
+          "created": 1773619200,
+          "displayName": "Grok TTS",
+          "name": "grok-tts",
+          "description": "xAI Grok unary text-to-speech model."
+        },
+        {
+          "id": "grok-voice-tts-1.0",
+          "object": "model",
+          "ownedBy": "xai",
+          "type": "xai",
+          "created": 1773619200,
+          "displayName": "Grok Voice TTS 1.0",
+          "name": "grok-voice-tts-1.0",
+          "description": "xAI Grok unary text-to-speech model."
+        }
+      ]
+    },
+    "meta": {
+      "facts": {
+        "muse-spark-1.3": {
+          "name": "muse-spark-1.3"
+        },
+        "muse-spark-1.3-contributor": {
+          "name": "muse-spark-1.3-contributor"
+        },
+        "muse-spark-1.2": {
+          "name": "muse-spark-1.2"
+        },
+        "muse-spark-1.2-contributor": {
+          "name": "muse-spark-1.2-contributor"
+        },
+        "muse-spark-1.1": {
+          "name": "muse-spark-1.1"
+        }
+      },
+      "models": []
+    },
+    "kimi": {
+      "facts": {
+        "kimi-k3": {
+          "thinking": {
+            "zeroAllowed": true
+          }
+        },
+        "kimi-k3-256k": {
+          "thinking": {
+            "zeroAllowed": true
+          }
+        }
+      },
+      "models": [
+        {
+          "id": "kimi-k2",
+          "object": "model",
+          "ownedBy": "moonshot",
+          "type": "kimi",
+          "created": 1752192000,
+          "displayName": "Kimi K2",
+          "description": "Kimi K2 - Moonshot AI's flagship coding model",
+          "contextLength": 131072,
+          "maxCompletionTokens": 32768,
+          "supportedInputModalities": [
+            "text"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ]
+        },
+        {
+          "id": "kimi-k2-thinking",
+          "object": "model",
+          "ownedBy": "moonshot",
+          "type": "kimi",
+          "created": 1762387200,
+          "displayName": "Kimi K2 Thinking",
+          "description": "Kimi K2 Thinking - Extended reasoning model",
+          "contextLength": 131072,
+          "maxCompletionTokens": 32768,
+          "supportedInputModalities": [
+            "text"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "zeroAllowed": true,
+            "levels": [
+              "low",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "kimi-k2.5",
+          "object": "model",
+          "ownedBy": "moonshot",
+          "type": "kimi",
+          "created": 1769472000,
+          "displayName": "Kimi K2.5",
+          "description": "Kimi K2.5 - Native multimodal agentic model with text, image, and video input; supports thinking and non-thinking modes",
+          "contextLength": 262144,
+          "maxCompletionTokens": 32768,
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "zeroAllowed": true,
+            "levels": [
+              "low",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "kimi-k2.6",
+          "object": "model",
+          "ownedBy": "moonshot",
+          "type": "kimi",
+          "created": 1776729600,
+          "displayName": "Kimi K2.6",
+          "description": "Kimi K2.6 - Native multimodal agentic model with stronger long-horizon agentic coding, long-context reasoning, and preserved thinking support",
+          "contextLength": 262144,
+          "maxCompletionTokens": 65536,
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "zeroAllowed": true,
+            "levels": [
+              "low",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "kimi-k2.7-code",
+          "object": "model",
+          "ownedBy": "moonshot",
+          "type": "kimi",
+          "created": 1780396800,
+          "displayName": "Kimi K2.7 Code",
+          "description": "Kimi K2.7 Code - Moonshot AI's latest coding-focused model",
+          "contextLength": 262144,
+          "maxCompletionTokens": 65536,
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "zeroAllowed": false,
+            "levels": [
+              "low",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "kimi-k2.7-code-highspeed",
+          "object": "model",
+          "ownedBy": "moonshot",
+          "type": "kimi",
+          "created": 1780396800,
+          "displayName": "Kimi K2.7 Code HighSpeed",
+          "description": "Kimi K2.7 Code HighSpeed - Same capabilities as Kimi K2.7 Code with higher output speed (~180 tokens/s)",
+          "contextLength": 262144,
+          "maxCompletionTokens": 65536,
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "zeroAllowed": false,
+            "levels": [
+              "low",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "kimi-k2.8",
+          "object": "model",
+          "ownedBy": "moonshot",
+          "type": "kimi",
+          "created": 1789115500,
+          "displayName": "Kimi K2.8 Preview",
+          "description": "Kimi K2.8 Preview - Lightweight coding and agent model with near-K3 performance and 1M context window",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 65536,
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "zeroAllowed": true,
+            "levels": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        },
+        {
+          "id": "kimi-k2.8-code",
+          "object": "model",
+          "ownedBy": "moonshot",
+          "type": "kimi",
+          "created": 1789115500,
+          "displayName": "Kimi K2.8 Code Preview",
+          "description": "Kimi K2.8 Code Preview - Lightweight coding and agent model with near-K3 performance and 1M context window",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 65536,
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "zeroAllowed": true,
+            "levels": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        }
+      ]
+    },
+    "codex": {
+      "plans": {
+        "free": [
+          "gpt-6-luna",
+          "gpt-5.5",
+          "gpt-5.6-terra",
+          "gpt-5.6-luna",
+          "codex-auto-review",
+          "gpt-image-1.5",
+          "gpt-image-2",
+          "gpt-image-2.5-flare",
+          "gpt-image-2.5-sunburst",
+          "gpt-image-2.5"
+        ],
+        "team": [
+          "gpt-5.5",
+          "gpt-6-astra",
+          "gpt-6-sol",
+          "gpt-6.1-sol",
+          "gpt-6-luna",
+          "gpt-5.6-sol",
+          "gpt-5.6-terra",
+          "gpt-5.6-luna",
+          "codex-auto-review",
+          "gpt-image-1.5",
+          "gpt-image-2",
+          "gpt-image-2.5-flare",
+          "gpt-image-2.5-sunburst",
+          "gpt-image-2.5"
+        ],
+        "plus": [
+          "gpt-5.5",
+          "gpt-6-astra",
+          "gpt-6-sol",
+          "gpt-6.1-sol",
+          "gpt-6-luna",
+          "gpt-5.6-sol",
+          "gpt-5.6-terra",
+          "gpt-5.6-luna",
+          "codex-auto-review",
+          "gpt-image-1.5",
+          "gpt-image-2",
+          "gpt-image-2.5-flare",
+          "gpt-image-2.5-sunburst",
+          "gpt-image-2.5"
+        ],
+        "pro": [
+          "gpt-5.5",
+          "gpt-6-astra",
+          "gpt-6-sol",
+          "gpt-6.1-sol",
+          "gpt-6-luna",
+          "gpt-5.6-sol",
+          "gpt-5.6-terra",
+          "gpt-5.6-luna",
+          "codex-auto-review",
+          "gpt-image-1.5",
+          "gpt-image-2",
+          "gpt-image-2.5-flare",
+          "gpt-image-2.5-sunburst",
+          "gpt-image-2.5"
+        ]
+      },
+      "facts": {},
+      "models": [
+        {
+          "id": "codex-auto-review",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "openai",
+          "created": 1776902400,
+          "displayName": "Codex Auto Review",
+          "version": "Codex Auto Review",
+          "description": "Automatic approval review model for Codex.",
+          "contextLength": 272000,
+          "maxCompletionTokens": 128000,
+          "supportedParameters": [
+            "tools"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        },
+        {
+          "id": "gpt-image-2.5-flare",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "openai",
+          "created": 1704067200,
+          "displayName": "GPT Image 2.5 Flare",
+          "version": "gpt-image-2.5-flare"
+        },
+        {
+          "id": "gpt-image-2.5-sunburst",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "openai",
+          "created": 1704067200,
+          "displayName": "GPT Image 2.5 Sunburst",
+          "version": "gpt-image-2.5-sunburst"
+        },
+        {
+          "id": "gpt-image-2.5",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "openai",
+          "created": 1704067200,
+          "displayName": "GPT Image 2.5",
+          "version": "gpt-image-2.5"
+        },
+        {
+          "id": "gpt-6-luna",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "openai",
+          "created": 1790035200,
+          "displayName": "GPT 6.0 Luna",
+          "version": "gpt-6.0",
+          "description": "GPT-6 Luna Codex model.",
+          "contextLength": 272000,
+          "maxCompletionTokens": 128000,
+          "supportedParameters": [
+            "tools"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "supportConfigurationUpdate": true,
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
+        {
+          "id": "gpt-5.5",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "openai",
+          "created": 1776902400,
+          "displayName": "GPT 5.5",
+          "version": "gpt-5.5",
+          "description": "Frontier model for complex coding, research, and real-world work.",
+          "contextLength": 272000,
+          "maxCompletionTokens": 128000,
+          "supportedParameters": [
+            "tools"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        },
+        {
+          "id": "gpt-5.6-terra",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "openai",
+          "created": 1783616400,
+          "displayName": "GPT 5.6 Terra",
+          "version": "gpt-5.6",
+          "description": "Balanced agentic coding model for everyday work.",
+          "contextLength": 921000,
+          "maxCompletionTokens": 128000,
+          "supportedParameters": [
+            "tools"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
+        {
+          "id": "gpt-5.6-luna",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "openai",
+          "created": 1783616400,
+          "displayName": "GPT 5.6 Luna",
+          "version": "gpt-5.6",
+          "description": "Fast and affordable agentic coding model.",
+          "contextLength": 921000,
+          "maxCompletionTokens": 128000,
+          "supportedParameters": [
+            "tools"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "config": {
+            "overrideHeader": {
+              "user-agent": "codex-tui/0.154.0 (Mac OS 26.5.2; arm64) iTerm.app/3.6.11 (codex-tui; 0.154.0)",
+              "originator": "codex-tui"
+            }
+          }
+        },
+        {
+          "id": "gpt-image-1.5",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "openai",
+          "created": 1704067200,
+          "displayName": "GPT Image 1.5",
+          "version": "gpt-image-1.5"
+        },
+        {
+          "id": "gpt-image-2",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "openai",
+          "created": 1704067200,
+          "displayName": "GPT Image 2",
+          "version": "gpt-image-2"
+        },
+        {
+          "id": "gpt-6-astra",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "openai",
+          "created": 1783616400,
+          "displayName": "GPT 6.0 Astra",
+          "version": "gpt-6.0",
+          "description": "GPT-6 Astra is our most intelligent model yet, with state-of-the-art performance in computer use, browsing, software engineering, science, and professional work.",
+          "contextLength": 272000,
+          "maxCompletionTokens": 128000,
+          "supportedParameters": [
+            "tools"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "supportConfigurationUpdate": true,
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
+        {
+          "id": "gpt-6-sol",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "openai",
+          "created": 1790035200,
+          "displayName": "GPT 6.0 Sol",
+          "version": "gpt-6.0",
+          "description": "GPT-6 Sol Codex model.",
+          "contextLength": 272000,
+          "maxCompletionTokens": 128000,
+          "supportedParameters": [
+            "tools"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "supportConfigurationUpdate": true,
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
+        {
+          "id": "gpt-6.1-sol",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "openai",
+          "created": 1790640000,
+          "displayName": "GPT 6.1 Sol",
+          "version": "gpt-6.0",
+          "description": "Latest workhorse model for coding and everyday work.",
+          "contextLength": 272000,
+          "maxCompletionTokens": 128000,
+          "supportedParameters": [
+            "tools"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "supportConfigurationUpdate": true,
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        },
+        {
+          "id": "gpt-5.6-sol",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "openai",
+          "created": 1783616400,
+          "displayName": "GPT 5.6 Sol",
+          "version": "gpt-5.6",
+          "description": "Our most capable model yet. GPT-5.6 Sol can tackle complex code changes, dig into research, produce polished documents, and take on your most ambitious work. Sol is highly capable at lower reasoning efforts\u2014try starting lower, then turn it up for harder jobs.",
+          "contextLength": 921000,
+          "maxCompletionTokens": 128000,
+          "supportedParameters": [
+            "tools"
+          ],
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        }
+      ]
+    },
+    "antigravity": {
+      "models": [
+        {
+          "id": "claude-opus-4-6-thinking",
+          "object": "model",
+          "ownedBy": "antigravity",
+          "type": "antigravity",
+          "created": 0,
+          "displayName": "Claude Opus 4.6 (Thinking)",
+          "name": "claude-opus-4-6-thinking",
+          "description": "Claude Opus 4.6 (Thinking)",
+          "contextLength": 200000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "min": 1024,
+            "max": 64000,
+            "zeroAllowed": true,
+            "dynamicAllowed": true
+          }
+        },
+        {
+          "id": "claude-sonnet-4-6",
+          "object": "model",
+          "ownedBy": "antigravity",
+          "type": "antigravity",
+          "created": 0,
+          "displayName": "Claude Sonnet 4.6 (Thinking)",
+          "name": "claude-sonnet-4-6",
+          "description": "Claude Sonnet 4.6 (Thinking)",
+          "contextLength": 200000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "min": 1024,
+            "max": 64000,
+            "zeroAllowed": true,
+            "dynamicAllowed": true
+          }
+        },
+        {
+          "id": "claude-opus-5-5-high",
+          "object": "model",
+          "ownedBy": "antigravity",
+          "type": "antigravity",
+          "created": 0,
+          "displayName": "Claude Opus 5.5 (High)",
+          "name": "claude-opus-5-5-high",
+          "description": "Claude Opus 5.5 (High)",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 128000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "min": 1024,
+            "max": 64000,
+            "zeroAllowed": true,
+            "dynamicAllowed": true
+          }
+        },
+        {
+          "id": "claude-sonnet-5-5-high",
+          "object": "model",
+          "ownedBy": "antigravity",
+          "type": "antigravity",
+          "created": 0,
+          "displayName": "Claude Sonnet 5.5 (High)",
+          "name": "claude-sonnet-5-5-high",
+          "description": "Claude Sonnet 5.5 (High)",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 128000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "min": 1024,
+            "max": 64000,
+            "zeroAllowed": true,
+            "dynamicAllowed": true
+          }
+        },
+        {
+          "id": "gemini-3.6-flash-high",
+          "object": "model",
+          "ownedBy": "antigravity",
+          "type": "antigravity",
+          "created": 0,
+          "displayName": "Gemini 3.6 Flash",
+          "name": "gemini-3.6-flash-high",
+          "description": "Gemini 3.6 Flash (High)",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 65536,
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "supportsWebSearch": true,
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 1,
+            "max": 65535,
+            "dynamicAllowed": true,
+            "levels": [
+              "minimal",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "gemini-3.7-flash-high",
+          "object": "model",
+          "ownedBy": "antigravity",
+          "type": "antigravity",
+          "created": 0,
+          "displayName": "Gemini 3.7 Flash",
+          "name": "gemini-3.7-flash-high",
+          "description": "Gemini 3.7 Flash (High)",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 65536,
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "supportsWebSearch": true,
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 1,
+            "max": 65535,
+            "dynamicAllowed": true,
+            "levels": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "gemini-3.8-flash-high",
+          "object": "model",
+          "ownedBy": "antigravity",
+          "type": "antigravity",
+          "created": 0,
+          "displayName": "Gemini 3.8 Flash",
+          "name": "gemini-3.8-flash-high",
+          "description": "Gemini 3.8 Flash (High)",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 65536,
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "supportsWebSearch": true,
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 1,
+            "max": 65535,
+            "dynamicAllowed": true,
+            "levels": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "gemini-3-flash",
+          "object": "model",
+          "ownedBy": "antigravity",
+          "type": "antigravity",
+          "created": 0,
+          "displayName": "Gemini 3 Flash",
+          "name": "gemini-3-flash",
+          "description": "Gemini 3 Flash",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 65536,
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "supportsWebSearch": true,
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 128,
+            "max": 32768,
+            "dynamicAllowed": true,
+            "levels": [
+              "minimal",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "gemini-3.1-flash-image",
+          "object": "model",
+          "ownedBy": "antigravity",
+          "type": "antigravity",
+          "created": 0,
+          "displayName": "Gemini 3.1 Flash Image",
+          "name": "gemini-3.1-flash-image",
+          "description": "Gemini 3.1 Flash Image",
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text",
+            "image"
+          ],
+          "supportsWebSearch": true,
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 128,
+            "max": 32768,
+            "dynamicAllowed": true,
+            "levels": [
+              "minimal",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "gemini-pro-agent",
+          "object": "model",
+          "ownedBy": "antigravity",
+          "type": "antigravity",
+          "created": 0,
+          "displayName": "Gemini 3.1 Pro (High)",
+          "name": "gemini-pro-agent",
+          "description": "Gemini 3.1 Pro (High)",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 65535,
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "supportsWebSearch": true,
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 1,
+            "max": 65535,
+            "dynamicAllowed": true,
+            "levels": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "gemini-3.1-pro-low",
+          "object": "model",
+          "ownedBy": "antigravity",
+          "type": "antigravity",
+          "created": 0,
+          "displayName": "Gemini 3.1 Pro (Low)",
+          "name": "gemini-3.1-pro-low",
+          "description": "Gemini 3.1 Pro (Low)",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 65535,
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "supportsWebSearch": true,
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 1,
+            "max": 65535,
+            "dynamicAllowed": true,
+            "levels": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "gpt-oss-120b-medium",
+          "object": "model",
+          "ownedBy": "antigravity",
+          "type": "antigravity",
+          "created": 0,
+          "displayName": "GPT-OSS 120B (Medium)",
+          "name": "gpt-oss-120b-medium",
+          "description": "GPT-OSS 120B (Medium)",
+          "contextLength": 114000,
+          "maxCompletionTokens": 32768,
+          "supportedInputModalities": [
+            "text"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ]
+        },
+        {
+          "id": "gemini-3.1-flash-lite",
+          "object": "model",
+          "ownedBy": "antigravity",
+          "type": "antigravity",
+          "created": 0,
+          "displayName": "Gemini 3.1 Flash Lite",
+          "name": "gemini-3.1-flash-lite",
+          "description": "Gemini 3.1 Flash Lite",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 65535,
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "supportsWebSearch": true,
+          "nativeCapabilities": {
+            "webSearch": true
+          },
+          "thinking": {
+            "min": 1,
+            "max": 65535,
+            "zeroAllowed": true,
+            "dynamicAllowed": true,
+            "levels": [
+              "minimal",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        {
+          "id": "gemini-3.5-flash-lite",
+          "object": "model",
+          "ownedBy": "antigravity",
+          "type": "antigravity",
+          "created": 0,
+          "displayName": "Gemini 3.5 Flash Lite",
+          "name": "gemini-3.5-flash-lite",
+          "description": "Gemini 3.5 Flash Lite",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 65535,
+          "supportedInputModalities": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "supportsWebSearch": true,
+          "thinking": {
+            "min": 1,
+            "max": 65535,
+            "dynamicAllowed": true,
+            "levels": [
+              "minimal",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        }
+      ]
+    },
+    "devin": {
+      "models": [
+        {
+          "id": "devin/claude-opus-5-5",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Claude Opus 5.5",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/claude-fable-5-1",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Claude Fable 5.1",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/claude-sonnet-5",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Claude Sonnet 5",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/gemini-3-8-flash",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Gemini 3.8 Flash",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/gpt-6-astra",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GPT-6 Astra",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/gpt-6-sol",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GPT-6 Sol",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/gpt-6-luna",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GPT-6 Luna",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/glm-5-2",
+          "object": "model",
+          "ownedBy": "zhipu",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GLM-5.2",
+          "contextLength": 200000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "none",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 200000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/kimi-k3",
+          "object": "model",
+          "ownedBy": "moonshot",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Kimi K3",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "high",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/glm-5-3",
+          "object": "model",
+          "ownedBy": "zhipu",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GLM-5.3",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "high",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/swe-1-7-lightning",
+          "object": "model",
+          "ownedBy": "cognition",
+          "type": "devin",
+          "created": 0,
+          "displayName": "SWE-1.7 Lightning",
+          "contextLength": 202752,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "medium"
+            ]
+          },
+          "inputTokenLimit": 202752,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/swe-2",
+          "object": "model",
+          "ownedBy": "cognition",
+          "type": "devin",
+          "created": 0,
+          "displayName": "SWE-2",
+          "contextLength": 262000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "medium",
+              "high",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 262000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/claude-opus-4-7",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Claude Opus 4.7",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/claude-opus-4-8",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Claude Opus 4.8",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/claude-opus-5",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Claude Opus 5",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/claude-5-fable",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Claude Fable 5",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/gemini-3-5-flash",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Gemini 3.5 Flash",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "minimal",
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/gemini-3-6-flash",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Gemini 3.6 Flash",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "minimal",
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/gemini-3-7-flash",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Gemini 3.7 Flash",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/gpt-5-6-sol",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GPT-5.6 Sol",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/gpt-5-6-terra",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GPT-5.6 Terra",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/gpt-5-6-luna",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GPT-5.6 Luna",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/glm-5-2-1m",
+          "object": "model",
+          "ownedBy": "zhipu",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GLM-5.2 High 1M",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "none",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/grok-4-5",
+          "object": "model",
+          "ownedBy": "xai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Grok 4.5",
+          "contextLength": 500000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "inputTokenLimit": 500000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/grok-4-6",
+          "object": "model",
+          "ownedBy": "xai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Grok 4.6",
+          "contextLength": 500000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "inputTokenLimit": 500000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/grok-4-7",
+          "object": "model",
+          "ownedBy": "xai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Grok 4.7",
+          "contextLength": 500000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "inputTokenLimit": 500000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/inkling",
+          "object": "model",
+          "ownedBy": "devin",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Inkling",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/glm-5-3-flash",
+          "object": "model",
+          "ownedBy": "zhipu",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GLM-5.3 Flash",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "high",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/deepseek-v4-flash",
+          "object": "model",
+          "ownedBy": "deepseek",
+          "type": "devin",
+          "created": 0,
+          "displayName": "DeepSeek V4 Flash",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "high",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/deepseek-v4-1-flash",
+          "object": "model",
+          "ownedBy": "deepseek",
+          "type": "devin",
+          "created": 0,
+          "displayName": "DeepSeek V4.1 Flash",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "high",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/swe-1-7",
+          "object": "model",
+          "ownedBy": "cognition",
+          "type": "devin",
+          "created": 0,
+          "displayName": "SWE-1.7",
+          "contextLength": 262000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "medium"
+            ]
+          },
+          "inputTokenLimit": 262000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/claude-opus-4-6",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Claude Opus 4.6",
+          "contextLength": 200000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "inputTokenLimit": 200000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/claude-opus-4-6-1m",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Claude Opus 4.6 1M",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/gpt-5-4",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GPT-5.4",
+          "contextLength": 272000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "inputTokenLimit": 272000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/gpt-5-5",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GPT-5.5",
+          "contextLength": 272000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "inputTokenLimit": 272000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/gpt-5-4-mini",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GPT-5.4 Mini",
+          "contextLength": 400000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "inputTokenLimit": 400000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/claude-sonnet-4-6",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Claude Sonnet 4.6",
+          "contextLength": 200000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "inputTokenLimit": 200000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/claude-sonnet-4-6-1m",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Claude Sonnet 4.6 1M",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/model_gpt_5_2",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GPT-5.2",
+          "contextLength": 384000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "inputTokenLimit": 384000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/model_claude_4_5_opus",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Claude Opus 4.5",
+          "contextLength": 200000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "high"
+            ]
+          },
+          "inputTokenLimit": 200000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/model_private_11",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Claude Haiku 4.5",
+          "contextLength": 200000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "inputTokenLimit": 200000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/model_private_2",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Claude Sonnet 4.5",
+          "contextLength": 200000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "inputTokenLimit": 200000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/model_private_3",
+          "object": "model",
+          "ownedBy": "anthropic",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Claude Sonnet 4.5",
+          "contextLength": 200000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "inputTokenLimit": 200000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/model_chat_gpt_4_1_2025_04_14",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GPT-4.1",
+          "contextLength": 1047576,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "inputTokenLimit": 1047576,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/model_private_12",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GPT-5.1",
+          "contextLength": 272000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "inputTokenLimit": 272000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/model_private_13",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GPT-5.1",
+          "contextLength": 272000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "inputTokenLimit": 272000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/model_private_14",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GPT-5.1",
+          "contextLength": 272000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "inputTokenLimit": 272000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/model_private_15",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GPT-5.1",
+          "contextLength": 272000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "inputTokenLimit": 272000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/gpt-5-3-codex",
+          "object": "model",
+          "ownedBy": "openai",
+          "type": "devin",
+          "created": 0,
+          "displayName": "GPT-5.3-Codex",
+          "contextLength": 400000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "inputTokenLimit": 400000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/kimi-k2-6",
+          "object": "model",
+          "ownedBy": "moonshot",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Kimi K2.6",
+          "contextLength": 262144,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "inputTokenLimit": 262144,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/kimi-k2-7",
+          "object": "model",
+          "ownedBy": "moonshot",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Kimi K2.7",
+          "contextLength": 262144,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "inputTokenLimit": 262144,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/nemotron-3-ultra",
+          "object": "model",
+          "ownedBy": "nvidia",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Nemotron 3 Ultra",
+          "contextLength": 1000000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "none",
+              "medium",
+              "high"
+            ]
+          },
+          "inputTokenLimit": 1000000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/swe-1-6",
+          "object": "model",
+          "ownedBy": "cognition",
+          "type": "devin",
+          "created": 0,
+          "displayName": "SWE-1.6",
+          "contextLength": 200000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "inputTokenLimit": 200000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/gemini-3-1-pro",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Gemini 3.1 Pro",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "low",
+              "high"
+            ]
+          },
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/model_google_gemini_3_0_flash",
+          "object": "model",
+          "ownedBy": "google",
+          "type": "devin",
+          "created": 0,
+          "displayName": "Gemini 3 Flash",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "minimal",
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/deepseek-v4-pro",
+          "object": "model",
+          "ownedBy": "deepseek",
+          "type": "devin",
+          "created": 0,
+          "displayName": "DeepSeek V4 Pro",
+          "contextLength": 1048576,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ],
+          "thinking": {
+            "levels": [
+              "high",
+              "max"
+            ]
+          },
+          "inputTokenLimit": 1048576,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ]
+        },
+        {
+          "id": "devin/swe-1-6-slow",
+          "object": "model",
+          "ownedBy": "cognition",
+          "type": "devin",
+          "created": 0,
+          "displayName": "SWE-1.6 Slow",
+          "inputTokenLimit": 200000,
+          "outputTokenLimit": 64000,
+          "supportedGenerationMethods": [
+            "generateContent",
+            "countTokens"
+          ],
+          "contextLength": 200000,
+          "maxCompletionTokens": 64000,
+          "supportedInputModalities": [
+            "text",
+            "image"
+          ],
+          "supportedOutputModalities": [
+            "text"
+          ]
+        }
+      ]
+    }
+  }
+}

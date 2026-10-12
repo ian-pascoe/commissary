@@ -62,8 +62,41 @@ export const fakeConfig = (yaml: string) =>
     ),
   );
 
-export const workerEnv = (kv: FakeKv): Layer.Layer<WorkerEnv> =>
-  Layer.succeed(WorkerEnv, { CACHE: kv as unknown as KVNamespace } as unknown as Env);
+/** The refresh lease as the ControlPlane hands it out: free unless `held` says who holds it. */
+export interface FakeLease {
+  held?: { source: "cron" | "panel"; startedAt: number };
+  readonly taken: string[];
+  readonly released: string[];
+}
 
-export const refreshLayer = (kv: FakeKv, http: Layer.Layer<HttpClient.HttpClient>, yaml = "") =>
-  Layer.mergeAll(http, fakeConfig(yaml), CatalogStore.layer, workerEnv(kv));
+export const fakeLease = (): FakeLease => ({ taken: [], released: [] });
+
+export const workerEnv = (kv: FakeKv, lease: FakeLease = fakeLease()): Layer.Layer<WorkerEnv> =>
+  Layer.succeed(WorkerEnv, {
+    CACHE: kv as unknown as KVNamespace,
+    CONTROL_PLANE: {
+      getByName: () => ({
+        takeCatalogRefreshLease: async (source: "cron" | "panel") => {
+          lease.taken.push(source);
+
+          if (lease.held !== undefined)
+            return {
+              ok: false,
+              held: { token: "other", ...lease.held, renewedAt: lease.held.startedAt },
+            };
+
+          return { ok: true, lease: { token: "tok", source, startedAt: 1, renewedAt: 1 } };
+        },
+        releaseCatalogRefreshLease: async (token: string) => {
+          lease.released.push(token);
+        },
+      }),
+    },
+  } as unknown as Env);
+
+export const refreshLayer = (
+  kv: FakeKv,
+  http: Layer.Layer<HttpClient.HttpClient>,
+  yaml = "",
+  lease: FakeLease = fakeLease(),
+) => Layer.mergeAll(http, fakeConfig(yaml), CatalogStore.layer, workerEnv(kv, lease));

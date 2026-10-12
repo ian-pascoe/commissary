@@ -218,6 +218,18 @@ export const routingModelsAtom = ManagementClient.query("routing", "models", {
   timeToLive: KEEP,
 });
 
+/** The catalog status refetches after a refresh tagged with this key. */
+export const CATALOG = ["catalog"] as const;
+
+/** Which model catalog is in use, where it comes from and when it was last refreshed. */
+export const catalogStatusAtom = ManagementClient.query("catalog", "status", {
+  reactivityKeys: CATALOG,
+  timeToLive: KEEP,
+});
+
+/** Refreshes the catalog now (call with `reactivityKeys: [...CATALOG, ...ROUTING]`: the model list may change). */
+export const refreshCatalogAtom = ManagementClient.mutation("catalog", "refresh");
+
 /**
  * One channel rule edit (key: `<rule>:<channel>`), sent with the view's `config_version` as `If-Match` and re-applied
  * to a fresh read once when another edit landed first (`saveRuleChange`). Transport and decoding failures become

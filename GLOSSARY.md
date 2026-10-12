@@ -1,8 +1,8 @@
 # CLIProxyAPI on Workers
 
 A personal LLM proxy: it pools one operator's provider accounts and API keys and serves them through OpenAI-, Claude-
-and Gemini-compatible APIs, behind Cloudflare Access. It is a port of the Go server CLIProxyAPI, which remains the
-reference for how it behaves.
+and Gemini-compatible APIs, behind Cloudflare Access. It began as a port of the Go server CLIProxyAPI, which it now
+consults as a reference rather than follows.
 
 ## Language
 
@@ -144,8 +144,13 @@ A per-credential name segment (`team/gpt-5`) through which clients reach that cr
 _Avoid_: namespace, prefix (on its own)
 
 **Model catalog**:
-The list of a provider's known models and their capabilities, shipped with the proxy and refreshed periodically.
+The known models of each provider and their capabilities, built from models.dev and the catalog additions.
 _Avoid_: catalogue, static models
+
+**Catalog addition**:
+A model, or a fact about a model, that the proxy records itself because models.dev lacks it. It fills gaps and never
+overrides a value models.dev has.
+_Avoid_: overlay, patch, overrides
 
 **Model route**:
 One credential's way of serving one model id, together with whether it can serve it right now.
@@ -362,11 +367,11 @@ _Avoid_: usage queue
 ### The reference
 
 **Go server**:
-The original CLIProxyAPI, whose behaviour this proxy reproduces unless a deviation says otherwise.
+The original CLIProxyAPI, which the proxy was ported from and still consults for ideas and tested behaviour.
 _Avoid_: upstream, reference repo
 
 **Deviation**:
-A deliberate, documented behaviour difference from the Go server.
+A deliberate behaviour difference from the Go server, from the time when the proxy followed it everywhere.
 _Avoid_: difference, divergence
 
 **Golden fixture**:

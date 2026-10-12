@@ -26,6 +26,7 @@
     "web/src/lib/account-fields.ts",
     "web/src/lib/accounts.ts",
     "web/src/lib/batch.ts",
+    "web/src/lib/catalog.ts",
     "web/src/lib/connect.ts",
     "web/src/lib/failure.ts",
     "web/src/lib/format.ts",

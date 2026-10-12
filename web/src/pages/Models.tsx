@@ -41,6 +41,7 @@ import {
 import { useAction } from "../lib/use-action.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
 import styles from "./Models.module.css";
+import { ModelsCatalog } from "./ModelsCatalog.tsx";
 
 type Filter = "all" | "attention" | "hidden";
 
@@ -484,6 +485,7 @@ export const ModelsPage = () => {
           Aliases and exclusions
         </Link>
       </header>
+      <ModelsCatalog />
       {AsyncResult.match(result, {
         onInitial: () => (
           <p className={kit["muted"]} aria-busy="true">

@@ -1,0 +1,2926 @@
+{
+  "claude": [
+    {
+      "id": "claude-haiku-4-5-20251001",
+      "thinking": {
+        "min": 1024,
+        "max": 128000,
+        "zeroAllowed": true
+      }
+    },
+    {
+      "id": "claude-sonnet-4-5-20250929",
+      "thinking": {
+        "min": 1024,
+        "max": 128000,
+        "zeroAllowed": true
+      }
+    },
+    {
+      "id": "claude-sonnet-4-6",
+      "thinking": {
+        "min": 1024,
+        "max": 128000,
+        "zeroAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "max"
+        ]
+      }
+    },
+    {
+      "id": "claude-opus-4-6",
+      "thinking": {
+        "min": 1024,
+        "max": 128000,
+        "zeroAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "max"
+        ]
+      }
+    },
+    {
+      "id": "claude-opus-4-7",
+      "thinking": {
+        "min": 1024,
+        "max": 128000,
+        "zeroAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      }
+    },
+    {
+      "id": "claude-opus-4-8",
+      "thinking": {
+        "min": 1024,
+        "max": 128000,
+        "zeroAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      }
+    },
+    {
+      "id": "claude-opus-5",
+      "thinking": {
+        "zeroAllowed": true,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "claude-sonnet-5",
+      "thinking": {
+        "zeroAllowed": true,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      }
+    },
+    {
+      "id": "claude-fable-5",
+      "thinking": {
+        "min": 1024,
+        "max": 128000,
+        "zeroAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      }
+    },
+    {
+      "id": "claude-fable-5-1",
+      "thinking": {
+        "min": 1024,
+        "max": 128000,
+        "zeroAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      }
+    },
+    {
+      "id": "claude-opus-5-5",
+      "thinking": {
+        "zeroAllowed": true,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "claude-sonnet-5-5",
+      "thinking": {
+        "zeroAllowed": true,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "claude-opus-4-5-20251101",
+      "thinking": {
+        "min": 1024,
+        "max": 128000,
+        "zeroAllowed": true
+      }
+    },
+    {
+      "id": "claude-opus-4-1-20250805",
+      "thinking": {
+        "min": 1024,
+        "max": 128000
+      }
+    },
+    {
+      "id": "claude-opus-4-20250514",
+      "thinking": {
+        "min": 1024,
+        "max": 128000
+      }
+    },
+    {
+      "id": "claude-sonnet-4-20250514",
+      "thinking": {
+        "min": 1024,
+        "max": 128000
+      }
+    },
+    {
+      "id": "claude-3-7-sonnet-20250219",
+      "thinking": {
+        "min": 1024,
+        "max": 128000
+      }
+    },
+    {
+      "id": "claude-3-5-haiku-20241022"
+    }
+  ],
+  "gemini": [
+    {
+      "id": "gemini-2.5-pro",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-2.5-flash",
+      "thinking": {
+        "max": 24576,
+        "zeroAllowed": true,
+        "dynamicAllowed": true
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-2.5-flash-lite",
+      "thinking": {
+        "max": 24576,
+        "zeroAllowed": true,
+        "dynamicAllowed": true
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3-pro-preview",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.1-pro-preview",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.1-flash-image-preview",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3-flash-preview",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.1-flash-lite-preview",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3-pro-image-preview",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.5-flash",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.5-flash-lite",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.6-flash",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.7-flash",
+      "thinking": {
+        "min": 128,
+        "max": 65535,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gemini-3.8-flash",
+      "thinking": {
+        "min": 128,
+        "max": 65535,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    }
+  ],
+  "vertex": [
+    {
+      "id": "gemini-2.5-pro",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-2.5-flash",
+      "thinking": {
+        "max": 24576,
+        "zeroAllowed": true,
+        "dynamicAllowed": true
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-2.5-flash-image",
+      "thinking": {
+        "max": 24576,
+        "zeroAllowed": true,
+        "dynamicAllowed": true
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-2.5-flash-lite",
+      "thinking": {
+        "max": 24576,
+        "zeroAllowed": true,
+        "dynamicAllowed": true
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3-pro",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3-flash",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.1-pro",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.1-pro-preview",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.1-flash-image",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.1-flash-lite",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3-pro-image",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "imagen-4.0-generate-001",
+      "supportedGenerationMethods": [
+        "predict"
+      ]
+    },
+    {
+      "id": "imagen-4.0-ultra-generate-001",
+      "supportedGenerationMethods": [
+        "predict"
+      ]
+    },
+    {
+      "id": "imagen-3.0-generate-002",
+      "supportedGenerationMethods": [
+        "predict"
+      ]
+    },
+    {
+      "id": "imagen-3.0-fast-generate-001",
+      "supportedGenerationMethods": [
+        "predict"
+      ]
+    },
+    {
+      "id": "imagen-4.0-fast-generate-001",
+      "supportedGenerationMethods": [
+        "predict"
+      ]
+    },
+    {
+      "id": "gemini-3.5-flash",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.5-flash-lite",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.6-flash",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.7-flash",
+      "thinking": {
+        "min": 128,
+        "max": 65535,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gemini-3.8-flash",
+      "thinking": {
+        "min": 128,
+        "max": 65535,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    }
+  ],
+  "aistudio": [
+    {
+      "id": "gemini-2.5-pro",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-2.5-flash",
+      "thinking": {
+        "max": 24576,
+        "zeroAllowed": true,
+        "dynamicAllowed": true
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-2.5-flash-lite",
+      "thinking": {
+        "max": 24576,
+        "zeroAllowed": true,
+        "dynamicAllowed": true
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3-pro-preview",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.1-pro-preview",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3-flash-preview",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.1-flash-lite-preview",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-pro-latest",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-flash-latest",
+      "thinking": {
+        "max": 24576,
+        "zeroAllowed": true,
+        "dynamicAllowed": true
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-flash-lite-latest",
+      "thinking": {
+        "min": 512,
+        "max": 24576,
+        "zeroAllowed": true,
+        "dynamicAllowed": true
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-2.5-flash-image",
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.5-flash",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.5-flash-lite",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.6-flash",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens",
+        "createCachedContent",
+        "batchGenerateContent"
+      ]
+    },
+    {
+      "id": "gemini-3.7-flash",
+      "thinking": {
+        "min": 128,
+        "max": 65535,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gemini-3.8-flash",
+      "thinking": {
+        "min": 128,
+        "max": 65535,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    }
+  ],
+  "kimi": [
+    {
+      "id": "kimi-k2"
+    },
+    {
+      "id": "kimi-k2-thinking",
+      "thinking": {
+        "zeroAllowed": true,
+        "levels": [
+          "low",
+          "high"
+        ]
+      }
+    },
+    {
+      "id": "kimi-k2.5",
+      "thinking": {
+        "zeroAllowed": true,
+        "levels": [
+          "low",
+          "high"
+        ]
+      }
+    },
+    {
+      "id": "kimi-k2.6",
+      "thinking": {
+        "zeroAllowed": true,
+        "levels": [
+          "low",
+          "high"
+        ]
+      }
+    },
+    {
+      "id": "kimi-k2.7-code",
+      "thinking": {
+        "zeroAllowed": false,
+        "levels": [
+          "low",
+          "high"
+        ]
+      }
+    },
+    {
+      "id": "kimi-k2.7-code-highspeed",
+      "thinking": {
+        "zeroAllowed": false,
+        "levels": [
+          "low",
+          "high"
+        ]
+      }
+    },
+    {
+      "id": "kimi-k2.8",
+      "thinking": {
+        "zeroAllowed": true,
+        "levels": [
+          "low",
+          "high",
+          "max"
+        ]
+      }
+    },
+    {
+      "id": "kimi-k2.8-code",
+      "thinking": {
+        "zeroAllowed": true,
+        "levels": [
+          "low",
+          "high",
+          "max"
+        ]
+      }
+    },
+    {
+      "id": "kimi-k3",
+      "thinking": {
+        "zeroAllowed": true,
+        "levels": [
+          "low",
+          "high",
+          "max"
+        ]
+      }
+    },
+    {
+      "id": "kimi-k3-256k",
+      "thinking": {
+        "zeroAllowed": true,
+        "levels": [
+          "low",
+          "high",
+          "max"
+        ]
+      }
+    }
+  ],
+  "antigravity": [
+    {
+      "id": "claude-opus-4-6-thinking",
+      "thinking": {
+        "min": 1024,
+        "max": 64000,
+        "zeroAllowed": true,
+        "dynamicAllowed": true
+      }
+    },
+    {
+      "id": "claude-sonnet-4-6",
+      "thinking": {
+        "min": 1024,
+        "max": 64000,
+        "zeroAllowed": true,
+        "dynamicAllowed": true
+      }
+    },
+    {
+      "id": "claude-opus-5-5-high",
+      "thinking": {
+        "min": 1024,
+        "max": 64000,
+        "zeroAllowed": true,
+        "dynamicAllowed": true
+      }
+    },
+    {
+      "id": "claude-sonnet-5-5-high",
+      "thinking": {
+        "min": 1024,
+        "max": 64000,
+        "zeroAllowed": true,
+        "dynamicAllowed": true
+      }
+    },
+    {
+      "id": "gemini-3.6-flash-high",
+      "thinking": {
+        "min": 1,
+        "max": 65535,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "supportsWebSearch": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gemini-3.7-flash-high",
+      "thinking": {
+        "min": 1,
+        "max": 65535,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "supportsWebSearch": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gemini-3.8-flash-high",
+      "thinking": {
+        "min": 1,
+        "max": 65535,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "supportsWebSearch": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gemini-3-flash",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "supportsWebSearch": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gemini-3.1-flash-image",
+      "thinking": {
+        "min": 128,
+        "max": 32768,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "high"
+        ]
+      },
+      "supportsWebSearch": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gemini-pro-agent",
+      "thinking": {
+        "min": 1,
+        "max": 65535,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "supportsWebSearch": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gemini-3.1-pro-low",
+      "thinking": {
+        "min": 1,
+        "max": 65535,
+        "dynamicAllowed": true,
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "supportsWebSearch": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-oss-120b-medium"
+    },
+    {
+      "id": "gemini-3.1-flash-lite",
+      "thinking": {
+        "min": 1,
+        "max": 65535,
+        "zeroAllowed": true,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "supportsWebSearch": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gemini-3.5-flash-lite",
+      "thinking": {
+        "min": 1,
+        "max": 65535,
+        "dynamicAllowed": true,
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "supportsWebSearch": true
+    }
+  ],
+  "meta": [
+    {
+      "id": "muse-spark-1.3",
+      "thinking": {
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      }
+    },
+    {
+      "id": "muse-spark-1.3-contributor",
+      "thinking": {
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      }
+    },
+    {
+      "id": "muse-spark-1.2",
+      "thinking": {
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      }
+    },
+    {
+      "id": "muse-spark-1.2-contributor",
+      "thinking": {
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      }
+    },
+    {
+      "id": "muse-spark-1.1",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      }
+    }
+  ],
+  "codex-free": [
+    {
+      "id": "gpt-6-luna",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportConfigurationUpdate": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-5.5",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-5.6-terra",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-5.6-luna",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "overrideHeader": {
+        "user-agent": "codex-tui/0.154.0 (Mac OS 26.5.2; arm64) iTerm.app/3.6.11 (codex-tui; 0.154.0)",
+        "originator": "codex-tui"
+      }
+    },
+    {
+      "id": "codex-auto-review",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-image-1.5"
+    },
+    {
+      "id": "gpt-image-2"
+    },
+    {
+      "id": "gpt-image-2.5-flare"
+    },
+    {
+      "id": "gpt-image-2.5-sunburst"
+    },
+    {
+      "id": "gpt-image-2.5"
+    }
+  ],
+  "codex-team": [
+    {
+      "id": "gpt-5.5",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-6-astra",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportConfigurationUpdate": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-6-sol",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportConfigurationUpdate": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-6.1-sol",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportConfigurationUpdate": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-6-luna",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportConfigurationUpdate": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-5.6-sol",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-5.6-terra",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-5.6-luna",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "overrideHeader": {
+        "user-agent": "codex-tui/0.154.0 (Mac OS 26.5.2; arm64) iTerm.app/3.6.11 (codex-tui; 0.154.0)",
+        "originator": "codex-tui"
+      }
+    },
+    {
+      "id": "codex-auto-review",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-image-1.5"
+    },
+    {
+      "id": "gpt-image-2"
+    },
+    {
+      "id": "gpt-image-2.5-flare"
+    },
+    {
+      "id": "gpt-image-2.5-sunburst"
+    },
+    {
+      "id": "gpt-image-2.5"
+    }
+  ],
+  "codex-plus": [
+    {
+      "id": "gpt-5.5",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-6-astra",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportConfigurationUpdate": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-6-sol",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportConfigurationUpdate": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-6.1-sol",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportConfigurationUpdate": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-6-luna",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportConfigurationUpdate": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-5.6-sol",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-5.6-terra",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-5.6-luna",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "overrideHeader": {
+        "user-agent": "codex-tui/0.154.0 (Mac OS 26.5.2; arm64) iTerm.app/3.6.11 (codex-tui; 0.154.0)",
+        "originator": "codex-tui"
+      }
+    },
+    {
+      "id": "codex-auto-review",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-image-1.5"
+    },
+    {
+      "id": "gpt-image-2"
+    },
+    {
+      "id": "gpt-image-2.5-flare"
+    },
+    {
+      "id": "gpt-image-2.5-sunburst"
+    },
+    {
+      "id": "gpt-image-2.5"
+    }
+  ],
+  "codex-pro": [
+    {
+      "id": "gpt-5.5",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-6-astra",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportConfigurationUpdate": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-6-sol",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportConfigurationUpdate": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-6.1-sol",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportConfigurationUpdate": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-6-luna",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportConfigurationUpdate": true,
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-5.6-sol",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-5.6-terra",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-5.6-luna",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      },
+      "overrideHeader": {
+        "user-agent": "codex-tui/0.154.0 (Mac OS 26.5.2; arm64) iTerm.app/3.6.11 (codex-tui; 0.154.0)",
+        "originator": "codex-tui"
+      }
+    },
+    {
+      "id": "codex-auto-review",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "gpt-image-1.5"
+    },
+    {
+      "id": "gpt-image-2"
+    },
+    {
+      "id": "gpt-image-2.5-flare"
+    },
+    {
+      "id": "gpt-image-2.5-sunburst"
+    },
+    {
+      "id": "gpt-image-2.5"
+    }
+  ],
+  "xai": [
+    {
+      "id": "grok-4.7",
+      "thinking": {
+        "zeroAllowed": false,
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "grok-4.7-build-fast",
+      "thinking": {
+        "zeroAllowed": false,
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "grok-4.6",
+      "thinking": {
+        "zeroAllowed": false,
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "nativeCapabilities": {
+        "webSearch": true
+      }
+    },
+    {
+      "id": "grok-build-0.1"
+    },
+    {
+      "id": "grok-4.5",
+      "thinking": {
+        "zeroAllowed": false,
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      }
+    },
+    {
+      "id": "grok-4.3",
+      "thinking": {
+        "zeroAllowed": true,
+        "levels": [
+          "none",
+          "low",
+          "medium",
+          "high"
+        ]
+      }
+    },
+    {
+      "id": "grok-4.20-0309-reasoning"
+    },
+    {
+      "id": "grok-4.20-0309-non-reasoning"
+    },
+    {
+      "id": "grok-4.20-multi-agent-0309",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      }
+    },
+    {
+      "id": "grok-3-mini",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      }
+    },
+    {
+      "id": "grok-3-mini-fast",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      }
+    },
+    {
+      "id": "grok-composer-2.5-fast"
+    },
+    {
+      "id": "grok-imagine-image"
+    },
+    {
+      "id": "grok-imagine-image-quality"
+    },
+    {
+      "id": "grok-imagine-image-2.0"
+    },
+    {
+      "id": "grok-imagine-video"
+    },
+    {
+      "id": "grok-imagine-video-1.5"
+    },
+    {
+      "id": "grok-imagine-video-1.5-preview"
+    },
+    {
+      "id": "grok-tts"
+    },
+    {
+      "id": "grok-voice-tts-1.0"
+    }
+  ],
+  "devin": [
+    {
+      "id": "devin/claude-opus-5-5",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/claude-fable-5-1",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/claude-sonnet-5",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/gemini-3-8-flash",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/gpt-6-astra",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/gpt-6-sol",
+      "thinking": {
+        "levels": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/gpt-6-luna",
+      "thinking": {
+        "levels": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/glm-5-2",
+      "thinking": {
+        "levels": [
+          "none",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/kimi-k3",
+      "thinking": {
+        "levels": [
+          "low",
+          "high",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/glm-5-3",
+      "thinking": {
+        "levels": [
+          "low",
+          "high",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/swe-1-7-lightning",
+      "thinking": {
+        "levels": [
+          "medium"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/swe-2",
+      "thinking": {
+        "levels": [
+          "medium",
+          "high",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/claude-opus-4-7",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/claude-opus-4-8",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/claude-opus-5",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/claude-5-fable",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/gemini-3-5-flash",
+      "thinking": {
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/gemini-3-6-flash",
+      "thinking": {
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/gemini-3-7-flash",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/gpt-5-6-sol",
+      "thinking": {
+        "levels": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/gpt-5-6-terra",
+      "thinking": {
+        "levels": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/gpt-5-6-luna",
+      "thinking": {
+        "levels": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/glm-5-2-1m",
+      "thinking": {
+        "levels": [
+          "none",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/grok-4-5",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/grok-4-6",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/grok-4-7",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/inkling",
+      "thinking": {
+        "levels": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/glm-5-3-flash",
+      "thinking": {
+        "levels": [
+          "low",
+          "high",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/deepseek-v4-flash",
+      "thinking": {
+        "levels": [
+          "high",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/deepseek-v4-1-flash",
+      "thinking": {
+        "levels": [
+          "high",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/swe-1-7",
+      "thinking": {
+        "levels": [
+          "medium"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/claude-opus-4-6",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/claude-opus-4-6-1m",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/gpt-5-4",
+      "thinking": {
+        "levels": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/gpt-5-5",
+      "thinking": {
+        "levels": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/gpt-5-4-mini",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/claude-sonnet-4-6",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/claude-sonnet-4-6-1m",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/model_gpt_5_2",
+      "thinking": {
+        "levels": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/model_claude_4_5_opus",
+      "thinking": {
+        "levels": [
+          "high"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/model_private_11",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/model_private_2",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/model_private_3",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/model_chat_gpt_4_1_2025_04_14",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/model_private_12",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/model_private_13",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/model_private_14",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/model_private_15",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/gpt-5-3-codex",
+      "thinking": {
+        "levels": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/kimi-k2-6",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/kimi-k2-7",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/nemotron-3-ultra",
+      "thinking": {
+        "levels": [
+          "none",
+          "medium",
+          "high"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/swe-1-6",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/gemini-3-1-pro",
+      "thinking": {
+        "levels": [
+          "low",
+          "high"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/model_google_gemini_3_0_flash",
+      "thinking": {
+        "levels": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/deepseek-v4-pro",
+      "thinking": {
+        "levels": [
+          "high",
+          "max"
+        ]
+      },
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    },
+    {
+      "id": "devin/swe-1-6-slow",
+      "supportedGenerationMethods": [
+        "generateContent",
+        "countTokens"
+      ]
+    }
+  ]
+}

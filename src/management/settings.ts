@@ -153,7 +153,7 @@ const DURATIONS = new Set([
   "multimedia.video-result-auth-cache-ttl",
 ]);
 
-const CATALOGS = new Set(["models.catalog", "models.codex-catalog", "models.devin-catalog"]);
+const CATALOGS = new Set(["models.catalog"]);
 
 /** A value as a message names it: “EST” (the panel shows the message under the field, beside its hint). */
 const quoted = (value: Json): string =>

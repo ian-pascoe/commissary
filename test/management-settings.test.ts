@@ -300,7 +300,8 @@ describe("management settings", () => {
       { upstream: { codex: { "stream-bootstrap-timeout": "90" } } },
       { upstream: { claude: { "header-defaults": { timezone: "Local" } } } },
       { upstream: { claude: { "header-defaults": { timezone: "Europe/Berlin" } } } },
-      { models: { catalog: "embed", "codex-catalog": "https://example.test/codex.json" } },
+      { models: { catalog: "https://example.test/models.json" } },
+      { models: { catalog: "embed" } },
       {
         multimedia: { "disable-image-generation": "chat", "gpt-image-2-base-model": "gpt-image-x" },
       },

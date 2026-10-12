@@ -21,7 +21,7 @@ import {
   resolveOpenCodeKeyConfig,
   resolveOpenCodeProtocol,
 } from "../src/executor/opencode/protocol.ts";
-import { embeddedOpenCodeCatalog } from "../src/registry/opencode-catalog.ts";
+import { embeddedModelsDev } from "../src/registry/catalog.ts";
 import type { ExecutorOptions } from "../src/executor/types.ts";
 import { loadConfig } from "./support/pipeline.ts";
 
@@ -73,7 +73,7 @@ const CONFIG = `api-keys:
 `;
 
 describe("protocol resolution", () => {
-  const catalog = embeddedOpenCodeCatalog();
+  const catalog = embeddedModelsDev();
 
   it("finds the key behind a credential by config_index and secret; key models override group models", async () => {
     const config = await loadConfig(CONFIG);

@@ -237,9 +237,14 @@ export const Config = Schema.Struct({
     Schema.withDecodingDefaultKey(Effect.succeed(8 as const)),
   ),
   models: section({
-    /** http(s) URL of the general model catalog; empty = official source. File paths are not usable on Workers. */
+    /**
+     * Source of the models.dev catalog: an http(s) URL; empty = the official source (`https://models.dev/api.json`).
+     * File paths are not usable on Workers.
+     */
     catalog: text(),
+    /** No effect (accepted so existing documents import unchanged): the Codex client catalog is bundled. */
     "codex-catalog": text(),
+    /** No effect (accepted so existing documents import unchanged): Devin models are catalog additions. */
     "devin-catalog": text(),
   }),
   access: section({

@@ -48,15 +48,16 @@ curl "${H[@]}" "$M/config.yaml"                                       # sparse e
 These keys are accepted and kept in the stored document (so a round trip through the panel does not lose them) but have no
 effect. Storing a config that sets any of them logs a warning naming the keys (`config keys not applied on Workers`):
 
-| Key                                                          | Why                                                                                       |
-| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `access.api-keys` (legacy top-level `api-keys`)              | Clients authenticate with Cloudflare Access, see [CLIENTS.md](CLIENTS.md)                 |
-| `requests.proxy-url`, per-group/per-key `proxy-url`          | Workers `fetch` cannot use outbound proxies                                               |
-| `api-keys.claude[].keys[].experimental-cch-signing`          | Kept for compatibility (also in Go); signing follows the credential type                  |
-| `observability.logs.debug`, `observability.logs.request-log` | No debug/request-log files; Workers Logs carry one structured line per request            |
-| `observability.usage.usage-statistics-enabled`               | Usage persistence is always on when the `USAGE` D1 binding exists                         |
-| `observability.usage.redis-usage-queue-retention-seconds`    | The queue lives in D1 (`/observability/usage/queue`), retention is `USAGE_RETENTION_DAYS` |
-| `routing.cooldown.save-cooldown-status`                      | Cooldowns always persist: the Durable Object is evicted when idle, which is not a restart |
+| Key                                                          | Why                                                                                                            |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `access.api-keys` (legacy top-level `api-keys`)              | Clients authenticate with Cloudflare Access, see [CLIENTS.md](CLIENTS.md)                                      |
+| `requests.proxy-url`, per-group/per-key `proxy-url`          | Workers `fetch` cannot use outbound proxies                                                                    |
+| `api-keys.claude[].keys[].experimental-cch-signing`          | Kept for compatibility (also in Go); signing follows the credential type                                       |
+| `observability.logs.debug`, `observability.logs.request-log` | No debug/request-log files; Workers Logs carry one structured line per request                                 |
+| `observability.usage.usage-statistics-enabled`               | Usage persistence is always on when the `USAGE` D1 binding exists                                              |
+| `observability.usage.redis-usage-queue-retention-seconds`    | The queue lives in D1 (`/observability/usage/queue`), retention is `USAGE_RETENTION_DAYS`                      |
+| `models.codex-catalog`, `models.devin-catalog`               | The Codex client catalog is bundled and Devin models are catalog additions, [ARCHITECTURE.md](ARCHITECTURE.md) |
+| `routing.cooldown.save-cooldown-status`                      | Cooldowns always persist: the Durable Object is evicted when idle, which is not a restart                      |
 
 `requests.streaming.keepalive-seconds` applies to SSE responses but not to the Responses WebSocket (no ping frames).
 

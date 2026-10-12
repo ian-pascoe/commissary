@@ -1,253 +1,384 @@
 /**
- * Remote catalog refresh (cron): fetches the model catalogs, validates them and publishes them into KV.
+ * Cron refresh of the model catalog (ADR 0020): fetches the models.dev document (`https://models.dev/api.json`), trims
+ * it to the providers the proxy reads (`models-dev.ts`) and stores the trimmed JSON in KV `CACHE`
+ * (`CATALOG_KEYS.modelsDev`), where the registry (`CatalogStore`) and the OpenCode executor
+ * (`currentOpenCodeCatalog`) read it. It is the one scheduled task that keeps every provider's models current; the
+ * catalog additions are bundled data and never fetched.
  *
- * Go source: internal/registry/catalog_sources.go (`catalogUpdater`, `catalogFetcher`, `publishCatalogBytes`,
- * `readCatalogSource`), model_updater.go (`modelsURLs`, `ModelsRefreshInterval`), codex_client_models_updater.go and
- * devin_models_updater.go (URLs). Behaviour kept: sources are tried in order and the first valid one wins; an explicit
- * `models.<x>` URL replaces the defaults; an invalid or unreachable source keeps the last valid catalog; a general
- * catalog without `meta` keeps the previous `meta` section; responses are limited to 8 MiB.
- * Differences: no file-path sources and no ticker (the cron trigger runs this every 3 hours); there is no refresh
- * callback because registrations are derived on demand from the stored catalogs.
+ * `models.catalog` in the configuration overrides the source: empty = the official URL, `embed` = delete the stored
+ * copy and serve the bundled snapshot, `disabled` = no refresh, otherwise one http(s) URL.
+ *
+ * Bounded: one fetch per cron run (every 3 hours), a 30 s timeout and a 16 MiB size limit (the document is ≈5.4 MB),
+ * enforced on the declared `content-length` and while the body streams in (the read is cancelled once it passes the
+ * limit, so no more than the limit plus one chunk is held). A failed fetch, an oversized or an invalid document (a
+ * provider missing or without models) keeps the stored catalog; the request path never fetches. See
+ * docs/ARCHITECTURE.md "Model catalog".
  */
-import { Clock, Effect, Option } from "effect";
-import { HttpClient } from "effect/http";
+import { Clock, Data, Effect, Result, Stream } from "effect";
+import type { HttpClientResponse } from "effect/http";
+import { HttpClient, HttpClientRequest } from "effect/http";
 import { ConfigReader } from "../config/reader.ts";
-import { isJsonObject, type Json } from "../json/index.ts";
-import { WorkerEnv } from "../platform/env.ts";
-import { detectChangedProviders, embeddedModelsDocument, parseModelsCatalog } from "./catalog.ts";
+import { holdInvocation, WorkerEnv } from "../platform/env.ts";
+import type { SweepLease } from "../quota/sweep-lease.ts";
+import {
+  catalogsFromModelsDev,
+  embeddedCatalogs,
+  type ModelCatalogs,
+  modelsDevFromText,
+} from "./catalog.ts";
+import { resolveSource } from "./catalog-source.ts";
+import { resetOpenCodeCatalogCache } from "./opencode-catalog.ts";
 import {
   CATALOG_KEYS,
   CatalogStore,
-  type CatalogName,
-  type CatalogTexts,
-  validateCatalogText,
+  readRefreshStatus,
+  writeRefreshStatus,
 } from "./catalog-store.ts";
+import { type ModelsDevCatalog, trimModelsDev } from "./models-dev.ts";
 
-/** `ModelsRefreshInterval`; the three-hourly cron trigger (`CRONS` in alchemy.run.ts) implements it. */
+/** The three-hourly cron trigger (`CRONS` in alchemy.run.ts) runs this refresh. */
 export const MODELS_REFRESH_INTERVAL_HOURS = 3;
 
-/** `readCatalogSource` size limit (`maxCodexClientModelsSize`). */
-export const MAX_CATALOG_BYTES = 8 << 20;
+export { MODELS_DEV_URL, resolveSource } from "./catalog-source.ts";
 
-export const DEFAULT_CATALOG_URLS: Readonly<Record<CatalogName, ReadonlyArray<string>>> = {
-  models: [
-    "https://raw.githubusercontent.com/router-for-me/models/refs/heads/main/models.json",
-    "https://models.router-for.me/models.json",
-  ],
-  codexClient: [
-    "https://raw.githubusercontent.com/router-for-me/models/refs/heads/main/codex_client_models.json",
-    "https://models.router-for.me/codex_client_models.json",
-  ],
-  devin: [
-    "https://raw.githubusercontent.com/router-for-me/models/refs/heads/main/devin_models.json",
-    "https://models.router-for.me/devin_models.json",
-  ],
-};
+/** Largest document accepted (the full models.dev document is ≈5.4 MB). */
+export const MAX_CATALOG_BYTES = 16 << 20;
 
-type Source =
-  | { readonly mode: "fetch"; readonly urls: ReadonlyArray<string> }
-  | { readonly mode: "embed" }
-  | { readonly mode: "disabled"; readonly reason?: string };
-
-/** `models.<catalog>` config value: empty = official URLs, `embed`/`disabled` as in Go, otherwise one http(s) URL. */
-export const resolveSource = (configured: string, name: CatalogName): Source => {
-  const value = configured.trim();
-
-  if (value === "") return { mode: "fetch", urls: DEFAULT_CATALOG_URLS[name] };
-
-  if (value === "embed") return { mode: "embed" };
-
-  if (value === "disabled") return { mode: "disabled" };
-
-  try {
-    const url = new URL(value);
-
-    if ((url.protocol === "http:" || url.protocol === "https:") && url.hostname !== "") {
-      return { mode: "fetch", urls: [value] };
-    }
-  } catch {
-    // Falls through to the rejection below.
-  }
-
-  return { mode: "disabled", reason: "must be an http(s) URL" };
-};
-
-export type RefreshStatus = "updated" | "unchanged" | "failed" | "skipped";
+const TIMEOUT = "30 seconds";
 
 export interface RefreshOutcome {
-  readonly catalog: CatalogName;
-  readonly status: RefreshStatus;
-  /** URL the published catalog came from. */
-  readonly source?: string;
-  /** Providers whose model definitions changed (general catalog only). */
-  readonly changedProviders?: ReadonlyArray<string>;
+  /** `skipped`: the source setting is `disabled`; `running`: another refresh holds the lease, nothing was fetched. */
+  readonly status: "updated" | "unchanged" | "failed" | "skipped" | "running";
   readonly message?: string;
+  /** URL the stored catalog came from. */
+  readonly source?: string;
+  /** Model counts of the stored catalog by models.dev provider. */
+  readonly models?: Readonly<Record<string, number>>;
+  /** Models clients can call that appeared / disappeared (see {@link modelChanges}; `updated` only). */
+  readonly added?: number;
+  readonly removed?: number;
+  /** Entries of the document that did not decode and were left out (only when there were any). */
+  readonly skipped?: number;
 }
 
-const makeOutcome = (value: RefreshOutcome): RefreshOutcome => value;
+/** Who asked for the refresh: the cron task or the panel's "Refresh catalog". */
+export type RefreshTrigger = "cron" | "panel";
 
-const catalogConfigKey = {
-  models: "catalog",
-  codexClient: "codex-catalog",
-  devin: "devin-catalog",
-} as const;
+class RefreshFailure extends Data.TaggedError("CatalogRefreshFailure")<{
+  readonly message: string;
+}> {}
 
-/** First source whose body passes `validateCatalogText`. */
-const fetchValid = (
-  client: HttpClient.HttpClient,
-  name: CatalogName,
-  urls: ReadonlyArray<string>,
-): Effect.Effect<{ readonly url: string; readonly text: string } | undefined> =>
+const failed = (message: string): RefreshOutcome => ({ status: "failed", message });
+
+/** The response body as text, failing (and cancelling the read) as soon as it passes `maxBytes`. */
+export const boundedResponseText = (
+  response: HttpClientResponse.HttpClientResponse,
+  maxBytes: number,
+): Effect.Effect<string, RefreshFailure> =>
   Effect.gen(function* () {
-    for (const url of urls) {
-      const text = yield* client.get(url).pipe(
-        Effect.flatMap((response) => response.text),
-        Effect.option,
-      );
+    const decoder = new TextDecoder();
+    let read = 0;
+    let text = "";
 
-      if (Option.isNone(text)) continue;
+    yield* response.stream.pipe(
+      Stream.mapError(() => new RefreshFailure({ message: "catalog fetch failed" })),
+      Stream.runForEach((chunk) => {
+        read += chunk.byteLength;
 
-      if (new TextEncoder().encode(text.value).length > MAX_CATALOG_BYTES) continue;
+        if (read > maxBytes)
+          return Effect.fail(new RefreshFailure({ message: "catalog is too large" }));
+        text += decoder.decode(chunk, { stream: true });
 
-      if (validateCatalogText(name, text.value) === undefined) return { url, text: text.value };
-    }
+        return Effect.void;
+      }),
+    );
 
-    return undefined;
+    return text + decoder.decode();
   });
 
-/** `publishCatalogBytes`: a catalog without `meta` keeps the previous one. Returns the text to store. */
-const carryOverMeta = (text: string, previousText: string | undefined): string => {
-  const next: Json = JSON.parse(text);
-  const nextMeta = isJsonObject(next) ? next.meta : undefined;
+const fetchText = (
+  client: HttpClient.HttpClient,
+  url: string,
+): Effect.Effect<Result.Result<string, RefreshFailure>> =>
+  client
+    .execute(
+      HttpClientRequest.get(url).pipe(HttpClientRequest.setHeaders({ accept: "application/json" })),
+    )
+    .pipe(
+      Effect.mapError(() => new RefreshFailure({ message: "catalog fetch failed" })),
+      Effect.flatMap((response): Effect.Effect<string, RefreshFailure> => {
+        if (response.status !== 200)
+          return Effect.fail(
+            new RefreshFailure({ message: `catalog source answered HTTP ${response.status}` }),
+          );
+        const length = Number(response.headers["content-length"] ?? "0");
 
-  if (Array.isArray(nextMeta) && nextMeta.length > 0) return text;
+        if (length > MAX_CATALOG_BYTES)
+          return Effect.fail(
+            new RefreshFailure({ message: `catalog is too large (${length} bytes)` }),
+          );
 
-  const previous: Json =
-    previousText === undefined ? embeddedModelsDocument : JSON.parse(previousText);
+        return boundedResponseText(response, MAX_CATALOG_BYTES);
+      }),
+      Effect.timeoutOrElse({
+        duration: TIMEOUT,
+        orElse: () => Effect.fail(new RefreshFailure({ message: "catalog fetch timed out" })),
+      }),
+      Effect.result,
+    );
 
-  const previousMeta = isJsonObject(previous) ? previous.meta : undefined;
+/** Fixed failure texts only: a message reaches the panel, so it never carries a URL or an upstream body. */
+const MAX_MESSAGE = 200;
 
-  if (!Array.isArray(previousMeta) || previousMeta.length === 0) return text;
+const clip = (message: string): string =>
+  message.length > MAX_MESSAGE ? `${message.slice(0, MAX_MESSAGE)}…` : message;
 
-  return JSON.stringify({ ...(isJsonObject(next) ? next : {}), meta: previousMeta });
-};
-
-const changedProvidersOf = (
-  previousText: string | undefined,
-  nextText: string,
-): ReadonlyArray<string> => {
-  const previous = parseModelsCatalog(
-    previousText === undefined ? embeddedModelsDocument : JSON.parse(previousText),
+const counts = (doc: ModelsDevCatalog): Readonly<Record<string, number>> =>
+  Object.fromEntries(
+    Object.values(doc).map((provider) => [provider.id, Object.keys(provider.models).length]),
   );
 
-  const next = parseModelsCatalog(JSON.parse(nextText));
+export interface ModelChanges {
+  readonly added: number;
+  readonly removed: number;
+  /** The removed ones, as `provider/id`. */
+  readonly removedIds: ReadonlyArray<string>;
+}
 
-  return previous.ok && next.ok ? detectChangedProviders(previous.value, next.value) : [];
-};
+/** Provider of a catalog section: the Codex plans are one provider. */
+const providerOf = (section: string): string => (section.startsWith("codex-") ? "codex" : section);
 
-/**
- * One refresh round over the three catalogs. Never fails: every problem is part of the returned outcomes, and the
- * last valid catalog stays in place.
- */
-export const refreshCatalogs: Effect.Effect<
-  ReadonlyArray<RefreshOutcome>,
-  never,
-  HttpClient.HttpClient | WorkerEnv | ConfigReader | CatalogStore
-> = Effect.gen(function* () {
-  const env = yield* WorkerEnv;
-  const store = yield* CatalogStore;
-  const client = HttpClient.filterStatusOk(yield* HttpClient.HttpClient);
-
-  const configured = yield* ConfigReader.use((reader) => reader.get).pipe(
-    Effect.map((snapshot) => snapshot.config.models),
-    Effect.catch((error) =>
-      Effect.logWarning(
-        `config unavailable for catalog refresh, using default sources: ${error.message}`,
-      ).pipe(Effect.as({ catalog: "", "codex-catalog": "", "devin-catalog": "" })),
+/** The models a catalog serves, as `provider/id` (a model in several Codex plans counts once). */
+const servedIds = (catalogs: ModelCatalogs): ReadonlySet<string> =>
+  new Set(
+    Object.entries(catalogs.models).flatMap(([section, models]) =>
+      models.map((model) => `${providerOf(section)}/${model.id}`),
     ),
   );
 
-  const current: CatalogTexts = yield* store.stored.pipe(Effect.catch(() => Effect.succeed({})));
+/** The models clients can call that appeared and disappeared between two catalogs, not the ids of the raw document. */
+export const modelChanges = (previous: ModelCatalogs, next: ModelCatalogs): ModelChanges => {
+  const before = servedIds(previous);
+  const after = servedIds(next);
+  const removedIds = [...before].filter((id) => !after.has(id)).toSorted();
 
-  const refreshOne = (name: CatalogName): Effect.Effect<RefreshOutcome> =>
+  return {
+    added: [...after].filter((id) => !before.has(id)).length,
+    removed: removedIds.length,
+    removedIds,
+  };
+};
+
+/**
+ * The download-validate-trim-store step, without the lease. `configured` is the `models.catalog` value. Never fails:
+ * every problem is part of the outcome, and the stored catalog stays in place.
+ */
+const refreshNow = (
+  configured: string,
+): Effect.Effect<RefreshOutcome, never, HttpClient.HttpClient | WorkerEnv | CatalogStore> =>
+  Effect.gen(function* (): Effect.fn.Return<
+    RefreshOutcome,
+    never,
+    HttpClient.HttpClient | WorkerEnv | CatalogStore
+  > {
+    const env = yield* WorkerEnv;
+    const store = yield* CatalogStore;
+    const client = yield* HttpClient.HttpClient;
+    const source = resolveSource(configured);
+
+    if (source.mode === "disabled")
+      return {
+        status: "skipped",
+        ...(source.reason === undefined ? {} : { message: `models.catalog ${source.reason}` }),
+      };
+
+    const previous = yield* store.stored.pipe(Effect.orElseSucceed(() => null));
+
+    if (source.mode === "embed") {
+      if (previous === null) return { status: "unchanged" };
+
+      const deleted = yield* Effect.tryPromise(() => env.CACHE.delete(CATALOG_KEYS.modelsDev)).pipe(
+        Effect.result,
+      );
+
+      if (Result.isFailure(deleted)) return failed("removing the stored catalog failed");
+      yield* store.invalidate;
+      resetOpenCodeCatalogCache();
+
+      return { status: "updated", message: "reverted to the bundled catalog" };
+    }
+
+    const text = yield* fetchText(client, source.url);
+
+    if (Result.isFailure(text)) return failed(text.failure.message);
+    const trimmed = trimModelsDev(text.success);
+
+    if (!trimmed.ok) return failed(clip(trimmed.error));
+    const next = JSON.stringify(trimmed.value);
+    const models = counts(trimmed.value);
+    const { skipped } = trimmed;
+    const skippedPart = skipped > 0 ? { skipped } : {};
+
+    if (skipped > 0)
+      yield* Effect.logWarning(
+        `model catalog: ${skipped} malformed entries in the document were left out`,
+      );
+
+    if (previous === next)
+      return { status: "unchanged", source: source.url, models, ...skippedPart };
+
+    const stored = yield* Effect.tryPromise(() => env.CACHE.put(CATALOG_KEYS.modelsDev, next)).pipe(
+      Effect.result,
+    );
+
+    if (Result.isFailure(stored)) return failed("storing the catalog failed");
+    yield* store.invalidate;
+    resetOpenCodeCatalogCache();
+
+    const before = previous === null ? undefined : modelsDevFromText(previous);
+
+    const changes = modelChanges(
+      before?.ok === true ? catalogsFromModelsDev(before.value) : embeddedCatalogs(),
+      catalogsFromModelsDev(trimmed.value),
+    );
+
+    if (changes.removed > 0)
+      yield* Effect.logWarning(
+        `model catalog: ${changes.removed} served models are gone from the document: ${changes.removedIds.slice(0, 50).join(", ")}`,
+      );
+
+    return {
+      status: "updated",
+      source: source.url,
+      models,
+      added: changes.added,
+      removed: changes.removed,
+      ...skippedPart,
+    };
+  });
+
+type Taken =
+  | { readonly kind: "taken"; readonly token: string }
+  | { readonly kind: "held"; readonly held: SweepLease }
+  | { readonly kind: "unavailable" };
+
+const takeLease = (trigger: RefreshTrigger): Effect.Effect<Taken, never, WorkerEnv> =>
+  Effect.gen(function* () {
+    const env = yield* WorkerEnv;
+
+    return yield* Effect.tryPromise(async (): Promise<Taken> => {
+      const taken = await env.CONTROL_PLANE.getByName("global").takeCatalogRefreshLease(trigger);
+
+      return taken.ok
+        ? { kind: "taken", token: taken.lease.token }
+        : { kind: "held", held: taken.held };
+    }).pipe(Effect.orElseSucceed((): Taken => ({ kind: "unavailable" })));
+  });
+
+const releaseLease = (token: string): Effect.Effect<void, never, WorkerEnv> =>
+  Effect.gen(function* () {
+    const env = yield* WorkerEnv;
+
+    yield* Effect.tryPromise(() =>
+      env.CONTROL_PLANE.getByName("global").releaseCatalogRefreshLease(token),
+    ).pipe(Effect.ignore);
+  });
+
+const record = (outcome: RefreshOutcome): Effect.Effect<void, never, WorkerEnv> =>
+  Effect.gen(function* () {
+    const env = yield* WorkerEnv;
+    const now = yield* Clock.currentTimeMillis;
+
+    if (outcome.status === "failed")
+      yield* Effect.logWarning(
+        `model catalog refresh failed, keeping the stored catalog: ${outcome.message ?? ""}`,
+      );
+    else yield* Effect.logInfo(`model catalog: ${outcome.status}`);
+
+    const { status } = outcome;
+
+    if (status === "skipped" || status === "running") return;
+
+    const previous = yield* Effect.tryPromise(() => readRefreshStatus(env.CACHE)).pipe(
+      Effect.orElseSucceed(() => undefined),
+    );
+
+    const succeeded = status === "updated" || status === "unchanged";
+    // Reverting to the shipped copy leaves nothing stored that could have been refreshed.
+    const reverted = status === "updated" && outcome.source === undefined;
+
+    const refreshedAt = reverted ? undefined : succeeded ? now : previous?.refreshedAt;
+
+    yield* Effect.tryPromise(() =>
+      writeRefreshStatus(env.CACHE, {
+        attemptedAt: now,
+        status,
+        ...(outcome.message === undefined ? {} : { message: outcome.message }),
+        ...(refreshedAt === undefined ? {} : { refreshedAt }),
+      }),
+    ).pipe(Effect.ignore);
+  });
+
+/**
+ * One refresh under the refresh lease (ControlPlane, `catalog_refresh_lease`): cron and the panel never download at
+ * once, whichever isolates they run in. The second one gets `status: "running"` without any request being made. A
+ * ControlPlane that cannot be reached fails the refresh (exclusivity cannot be shown); the stored catalog stays.
+ * `disabled` and `embed` do not fetch and need no lease. The invocation is held open until the lease is given back
+ * (`holdInvocation`), so a request the client abandoned still releases it; a lease never released expires.
+ */
+export const refreshModelsDev = (
+  configured: string,
+  trigger: RefreshTrigger,
+): Effect.Effect<RefreshOutcome, never, HttpClient.HttpClient | WorkerEnv | CatalogStore> => {
+  const source = resolveSource(configured);
+
+  if (source.mode !== "fetch") return refreshNow(configured).pipe(Effect.tap(record));
+
+  return Effect.acquireUseRelease(
     Effect.gen(function* () {
-      const source = resolveSource(configured[catalogConfigKey[name]], name);
+      const hold = yield* holdInvocation;
+      const taken = yield* takeLease(trigger);
 
-      if (source.mode === "disabled") {
-        return makeOutcome({
-          catalog: name,
-          status: "skipped",
-          ...(source.reason === undefined
-            ? {}
-            : { message: `models.${catalogConfigKey[name]} ${source.reason}` }),
+      return { hold, taken };
+    }),
+    ({
+      taken,
+    }): Effect.Effect<RefreshOutcome, never, HttpClient.HttpClient | WorkerEnv | CatalogStore> => {
+      if (taken.kind === "unavailable")
+        return Effect.succeed(failed("control plane unavailable")).pipe(Effect.tap(record));
+
+      if (taken.kind === "held") {
+        const by = taken.held.source === "cron" ? "the scheduled refresh" : "the panel";
+
+        return Effect.succeed({
+          status: "running",
+          message: `a refresh started by ${by} at ${new Date(taken.held.startedAt).toISOString()} is still running`,
         });
       }
 
-      const key = CATALOG_KEYS[name];
-
-      if (source.mode === "embed") {
-        if (current[name] === undefined || current[name] === null)
-          return makeOutcome({ catalog: name, status: "unchanged" });
-        yield* Effect.tryPromise(() => env.CACHE.delete(key));
-
-        return makeOutcome({
-          catalog: name,
-          status: "updated",
-          message: "reverted to the embedded catalog",
-        });
-      }
-
-      const fetched = yield* fetchValid(client, name, source.urls);
-
-      if (fetched === undefined) {
-        yield* Effect.logWarning(
-          `model catalog refresh failed for ${name}; keeping last valid catalog`,
-        );
-
-        return makeOutcome({ catalog: name, status: "failed", message: "no valid catalog source" });
-      }
-
-      const previous = current[name] ?? undefined;
-      const text = name === "models" ? carryOverMeta(fetched.text, previous) : fetched.text;
-
-      if (text === previous)
-        return makeOutcome({ catalog: name, status: "unchanged", source: fetched.url });
-      yield* Effect.tryPromise(() => env.CACHE.put(key, text));
-      const changedProviders = name === "models" ? changedProvidersOf(previous, text) : undefined;
-
-      return makeOutcome({
-        catalog: name,
-        status: "updated",
-        source: fetched.url,
-        ...(changedProviders === undefined ? {} : { changedProviders }),
-      });
-    }).pipe(
-      Effect.catchCause(() =>
-        Effect.succeed(
-          makeOutcome({ catalog: name, status: "failed", message: "storing the catalog failed" }),
-        ),
+      return refreshNow(configured).pipe(Effect.tap(record));
+    },
+    ({ hold, taken }) =>
+      (taken.kind === "taken" ? releaseLease(taken.token) : Effect.void).pipe(
+        Effect.ensuring(Effect.sync(hold)),
       ),
-    );
+  );
+};
 
-  const outcomes: RefreshOutcome[] = [];
+/** Cron task `model-catalog-refresh`: {@link refreshModelsDev} with the stored `models.catalog` setting. */
+export const refreshCatalogs: Effect.Effect<
+  RefreshOutcome,
+  never,
+  HttpClient.HttpClient | WorkerEnv | ConfigReader | CatalogStore
+> = Effect.gen(function* () {
+  const configured = yield* ConfigReader.use((reader) => reader.get).pipe(
+    Effect.map((snapshot) => snapshot.config.models.catalog),
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `config unavailable for catalog refresh, using the default source: ${error.message}`,
+      ).pipe(Effect.as("")),
+    ),
+  );
 
-  for (const name of ["models", "codexClient", "devin"] as const)
-    outcomes.push(yield* refreshOne(name));
-
-  const now = yield* Clock.currentTimeMillis;
-  yield* Effect.tryPromise(() =>
-    env.CACHE.put(CATALOG_KEYS.status, JSON.stringify({ at: now, outcomes })),
-  ).pipe(Effect.ignore);
-  yield* store.invalidate;
-
-  for (const outcome of outcomes) {
-    yield* Effect.logInfo(
-      `model catalog ${outcome.catalog}: ${outcome.status}` +
-        (outcome.changedProviders === undefined || outcome.changedProviders.length === 0
-          ? ""
-          : ` (changed providers: ${outcome.changedProviders.join(", ")})`),
-    );
-  }
-
-  return outcomes;
+  return yield* refreshModelsDev(configured, "cron");
 });

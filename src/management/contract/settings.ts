@@ -164,10 +164,8 @@ export const SETTINGS_TREE = {
     "video-result-auth-cache-ttl": GoDuration,
   },
   models: {
-    /** `""` official source, `embed`, `disabled` or an http(s) URL. */
+    /** The models.dev catalog source: `""` official (`https://models.dev/api.json`), `embed`, `disabled` or an http(s) URL. */
     catalog: Schema.String,
-    "codex-catalog": Schema.String,
-    "devin-catalog": Schema.String,
   },
   access: {
     /** Extend `ACCESS_ADMIN_EMAILS` (lower-case). */
@@ -250,6 +248,13 @@ export const SettingsPatch = Schema.Struct({
     Schema.Struct({ ...patchFields(SETTINGS_TREE.requests), "proxy-url": removeOnly }),
   ),
   access: optional(Schema.Struct({ ...patchFields(SETTINGS_TREE.access), "api-keys": removeOnly })),
+  models: optional(
+    Schema.Struct({
+      ...patchFields(SETTINGS_TREE.models),
+      "codex-catalog": removeOnly,
+      "devin-catalog": removeOnly,
+    }),
+  ),
   observability: optional(
     Schema.Struct({
       logs: optional(Schema.Struct({ debug: removeOnly, "request-log": removeOnly })),

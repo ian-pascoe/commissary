@@ -19,7 +19,7 @@
 import { Effect } from "effect";
 import { asString, get } from "../../json/index.ts";
 import { getCodec } from "../../tokenizer/index.ts";
-import { currentOpenCodeCatalog } from "../../registry/opencode-catalog.ts";
+import { openCodeCatalogFor } from "../../registry/opencode-catalog.ts";
 import { builtinTranslators } from "../../translator/builtin.ts";
 import { EntryOnlyFormats, Formats } from "../../translator/formats.ts";
 import type { TranslatorRegistry } from "../../translator/registry.ts";
@@ -91,7 +91,7 @@ export const makeOpenCodeExecutor = (
     options: ExecutorOptions,
   ) {
     yield* unsupported(options);
-    const catalog = yield* currentOpenCodeCatalog;
+    const catalog = yield* openCodeCatalogFor(context.config.models.catalog);
 
     const resolved = resolveOpenCodeProtocol({
       config: context.config,

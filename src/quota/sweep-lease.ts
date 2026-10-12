@@ -13,7 +13,15 @@
  * gives the lease back: a lease not renewed for {@link LEASE_TTL_MS} counts as abandoned and the next sweep takes it
  * over. There is no rate limit beyond that: a sweep started right after another one finished checks again, which is
  * what the operator asked for.
+ *
+ * The same lease also keeps one refresh of the model catalog at a time (`catalog_refresh_lease`, src/registry/
+ * refresh.ts): taken at the start of a download, given back when it ends, not renewed (a refresh is bounded by its 30 s
+ * timeout, well within {@link LEASE_TTL_MS}).
  */
+
+/** The SQLite table of one lease: the quota sweep's or the catalog refresh's. */
+export type LeaseTable = "quota_sweep_lease" | "catalog_refresh_lease";
+
 /** Who started the sweep: the scheduled task or the panel. */
 export type SweepSource = "cron" | "panel";
 
@@ -47,21 +55,27 @@ interface LeaseRow {
 export class SweepLeaseStore {
   readonly #sql: SqlStorage;
   readonly #now: () => number;
+  readonly #table: LeaseTable;
 
-  constructor(sql: SqlStorage, now: () => number = Date.now) {
+  constructor(
+    sql: SqlStorage,
+    now: () => number = Date.now,
+    table: LeaseTable = "quota_sweep_lease",
+  ) {
     this.#sql = sql;
     this.#now = now;
+    this.#table = table;
 
     // A table from before leases were renewed (no `renewed_at`): it holds only a transient lease, so it is recreated.
     const columns = sql
-      .exec<{ name: string }>("PRAGMA table_info(quota_sweep_lease)")
+      .exec<{ name: string }>(`PRAGMA table_info(${this.#table})`)
       .toArray()
       .map((column) => column.name);
 
     if (columns.length > 0 && !columns.includes("renewed_at"))
-      sql.exec("DROP TABLE quota_sweep_lease");
+      sql.exec(`DROP TABLE ${this.#table}`);
     sql.exec(
-      `CREATE TABLE IF NOT EXISTS quota_sweep_lease (
+      `CREATE TABLE IF NOT EXISTS ${this.#table} (
          id INTEGER PRIMARY KEY CHECK (id = 1),
          token TEXT NOT NULL,
          source TEXT NOT NULL,
@@ -74,7 +88,7 @@ export class SweepLeaseStore {
   current(): SweepLease | undefined {
     const row = this.#sql
       .exec<LeaseRow>(
-        "SELECT token, source, started_at, renewed_at FROM quota_sweep_lease WHERE id = 1",
+        `SELECT token, source, started_at, renewed_at FROM ${this.#table} WHERE id = 1`,
       )
       .toArray()[0];
 
@@ -103,7 +117,7 @@ export class SweepLeaseStore {
     };
 
     this.#sql.exec(
-      `INSERT INTO quota_sweep_lease (id, token, source, started_at, renewed_at) VALUES (1, ?, ?, ?, ?)
+      `INSERT INTO ${this.#table} (id, token, source, started_at, renewed_at) VALUES (1, ?, ?, ?, ?)
        ON CONFLICT (id) DO UPDATE SET token = excluded.token, source = excluded.source,
          started_at = excluded.started_at, renewed_at = excluded.renewed_at`,
       lease.token,
@@ -119,7 +133,7 @@ export class SweepLeaseStore {
   renew(token: string): boolean {
     return (
       this.#sql.exec(
-        "UPDATE quota_sweep_lease SET renewed_at = ? WHERE id = 1 AND token = ?",
+        `UPDATE ${this.#table} SET renewed_at = ? WHERE id = 1 AND token = ?`,
         this.#now(),
         token,
       ).rowsWritten > 0
@@ -128,6 +142,6 @@ export class SweepLeaseStore {
 
   /** Gives the lease back; a token that no longer holds it (taken over after the TTL) changes nothing. */
   release(token: string): void {
-    this.#sql.exec("DELETE FROM quota_sweep_lease WHERE id = 1 AND token = ?", token);
+    this.#sql.exec(`DELETE FROM ${this.#table} WHERE id = 1 AND token = ?`, token);
   }
 }

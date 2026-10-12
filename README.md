@@ -152,7 +152,7 @@ Other commands: `pnpm logs --stage prod --tail` (Workers logs), `pnpm destroy --
 including the D1 usage history and the Durable Objects holding credentials). Pushes to `main` deploy
 production from CI and every pull request gets a preview stage: see [DEPLOY.md](docs/DEPLOY.md).
 
-The cron trigger (`0 */3 * * *`) refreshes model catalogs, prunes old usage rows and re-arms credential refresh alarms.
+The cron trigger (`0 */3 * * *`) refreshes the model catalog (models.dev; also on demand from the Models page), prunes old usage rows and re-arms credential refresh alarms.
 A `public/management.html` left over from the old `pnpm panel:sync` is never served (the path redirects to `/`); delete it.
 
 ## Cloudflare Access reference
