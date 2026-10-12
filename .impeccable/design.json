@@ -226,9 +226,9 @@
       "name": "Meter",
       "kind": "custom",
       "refersTo": "meter-fill",
-      "description": "Flat bar on a shared 0-100% scale.",
-      "html": "<div class=\"ds-meter\"><span class=\"ds-lbl\">5-hour</span><div class=\"ds-track\"><div class=\"ds-fill\" style=\"width:62%\"></div></div><span class=\"ds-val\">62%</span></div>",
-      "css": ".ds-meter{display:grid;grid-template-columns:4rem minmax(4rem,1fr) 2.75rem;align-items:center;gap:12px;width:22rem}.ds-lbl{font-size:.8125rem;color:var(--stone-4,#6a6c69)}.ds-track{height:.5rem;background:var(--stone-2,#e3e3df);border-radius:1px;overflow:hidden}.ds-fill{height:100%;background:var(--ink,#1b1c1b)}.ds-val{text-align:right;font-size:.875rem;font-weight:650}"
+      "description": "Flat bar on a shared 0-100% scale. With a pace, an ink tick (2px by 14px, ground-coloured edge) marks the share of the period passed and a stone-4 caption under the track says how far the share used is from it.",
+      "html": "<div class=\"ds-meter\"><span class=\"ds-lbl\">5-hour</span><div class=\"ds-gauge\"><div class=\"ds-track\"><div class=\"ds-fill\" style=\"width:62%\"></div></div><span class=\"ds-tick\" style=\"left:40%\"></span></div><span class=\"ds-val\">62%</span><span class=\"ds-pace\">22 pts ahead</span></div>",
+      "css": ".ds-meter{display:grid;grid-template-columns:4rem minmax(4rem,1fr) 2.75rem;align-items:center;gap:12px;width:22rem}.ds-lbl{font-size:.8125rem;color:var(--stone-4,#6a6c69)}.ds-track{height:.5rem;background:var(--stone-2,#e3e3df);border-radius:1px;overflow:hidden}.ds-fill{height:100%;background:var(--ink,#1b1c1b)}.ds-val{text-align:right;font-size:.875rem;font-weight:650}.ds-gauge{position:relative}.ds-tick{position:absolute;top:50%;width:2px;height:.875rem;background:var(--ink,#1b1c1b);outline:1px solid var(--ground,#fff);transform:translate(-50%,-50%)}.ds-pace{grid-column:2;margin-top:-8px;font-size:.8125rem;color:var(--stone-4,#6a6c69)}"
     },
     {
       "name": "Connect Button",

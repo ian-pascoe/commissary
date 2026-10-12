@@ -111,6 +111,10 @@ components:
     backgroundColor: "{colors.ink}"
   meter-fill-out:
     backgroundColor: "{colors.red}"
+  meter-pace-tick:
+    backgroundColor: "{colors.ink}"
+    width: "2px"
+    height: "14px"
   trail-mark:
     backgroundColor: "{colors.red}"
     width: "16px"
@@ -313,6 +317,7 @@ Square signage. Buttons take a 3px radius; meters 1px. Blades have a square tail
 ### Meter
 
 - Grid of label (5rem; a longer window name wraps rather than touching the track), track, value (2.75rem). Track stone-2, 8px high; fill ink; at 100% fill and value turn red. The scale is a shared 0–100%.
+- **Pace:** when an allowance has a pace, a tick marks the share of its period that had passed when the figures were read: ink, 2px by 14px, so it stands proud of the track, with a 1px ground-coloured edge so it reads over the fill. A caption sits under the track (0.8125rem, stone-4): "8 pts ahead", "On pace" or "12 pts behind". Pace is information, so neither tick nor caption ever turns yellow or red. The meter's spoken value carries the pace ("62%, 8 points ahead of pace"); the caption is hidden from assistive technology so it isn't read twice. Without a pace, the meter has neither.
 
 ### Trail Mark
 

@@ -58,7 +58,13 @@ import {
 } from "../lib/format.ts";
 import { dailyHistory, type HistoryBar, windowHistory } from "../lib/history.ts";
 import { providerName } from "../lib/providers.ts";
-import { checksQuota, type QuotaWindow, quotaReading, windowLevel } from "../lib/quota.ts";
+import {
+  checksQuota,
+  type QuotaWindow,
+  quotaReading,
+  windowLevel,
+  windowPace,
+} from "../lib/quota.ts";
 import {
   type AttemptNotice,
   attemptNotice,
@@ -88,12 +94,25 @@ const parsed = (raw: string | undefined): number | undefined => {
 // ---------------------------------------------------------------------------------------------------------------
 // Allowance
 
-const WindowRow = ({ window, now }: { readonly window: QuotaWindow; readonly now: number }) => {
+const WindowRow = ({
+  window,
+  readAt,
+  now,
+}: {
+  readonly window: QuotaWindow;
+  readonly readAt: number | undefined;
+  readonly now: number;
+}) => {
   const level = windowLevel(window);
 
   return (
     <li className={styles["window"]}>
-      <Meter label={window.label} percent={window.usedPercent} level={level} />
+      <Meter
+        label={window.label}
+        percent={window.usedPercent}
+        level={level}
+        pace={windowPace(window, readAt, now)}
+      />
       {window.resetsAt === undefined ? (
         <span className={kit["muted"]}>No reset reported</span>
       ) : window.resetsAt <= now ? (
@@ -129,7 +148,7 @@ const Allowance = ({ entry, now }: { readonly entry: CredentialEntry; readonly n
         <>
           <ul className={styles["windows"]}>
             {reading.windows.map((window) => (
-              <WindowRow key={window.label} window={window} now={now} />
+              <WindowRow key={window.label} window={window} readAt={reading.readAt} now={now} />
             ))}
           </ul>
           {reading.readAt === undefined ? null : (

@@ -9,6 +9,7 @@ import {
   quotaReading,
   quotaWindows,
   windowLabel,
+  windowPace,
 } from "../web/src/lib/quota.ts";
 
 const entry = (
@@ -252,6 +253,90 @@ describe("accountStanding", () => {
     expect(
       accountStanding(entry({ name: "c.json", provider: "claude", status: "error" })).level,
     ).toBe("out");
+  });
+});
+
+describe("windowPace", () => {
+  const HOUR = 3_600_000;
+  const resetsAt = Date.parse(RESET);
+  // A 5-hour allowance read 3 hours before it renews: 2 of its 5 hours (40%) had passed.
+  const readAt = resetsAt - 3 * HOUR;
+  const now = readAt + 10 * 60_000;
+
+  const fiveHour = (usedPercent: number) => ({
+    label: "5-hour",
+    usedPercent,
+    resetsAt,
+    seconds: 18_000,
+  });
+
+  it("is ahead of pace when the share used runs more than 5 points past the share of the period passed", () => {
+    expect(windowPace(fiveHour(62), readAt, now)).toEqual({
+      elapsedPercent: 40,
+      points: 22,
+      verdict: "ahead",
+    });
+  });
+
+  it("is on pace within 5 points either way, and behind beyond that", () => {
+    const verdicts = [46, 45, 40, 35, 34].map((used) => {
+      const pace = windowPace(fiveHour(used), readAt, now);
+
+      return [pace?.points, pace?.verdict];
+    });
+
+    expect(verdicts).toEqual([
+      [6, "ahead"],
+      [5, "on"],
+      [0, "on"],
+      [5, "on"],
+      [6, "behind"],
+    ]);
+  });
+
+  it("rounds the distance to whole points the same way on both sides of an even rate", () => {
+    const verdicts = [45.4, 45.5, 34.6, 34.5].map((used) => {
+      const pace = windowPace(fiveHour(used), readAt, now);
+
+      return [pace?.points, pace?.verdict];
+    });
+
+    expect(verdicts).toEqual([
+      [5, "on"],
+      [6, "ahead"],
+      [5, "on"],
+      [6, "behind"],
+    ]);
+  });
+
+  it("measures the period passed when the figures were read, whatever the time now", () => {
+    // Read 4 hours before the reset (20% passed), shown 2 hours later.
+    const stale = windowPace(fiveHour(30), resetsAt - 4 * HOUR, resetsAt - 2 * HOUR);
+    // Read 2 hours before the reset (60% passed).
+    const fresh = windowPace(fiveHour(30), resetsAt - 2 * HOUR, resetsAt - 2 * HOUR);
+
+    expect(stale).toEqual({ elapsedPercent: 20, points: 10, verdict: "ahead" });
+    expect(fresh).toEqual({ elapsedPercent: 60, points: 30, verdict: "behind" });
+  });
+
+  it("has no pace without the allowance's length, a reset or a reading time", () => {
+    expect(windowPace({ ...fiveHour(62), seconds: undefined }, readAt, now)).toBeUndefined();
+    expect(windowPace({ ...fiveHour(62), resetsAt: undefined }, readAt, now)).toBeUndefined();
+    expect(windowPace(fiveHour(62), undefined, now)).toBeUndefined();
+  });
+
+  it("has no pace once the reset has passed", () => {
+    expect(windowPace(fiveHour(62), readAt, resetsAt)).toBeUndefined();
+    expect(windowPace(fiveHour(62), readAt, resetsAt + HOUR)).toBeUndefined();
+  });
+
+  it("has no pace when the figures were read outside the allowance's period", () => {
+    expect(windowPace(fiveHour(62), resetsAt - 6 * HOUR, now)).toBeUndefined();
+    expect(windowPace(fiveHour(62), resetsAt, now)).toBeUndefined();
+  });
+
+  it("has no pace for a used-up allowance", () => {
+    expect(windowPace(fiveHour(100), readAt, now)).toBeUndefined();
   });
 });
 

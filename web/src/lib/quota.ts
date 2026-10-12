@@ -221,6 +221,49 @@ export const windowLevel = (window: QuotaWindow): QuotaLevel => {
   return window.usedPercent >= NEAR_LIMIT_PERCENT ? "near" : "ok";
 };
 
+/** Within this many points of an even rate an allowance is on pace. */
+export const ON_PACE_POINTS = 5;
+
+export type PaceVerdict = "ahead" | "on" | "behind";
+
+/** How an allowance's share used compares with the share of its period that had passed (GLOSSARY.md, Pace). */
+export interface Pace {
+  /** Share of the period that had passed when the figures were read, 0–100. */
+  readonly elapsedPercent: number;
+  /** Distance between the share used and the share passed, in whole points. */
+  readonly points: number;
+  readonly verdict: PaceVerdict;
+}
+
+/**
+ * The allowance's pace, measured at `readAt` (when its share used was read), since a stale share compared with the
+ * period passed by `now` would look behind. None without the allowance's length, its reset or a reading time inside
+ * its period, once the reset has passed at `now`, or when the allowance is used up.
+ */
+export const windowPace = (
+  window: QuotaWindow,
+  readAt: number | undefined,
+  now: number,
+): Pace | undefined => {
+  const { seconds, resetsAt, usedPercent } = window;
+
+  if (seconds === undefined || seconds <= 0 || resetsAt === undefined || readAt === undefined)
+    return undefined;
+  const periodMs = seconds * 1000;
+
+  if (resetsAt <= now || readAt >= resetsAt || readAt < resetsAt - periodMs || usedPercent >= 100)
+    return undefined;
+
+  const elapsedPercent = ((periodMs - (resetsAt - readAt)) * 100) / periodMs;
+  const gap = usedPercent - elapsedPercent;
+  // Rounded before the verdict, so a caption never reads "5 pts ahead", and by size, so ahead and behind round alike.
+  const points = Math.round(Math.abs(gap));
+
+  const verdict: PaceVerdict = points <= ON_PACE_POINTS ? "on" : gap > 0 ? "ahead" : "behind";
+
+  return { elapsedPercent, points, verdict };
+};
+
 /** The earliest time the account can serve requests again when it is cut off (credential-wide cooldown). */
 export const cutOffUntil = (entry: CredentialEntry): number | undefined => {
   const credentialWide = entry.cooldowns.find((cooldown) => cooldown.scope === "credential");
@@ -231,6 +274,8 @@ export const cutOffUntil = (entry: CredentialEntry): number | undefined => {
 export interface AccountStanding {
   readonly level: QuotaLevel;
   readonly windows: ReadonlyArray<QuotaWindow>;
+  /** When the windows' figures were read (epoch ms); their pace is measured then. */
+  readonly readAt: number | undefined;
   /** Cut off until this time (credential-wide cooldown). */
   readonly cutOffUntil: number | undefined;
   /** The reset the operator waits for: the cooldown's end, else the fullest window's reset, else the soonest known. */
@@ -242,7 +287,7 @@ export interface AccountStanding {
 }
 
 export const accountStanding = (entry: CredentialEntry): AccountStanding => {
-  const windows = quotaWindows(entry);
+  const { windows, readAt } = quotaReading(entry);
   const until = cutOffUntil(entry);
 
   const fullest = windows.reduce<QuotaWindow | undefined>(
@@ -272,6 +317,7 @@ export const accountStanding = (entry: CredentialEntry): AccountStanding => {
   return {
     level,
     windows,
+    readAt,
     cutOffUntil: until,
     nextReset: until ?? waitedFor?.resetsAt,
     nextResetWindow: until === undefined ? waitedFor?.label : undefined,
