@@ -1011,7 +1011,9 @@ panel paths and `/management.html` as `management`); there is no management key.
     keys are config entries (ADR 0025). The Worker reads the entries, answers `409 conflict` when the group changed since
     `revision` or vanished (a write of another group never conflicts), applies the edit to the assembled document,
     dry-runs it through the config decoder and writes the group alone (`writeKeyGroup`) **without retry** (the panel
-    re-reads and the user decides). The answer is `{status, version, id, revision}` (the group's new revision; `0` once
+    re-reads and the user decides). The duplicate settlement below reads the other groups without naming their
+    revisions, so the store also refuses (`409 conflict`) a write after which the normaliser would drop a key another
+    group of the family stored since that read. The answer is `{status, version, id, revision}` (the group's new revision; `0` once
     deleted). A key in a written group is `auth_index` (keep the stored secret) and/or `api-key` (new secret): a key is
     an entry whose id is its credential id, so editing the secret of a key keeps its credential id and so its
     `auth_index` (the old document model made it a new credential); an unknown `auth_index` is `409 unknown_auth_index`,
@@ -1045,7 +1047,9 @@ panel paths and `/management.html` as `management`); there is no management key.
     Meta `/models` and Vertex `countTokens` are unverified against the live services.
   - `PATCH /credentials/status` (`auth_index`; `name` addresses auth files only) on a config API key adds or removes `*` in its
     `excluded-models` (Go `toggleConfigAPIKeyExcludedAll`; answers `via: "config:excluded-models"`, `excluded_pattern: "*"`);
-    the id and `auth_index` do not change. A compat key answers `409`: disable the endpoint (its group's `disabled`).
+    the id and `auth_index` do not change. A compat key answers `409`: disable the endpoint (its group's `disabled`). The
+    toggle names no revision: it sets one flag to the state asked for, so the last toggle wins; it moves the group's
+    revision, so a key group form opened before it answers `409` on save instead of undoing it.
   - `configKeyIds` (`credentials/key-ids.ts`) maps config positions to credential ids through the synthesised credentials;
     the ControlPlane and the keys page share it. `includeDisabledGroups` also addresses the keys of a disabled compat
     group (they have no credentials in the pool).
@@ -1082,7 +1086,11 @@ panel paths and `/management.html` as `management`); there is no management key.
     key, rule list and payload rule it does not list is deleted. It answers `{status: "ok", version, not_applied}`:
     the keys that have no effect on Workers, which are not stored (`config/not-applied.ts`; ADR 0015's round trip
     through the stored document is replaced by this answer). The same admin guards as `PATCH /settings` apply
-    (`403 service_tokens_require_service_admin`; no self lock-out, `422 would_remove_your_admin_access`). Invalid YAML
+    (`403 service_tokens_require_service_admin`; no self lock-out, `422 would_remove_your_admin_access`); they read
+    the stored config, and the import names the change counter of that read, so a write landing in between makes it
+    `409 conflict` (send it again) instead of passing the guards on a stale config. A key whose secret a stored key
+    of its family has keeps that key's id (a secret edited in the panel no longer matches its content hash), so
+    re-importing a document keeps credential ids and auth indexes. Invalid YAML
     is `422 invalid_config` with `message`, `line` and `column` (a fixed sentence per error code, never the source; YAML
     parsed with the 1.2 core schema, custom tags, merge keys and a `%YAML 1.1` directive refused, anchors expanded); a
     config that does not decode is `422 invalid_config` with `path` when known, and so is a document that sets a
@@ -1160,7 +1168,7 @@ panel paths and `/management.html` as `management`); there is no management key.
   apply, and a `422` lands under the field its `path` names (the message
   names the bad value; the hint says what is expected); other save outcomes show in the section's sticky save bar; the
   jump list counts each section's unsaved changes and leaving the page with any asks first (`useBlocker`); payload
-  rules and account error rules are read-only there ("Set … by importing a config document."; the import has no panel
+  rules and account error rules are read-only there ("Set … by importing a Go config document (POST /settings/import)."; the import has no panel
   UI yet, see _Config entries_). There is no raw configuration editor (removed with its CodeMirror dependencies, ADR 0025).
   The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
   address (`?range=&by=&model=&provider=&account=&user=&failed=`, decoded per parameter by `web/src/lib/usage.ts`

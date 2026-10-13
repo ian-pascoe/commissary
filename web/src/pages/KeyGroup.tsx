@@ -628,7 +628,8 @@ const GroupForm = ({
       <div className={styles["save"]}>
         {kept.length === 0 ? null : (
           <p className={styles["kept"]}>
-            Kept as they are: {kept.join(", ")}. A config import sets them.
+            Kept as they are: {kept.join(", ")}. Importing a Go config document (POST
+            /settings/import) sets them.
           </p>
         )}
         {changesIdentity(family, view, draft) ? (

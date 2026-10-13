@@ -18,6 +18,7 @@
  */
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
+import { Revision } from "./config.ts";
 import { Cooldown, CredentialStatus, RecentRequests } from "./credentials.ts";
 import { managementErrors } from "./errors.ts";
 
@@ -394,8 +395,6 @@ export const CompatGroupInput = Schema.Struct({
 });
 
 export type CompatGroupInput = typeof CompatGroupInput.Type;
-
-const Revision = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
 /**
  * `PUT /api-keys/groups`: replaces the group `id` at `revision`, or adds a group (no `id`, `revision` 0) after the

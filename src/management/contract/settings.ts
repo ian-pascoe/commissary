@@ -19,7 +19,9 @@
  * The import takes a Go config document as the request body (YAML or JSON, v8 or legacy layout, at most 512 KiB) and
  * replaces every config entry of the org with it in one transaction. It answers the new `version` and `not_applied`:
  * the keys that have no effect on Workers, which are not stored (MIGRATION.md). `422 invalid_config` with `message`
- * (and `path`, `line`, `column` when known) for a document the config refuses; the admin rules of a save apply.
+ * (and `path`, `line`, `column` when known) for a document the config refuses; the admin rules of a save apply;
+ * `409 conflict` when another write landed while the import was checked (send it again). A key whose secret a stored
+ * key of its family has keeps that key's id, and so its `auth_index`.
  */
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api";

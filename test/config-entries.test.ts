@@ -101,6 +101,22 @@ describe("config import", () => {
     );
   });
 
+  it("refuses an import based on a change counter another write moved, and stores nothing", async () => {
+    const { version } = await controlPlane().getConfig();
+
+    await controlPlane().writeSettings(
+      [{ id: "routing.strategy", revision: 0, value: "fill-first" }],
+      "other",
+    );
+    const result = await controlPlane().importConfig("request-retry: 7\n", "test", version);
+
+    expect(result).toMatchObject({ ok: false, error: "conflict" });
+    expect((await current()).routing.strategy).toBe("fill-first");
+    expect(
+      await controlPlane().importConfig("request-retry: 7\n", "test", version + 1),
+    ).toMatchObject({ ok: true });
+  });
+
   it("refuses an invalid document and keeps the entries", async () => {
     await controlPlane().importConfig("routing:\n  strategy: fill-first\n", "test");
     const result = await controlPlane().importConfig("routing: [", "test");
@@ -168,20 +184,20 @@ describe("migration of a stored config document", () => {
       configKeyIds(before, { includeDisabledGroups: true }),
     );
 
-    // The pool's config credentials are the same ones, so their auth indexes are too.
-    const ids = configKeyIds(before);
-
-    const expected = [...ids.claude, ...ids.gemini]
-      .flatMap((group) => group.keys)
+    // The pool's config credentials are exactly the same ones, so their auth indexes (an HMAC of the id) are too.
+    const expected = Object.values(configKeyIds(before))
+      .flatMap((groups) => groups.flatMap((group) => [...group.keys, group.group]))
       .filter((id) => id !== undefined)
       .toSorted((a, b) => a.localeCompare(b));
 
     const live = (await stub.listCredentials())
       .filter((entry) => entry.source === "config")
       .map((entry) => entry.id)
-      .toSorted();
+      .toSorted((a, b) => a.localeCompare(b));
 
-    expect(live).toEqual(expect.arrayContaining(expected));
+    expect(expected.length).toBeGreaterThan(0);
+    expect(live).toEqual(expected);
+    expect(live.map(authIndexOf)).toEqual(expected.map(authIndexOf));
 
     await runInDurableObject(stub, (_instance, state) => {
       // The document row is kept; the entries say who wrote them.
@@ -251,6 +267,22 @@ describe("entry revisions", () => {
     expect(config.routing.strategy).toBe("fill-first");
     // The whole write is refused, also its fresh part.
     expect(config.routing["session-affinity"]).toBe(false);
+  });
+
+  it("refuses a write that names a setting twice", async () => {
+    const { version } = await controlPlane().getConfig();
+
+    const twice = await controlPlane().writeSettings(
+      [
+        { id: "routing.strategy", revision: 0, value: "fill-first" },
+        { id: "routing.strategy", revision: 0, value: "round-robin" },
+      ],
+      "a",
+    );
+
+    expect(twice).toMatchObject({ ok: false, error: "invalid" });
+    expect((await current()).routing.strategy).toBe("round-robin");
+    expect((await controlPlane().getConfig()).version).toBe(version);
   });
 
   it("never repeats a revision for an entry deleted and created again", async () => {
@@ -406,6 +438,43 @@ describe("API key groups", () => {
     expect(authIndexOf(idBefore[0] ?? "")).toBeDefined();
   });
 
+  it("keeps the auth index of a key edited in the panel when a document with its new secret is imported", async () => {
+    const [first, other] = (await keysList()).families.claude;
+    const group = must(first);
+    const authIndex = must(group.group.keys[0]?.auth_index);
+    const otherIndex = must(other?.group.keys[0]?.auth_index);
+
+    const rotated = await json(
+      `${API_KEYS}/groups`,
+      jsonInit("PUT", {
+        family: "claude",
+        id: group.id,
+        revision: group.revision,
+        group: { keys: [{ auth_index: authIndex, "api-key": "sk-ant-rotated-9999" }] },
+      }),
+    );
+
+    expect(rotated.status).toBe(200);
+
+    const imported = await json("/v8/management/settings/import", {
+      method: "POST",
+      headers: { "content-type": "application/yaml" },
+      body: [
+        "api-keys:",
+        "  claude:",
+        "    - keys: [{api-key: sk-ant-second-2222}]",
+        "    - keys: [{api-key: sk-ant-rotated-9999}]",
+        "",
+      ].join("\n"),
+    });
+
+    expect(imported.status).toBe(200);
+    const [reordered, rotatedGroup] = (await keysList()).families.claude;
+    // Its content hash changed with the secret, yet it keeps the id it had, and the other key keeps its own.
+    expect(rotatedGroup?.group.keys[0]?.auth_index).toBe(authIndex);
+    expect(reordered?.group.keys[0]?.auth_index).toBe(otherIndex);
+  });
+
   it("lets concurrent writes of two different groups both succeed and refuses a stale one with 409", async () => {
     const [first, second] = (await keysList()).families.claude.map(must);
 
@@ -428,6 +497,37 @@ describe("API key groups", () => {
     const stale = await write(must(first), "three");
     expect(stale.status).toBe(409);
     expect((await keysList()).families.claude[0]?.group.keys[0]?.prefix).toBe("one");
+  });
+
+  it("refuses a group write that would let the normaliser drop a key another group stored since", async () => {
+    await controlPlane().importConfig(
+      JSON.stringify({ "api-keys": { gemini: [{ keys: [{ "api-key": "AIza-first" }] }] } }),
+      "test",
+    );
+    const first = must((await keysList()).families.gemini[0]);
+
+    // Another admin adds a group holding a key; this write was checked against a read without it.
+    const added = await controlPlane().writeKeyGroup(
+      { family: "gemini", revision: 0, group: { keys: [{ "api-key": "AIza-shared" }] } },
+      "other",
+    );
+
+    expect(added.ok).toBe(true);
+
+    const raced = await controlPlane().writeKeyGroup(
+      {
+        family: "gemini",
+        id: first.id,
+        revision: first.revision,
+        group: { keys: [{ "api-key": "AIza-first" }, { "api-key": "AIza-shared" }] },
+      },
+      "test",
+    );
+
+    expect(raced).toMatchObject({ ok: false, error: "conflict" });
+    expect((await keysList()).families.gemini.map((group) => group.group.keys.length)).toEqual([
+      1, 1,
+    ]);
   });
 
   it("deletes a group by id and revision", async () => {

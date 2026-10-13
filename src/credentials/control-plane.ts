@@ -347,10 +347,11 @@ export class ControlPlane extends DurableObject<Env> {
 
   /**
    * Replaces every config entry with a Go config document (YAML or JSON, v8 or legacy layout) in one transaction and
-   * answers the not-applied keys it dropped.
+   * answers the not-applied keys it dropped; `basedOn` is the change counter the caller checked it against
+   * (`conflict` when another write landed since).
    */
-  importConfig(text: string, by: string): ImportResult {
-    return this.#config.importDocument(text, by);
+  importConfig(text: string, by: string, basedOn?: number): ImportResult {
+    return this.#config.importDocument(text, by, basedOn);
   }
 
   /**

@@ -1,5 +1,5 @@
 // The read-only parts of the Settings page: payload rule counts, the account error rules and the deployment's own
-// admins. Payload and error rules are set by importing a config document.
+// admins. Payload and error rules are set by importing a Go config document.
 import type { ReactNode } from "react";
 import type { RequestScopedErrorRule } from "#contract/api-keys.ts";
 import type { SettingsView } from "#contract/settings.ts";
@@ -9,7 +9,9 @@ import styles from "./Settings.module.css";
 
 /** Payload and error rules are not edited in the panel: a config import sets them. */
 const SetByImport = ({ what }: { readonly what: string }) => (
-  <p className={styles["quiet"]}>Set {what} by importing a config document.</p>
+  <p className={styles["quiet"]}>
+    Set {what} by importing a Go config document (POST /settings/import).
+  </p>
 );
 
 /** A section without a form: heading and body. */

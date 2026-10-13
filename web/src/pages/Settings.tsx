@@ -2,7 +2,7 @@
 // .scratch/p5-settings-research.md (c)). A status line says the config version and when it was saved; a jump list
 // leads to each section (a sticky rail beside the column on wide screens) and counts each one's unsaved changes. Each
 // section saves on its own (`SettingsForm.tsx`); leaving the page with unsaved changes asks first. Payload and account
-// error rules are read-only here, set by importing a config document. The view carries no secret, and nothing here
+// error rules are read-only here, set by importing a Go config document. The view carries no secret, and nothing here
 // shows one.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link, useBlocker } from "@tanstack/react-router";

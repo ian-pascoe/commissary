@@ -25,7 +25,12 @@
  * is not: readers take `global`'s value (`config/reader.ts`).
  */
 import { Effect, Result } from "effect";
-import { assignEntryIds, freshEntryId, withoutEntryIds } from "../credentials/key-ids.ts";
+import {
+  assignEntryIds,
+  freshEntryId,
+  withoutEntryIds,
+  withStoredKeyIds,
+} from "../credentials/key-ids.ts";
 import { type Json, type JsonObject, jsonEquals } from "../json/index.ts";
 import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 import { decodeConfig, decodeRawConfig, encodeConfig, parseConfigYaml } from "./codec.ts";
@@ -146,7 +151,8 @@ export type ImportResult =
       readonly path?: string;
       readonly line?: number;
       readonly column?: number;
-    };
+    }
+  | { readonly ok: false; readonly error: "conflict"; readonly message: string };
 
 const TABLES = {
   settings: "config_settings",
@@ -336,6 +342,9 @@ export class ConfigStore {
       if (!isSettingPath(change.id)) return refuse("invalid", `${change.id}: not a setting`);
     }
 
+    if (new Set(changes.map(({ id }) => id)).size !== changes.length)
+      return refuse("invalid", "a setting is named more than once");
+
     if (this.#org !== GLOBAL_ORG) {
       const set = changes.filter(
         (change) =>
@@ -404,7 +413,32 @@ export class ConfigStore {
     change: KeyGroupChange,
     by: string,
   ): WriteResult<{ readonly id: string; readonly revision: number }> {
+    // The keys stored in the family's other groups: the write is checked against a read of them that names no
+    // revision, so one that landed since must not lose a key to the normaliser's first-wins deduplication.
+    let others: ReadonlyArray<string> = [];
+
+    const keepsOthers = (config: Config): void => {
+      const ids = new Set(
+        config["api-keys"][change.family].flatMap((group) => group.keys.map((key) => key.id)),
+      );
+
+      if (others.some((id) => !ids.has(id)))
+        throw new Refusal(
+          refuse("conflict", "another key group changed with a key equal to one written"),
+        );
+    };
+
     return this.#write((revision) => {
+      others = this.#sql
+        .exec<{ id: string }>(
+          `SELECT k.id AS id FROM ${TABLES.keys} k JOIN ${TABLES.groups} g ON g.id = k.group_id
+           WHERE g.family = ? AND g.id IS NOT ?`,
+          change.family,
+          change.id ?? null,
+        )
+        .toArray()
+        .map((row) => row.id);
+
       const existing =
         change.id === undefined
           ? undefined
@@ -494,13 +528,14 @@ export class ConfigStore {
         if (!kept.has(keyId)) this.#sql.exec(`DELETE FROM ${TABLES.keys} WHERE id = ?`, keyId);
 
       return { id, revision };
-    });
+    }, keepsOthers);
   }
 
   /**
    * Adds or removes `*` in the `excluded-models` of the API key `credentialId` (disables it without changing its id).
    * A key's own list replaces its group's, so a key without one starts from the group's. The key and its group take
-   * the write's revision.
+   * the write's revision. It names no revision: it sets one flag to the state asked for (the last toggle wins), and
+   * moving the group's revision makes a group write based on the older group a `conflict` instead of undoing it.
    */
   setKeyExcludedAll(credentialId: string, disabled: boolean, by: string): WriteResult {
     return this.#write((revision) => {
@@ -557,10 +592,12 @@ export class ConfigStore {
 
   /**
    * Replaces every entry with a Go config document (`text`, YAML or JSON, v8 or legacy layout) in one transaction. Key
-   * ids in the document are ignored: every API key takes the id of the credential it produces (`assignEntryIds`).
-   * The not-applied keys are named in the answer and not stored.
+   * ids in the document are ignored: an API key whose secret a stored key of its family has keeps that key's id
+   * (`withStoredKeyIds`), any other takes the id of the credential it produces (`assignEntryIds`). The not-applied
+   * keys are named in the answer and not stored. `basedOn` is the change counter the caller's checks read: the import
+   * is refused (`conflict`) when another write landed since.
    */
-  importDocument(text: string, by: string): ImportResult {
+  importDocument(text: string, by: string, basedOn?: number): ImportResult {
     this.#ensure();
     const parsed = Effect.runSync(Effect.result(parseConfigYaml(text)));
 
@@ -588,7 +625,16 @@ export class ConfigStore {
         };
     }
 
-    const rows = this.#rowsOf(parsed.success);
+    if (basedOn !== undefined && this.#counter().counter !== basedOn)
+      return {
+        ok: false,
+        error: "conflict",
+        message: "the configuration changed since it was read",
+      };
+
+    const rows = this.#rowsOf(
+      withStoredKeyIds(withoutEntryIds(parsed.success), this.current().config),
+    );
 
     const version = this.#transaction(() => {
       const counter = this.#bump();
@@ -602,8 +648,14 @@ export class ConfigStore {
 
   // --- internals --------------------------------------------------------------------------------------------------
 
-  /** Runs `apply` with the write's revision in one transaction, then checks the config it leaves. */
-  #write<A extends object>(apply: (revision: number) => A): WriteResult<A> {
+  /**
+   * Runs `apply` with the write's revision in one transaction, then checks the config it leaves (and `verify` it,
+   * which refuses by throwing a `Refusal`).
+   */
+  #write<A extends object>(
+    apply: (revision: number) => A,
+    verify?: (config: Config) => void,
+  ): WriteResult<A> {
     this.#ensure();
 
     try {
@@ -617,6 +669,8 @@ export class ConfigStore {
 
         if (Result.isFailure(decoded))
           throw new Refusal(refuse("invalid", decoded.failure.message));
+
+        verify?.(decoded.success);
 
         return { ok: true as const, version: revision, ...result };
       });
@@ -840,9 +894,9 @@ export class ConfigStore {
     };
   }
 
-  /** The rows of an imported config: Go ids dropped, entry ids assigned, not-applied keys left out. */
+  /** The rows of an imported config (without Go ids): entry ids assigned, not-applied keys left out. */
   #rowsOf(config: Config): EntryRows {
-    return entriesOfConfig(assignEntryIds(withoutEntryIds(config)), () => freshEntryId("payload"));
+    return entriesOfConfig(assignEntryIds(config), () => freshEntryId("payload"));
   }
 
   /** Replaces every entry with `rows`, each at `revision` (inside the caller's transaction). */
@@ -908,7 +962,7 @@ export class ConfigStore {
       const rows =
         legacy === undefined
           ? undefined
-          : this.#rowsOf(Effect.runSync(decodeConfig(parse(legacy.document))));
+          : this.#rowsOf(withoutEntryIds(Effect.runSync(decodeConfig(parse(legacy.document)))));
 
       this.#transaction(() => {
         const counter = legacy === undefined ? 0 : legacy.version + 1;

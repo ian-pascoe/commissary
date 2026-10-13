@@ -168,7 +168,7 @@ put a server-side client in between.
   entries (ADR 0025) and never leave the Worker: `GET /api-keys` shows a `[redacted]…abcd` preview, `GET /settings` carries
   no secret, and the routes that returned the whole document (`/config*`, `/config.yaml`, `/settings/config`) and the raw
   editor are gone. So there are no masked placeholders to restore and nothing to refuse on write. A secret is replaced by
-  typing a new one into its key group, or by importing a config document (`POST /settings/import`). Config error messages
+  typing a new one into its key group, or by importing a Go config document (`POST /settings/import`). Config error messages
   never quote a written value (YAML errors are a fixed sentence per error code with line and column; schema errors an
   expectation and a path) and are not scrubbed: they name at most keys the caller wrote, so a refused write reads the same
   whether a typed value, key or alias name equals a stored secret or not.
@@ -194,8 +194,9 @@ put a server-side client in between.
   advances the version. The same goes for header values, a `proxy-url` or a `base-url` written for a key kept by
   `auth_index`: they are typed too, so trying them never produces a different reply. The stored key always wins, so a typed
   copy never deletes a stored key (or its group); a group left with no key is stored but not shown. The config import
-  replaces every entry, so nothing stored is kept and nothing can be guessed: Go's first-wins deduplication applies inside the
-  imported document. Configuration error messages never quote a value.
+  replaces every entry, so its reply confirms nothing and Go's first-wins deduplication applies inside the imported
+  document. A key whose secret a stored key of its family has keeps that key's credential id, so the next read shows the
+  same `auth_index` (the next read confirms, as above); a wrong guess has replaced every stored key with the document's. Configuration error messages never quote a value.
 
 ### Logs and personal data
 

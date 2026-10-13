@@ -219,6 +219,63 @@ export const assignEntryIds = (
   };
 };
 
+/**
+ * `config` (an imported document, without ids) with each API key taking the id of the stored key of its family with
+ * the same secret, each stored id at most once. A key whose secret was edited in the panel kept its id while its
+ * content hash changed, so a later import of a document with that secret keeps its credential id and auth index too.
+ */
+export const withStoredKeyIds = (config: Config, stored: Config): Config => {
+  const withIds = <G extends { readonly keys: ReadonlyArray<StoredKey> }>(
+    groups: ReadonlyArray<G>,
+    storedGroups: ReadonlyArray<{ readonly keys: ReadonlyArray<StoredKey> }>,
+  ): G[] => {
+    const ids = new Map<string, string>();
+
+    for (const group of storedGroups)
+      for (const key of group.keys)
+        if (key.id !== undefined && !ids.has(key["api-key"])) ids.set(key["api-key"], key.id);
+
+    return groups.map((group) => ({
+      ...group,
+      keys: group.keys.map((key) => {
+        const id = key.id ?? ids.get(key["api-key"]);
+
+        if (id === undefined) return key;
+        ids.delete(key["api-key"]);
+
+        return { ...key, id };
+      }),
+    }));
+  };
+
+  const apiKeys = config["api-keys"];
+  const storedKeys = stored["api-keys"];
+
+  return {
+    ...config,
+    "api-keys": {
+      gemini: withIds(apiKeys.gemini, storedKeys.gemini),
+      interactions: withIds(apiKeys.interactions, storedKeys.interactions),
+      vertex: withIds(apiKeys.vertex, storedKeys.vertex),
+      codex: withIds(apiKeys.codex, storedKeys.codex),
+      claude: withIds(apiKeys.claude, storedKeys.claude),
+      xai: withIds(apiKeys.xai, storedKeys.xai),
+      meta: withIds(apiKeys.meta, storedKeys.meta),
+      "opencode-zen": withIds(apiKeys["opencode-zen"], storedKeys["opencode-zen"]),
+      "opencode-go": withIds(apiKeys["opencode-go"], storedKeys["opencode-go"]),
+      "openai-compatibility": withIds(
+        apiKeys["openai-compatibility"],
+        storedKeys["openai-compatibility"],
+      ),
+    },
+  };
+};
+
+interface StoredKey {
+  readonly id?: string | undefined;
+  readonly "api-key": string;
+}
+
 /** `config` without entry ids (a Go config document never carries them; the import assigns its own). */
 export const withoutEntryIds = (config: Config): Config => {
   // SAFETY: the config schema encodes to a plain JSON object.

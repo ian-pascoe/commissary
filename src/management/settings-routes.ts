@@ -12,7 +12,9 @@
  * The import replaces every config entry of the org with a Go config document (YAML or JSON, v8 or legacy layout) in
  * one transaction, and answers the keys that have no effect on Workers, which it does not store (ADR 0015). It is the
  * one write of the whole configuration, and the same admin rules apply: only a service-token administrator or a
- * platform admin may change the admin service tokens, and a caller may not remove their own admin access.
+ * platform admin may change the admin service tokens, and a caller may not remove their own admin access. Those
+ * checks read the stored config; the import names its change counter and is `409 conflict` when another write landed
+ * in between, so they never pass on a stale read. A key whose secret is already stored keeps that key's credential id.
  */
 import { Effect, Result, Schema } from "effect";
 import { HttpRouter } from "effect/http";
@@ -188,8 +190,11 @@ const importDocument = Effect.gen(function* () {
   yield* failIf(checkDocumentLockout({ ...rules, alwaysAdmin: always }));
 
   const result = yield* controlPlane("importConfig", (stub) =>
-    stub.importConfig(text, identity.principalId),
+    stub.importConfig(text, identity.principalId, current.version),
   );
+
+  if (!result.ok && result.error === "conflict")
+    return yield* replyError(409, "conflict", { message: result.message });
 
   if (!result.ok)
     return yield* replyError(422, "invalid_config", {
