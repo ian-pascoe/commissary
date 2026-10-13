@@ -318,6 +318,50 @@ describe("xai billing", () => {
     assert.isUndefined(parseXaiWeekly({ config: {} }));
     assert.isUndefined(parseXaiMonthly({ config: { monthlyLimit: 0, used: 10 } }));
   });
+
+  // Real answers (2026-10-13) of an account that has not used its week: the billing payload is protobuf JSON, which
+  // omits zero values, so `creditUsagePercent` is absent; the monthly allowance is `{val: 0}` (none included).
+  it("reads a weekly period without creditUsagePercent as unused", () => {
+    assert.deepStrictEqual(
+      parseXaiWeekly({
+        config: {
+          currentPeriod: {
+            type: "USAGE_PERIOD_TYPE_WEEKLY",
+            start: "2026-10-08T09:24:19.164649+00:00",
+            end: "2026-10-15T09:24:19.164649+00:00",
+          },
+          onDemandCap: { val: 0 },
+          onDemandUsed: { val: 0 },
+          isUnifiedBillingUser: true,
+          prepaidBalance: { val: 0 },
+          billingPeriodStart: "2026-10-08T09:24:19.164649+00:00",
+          billingPeriodEnd: "2026-10-15T09:24:19.164649+00:00",
+        },
+      }),
+      {
+        id: "weekly",
+        label: "Weekly credits",
+        used_percent: 0,
+        resets_at: "2026-10-15T09:24:19.164Z",
+        window_seconds: 604_800,
+      },
+    );
+    assert.isUndefined(
+      parseXaiMonthly({
+        config: {
+          monthlyLimit: { val: 0 },
+          used: { val: 0 },
+          onDemandCap: { val: 0 },
+          billingPeriodStart: "2026-10-01T00:00:00+00:00",
+          billingPeriodEnd: "2026-11-01T00:00:00+00:00",
+        },
+      }),
+    );
+    // A monthly period (or none) without the percentage is still no weekly window.
+    assert.isUndefined(
+      parseXaiWeekly({ config: { currentPeriod: { type: "USAGE_PERIOD_TYPE_MONTHLY" } } }),
+    );
+  });
 });
 
 describe("meta usage", () => {

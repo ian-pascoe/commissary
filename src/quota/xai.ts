@@ -10,8 +10,10 @@
  * (`GET https://api.x.ai/v1/me` plus a real `POST /v1/chat/completions` "ping") is never made, because it spends a
  * request; the plan lookups (`/v1/user`, `/v1/settings`) are skipped too. The weekly window is `creditUsagePercent` of
  * the current period; the monthly one is the included usage (`used` capped at `monthlyLimit`, in cents) over
- * `monthlyLimit`.
+ * `monthlyLimit`. The Grok CLI version is the executor's (`currentXaiClientVersion`, src/executor/xai/version.ts)
+ * rather than a pin: the chat proxy answers 426 to versions below its floor, billing included.
  */
+import { XAI_TOKEN_AUTH_VALUE } from "../executor/xai/headers.ts";
 import type { Json, JsonObject } from "../json/index.ts";
 import type { QuotaWindow } from "../management/contract/credentials.ts";
 import { isoInstant, num, quotaWindow, record } from "./window.ts";
@@ -20,13 +22,16 @@ export const XAI_BILLING_WEEKLY_URL = "https://cli-chat-proxy.grok.com/v1/billin
 
 export const XAI_BILLING_MONTHLY_URL = "https://cli-chat-proxy.grok.com/v1/billing";
 
-/** `XAI_REQUEST_HEADERS` without the bearer token (`x-userid` is added when the file has a subject). */
-export const XAI_HEADERS = {
-  "x-xai-token-auth": "xai-grok-cli",
-  "x-grok-client-version": "0.2.91",
+/**
+ * `XAI_REQUEST_HEADERS` at Grok CLI `version`, without the bearer token (`x-userid` is added when the file has a
+ * subject).
+ */
+export const xaiBillingHeaders = (version: string) => ({
+  "x-xai-token-auth": XAI_TOKEN_AUTH_VALUE,
+  "x-grok-client-version": version,
   accept: "*/*",
-  "user-agent": "grok-pager/0.2.91 grok-shell/0.2.91 (macos; aarch64)",
-} as const;
+  "user-agent": `grok-pager/${version} grok-shell/${version} (macos; aarch64)`,
+});
 
 const pick = (source: JsonObject, camel: string, snake: string): Json | undefined =>
   source[camel] ?? source[snake];
@@ -46,13 +51,23 @@ const spanSeconds = (start: string | undefined, end: string | undefined): number
   return seconds > 0 ? seconds : undefined;
 };
 
-/** The weekly credits window of a billing payload (`config.creditUsagePercent`). */
+/** `resolveXaiPeriodType`: `USAGE_PERIOD_TYPE_WEEKLY` and the like. */
+const isWeeklyPeriod = (period: JsonObject): boolean =>
+  typeof period.type === "string" && period.type.toLowerCase().includes("weekly");
+
+/**
+ * The weekly credits window of a billing payload (`config.creditUsagePercent`). The payload is protobuf JSON, which
+ * omits zero values: a weekly period without the percentage is a week with nothing used yet.
+ */
 export const parseXaiWeekly = (payload: Json): QuotaWindow | undefined => {
   const config = record(record(payload).config);
-  const used = num(pick(config, "creditUsagePercent", "credit_usage_percent"));
+  const period = record(pick(config, "currentPeriod", "current_period"));
+
+  const used =
+    num(pick(config, "creditUsagePercent", "credit_usage_percent")) ??
+    (isWeeklyPeriod(period) ? 0 : undefined);
 
   if (used === undefined) return undefined;
-  const period = record(pick(config, "currentPeriod", "current_period"));
 
   const start =
     isoInstant(period.start) ??

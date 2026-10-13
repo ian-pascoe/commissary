@@ -14,6 +14,7 @@
 import { Clock, Effect, Result } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 import { fetchDevinUserStatus } from "../credentials/devin-status.ts";
+import { currentXaiClientVersion } from "../executor/xai/version.ts";
 import { type Json, tryParseJson } from "../json/index.ts";
 import type { QuotaWindow, ResetGrantStatus } from "../management/contract/credentials.ts";
 import {
@@ -39,9 +40,9 @@ import type { QuotaProbeTarget } from "./target.ts";
 import {
   XAI_BILLING_MONTHLY_URL,
   XAI_BILLING_WEEKLY_URL,
-  XAI_HEADERS,
   parseXaiMonthly,
   parseXaiWeekly,
+  xaiBillingHeaders,
 } from "./xai.ts";
 
 const TIMEOUT = "15 seconds";
@@ -210,7 +211,7 @@ const kimi = Effect.fnUntraced(function* (target: QuotaProbeTarget) {
 /** Weekly credits and the monthly allowance; either endpoint may carry either figure (panel `mergeXaiBillingSummaries`). */
 const xai = Effect.fnUntraced(function* (target: QuotaProbeTarget) {
   const headers = {
-    ...XAI_HEADERS,
+    ...xaiBillingHeaders(yield* currentXaiClientVersion),
     authorization: bearer(target.token),
     ...(target.userId === undefined ? {} : { "x-userid": target.userId }),
   };
