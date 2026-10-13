@@ -1,8 +1,10 @@
 # Cloudflare Access setup
 
-Access is the only client authentication of the Workers port. The Worker never sees passwords or API keys from clients: Access
-authenticates the caller (identity provider login or a service token), then forwards the request with a signed
-`Cf-Access-Jwt-Assertion` header that the Worker verifies.
+Cloudflare Access signs people in for the control panel and the management API (ADR 0022): it authenticates the caller
+(identity provider login or a service token), then forwards the request with a signed `Cf-Access-Jwt-Assertion` header
+that the Worker verifies. The Worker never sees their passwords. Clients of the proxy routes (`/v1*`, `/openai/v1*`,
+`/backend-api/codex*` and the unprefixed aliases) are not behind Access: they send a **proxy key** the proxy issued to a
+member, which the Worker checks itself (§4, "Proxy keys" below, [CLIENTS.md](CLIENTS.md)).
 
 ## 1. What the deploy creates
 
@@ -12,6 +14,7 @@ settings in `.env` (template: `.env.example`):
 | Setting                                                  | Creates / sets                                                                                                  |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `CF_LLM_PROXY_DOMAIN`                                    | A **self-hosted application** on that hostname (empty path: the whole hostname), and the Worker's custom domain |
+| (always)                                                 | A second application on the proxy paths of that hostname with a **Bypass** policy for everyone (below)          |
 | `ACCESS_ALLOW_EMAILS`, `ACCESS_ALLOW_EMAIL_DOMAINS`      | A reusable **Allow** policy (interactive login with your identity providers)                                    |
 | `ACCESS_SERVICE_TOKENS` (names)                          | One **service token** per name and a **Service Auth** policy that admits exactly those tokens                   |
 | `ACCESS_ALLOW_SERVICE_TOKEN_IDS`                         | Adds service tokens managed elsewhere (by token ID, e.g. CI's) to the **Service Auth** policy                   |
@@ -26,9 +29,16 @@ subrequests (the first line of defence against cross-site request forgery on the
 Alchemy application resource does not manage these fields and its updates are PUT-style, so a follow-up step re-applies them
 after every change of the application: do not edit them in the dashboard.
 
+**The proxy routes leave Access.** The bypass application (`infra/access.ts` `provisionProxyBypass`) covers `/v1`,
+`/v1beta`, `/v1internal`, `/openai/v1`, `/backend-api/codex`, `/chat/completions`, `/completions` and `/responses` with
+their sub-paths. Access applies the most specific application to a request, and a hostname-and-path application before
+a Worker-level one, so these paths reach the Worker without a sign-in while every other path (the panel, the management
+API, the OAuth callbacks) stays behind the main application. The Worker is then the only gate of the proxy routes: it
+answers `401` to a request without a valid proxy key (§4).
+
 The production Worker has no `workers.dev` or preview URLs, so the custom domain is the only way in. Pull-request preview
 stages (`pr-<number>`, see [DEPLOY.md](DEPLOY.md)) instead serve their `workers.dev` URL behind their own application,
-which the Worker enrolls into. Service token credentials:
+which the Worker enrolls into, with the bypass application on the proxy paths of that URL. Service token credentials:
 
 - The Client IDs are printed in the deploy outputs (`serviceTokens`).
 - The Client Secrets are returned by Cloudflare only on creation; the deploy writes them to
@@ -42,14 +52,17 @@ which the Worker enrolls into. Service token credentials:
 **Bring your own application.** Set `ACCESS_AUD` to the AUD tag(s) of an Access application you manage yourself (dashboard
 or other tooling) and the deploy creates no Access resources; `ACCESS_ALLOW_*`/`ACCESS_SERVICE_TOKENS` must then be empty.
 The application must cover the Worker's whole hostname, with an Allow policy for people and a Service Auth policy for tokens
-(an Allow policy does not match service tokens). Set SameSite=Lax on its cookie yourself.
+(an Allow policy does not match service tokens). Set SameSite=Lax on its cookie yourself, and add the bypass application for
+the proxy paths above (a self-hosted application on `<host>/v1`, `<host>/v1beta`, ... with a Bypass policy that includes
+everyone); without it clients need Access in front of their proxy key.
 
 ## 2. Policies
 
-| Who                                  | Policy action    | Selector                   | Notes                                                  |
-| ------------------------------------ | ---------------- | -------------------------- | ------------------------------------------------------ |
-| People using the panel / browsers    | **Allow**        | Emails, email domain       | Interactive login                                      |
-| Tools (Claude Code, Codex, SDKs, CI) | **Service Auth** | The stack's service tokens | Non-interactive; an Allow policy does not match tokens |
+| Who                                 | Policy action    | Selector                   | Notes                                                  |
+| ----------------------------------- | ---------------- | -------------------------- | ------------------------------------------------------ |
+| People using the panel / browsers   | **Allow**        | Emails, email domain       | Interactive login                                      |
+| Management automation (scripts, CI) | **Service Auth** | The stack's service tokens | Non-interactive; an Allow policy does not match tokens |
+| Clients of the proxy routes         | **Bypass**       | Everyone                   | The Worker checks their proxy key instead              |
 
 Need IdP groups, device posture or other rules? Extend the policies in `infra/access.ts` (Alchemy's
 `Cloudflare.Access.Policy` accepts every Cloudflare rule shape).
@@ -111,10 +124,15 @@ the Worker asks on every request: a removed member, or a member whose role was l
 | List members, teams and service tokens; manage teams                                         |                   |     ✓     |              ✓               |       ✓        |
 | Add or remove plain members; register or remove member service tokens                        |                   |     ✓     |              ✓               |       ✓        |
 | Add or remove org admins and owners; change any role                                         |                   |           |              ✓               |       ✓        |
-| Turn auto-join on or off (`PATCH /membership`)                                               |                   |           |              ✓               |       ✓        |
+| Create proxy keys for themselves; list and revoke their own (`/proxy-keys`)                  |         ✓         |     ✓     |              ✓               | if a member ¹  |
+| List and revoke every proxy key of the org                                                   |                   |     ✓     |              ✓               |       ✓        |
+| Turn auto-join, or Access sign-ins for clients in `global`, on or off (`PATCH /membership`)  |                   |           |              ✓               |       ✓        |
 | Allow or stop private credentials (`PATCH /membership`, `private_credentials`)               |                   |     ✓     |              ✓               |       ✓        |
 | Give a service token a role above plain member; download a credential                        |                   |           | owner **service token** only |       ✓        |
 | List, create and rename orgs                                                                 |                   |           |                              |       ✓        |
+
+¹ Proxy keys are issued to members: a platform admin who is not a member of the org, or a service token, gets
+`403 member_required` when creating one.
 
 - **Adding a member** (`POST /members` with an email and a role) takes effect the next time the person signs in through Access;
   no email is sent, and Access must still admit them (§2). Removing a member takes them off every team, and they are refused
@@ -147,6 +165,35 @@ the Worker asks on every request: a removed member, or a member whose role was l
   and cannot grant itself those powers: a person who is an org owner registers only plain-member tokens
   (`403 service_token_owner_required` otherwise).
 
+### Proxy keys
+
+A **proxy key** (ADR 0022) is how a client authenticates on the proxy routes: `cfp_<org id>_<key id>_<secret>`, with 288
+random bits of secret. Any member creates keys for themselves in the panel (**Proxy keys**) or with
+`POST /v8/management/proxy-keys {"name": "laptop", "expires_at": "<ISO time, optional>"}`; the answer carries the whole
+key once (`key`), and the org's ControlPlane stores only its SHA-256, a visible prefix (`cfp_<org id>_<key id>_<4
+characters>`), its member, its name and when it was created, last used (to the minute), expires and was revoked.
+
+- A key names its org by the org's permanent id, so the Worker asks that org's ControlPlane and no other (after the Platform
+  registry confirms, once per isolate, that the org exists). The presented key's hash is compared with the stored one in
+  constant time.
+- A request with a key acts as the key's member in the key's org, with their role there: usage records store the key
+  (`principal` `key:<key id>`) and the member (`member_id`), and the caller scope of session state is the member's, so one
+  member's tools share it. A key is never a platform admin.
+- `GET /proxy-keys` lists the caller's keys (an org admin's: every key of the org, with `member_email`); `DELETE
+  /proxy-keys/<id>` revokes one (`404 proxy_key_not_found` for another member's key unless an org admin asks). A revoked
+  key stays listed and is refused from the next request on in the isolate that revoked it and within 30 seconds
+  everywhere (each isolate trusts a verified key for at most 30 seconds, and never past its expiry). Removing a member
+  deletes their keys (ADR 0027). A member holds at most 100 keys.
+- Proxy keys are never accepted on the management API or the panel: those stay behind Access.
+
+**Access sign-ins for clients** (`GET`/`PATCH /membership`, `{"access_clients": true}`): clients set up before proxy keys
+signed in through Access on the proxy routes. While this org setting is on, a proxy route still takes an Access JWT,
+which the Worker verifies itself from `Cf-Access-Jwt-Assertion` or from the `cf-access-token` header `cloudflared access`
+sends (Access no longer adds the former there); the sign-in is admitted like on the management API. It is on for `global`,
+so an upgraded deployment's `cloudflared` clients keep working, and off for new orgs, where a request with only an Access
+sign-in answers `401`. A proxy key always wins: a request with a key is judged by the key alone. Moving clients:
+[MIGRATION.md](MIGRATION.md#5-move-clients-to-proxy-keys).
+
 **Upgrading from config admin lists.** Before members, `global` was also managed by the config document's
 `access.admin-emails` and `access.admin-service-tokens`. The first time an org's ControlPlane is used after the upgrade, those
 lists become members of `global`, once: the platform admins of the time become org owners, `access.admin-emails` org admins and
@@ -167,26 +214,34 @@ characters; a missing key is refused everywhere.
 ## 4. How the Worker validates requests
 
 1. The path is classified (`src/access/routes.ts`): `/v1*` (incl. `/v1beta`, `/v1internal`), `/openai/v1*`, `/backend-api/codex*` and the unprefixed
-   aliases `/chat/completions`, `/completions`, `/responses` need a
-   principal; `/v8/management*` (also `/v8/management/orgs/<slug>/...`), the control panel (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/members`, `/settings` with their
+   aliases `/chat/completions`, `/completions`, `/responses` are the proxy routes and need a
+   principal; `/v8/management*` (also `/v8/management/orgs/<slug>/...`), the control panel (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/members`, `/proxy-keys`, `/settings` with their
    sub-paths, the same pages under `/o/<slug>/`, `/assets/*`) and `/management.html` (the upstream panel's old address, a redirect to `/`) form the management zone;
    everything else (`/healthz`, the OAuth browser callbacks `/anthropic/callback`, `/codex/callback`,
    `/antigravity/callback`, `/callback`, `/devin/callback`) is public to the Worker.
    Matching is case-, slash- and percent-encoding-insensitive, so odd spellings cannot dodge the gate.
-2. `Cf-Access-Jwt-Assertion` is verified with `jose`: RS256 signature against the JWKS at
+2. On a proxy route, a proxy key wins (`src/access/proxy-key.ts`): the first credential starting with `cfp_` in
+   `Authorization: Bearer`, `x-goog-api-key`, `x-api-key`, `?key=` or `?auth_token=` (the Go server's order) is checked
+   against its org's ControlPlane ("Proxy keys" above), and the request runs as its member in its org. A malformed, unknown,
+   wrong, revoked or expired key answers 401 `Invalid API key`, whatever else the request carries. Without a key, the
+   proxy route takes an Access JWT (from `Cf-Access-Jwt-Assertion` or `cf-access-token`) only while the org's `access_clients`
+   setting is on; other credentials (a dummy provider key) are ignored.
+3. `Cf-Access-Jwt-Assertion` is verified with `jose`: RS256 signature against the JWKS at
    `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs` (cached per isolate, refetched on an unknown `kid` at most every
    30 s), `iss` = the team domain, `aud` contains one of `ACCESS_AUD`, `exp` required and `exp`/`nbf` valid (30 s clock skew).
-3. The principal is the `email` claim (users) or `common_name` (service token Client ID). It is recorded in usage records and
+4. The principal is the `email` claim (users) or `common_name` (service token Client ID). It is recorded in usage records and
    scopes session state per caller.
-4. The org's ControlPlane admits the principal (`src/members/admission.ts`, auto-joining it where that is on) and the route's
+5. The org's ControlPlane admits the principal (`src/members/admission.ts`, auto-joining it where that is on) and the route's
    policy (`src/access/policy.ts`) names the role it needs: a member role for the proxy endpoints, the org's panel pages and the
    usage reads, org admin for every other management route. Who the caller is (`/v8/management/me`), the org list
    (`/v8/management/orgs*`, whose handlers ask for a platform admin), the panel pages without an org, `/assets/*` and
    `/management.html` need no role. A principal without the role gets 403 `Forbidden`.
-5. A missing header answers 401 `Missing API key`; an invalid token 401 `Invalid API key` (Go wording, so existing clients
-   show familiar errors).
+6. A missing header answers 401 `Missing API key`; an invalid token 401 `Invalid API key` (Go wording, so existing clients
+   show familiar errors). On a proxy route of an org that takes proxy keys only, an Access sign-in alone answers 401
+   `Missing API key` too (`Invalid API key` when another credential came with it).
 
-Because the Worker trusts only the signed JWT, requests that skip Access (e.g. a `workers.dev` URL enabled by hand) are rejected.
+Outside the proxy routes the Worker trusts only the signed JWT, so requests that skip Access (e.g. a `workers.dev` URL enabled
+by hand) are rejected.
 
 ### Browser sessions (CSRF and WebSocket hijacking)
 
@@ -198,7 +253,7 @@ admin's session. Before authentication the gate (`src/access/csrf.ts`) refuses, 
   management zone when `Sec-Fetch-Site` is `cross-site`/`same-site` or `Origin` names another host;
 - any management request (`/v8/management*`, the panel paths) with a foreign `Origin` or a cross-site `Sec-Fetch-Site`,
   except a top-level document navigation (`GET`/`HEAD` with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document`)
-  to a panel page (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/settings` and their sub-paths) or
+  to a panel page (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/members`, `/proxy-keys`, `/settings` and their sub-paths) or
   `/management.html`: a link to a panel page still opens it, while frames (clickjacking), `/assets/*` and every
   `/v8/management*` request are refused (OAuth providers redirect to the public callback paths, never there);
 - WebSocket upgrades (`GET /v1/responses`, `/backend-api/codex/responses`) whose `Origin` is not the Worker's own host
@@ -258,8 +313,8 @@ put a server-side client in between.
 
 ### Logs and personal data
 
-Every proxied request produces one structured log line (Workers Logs) whose `principal` field is the Access identity:
-`user:<email>` for people, `service:<client id>` for service tokens. Usage records in D1 store the same id. Emails are
+Every proxied request produces one structured log line (Workers Logs) whose `principal` field is the caller:
+`key:<key id>` for a proxy key, `user:<email>` for people, `service:<client id>` for service tokens. Usage records in D1 store the same id. Emails are
 personal data: restrict who can read Workers Logs and the D1 database, and set the retention you need
 (`USAGE_RETENTION_DAYS`, Workers Logs retention). Tokens, API keys, JWTs, request bodies, headers and query strings are never
 logged; scheduled-job failures are logged as a one-line summary with URL queries removed.
@@ -274,7 +329,8 @@ Set `ACCESS_SERVICE_TOKEN_HEADER` (e.g. `x-api-key`) and deploy; the deploy sets
 x-api-key: {"cf-access-client-id": "<CLIENT_ID>", "cf-access-client-secret": "<CLIENT_SECRET>"}
 ```
 
-This is handled entirely by Access; the Worker still only sees the resulting JWT. The header name is your choice
+This is handled entirely by Access; the Worker still only sees the resulting JWT. It applies where Access sits, so to the
+management API, not to the proxy routes (clients send a proxy key there). The header name is your choice
 (`Authorization` is the Cloudflare docs' example, but then the client's own bearer token cannot carry anything else); `x-api-key`
 suits the Anthropic SDK, where the API key is that header. The two-header form keeps working alongside it. If your organisation
 enables _strict service token authentication_, only Service Auth policies authorise token requests. With a bring-your-own
@@ -282,9 +338,10 @@ application (`ACCESS_AUD`), configure the setting on that application with the C
 
 ## 6. WARP note
 
-The Worker needs the Access JWT regardless of how the client reaches the hostname. A WARP-enrolled device still passes through
-Access; satisfy it with an Allow policy that matches the user's identity (or device posture) or, for CLI tools, simply use a
-service token, which does not depend on the device. Check the Cloudflare WARP/Access docs for the current options.
+The panel and the management API need the Access JWT regardless of how the client reaches the hostname. A WARP-enrolled
+device still passes through Access; satisfy it with an Allow policy that matches the user's identity (or device posture)
+or, for scripts, use a service token, which does not depend on the device. Proxy clients send a proxy key and are not
+affected. Check the Cloudflare WARP/Access docs for the current options.
 
 ## Troubleshooting
 
@@ -293,8 +350,10 @@ service token, which does not depend on the device. Check the Cloudflare WARP/Ac
 | 302 to `cloudflareaccess.com` in a CLI | Service token headers missing/wrong, or no Service Auth policy for the token                           |
 | 403 from Access (before the Worker)    | Token not in the Service Auth policy (name missing from `ACCESS_SERVICE_TOKENS`)                       |
 | 500 `Authentication service error`     | `ACCESS_TEAM_DOMAIN` wrong (check the team name) or `ACCESS_AUD` empty                                 |
-| 401 `Missing API key`                  | Request reached the Worker without Access (wrong hostname) or no JWT header                            |
-| 401 `Invalid API key`                  | AUD/issuer mismatch, expired JWT                                                                       |
+| 401 `Missing API key`                  | No proxy key (proxy routes), or the request reached the Worker without Access (management)             |
+| 401 `Invalid API key`                  | Wrong, revoked or expired proxy key; AUD/issuer mismatch, expired JWT                                  |
+| 401 with a working `cloudflared` token | The org takes proxy keys only (`access_clients` off): create a proxy key                               |
+| 403 `member_required`                  | Proxy keys are issued to members of the org: add yourself as a member                                  |
 | 403 `Forbidden`                        | No role in the org (add the member, or turn auto-join on), or a plain member on a route for org admins |
 | 403 `owner_required`                   | Adding or removing an org admin or owner, or changing a role, needs an org owner                       |
 | 403 `service_token_owner_required`     | A service token role above member needs an owner service token of the org, or a platform admin         |

@@ -1,21 +1,31 @@
 # Connecting clients
 
-All examples use `https://proxy.example.com` as the Worker's hostname and an Access **service token** (created by the
-deploy from `ACCESS_SERVICE_TOKENS`; its credentials are in `.alchemy/access-service-tokens.json`, see
-[ACCESS.md](ACCESS.md)). Export the token once; never commit it:
+All examples use `https://proxy.example.com` as the Worker's hostname and a **proxy key**: a key the proxy issues to a
+member of an org (ADR 0022). Create one in the control panel under **Proxy keys** (any member can); it is shown once, so
+copy it then. A key looks like `cfp_<org id>_<key id>_<secret>`: it names its org, so the proxy serves the request from
+that org's accounts, and it acts as the member who created it (usage is recorded against the key and its member, and
+one member's keys share session state). Export it once; never commit it:
 
 ```bash
-export CF_ACCESS_CLIENT_ID='<id>.access'
-export CF_ACCESS_CLIENT_SECRET='<secret>'
+export PROXY_KEY='cfp_…'
 ```
 
-The proxy ignores the provider API key a client sends (Access is the only authentication), but most clients insist on one, so
-use a dummy value. List the model ids you can use with `GET /v1/models`.
+Send the key wherever the client sends a provider API key: `Authorization: Bearer <key>` (OpenAI, Codex, Claude Code's
+auth token), `x-api-key` (Anthropic), `x-goog-api-key` or `?key=` (Gemini). The proxy routes (`/v1*`, `/openai/v1*`,
+`/backend-api/codex*` and the unprefixed `/chat/completions`, `/completions`, `/responses`) are not behind Cloudflare
+Access, so no Access headers are needed. A missing key answers `401 {"error":"Missing API key"}`; a wrong, revoked or
+expired key `401 {"error":"Invalid API key"}`. Revoking a key in the panel takes effect within 30 seconds. List the
+model ids you can use with `GET /v1/models`.
+
+Clients set up before proxy keys that sign in through Access (a `cloudflared access` token in the `cf-access-token`
+header) keep working in an org whose owner left **Access sign-ins for clients** on (the `access_clients` setting; on
+for the first org of an upgraded deployment, off for new orgs). See [MIGRATION.md](MIGRATION.md#5-move-clients-to-proxy-keys).
+Access service token headers (`CF-Access-Client-Id`/`-Secret`) are not accepted on the proxy routes any more.
 
 ## curl
 
 ```bash
-H=(-H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
+H=(-H "Authorization: Bearer $PROXY_KEY")
 curl "${H[@]}" https://proxy.example.com/v1/models
 
 # OpenAI chat completions
@@ -23,16 +33,16 @@ curl "${H[@]}" https://proxy.example.com/v1/chat/completions -H 'content-type: a
   -d '{"model":"gpt-5","messages":[{"role":"user","content":"hi"}]}'
 
 # Anthropic messages
-curl "${H[@]}" https://proxy.example.com/v1/messages -H 'content-type: application/json' -H 'anthropic-version: 2023-06-01' \
+curl -H "x-api-key: $PROXY_KEY" https://proxy.example.com/v1/messages -H 'content-type: application/json' \
+  -H 'anthropic-version: 2023-06-01' \
   -d '{"model":"claude-sonnet-4-5","max_tokens":256,"messages":[{"role":"user","content":"hi"}]}'
 
 # Gemini
-curl "${H[@]}" 'https://proxy.example.com/v1beta/models/gemini-2.5-pro:generateContent' -H 'content-type: application/json' \
-  -d '{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}'
+curl -H "x-goog-api-key: $PROXY_KEY" 'https://proxy.example.com/v1beta/models/gemini-2.5-pro:generateContent' \
+  -H 'content-type: application/json' -d '{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}'
 ```
 
-Replace the model ids with ones from `/v1/models`. A redirect (302) to `cloudflareaccess.com` means the headers did not match a
-Service Auth policy.
+Replace the model ids with ones from `/v1/models`.
 
 ## Claude Code
 
@@ -41,15 +51,14 @@ Claude Code reads these environment variables (see the
 
 ```bash
 export ANTHROPIC_BASE_URL=https://proxy.example.com
-export ANTHROPIC_AUTH_TOKEN=dummy        # sent as "Authorization: Bearer dummy"; ignored by the proxy
-export ANTHROPIC_CUSTOM_HEADERS=$'CF-Access-Client-Id: '"$CF_ACCESS_CLIENT_ID"$'\nCF-Access-Client-Secret: '"$CF_ACCESS_CLIENT_SECRET"
+export ANTHROPIC_AUTH_TOKEN="$PROXY_KEY"   # sent as "Authorization: Bearer <key>"
 claude
 ```
 
-`ANTHROPIC_CUSTOM_HEADERS` takes `Name: Value` pairs separated by newlines. Set `ANTHROPIC_API_KEY=dummy` instead of
-`ANTHROPIC_AUTH_TOKEN` if you prefer the `x-api-key` header; an API key already logged in with `claude login` can interfere, so
-log out or use a clean `CLAUDE_CONFIG_DIR`. Pick a model served by your credentials with `ANTHROPIC_MODEL` (and
-`ANTHROPIC_DEFAULT_SONNET_MODEL` etc.); the proxy also accepts non-Claude models, translated to the Claude Code protocol.
+Set `ANTHROPIC_API_KEY="$PROXY_KEY"` instead of `ANTHROPIC_AUTH_TOKEN` if you prefer the `x-api-key` header; an API key
+already logged in with `claude login` can interfere, so log out or use a clean `CLAUDE_CONFIG_DIR`. Pick a model served
+by your credentials with `ANTHROPIC_MODEL` (and `ANTHROPIC_DEFAULT_SONNET_MODEL` etc.); the proxy also accepts
+non-Claude models, translated to the Claude Code protocol.
 
 Persistent alternative, `~/.claude/settings.json`:
 
@@ -57,20 +66,15 @@ Persistent alternative, `~/.claude/settings.json`:
 {
   "env": {
     "ANTHROPIC_BASE_URL": "https://proxy.example.com",
-    "ANTHROPIC_AUTH_TOKEN": "dummy",
-    "ANTHROPIC_CUSTOM_HEADERS": "CF-Access-Client-Id: <id>.access\nCF-Access-Client-Secret: <secret>"
+    "ANTHROPIC_AUTH_TOKEN": "cfp_…"
   }
 }
 ```
 
-Single-header mode (see [ACCESS.md](ACCESS.md#5-optional-single-header-service-token)) with `read_service_tokens_from_header` set to
-`x-api-key` allows `ANTHROPIC_API_KEY='{"cf-access-client-id":"…","cf-access-client-secret":"…"}'` with no custom headers. This
-relies on Claude Code not rejecting that key format; if it does, use the two-header form.
-
 ## Codex CLI
 
-The built-in ChatGPT provider has no setting for extra headers, so define a custom provider in `~/.codex/config.toml`
-(see the [config reference](https://developers.openai.com/codex/config-reference)):
+Define a custom provider in `~/.codex/config.toml` (see the
+[config reference](https://developers.openai.com/codex/config-reference)):
 
 ```toml
 model_provider = "cf-llm-proxy"
@@ -80,18 +84,15 @@ model = "gpt-5-codex"            # any model id from /v1/models
 name = "cf-llm-proxy"
 base_url = "https://proxy.example.com/v1"
 wire_api = "responses"           # the only supported value
-# Header name -> environment variable holding its value (keeps the secret out of the file):
-env_http_headers = { "CF-Access-Client-Id" = "CF_ACCESS_CLIENT_ID", "CF-Access-Client-Secret" = "CF_ACCESS_CLIENT_SECRET" }
+env_key = "PROXY_KEY"            # sent as "Authorization: Bearer <key>"
 # supports_websockets = true     # optional: Responses over WebSocket (see the CPU-limit caveat in the README)
 ```
 
-Run `codex` with the two variables exported. Static values can use `http_headers = { "CF-Access-Client-Id" = "…" }`, but then the
-secret lives in the file. A provider without `env_key` sends no bearer token, which is fine: the proxy does not need one. Codex
-sends `/v1/responses` (HTTP/SSE, or the WebSocket upgrade on the same path) and `/v1/responses/compact`.
+Run `codex` with `PROXY_KEY` exported. Codex sends `/v1/responses` (HTTP/SSE, or the WebSocket upgrade on the same path)
+and `/v1/responses/compact`.
 
-The Worker also serves the ChatGPT-backend paths `/backend-api/codex/responses`, `/responses/compact` and `/alpha/search` for tools
-that hard-code them. Codex's `chatgpt_base_url` only overrides the ChatGPT _login_ flow and cannot carry the Access headers, so
-prefer the custom provider above.
+The Worker also serves the ChatGPT-backend paths `/backend-api/codex/responses`, `/responses/compact` and `/alpha/search`
+for tools that hard-code them; they take the key the same way.
 
 ## OpenAI SDKs
 
@@ -99,14 +100,7 @@ prefer the custom provider above.
 import os
 from openai import OpenAI
 
-client = OpenAI(
-    base_url="https://proxy.example.com/v1",
-    api_key="dummy",
-    default_headers={
-        "CF-Access-Client-Id": os.environ["CF_ACCESS_CLIENT_ID"],
-        "CF-Access-Client-Secret": os.environ["CF_ACCESS_CLIENT_SECRET"],
-    },
-)
+client = OpenAI(base_url="https://proxy.example.com/v1", api_key=os.environ["PROXY_KEY"])
 print(client.chat.completions.create(model="gpt-5", messages=[{"role": "user", "content": "hi"}]))
 ```
 
@@ -115,11 +109,7 @@ import OpenAI from "openai";
 
 const client = new OpenAI({
   baseURL: "https://proxy.example.com/v1",
-  apiKey: "dummy",
-  defaultHeaders: {
-    "CF-Access-Client-Id": process.env.CF_ACCESS_CLIENT_ID!,
-    "CF-Access-Client-Secret": process.env.CF_ACCESS_CLIENT_SECRET!,
-  },
+  apiKey: process.env.PROXY_KEY!,
 });
 ```
 
@@ -128,13 +118,10 @@ const client = new OpenAI({
 The SDK appends `/v1/messages` itself: the base URL has **no** `/v1`.
 
 ```python
+import os
 from anthropic import Anthropic
 
-client = Anthropic(
-    base_url="https://proxy.example.com",
-    api_key="dummy",
-    default_headers={"CF-Access-Client-Id": "...", "CF-Access-Client-Secret": "..."},
-)
+client = Anthropic(base_url="https://proxy.example.com", api_key=os.environ["PROXY_KEY"])
 ```
 
 ```ts
@@ -142,30 +129,22 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({
   baseURL: "https://proxy.example.com",
-  apiKey: "dummy",
-  defaultHeaders: {
-    "CF-Access-Client-Id": "...",
-    "CF-Access-Client-Secret": "...",
-  },
+  apiKey: process.env.PROXY_KEY!,
 });
 ```
-
-With single-header mode on `x-api-key`, pass the JSON string as `api_key`/`apiKey` and drop the extra headers.
 
 ## Gemini SDKs (`google-genai`)
 
 The base URL is the host; the SDK adds `/v1beta`.
 
 ```python
+import os
 from google import genai
 from google.genai import types
 
 client = genai.Client(
-    api_key="dummy",
-    http_options=types.HttpOptions(
-        base_url="https://proxy.example.com",
-        headers={"CF-Access-Client-Id": "...", "CF-Access-Client-Secret": "..."},
-    ),
+    api_key=os.environ["PROXY_KEY"],
+    http_options=types.HttpOptions(base_url="https://proxy.example.com"),
 )
 ```
 
@@ -173,11 +152,8 @@ client = genai.Client(
 import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({
-  apiKey: "dummy",
-  httpOptions: {
-    baseUrl: "https://proxy.example.com",
-    headers: { "CF-Access-Client-Id": "...", "CF-Access-Client-Secret": "..." },
-  },
+  apiKey: process.env.PROXY_KEY!,
+  httpOptions: { baseUrl: "https://proxy.example.com" },
 });
 ```
 
@@ -185,9 +161,9 @@ const ai = new GoogleGenAI({
 
 Anyone allowed by an Access Allow policy who is a member of an org (added by an org admin, or joined through auto-join,
 which is on for the first org) can open the control panel at `https://proxy.example.com/`: a plain member sees their own
-usage, an org admin also manages credentials ([ACCESS.md](ACCESS.md#members-roles-and-teams)). They do not need a service
-token.
+usage and manages their own proxy keys, an org admin also manages credentials and every key of the org
+([ACCESS.md](ACCESS.md#members-roles-and-teams)).
 
-Web applications on other origins cannot use a user's Access session to call the proxy: cross-site POSTs and cross-origin
-WebSocket upgrades are refused (403), see [ACCESS.md](ACCESS.md#browser-sessions-csrf-and-websocket-hijacking). Call the
-proxy from a backend with a service token instead.
+The proxy routes do not read the Access session cookie, so a web page on another origin cannot spend a signed-in user's
+access: it would need a proxy key, which browsers never attach on their own. Call the proxy from a backend with a proxy
+key.

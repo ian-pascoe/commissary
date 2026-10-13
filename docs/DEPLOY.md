@@ -12,8 +12,11 @@ Deploys run only after typecheck, lint, workflow lint (actionlint, zizmor), the 
 Fork and Dependabot pull requests get the checks but no preview (they receive no deploy secrets). A manual run
 (`workflow_dispatch`) on `main` redeploys production.
 
-After each deploy, `tools/check-deploy.sh` calls `/healthz` and `/v1/models` through Access with the CI service token;
-the second route proves that the Worker accepts the Access JWT (team domain and AUD wired). The deploy job then shows
+After each deploy, `tools/check-deploy.sh` checks where Access sits (ADR 0022): `/healthz` and `/v8/management/me`
+answer 200 through Access with the CI service token (the second proves that the Worker accepts the Access JWT: team
+domain and AUD wired); `/v1/models` and `/v1beta/models` without credentials reach the Worker, which answers
+`401 Missing API key` itself (the proxy routes are outside Access, behind proxy keys); and `/` without credentials is
+stopped by Access. The deploy job then shows
 the URL on the run, and previews get a pull request comment (`tools/preview-comment.sh`) that is updated on every push.
 
 ## Preview stages
@@ -21,7 +24,8 @@ the URL on the run, and previews get a pull request comment (`tools/preview-comm
 A stage named `pr-<number>` is a preview (`infra/settings.ts`):
 
 - Its own Worker on `workers.dev`, protected by its own Access application. The Worker enrolls into it (Alchemy's
-  Worker `access` prop), so Access covers the `workers.dev` URL; no custom hostname is needed.
+  Worker `access` prop), so Access covers the `workers.dev` URL; no custom hostname is needed. The proxy paths of that
+  URL get the same bypass application as production ([ACCESS.md](ACCESS.md#1-what-the-deploy-creates)).
 - Same policies as production: `ACCESS_ALLOW_*` for people, `ACCESS_ALLOW_SERVICE_TOKEN_IDS` for the CI token. Same
   platform admins (`PLATFORM_ADMIN_EMAILS`).
 - Empty KV, D1 and Durable Objects, and no cron trigger. A preview has no provider credentials, so it serves the panel,
@@ -79,6 +83,14 @@ the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --pro
 
 - **Control panel.** CI builds the control panel from `web/` (`pnpm web:build`) before each deploy; nothing else is
   installed into `public/`.
+- **Proxy keys.** The deploy adds an Access application with a Bypass policy on the proxy paths (`/v1*`,
+  `/openai/v1*`, `/backend-api/codex*`, `/chat/completions`, `/completions`, `/responses`), so clients reach the
+  Worker with a proxy key and no Access sign-in ([ACCESS.md](ACCESS.md#proxy-keys)). From that deploy on, clients that
+  send Access service token headers to those paths are refused: move them to proxy keys first
+  ([MIGRATION.md](MIGRATION.md#5-move-clients-to-proxy-keys)). `cloudflared access` tokens (`cf-access-token`) keep
+  working in `global` while its `access_clients` setting is on. The keys live in each org's ControlPlane (tables
+  created on first use): no migration to run. With your own application (`ACCESS_AUD`) the deploy creates no bypass;
+  add one yourself.
 - **Platform registry and orgs.** The `Platform` Durable Object (the list of orgs, ADR 0021) is a new class that the
   next deploy adds; its tables are created on first use, so there is no migration to run, and the org `global` (slug
   `default`) exists from the start with everything the deployment stored before. Nothing has to change in `.env` or
