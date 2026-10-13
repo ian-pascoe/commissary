@@ -13,9 +13,9 @@ const TARGETS: ReadonlyArray<readonly [prefix: string, target: string]> = [
   ["/ai-providers", "/keys"],
   ["/quick-start", "/keys"],
   // Upstream sends `/settings` and `/api-keys` (client keys) to its config page.
-  ["/config", "/settings/config"],
-  ["/settings", "/settings/config"],
-  ["/api-keys", "/settings/config"],
+  ["/config", "/settings"],
+  ["/settings", "/settings"],
+  ["/api-keys", "/settings"],
   // Version and runtime facts live on Settings.
   ["/system", "/settings"],
 ];

@@ -1,6 +1,6 @@
 // `access.admin-service-tokens` can only be changed by a service-token administrator or a platform admin
 // (`PLATFORM_ADMIN_*`): an email admin that is one only through the config gets `403 service_tokens_require_service_admin`
-// on every write path (`PATCH /settings`, `PUT /settings/config`, `/config*`), and nothing is stored.
+// on both write paths (`PATCH /settings`, `POST /settings/import`), and nothing is stored.
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   ADMIN,
@@ -34,10 +34,11 @@ const CONFIG_SERVICE = "config-service.access";
 const NEW_TOKEN = "new-token.access";
 
 const seed = async (): Promise<number> => {
-  const result = await controlPlane().putConfig(
+  const result = await controlPlane().importConfig(
     JSON.stringify({
       access: { "admin-emails": [CONFIG_EMAIL], "admin-service-tokens": [CONFIG_SERVICE] },
     }),
+    "test",
   );
 
   if (!result.ok) throw new Error(result.message);
@@ -73,60 +74,22 @@ interface Write {
 const writes: ReadonlyArray<Write> = [
   {
     name: "PATCH /settings",
+    // The import that seeded the config stored every entry at its version.
     request: (tokens, version) => [
       "PATCH",
       "/v8/management/settings",
-      jsonInit("PATCH", { version, patch: { access: { "admin-service-tokens": [...tokens] } } }),
-    ],
-  },
-  {
-    name: "PUT /settings/config",
-    request: (tokens, version) => [
-      "PUT",
-      "/v8/management/settings/config",
-      jsonInit("PUT", { version, yaml: yamlWith(tokens) }),
-    ],
-  },
-  {
-    name: "POST /settings/config/check",
-    request: (tokens, version) => [
-      "POST",
-      "/v8/management/settings/config/check",
-      jsonInit("POST", { version, yaml: yamlWith(tokens) }),
-    ],
-  },
-  {
-    name: "PUT /config.yaml",
-    request: (tokens) => [
-      "PUT",
-      "/v8/management/config.yaml",
-      { method: "PUT", headers: YAML, body: yamlWith(tokens) },
-    ],
-  },
-  {
-    name: "PUT /config",
-    request: (tokens) => [
-      "PUT",
-      "/v8/management/config",
-      jsonInit("PUT", {
-        access: { "admin-emails": [CONFIG_EMAIL], "admin-service-tokens": [...tokens] },
+      jsonInit("PATCH", {
+        revisions: { "access.admin-service-tokens": version },
+        patch: { access: { "admin-service-tokens": [...tokens] } },
       }),
     ],
   },
   {
-    name: "PATCH /config/access",
+    name: "POST /settings/import",
     request: (tokens) => [
-      "PATCH",
-      "/v8/management/config/access",
-      jsonInit("PATCH", { "admin-service-tokens": [...tokens] }),
-    ],
-  },
-  {
-    name: "PUT /config/access/admin-service-tokens",
-    request: (tokens) => [
-      "PUT",
-      "/v8/management/config/access/admin-service-tokens",
-      jsonInit("PUT", [...tokens]),
+      "POST",
+      "/v8/management/settings/import",
+      { method: "POST", headers: YAML, body: yamlWith(tokens) },
     ],
   },
 ];
@@ -153,24 +116,7 @@ describe("admin service tokens: who may change them", () => {
       expect(await storedTokens()).toEqual([CONFIG_SERVICE]);
     });
 
-  it("DELETE /config/access/admin-service-tokens: an email admin from the config is refused", async () => {
-    const version = await seed();
-
-    const reply = await harness.json("/v8/management/config/access/admin-service-tokens", {
-      method: "DELETE",
-      auth: await token(CONFIG_EMAIL),
-    });
-
-    expect(reply).toMatchObject({
-      status: 403,
-      body: { error: "service_tokens_require_service_admin" },
-    });
-
-    expect((await controlPlane().getConfig()).version).toBe(version);
-    expect(await storedTokens()).toEqual([CONFIG_SERVICE]);
-  });
-
-  for (const write of writes.filter((candidate) => !candidate.name.endsWith("/check"))) {
+  for (const write of writes) {
     it(`${write.name}: a service token that is an admin through the config may change them`, async () => {
       const version = await seed();
       const [, path, init] = write.request(grown, version);
@@ -209,7 +155,7 @@ describe("admin service tokens: who may change them", () => {
 
     const same = await harness.json("/v8/management/settings", {
       ...jsonInit("PATCH", {
-        version,
+        revisions: { "access.admin-service-tokens": version },
         patch: { access: { "admin-service-tokens": [CONFIG_SERVICE] } },
       }),
       auth,
@@ -219,7 +165,7 @@ describe("admin service tokens: who may change them", () => {
 
     const other = await harness.json("/v8/management/settings", {
       ...jsonInit("PATCH", {
-        version: version + 1,
+        revisions: {},
         patch: { routing: { strategy: "fill-first" } },
       }),
       auth,
@@ -227,8 +173,8 @@ describe("admin service tokens: who may change them", () => {
 
     expect(other.status).toBe(200);
 
-    const yaml = await harness.json("/v8/management/config.yaml", {
-      method: "PUT",
+    const yaml = await harness.json("/v8/management/settings/import", {
+      method: "POST",
       headers: YAML,
       body: yamlWith([CONFIG_SERVICE]),
       auth,

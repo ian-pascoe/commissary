@@ -66,7 +66,7 @@ export const resetOrgControlPlane = async (org: OrgId): Promise<void> => {
   const stub = controlPlane(org);
   const entries = await stub.listCredentials();
   await stub.removeCredentials(entries.map((entry) => entry.id));
-  await stub.putConfig("");
+  await stub.importConfig("", "test");
 };
 
 export interface Harness {

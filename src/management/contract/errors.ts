@@ -1,8 +1,8 @@
 /**
  * The management API's error body: every handler answers failures as `{"error": "<message>"}` (Go's
  * `c.JSON(status, gin.H{"error": ...})`, see `../http.ts`). Some add a human-readable `message` (e.g. `422
- * invalid_config`) and, for a refused setting, the dotted config `path` it concerns; a raw configuration that is not
- * valid YAML adds the `line` and `column` of the problem. Shared with the browser: imports `effect` only.
+ * invalid_config`) and, for a refused setting, the dotted config `path` it concerns; an imported config document that
+ * is not valid YAML adds the `line` and `column` of the problem. Shared with the browser: imports `effect` only.
  */
 import { Schema } from "effect";
 import { HttpApiSchema } from "effect/http-api";

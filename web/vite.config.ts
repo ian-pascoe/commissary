@@ -111,8 +111,7 @@ export default defineConfig({
     target: "es2023",
     sourcemap: true,
     // Effect, React and the router make one ~219 kB (gzip) main bundle; the panel is a single admin page, so it is not
-    // split further. The one exception is the raw configuration editor (/settings/config, a lazy route): CodeMirror and
-    // `yaml` go to their own ~160 kB (gzip) chunk, loaded only when that page opens.
+    // split further.
     chunkSizeWarningLimit: 800,
   },
   server: {

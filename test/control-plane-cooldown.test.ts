@@ -102,7 +102,7 @@ describe("ControlPlane report -> cooldown (Workers pool)", () => {
     ]) {
       const name = crypto.randomUUID();
       const stub = plane(name);
-      await stub.putConfig(yaml);
+      await stub.importConfig(yaml, "test");
       await stub.importAuthFile("claude-a.json", claudeFile());
       const first = picked(await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" }));
       await stub.report(first.lease, fail(500));
@@ -120,7 +120,10 @@ describe("ControlPlane report -> cooldown (Workers pool)", () => {
   it("keeps a model-level cooldown across an eviction: only that model of the key cools", async () => {
     const name = crypto.randomUUID();
     const stub = plane(name);
-    await stub.putConfig("api-keys:\n  opencode-zen:\n    - keys: [{ api-key: sk-zen-evict }]\n");
+    await stub.importConfig(
+      "api-keys:\n  opencode-zen:\n    - keys: [{ api-key: sk-zen-evict }]\n",
+      "test",
+    );
     const request = { providers: ["opencode-zen"], model: "claude-haiku-4-5" };
     const first = picked(await stub.pick(request));
     await stub.report(first.lease, {
@@ -148,7 +151,8 @@ describe("ControlPlane picker adapter (Workers pool)", () => {
   it("maps picks, model_cooldown failures and reports through the Durable Object", async () => {
     const name = crypto.randomUUID();
     const stub = plane(name);
-    await stub.putConfig(`
+    await stub.importConfig(
+      `
 api-keys:
   openai-compatibility:
     - name: oc
@@ -156,7 +160,9 @@ api-keys:
       headers: { X-Org: acme }
       models: [{ name: up-1, alias: shared }, { name: up-2, alias: shared }]
       keys: [{ api-key: key-oc }]
-`);
+`,
+      "test",
+    );
     const picker = makeControlPlanePicker((workerEnv) => workerEnv.CONTROL_PLANE.getByName(name));
 
     const run = <A, E>(effect: Effect.Effect<A, E, WorkerEnv | CurrentOrg>) =>

@@ -70,7 +70,7 @@ describe("routes that only the upstream panel called", () => {
   });
 
   it("sends no X-CPA-* headers on management replies", async () => {
-    const { headers } = await call("/v8/management/config");
+    const { headers } = await call("/v8/management/settings");
 
     expect(headers.get("cache-control")).toBe("no-store");
     expect(headers.get("x-cpa-version")).toBeNull();

@@ -1,11 +1,10 @@
 // Small hardening helpers: config keys that do nothing on Workers, log-safe cause summaries, shared hashing.
 import { createHash } from "node:crypto";
+import { env } from "cloudflare:workers";
 import { Cause, Data } from "effect";
 import { describe, expect, it } from "vitest";
 import { notAppliedSettings } from "../src/config/not-applied.ts";
-import { ConfigStore } from "../src/config/store.ts";
 import { sha256Hex } from "../src/hash.ts";
-import { GLOBAL_ORG } from "../src/platform/org.ts";
 import { causeSummary, redactUrls } from "../src/observability/cause.ts";
 import { sha256Hex as oauthSha256Hex } from "../src/oauth/encoding.ts";
 import { loadConfig } from "./support/pipeline.ts";
@@ -58,20 +57,11 @@ describe("notAppliedSettings", () => {
     ).toEqual(["models.codex-catalog", "models.devin-catalog"]);
   });
 
-  it("is reported by the config store on write", async () => {
-    const rows: unknown[] = [];
+  it("is reported by the config import", async () => {
+    const result = await env.CONTROL_PLANE.getByName(
+      `hardening-${crypto.randomUUID().slice(0, 8)}`,
+    ).importConfig(GO_CONFIG, "test");
 
-    // Minimal SqlStorage stand-in: the store only needs `exec` for its single-row table.
-    const sql = {
-      exec: (query: string, ...bindings: unknown[]) => {
-        if (query.startsWith("INSERT"))
-          rows[0] = { version: bindings[0], document: bindings[1], updated_at: bindings[2] };
-
-        return { toArray: () => (query.startsWith("SELECT") ? rows : []) };
-      },
-    } as unknown as SqlStorage;
-
-    const result = new ConfigStore(sql, GLOBAL_ORG, () => 1).put(GO_CONFIG);
     expect(result.ok && result.notApplied).toContain("access.api-keys");
     // Response steering is ported: an effective key, not reported.
     expect(result.ok && result.notApplied).not.toContain("upstream.codex.response-steering");

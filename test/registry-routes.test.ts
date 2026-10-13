@@ -252,14 +252,17 @@ describe("model routes with the real ControlPlane", () => {
 
   it("lists models of imported credentials (prefix, plan tier, exclusions) and hides disabled ones", async () => {
     const stub = env.CONTROL_PLANE.getByName("global");
-    await stub.putConfig(`
+    await stub.importConfig(
+      `
 oauth:
   excluded-models:
     codex: ["gpt-image-*"]
   model-alias:
     claude:
       - { name: claude-sonnet-4-5-20250929, alias: sonnet, fork: true }
-`);
+`,
+      "test",
+    );
     await stub.importAuthFile(
       "claude-a.json",
       JSON.stringify({

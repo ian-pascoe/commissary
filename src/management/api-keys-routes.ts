@@ -3,20 +3,23 @@
  * connection test.
  *
  * Workers addition, no Go counterpart (Go's panel edits whole family arrays through `PUT /api-keys` style routes with
- * raw keys). Reads never carry secrets (`api-keys-view.ts`). Writes are semantic, one group at a time, and carry the
- * config `version` of the list they came from: the edit is applied to the stored document and stored with
- * `putConfig(text, version)` and no retry, so a stale view is a `409 conflict` instead of silently overwriting a
- * concurrent change. The edited document is dry-run through the config decoder first, so a group the normaliser
- * would drop for its own shape (codex without base-url, an empty key) is refused with `422` and the reason instead of
- * "succeeding". A typed key that duplicates a key of another group is dropped from the written group, silently and
- * never refused (stored keys win, `api-keys-write.ts` `settleDuplicates`): the reply must not tell a right guess of
- * a stored key from a wrong one, and the normaliser's first-wins must not delete the stored key instead.
+ * raw keys). Reads never carry secrets (`api-keys-view.ts`). Writes are semantic, one group at a time: a key group and
+ * its keys are config entries (ADR 0025), and a write names the group's `id` and the `revision` it was read at. The
+ * edit is applied to the assembled document to check it, then the group alone is written (`writeKeyGroup`), with no
+ * retry: a group changed since is a `409 conflict` instead of silently overwriting a concurrent change, and a write of
+ * another group never conflicts. The edited document is dry-run through the config decoder first, so a group the
+ * normaliser would drop for its own shape (codex without base-url, an empty key) is refused with `422` and the reason
+ * instead of "succeeding". A typed key that duplicates a key of another group is dropped from the written group,
+ * silently and never refused (stored keys win, `api-keys-write.ts` `settleDuplicates`): the reply must not tell a
+ * right guess of a stored key from a wrong one, and the normaliser's first-wins must not delete the stored key instead.
  */
 import { Effect, Schema } from "effect";
 import { HttpRouter, type HttpServerRequest } from "effect/http";
+import { AccessPrincipal } from "../access/principal.ts";
 import { decodeConfig, decodeRawConfig } from "../config/codec.ts";
 import { keyIdentities } from "../config/normalize.ts";
-import { decodeStoredConfig } from "../config/store.ts";
+import type { WriteResult } from "../config/store.ts";
+import { configKeyIds } from "../credentials/key-ids.ts";
 import { isJsonObject, type JsonObject } from "../json/index.ts";
 import { probeApiKey } from "./api-keys-probe.ts";
 import { currentAuthIndexer } from "./auth-index.ts";
@@ -26,10 +29,8 @@ import {
   type Edit,
   type GroupWrite,
   isDedupedFamily,
-  removeGroup,
   settleDuplicates,
 } from "./api-keys-write.ts";
-import { configKeyIds } from "./config-document.ts";
 import {
   type ApiKeyFamily,
   DeleteGroupRequest,
@@ -37,6 +38,7 @@ import {
   PutGroupRequest,
 } from "./contract/api-keys.ts";
 import { bodyJson, controlPlane, handled, jsonReply, type Reply, replyError } from "./http.ts";
+import { storedConfig } from "./settings-routes.ts";
 
 const BASE = "/v8/management/api-keys";
 
@@ -61,43 +63,39 @@ const decoded = <S extends Schema.Decoder<unknown>>(
 
 const conflict = () => replyError(409, "conflict");
 
-/** The stored config at its version, decoded; a failed decode of the stored document is an internal error. */
-const storedConfig = Effect.gen(function* () {
-  const wire = yield* controlPlane("getConfig", (stub) => stub.getConfig());
-  const text = wire.document ?? "{}";
-
-  const config = yield* decodeStoredConfig(text).pipe(
-    Effect.mapError(() => replyError(500, "invalid_config")),
-  );
-
-  // SAFETY: the stored config document is always a serialized JSON object (writes reject non-objects).
-  return { version: wire.version, document: JSON.parse(text) as JsonObject, config };
-});
-
 const refuse = <A>(edit: Edit<A>) =>
   edit.ok ? Effect.succeed(edit.value) : Effect.fail(replyError(edit.status, edit.error));
 
-/** Stores `document` at `version` (no retry); answers the new version. */
-const store = (document: JsonObject, version: number) =>
-  Effect.gen(function* () {
-    const result = yield* controlPlane("putConfig", (stub) =>
-      stub.putConfig(JSON.stringify(document), version),
+/** The answer to a group write. */
+const written = (result: WriteResult<{ readonly id: string; readonly revision: number }>) => {
+  if (result.ok)
+    return Effect.succeed(
+      jsonReply(200, {
+        status: "ok",
+        version: result.version,
+        id: result.id,
+        revision: result.revision,
+      }),
     );
 
-    if (result.ok) {
-      if (result.notApplied.length > 0) {
-        yield* Effect.logWarning("config keys not applied on Workers (see MIGRATION.md)").pipe(
-          Effect.annotateLogs({ keys: result.notApplied.join(", ") }),
-        );
-      }
+  if (result.error === "conflict") return Effect.fail(conflict());
 
-      return jsonReply(200, { status: "ok", version: result.version });
-    }
+  if (result.error === "not_found") return Effect.fail(replyError(404, "group not found"));
 
-    if (result.error === "conflict") return yield* conflict();
+  return Effect.fail(replyError(422, result.message));
+};
 
-    return yield* replyError(422, result.message);
-  });
+/** The position of group `id` in `family` of the assembled config; a group gone since it was read is a conflict. */
+const indexOf = (
+  config: { readonly "api-keys": Record<ApiKeyFamily, ReadonlyArray<{ readonly id?: string }>> },
+  family: ApiKeyFamily,
+  id: string | undefined,
+) => {
+  if (id === undefined) return Effect.succeed(undefined);
+  const index = config["api-keys"][family].findIndex((group) => group.id === id);
+
+  return index < 0 ? Effect.fail(conflict()) : Effect.succeed(index);
+};
 
 const familyCounts = (groups: ReadonlyArray<{ readonly keys: ReadonlyArray<unknown> }>): number[] =>
   groups.map((group) => group.keys.length);
@@ -138,23 +136,22 @@ const putGroup = Effect.gen(function* () {
   // The decoder accepted `raw`, so `group` is an object.
   if (!isJsonObject(group)) return yield* invalidBody();
   const current = yield* storedConfig;
-
-  if (current.version !== value.version) return yield* conflict();
+  const index = yield* indexOf(current.config, value.family, value.id);
   const ids = configKeyIds(current.config, { includeDisabledGroups: true });
   const authIndexOf = yield* currentAuthIndexer;
 
   const applied = yield* refuse(
     applyGroupWrite(current.document, ids, authIndexOf, {
       family: value.family,
-      ...(value.index === undefined ? {} : { index: value.index }),
+      ...(index === undefined ? {} : { index }),
       group,
     }),
   );
 
   // Stored keys win: a typed key equal to a key of another group goes, whatever the normaliser would keep.
-  const write = yield* settled(value.family, value.index, applied);
+  const write = yield* settled(value.family, index, applied);
 
-  // Dry run through the decoder (what the ControlPlane will store): the group must survive normalisation, and no
+  // Dry run through the decoder (what the ControlPlane will assemble): the group must survive normalisation, and no
   // other group may lose a key.
   const normalised = yield* decodeConfig(write.document).pipe(
     Effect.mapError((error) => replyError(422, error.message)),
@@ -165,23 +162,41 @@ const putGroup = Effect.gen(function* () {
       value.family,
       familyCounts(familyOf(current.config, value.family)),
       familyCounts(familyOf(normalised, value.family)),
-      value.index,
+      index,
       applied.group,
       write.group,
     ),
   );
 
-  return yield* store(write.document, value.version);
+  const { principalId } = yield* AccessPrincipal;
+
+  const result = yield* controlPlane("writeKeyGroup", (stub) =>
+    stub.writeKeyGroup(
+      {
+        family: value.family,
+        ...(value.id === undefined ? {} : { id: value.id }),
+        revision: value.revision,
+        group: write.group,
+      },
+      principalId,
+    ),
+  );
+
+  return yield* written(result);
 });
 
 const deleteGroup = Effect.gen(function* () {
   const { value } = yield* decoded(DeleteGroupRequest);
-  const current = yield* storedConfig;
+  const { principalId } = yield* AccessPrincipal;
 
-  if (current.version !== value.version) return yield* conflict();
-  const edited = yield* refuse(removeGroup(current.document, value.family, value.index));
+  const result = yield* controlPlane("writeKeyGroup", (stub) =>
+    stub.writeKeyGroup(
+      { family: value.family, id: value.id, revision: value.revision, group: null },
+      principalId,
+    ),
+  );
 
-  return yield* store(edited, value.version);
+  return yield* written(result);
 });
 
 const probe = Effect.gen(function* () {

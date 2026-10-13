@@ -136,7 +136,7 @@ beforeAll(async () => {
     return Response.json(key === MESSAGES_SPARE_KEY ? MESSAGE : COMPLETION);
   };
 
-  const stored = await controlPlane().putConfig(YAML);
+  const stored = await controlPlane().importConfig(YAML, "test");
   expect(stored.ok).toBe(true);
 });
 

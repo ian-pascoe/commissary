@@ -398,7 +398,7 @@ beforeAll(async () => {
   };
 
   await resetUsageDb();
-  const stored = await controlPlane().putConfig(YAML);
+  const stored = await controlPlane().importConfig(YAML, "test");
   expect(stored.ok).toBe(true);
   configIds = (await controlPlane().listCredentials())
     .filter((entry) => entry.source === "config")
@@ -417,7 +417,7 @@ beforeAll(async () => {
 afterAll(async () => {
   globalThis.fetch = realFetch;
   await controlPlane().removeCredentials(["claude-leak.json"]);
-  await controlPlane().putConfig("");
+  await controlPlane().importConfig("", "test");
 });
 
 describe("no raw config id or unkeyed hash in any response", () => {
@@ -468,11 +468,7 @@ describe("no raw config id or unkeyed hash in any response", () => {
         `${BASE}/credentials`,
         `${BASE}/credentials/models?name=${encodeURIComponent(configIds[0] ?? "")}`,
         `${BASE}/routing/models`,
-        `${BASE}/config`,
-        `${BASE}/config.yaml`,
-        `${BASE}/config/api-keys/claude`,
         `${BASE}/settings`,
-        `${BASE}/settings/config`,
         `${BASE}/observability/usage/summary?group_by=auth`,
         `${BASE}/observability/usage/summary?group_by=model`,
         `${BASE}/observability/usage/series?since=${since}&group_by=auth`,

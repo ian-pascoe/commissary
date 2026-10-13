@@ -577,9 +577,11 @@ const EMPTY_GROUP: ApiKeyGroupBody = { keys: [] };
 
 const EMPTY_COMPAT: CompatGroupBody = { name: "", "base-url": "", keys: [] };
 
-/** The `PUT /api-keys/groups` body for the form: every field the form does not show is kept as stored. */
+/**
+ * The `PUT /api-keys/groups` body for the form: every field the form does not show is kept as stored. A group that
+ * exists is named by its entry `id` and `revision`; a new one has neither (revision 0).
+ */
 export const putGroupRequest = (
-  version: number,
   family: ApiKeyFamily,
   view: AnyGroupView | undefined,
   draft: GroupDraft,
@@ -590,7 +592,7 @@ export const putGroupRequest = (
   const priority = optionalInt(draft.priority);
   const models = modelEntries(draft.models);
   const keys = draft.keys.map(keyInput);
-  const index = view === undefined ? {} : { index: view.index };
+  const entry = view === undefined ? { revision: 0 } : { id: view.id, revision: view.revision };
 
   if (family === "openai-compatibility") {
     // SAFETY: the list files OpenAI-compatible endpoints only under `openai-compatibility`.
@@ -624,7 +626,7 @@ export const putGroupRequest = (
       })),
     };
 
-    return { version, family, ...index, group };
+    return { family, ...entry, group };
   }
 
   // SAFETY: every family but `openai-compatibility` lists key groups.
@@ -654,7 +656,7 @@ export const putGroupRequest = (
     keys,
   };
 
-  return { version, family, ...index, group };
+  return { family, ...entry, group };
 };
 
 /** Key fields the form shows (everything else on a key is kept as stored). */
@@ -700,11 +702,19 @@ export const keptSettings = (view: AnyGroupView | undefined): ReadonlyArray<stri
   return kept;
 };
 
+/**
+ * Does a refused write mean the page's view of the group is stale (the group, or one of its keys, changed or was
+ * removed since the list was read)? The form then offers Reload, which refetches the list and remounts the form on the
+ * group's new `id` and `revision`.
+ */
+export const isStaleWrite = (error: string | undefined): boolean =>
+  error === "conflict" || error === "unknown_auth_index";
+
 /** What the server's write errors mean on the form. */
 export const writeProblem = (error: string | undefined, message: string): string => {
   switch (error) {
     case "conflict":
-      return "The configuration changed since this page loaded. Reload to see the current keys; your edits stay in the form until you do.";
+      return "This group changed or was removed since this page loaded. Reload to see the current keys; your edits stay in the form until you do.";
     case "unknown_auth_index":
       return "A key in this group changed or was removed since this page loaded. Reload and make the edit again.";
     default:

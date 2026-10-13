@@ -166,7 +166,10 @@ describe("POST /credentials/batch", () => {
 
   it("reports unknown names and config API keys as not_found next to the ones that succeeded", async () => {
     await seed("a.json");
-    await controlPlane().putConfig("api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-x }]\n");
+    await controlPlane().importConfig(
+      "api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-x }]\n",
+      "test",
+    );
 
     const configKey = (await controlPlane().listCredentials()).find(
       (entry) => entry.source === "config",

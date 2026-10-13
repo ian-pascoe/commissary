@@ -1,6 +1,6 @@
 /**
  * Which custom header values the management API shows and which it masks: the Account page and the Keys page
- * (`maskHeaders`) and the raw configuration editor (`config-secrets.ts`) all classify headers by these rules. Shared
+ * (`maskHeaders`) classify headers by these rules. Shared
  * with the browser (no imports), so the panel types a new secret header's value into a password field by the same
  * rule the server masks it by.
  *

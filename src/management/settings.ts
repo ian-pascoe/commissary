@@ -7,18 +7,18 @@
  * default). Values the config would silently rewrite or ignore (invalid durations, unknown strategies, a
  * `gpt-image-2-base-model` without `gpt-`, negative counts, untrimmed text) are refused with their path instead: first
  * by `validateSettings`, then by the survival check, which decodes the edited document like the ControlPlane will and
- * compares every written leaf with the normalised result. The not-applied keys (`config/not-applied.ts`) that have a
- * mapping path accept `null` only, so the page can remove them; their values never appear in the view.
+ * compares every written leaf with the normalised result. Every setting is a config entry of its own (ADR 0025,
+ * `config/entries.ts`); the route turns the leaf edits into entry writes.
  */
 import { Result, Schema } from "effect";
 import { type AdminLists, configAdminLists, isAdmin } from "../access/config.ts";
 import type { Principal } from "../access/principal.ts";
 import { parseGoDuration } from "../config/accessors.ts";
 import { encodeConfig } from "../config/codec.ts";
-import { notAppliedRules, NOT_APPLIED_RULES } from "../config/not-applied.ts";
 import { Config } from "../config/schema.ts";
 import { isJsonObject, type Json, type JsonObject, jsonEquals } from "../json/index.ts";
-import { deleteAtPath, getAtPath, writeAtPath } from "./config-document.ts";
+import { setOwn } from "../json/value.ts";
+import type { Revisions } from "./contract/config.ts";
 import {
   SETTINGS_TREE,
   type SettingsValues as SettingsValuesType,
@@ -47,7 +47,6 @@ export interface SettingsEdit {
 
 type PatchNode =
   | { readonly kind: "leaf"; readonly schema: Schema.Top }
-  | { readonly kind: "remove" }
   | { readonly kind: "section"; readonly children: ReadonlyMap<string, PatchNode> };
 
 interface Tree {
@@ -64,34 +63,40 @@ const sectionOf = (tree: Tree): Map<string, PatchNode> =>
     ]),
   );
 
-/** Adds a remove-only leaf at `path` (creating sections; an owned leaf is never replaced). */
-const addRemovable = (root: Map<string, PatchNode>, path: ReadonlyArray<string>): void => {
-  const [head, ...rest] = path;
+/** What a patch may address: the settings. */
+const PATCH_ROOT: ReadonlyMap<string, PatchNode> = sectionOf(SETTINGS_TREE);
 
-  if (head === undefined) return;
-  const existing = root.get(head);
+/** The value at `path` of a JSON document; `undefined` when absent. */
+const getAtPath = (root: Json, path: ReadonlyArray<string>): Json | undefined => {
+  let current: Json | undefined = root;
 
-  if (rest.length === 0) {
-    if (existing === undefined) root.set(head, { kind: "remove" });
-
-    return;
+  for (const segment of path) {
+    if (!isJsonObject(current) || !Object.hasOwn(current, segment)) return undefined;
+    current = current[segment];
   }
 
-  if (existing !== undefined && existing.kind !== "section") return;
-  const children = new Map(existing?.children);
-
-  addRemovable(children, rest);
-  root.set(head, { kind: "section", children });
+  return current;
 };
 
-/** What a patch may address: the owned settings plus the removable not-applied keys. */
-const PATCH_ROOT: ReadonlyMap<string, PatchNode> = (() => {
-  const root = sectionOf(SETTINGS_TREE);
+/** `document` with `value` at `path` (sections created), or with the key removed when `value` is `null`. */
+const withAtPath = (document: JsonObject, path: ReadonlyArray<string>, value: Json): JsonObject => {
+  const [head, ...rest] = path;
 
-  for (const rule of NOT_APPLIED_RULES) if (rule.path !== undefined) addRemovable(root, rule.path);
+  if (head === undefined) return document;
+  const out: JsonObject = { ...document };
 
-  return root;
-})();
+  if (rest.length === 0) {
+    if (value === null) delete out[head];
+    else setOwn(out, head, value);
+
+    return out;
+  }
+
+  const child = Object.hasOwn(document, head) ? document[head] : undefined;
+  setOwn(out, head, withAtPath(isJsonObject(child) ? child : {}, rest, value));
+
+  return out;
+};
 
 const dotted = (path: ReadonlyArray<string>): string => path.join(".");
 
@@ -238,18 +243,6 @@ const collect = (
     if (target === undefined)
       return problem(400, "not_a_setting", path, `${dotted(path)} is not a setting`);
 
-    if (target.kind === "remove") {
-      if (value !== null)
-        return problem(
-          400,
-          "not_a_setting",
-          path,
-          `${dotted(path)} has no effect on Workers; it can only be removed (null)`,
-        );
-      edits.push({ path, value: null });
-      continue;
-    }
-
     if (target.kind === "section") {
       if (!isJsonObject(value)) return invalid(path, "must be a mapping of settings");
       const nested = collect(value, target.children, path, edits);
@@ -287,24 +280,8 @@ export const validateSettings = (
 export const applySettingsPatch = (
   document: JsonObject,
   edits: ReadonlyArray<SettingsEdit>,
-): Result.Result<JsonObject, SettingsProblem> => {
-  let out = document;
-
-  for (const edit of edits) {
-    if (edit.value === null) {
-      out = deleteAtPath(out, edit.path) ?? out;
-      continue;
-    }
-
-    const written = writeAtPath(out, edit.path, edit.value, "put");
-
-    if (written === "invalid_path")
-      return Result.fail(invalid(edit.path, "the stored document has no mapping at this path"));
-    out = written;
-  }
-
-  return Result.succeed(out);
-};
+): Result.Result<JsonObject, SettingsProblem> =>
+  Result.succeed(edits.reduce((out, edit) => withAtPath(out, edit.path, edit.value), document));
 
 /**
  * Every written leaf must be stored as sent: `normalised` is the edited document after decoding (what the
@@ -390,7 +367,7 @@ export const checkServiceTokenAdmins = (input: {
       );
 };
 
-/** {@link checkAdminLockout} for a whole-document write (the raw configuration): `before` is the stored config. */
+/** {@link checkAdminLockout} for a whole-document write (the config import): `before` is the stored config. */
 export const checkDocumentLockout = (input: {
   readonly before: Config;
   readonly after: Config;
@@ -437,6 +414,8 @@ const defaults = (): SettingsValuesType =>
 export interface SettingsViewInput {
   readonly config: Config;
   readonly version: number;
+  /** The revision of every stored setting (`config/store.ts`). */
+  readonly revisions: Revisions;
   /** Epoch milliseconds of the last write; 0 when nothing was stored. */
   readonly updatedAt: number;
   readonly envAdmins: AdminLists;
@@ -450,10 +429,10 @@ export const settingsView = (input: SettingsViewInput): SettingsView => {
 
   return {
     version: input.version,
+    revisions: input.revisions,
     ...(input.updatedAt > 0 ? { updated_at: new Date(input.updatedAt).toISOString() } : {}),
     values: settingsValues(config),
     defaults: defaults(),
-    not_applied: notAppliedRules(config).map((rule) => ({ key: rule.key, reason: rule.reason })),
     env_admins: {
       emails: [...input.envAdmins.adminEmails].toSorted(),
       service_tokens: [...input.envAdmins.adminServiceTokens].toSorted(),

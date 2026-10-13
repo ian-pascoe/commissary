@@ -2,12 +2,15 @@ import { DurableObject } from "cloudflare:workers";
 import { Effect, Schema } from "effect";
 import { FetchHttpClient, type HttpClient } from "effect/http";
 import {
+  type ChannelRuleKind,
+  type ConfigEntriesWire,
   ConfigStore,
-  decodeStoredConfig,
   type ConfigSnapshotWire,
-  type PutConfigResult,
+  type ImportResult,
+  type KeyGroupChange,
+  type SettingChange,
+  type WriteResult,
 } from "../config/store.ts";
-import type { Config } from "../config/schema.ts";
 import type { JsonObject } from "../json/index.ts";
 import { isTokenPayloadKey } from "./merge.ts";
 import { CredentialPool, type ConfigView, type RefreshTarget, type UpsertResult } from "./pool.ts";
@@ -35,8 +38,8 @@ import {
   buildApiKeyProbeTarget,
 } from "../management/api-keys-probe.ts";
 import { buildApiKeysList } from "../management/api-keys-view.ts";
-import { locateKey, setKeyExcludedAll } from "../management/api-keys-write.ts";
-import { configKeyIds } from "../management/config-document.ts";
+import { locateKey } from "../management/api-keys-write.ts";
+import { configKeyIds } from "./key-ids.ts";
 import {
   buildConfigCredentialEntry,
   buildCredentialEntry,
@@ -242,7 +245,9 @@ export class ControlPlane extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.#org = orgOfControlPlane(ctx.id);
-    this.#config = new ConfigStore(ctx.storage.sql, this.#org);
+    this.#config = new ConfigStore(ctx.storage.sql, this.#org, (body) =>
+      ctx.storage.transactionSync(body),
+    );
     this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
 
@@ -289,32 +294,63 @@ export class ControlPlane extends DurableObject<Env> {
     });
   }
 
-  /** Decoded config, re-decoded only when the stored version changed. */
+  /** The config the entries make up, re-assembled only when the change counter moved. */
   #currentConfig(): ConfigView {
+    const { version, config } = this.#config.current();
     const cached = this.#configView;
-    const snapshot = this.#config.get(cached?.version);
 
-    if (cached !== undefined && snapshot.unchanged) return cached;
-    const config: Config = Effect.runSync(decodeStoredConfig(snapshot.document ?? ""));
-    this.#configView = { version: snapshot.version, config };
+    if (cached !== undefined && cached.version === version) return cached;
+    this.#configView = { version, config };
 
     return this.#configView;
   }
 
   /**
-   * Current config document. Pass the version already cached by the caller to get a cheap `unchanged: true`
-   * answer instead of the full document.
+   * The assembled config document. Pass the version (change counter) already cached by the caller to get a cheap
+   * `unchanged: true` answer instead of the full document.
    */
   getConfig(sinceVersion?: number): ConfigSnapshotWire {
-    return this.#config.get(sinceVersion);
+    return this.#config.snapshot(sinceVersion);
+  }
+
+  /** The assembled config document with the revision of every entry (what the management routes edit). */
+  configEntries(): ConfigEntriesWire {
+    return this.#config.entries();
+  }
+
+  /** Writes settings entries, each at the revision it names (`config/store.ts`); `by` is the writing principal. */
+  writeSettings(
+    changes: ReadonlyArray<SettingChange>,
+    by: string,
+  ): WriteResult<{ readonly revisions: Readonly<Record<string, number>> }> {
+    return this.#config.writeSettings(changes, by);
+  }
+
+  /** Writes or deletes (`value: null`) one channel's model aliases or exclusions at the revision it names. */
+  writeChannelRule(
+    kind: ChannelRuleKind,
+    channel: string,
+    revision: number,
+    value: Schema.MutableJson | null,
+    by: string,
+  ): WriteResult<{ readonly revision: number }> {
+    return this.#config.writeChannelRule(kind, channel, revision, value, by);
+  }
+
+  /** Writes or deletes one key group with its API keys at the revision it names. */
+  writeKeyGroup(
+    change: KeyGroupChange,
+    by: string,
+  ): WriteResult<{ readonly id: string; readonly revision: number }> {
+    return this.#config.writeKeyGroup(change, by);
   }
 
   /**
-   * Replaces the config with `text` (YAML or JSON). Returns a structured result instead of throwing so validation
-   * and version-conflict errors survive the RPC boundary. `expectedVersion` enables optimistic concurrency.
+   * Replaces every config entry with a Go config document (YAML or JSON, v8 or legacy layout) in one transaction and
+   * answers the not-applied keys it dropped.
    */
-  putConfig(text: string, expectedVersion?: number): PutConfigResult {
-    return this.#config.put(text, expectedVersion);
+  importConfig(text: string, by: string): ImportResult {
+    return this.#config.importDocument(text, by);
   }
 
   /**
@@ -635,37 +671,28 @@ export class ControlPlane extends DurableObject<Env> {
   async setCredentialDisabledByRef(
     ref: CredentialRef,
     disabled: boolean,
+    by: string,
   ): Promise<SetDisabledResult> {
     const target = findCredential(this.#pool.entries(), ref, this.#authIndex);
 
     if (target === undefined) return { ok: false, error: "not_found" };
 
     if (target.credential.source === "config")
-      return this.#setConfigKeyDisabled(target.credential, disabled);
+      return this.#setConfigKeyDisabled(target.credential, disabled, by);
 
     return await this.setCredentialDisabled(target.credential.id, disabled);
   }
 
-  #setConfigKeyDisabled(credential: Credential, disabled: boolean): SetDisabledResult {
+  #setConfigKeyDisabled(credential: Credential, disabled: boolean, by: string): SetDisabledResult {
     // Go has no compat loop in config_apikey_disable.go: an endpoint is disabled as a whole (`disabled` on its group).
     if (credential.attributes.compat_name !== undefined)
       return { ok: false, error: "compat_endpoint" };
-    const view = this.#currentConfig();
-    const snapshot = this.#config.get();
-    const position = locateKey(configKeyIds(view.config), credential.id);
+    const stored = this.#config.setKeyExcludedAll(credential.id, disabled, by);
 
-    if (position === undefined) return { ok: false, error: "not_found" };
-    // SAFETY: the stored config document is always a serialized JSON object (writes reject non-objects).
-    const document = JSON.parse(snapshot.document ?? "{}") as JsonObject;
+    if (stored.ok) return { ok: true, via: "config:excluded-models" };
 
-    const edit = setKeyExcludedAll(document, position, disabled);
-
-    if (!edit.ok) return { ok: false, error: "not_found" };
-    // Synchronous read-check-write: nothing can interleave, the version check only documents that.
-    const stored = this.#config.put(JSON.stringify(edit.value), snapshot.version);
-
-    return stored.ok
-      ? { ok: true, via: "config:excluded-models" }
+    return stored.error === "not_found"
+      ? { ok: false, error: "not_found" }
       : { ok: false, error: "invalid", message: stored.message };
   }
 
@@ -674,8 +701,16 @@ export class ControlPlane extends DurableObject<Env> {
   /** The `api-keys` groups with runtime state: one snapshot of config version and credential pool (no secrets). */
   apiKeysView(): WireJsonObject {
     const { version, config } = this.#currentConfig();
+    const { groups } = this.#config.entries().revisions;
 
-    return buildApiKeysList(version, config, this.#pool.entries(), Date.now(), this.#authIndex);
+    return buildApiKeysList(
+      version,
+      groups,
+      config,
+      this.#pool.entries(),
+      Date.now(),
+      this.#authIndex,
+    );
   }
 
   /**

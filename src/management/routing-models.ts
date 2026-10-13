@@ -3,16 +3,20 @@
  * (aliases, exclusions) that shape it. No Go counterpart (the Go panel has no such view); see `routingView`.
  *
  * Built from a fresh registry snapshot (`ModelRegistry.fresh`: config re-read, no 5 s cache), so a rule edit shows on
- * the next read. The cost is one config check, one `listModelSources` RPC and a pure pass over the credentials.
+ * the next read. The cost is one config check, one `listModelSources` RPC and a pure pass over the credentials, plus
+ * the `configEntries` RPC for the revision of each channel's rules. The revisions are read first: when a write lands
+ * in between, the view shows newer rules than its revisions, and an edit of that channel answers 409 (re-read) rather
+ * than overwriting a change the view did not show.
  */
 import { Clock, Effect } from "effect";
 import { routingView } from "../registry/routing-view.ts";
 import { ModelRegistry } from "../registry/service.ts";
 import { currentAuthIndexer } from "./auth-index.ts";
-import { handled, jsonReply, replyError } from "./http.ts";
+import { controlPlane, handled, jsonReply, replyError } from "./http.ts";
 
 const routingModels = Effect.gen(function* () {
   const registry = yield* ModelRegistry;
+  const entries = yield* controlPlane("configEntries", (stub) => stub.configEntries());
 
   const snapshot = yield* registry.fresh.pipe(
     Effect.catch((error) =>
@@ -24,7 +28,10 @@ const routingModels = Effect.gen(function* () {
 
   const now = yield* Clock.currentTimeMillis;
 
-  return jsonReply(200, routingView(snapshot, now, yield* currentAuthIndexer));
+  return jsonReply(200, {
+    ...routingView(snapshot, now, yield* currentAuthIndexer),
+    revisions: { aliases: entries.revisions.aliases, exclusions: entries.revisions.exclusions },
+  });
 });
 
 export const routingModelsHandler = handled(routingModels);

@@ -22,6 +22,7 @@ import {
   newKeyDraft,
   newModelDraft,
   PROTOCOL_CHOICES,
+  isStaleWrite,
   parsePatterns,
   putGroupRequest,
   recentRequests,
@@ -51,6 +52,8 @@ const key = (overrides: Partial<ApiKeyView> = {}): ApiKeyView => ({
 });
 
 const group = (overrides: Partial<GroupView["group"]> = {}, index = 0): GroupView => ({
+  id: `g${String(index)}`,
+  revision: 3,
   index,
   group: { keys: [key()], ...overrides },
   effective_base_url: overrides["base-url"] ?? "https://api.anthropic.com",
@@ -58,6 +61,8 @@ const group = (overrides: Partial<GroupView["group"]> = {}, index = 0): GroupVie
 });
 
 const compat = (overrides: Partial<CompatGroupView["group"]> = {}): CompatGroupView => ({
+  id: "c0",
+  revision: 5,
   index: 0,
   group: {
     name: "openrouter",
@@ -293,7 +298,7 @@ describe("the group form", () => {
 
     const draft = draftOf(view);
 
-    const request = putGroupRequest(7, "claude", view, {
+    const request = putGroupRequest("claude", view, {
       ...draft,
       prefix: "team",
       excluded: "claude-3-*\n claude-3-* , haiku",
@@ -301,9 +306,9 @@ describe("the group form", () => {
     });
 
     expect(request).toEqual({
-      version: 7,
       family: "claude",
-      index: 0,
+      id: "g0",
+      revision: 3,
       group: {
         name: "team",
         headers: { "x-team": "[redacted]…1234" },
@@ -320,7 +325,7 @@ describe("the group form", () => {
     const view = group();
     const [stored] = draftOf(view).keys;
 
-    const request = putGroupRequest(1, "claude", view, {
+    const request = putGroupRequest("claude", view, {
       ...draftOf(view),
       keys: stored === undefined ? [] : [{ ...stored, secret: "sk-replaced" }],
     });
@@ -341,16 +346,16 @@ describe("the group form", () => {
   it("writes an OpenAI-compatible endpoint with its switches", () => {
     const view = compat({ "request-retry": 2 });
 
-    const request = putGroupRequest(3, "openai-compatibility", view, {
+    const request = putGroupRequest("openai-compatibility", view, {
       ...draftOf(view),
       disabled: true,
       models: [{ name: "meta-llama/llama-4", alias: "llama", protocol: "", stored: undefined }],
     });
 
     expect(request).toEqual({
-      version: 3,
       family: "openai-compatibility",
-      index: 0,
+      id: "c0",
+      revision: 5,
       group: {
         name: "openrouter",
         "base-url": "https://openrouter.ai/api/v1",
@@ -381,7 +386,7 @@ describe("the group form", () => {
 
     const [haiku, gpt] = draft.models;
 
-    const request = putGroupRequest(4, "opencode-zen", view, {
+    const request = putGroupRequest("opencode-zen", view, {
       ...draft,
       models: [
         ...(haiku === undefined ? [] : [haiku]),
@@ -397,22 +402,41 @@ describe("the group form", () => {
     ]);
   });
 
-  it("appends a new group without an index", () => {
-    const request = putGroupRequest(2, "gemini", undefined, {
+  it("adds a new group without an id, at revision 0", () => {
+    const request = putGroupRequest("gemini", undefined, {
       ...draftOf(undefined),
       keys: [{ ...newKeyDraft(), secret: "AIza-1" }],
     });
 
     expect(request).toEqual({
-      version: 2,
       family: "gemini",
+      revision: 0,
       group: { keys: [{ "api-key": "AIza-1" }] },
     });
   });
 
+  it("names the group's id and revision from the list it was read from, so a reload retargets the write", () => {
+    const stale = group({ name: "team" });
+    const reloaded: GroupView = { ...stale, revision: stale.revision + 1 };
+    const edit = { ...draftOf(stale), prefix: "team" };
+
+    expect(putGroupRequest("claude", stale, edit)).toMatchObject({ id: "g0", revision: 3 });
+    expect(putGroupRequest("claude", reloaded, edit)).toMatchObject({ id: "g0", revision: 4 });
+  });
+
+  it("treats a conflict or an unknown key as a stale view to reload", () => {
+    expect(isStaleWrite("conflict")).toBe(true);
+    expect(isStaleWrite("unknown_auth_index")).toBe(true);
+    expect(isStaleWrite("invalid_group")).toBe(false);
+    expect(isStaleWrite(undefined)).toBe(false);
+  });
+
   it("splits patterns and explains write conflicts", () => {
     expect(parsePatterns(" a, b\n\na ,*")).toEqual(["a", "b", "*"]);
-    expect(writeProblem("conflict", "Conflict.")).toMatch(/changed since this page loaded/);
+    expect(writeProblem("conflict", "Conflict.")).toMatch(
+      /changed or was removed since this page loaded/,
+    );
+    expect(writeProblem("unknown_auth_index", "x")).toMatch(/Reload/);
     expect(writeProblem(undefined, "Codex needs a base-url.")).toBe("Codex needs a base-url.");
   });
 });

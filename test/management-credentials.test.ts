@@ -384,7 +384,10 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
   });
 
   it("toggles config API keys through excluded-models and refuses compat keys", async () => {
-    await controlPlane().putConfig("api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-x }]\n");
+    await controlPlane().importConfig(
+      "api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-x }]\n",
+      "test",
+    );
 
     const entries = await controlPlane().listCredentials();
     const id = entries.find((entry) => entry.source === "config")!.id;
@@ -416,9 +419,14 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     };
 
     // The id (and so auth_index) is unchanged: excluded-models is not part of the identity.
-    const stored = (await json("/v8/management/config/api-keys/claude")).body as Array<{
-      keys: Array<{ auth_index?: string; "excluded-models"?: string[] }>;
-    }>;
+    // SAFETY: the assembled config document is a JSON object with the canonical v8 `api-keys` map.
+    const stored = (
+      JSON.parse((await controlPlane().getConfig()).document ?? "{}") as {
+        "api-keys": {
+          claude: Array<{ keys: Array<{ auth_index?: string; "excluded-models"?: string[] }> }>;
+        };
+      }
+    )["api-keys"].claude;
 
     expect(stored[0]!.keys[0]).toMatchObject({ "excluded-models": ["*"] });
     expect(stored[0]!.keys[0]!.auth_index).toBeUndefined();
@@ -439,8 +447,9 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     expect((await list()).files).toEqual([]);
 
     // An OpenAI-compatible endpoint is disabled as a whole.
-    await controlPlane().putConfig(
+    await controlPlane().importConfig(
       "openai-compatibility:\n  - name: acme\n    base-url: https://api.acme.test/v1\n    api-key-entries: [{ api-key: sk-acme }]\n",
+      "test",
     );
 
     const compat = (await controlPlane().listCredentials()).find((e) => e.source === "config")!;

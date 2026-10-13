@@ -5,14 +5,15 @@ import { FetchHttpClient, HttpClient, HttpClientError, HttpClientRequest } from 
 import { Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 import { ManagementApi } from "#contract/api.ts";
 import { type BatchAction, batchLimit } from "#contract/credentials.ts";
+import { ManagementError } from "#contract/errors.ts";
 import type { RoutingModels } from "#contract/routing.ts";
 import { type ChunkOutcome, chunks, foldOutcomes } from "../lib/batch.ts";
 import { causeMessage } from "../lib/failure.ts";
-import type { SettingsPatch, SettingsView } from "#contract/settings.ts";
+import type { SaveSettings, SettingsView } from "#contract/settings.ts";
 import { HISTORY_SPAN_MS } from "../lib/history.ts";
 import { orgSlugOfPath, scopedApiUrl } from "../lib/org.ts";
 import { type RuleChange, type RuleWrite, saveRuleChange } from "../lib/models.ts";
-import { type Edits, removeNotApplied, saveDraft } from "../lib/settings.ts";
+import { type Edits, saveDraft } from "../lib/settings.ts";
 import {
   type Breakdown,
   filterQuery,
@@ -204,7 +205,7 @@ export const accountModelsAtom = Atom.family((name: string) =>
 /** The API keys page refetches after a mutation tagged with this key. */
 export const API_KEYS = ["api-keys"] as const;
 
-/** Every configured API key group with its keys' state and the config version writes send back. */
+/** Every configured API key group with its id, revision and its keys' state (writes name the group by both). */
 export const apiKeysAtom = ManagementClient.query("apiKeys", "list", {
   reactivityKeys: API_KEYS,
   timeToLive: KEEP,
@@ -229,6 +230,19 @@ export const probeKeyAtom = Atom.family((authIndex: string) =>
   ),
 );
 
+/**
+ * A write refused with 409 `conflict` means the view it was made from is stale: refetch every query tagged with
+ * `keys` (the mutations invalidate only on success).
+ */
+const reloadOnConflict =
+  (keys: ReadonlyArray<string>) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    Effect.tapError(effect, (error) =>
+      error instanceof ManagementError && error.error === "conflict"
+        ? Reactivity.invalidate(keys)
+        : Effect.void,
+    );
+
 /** The Models page refetches after a mutation tagged with this key. */
 export const ROUTING = ["routing"] as const;
 
@@ -251,9 +265,10 @@ export const catalogStatusAtom = ManagementClient.query("catalog", "status", {
 export const refreshCatalogAtom = ManagementClient.mutation("catalog", "refresh");
 
 /**
- * One channel rule edit (key: `<rule>:<channel>`), sent with the view's `config_version` as `If-Match` and re-applied
- * to a fresh read once when another edit landed first (`saveRuleChange`). Transport and decoding failures become
- * defects, as in the generated mutations, so the failure is a `ManagementError` or none.
+ * One channel rule edit (key: `<rule>:<channel>`), sent with the channel entry's revision (`view.revisions`) as
+ * `If-Match` and re-applied to a fresh read once when another edit of that channel landed first (`saveRuleChange`); a
+ * refusal that stays refetches the view. Transport and decoding failures become defects, as in the generated
+ * mutations, so the failure is a `ManagementError` or none.
  */
 export const saveRuleAtom = Atom.family((_key: string) =>
   ManagementClient.runtime.fn(
@@ -261,8 +276,8 @@ export const saveRuleAtom = Atom.family((_key: string) =>
       Effect.gen(function* () {
         const client = yield* ManagementClient;
 
-        const write = (request: RuleWrite, version: number) => {
-          const headers = { "if-match": String(version) };
+        const write = (request: RuleWrite, revision: number) => {
+          const headers = { "if-match": String(revision) };
           const params = { channel: request.channel };
 
           switch (request.kind) {
@@ -280,7 +295,7 @@ export const saveRuleAtom = Atom.family((_key: string) =>
         return yield* Reactivity.mutation(
           saveRuleChange(input.change, input.base, { read: client.routing.models(), write }),
           ROUTING,
-        );
+        ).pipe(reloadOnConflict(ROUTING));
       }).pipe(
         Effect.catchIf(
           (error) => Schema.isSchemaError(error) || HttpClientError.isHttpClientError(error),
@@ -293,7 +308,7 @@ export const saveRuleAtom = Atom.family((_key: string) =>
 /** The Settings page refetches after a mutation tagged with this key. */
 export const SETTINGS = ["settings"] as const;
 
-/** The settings that apply on Workers, their defaults and the config version writes send back. */
+/** The settings that apply on Workers, their defaults and the revision of each stored setting (writes send them back). */
 export const settingsAtom = ManagementClient.query("settings", "get", {
   reactivityKeys: SETTINGS,
   timeToLive: KEEP,
@@ -302,21 +317,23 @@ export const settingsAtom = ManagementClient.query("settings", "get", {
 /** How the settings saves read the view and write a patch. */
 const settingsIo = (client: ManagementClient["Service"]) => ({
   read: client.settings.get(),
-  write: (patch: SettingsPatch, version: number) =>
-    client.settings.save({ payload: { version, patch } }),
+  write: (save: SaveSettings) => client.settings.save({ payload: save }),
 });
 
 /**
- * One section's save (key: the section), sent with the view's version and re-applied once to a fresh read on 409
- * (`saveDraft`). The view refetches afterwards, so the other sections rebase onto it. Transport and decoding failures
- * become defects, as in the generated mutations, so the failure is a `ManagementError` or none.
+ * One section's save (key: the section), sent with the revision of each setting it changes and re-applied once to a
+ * fresh read on 409 (`saveDraft`). The view refetches afterwards (also after a refusal that stays), so the other
+ * sections rebase onto it. Transport and decoding failures become defects, as in the generated mutations, so the
+ * failure is a `ManagementError` or none.
  */
 export const saveSettingsAtom = Atom.family((_section: string) =>
   ManagementClient.runtime.fn((input: { readonly edits: Edits; readonly base: SettingsView }) =>
     Effect.gen(function* () {
       const io = settingsIo(yield* ManagementClient);
 
-      return yield* Reactivity.mutation(saveDraft(input.edits, input.base, io), SETTINGS);
+      return yield* Reactivity.mutation(saveDraft(input.edits, input.base, io), SETTINGS).pipe(
+        reloadOnConflict(SETTINGS),
+      );
     }).pipe(
       Effect.catchIf(
         (error) => Schema.isSchemaError(error) || HttpClientError.isHttpClientError(error),
@@ -325,48 +342,6 @@ export const saveSettingsAtom = Atom.family((_section: string) =>
     ),
   ),
 );
-
-/** Removes one not-applied key (key: the config key), retried once on 409 (`removeNotApplied`). */
-export const removeSettingAtom = Atom.family((key: string) =>
-  ManagementClient.runtime.fn((base: SettingsView) =>
-    Effect.gen(function* () {
-      const io = settingsIo(yield* ManagementClient);
-
-      return yield* Reactivity.mutation(removeNotApplied(key, base, io), SETTINGS);
-    }).pipe(
-      Effect.catchIf(
-        (error) => Schema.isSchemaError(error) || HttpClientError.isHttpClientError(error),
-        Effect.die,
-      ),
-    ),
-  ),
-);
-
-/** The raw configuration page refetches after a mutation tagged with this key. */
-export const RAW_CONFIG = ["raw-config"] as const;
-
-/**
- * The whole configuration as masked YAML with its version. Read afresh on every visit (no idle cache): the draft's
- * placeholders are bound to the version it was read at.
- */
-export const rawConfigAtom = ManagementClient.query("settings", "raw", {
-  reactivityKeys: RAW_CONFIG,
-});
-
-/** What saving a raw configuration would store (stores nothing). */
-export const checkRawConfigAtom = ManagementClient.mutation("settings", "checkRaw");
-
-/** Stores a raw configuration: call with `reactivityKeys: RAW_CONFIG_WRITES`. */
-export const saveRawConfigAtom = ManagementClient.mutation("settings", "saveRaw");
-
-/** A raw save can change anything the other pages show: every view that reads the configuration refetches. */
-export const RAW_CONFIG_WRITES = [
-  ...RAW_CONFIG,
-  ...SETTINGS,
-  ...API_KEYS,
-  ...ROUTING,
-  ...CREDENTIALS,
-] as const;
 
 // Mutations: call with `reactivityKeys: CREDENTIALS` so the credential list refetches afterwards (`API_KEYS` for a
 // config API key).

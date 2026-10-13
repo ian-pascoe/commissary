@@ -1,9 +1,10 @@
 /**
- * Pure edits of the stored config document behind the API keys page writes (`PUT|DELETE /api-keys/groups`) and the
- * per-key disable toggle (`PATCH /credentials/status`). They work on a private copy of the JSON document
- * (`config-document.ts` conventions) and never see a secret the caller did not already hold:
+ * Pure edits of the assembled config document behind the API keys page writes (`PUT|DELETE /api-keys/groups`). They
+ * work on a private copy of the JSON document and never see a secret the caller did not already hold:
  *
- * - a key in a written group is `auth_index` (keep the stored secret) and/or `api-key` (new secret);
+ * - a key in a written group is `auth_index` (keep the stored secret) and/or `api-key` (new secret). A key of the
+ *   written group kept by `auth_index` keeps its entry id, and with it its credential id and `auth_index`, also when
+ *   its secret changes (ADR 0025); ids sent by the caller are ignored;
  * - settings the panel never sees (`proxy-url`, `experimental-cch-signing`) and header values it only knows as
  *   `[redacted]…` placeholders are restored from the stored entry, so a write is lossless;
  * - an unknown `auth_index` is a conflict (the key changed identity or is gone since the list was read).
@@ -18,11 +19,11 @@
  * the edit makes equal to a key of another group (by its prefix alone) is a plain `422`.
  * Workers deviation: documented in docs/ARCHITECTURE.md, "API keys".
  */
-import { isJsonObject, jsonEquals, type Json, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { DEDUPED_FAMILIES, type DedupedFamily } from "../config/normalize.ts";
 import { typedDuplicates, withoutKeys } from "./key-duplicates.ts";
 import type { AuthIndexer } from "./auth-index.ts";
-import type { ConfigKeyIds, GroupKeyIds } from "./config-document.ts";
+import type { ConfigKeyIds, GroupKeyIds } from "../credentials/key-ids.ts";
 import { type ApiKeyFamily, REDACTED_PREFIX } from "./contract/api-keys.ts";
 
 export interface EditFailure {
@@ -147,6 +148,7 @@ interface ResolvedKey {
 const resolveKey = (
   input: JsonObject,
   compat: boolean,
+  existing: JsonObject | undefined,
   groups: ReadonlyArray<JsonObject>,
   ids: ReadonlyArray<GroupKeyIds>,
   authIndexOf: AuthIndexer,
@@ -161,9 +163,17 @@ const resolveKey = (
   if (typeof supplied !== "string" && stored === undefined)
     return fail(422, "every key needs an api-key or an auth_index");
 
-  const { auth_index: _authIndex, "api-key": _apiKey, ...rest } = input;
+  const { auth_index: _authIndex, "api-key": _apiKey, id: _id, ...rest } = input;
   const secret = typeof supplied === "string" ? supplied : (stored?.key["api-key"] ?? "");
-  const out: JsonObject = { "api-key": secret, ...rest };
+  // A key of the written group keeps its entry id (its credential id); one taken from another group gets a new one.
+  const keptId = stored !== undefined && stored.group === existing ? stored.key.id : undefined;
+
+  const out: JsonObject = {
+    ...(typeof keptId === "string" ? { id: keptId } : {}),
+    "api-key": secret,
+    ...rest,
+  };
+
   carryOver(out, input, stored?.key, HIDDEN_KEY_FIELDS[compat ? "compat" : "standard"]);
   const headers = restoreHeaders(out.headers, stored?.key.headers);
 
@@ -199,7 +209,7 @@ const resolveGroup = (
 
   if (index !== undefined && existing === undefined) return fail(404, "group not found");
   const compat = family === "openai-compatibility";
-  const { keys, ...rest } = input;
+  const { keys, id: _id, ...rest } = input;
   const out: JsonObject = { ...rest };
   carryOver(out, input, existing, HIDDEN_GROUP_FIELDS[compat ? "compat" : "standard"]);
   const headers = restoreHeaders(out.headers, existing?.headers);
@@ -218,7 +228,7 @@ const resolveGroup = (
 
   for (const key of Array.isArray(keys) ? keys : []) {
     if (!isJsonObject(key)) return fail(422, "every key must be an object");
-    const result = resolveKey(key, compat, groups, ids, authIndexOf, groupTyped);
+    const result = resolveKey(key, compat, existing, groups, ids, authIndexOf, groupTyped);
 
     if (!result.ok) return result;
     resolved.push(result.value.key);
@@ -453,43 +463,4 @@ export const locateKey = (ids: ConfigKeyIds, id: string): KeyPosition | undefine
   }
 
   return undefined;
-};
-
-const patterns = (value: Json | undefined): string[] =>
-  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-
-const isDisablingPattern = (pattern: string): boolean => pattern.trim() === "*";
-
-/**
- * `setConfigAPIKeyExcludedAll` (internal/api/handlers/management/config_apikey_disable.go): adds or removes `*` in the
- * key's `excluded-models`, which disables the key without changing its identity (`excluded-models` is not in the
- * credential id). A key's own list replaces the group's, so a key without one starts from the group's list.
- */
-export const setKeyExcludedAll = (
-  document: JsonObject,
-  position: KeyPosition,
-  disable: boolean,
-): Edit<JsonObject> => {
-  const out = structuredClone(document);
-  const group = groupsOf(out, position.family)[position.group];
-  const key = group === undefined ? undefined : keysOf(group)[position.key];
-
-  if (group === undefined || key === undefined) return fail(404, "config api key entry not found");
-
-  const inherited = patterns(group["excluded-models"]);
-
-  const effective = Array.isArray(key["excluded-models"])
-    ? patterns(key["excluded-models"])
-    : inherited;
-
-  const next = disable
-    ? effective.some(isDisablingPattern)
-      ? effective
-      : [...effective, "*"]
-    : effective.filter((pattern) => !isDisablingPattern(pattern));
-
-  if (jsonEquals(next, inherited)) delete key["excluded-models"];
-  else key["excluded-models"] = next;
-
-  return succeed(out);
 };

@@ -1,20 +1,50 @@
 /**
- * Versioned config storage inside the ControlPlane Durable Object (SQLite).
+ * An org's config entries inside its ControlPlane Durable Object (SQLite; ADR 0025). New in the Workers port.
  *
- * The document is the canonical v8 JSON produced by `encodeConfig`. The version starts at 0 (nothing stored: defaults)
- * and increases by one on every write. All methods are synchronous so a read-check-write sequence is atomic under the
- * Durable Object input gate.
+ * Every setting, key group, API key, model alias, model exclusion and payload rule is a row of its own kind's table
+ * (`entries.ts`), with an id, a revision, `updated_at` and the principal that wrote it (`updated_by`). API keys leave
+ * room for an owner (`owner`, `NULL` = the org); private API keys come with credential ownership.
  *
- * Deployment settings (`DEPLOYMENT_SETTINGS`) decide something every org shares; only the `global` org's store accepts
- * them. Another org's store refuses a document that sets one (`invalid`), so a setting never looks applied when it is
- * not: readers take `global`'s value (`config/reader.ts`).
+ * Revisions come from one counter of changes per org (`config_changes`): every write takes the next value, and the
+ * entries it changes take that value as their revision. A missing entry has revision 0. A write names the revision of
+ * every entry it changes and is refused (`conflict`) when one is stale, so writes to different entries never
+ * conflict, and since the counter never goes back, an entry deleted and created again never repeats a revision. The
+ * counter is also the version of the assembled config (`snapshot`): readers rebuild their view when it moves.
+ *
+ * Readers get the `Config` the entries make up (`documentOfEntries`, decoded and normalised like any document). Every
+ * write applies its rows and decodes the result inside one storage transaction: a write that would leave an invalid
+ * config is rolled back (`invalid`). All methods are synchronous, so a read-check-write is atomic under the Durable
+ * Object input gate.
+ *
+ * Migration: a ControlPlane that stored the config as one document (the single-row `config` table) and has no entries
+ * yet imports that document on first use, in one transaction, and keeps the row. The counter continues from the
+ * document's version, so every cached view is rebuilt. Not-applied keys are dropped, as on import.
+ *
+ * Deployment settings (`DEPLOYMENT_SETTINGS`) decide something every org shares; only the `global` org stores them.
+ * Another org's store refuses a write or an import that sets one (`invalid`), so a setting never looks applied when it
+ * is not: readers take `global`'s value (`config/reader.ts`).
  */
-import { Effect, Result, Schema } from "effect";
-import type { Json } from "../json/index.ts";
-import { decodeConfig, encodeConfig, parseConfigYaml } from "./codec.ts";
-import { notAppliedSettings } from "./not-applied.ts";
-import { Config } from "./schema.ts";
+import { Effect, Result } from "effect";
+import { assignEntryIds, freshEntryId, withoutEntryIds } from "../credentials/key-ids.ts";
+import { type Json, type JsonObject, jsonEquals } from "../json/index.ts";
 import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
+import { decodeConfig, decodeRawConfig, encodeConfig, parseConfigYaml } from "./codec.ts";
+import {
+  atPath,
+  type ChannelRow,
+  defaultDocument,
+  documentOfEntries,
+  type EntryRows,
+  entriesOfConfig,
+  type GroupRow,
+  isSettingPath,
+  type KeyRow,
+  type PayloadKind,
+  type PayloadRow,
+  type SettingRow,
+} from "./entries.ts";
+import { notAppliedSettings } from "./not-applied.ts";
+import type { ApiKeyFamily, Config } from "./schema.ts";
 
 /**
  * Settings that only the `global` org's config may set, with the value read from it: `models.catalog`, the source of
@@ -32,7 +62,7 @@ export const DEPLOYMENT_SETTINGS: ReadonlyArray<DeploymentSetting> = [
 ];
 
 export interface DeploymentSetting {
-  /** The setting's key as the config document spells it. */
+  /** The setting's key, which is also its entry id. */
   readonly key: string;
   /** Whether `config` sets it (a value other than the default). */
   readonly isSet: (config: Config) => boolean;
@@ -44,8 +74,12 @@ export interface DeploymentSetting {
 export const withDeploymentSettings = (config: Config, deployment: Config): Config =>
   DEPLOYMENT_SETTINGS.reduce((current, setting) => setting.copy(current, deployment), config);
 
+const deploymentRefusal = (keys: ReadonlyArray<string>): string =>
+  `${keys.join(", ")}: a deployment setting, set in the global org's config only`;
+
 /** What `getConfig` returns over RPC (plain data only). */
 export interface ConfigSnapshotWire {
+  /** The org's change counter. */
   readonly version: number;
   /** Canonical JSON document; omitted when the caller already has `version` (`unchanged`). */
   readonly document?: string;
@@ -54,96 +88,494 @@ export interface ConfigSnapshotWire {
   readonly updatedAt: number;
 }
 
-export type PutConfigResult =
+/** The revision of every stored entry by kind (absent = 0). Key groups carry the revision of their keys too. */
+export interface EntryRevisions {
+  readonly settings: Readonly<Record<string, number>>;
+  readonly groups: Readonly<Record<string, number>>;
+  readonly aliases: Readonly<Record<string, number>>;
+  readonly exclusions: Readonly<Record<string, number>>;
+}
+
+/** What the management routes read (`configEntries` over RPC): the assembled config and every entry's revision. */
+export interface ConfigEntriesWire extends ConfigSnapshotWire {
+  readonly document: string;
+  readonly revisions: EntryRevisions;
+}
+
+/** A refused write. `conflict`: a named revision is stale; `not_found`: the entry does not exist. */
+export interface WriteRefused {
+  readonly ok: false;
+  readonly error: "conflict" | "invalid" | "not_found";
+  readonly message: string;
+}
+
+export type WriteResult<A = object> =
+  | ({ readonly ok: true; readonly version: number } & A)
+  | WriteRefused;
+
+/** One setting write: `value` `null` resets it to its default (removes the entry). */
+export interface SettingChange {
+  readonly id: string;
+  readonly revision: number;
+  readonly value: Json | null;
+}
+
+/** A key group write: `group` (with its keys; a kept key carries its `id`) or `null` to delete the group. */
+export interface KeyGroupChange {
+  readonly family: ApiKeyFamily;
+  /** Absent: a new group (`revision` 0). */
+  readonly id?: string;
+  readonly revision: number;
+  readonly group: JsonObject | null;
+}
+
+/** The channel rule kinds: `oauth.model-alias` and `oauth.excluded-models`, one entry per channel. */
+export type ChannelRuleKind = "aliases" | "exclusions";
+
+export type ImportResult =
   | {
       readonly ok: true;
       readonly version: number;
-      readonly document: string;
-      readonly updatedAt: number;
-      /** Keys set in the document that have no effect on Workers (`not-applied.ts`). */
+      /** Keys of the document that would have no effect here: named, not stored (ADR 0015). */
       readonly notApplied: ReadonlyArray<string>;
     }
-  | { readonly ok: false; readonly error: "invalid"; readonly message: string }
   | {
       readonly ok: false;
-      readonly error: "conflict";
+      readonly error: "invalid";
       readonly message: string;
-      readonly currentVersion: number;
+      readonly path?: string;
+      readonly line?: number;
+      readonly column?: number;
     };
 
-interface Row {
-  version: number;
-  document: string;
+const TABLES = {
+  settings: "config_settings",
+  groups: "config_key_groups",
+  keys: "config_api_keys",
+  aliases: "config_model_aliases",
+  exclusions: "config_model_exclusions",
+  payload: "config_payload_rules",
+} as const;
+
+type Table = (typeof TABLES)[keyof typeof TABLES];
+
+const ENTRY_COLUMNS = `revision INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT NOT NULL`;
+
+const SCHEMA = [
+  `CREATE TABLE IF NOT EXISTS config_changes (
+     id INTEGER PRIMARY KEY CHECK (id = 1),
+     counter INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL
+   )`,
+  `CREATE TABLE IF NOT EXISTS config_settings (id TEXT PRIMARY KEY, value TEXT NOT NULL, ${ENTRY_COLUMNS})`,
+  `CREATE TABLE IF NOT EXISTS config_key_groups (
+     id TEXT PRIMARY KEY, family TEXT NOT NULL, position INTEGER NOT NULL, value TEXT NOT NULL, ${ENTRY_COLUMNS}
+   )`,
+  `CREATE TABLE IF NOT EXISTS config_api_keys (
+     id TEXT PRIMARY KEY, group_id TEXT NOT NULL, position INTEGER NOT NULL, owner TEXT, value TEXT NOT NULL,
+     ${ENTRY_COLUMNS}
+   )`,
+  `CREATE TABLE IF NOT EXISTS config_model_aliases (id TEXT PRIMARY KEY, value TEXT NOT NULL, ${ENTRY_COLUMNS})`,
+  `CREATE TABLE IF NOT EXISTS config_model_exclusions (id TEXT PRIMARY KEY, value TEXT NOT NULL, ${ENTRY_COLUMNS})`,
+  `CREATE TABLE IF NOT EXISTS config_payload_rules (
+     id TEXT PRIMARY KEY, kind TEXT NOT NULL, position INTEGER NOT NULL, value TEXT NOT NULL, ${ENTRY_COLUMNS}
+   )`,
+];
+
+/** Who wrote the entries a migration imported. */
+export const MIGRATION_PRINCIPAL = "migration";
+
+interface Counter {
+  counter: number;
   updated_at: number;
   [column: string]: SqlStorageValue;
 }
 
+interface ValueRow {
+  id: string;
+  value: string;
+  revision: number;
+  [column: string]: SqlStorageValue;
+}
+
+interface GroupSqlRow extends ValueRow {
+  family: string;
+  position: number;
+}
+
+interface KeySqlRow extends ValueRow {
+  group_id: string;
+  position: number;
+}
+
+interface PayloadSqlRow extends ValueRow {
+  kind: string;
+  position: number;
+}
+
+interface LegacyRow {
+  version: number;
+  document: string;
+  [column: string]: SqlStorageValue;
+}
+
+/** Thrown inside a write's transaction to roll it back; caught by `#write`. */
+class Refusal extends Error {
+  readonly refused: WriteRefused;
+
+  constructor(refused: WriteRefused) {
+    super(refused.message);
+    this.refused = refused;
+  }
+}
+
+const refuse = (error: WriteRefused["error"], message: string): WriteRefused => ({
+  ok: false,
+  error,
+  message,
+});
+
+// SAFETY: every value column holds the JSON text this store wrote.
+const parse = (text: string): Json => JSON.parse(text) as Json;
+
+const parseObject = (text: string): JsonObject => {
+  const value = parse(text);
+
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value : {};
+};
+
 export class ConfigStore {
   readonly #sql: SqlStorage;
-  readonly #now: () => number;
   readonly #org: OrgId;
+  readonly #transaction: <T>(body: () => T) => T;
+  readonly #now: () => number;
+  #ready = false;
+  #cached:
+    | { readonly version: number; readonly config: Config; readonly document: string }
+    | undefined;
 
-  /** `org`: the org whose config this is; only `global`'s accepts the deployment settings. */
-  constructor(sql: SqlStorage, org: OrgId, now: () => number = Date.now) {
+  /**
+   * `org`: the org whose config this is (only `global`'s stores the deployment settings); `transaction` runs a body in
+   * one storage transaction (`ctx.storage.transactionSync`).
+   */
+  constructor(
+    sql: SqlStorage,
+    org: OrgId,
+    transaction: <T>(body: () => T) => T,
+    now: () => number = Date.now,
+  ) {
     this.#sql = sql;
-    this.#now = now;
     this.#org = org;
-    sql.exec(
-      `CREATE TABLE IF NOT EXISTS config (
-         id INTEGER PRIMARY KEY CHECK (id = 1),
-         version INTEGER NOT NULL,
-         document TEXT NOT NULL,
-         updated_at INTEGER NOT NULL
-       )`,
-    );
+    this.#transaction = transaction;
+    this.#now = now;
+
+    for (const statement of SCHEMA) sql.exec(statement);
   }
 
-  #read(): Row | undefined {
-    return this.#sql
-      .exec<Row>("SELECT version, document, updated_at FROM config WHERE id = 1")
-      .toArray()[0];
+  // --- reads ------------------------------------------------------------------------------------------------------
+
+  /** The current config, re-assembled only when the counter moved. */
+  current(): { readonly version: number; readonly config: Config; readonly document: string } {
+    const { counter } = this.#counter();
+    const cached = this.#cached;
+
+    if (cached !== undefined && cached.version === counter) return cached;
+    const config = Effect.runSync(decodeConfig(documentOfEntries(this.#rows())));
+
+    this.#cached = { version: counter, config, document: JSON.stringify(encodeConfig(config)) };
+
+    return this.#cached;
   }
 
-  #defaultDocument(): string {
-    return JSON.stringify(encodeConfig(Schema.decodeUnknownSync(Config)({})));
+  /** The assembled document; `unchanged` (no document) when the caller already has `sinceVersion`. */
+  snapshot(sinceVersion?: number): ConfigSnapshotWire {
+    const { counter, updated_at: updatedAt } = this.#counter();
+
+    if (sinceVersion !== undefined && sinceVersion === counter)
+      return { version: counter, unchanged: true, updatedAt };
+
+    return { version: counter, unchanged: false, document: this.current().document, updatedAt };
   }
 
-  get(sinceVersion?: number): ConfigSnapshotWire {
-    const row = this.#read();
-    const version = row?.version ?? 0;
-    const updatedAt = row?.updated_at ?? 0;
+  /** The assembled document with the revision of every entry (`EntryRevisions`). */
+  entries(): ConfigEntriesWire {
+    const { counter, updated_at: updatedAt } = this.#counter();
+    const { document } = this.current();
 
-    if (sinceVersion !== undefined && sinceVersion === version)
-      return { version, unchanged: true, updatedAt };
+    const revisions = (table: Table) => {
+      const out: Record<string, number> = {};
+
+      for (const row of this.#sql.exec<ValueRow>(`SELECT id, revision FROM ${table}`))
+        Object.defineProperty(out, row.id, { value: row.revision, enumerable: true });
+
+      return out;
+    };
 
     return {
-      version,
+      version: counter,
       unchanged: false,
-      document: row?.document ?? this.#defaultDocument(),
+      document,
       updatedAt,
+      revisions: {
+        settings: revisions(TABLES.settings),
+        groups: revisions(TABLES.groups),
+        aliases: revisions(TABLES.aliases),
+        exclusions: revisions(TABLES.exclusions),
+      },
     };
   }
 
-  /**
-   * Validates `text` (YAML or JSON, v8 or legacy layout), normalises it and stores the canonical document.
-   * With `expectedVersion`, the write fails with `conflict` unless it equals the current version.
-   */
-  put(text: string, expectedVersion?: number): PutConfigResult {
-    const current = this.#read()?.version ?? 0;
+  // --- writes -----------------------------------------------------------------------------------------------------
 
-    if (expectedVersion !== undefined && expectedVersion !== current) {
-      return {
-        ok: false,
-        error: "conflict",
-        message: `config version is ${current}, expected ${expectedVersion}`,
-        currentVersion: current,
-      };
+  /** Writes settings entries; every change names the revision it is based on. */
+  writeSettings(
+    changes: ReadonlyArray<SettingChange>,
+    by: string,
+  ): WriteResult<{ readonly revisions: Readonly<Record<string, number>> }> {
+    for (const change of changes) {
+      if (!isSettingPath(change.id)) return refuse("invalid", `${change.id}: not a setting`);
     }
 
+    if (this.#org !== GLOBAL_ORG) {
+      const set = changes.filter(
+        (change) =>
+          change.value !== null &&
+          DEPLOYMENT_SETTINGS.some((setting) => setting.key === change.id) &&
+          !jsonEquals(change.value, atPath(defaultDocument(), change.id)),
+      );
+
+      if (set.length > 0) return refuse("invalid", deploymentRefusal(set.map(({ id }) => id)));
+    }
+
+    return this.#write((revision) => {
+      this.#checkRevisions(
+        TABLES.settings,
+        changes.map(({ id, revision: named }) => ({ id, revision: named })),
+      );
+      const revisions: Record<string, number> = {};
+
+      for (const change of changes) {
+        const reset =
+          change.value === null || jsonEquals(change.value, atPath(defaultDocument(), change.id));
+
+        if (reset) this.#sql.exec(`DELETE FROM ${TABLES.settings} WHERE id = ?`, change.id);
+        else this.#upsertValue(TABLES.settings, change.id, change.value, revision, by);
+
+        Object.defineProperty(revisions, change.id, {
+          value: reset ? 0 : revision,
+          enumerable: true,
+        });
+      }
+
+      return { revisions };
+    });
+  }
+
+  /** Writes one channel rule (`aliases` or `exclusions` of `channel`); `value` `null` deletes it. */
+  writeChannelRule(
+    kind: ChannelRuleKind,
+    channel: string,
+    revision: number,
+    value: Json | null,
+    by: string,
+  ): WriteResult<{ readonly revision: number }> {
+    const table = kind === "aliases" ? TABLES.aliases : TABLES.exclusions;
+
+    return this.#write((next) => {
+      const current = this.#revisionOf(table, channel);
+
+      if (value === null && current === 0)
+        throw new Refusal(refuse("not_found", `no ${kind} for ${channel}`));
+      this.#checkRevisions(table, [{ id: channel, revision }]);
+
+      if (value === null) this.#sql.exec(`DELETE FROM ${table} WHERE id = ?`, channel);
+      else this.#upsertValue(table, channel, value, next, by);
+
+      return { revision: value === null ? 0 : next };
+    });
+  }
+
+  /**
+   * Writes one key group with its keys, or deletes it (`group: null`). A kept key carries its `id`, which must be a key
+   * of this group; a key without one is new and gets an entry id (`assignEntryIds`). The group takes the write's
+   * revision; a key takes it when its value or position changed.
+   */
+  writeKeyGroup(
+    change: KeyGroupChange,
+    by: string,
+  ): WriteResult<{ readonly id: string; readonly revision: number }> {
+    return this.#write((revision) => {
+      const existing =
+        change.id === undefined
+          ? undefined
+          : this.#sql
+              .exec<GroupSqlRow>(
+                `SELECT id, family, position, value, revision FROM ${TABLES.groups} WHERE id = ?`,
+                change.id,
+              )
+              .toArray()[0];
+
+      if (change.id !== undefined && existing === undefined)
+        throw new Refusal(
+          change.revision === 0
+            ? refuse("not_found", "key group not found")
+            : refuse("conflict", "the key group was deleted"),
+        );
+
+      if (existing !== undefined && existing.family !== change.family)
+        throw new Refusal(refuse("not_found", "key group not found"));
+
+      if (existing === undefined && change.revision !== 0)
+        throw new Refusal(refuse("conflict", "a new key group is written at revision 0"));
+
+      if (existing !== undefined && existing.revision !== change.revision)
+        throw new Refusal(
+          refuse(
+            "conflict",
+            `key group is at revision ${existing.revision}, not ${change.revision}`,
+          ),
+        );
+
+      if (change.group === null) {
+        if (existing === undefined) throw new Refusal(refuse("not_found", "key group not found"));
+        this.#sql.exec(`DELETE FROM ${TABLES.groups} WHERE id = ?`, existing.id);
+        this.#sql.exec(`DELETE FROM ${TABLES.keys} WHERE group_id = ?`, existing.id);
+
+        return { id: existing.id, revision: 0 };
+      }
+
+      const id = existing?.id ?? this.#freshGroupId();
+
+      const stored = new Map(
+        this.#sql
+          .exec<KeySqlRow>(
+            `SELECT id, group_id, position, value, revision FROM ${TABLES.keys} WHERE group_id = ?`,
+            id,
+          )
+          .toArray()
+          .map((row) => [row.id, row]),
+      );
+
+      const group = this.#withKeyIds(change.family, id, change.group, stored);
+      const { id: _id, keys, ...value } = group;
+      const position = existing?.position ?? this.#nextGroupPosition(change.family);
+
+      this.#sql.exec(
+        `INSERT INTO ${TABLES.groups} (id, family, position, value, revision, updated_at, updated_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (id) DO UPDATE SET value = excluded.value, revision = excluded.revision,
+           updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+        id,
+        change.family,
+        position,
+        JSON.stringify(value),
+        revision,
+        this.#now(),
+        by,
+      );
+
+      const written = Array.isArray(keys) ? keys : [];
+      const kept = new Set<string>();
+
+      for (const [keyPosition, raw] of written.entries()) {
+        const { id: keyId, ...keyValue } =
+          typeof raw === "object" && raw !== null && !Array.isArray(raw) ? raw : {};
+
+        if (typeof keyId !== "string") throw new Error("an API key was written without an id");
+        kept.add(keyId);
+        this.#upsertKey(
+          { id: keyId, groupId: id, position: keyPosition, value: keyValue },
+          revision,
+          by,
+        );
+      }
+
+      for (const keyId of stored.keys())
+        if (!kept.has(keyId)) this.#sql.exec(`DELETE FROM ${TABLES.keys} WHERE id = ?`, keyId);
+
+      return { id, revision };
+    });
+  }
+
+  /**
+   * Adds or removes `*` in the `excluded-models` of the API key `credentialId` (disables it without changing its id).
+   * A key's own list replaces its group's, so a key without one starts from the group's. The key and its group take
+   * the write's revision.
+   */
+  setKeyExcludedAll(credentialId: string, disabled: boolean, by: string): WriteResult {
+    return this.#write((revision) => {
+      const key = this.#sql
+        .exec<KeySqlRow>(
+          `SELECT id, group_id, position, value, revision FROM ${TABLES.keys} WHERE id = ?`,
+          credentialId,
+        )
+        .toArray()[0];
+
+      const group =
+        key === undefined
+          ? undefined
+          : this.#sql
+              .exec<GroupSqlRow>(
+                `SELECT id, family, position, value, revision FROM ${TABLES.groups} WHERE id = ?`,
+                key.group_id,
+              )
+              .toArray()[0];
+
+      if (key === undefined || group === undefined)
+        throw new Refusal(refuse("not_found", "API key not found"));
+      const value = parseObject(key.value);
+      const inherited = patterns(parseObject(group.value)["excluded-models"]);
+      const own = value["excluded-models"];
+      const effective = Array.isArray(own) ? patterns(own) : inherited;
+      const disabling = (pattern: string) => pattern.trim() === "*";
+
+      const next = disabled
+        ? effective.some(disabling)
+          ? effective
+          : [...effective, "*"]
+        : effective.filter((pattern) => !disabling(pattern));
+
+      if (jsonEquals(next, inherited)) delete value["excluded-models"];
+      else value["excluded-models"] = next;
+
+      this.#upsertKey(
+        { id: key.id, groupId: key.group_id, position: key.position, value },
+        revision,
+        by,
+      );
+      this.#sql.exec(
+        `UPDATE ${TABLES.groups} SET revision = ?, updated_at = ?, updated_by = ? WHERE id = ?`,
+        revision,
+        this.#now(),
+        by,
+        group.id,
+      );
+
+      return {};
+    });
+  }
+
+  /**
+   * Replaces every entry with a Go config document (`text`, YAML or JSON, v8 or legacy layout) in one transaction. Key
+   * ids in the document are ignored: every API key takes the id of the credential it produces (`assignEntryIds`).
+   * The not-applied keys are named in the answer and not stored.
+   */
+  importDocument(text: string, by: string): ImportResult {
+    this.#ensure();
     const parsed = Effect.runSync(Effect.result(parseConfigYaml(text)));
 
-    if (Result.isFailure(parsed))
-      return { ok: false, error: "invalid", message: parsed.failure.message };
+    if (Result.isFailure(parsed)) {
+      const { message, path, line, column } = parsed.failure;
+
+      return {
+        ok: false,
+        error: "invalid",
+        message,
+        ...(path === undefined ? {} : { path }),
+        ...(line === undefined ? {} : { line }),
+        ...(column === undefined ? {} : { column }),
+      };
+    }
 
     if (this.#org !== GLOBAL_ORG) {
       const set = DEPLOYMENT_SETTINGS.filter((setting) => setting.isSet(parsed.success));
@@ -152,31 +584,375 @@ export class ConfigStore {
         return {
           ok: false,
           error: "invalid",
-          message: `${set.map((setting) => setting.key).join(", ")}: a deployment setting, set in the global org's config only`,
+          message: deploymentRefusal(set.map(({ key }) => key)),
         };
     }
 
-    // Round-trip through the schema so the stored document is exactly what readers will decode.
-    const document = JSON.stringify(encodeConfig(parsed.success));
-    const version = current + 1;
-    const updatedAt = this.#now();
+    const rows = this.#rowsOf(parsed.success);
+
+    const version = this.#transaction(() => {
+      const counter = this.#bump();
+      this.#replace(rows, counter, by);
+
+      return counter;
+    });
+
+    return { ok: true, version, notApplied: notAppliedSettings(parsed.success) };
+  }
+
+  // --- internals --------------------------------------------------------------------------------------------------
+
+  /** Runs `apply` with the write's revision in one transaction, then checks the config it leaves. */
+  #write<A extends object>(apply: (revision: number) => A): WriteResult<A> {
+    this.#ensure();
+
+    try {
+      return this.#transaction(() => {
+        const revision = this.#bump();
+        const result = apply(revision);
+
+        const decoded = Effect.runSync(
+          Effect.result(decodeConfig(documentOfEntries(this.#rows()))),
+        );
+
+        if (Result.isFailure(decoded))
+          throw new Refusal(refuse("invalid", decoded.failure.message));
+
+        return { ok: true as const, version: revision, ...result };
+      });
+    } catch (error) {
+      if (error instanceof Refusal) return error.refused;
+
+      throw error;
+    }
+  }
+
+  #checkRevisions(
+    table: Table,
+    named: ReadonlyArray<{ readonly id: string; readonly revision: number }>,
+  ): void {
+    const stale = named.filter(({ id, revision }) => this.#revisionOf(table, id) !== revision);
+
+    if (stale.length > 0)
+      throw new Refusal(
+        refuse(
+          "conflict",
+          `changed since the revision named: ${stale.map(({ id }) => id).join(", ")}`,
+        ),
+      );
+  }
+
+  #revisionOf(table: Table, id: string): number {
+    return (
+      this.#sql.exec<ValueRow>(`SELECT revision FROM ${table} WHERE id = ?`, id).toArray()[0]
+        ?.revision ?? 0
+    );
+  }
+
+  #upsertValue(table: Table, id: string, value: Json, revision: number, by: string): void {
     this.#sql.exec(
-      `INSERT INTO config (id, version, document, updated_at) VALUES (1, ?, ?, ?)
-       ON CONFLICT (id) DO UPDATE SET version = excluded.version, document = excluded.document, updated_at = excluded.updated_at`,
-      version,
-      document,
-      updatedAt,
+      `INSERT INTO ${table} (id, value, revision, updated_at, updated_by) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (id) DO UPDATE SET value = excluded.value, revision = excluded.revision,
+         updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+      id,
+      JSON.stringify(value),
+      revision,
+      this.#now(),
+      by,
+    );
+  }
+
+  /** Writes a key row; an unchanged key (same group, position and value) keeps its revision. */
+  #upsertKey(row: KeyRow, revision: number, by: string): void {
+    const value = JSON.stringify(row.value);
+
+    const current = this.#sql
+      .exec<KeySqlRow>(
+        `SELECT id, group_id, position, value, revision FROM ${TABLES.keys} WHERE id = ?`,
+        row.id,
+      )
+      .toArray()[0];
+
+    if (
+      current !== undefined &&
+      current.group_id === row.groupId &&
+      current.position === row.position &&
+      jsonEquals(parse(current.value), row.value)
+    )
+      return;
+
+    this.#sql.exec(
+      `INSERT INTO ${TABLES.keys} (id, group_id, position, owner, value, revision, updated_at, updated_by)
+       VALUES (?, ?, ?, NULL, ?, ?, ?, ?)
+       ON CONFLICT (id) DO UPDATE SET group_id = excluded.group_id, position = excluded.position,
+         value = excluded.value, revision = excluded.revision, updated_at = excluded.updated_at,
+         updated_by = excluded.updated_by`,
+      row.id,
+      row.groupId,
+      row.position,
+      value,
+      revision,
+      this.#now(),
+      by,
+    );
+  }
+
+  /**
+   * `group` (as written, keys with or without ids) checked and given ids: an id must be one of `stored` (this group's
+   * keys), and a key without one gets the id of the credential it produces, unique among every stored key.
+   */
+  #withKeyIds(
+    family: ApiKeyFamily,
+    groupId: string,
+    group: JsonObject,
+    stored: ReadonlyMap<string, KeySqlRow>,
+  ): JsonObject {
+    const keys = Array.isArray(group.keys) ? group.keys : [];
+
+    for (const key of keys) {
+      const id =
+        typeof key === "object" && key !== null && !Array.isArray(key) ? key.id : undefined;
+
+      if (id !== undefined && (typeof id !== "string" || !stored.has(id)))
+        throw new Refusal(refuse("conflict", "an API key of this group changed since it was read"));
+    }
+
+    const decoded = Effect.runSync(
+      Effect.result(decodeRawConfig({ "api-keys": { [family]: [{ ...group, id: groupId }] } })),
     );
 
+    if (Result.isFailure(decoded)) throw new Refusal(refuse("invalid", decoded.failure.message));
+
+    const taken = new Set(
+      this.#sql
+        .exec<ValueRow>(`SELECT id FROM ${TABLES.keys} WHERE group_id != ?`, groupId)
+        .toArray()
+        .map((row) => row.id),
+    );
+
+    const withIds = assignEntryIds(decoded.success, freshEntryId, taken);
+    // SAFETY: the config schema encodes to a plain JSON object.
+    const document = encodeConfig(withIds) as JsonObject;
+    const written = atPath(document, `api-keys.${family}`);
+
+    const first = Array.isArray(written) ? written[0] : undefined;
+
+    if (typeof first !== "object" || first === null || Array.isArray(first))
+      throw new Error("the written key group did not survive its own decode");
+
+    return first;
+  }
+
+  #nextGroupPosition(family: ApiKeyFamily): number {
+    const row = this.#sql
+      .exec<{ position: number | null; [column: string]: SqlStorageValue }>(
+        `SELECT MAX(position) AS position FROM ${TABLES.groups} WHERE family = ?`,
+        family,
+      )
+      .toArray()[0];
+
+    return (row?.position ?? -1) + 1;
+  }
+
+  #freshGroupId(): string {
+    let id = freshEntryId("group");
+
+    while (this.#revisionOf(TABLES.groups, id) !== 0) id = freshEntryId("group");
+
+    return id;
+  }
+
+  #counter(): Counter {
+    this.#ensure();
+
+    return (
+      this.#sql
+        .exec<Counter>("SELECT counter, updated_at FROM config_changes WHERE id = 1")
+        .toArray()[0] ?? { counter: 0, updated_at: 0 }
+    );
+  }
+
+  /** Takes the next value of the counter (inside the caller's transaction). */
+  #bump(): number {
+    const { counter } = this.#counter();
+    const next = counter + 1;
+
+    this.#sql.exec(
+      "UPDATE config_changes SET counter = ?, updated_at = ? WHERE id = 1",
+      next,
+      this.#now(),
+    );
+
+    return next;
+  }
+
+  #rows(): EntryRows {
+    const settings = this.#sql
+      .exec<ValueRow>(`SELECT id, value FROM ${TABLES.settings}`)
+      .toArray()
+      .map((row): SettingRow => ({ id: row.id, value: parse(row.value) }));
+
+    const groups = this.#sql
+      .exec<GroupSqlRow>(`SELECT id, family, position, value FROM ${TABLES.groups}`)
+      .toArray()
+      .map((row): GroupRow => ({
+        id: row.id,
+        // SAFETY: only `writeKeyGroup` and `#replace` write this column, with an `ApiKeyFamily`.
+        family: row.family as ApiKeyFamily,
+        position: row.position,
+        value: parseObject(row.value),
+      }));
+
+    const keys = this.#sql
+      .exec<KeySqlRow>(`SELECT id, group_id, position, value FROM ${TABLES.keys}`)
+      .toArray()
+      .map((row): KeyRow => ({
+        id: row.id,
+        groupId: row.group_id,
+        position: row.position,
+        value: parseObject(row.value),
+      }));
+
+    const channels = (table: Table): ChannelRow[] =>
+      this.#sql
+        .exec<ValueRow>(`SELECT id, value FROM ${table}`)
+        .toArray()
+        .map((row) => ({ id: row.id, value: parse(row.value) }));
+
+    const payload = this.#sql
+      .exec<PayloadSqlRow>(`SELECT id, kind, position, value FROM ${TABLES.payload}`)
+      .toArray()
+      .map((row): PayloadRow => ({
+        id: row.id,
+        // SAFETY: only `#replace` writes this column, with a `PayloadKind`.
+        kind: row.kind as PayloadKind,
+        position: row.position,
+        value: parse(row.value),
+      }));
+
     return {
-      ok: true,
-      version,
-      document,
-      updatedAt,
-      notApplied: notAppliedSettings(parsed.success),
+      settings,
+      groups,
+      keys,
+      aliases: channels(TABLES.aliases),
+      exclusions: channels(TABLES.exclusions),
+      payload,
     };
   }
+
+  /** The rows of an imported config: Go ids dropped, entry ids assigned, not-applied keys left out. */
+  #rowsOf(config: Config): EntryRows {
+    return entriesOfConfig(assignEntryIds(withoutEntryIds(config)), () => freshEntryId("payload"));
+  }
+
+  /** Replaces every entry with `rows`, each at `revision` (inside the caller's transaction). */
+  #replace(rows: EntryRows, revision: number, by: string): void {
+    const now = this.#now();
+
+    for (const table of Object.values(TABLES)) this.#sql.exec(`DELETE FROM ${table}`);
+
+    for (const { id, value } of rows.settings)
+      this.#upsertValue(TABLES.settings, id, value, revision, by);
+
+    for (const group of rows.groups)
+      this.#sql.exec(
+        `INSERT INTO ${TABLES.groups} (id, family, position, value, revision, updated_at, updated_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        group.id,
+        group.family,
+        group.position,
+        JSON.stringify(group.value),
+        revision,
+        now,
+        by,
+      );
+
+    for (const key of rows.keys) this.#upsertKey(key, revision, by);
+
+    for (const { id, value } of rows.aliases)
+      this.#upsertValue(TABLES.aliases, id, value, revision, by);
+
+    for (const { id, value } of rows.exclusions)
+      this.#upsertValue(TABLES.exclusions, id, value, revision, by);
+
+    for (const rule of rows.payload)
+      this.#sql.exec(
+        `INSERT INTO ${TABLES.payload} (id, kind, position, value, revision, updated_at, updated_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        rule.id,
+        rule.kind,
+        rule.position,
+        JSON.stringify(rule.value),
+        revision,
+        now,
+        by,
+      );
+  }
+
+  /**
+   * Creates the counter on first use. A ControlPlane that stored its config as one document (`config` table) imports
+   * it here, keeping the row; the counter continues after the document's version.
+   */
+  #ensure(): void {
+    if (this.#ready) return;
+
+    const present = this.#sql
+      .exec<Counter>("SELECT counter, updated_at FROM config_changes WHERE id = 1")
+      .toArray()[0];
+
+    if (present === undefined) {
+      const legacy = this.#legacyDocument();
+
+      // A stored document that no longer decodes fails here, and the next use tries again: never serve an empty
+      // config in its place.
+      const rows =
+        legacy === undefined
+          ? undefined
+          : this.#rowsOf(Effect.runSync(decodeConfig(parse(legacy.document))));
+
+      this.#transaction(() => {
+        const counter = legacy === undefined ? 0 : legacy.version + 1;
+
+        this.#sql.exec(
+          "INSERT INTO config_changes (id, counter, updated_at) VALUES (1, ?, ?)",
+          counter,
+          legacy === undefined ? 0 : this.#now(),
+        );
+
+        if (rows !== undefined) this.#replace(rows, counter, MIGRATION_PRINCIPAL);
+      });
+
+      if (legacy !== undefined) {
+        const dropped = notAppliedSettings(Effect.runSync(decodeConfig(parse(legacy.document))));
+
+        if (dropped.length > 0)
+          Effect.runSync(
+            Effect.logWarning("config migrated to entries; not-applied keys dropped").pipe(
+              Effect.annotateLogs({ keys: dropped.join(", ") }),
+            ),
+          );
+      }
+    }
+
+    this.#ready = true;
+  }
+
+  /** The single-row document of a ControlPlane from before config entries, if any. */
+  #legacyDocument(): LegacyRow | undefined {
+    const table = this.#sql
+      .exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'config'")
+      .toArray()[0];
+
+    if (table === undefined) return undefined;
+
+    return this.#sql
+      .exec<LegacyRow>("SELECT version, document FROM config WHERE id = 1")
+      .toArray()[0];
+  }
 }
+
+const patterns = (value: Json | undefined): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 
 /** Decodes a stored/wire JSON document into a `Config` (the DO already validated it on write). */
 export const decodeStoredConfig = (document: string) =>

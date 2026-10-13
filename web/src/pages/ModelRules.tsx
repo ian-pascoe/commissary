@@ -2,7 +2,7 @@
 // section per channel (the provider key of its accounts), with a jump list above. Aliases rename an upstream model for
 // clients, optionally keeping the original; exclusions take models away, with a live count of the models a pattern
 // matches. Add forms stay closed until asked for and take the focus when they open. Each edit is
-// a delta saved with the view's config version and re-applied once to a fresh read on 409 (`saveRuleChange`); the
+// a delta saved with the channel entry's revision and re-applied once to a fresh read on 409 (`saveRuleChange`); the
 // view refetches after a save, so the Models page shows the effect at once. API key and OpenAI-compatible rules live
 // on the API keys page, an account's own rules in its file; this page only points there.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";

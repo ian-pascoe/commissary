@@ -29,8 +29,8 @@ describe("crossSiteRejection", () => {
     expect(check("GET", "/v1/responses", { upgrade: "websocket" })).toBeUndefined();
     expect(
       check(
-        "PUT",
-        "/v8/management/config.yaml",
+        "POST",
+        "/v8/management/settings/import",
         { "content-type": "application/yaml" },
         "management",
       ),
@@ -49,7 +49,7 @@ describe("crossSiteRejection", () => {
       check("POST", "/v8/management/api-keys/probe", sameOrigin, "management"),
     ).toBeUndefined();
     expect(
-      check("GET", "/v8/management/config", { "sec-fetch-site": "same-origin" }, "management"),
+      check("GET", "/v8/management/settings", { "sec-fetch-site": "same-origin" }, "management"),
     ).toBeUndefined();
     expect(check("GET", "/v1/responses", { upgrade: "websocket", origin: PROXY })).toBeUndefined();
     // A user typing the URL / a bookmark.
@@ -98,10 +98,10 @@ describe("crossSiteRejection", () => {
 
   it("refuses cross-site management reads except top-level navigations", () => {
     expect(
-      check("GET", "/v8/management/config", { origin: "https://evil.test" }, "management"),
+      check("GET", "/v8/management/settings", { origin: "https://evil.test" }, "management"),
     ).toBe(403);
     expect(
-      check("GET", "/v8/management/config", { "sec-fetch-site": "cross-site" }, "management"),
+      check("GET", "/v8/management/settings", { "sec-fetch-site": "cross-site" }, "management"),
     ).toBe(403);
 
     // `queue` pops records on GET: an <img> from another site must not reach it.
@@ -142,10 +142,10 @@ describe("crossSiteRejection", () => {
     // The management API has no page to open from another site, OAuth callbacks included (providers redirect to the
     // public callback paths); nor do the bundle files.
     for (const path of [
-      "/v8/management/config",
+      "/v8/management/settings",
       "/v8/management/oauth/callback?provider=claude&state=s&code=c",
       "/v8/management/credentials/download?name=a.json",
-      "/V8/Management/config.yaml",
+      "/V8/Management/Settings",
       "/assets/index.js",
     ])
       expect(check("GET", path, link, "management")).toBe(403);
@@ -154,14 +154,16 @@ describe("crossSiteRejection", () => {
     expect(check("POST", "/accounts", link, "management")).toBe(403);
   });
 
-  it("requires JSON (multipart for uploads, YAML for config.yaml) on management writes", () => {
+  it("requires JSON (multipart for uploads, YAML for the config import) on management writes", () => {
     expect(
       write("POST", "/v8/management/api-keys/probe", {
         "content-type": "application/json; charset=utf-8",
       }),
     ).toBeUndefined();
     expect(
-      write("PATCH", "/v8/management/config", { "content-type": "application/merge-patch+json" }),
+      write("PATCH", "/v8/management/settings", {
+        "content-type": "application/merge-patch+json",
+      }),
     ).toBeUndefined();
     expect(write("POST", "/v8/management/api-keys/probe", { "content-type": "text/plain" })).toBe(
       415,
@@ -182,9 +184,14 @@ describe("crossSiteRejection", () => {
       }),
     ).toBe(415);
     expect(
-      write("PUT", "/v8/management/config.yaml", { "content-type": "text/yaml" }),
+      write("POST", "/v8/management/settings/import", { "content-type": "text/yaml" }),
     ).toBeUndefined();
-    expect(write("PUT", "/v8/management/config", { "content-type": "application/yaml" })).toBe(415);
+    expect(write("PATCH", "/v8/management/settings", { "content-type": "application/yaml" })).toBe(
+      415,
+    );
+    expect(write("POST", "/v8/management/settings/import", { "content-type": "text/plain" })).toBe(
+      415,
+    );
     // Bodies without a type are refused; bodiless writes (`DELETE ?name=`, `POST .../refresh`) are fine.
     expect(write("POST", "/v8/management/api-keys/probe", { "content-length": "12" })).toBe(415);
     expect(
@@ -237,23 +244,23 @@ describe("Worker entry point: cross-site protections", () => {
       "sec-fetch-mode": "cors",
     };
 
-    const config = await worker("/v8/management/config", { headers: panelHeaders });
+    const config = await worker("/v8/management/settings", { headers: panelHeaders });
     expect(config.status).toBe(200);
     expect(config.headers.get("access-control-allow-origin")).toBeNull();
     await config.body?.cancel();
 
     // A same-origin JSON write reaches the handler.
-    const patch = await worker("/v8/management/config", {
+    const patch = await worker("/v8/management/settings", {
       method: "PATCH",
       headers: { ...panelHeaders, "content-type": "application/json" },
-      body: JSON.stringify({ routing: { strategy: "fill-first" } }),
+      body: JSON.stringify({ revisions: {}, patch: { routing: { "session-affinity": true } } }),
     });
 
     expect(patch.status).toBe(200);
     await patch.body?.cancel();
 
-    const yaml = await worker("/v8/management/config.yaml", {
-      method: "PUT",
+    const yaml = await worker("/v8/management/settings/import", {
+      method: "POST",
       headers: { ...panelHeaders, "content-type": "application/yaml" },
       body: "routing:\n  strategy: fill-first\n",
     });
@@ -263,10 +270,10 @@ describe("Worker entry point: cross-site protections", () => {
   });
 
   it("keeps management working for curl-style clients without Origin", async () => {
-    const response = await worker("/v8/management/config", {
+    const response = await worker("/v8/management/settings", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ routing: { strategy: "fill-first" } }),
+      body: JSON.stringify({ revisions: {}, patch: { routing: { strategy: "fill-first" } } }),
     });
 
     expect(response.status).toBe(200);
@@ -274,8 +281,8 @@ describe("Worker entry point: cross-site protections", () => {
   });
 
   it("refuses forged management writes from other sites before they reach a handler", async () => {
-    const forged = await worker("/v8/management/config", {
-      method: "PUT",
+    const forged = await worker("/v8/management/settings", {
+      method: "PATCH",
       headers: {
         origin: "https://evil.test",
         "sec-fetch-site": "cross-site",
@@ -303,8 +310,8 @@ describe("Worker entry point: cross-site protections", () => {
     expect(JSON.stringify(await list.json())).not.toContain("claude-evil");
 
     // Simple (preflight-free) content types are refused even without browser headers.
-    const simple = await worker("/v8/management/config", {
-      method: "PUT",
+    const simple = await worker("/v8/management/settings", {
+      method: "PATCH",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: "routing=x",
     });
@@ -313,7 +320,7 @@ describe("Worker entry point: cross-site protections", () => {
     await simple.body?.cancel();
 
     // Cross-origin preflights get no CORS grant, so browsers never send the real request.
-    const preflight = await worker("/v8/management/config", {
+    const preflight = await worker("/v8/management/settings", {
       method: "OPTIONS",
       headers: { origin: "https://evil.test", "access-control-request-method": "POST" },
     });

@@ -1,26 +1,15 @@
-// The read-only parts of the Settings page: payload rule counts, the account error rules, the deployment's own admins,
-// and the keys that do nothing on Workers (each with Remove). Payload and error rules are edited in the raw
-// configuration (/settings/config), which each links at its key.
-import { Link } from "@tanstack/react-router";
-import { type ReactNode, useState } from "react";
+// The read-only parts of the Settings page: payload rule counts, the account error rules and the deployment's own
+// admins. Payload and error rules are set by importing a config document.
+import type { ReactNode } from "react";
 import type { RequestScopedErrorRule } from "#contract/api-keys.ts";
 import type { SettingsView } from "#contract/settings.ts";
-import { removeSettingAtom } from "../api/client.ts";
-import { kit, Problem } from "../components/Kit.tsx";
 import { formatCount } from "../lib/format.ts";
 import { providerName } from "../lib/providers.ts";
-import { removalPatch } from "../lib/settings.ts";
-import { useAction } from "../lib/use-action.ts";
 import styles from "./Settings.module.css";
 
-/** Where payload and error rules are edited: the raw configuration, at their key. */
-const EditRaw = ({ what, path }: { readonly what: string; readonly path: string }) => (
-  <p className={styles["quiet"]}>
-    <Link to="/settings/config" hash={path}>
-      Edit {what} in the raw configuration
-    </Link>
-    .
-  </p>
+/** Payload and error rules are not edited in the panel: a config import sets them. */
+const SetByImport = ({ what }: { readonly what: string }) => (
+  <p className={styles["quiet"]}>Set {what} by importing a config document.</p>
 );
 
 /** A section without a form: heading and body. */
@@ -66,7 +55,7 @@ export const PayloadRules = ({ payload }: { readonly payload: SettingsView["payl
         </li>
       ))}
     </ul>
-    <EditRaw what="payload rules" path="requests.payload" />
+    <SetByImport what="payload rules" />
   </PlainSection>
 );
 
@@ -129,7 +118,7 @@ export const ErrorRules = ({
           </tbody>
         </table>
       )}
-      <EditRaw what="error rules" path="oauth.request-scoped-errors" />
+      <SetByImport what="error rules" />
     </div>
   );
 };
@@ -157,61 +146,3 @@ export const DeploymentAdmins = ({ admins }: { readonly admins: SettingsView["en
     </div>
   );
 };
-
-const NotAppliedRow = ({
-  entry,
-  view,
-}: {
-  readonly entry: SettingsView["not_applied"][number];
-  readonly view: SettingsView;
-}) => {
-  const remove = useAction(removeSettingAtom(entry.key));
-  const [problem, setProblem] = useState<string | undefined>(undefined);
-  const removable = removalPatch(entry.key) !== undefined;
-
-  return (
-    <li className={styles["inertRow"]}>
-      <code className={styles["inertKey"]}>{entry.key}</code>
-      <span className={styles["inertReason"]}>{entry.reason}</span>
-      {removable ? (
-        <button
-          type="button"
-          className={kit["secondary"]}
-          disabled={remove.busy}
-          aria-label={`Remove ${entry.key}`}
-          onClick={async () => {
-            setProblem(undefined);
-            const outcome = await remove.run(view);
-
-            if (!outcome.ok) setProblem(outcome.message);
-          }}
-        >
-          {remove.busy ? "Removing…" : "Remove"}
-        </button>
-      ) : (
-        <Link to="/keys" className={styles["inertLink"]}>
-          On the API keys page
-        </Link>
-      )}
-      {problem === undefined ? null : (
-        <div className={styles["inertProblem"]}>
-          <Problem>Could not remove it. {problem}</Problem>
-        </div>
-      )}
-    </li>
-  );
-};
-
-export const NotApplied = ({ view }: { readonly view: SettingsView }) => (
-  <PlainSection id="not-applied" title="Not applied on Workers">
-    <p className={styles["lead"]}>
-      The configuration sets these, but they do nothing on Workers. Removing one changes nothing
-      else; values are never shown.
-    </p>
-    <ul className={styles["inert"]}>
-      {view.not_applied.map((entry) => (
-        <NotAppliedRow key={entry.key} entry={entry} view={view} />
-      ))}
-    </ul>
-  </PlainSection>
-);

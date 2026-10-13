@@ -8,6 +8,7 @@ import { ConfigReader, ConfigSource } from "../src/config/reader.ts";
 import { decodeStoredConfig, type ConfigSnapshotWire } from "../src/config/store.ts";
 import { WorkerEnv } from "../src/platform/env.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { comparable } from "./support/config-entries.ts";
 
 // Each test uses its own Durable Object instance; production uses getByName("global").
 const controlPlane = () => env.CONTROL_PLANE.getByName(crypto.randomUUID());
@@ -42,11 +43,11 @@ describe("ControlPlane config storage (Workers pool)", () => {
     }),
   );
 
-  it.effect("round-trips YAML through the Durable Object", () =>
+  it.effect("imports a YAML document through the Durable Object", () =>
     Effect.gen(function* () {
       const stub = controlPlane();
       const imported = yield* parseConfigYaml(YAML);
-      const put = yield* Effect.promise(async () => await stub.putConfig(YAML));
+      const put = yield* Effect.promise(async () => await stub.importConfig(YAML, "test"));
       assert.isTrue(put.ok);
 
       if (!put.ok) return;
@@ -55,17 +56,23 @@ describe("ControlPlane config storage (Workers pool)", () => {
       const snapshot = yield* Effect.promise(async () => await stub.getConfig());
       assert.strictEqual(snapshot.version, 1);
       const stored = yield* decodeStoredConfig(snapshot.document ?? "");
-      assert.deepStrictEqual(encodeConfig(stored), encodeConfig(imported));
+      assert.deepStrictEqual(comparable(stored), comparable(imported));
     }),
   );
 
   it.effect("versions increase and unchanged versions are reported cheaply", () =>
     Effect.gen(function* () {
       const stub = controlPlane();
-      yield* Effect.promise(async () => await stub.putConfig("routing: { strategy: fill-first }"));
+      yield* Effect.promise(
+        async () => await stub.importConfig("routing: { strategy: fill-first }", "test"),
+      );
 
       const second = yield* Effect.promise(
-        async () => await stub.putConfig('{"routing":{"strategy":"round-robin"}}'),
+        async () =>
+          await stub.writeSettings(
+            [{ id: "routing.strategy", revision: 1, value: "round-robin" }],
+            "t",
+          ),
       );
 
       assert.isTrue(second.ok && second.version === 2);
@@ -77,39 +84,33 @@ describe("ControlPlane config storage (Workers pool)", () => {
     }),
   );
 
-  it.effect("rejects invalid documents without changing the stored config", () =>
+  it.effect("rejects invalid documents and settings without changing the stored config", () =>
     Effect.gen(function* () {
       const stub = controlPlane();
-      yield* Effect.promise(async () => await stub.putConfig("routing: { strategy: fill-first }"));
+      yield* Effect.promise(
+        async () => await stub.importConfig("routing: { strategy: fill-first }", "test"),
+      );
 
       const bad = yield* Effect.promise(
-        async () => await stub.putConfig("routing: { retry: { request-retry: many } }"),
+        async () => await stub.importConfig("routing: { retry: { request-retry: many } }", "test"),
       );
 
       assert.isFalse(bad.ok);
+      assert.strictEqual(bad.ok ? "" : bad.error, "invalid");
 
-      if (bad.ok) return;
-      assert.strictEqual(bad.error, "invalid");
+      const badSetting = yield* Effect.promise(
+        async () =>
+          await stub.writeSettings(
+            [{ id: "requests.request-retry", revision: 0, value: "many" }],
+            "t",
+          ),
+      );
+
+      assert.isFalse(badSetting.ok);
       const snapshot = yield* Effect.promise(async () => await stub.getConfig());
       assert.strictEqual(snapshot.version, 1);
       const config = yield* decodeStoredConfig(snapshot.document ?? "");
       assert.strictEqual(config.routing.strategy, "fill-first");
-    }),
-  );
-
-  it.effect("supports optimistic concurrency with expectedVersion", () =>
-    Effect.gen(function* () {
-      const stub = controlPlane();
-      const first = yield* Effect.promise(async () => await stub.putConfig("{}", 0));
-      assert.isTrue(first.ok);
-      const stale = yield* Effect.promise(async () => await stub.putConfig("{}", 0));
-      assert.isFalse(stale.ok);
-
-      if (stale.ok) return;
-      assert.strictEqual(stale.error, "conflict");
-      assert.strictEqual(stale.error === "conflict" ? stale.currentVersion : -1, 1);
-      const fresh = yield* Effect.promise(async () => await stub.putConfig("{}", 1));
-      assert.isTrue(fresh.ok && fresh.version === 2);
     }),
   );
 
@@ -118,7 +119,10 @@ describe("ControlPlane config storage (Workers pool)", () => {
       const name = crypto.randomUUID();
       yield* Effect.promise(
         async () =>
-          await env.CONTROL_PLANE.getByName(name).putConfig("routing: { strategy: fill-first }"),
+          await env.CONTROL_PLANE.getByName(name).importConfig(
+            "routing: { strategy: fill-first }",
+            "test",
+          ),
       );
 
       const snapshot = yield* Effect.promise(
@@ -133,7 +137,7 @@ describe("ControlPlane config storage (Workers pool)", () => {
     Effect.gen(function* () {
       // The reader always talks to getByName("global"); this is the only test that touches it.
       const global = env.CONTROL_PLANE.getByName("global");
-      const put = yield* Effect.promise(async () => await global.putConfig(YAML));
+      const put = yield* Effect.promise(async () => await global.importConfig(YAML, "test"));
       assert.isTrue(put.ok);
       const reader = yield* ConfigReader;
 

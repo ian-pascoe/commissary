@@ -89,9 +89,9 @@ const YAML_TYPES = new Set(["application/yaml", "application/x-yaml", "text/yaml
 
 /**
  * Content types accepted by management writes: JSON everywhere, multipart for credential uploads, YAML for
- * `PUT /config.yaml`. The CORS-safelisted types (`text/plain`, form encoding, a bare body without type) are refused,
- * so a write can never be a "simple" cross-site request. `path` is the path without the org of an org-scoped request
- * (`/v8/management/orgs/<slug>/config.yaml` is `/v8/management/config.yaml`).
+ * `POST /settings/import` (the Go config import). The CORS-safelisted types (`text/plain`, form encoding, a bare body
+ * without type) are refused, so a write can never be a "simple" cross-site request. `path` is the path without the org
+ * of an org-scoped request (`/v8/management/orgs/<slug>/settings/import` is `/v8/management/settings/import`).
  */
 const managementTypeAllowed = (method: string, path: string, type: string): boolean => {
   if (isJsonType(type)) return true;
@@ -103,7 +103,8 @@ const managementTypeAllowed = (method: string, path: string, type: string): bool
     return type === "multipart/form-data";
   }
 
-  if (method === "PUT" && path === `${MANAGEMENT_PREFIX}/config.yaml`) return YAML_TYPES.has(type);
+  if (method === "POST" && path === `${MANAGEMENT_PREFIX}/settings/import`)
+    return YAML_TYPES.has(type);
 
   return false;
 };
@@ -125,7 +126,7 @@ const hasBody = (headers: Headers): boolean => {
  * - Management requests of any method are refused for a foreign `Origin`, and for a cross-site `Sec-Fetch-Site` unless
  *   they are top-level document navigations to a panel page or `/management.html` (a link to `/accounts` still
  *   works; a frame or any `/v8/management` request does not).
- * - Management writes need a JSON body (multipart for uploads, YAML for `config.yaml`) or no body at all.
+ * - Management writes need a JSON body (multipart for uploads, YAML for the config import) or no body at all.
  */
 export const crossSiteRejection = (
   method: string,

@@ -7,7 +7,9 @@
  *
  * The Workers config groups keys under a shared endpoint (`api-keys.<family>[].keys[]`). Go works on flat entries,
  * so every key is flattened into one entry: settings on the key override the group's (as in `expandV8Groups`).
- * Credential ids are content hashes: changing key, base URL, proxy, prefix or headers changes the identity.
+ * A stored API key carries its config entry id (`id`, ADR 0025), which is its credential id: editing the key keeps
+ * the identity. A key without one (a decoded Go document before the import stores it) gets Go's content hash, so
+ * changing key, base URL, proxy, prefix or headers changes the identity; the import stores exactly those ids.
  */
 import { createHash } from "node:crypto";
 import type {
@@ -65,6 +67,12 @@ export class StableIdGenerator {
     return { id: `${kind}:${token}`, token };
   }
 }
+
+/** A stored entry id as the generator's result: `token` is the part after `<kind>:` (the whole id otherwise). */
+const storedId = (kind: string, id: string): GeneratedId => ({
+  id,
+  token: id.startsWith(`${kind}:`) ? id.slice(kind.length + 1) : id,
+});
 
 type Family =
   | "gemini"
@@ -125,6 +133,15 @@ const SPECS: Readonly<Record<Family, FamilySpec>> = {
     label: "vertex-apikey",
   },
 };
+
+/** The `<kind>` of the credential ids of `family`'s keys (`group`: an OpenAI-compatible endpoint's name). */
+export const apiKeyIdKind = (
+  family: Family | "openai-compatibility",
+  group: { readonly name?: string | undefined },
+): string =>
+  family === "openai-compatibility"
+    ? `openai-compatibility:${(group.name ?? "").trim().toLowerCase() || "openai-compatibility"}`
+    : SPECS[family].idKind;
 
 /** Order in which Go synthesises families; it decides duplicate suffixes only. */
 const FAMILY_ORDER: ReadonlyArray<Family> = [
@@ -249,9 +266,11 @@ const synthesizeKey = (
   const headers = normalizeHeaders(entry.headers) ?? {};
 
   const { id, token } =
-    family === "vertex"
-      ? ids.next(spec.idKind, key, baseUrl, proxyUrl)
-      : ids.next(spec.idKind, key, baseUrl, proxyUrl, prefix, formatSortedHeaders(headers));
+    entry.id !== undefined
+      ? storedId(spec.idKind, entry.id)
+      : family === "vertex"
+        ? ids.next(spec.idKind, key, baseUrl, proxyUrl)
+        : ids.next(spec.idKind, key, baseUrl, proxyUrl, prefix, formatSortedHeaders(headers));
 
   const attributes: Record<string, string> = {};
   attributes.source = `config:${spec.sourceName}[${token}]`;
@@ -330,7 +349,7 @@ const synthesizeCompat = (
   const providerName = group.name.trim().toLowerCase() || "openai-compatibility";
   const providerKey = openAICompatibleProviderKey(providerName);
   const baseUrl = group["base-url"].trim();
-  const idKind = `openai-compatibility:${providerName}`;
+  const idKind = apiKeyIdKind("openai-compatibility", group);
   const headers = normalizeHeaders(group.headers) ?? {};
   const priority = group.priority ?? 0;
   const models = group.models !== undefined && group.models.length > 0 ? group.models : undefined;
@@ -385,12 +404,20 @@ const synthesizeCompat = (
     );
   };
 
+  // A key-less endpoint has no API key entry: its credential keeps Go's content hash.
   if (group.keys.length === 0) return [build(undefined, ids.next(idKind, baseUrl))];
 
   return group.keys.map((keyEntry) =>
     build(
       keyEntry,
-      ids.next(idKind, keyEntry["api-key"].trim(), baseUrl, (keyEntry["proxy-url"] ?? "").trim()),
+      keyEntry.id !== undefined
+        ? storedId(idKind, keyEntry.id)
+        : ids.next(
+            idKind,
+            keyEntry["api-key"].trim(),
+            baseUrl,
+            (keyEntry["proxy-url"] ?? "").trim(),
+          ),
     ),
   );
 };

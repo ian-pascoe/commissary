@@ -34,7 +34,7 @@ oauth:
 describe("ControlPlane credentials (Workers pool)", () => {
   it("imports auth files, lists them redacted and returns the full snapshot from pick", async () => {
     const stub = plane();
-    await stub.putConfig(CONFIG);
+    await stub.importConfig(CONFIG, "test");
 
     const imported = await stub.importAuthFile(
       "claude-a.json",
@@ -143,7 +143,8 @@ describe("ControlPlane credentials (Workers pool)", () => {
 
   it("synthesises config API keys, applies model aliases and follows config changes", async () => {
     const stub = plane();
-    await stub.putConfig(`
+    await stub.importConfig(
+      `
 routing:
   strategy: fill-first
 api-keys:
@@ -156,7 +157,9 @@ api-keys:
       keys:
         - { api-key: key-1, weight: 1 }
         - { api-key: key-2 }
-`);
+`,
+      "test",
+    );
 
     const first = picked(
       await stub.pick({ providers: ["openai-compatible-router"], model: "smart" }),
@@ -180,7 +183,8 @@ api-keys:
     expect(
       (await stub.pick({ providers: ["openai-compatible-router"], model: "unknown" })).ok,
     ).toBe(false);
-    await stub.putConfig(`
+    await stub.importConfig(
+      `
 routing:
   strategy: fill-first
 api-keys:
@@ -189,7 +193,9 @@ api-keys:
       base-url: https://router.example/v1
       models: [{ name: gpt-4o, alias: smart }]
       keys: [{ api-key: key-3 }]
-`);
+`,
+      "test",
+    );
 
     const second = picked(
       await stub.pick({ providers: ["openai-compatible-router"], model: "smart" }),
@@ -201,14 +207,17 @@ api-keys:
 
   it("rotates the upstream models of a shared alias between requests", async () => {
     const stub = plane();
-    await stub.putConfig(`
+    await stub.importConfig(
+      `
 api-keys:
   openai-compatibility:
     - name: Pool
       base-url: https://pool.example/v1
       models: [{ name: m-a, alias: shared }, { name: m-b, alias: shared }]
       keys: [{ api-key: k }]
-`);
+`,
+      "test",
+    );
     const firsts = [];
 
     for (let index = 0; index < 4; index += 1) {
@@ -323,7 +332,7 @@ api-keys:
 
   it("session affinity binds a session and is released by a credential failure (per caller scope)", async () => {
     const stub = plane();
-    await stub.putConfig("routing: { session-affinity: true }");
+    await stub.importConfig("routing: { session-affinity: true }", "test");
 
     for (const id of ["a", "b", "c"])
       await stub.importAuthFile(`claude-${id}.json`, claudeFile({ email: `${id}@x.com` }));

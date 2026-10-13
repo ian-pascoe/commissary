@@ -9,9 +9,12 @@
  * keeps its stored secret and hidden settings, or carries a new `api-key`; a header value that is still the
  * `[redacted]…` placeholder keeps the stored value.
  *
- * Writes carry the `version` of the list they were made from; a stale one is answered `409 conflict`, an unknown
- * `auth_index` `409 unknown_auth_index`, and a group the config normaliser would (partly) drop `422` with the reason
- * as the error text.
+ * Every group is a config entry (ADR 0025) with an `id` and a `revision`, and each of its keys an entry whose id is
+ * its credential id (never sent). A write names the group by `id` (none for a new group) and the `revision` of the
+ * list it was made from; a group changed or deleted since is answered `409 conflict` (writes to other groups never
+ * conflict), an unknown `auth_index` `409 unknown_auth_index`, and a group the config normaliser would (partly) drop
+ * `422` with the reason as the error text. A key kept by `auth_index` keeps its credential id and `auth_index`, also
+ * when the write gives it a new secret.
  */
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
@@ -128,8 +131,16 @@ const keyFields = {
   interactions: optional(Schema.Boolean),
 };
 
+/**
+ * The config entry id of a key group or API key (ADR 0025), set by the ControlPlane when the entry is stored. An API
+ * key's id is its credential id, so it never leaves the Worker; a group's id is random and names the group in writes.
+ * A Go config document never sets it: the import drops ids and assigns its own.
+ */
+const entryId = { id: optional(Schema.String) };
+
 /** One credential inside an API-key group. */
 export const ApiKeyEntry = Schema.Struct({
+  ...entryId,
   "api-key": Schema.String,
   ...keyFields,
 });
@@ -144,6 +155,7 @@ const groupFields = {
 
 /** `api-keys.<provider>[]` group: one endpoint, shared settings and a list of keys. */
 export const ApiKeyGroup = Schema.Struct({
+  ...entryId,
   ...groupFields,
   keys: Schema.Array(ApiKeyEntry),
 });
@@ -156,6 +168,7 @@ const compatKeyFields = {
 };
 
 export const OpenAICompatKey = Schema.Struct({
+  ...entryId,
   "api-key": Schema.String,
   ...compatKeyFields,
 });
@@ -176,6 +189,7 @@ const compatGroupFields = {
 
 /** `api-keys.openai-compatibility[]` group. */
 export const OpenAICompatGroup = Schema.Struct({
+  ...entryId,
   ...compatGroupFields,
   keys: Schema.Array(OpenAICompatKey),
 });
@@ -279,6 +293,11 @@ export type ApiKeyGroupBody = typeof ApiKeyGroupBody.Type;
 
 /** One group of a key family. `effective_base_url` is the configured base URL or the provider's default. */
 export const GroupView = Schema.Struct({
+  /** The group's entry id: what a write or delete names. */
+  id: Schema.String,
+  /** The group's revision: a write or delete sends it back. */
+  revision: Schema.Int,
+  /** Position in the family. */
   index: Schema.Int,
   group: ApiKeyGroupBody,
   effective_base_url: Schema.String,
@@ -310,6 +329,8 @@ export const CompatGroupBody = Schema.Struct({
 export type CompatGroupBody = typeof CompatGroupBody.Type;
 
 export const CompatGroupView = Schema.Struct({
+  id: Schema.String,
+  revision: Schema.Int,
   index: Schema.Int,
   group: CompatGroupBody,
   effective_base_url: Schema.String,
@@ -318,8 +339,9 @@ export const CompatGroupView = Schema.Struct({
 
 export type CompatGroupView = typeof CompatGroupView.Type;
 
-/** `GET /api-keys`: every group, with the config `version` the writes must send back. */
+/** `GET /api-keys`: every group, with its id and revision. */
 export const ApiKeysList = Schema.Struct({
+  /** The org's change counter. */
   version: Schema.Int,
   families: Schema.Struct({
     gemini: Schema.Array(GroupView),
@@ -373,22 +395,23 @@ export const CompatGroupInput = Schema.Struct({
 
 export type CompatGroupInput = typeof CompatGroupInput.Type;
 
-const Version = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+const Revision = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
-const Index = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
-
-/** `PUT /api-keys/groups`: replaces the group at `index`, or appends one without `index`. */
+/**
+ * `PUT /api-keys/groups`: replaces the group `id` at `revision`, or adds a group (no `id`, `revision` 0) after the
+ * family's last one.
+ */
 export const PutGroupRequest = Schema.Union([
   Schema.Struct({
-    version: Version,
     family: KeyGroupFamily,
-    index: optional(Index),
+    id: optional(Schema.String),
+    revision: Revision,
     group: GroupInput,
   }),
   Schema.Struct({
-    version: Version,
     family: Schema.Literal("openai-compatibility"),
-    index: optional(Index),
+    id: optional(Schema.String),
+    revision: Revision,
     group: CompatGroupInput,
   }),
 ]);
@@ -396,17 +419,19 @@ export const PutGroupRequest = Schema.Union([
 export type PutGroupRequest = typeof PutGroupRequest.Type;
 
 export const DeleteGroupRequest = Schema.Struct({
-  version: Version,
   family: ApiKeyFamily,
-  index: Index,
+  id: Schema.String,
+  revision: Revision,
 });
 
 export type DeleteGroupRequest = typeof DeleteGroupRequest.Type;
 
-/** Answer of a group write: the new config version (the list is re-read afterwards). */
+/** Answer of a group write: the new change counter and the group's id and new revision (0 once deleted). */
 export const ApiKeysWritten = Schema.Struct({
   status: Schema.Literal("ok"),
   version: Schema.Int,
+  id: Schema.String,
+  revision: Schema.Int,
 });
 
 export const ProbeRequest = Schema.Struct({ auth_index: Schema.String });

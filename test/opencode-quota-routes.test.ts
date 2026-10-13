@@ -73,7 +73,7 @@ beforeEach(async () => {
   usageReply = { status: 200, body: USAGE };
   harness.requests.length = 0;
   await resetControlPlane();
-  const stored = await controlPlane().putConfig(CONFIG);
+  const stored = await controlPlane().importConfig(CONFIG, "test");
   expect(stored.ok).toBe(true);
 });
 
@@ -236,7 +236,7 @@ describe("an edited OpenCode Go key", () => {
     expect((await checkQuota(oldIndex)).status).toBe(200);
     expect(await reportRows()).toHaveLength(1);
 
-    const stored = await controlPlane().putConfig(CONFIG.replace(GO_KEY, GO_EDITED_KEY));
+    const stored = await controlPlane().importConfig(CONFIG.replace(GO_KEY, GO_EDITED_KEY), "test");
     expect(stored.ok).toBe(true);
 
     expect((await checkQuota(oldIndex)).status).toBe(404);

@@ -1,13 +1,15 @@
 /**
  * `GET /v8/management/routing/models` (`../routing-models.ts`, `src/registry/routing-view.ts`) and the channel rule
- * edits of the Models page (`PUT|DELETE /config/oauth/model-alias/:channel`, `/config/oauth/excluded-models/:channel`,
- * served by `../config-routes.ts`). Shared with the browser: imports `effect` only.
+ * edits of the Models page (`PUT|DELETE /model-rules/aliases/:channel`, `/model-rules/exclusions/:channel`, served by
+ * `../model-rules-routes.ts`). Shared with the browser: imports `effect` only.
  *
  * `routing/models` answers, per client-visible model id, every credential that could serve it and why it does or does
  * not right now. It is built from a fresh (uncached) registry snapshot, so an edit shows on the next read. The same
- * body carries the two rule maps and `config_version`: a rule edit sends it back as `If-Match` and the write is
- * refused with 409 `conflict` when the config changed since (arrays are replaced whole, so a stale view would
- * otherwise lose another tab's edit). The new version comes back in `Saved.version`.
+ * body carries the two rule maps and their `revisions`: each channel's aliases and exclusions are a config entry
+ * (ADR 0025), and a rule edit sends the entry's revision back as `If-Match` (0 for a channel without rules). The write
+ * is refused with 409 `conflict` when that entry changed since (lists are replaced whole, so a stale view would
+ * otherwise lose another tab's edit); edits of other channels never conflict. The new revision comes back in
+ * `EntrySaved.revision`.
  *
  * Concepts. A *channel* is the credential's provider key as stored (lower-case auth-file `type`, e.g. `claude`,
  * `kimi.com`): the key of `oauth.model-alias` and `oauth.excluded-models`; API keys and OpenAI-compatible groups have
@@ -16,7 +18,7 @@
  */
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
-import { Saved } from "./config.ts";
+import { EntrySaved, Revisions } from "./config.ts";
 import { managementErrors } from "./errors.ts";
 
 const optional = Schema.optionalKey;
@@ -114,8 +116,10 @@ export const RoutingChannel = Schema.Struct({
 
 export const RoutingModels = Schema.Struct({
   observed_at: Schema.String,
-  /** Config version this view was built from; send it as `If-Match` on rule edits. */
+  /** Config version (the org's change counter) this view was built from. */
   config_version: Schema.Number,
+  /** Revision of each channel's rules by channel (absent: 0); send it as `If-Match` on that channel's rule edits. */
+  revisions: Schema.Struct({ aliases: Revisions, exclusions: Revisions }),
   /** `routing.force-model-prefix`: prefixed credentials serve only `<prefix>/<model>`. */
   force_model_prefix: Schema.Boolean,
   /** Channels with at least one credential, by name. */
@@ -130,7 +134,7 @@ export const RoutingModels = Schema.Struct({
 
 export type RoutingModels = typeof RoutingModels.Type;
 
-/** The `If-Match` request header: the `config_version` the edit was based on (a bare number or `"<number>"`). */
+/** The `If-Match` request header: the channel revision the edit was based on (a bare number or `"<number>"`). */
 const IfMatch = { headers: Schema.Struct({ "if-match": Schema.String }) };
 
 const channelParam = { params: { channel: Schema.String } };
@@ -141,33 +145,33 @@ export class RoutingGroup extends HttpApiGroup.make("routing").add(
     error: managementErrors,
   }),
   /** Replace one channel's aliases. */
-  HttpApiEndpoint.put("putAliases", "/config/oauth/model-alias/:channel", {
+  HttpApiEndpoint.put("putAliases", "/model-rules/aliases/:channel", {
     ...channelParam,
     ...IfMatch,
     payload: Schema.Array(OAuthModelAliasWire),
-    success: Saved,
+    success: EntrySaved,
     error: managementErrors,
   }),
   /** Remove one channel's aliases (404 when it has none). */
-  HttpApiEndpoint.delete("deleteAliases", "/config/oauth/model-alias/:channel", {
+  HttpApiEndpoint.delete("deleteAliases", "/model-rules/aliases/:channel", {
     ...channelParam,
     ...IfMatch,
-    success: Saved,
+    success: EntrySaved,
     error: managementErrors,
   }),
   /** Replace one channel's exclusion patterns. */
-  HttpApiEndpoint.put("putExclusions", "/config/oauth/excluded-models/:channel", {
+  HttpApiEndpoint.put("putExclusions", "/model-rules/exclusions/:channel", {
     ...channelParam,
     ...IfMatch,
     payload: Schema.Array(Schema.String),
-    success: Saved,
+    success: EntrySaved,
     error: managementErrors,
   }),
   /** Remove one channel's exclusion patterns (404 when it has none). */
-  HttpApiEndpoint.delete("deleteExclusions", "/config/oauth/excluded-models/:channel", {
+  HttpApiEndpoint.delete("deleteExclusions", "/model-rules/exclusions/:channel", {
     ...channelParam,
     ...IfMatch,
-    success: Saved,
+    success: EntrySaved,
     error: managementErrors,
   }),
 ) {}

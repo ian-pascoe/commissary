@@ -4,6 +4,7 @@ import { env } from "cloudflare:workers";
 import { Effect, Layer, Schema } from "effect";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { ConfigStoreError } from "../src/config/errors.ts";
+import type { SettingsView } from "../src/management/contract/settings.ts";
 import { ConfigReader, ConfigSource } from "../src/config/reader.ts";
 import { makeControlPlanePicker } from "../src/executor/control-plane-picker.ts";
 import { WorkerEnv } from "../src/platform/env.ts";
@@ -46,8 +47,8 @@ beforeEach(async () => {
   await resetOrgControlPlane(BETA);
 });
 
-const putYaml = (yaml: string) => ({
-  method: "PUT",
+const importYaml = (yaml: string) => ({
+  method: "POST",
   headers: { "content-type": "application/yaml" },
   body: yaml,
 });
@@ -86,16 +87,18 @@ describe("org-scoped names", () => {
 describe("two orgs in one deployment", () => {
   it("keep separate config", async () => {
     const put = await acme.json(
-      "/v8/management/config.yaml",
-      putYaml("routing:\n  strategy: fill-first\n"),
+      "/v8/management/settings/import",
+      importYaml("routing:\n  strategy: fill-first\n"),
     );
 
     expect(put.status).toBe(200);
 
-    const acmeStrategy = await acme.json("/v8/management/config/routing/strategy");
-    const globalStrategy = await global.json("/v8/management/config/routing/strategy");
-    expect(acmeStrategy.body).toBe("fill-first");
-    expect(globalStrategy.body).toBe("round-robin");
+    const strategy = async (harness: typeof acme) =>
+      ((await harness.json("/v8/management/settings")).body as SettingsView).values.routing
+        .strategy;
+
+    expect(await strategy(acme)).toBe("fill-first");
+    expect(await strategy(global)).toBe("round-robin");
   });
 
   it("keep separate credentials, and the same credential gets another auth index in each", async () => {
@@ -147,8 +150,8 @@ api-keys:
       );
 
   it("a cooldown in one org leaves the same credential of another org usable", async () => {
-    await controlPlaneOf(env, ACME).putConfig(CONFIG);
-    await controlPlaneOf(env, GLOBAL_ORG).putConfig(CONFIG);
+    await controlPlaneOf(env, ACME).importConfig(CONFIG, "test");
+    await controlPlaneOf(env, GLOBAL_ORG).importConfig(CONFIG, "test");
 
     const picked = await inOrg(ACME)(picker.pick(request));
     await inOrg(ACME)(
@@ -281,8 +284,8 @@ describe("the shared model catalog", () => {
 
   it("only global's config sets its source; another org refuses the setting", async () => {
     const refused = await acme.json(
-      "/v8/management/config.yaml",
-      putYaml("models:\n  catalog: embed\n"),
+      "/v8/management/settings/import",
+      importYaml("models:\n  catalog: embed\n"),
     );
 
     expect(refused.status).toBe(422);
@@ -290,16 +293,16 @@ describe("the shared model catalog", () => {
     expect(JSON.stringify(refused.body)).toContain("deployment setting");
 
     const accepted = await global.json(
-      "/v8/management/config.yaml",
-      putYaml("models:\n  catalog: embed\n"),
+      "/v8/management/settings/import",
+      importYaml("models:\n  catalog: embed\n"),
     );
 
     expect(accepted.status).toBe(200);
   });
 
   it("every org reads, shows and refreshes the catalog under global's setting", async () => {
-    await controlPlaneOf(env, GLOBAL_ORG).putConfig("models:\n  catalog: embed\n");
-    await controlPlaneOf(env, ACME).putConfig("routing:\n  strategy: fill-first\n");
+    await controlPlaneOf(env, GLOBAL_ORG).importConfig("models:\n  catalog: embed\n", "test");
+    await controlPlaneOf(env, ACME).importConfig("routing:\n  strategy: fill-first\n", "test");
 
     const status = await acme.json(CATALOG);
     expect(status.status).toBe(200);
