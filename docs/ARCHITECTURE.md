@@ -279,6 +279,39 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
   make credentials with an exhausted budget age out of later rounds. Alias pools count as available when any upstream model
   is (Go only discovers a cooling pool when it filters the execution models). When the wait exceeds the limit the plan
   carries the recovery time so the Worker can answer with `Retry-After`.
+- **Shared and private credentials** (`credentials/ownership.ts`, `credentials/private-keys.ts`; Workers addition, ADR 0023,
+  ADR 0025, no Go counterpart): a credential belongs to the org (a _shared credential_, `owner` unset) or to one member (a
+  _private credential_, `owner` the member's id). A stored account carries `owner` (nullable `credentials.owner`, also on
+  `oauth_sessions.owner` so a login finished later stays the member's); every credential that existed before is shared. A
+  private API key group is one sealed row of its own in `private_key_groups` (value sealed with the org data key,
+  `private_key_changes` is its change counter) and never enters the org's config entries, so the config, its snapshot and
+  every export stay what an org admin may see; `CredentialPool` derives the private groups of every owner and stamps their
+  credentials with the owner. `membership.private_credentials` is the org setting "members may connect private
+  credentials": on for `global` (the upgrade sets it), off for a new org unless `POST /orgs` chose it; off, `CredentialPool`
+  derives every private credential as disabled (kept, not deleted) until it is on again.
+  - **Selection**: `PickRequest.memberId` (the caller's member id, also in the retry query) enters `pick` and `planRetry`;
+    a private credential is a candidate only when `credential.owner === memberId` (`servesMember`), so a request of another
+    member, of an org admin or of a service token never reaches it. For its owner it competes with the shared credentials
+    in the same tiers and strategies.
+  - **Management** (`Viewer` = member id + whether an org admin, handed by every credential route to the ControlPlane;
+    `accessTo` answers `full`, `limited` or `none`): the owner reads and changes everything of their private credential.
+    An org admin gets `limited`: `GET /credentials` lists it in `others` (`LimitedCredentialEntry`: provider, label, owner,
+    `disabled`; no file fields, quota, models or state) and `PATCH /credentials/status` (disable, enable) and `DELETE`
+    work, nothing else; anybody else, and an org admin for any other operation, gets `404`. `GET /api-keys` likewise lists
+    other members' private groups in `others` (`LimitedKeyGroup`: family, label, owner); an org admin can only remove one
+    (`DELETE /api-keys/groups` with `private`), since a private group is not in the config they edit. A shared credential
+    stays admin-only. A plain member reaches only their own private credentials through the same routes (`/credentials*`,
+    `/oauth/*`, `/api-keys*`: `MEMBER_CREDENTIAL_ROUTES` in `access/policy.ts`); what they upload, log in or add is private
+    whatever they send, an org admin's is shared unless `?private=true` (`private: true` for a key group) asks otherwise.
+    Where the org setting is off creating one answers `403` (`forbidden` for an account, `private_credentials_unavailable`
+    for a key group). The download is the owner's alone (`403 private_credential` for an org admin, a service-token owner
+    included); an owner downloads their own with their session, a shared credential keeps ADR 0006.
+  - **Usage and registry**: usage records carry `private` (`migrations/0006_usage_private.sql`), set by the proxy handlers
+    from the credential that served the request; every org-wide read, export and the export queue leave private records
+    out, and a member's reads add their own (`UsageFilter.privateOf`), see _Usage accounting and observability_. The model
+    registry lists a private credential's models to its owner only (`RegistrySnapshot.visibleTo(member)` for `/v1/models`,
+    `/v1beta/models`, the spawn-agent list and the routing view); routing itself resolves through the full snapshot, since
+    the picker is what keeps private credentials from other callers.
 - Deviations from Go: several providers are selected from one ID-sorted union (no per-provider slot cursor); alias groups
   of the session cache are independent keys (the LCP matcher is ported, see Sessions below). `PickRequest.session` carries the
   explicit id extracted by `handlers/session.ts`; `lcp` and `fallbackSession` carry the content-based identities.
@@ -956,6 +989,10 @@ panel paths and `/management.html` as `management`); there is no management key.
   - Price overrides (`price-routes.ts`, contract `prices.ts`; Workers addition): an org's price for a provider and model,
     one entry each, see _Usage accounting and observability_ (Cost). They are not part of the config document, so
     `GET /settings` and the import never carry them.
+- **Private credentials in the API** (ADR 0023): every credential and API key route takes the caller as a `Viewer`; plain
+  members reach the credential, OAuth and API key routes for their own private credentials only (the policy opens those
+  routes to members, the handlers narrow them), org admins get existence-only rows (`others`) for the rest. See _Credentials
+  and selection_ for the rules; `docs/ACCESS.md` for the matrix.
 - **Credentials** (`credentials-routes.ts`, `credential-entry.ts`, `credentials/field-patch.ts`): list (filters,
   pagination), upload (multipart or raw JSON + `?name=`), delete (`name`/`names`/`all`), download (the stored file,
   tokens included; deviation from Go: only a service-token admin may call it, an email admin gets
@@ -1407,6 +1444,12 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   indexes: the writer stores the request's `CurrentOrg`, and every listing, summary, series, export and queue query
   filters on it. `migrations/0005_usage_member.sql` adds `member_id` (the caller's member id in the org, `NULL` for records
   from before members and for callers admitted without a member record) with an `(org_id, member_id, requested_at)` index.
+  `migrations/0006_usage_private.sql` adds `private` (`1` when a private credential served the request, `0` for every record
+  written before and for shared credentials): a private record is its owner's alone. Every listing, summary, series, export
+  and the export queue filter `private = 0` unless the reader is named (`UsageFilter.privateOf`, the caller's member id,
+  which then adds that member's own private records), so an org admin's org-wide views never include a member's private
+  traffic and a member reads their own private records with their other ones. The usage reporter's `finish()` now keeps the
+  member id of the request (it was dropped before).
   `D1UsageSink` (default in `makeProxyRoutes`) inserts through `ctx.waitUntil` (awaits when
   `waitUntil` throws), logs failures with request id and message only and never fails the request. The sink reads
   `WorkerEnv`/`WorkerExecutionContext` from the fiber context at publish time (not part of its type, so the conductor's
@@ -1851,7 +1894,9 @@ error codes are in `docs/ACCESS.md` "Members, roles and teams".
 - **Store** (`members/store.ts` `MemberStore`, in each org's ControlPlane, SQLite, tables `CREATE IF NOT EXISTS`): `members`
   (permanent `mem-…` id, lowercased unique email, role, who added them), `teams` and `team_members`, `service_tokens` (Client
   ID, name, role) and one `membership` row (auto-join, whether the admin lists were migrated, a change counter and the
-  change the registry's index holds). Members are not config entries: a config import replaces every entry and must not
+  change the registry's index holds) and the org setting `private_credentials` (members may connect private credentials: `1`
+  for `global`, `0` for a new org unless `POST /orgs` chose it; `GET`/`PATCH /membership`, `/me` and the panel read it; an org
+  admin changes it, and a change makes the credential pool derive again). Members are not config entries: a config import replaces every entry and must not
   remove people. Every write takes the actor's role and checks it against the target in the same Durable Object call
   (`members/roles.ts`: `mayManageMember`, `mayChangeRoles`, `mayGrantTokenRole`, `holdsSensitivePowers`), so check and write
   cannot interleave with another request; refusals are data (`{ok: false, error, message}`) that `member-routes.ts` maps to
@@ -1866,7 +1911,9 @@ error codes are in `docs/ACCESS.md` "Members, roles and teams".
   pages without an org, `/assets`, `/management.html`), member (the proxy endpoints, the org's panel pages, `GET` usage
   records/summary/series, where a plain member is narrowed to their own records: by member id, or by Access principal for
   records from before members), admin (every other management route). Owner-only and ADR 0006 checks live in the handlers
-  (role changes, auto-join, service token roles above member, the credential download).
+  (role changes, auto-join, service token roles above member, the credential download). A plain member also reaches the
+  credential, OAuth and API key routes of `MEMBER_CREDENTIAL_ROUTES` (their own private credentials, ADR 0023); the handlers
+  narrow every operation to what the caller's `Viewer` reaches (_Shared and private credentials_ above).
 - **Registry index**: the Platform registry lists which orgs each person and service token belong to, for `/me` and the
   panel's org switcher. Each member or token change bumps the ControlPlane's counter; the Worker then pushes the org's lists
   (`syncOrgIndex`: `membershipIndex` → `replaceOrgIndex` → `markIndexSynced(counter)`), and admission retries a push that

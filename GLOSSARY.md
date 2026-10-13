@@ -137,8 +137,8 @@ A credential that belongs to the org. Members use it through grants.
 _Avoid_: org account, team account
 
 **Private credential**:
-A credential that belongs to one member, who alone can use it. Other members, org admins included, see only that it
-exists.
+A credential that belongs to one member, who alone can use it. Other members see nothing of it; org admins see only that
+it exists (provider, owner, label), and can disable or remove it. Its traffic is left out of org-wide usage.
 _Avoid_: personal account, own key
 
 **Grant**:
