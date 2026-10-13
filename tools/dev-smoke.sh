@@ -36,10 +36,16 @@ check() {
   [ "$status" = 200 ] || { cat "$log"; exit 1; }
 }
 check "$url/healthz"
-check "$url/"
-check "$url/accounts"
+# An address without an org redirects to the caller's only org.
+check -L "$url/"
+check -L "$url/accounts"
+check "$url/o/default/"
+check "$url/o/default/accounts"
 check "$url/v1/models"
 check "$url/v8/management/config"
 check "$url/v8/management/observability/usage/summary"
+check "$url/v8/management/me"
+check "$url/v8/management/orgs"
+check "$url/v8/management/orgs/default/config"
 check "$url/cdn-cgi/handler/scheduled?cron=0+*/3+*+*+*"
 echo "smoke ok: $url"

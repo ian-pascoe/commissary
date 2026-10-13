@@ -2,7 +2,7 @@
 // calls the management routes through the Access gate and must decode what they answer.
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
-import { FetchHttpClient } from "effect/http";
+import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 import { HttpApiClient } from "effect/http-api";
 import { env } from "cloudflare:workers";
 import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
@@ -16,9 +16,11 @@ import {
   claudeFile,
   controlPlane,
   type Harness,
+  isolatedPlatform,
   makeHarness,
   resetControlPlane,
 } from "./support/management.ts";
+import { scopedApiUrl } from "../web/src/lib/org.ts";
 import { documentText } from "./support/models-dev.ts";
 import { authIndexOf } from "./support/auth-index.ts";
 import type { MockHandler, RecordedRequest } from "./support/refresh.ts";
@@ -56,11 +58,14 @@ const probing = makeHarness((request) => probeReply(request));
 
 const withoutUsage = makeHarness(undefined, { USAGE: undefined as unknown as D1Database });
 
+const orgsHarness = makeHarness(undefined, isolatedPlatform().bindings);
+
 afterAll(async () => {
   globalThis.fetch = realFetch;
   await harness.dispose();
   await withoutUsage.dispose();
   await probing.dispose();
+  await orgsHarness.dispose();
 });
 
 /** `fetch` that answers through the harness (an admin's Access token is added). */
@@ -1269,6 +1274,75 @@ describe("management contract", () => {
         }).pipe(through(probing)),
       );
     });
+  });
+
+  describe("orgs", () => {
+    it.effect("lists, creates and renames orgs and tells who the caller is", () =>
+      Effect.gen(function* () {
+        const api = yield* client;
+
+        const me = yield* api.orgs.me();
+        assert.isTrue(me.platform_admin);
+        assert.deepStrictEqual(me.orgs[0], { slug: "default", name: "Default" });
+
+        const created = yield* api.orgs.create({
+          payload: { slug: "contract-org", name: "Contract" },
+        });
+
+        assert.strictEqual(created.slug, "contract-org");
+        assert.match(created.id, /^org-[0-9a-f]{16}$/);
+
+        const listed = yield* api.orgs.list();
+
+        assert.deepStrictEqual(
+          listed.orgs.map((org) => org.slug),
+          ["default", "contract-org"],
+        );
+
+        const renamed = yield* api.orgs.update({
+          params: { slug: "contract-org" },
+          payload: { slug: "renamed-org", name: "Renamed" },
+        });
+
+        assert.deepStrictEqual(
+          [renamed.id, renamed.slug, renamed.name],
+          [created.id, "renamed-org", "Renamed"],
+        );
+
+        const taken = yield* Effect.flip(
+          api.orgs.create({ payload: { slug: "renamed-org", name: "Again" } }),
+        );
+
+        assert.instanceOf(taken, ManagementError);
+        assert.strictEqual(taken.error, "slug_taken");
+
+        const missing = yield* Effect.flip(
+          api.orgs.update({ params: { slug: "nobody" }, payload: { name: "X" } }),
+        );
+
+        assert.instanceOf(missing, ManagementError);
+        assert.strictEqual(missing.error, "org_not_found");
+      }).pipe(through(orgsHarness)),
+    );
+
+    it.effect("serves the other groups of an org under its slug", () =>
+      Effect.gen(function* () {
+        const api = yield* client;
+        const created = yield* api.orgs.create({ payload: { slug: "contract-scoped", name: "S" } });
+
+        // The panel's client addresses its org this way (web/src/api/client.ts).
+        const scoped = HttpApiClient.make(ManagementApi, {
+          baseUrl: "https://proxy.test",
+          transformClient: HttpClient.mapRequest(
+            HttpClientRequest.updateUrl((url) => scopedApiUrl(url, "contract-scoped")),
+          ),
+        });
+
+        assert.strictEqual(created.slug, "contract-scoped");
+        const list = yield* (yield* scoped).credentials.list();
+        assert.deepStrictEqual(list.files, []);
+      }).pipe(through(orgsHarness)),
+    );
   });
 
   describe("settings", () => {
