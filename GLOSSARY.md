@@ -99,6 +99,15 @@ _Avoid_: tenant, user scope
 A shared secret that the Go server accepted from clients. The proxy accepts it on import but never enforces it.
 _Avoid_: API key, proxy key
 
+**Secrets key**:
+The secret of a deployment that protects every org's data key. Rotating it does not encrypt any stored secret again.
+_Avoid_: master key, encryption key (unqualified)
+
+**Data key**:
+The key of one org that encrypts the secrets the org stores: its auth files and its config entries. No other org can
+read them with its own data key.
+_Avoid_: org key, encryption key (unqualified)
+
 ### Providers and credentials
 
 **Provider**:
@@ -148,15 +157,6 @@ _Avoid_: compat, compatibility entry
 **Auth file**:
 The stored document of one account: its provider tokens and the account's own settings, in the Go server's file format.
 _Avoid_: credential file, token record
-
-**Secrets key**:
-The secret of a deployment that protects every org's data key. Rotating it does not encrypt any stored secret again.
-_Avoid_: master key, encryption key (unqualified)
-
-**Data key**:
-The key of one org that encrypts the secrets the org stores: its auth files and its config entries. No other org can
-read them with its own data key.
-_Avoid_: org key, encryption key (unqualified)
 
 **Auth index**:
 The opaque public handle that names a credential in the control panel, the management API and usage exports.

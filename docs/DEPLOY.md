@@ -119,7 +119,10 @@ the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --pro
   again. Keep the previous generation set until every org has started (the cron trigger, every 3 hours, runs
   per-org tasks on every org's ControlPlane, so one full cron run after the deploy is enough), then unset
   `SECRETS_KEY_PREVIOUS_GENERATION` and deploy again. An org that had not started by then fails until the previous
-  generation is set again. The old `SecretsKey` resource stays in the state; it is harmless.
+  generation is set again. Every generation up to `SECRETS_KEY_GENERATION` stays declared in the stack (`SecretsKey`,
+  `SecretsKey2`, …), so an old key is never deleted: **never lower `SECRETS_KEY_GENERATION`**, which would delete the
+  newer keys from the state and, with them, every secret they protect. With `ALCHEMY_STATE=local` the keys sit in plain
+  text under `.alchemy/`, like the `auth_index` key below.
 - **`auth_index` values change once.** Indexes are computed on read, never stored, so the first deploy with the keyed
   index (or a new key: destroying a stage, replacing its `AuthIndexKey` resource, or a state entry that fails to
   decrypt, after which the next deploy mints a new key) changes every `auth_index` at once. With

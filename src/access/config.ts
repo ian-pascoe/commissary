@@ -153,6 +153,15 @@ type DevBypassOutcome = Data.TaggedEnum<{
 const { Active, Refused } = Data.taggedEnum<DevBypassOutcome>();
 
 /**
+ * Whether the Worker is wired to Access (`ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` set): a deployed stage. Such a Worker
+ * refuses the dev bypass and the fixed development keys (`AUTH_INDEX_KEY`, `SECRETS_KEY`).
+ */
+export const isDeployedStage = (env: {
+  readonly ACCESS_TEAM_DOMAIN?: string | undefined;
+  readonly ACCESS_AUD?: string | undefined;
+}): boolean => (env.ACCESS_TEAM_DOMAIN ?? "").trim() !== "" || (env.ACCESS_AUD ?? "").trim() !== "";
+
+/**
  * `ACCESS_DEV_BYPASS` is honoured only when the request itself targets a loopback host, which is only the case under
  * `alchemy dev`: production traffic always arrives with the Access-protected custom domain as host. It is refused
  * (`Refused`, the caller logs a warning) whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set: a Worker that is wired
@@ -163,8 +172,8 @@ export const devBypass = (env: DevBypassEnv, requestUrl: string): DevBypass => {
 
   if (value === "") return undefined;
 
-  if ((env.ACCESS_TEAM_DOMAIN ?? "").trim() !== "" || (env.ACCESS_AUD ?? "").trim() !== "")
-    return Refused();
+  if (isDeployedStage(env)) return Refused();
+
   let hostname: string;
 
   try {

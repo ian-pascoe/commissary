@@ -17,16 +17,14 @@
 import { Buffer } from "node:buffer";
 import { Effect } from "effect";
 import type { OrgId } from "../platform/org.ts";
-import { DATA_KEY_BYTES, SecretCipher, type Sealer } from "./cipher.ts";
+import { DATA_KEY_BYTES, NONCE_BYTES, SecretCipher, type Sealer } from "./cipher.ts";
 import { SecretsKeyError, type SecretsKeys } from "./deployment-keys.ts";
 
 const WRAPPED_PREFIX = "wk:v1:";
 
-const NONCE_BYTES = 12;
+const WRAPPING_KEY_SALT = "cf-llm-proxy/secrets-key";
 
-const KEK_SALT = "cf-llm-proxy/secrets-key";
-
-const KEK_INFO = "org-data-key-wrap/v1";
+const WRAPPING_KEY_INFO = "org-data-key-wrap/v1";
 
 const encoder = new TextEncoder();
 
@@ -48,7 +46,6 @@ export interface DataKeyOptions {
    * the transaction that stores the key (first start only).
    */
   readonly sealStored: (cipher: SecretCipher) => number;
-  readonly now?: () => number;
 }
 
 /** The non-extractable wrapping key of `secret`. */
@@ -61,8 +58,8 @@ const wrappingKey = async (secret: string): Promise<CryptoKey> => {
     {
       name: "HKDF",
       hash: "SHA-256",
-      salt: encoder.encode(KEK_SALT),
-      info: encoder.encode(KEK_INFO),
+      salt: encoder.encode(WRAPPING_KEY_SALT),
+      info: encoder.encode(WRAPPING_KEY_INFO),
     },
     material,
     { name: "AES-GCM", length: 256 },
@@ -78,20 +75,20 @@ const wrapParams = (org: OrgId, nonce: Uint8Array): SubtleCryptoEncryptAlgorithm
   tagLength: 128,
 });
 
-const wrap = async (dataKey: CryptoKey, kek: CryptoKey, org: OrgId): Promise<string> => {
+const wrap = async (dataKey: CryptoKey, wrapper: CryptoKey, org: OrgId): Promise<string> => {
   const nonce = crypto.getRandomValues(new Uint8Array(NONCE_BYTES));
 
   const wrapped = new Uint8Array(
-    await crypto.subtle.wrapKey("raw", dataKey, kek, wrapParams(org, nonce)),
+    await crypto.subtle.wrapKey("raw", dataKey, wrapper, wrapParams(org, nonce)),
   );
 
   return WRAPPED_PREFIX + Buffer.concat([nonce, wrapped]).toString("base64url");
 };
 
-/** The data key `stored` holds when `kek` wrapped it; `undefined` when another key did (or it was changed). */
+/** The data key `stored` holds when `wrapper` wrapped it; `undefined` when another key did (or it was changed). */
 const unwrap = async (
   stored: string,
-  kek: CryptoKey,
+  wrapper: CryptoKey,
   org: OrgId,
 ): Promise<CryptoKey | undefined> => {
   if (!stored.startsWith(WRAPPED_PREFIX))
@@ -103,7 +100,7 @@ const unwrap = async (
     return await crypto.subtle.unwrapKey(
       "raw",
       bytes.subarray(NONCE_BYTES),
-      kek,
+      wrapper,
       wrapParams(org, bytes.subarray(0, NONCE_BYTES)),
       { name: "AES-GCM", length: 256 },
       true,
@@ -152,7 +149,6 @@ const log = (effect: Effect.Effect<void>, org: OrgId): void =>
  */
 export const openDataKey = async (options: DataKeyOptions): Promise<SecretCipher> => {
   const { sql, org } = options;
-  const now = options.now ?? Date.now;
   const keys = options.keys();
   const current = await wrappingKey(keys.current);
 
@@ -172,7 +168,7 @@ export const openDataKey = async (options: DataKeyOptions): Promise<SecretCipher
     const cipher = await cipherOf(dataKey);
 
     const sealed = options.transaction(() => {
-      const at = now();
+      const at = Date.now();
 
       sql.exec(
         "INSERT INTO org_data_key (id, wrapped, created_at, wrapped_at) VALUES (1, ?, ?, ?)",
@@ -207,7 +203,7 @@ export const openDataKey = async (options: DataKeyOptions): Promise<SecretCipher
     sql.exec(
       "UPDATE org_data_key SET wrapped = ?, wrapped_at = ? WHERE id = 1",
       await wrap(previous, current, org),
-      now(),
+      Date.now(),
     );
     log(Effect.logInfo("wrapped the org's data key under the new SECRETS_KEY"), org);
 

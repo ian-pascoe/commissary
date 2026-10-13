@@ -23,7 +23,8 @@ const VERSION = "enc:v1";
 
 const PREFIX = `${VERSION}:`;
 
-const NONCE_BYTES = 12;
+/** AES-GCM nonce length (96 bits), of sealed values and of wrapped data keys. */
+export const NONCE_BYTES = 12;
 
 const TAG_BYTES = 16;
 

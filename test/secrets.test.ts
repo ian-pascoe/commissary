@@ -5,7 +5,7 @@ import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
-import type { ControlPlane } from "../src/index.ts";
+import { ControlPlane } from "../src/index.ts";
 import type { PickResult } from "../src/credentials/selection/types.ts";
 import { OrgId } from "../src/platform/org.ts";
 import { SealedValueError, SecretCipher, isSealed } from "../src/secrets/cipher.ts";
@@ -64,7 +64,7 @@ api-keys:
 `;
 
 /** A ControlPlane of a new org holding an auth file and config API keys. */
-const stocked = async () => {
+const orgWithSecrets = async () => {
   const org = newOrg();
   const stub = controlPlane(org);
 
@@ -75,7 +75,7 @@ const stocked = async () => {
 };
 
 /** What the org's secrets read as through the ControlPlane, with the auth index of every credential. */
-const readable = async (stub: ReturnType<typeof controlPlane>, org: OrgId) => {
+const readThroughControlPlane = async (stub: ReturnType<typeof controlPlane>, org: OrgId) => {
   const index = orgAuthIndexer(env, org);
   const credentials = (await stub.listCredentials()).map(({ id }) => ({ id, index: index(id) }));
   const picked: PickResult = await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" });
@@ -92,7 +92,7 @@ const readable = async (stub: ReturnType<typeof controlPlane>, org: OrgId) => {
  * Runs `body` against the ControlPlane instance once it started. Failing calls are checked here rather than over RPC:
  * the Workers test pool reports an exception thrown out of a Durable Object RPC method as an unhandled error.
  */
-const inside = (
+const inStartedControlPlane = (
   stub: ReturnType<typeof controlPlane>,
   body: (plane: ControlPlane) => Promise<void>,
 ) =>
@@ -102,7 +102,7 @@ const inside = (
   });
 
 /** The outcome of a call, sync or async, as a promise. */
-const called = async <A>(call: () => A | Promise<A>): Promise<A> => call();
+const outcomeOf = async <A>(call: () => A | Promise<A>): Promise<A> => call();
 
 const expectNoPlaintext = (stored: string) => {
   for (const secret of SECRETS) expect(stored).not.toContain(secret);
@@ -241,13 +241,13 @@ describe("deploymentSecretsKeys", () => {
 
 describe("ControlPlane stored secrets", () => {
   it("stores no secret in plain text and reads every one back", async () => {
-    const { org, stub } = await stocked();
+    const { org, stub } = await orgWithSecrets();
     const stored = await storedText(stub);
 
     expectNoPlaintext(stored);
     expect(await wrappedDataKey(stub)).toMatch(/^wk:v1:/);
 
-    const read = await readable(stub, org);
+    const read = await readThroughControlPlane(stub, org);
     expect(read.file).toEqual(AUTH_FILE);
     expect(read.token).toBe(ACCESS_TOKEN);
 
@@ -256,15 +256,13 @@ describe("ControlPlane stored secrets", () => {
 
     // After a restart the same rows open with the same data key.
     await restart(stub);
-    expect(await readable(stub, org)).toEqual(read);
+    expect(await readThroughControlPlane(stub, org)).toEqual(read);
     expect(await storedText(stub)).toBe(stored);
   });
 
   it("gives every org its own data key", async () => {
-    const a = await stocked();
-    const b = await stocked();
-
-    expect(await wrappedDataKey(a.stub)).not.toBe(await wrappedDataKey(b.stub));
+    const a = await orgWithSecrets();
+    const b = await orgWithSecrets();
 
     // Org a's sealed auth file, stored under the same name in org b, does not open there.
     const sealed = await runInDurableObject(
@@ -283,8 +281,8 @@ describe("ControlPlane stored secrets", () => {
     });
     await restart(b.stub);
 
-    await inside(b.stub, async (plane) => {
-      await expect(called(() => plane.getCredentialFile("claude-a.json"))).rejects.toThrow(
+    await inStartedControlPlane(b.stub, async (plane) => {
+      await expect(outcomeOf(() => plane.getCredentialFile("claude-a.json"))).rejects.toThrow(
         /credentials\/claude-a\.json: the sealed value does not open with the org's data key/,
       );
     });
@@ -292,7 +290,7 @@ describe("ControlPlane stored secrets", () => {
   });
 
   it("does not start under another SECRETS_KEY, instead of reading garbage", async () => {
-    const { org, stub } = await stocked();
+    const { org, stub } = await orgWithSecrets();
 
     await wrapDataKeyUnder(stub, org, UNRELATED_SECRETS_KEY);
 
@@ -300,20 +298,82 @@ describe("ControlPlane stored secrets", () => {
       `neither SECRETS_KEY nor SECRETS_KEY_PREVIOUS opens the data key of org ${org}`,
     );
 
-    await inside(stub, async (plane) => {
-      await expect(called(() => plane.listCredentials())).rejects.toThrow(refusal);
-      await expect(called(() => plane.getConfig())).rejects.toThrow(refusal);
+    await inStartedControlPlane(stub, async (plane) => {
+      await expect(outcomeOf(() => plane.listCredentials())).rejects.toThrow(refusal);
+      await expect(outcomeOf(() => plane.getConfig())).rejects.toThrow(refusal);
     });
     // Every later start fails the same way (nothing was rewritten under the wrong key).
     await restart(stub);
-    await inside(stub, async (plane) => {
-      await expect(called(() => plane.getCredentialFile("claude-a.json"))).rejects.toThrow(refusal);
+    await inStartedControlPlane(stub, async (plane) => {
+      await expect(outcomeOf(() => plane.getCredentialFile("claude-a.json"))).rejects.toThrow(
+        refusal,
+      );
     });
   });
 
+  it("does not start on a deployed stage without its SECRETS_KEY, or with the development key", async () => {
+    const { stub } = await orgWithSecrets();
+
+    await runInDurableObject(stub, async (_instance, state) => {
+      for (const [SECRETS_KEY, refusal] of [
+        ["", /SECRETS_KEY is not set or shorter than 32 characters/],
+        [DEV_SECRETS_KEY, /SECRETS_KEY is refused because ACCESS_TEAM_DOMAIN\/ACCESS_AUD are set/],
+      ] as const) {
+        // A second instance over the same storage, with the bindings of a deployed stage.
+        const refused = new ControlPlane(state, {
+          ...env,
+          ACCESS_TEAM_DOMAIN: "team",
+          SECRETS_KEY,
+        });
+
+        await refused.started;
+        await expect(outcomeOf(() => refused.listCredentials())).rejects.toThrow(refusal);
+        await expect(outcomeOf(() => refused.getConfig())).rejects.toThrow(refusal);
+      }
+    });
+  });
+
+  it("stores the data key and seals the plain-text secrets in one transaction", async () => {
+    const { org, stub } = await orgWithSecrets();
+
+    // The state before encryption (plain-text values, no data key), then a first start whose sealing step fails
+    // halfway: nothing of it may stay.
+    const after = await runInDurableObject(stub, async (_instance, state) => {
+      const { sql } = state.storage;
+
+      sql.exec("UPDATE credentials SET metadata = ?", JSON.stringify(AUTH_FILE));
+      sql.exec("DROP TABLE org_data_key");
+
+      const failure = await openDataKey({
+        sql,
+        transaction: (body) => state.storage.transactionSync(body),
+        org,
+        keys: () => deploymentSecretsKeys(env),
+        sealStored: (cipher) => {
+          sql.exec("UPDATE credentials SET metadata = ?", cipher.seal("{}", "credentials/x"));
+          throw new Error("sealing failed halfway");
+        },
+      }).then(
+        () => "opened",
+        (error: Error) => error.message,
+      );
+
+      return {
+        failure,
+        keys: sql.exec("SELECT COUNT(*) AS n FROM org_data_key").one()["n"],
+        metadata: sql.exec<{ metadata: string }>("SELECT metadata FROM credentials").toArray(),
+      };
+    });
+
+    expect(after.failure).toContain("sealing failed halfway");
+    expect(after.keys).toBe(0);
+
+    for (const { metadata } of after.metadata) expect(isSealed(metadata)).toBe(false);
+  });
+
   it("wraps the data key again under SECRETS_KEY when SECRETS_KEY_PREVIOUS opens it, keeping every secret", async () => {
-    const { org, stub } = await stocked();
-    const before = await readable(stub, org);
+    const { org, stub } = await orgWithSecrets();
+    const before = await readThroughControlPlane(stub, org);
 
     const sealedRows = await runInDurableObject(stub, (_instance, state) =>
       state.storage.sql.exec("SELECT id, metadata FROM credentials").toArray(),
@@ -322,7 +382,7 @@ describe("ControlPlane stored secrets", () => {
     // The stage rotated: its data key was wrapped under what is now SECRETS_KEY_PREVIOUS.
     const wrappedBefore = await wrapDataKeyUnder(stub, org, env.SECRETS_KEY_PREVIOUS ?? "");
 
-    expect(await readable(stub, org)).toEqual(before);
+    expect(await readThroughControlPlane(stub, org)).toEqual(before);
     expect(await wrappedDataKey(stub)).not.toBe(wrappedBefore);
 
     // The data is not encrypted again, and the data key now opens under SECRETS_KEY alone.
@@ -344,11 +404,11 @@ describe("ControlPlane stored secrets", () => {
   });
 
   it("seals what a ControlPlane stored before encryption on its first start, keeping auth indexes", async () => {
-    const { org, stub } = await stocked();
+    const { org, stub } = await orgWithSecrets();
     expect(
       await stub.importAuthFile("claude-b.json", { ...AUTH_FILE, email: "b@x.com" }),
     ).toMatchObject({ ok: true });
-    const before = await readable(stub, org);
+    const before = await readThroughControlPlane(stub, org);
 
     let plain = "";
 
@@ -364,7 +424,7 @@ describe("ControlPlane stored secrets", () => {
     for (const secret of SECRETS) expect(plain).toContain(secret);
     expect(await wrappedDataKey(stub)).toMatch(/^wk:v1:/);
 
-    const after = await readable(stub, org);
+    const after = await readThroughControlPlane(stub, org);
     expect(after).toEqual(before);
     expect(after.credentials.length).toBeGreaterThanOrEqual(4);
     expectNoPlaintext(await storedText(stub));
@@ -372,7 +432,7 @@ describe("ControlPlane stored secrets", () => {
     // Idempotent: the next start finds the data key and seals nothing again.
     const stored = await storedText(stub);
     await restart(stub);
-    expect(await readable(stub, org)).toEqual(before);
+    expect(await readThroughControlPlane(stub, org)).toEqual(before);
     expect(await storedText(stub)).toBe(stored);
   });
 });

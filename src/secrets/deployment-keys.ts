@@ -5,10 +5,10 @@
  * Fails closed like `AUTH_INDEX_KEY` (`management/auth-index.ts`): a missing, non-string or short (< 32 characters)
  * key throws. On a deployed stage (`ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` set, the condition that also refuses
  * `ACCESS_DEV_BYPASS`) the fixed `alchemy dev` key and any key shorter than 64 characters (the deploy mints 32 random
- * bytes, 256 bits, as 64 hex characters) are refused too, and the refusal is logged once per isolate. The ControlPlane
- * reads them when it starts, so a stage without its key has no ControlPlane that starts.
+ * bytes, 256 bits, as 64 hex characters) are refused too. The ControlPlane reads them when it starts (and logs a
+ * refusal, `OrgSecrets`), so a stage without its key has no ControlPlane that starts.
  */
-import { Effect } from "effect";
+import { isDeployedStage } from "../access/config.ts";
 import { DEV_SECRETS_KEY, MIN_DEPLOYED_SECRETS_KEY_LENGTH, MIN_SECRETS_KEY_LENGTH } from "./key.ts";
 
 /** Thrown for a missing, short or refused secrets key, and for one that opens no data key. */
@@ -31,15 +31,7 @@ export interface SecretsKeys {
   readonly previous?: string;
 }
 
-let refusalLogged = false;
-
-const refuse = (message: string, deployed: boolean): never => {
-  if (deployed && !refusalLogged) {
-    refusalLogged = true;
-    // Sync, and reached inside the ControlPlane Durable Object, outside a request's runtime.
-    Effect.runSync(Effect.logError(message));
-  }
-
+const refuse = (message: string): never => {
   throw new SecretsKeyError(message);
 };
 
@@ -47,13 +39,11 @@ const check = (name: string, secret: string | undefined, deployed: boolean): str
   if (typeof secret !== "string" || secret.length < MIN_SECRETS_KEY_LENGTH)
     return refuse(
       `${name} is not set or shorter than ${MIN_SECRETS_KEY_LENGTH} characters: the Worker needs its secrets key (alchemy.run.ts, docs/DEPLOY.md)`,
-      deployed,
     );
 
   if (deployed && (secret === DEV_SECRETS_KEY || secret.length < MIN_DEPLOYED_SECRETS_KEY_LENGTH))
     return refuse(
       `${name} is refused because ACCESS_TEAM_DOMAIN/ACCESS_AUD are set: a deployed stage needs its own random key of at least ${MIN_DEPLOYED_SECRETS_KEY_LENGTH} characters (alchemy.run.ts, docs/DEPLOY.md)`,
-      deployed,
     );
 
   return secret;
@@ -64,8 +54,7 @@ const check = (name: string, secret: string | undefined, deployed: boolean): str
  * current key: none) and checked like it when set.
  */
 export const deploymentSecretsKeys = (env: SecretsKeyEnv): SecretsKeys => {
-  const deployed =
-    (env.ACCESS_TEAM_DOMAIN ?? "").trim() !== "" || (env.ACCESS_AUD ?? "").trim() !== "";
+  const deployed = isDeployedStage(env);
 
   const current = check("SECRETS_KEY", env.SECRETS_KEY, deployed);
   const previous = env.SECRETS_KEY_PREVIOUS ?? "";
