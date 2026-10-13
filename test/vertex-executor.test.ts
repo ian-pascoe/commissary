@@ -1,5 +1,6 @@
 // End-to-end tests (workerd) of the Vertex executor: service-account and API-key endpoints, token handling through the
 // ControlPlane stub, Imagen conversion, native Interactions and the payload-rules-last ordering.
+import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Config } from "../src/config/schema.ts";
 import {
@@ -59,6 +60,8 @@ const harness = (
 
 const body = { contents: [{ role: "user", parts: [{ text: "hi" }] }] };
 
+type RealStub = ReturnType<Env["CONTROL_PLANE"]["getByName"]>;
+
 describe("vertex service account", () => {
   it("uses the regional endpoint with the cached bearer token and applies payload rules last", async () => {
     const cred = credential("vertex", "vertex:sa", {
@@ -85,9 +88,17 @@ describe("vertex service account", () => {
     expect(upstream.session_id).toBe("from-rule");
   });
 
-  /** A ControlPlane stub whose `ensureFresh` returns `result` (the wire credential carries the minted metadata). */
+  /**
+   * A ControlPlane stub whose `ensureFresh` returns `result` (the wire credential carries the minted metadata); the
+   * Access gate's membership calls reach the real ControlPlane.
+   */
   const controlPlane = (ensured: string[], result: (id: string) => Json) => ({
-    getByName: () => ({
+    getByName: (name: string) => ({
+      admit: async (...args: Parameters<RealStub["admit"]>) =>
+        await env.CONTROL_PLANE.getByName(name).admit(...args),
+      membershipIndex: async () => await env.CONTROL_PLANE.getByName(name).membershipIndex(),
+      markIndexSynced: async (counter: number) =>
+        await env.CONTROL_PLANE.getByName(name).markIndexSynced(counter),
       ensureFresh: async (id: string) => {
         ensured.push(id);
 

@@ -25,7 +25,7 @@ afterAll(harness.dispose);
 
 const CAROL = "carol@example.com";
 
-/** An admin only through the config document's `access.admin-emails`, which keep managing `global`. */
+/** An admin of `global` through her membership there (`seedCarol`), and of no other org. */
 const asCarol = async () => ({ auth: await token(CAROL) });
 
 beforeEach(async () => {
@@ -50,12 +50,13 @@ const patch = (slug: string, body: Payload) =>
   harness.json(`/v8/management/orgs/${slug}`, jsonInit("PATCH", body));
 
 const seedCarol = async () => {
-  const stored = await controlPlane().importConfig(
-    JSON.stringify({ access: { "admin-emails": [CAROL] } }),
+  const added = await controlPlane().addMember(
+    { email: CAROL, role: "admin" },
+    { role: "owner", sensitive: true },
     "test",
   );
 
-  expect(stored.ok).toBe(true);
+  expect(added.ok || added.error === "member_exists").toBe(true);
 };
 
 describe("the org list", () => {
@@ -208,7 +209,7 @@ describe("renaming an org", () => {
 });
 
 describe("who may manage the list of orgs", () => {
-  it("is a platform admin only: an admin named by the config gets 403 platform_admin_required", async () => {
+  it("is a platform admin only: an admin of global gets 403 platform_admin_required", async () => {
     await seedCarol();
     const carol = await asCarol();
 
@@ -238,11 +239,16 @@ describe("who may manage the list of orgs", () => {
     expect((await orgs()).find((org) => org.slug === "default")?.name).toBe("Default");
   });
 
-  it("refuses everyone who is no admin at all", async () => {
+  it("refuses a plain member, who still learns who they are", async () => {
     const dave = { auth: await token("dave@example.com") };
 
     expect((await harness.json("/v8/management/orgs", dave)).status).toBe(403);
-    expect((await harness.json("/v8/management/me", dave)).status).toBe(403);
+    // `global` lets everyone Access admits join as a plain member (auto-join is on there).
+    expect((await harness.json("/v8/management/me", dave)).body).toEqual({
+      platform_admin: false,
+      role: "member",
+      orgs: [{ slug: "default", name: "Default" }],
+    });
     expect((await harness.json("/v8/management/orgs", { auth: false })).status).toBe(401);
   });
 
@@ -282,7 +288,7 @@ describe("GET /me", () => {
     expect(body.orgs).toContainEqual({ slug: "me-org", name: "Me Org" });
   });
 
-  it("tells an admin named by the config that its org is global, whatever its slug is now", async () => {
+  it("tells an admin of global its role and that its org is global, whatever its slug is now", async () => {
     await seedCarol();
     await create({ slug: "not-hers", name: "Not hers" });
 
@@ -290,6 +296,7 @@ describe("GET /me", () => {
 
     expect(carol.body).toEqual({
       platform_admin: false,
+      role: "admin",
       orgs: [{ slug: "default", name: "Default" }],
     });
 
@@ -298,6 +305,7 @@ describe("GET /me", () => {
     try {
       expect((await harness.json("/v8/management/me", await asCarol())).body).toEqual({
         platform_admin: false,
+        role: "admin",
         orgs: [{ slug: "renamed-home", name: "Default" }],
       });
     } finally {
@@ -441,7 +449,7 @@ describe("org-scoped management routes", () => {
     expect((await harness.json("/o/ghost/accounts")).status).toBe(404);
   });
 
-  it("answer 403 to an admin named by the config for any org but global", async () => {
+  it("answer 403 to an admin of global for any org they are no member of", async () => {
     await seedCarol();
     await create({ slug: "scoped-closed", name: "Closed" });
     const carol = await asCarol();

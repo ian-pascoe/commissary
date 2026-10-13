@@ -139,16 +139,23 @@ describe("web panel", () => {
     ).toBe(403);
   });
 
-  it("is only served to administrators", async () => {
+  it("is served to the members of an org only", async () => {
     expect((await built.call("/", { auth: false })).status).toBe(401);
     expect((await built.call("/assets/index-abc.js", { auth: false })).status).toBe(401);
     expect((await built.call("/o/default/accounts", { auth: false })).status).toBe(401);
-    expect(
-      (await built.call("/o/default/accounts", { auth: await token("user@example.com") })).status,
-    ).toBe(403);
-    expect((await built.call("/usage", { auth: await token("user@example.com") })).status).toBe(
-      403,
-    );
+
+    // `global` lets everyone Access admits join as a plain member; an org with auto-join off does not.
+    expect((await several.platform.createOrg({ slug: "closed", name: "Closed" }, 1)).ok).toBe(true);
+    const user = { auth: await token("panel-user@example.com") };
+
+    expect((await chooser.call("/o/default/usage", user)).status).toBe(200);
+    expect((await chooser.call("/o/closed/usage", user)).status).toBe(403);
+
+    // Without an org in the address, the panel goes to the only org they belong to.
+    const usage = await chooser.call("/usage", user);
+
+    expect(usage.status).toBe(302);
+    expect(usage.headers.get("location")).toBe("/o/default/usage");
   });
 
   it("classifies the panel paths as management and leaves look-alikes alone", () => {

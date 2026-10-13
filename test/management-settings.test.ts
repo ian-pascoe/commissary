@@ -3,7 +3,6 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { Json } from "../src/json/index.ts";
 import type { SettingsView } from "../src/management/contract/settings.ts";
 import {
-  ADMIN,
   controlPlane,
   jsonInit,
   makeHarness,
@@ -69,7 +68,7 @@ describe("management settings", () => {
     expect((await call(PATH, { auth: await token("other@example.com") })).status).toBe(403);
   });
 
-  it("serves the defaults on an empty config, with the env admins", async () => {
+  it("serves the defaults on an empty config", async () => {
     const view = await getView();
 
     expect(view.values).toEqual(view.defaults);
@@ -77,7 +76,6 @@ describe("management settings", () => {
     expect(view.values.routing["session-affinity-ttl"]).toBe("1h");
     expect(view.values.oauth.providers.antigravity["signature-cache-enabled"]).toBeNull();
     expect(view.revisions).toEqual({});
-    expect(view.env_admins).toEqual({ emails: [ADMIN], service_tokens: [] });
     expect(view.payload).toEqual({
       default: 0,
       "default-raw": 0,
@@ -200,8 +198,11 @@ describe("management settings", () => {
 
   it("refuses the keys that do nothing on Workers as not settings", async () => {
     for (const [patch, path] of [
-      [{ access: { "api-keys": ["other"] } }, "access.api-keys"],
-      [{ access: { "api-keys": null } }, "access.api-keys"],
+      // No setting lives under `access`: the admin lists are an org's members now (`/v8/management/members`).
+      [{ access: { "api-keys": ["other"] } }, "access"],
+      [{ access: { "api-keys": null } }, "access"],
+      [{ access: { "admin-emails": ["new@example.com"] } }, "access"],
+      [{ access: { "admin-service-tokens": ["new.access"] } }, "access"],
       [
         { observability: { usage: { "redis-usage-queue-retention-seconds": 120 } } },
         // No setting lives under `observability`.
@@ -290,8 +291,6 @@ describe("management settings", () => {
         { upstream: { claude: { "header-defaults": { "user-agent": " claude-cli " } } } },
         "upstream.claude.header-defaults.user-agent",
       ],
-      [{ access: { "admin-emails": [ADMIN, "Mixed@Example.com"] } }, "access.admin-emails"],
-      [{ access: { "admin-emails": ["not-an-email"] } }, "access.admin-emails"],
     ];
 
     for (const [patch, path] of cases) {
@@ -342,52 +341,5 @@ describe("management settings", () => {
     expect(
       await json(PATH, jsonInit("PATCH", { revisions: { "routing.strategy": -1 }, patch: {} })),
     ).toMatchObject({ status: 400 });
-  });
-
-  it("does not let a config-only admin remove their own access", async () => {
-    // A fresh harness: the Access gate caches the config admin lists per isolate (5 s).
-    const own = makeHarness();
-    const CONFIG_ADMIN = "cfg@example.com";
-
-    try {
-      const version = await seed({
-        access: { "admin-emails": [CONFIG_ADMIN, "other@example.com"] },
-      });
-
-      const as = async (email: string, patch: Json) => {
-        const { revisions } = await getView();
-
-        const response = await own.call(PATH, {
-          ...jsonInit("PATCH", { revisions, patch }),
-          auth: await token(email),
-        });
-
-        const body: unknown = await response.json();
-
-        return { status: response.status, body };
-      };
-
-      const lockout = await as(CONFIG_ADMIN, { access: { "admin-emails": ["other@example.com"] } });
-
-      expect(lockout).toMatchObject({
-        status: 422,
-        body: { error: "would_remove_your_admin_access", path: "access.admin-emails" },
-      });
-
-      const reset = await as(CONFIG_ADMIN, { access: { "admin-emails": null } });
-
-      expect(reset.status).toBe(422);
-
-      const kept = await as(CONFIG_ADMIN, { access: { "admin-emails": [CONFIG_ADMIN] } });
-
-      expect(kept).toMatchObject({ status: 200, body: { version: version + 1 } });
-
-      // A platform admin may remove anyone.
-      const removed = await as(ADMIN, { access: { "admin-emails": null } });
-
-      expect(removed).toMatchObject({ status: 200, body: { version: version + 2 } });
-    } finally {
-      await own.dispose();
-    }
   });
 });
