@@ -17,6 +17,7 @@ import {
   uploadAtom,
 } from "../api/client.ts";
 import { kit, Problem } from "../components/Kit.tsx";
+import { addsPrivately, Ownership } from "../components/Ownership.tsx";
 import {
   authFileName,
   CONNECT_OPTIONS,
@@ -30,6 +31,7 @@ import { formatDuration } from "../lib/format.ts";
 import { scopedApiUrl } from "../lib/org.ts";
 import { useAction } from "../lib/use-action.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
+import { useRole } from "../lib/use-role.ts";
 import styles from "./Connect.module.css";
 
 /** How often the page asks whether the sign-in finished (the server polls the provider no faster than it allows). */
@@ -123,7 +125,17 @@ const Waiting = ({ text }: { readonly text: string }) => (
   </p>
 );
 
-const SignIn = ({ option }: { readonly option: ConnectOption }) => {
+/** What the connect flows send for an account that is the caller's own (ADR 0023). */
+const privateQuery = (privately: boolean) => (privately ? ({ private: "true" } as const) : {});
+
+const SignIn = ({
+  option,
+  privately,
+}: {
+  readonly option: ConnectOption;
+  /** The account becomes the caller's private one. */
+  readonly privately: boolean;
+}) => {
   if (option.method.kind !== "sign-in") throw new Error("SignIn needs a sign-in option");
   const { provider, flow: defaultFlow, codeAlternative } = option.method;
   const [useCode, setUseCode] = useState(false);
@@ -196,7 +208,11 @@ const SignIn = ({ option }: { readonly option: ConnectOption }) => {
     setPasteProblem(undefined);
 
     const outcome = await start.run({
-      query: { provider, ...(mode === "code" && defaultFlow !== "code" ? { flow: "device" } : {}) },
+      query: {
+        provider,
+        ...(mode === "code" && defaultFlow !== "code" ? { flow: "device" } : {}),
+        ...privateQuery(privately),
+      },
     });
 
     if (!outcome.ok) {
@@ -384,7 +400,11 @@ type VertexResult =
   | { readonly ok: false; readonly message: string };
 
 /** `POST /oauth/import?provider=vertex` is multipart, which the typed client does not send; a plain request does. */
-const importVertex = async (file: File, location: string): Promise<VertexResult> => {
+const importVertex = async (
+  file: File,
+  location: string,
+  privately: boolean,
+): Promise<VertexResult> => {
   const form = new FormData();
   form.set("file", file);
 
@@ -394,7 +414,10 @@ const importVertex = async (file: File, location: string): Promise<VertexResult>
 
   try {
     response = await fetch(
-      scopedApiUrl("/v8/management/oauth/import?provider=vertex", panelOrgSlug),
+      scopedApiUrl(
+        `/v8/management/oauth/import?provider=vertex${privately ? "&private=true" : ""}`,
+        panelOrgSlug,
+      ),
       {
         method: "POST",
         body: form,
@@ -440,7 +463,7 @@ const importVertex = async (file: File, location: string): Promise<VertexResult>
   };
 };
 
-const Vertex = () => {
+const Vertex = ({ privately }: { readonly privately: boolean }) => {
   const ids = useId();
   const [file, setFile] = useState<File | undefined>(undefined);
   const [location, setLocation] = useState("us-central1");
@@ -476,7 +499,7 @@ const Vertex = () => {
         }
 
         setBusy(true);
-        const outcome = await importVertex(file, location);
+        const outcome = await importVertex(file, location, privately);
         setBusy(false);
         setResult(outcome);
 
@@ -528,7 +551,7 @@ interface FileResult {
   readonly problem: string | undefined;
 }
 
-const Files = () => {
+const Files = ({ privately }: { readonly privately: boolean }) => {
   const id = useId();
   const upload = useAction(uploadAtom);
   const refreshCredentials = useAtomRefresh(credentialsAtom);
@@ -549,7 +572,11 @@ const Files = () => {
       } else if (file.size > MAX_AUTH_FILE_BYTES) {
         done.push({ name, problem: "Not added: larger than 10 MB, so not an auth file." });
       } else {
-        const outcome = await upload.run({ query: { name }, payload: await file.text() });
+        const outcome = await upload.run({
+          query: { name, ...privateQuery(privately) },
+          payload: await file.text(),
+        });
+
         done.push({ name, problem: outcome.ok ? undefined : `Not added. ${outcome.message}` });
       }
 
@@ -609,21 +636,31 @@ const Files = () => {
 // ---------------------------------------------------------------------------------------------------------------
 // Page
 
-const Panel = ({ option }: { readonly option: ConnectOption }) => {
+const Panel = ({
+  option,
+  privately,
+}: {
+  readonly option: ConnectOption;
+  readonly privately: boolean;
+}) => {
   switch (option.method.kind) {
     case "sign-in":
-      return <SignIn key={option.id} option={option} />;
+      return <SignIn key={`${option.id}-${privately}`} option={option} privately={privately} />;
     case "vertex":
-      return <Vertex />;
+      return <Vertex key={String(privately)} privately={privately} />;
     case "file":
-      return <Files />;
+      return <Files key={String(privately)} privately={privately} />;
   }
 };
 
 export const ConnectPage = () => {
   usePageTitle("Connect an account");
   const [chosen, setChosen] = useState<ConnectOption | undefined>(undefined);
+  const [mine, setMine] = useState(false);
   const panel = useRef<HTMLElement>(null);
+  const role = useRole();
+  const caller = role.kind === "ready" ? role.caller : undefined;
+  const privately = addsPrivately(caller, mine);
 
   useEffect(() => {
     if (chosen !== undefined && window.matchMedia("(max-width: 48rem)").matches) {
@@ -639,6 +676,7 @@ export const ConnectPage = () => {
           Accounts
         </Link>
         <h1 className={styles["title"]}>Connect an account</h1>
+        <Ownership caller={caller} noun="account" chosen={mine} onChange={setMine} />
       </header>
       <div className={styles["columns"]}>
         <fieldset className={styles["options"]}>
@@ -669,7 +707,7 @@ export const ConnectPage = () => {
           ) : (
             <>
               <h2 className={styles["panelTitle"]}>{chosen.name}</h2>
-              <Panel option={chosen} />
+              <Panel option={chosen} privately={privately} />
             </>
           )}
         </section>

@@ -479,9 +479,12 @@ export class CredentialsGroup extends HttpApiGroup.make("credentials").add(
     success: Ok,
     error: managementErrors,
   }),
-  /** Add or replace one auth file (`name` ends in `.json`; the body is the file's JSON text). */
+  /**
+   * Add or replace one auth file (`name` ends in `.json`; the body is the file's JSON text). `private=true` makes it
+   * the caller's private account (ADR 0023); a plain member's upload is always private.
+   */
   HttpApiEndpoint.post("upload", "/credentials", {
-    query: { name: Schema.String },
+    query: { name: Schema.String, private: optional(Schema.Literal("true")) },
     payload: Schema.String.pipe(HttpApiSchema.asText({ contentType: "application/json" })),
     success: Ok,
     error: managementErrors,

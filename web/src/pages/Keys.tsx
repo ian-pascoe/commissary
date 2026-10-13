@@ -32,9 +32,12 @@ import {
   needsAttention,
   recentRequests,
 } from "../lib/keys.ts";
+import { holdsOnlyPrivate } from "../lib/role.ts";
 import { useAction } from "../lib/use-action.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
+import { useRole } from "../lib/use-role.ts";
 import styles from "./Keys.module.css";
+import { OtherPrivateKeyGroups } from "./KeysOthers.tsx";
 
 /** Requests per key are counted over the recent-requests ring: ten-minute buckets. */
 const BUCKET_MS = 10 * 60_000;
@@ -254,14 +257,25 @@ const Group = ({
               ))}
           </p>
         </div>
-        <Link
-          to="/keys/$family/$index"
-          params={{ family: group.family, index: String(group.index) }}
-          className={kit["sectionLink"]}
-          aria-label={`Edit ${title}`}
-        >
-          Edit
-        </Link>
+        {group.private === true ? (
+          <Link
+            to="/keys/private/$family/$index"
+            params={{ family: group.family, index: String(group.index) }}
+            className={kit["sectionLink"]}
+            aria-label={`Edit ${title}`}
+          >
+            Edit
+          </Link>
+        ) : (
+          <Link
+            to="/keys/$family/$index"
+            params={{ family: group.family, index: String(group.index) }}
+            className={kit["sectionLink"]}
+            aria-label={`Edit ${title}`}
+          >
+            Edit
+          </Link>
+        )}
       </div>
       {keys.length === 0 ? (
         <p className={kit["muted"]}>
@@ -403,7 +417,7 @@ const List = ({ list }: { readonly list: ApiKeysList }) => {
               </header>
               {groups.map(({ group, keys }) => (
                 <Group
-                  key={`${group.family}:${group.index}`}
+                  key={`${group.private === true ? "own:" : ""}${group.family}:${group.index}`}
                   group={group}
                   keys={keys}
                   now={now}
@@ -416,6 +430,20 @@ const List = ({ list }: { readonly list: ApiKeysList }) => {
         </div>
       )}
     </>
+  );
+};
+
+/** A plain member's page is theirs alone: say so, and what the org's admins can tell of it. */
+const OwnLead = () => {
+  const role = useRole();
+
+  if (role.kind !== "ready" || !holdsOnlyPrivate(role.caller)) return null;
+
+  return (
+    <p className={styles["empty"]}>
+      Your private API keys: only your own requests use them. Org admins see that each group exists,
+      its provider and its label, and nothing more.
+    </p>
   );
 };
 
@@ -442,14 +470,19 @@ export const KeysPage = () => {
         onFailure: (failure) => (
           <Problem onRetry={retry}>Could not load the API keys. {failureMessage(failure)}</Problem>
         ),
-        onSuccess: ({ value }) =>
-          keySections(value).length === 0 ? (
-            <p className={styles["empty"]}>
-              No API keys yet. Add a provider key to let the proxy answer requests with it.
-            </p>
-          ) : (
-            <List list={value} />
-          ),
+        onSuccess: ({ value }) => (
+          <>
+            <OwnLead />
+            {keySections(value).length === 0 ? (
+              <p className={styles["empty"]}>
+                No API keys yet. Add a provider key to let the proxy answer requests with it.
+              </p>
+            ) : (
+              <List list={value} />
+            )}
+            <OtherPrivateKeyGroups others={value.others ?? []} />
+          </>
+        ),
       })}
     </div>
   );

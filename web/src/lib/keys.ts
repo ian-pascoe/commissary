@@ -108,6 +108,8 @@ export interface GroupRef {
   readonly family: ApiKeyFamily;
   readonly index: number;
   readonly view: AnyGroupView;
+  /** One of the caller's private groups (ADR 0023): `index` counts among those, not among the shared ones. */
+  readonly private?: boolean;
 }
 
 export interface KeySection {
@@ -118,31 +120,43 @@ export interface KeySection {
   readonly groups: ReadonlyArray<GroupRef>;
 }
 
-/** One section per provider in a fixed order; every OpenAI-compatible endpoint is a provider of its own. */
-export const keySections = (list: ApiKeysList): ReadonlyArray<KeySection> =>
+const sectionsOf = (families: ApiKeysList["families"], privately: boolean) =>
   FAMILY_ORDER.flatMap((family): ReadonlyArray<KeySection> => {
-    const groups: ReadonlyArray<AnyGroupView> = list.families[family];
+    const groups: ReadonlyArray<AnyGroupView> = families[family];
+    const mark = privately ? { private: true } : {};
+    const prefix = privately ? "own:" : "";
 
     if (groups.length === 0) return [];
 
     if (family === "openai-compatibility") {
       return groups.map((view) => ({
-        id: `${family}:${view.index}`,
+        id: `${prefix}${family}:${view.index}`,
         title: groupTitle(family, view),
-        caption: "OpenAI-compatible endpoint",
-        groups: [{ family, index: view.index, view }],
+        caption: privately
+          ? "OpenAI-compatible endpoint, private to you"
+          : "OpenAI-compatible endpoint",
+        groups: [{ family, index: view.index, view, ...mark }],
       }));
     }
 
     return [
       {
-        id: family,
+        id: `${prefix}${family}`,
         title: familyName(family),
-        caption: undefined,
-        groups: groups.map((view) => ({ family, index: view.index, view })),
+        caption: privately ? "Private to you" : undefined,
+        groups: groups.map((view) => ({ family, index: view.index, view, ...mark })),
       },
     ];
   });
+
+/**
+ * One section per provider in a fixed order; every OpenAI-compatible endpoint is a provider of its own. The org's
+ * shared groups come first, then the caller's private ones (ADR 0023), each marked.
+ */
+export const keySections = (list: ApiKeysList): ReadonlyArray<KeySection> => [
+  ...sectionsOf(list.families, false),
+  ...(list.own === undefined ? [] : sectionsOf(list.own, true)),
+];
 
 /** A group's name, else its host, else its position. */
 export const groupTitle = (family: ApiKeyFamily, view: AnyGroupView): string => {
@@ -585,6 +599,7 @@ export const putGroupRequest = (
   family: ApiKeyFamily,
   view: AnyGroupView | undefined,
   draft: GroupDraft,
+  privately = false,
 ): PutGroupRequest => {
   const name = optionalText(draft.name);
   const baseUrl = optionalText(draft.baseUrl);
@@ -592,7 +607,11 @@ export const putGroupRequest = (
   const priority = optionalInt(draft.priority);
   const models = modelEntries(draft.models);
   const keys = draft.keys.map(keyInput);
-  const entry = view === undefined ? { revision: 0 } : { id: view.id, revision: view.revision };
+
+  const entry = {
+    ...(view === undefined ? { revision: 0 } : { id: view.id, revision: view.revision }),
+    ...(privately ? { private: true } : {}),
+  };
 
   if (family === "openai-compatibility") {
     // SAFETY: the list files OpenAI-compatible endpoints only under `openai-compatibility`.

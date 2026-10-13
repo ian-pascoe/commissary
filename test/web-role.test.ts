@@ -7,6 +7,7 @@ import {
   canRemove,
   canSetAutoJoin,
   effectiveRole,
+  holdsOnlyPrivate,
   homeFor,
   pageAllowed,
   pagesFor,
@@ -42,6 +43,36 @@ describe("pages", () => {
     expect(pageAllowed("member", "/usage/prices")).toBe(false);
     expect(pageAllowed("member", "/members")).toBe(false);
     expect(pageAllowed("admin", "/usage/prices")).toBe(true);
+  });
+});
+
+describe("private credentials in the panel (ADR 0023)", () => {
+  it("opens a plain member their own accounts and API keys only where the org allows private credentials", () => {
+    expect(pagesFor("member", true).map((page) => page.to)).toEqual([
+      "/accounts",
+      "/keys",
+      "/usage",
+    ]);
+    expect(pagesFor("member", false).map((page) => page.to)).toEqual(["/usage"]);
+    expect(pageAllowed("member", "/accounts", true)).toBe(true);
+    expect(pageAllowed("member", "/accounts/connect", true)).toBe(true);
+    expect(pageAllowed("member", "/keys/new", true)).toBe(true);
+    expect(pageAllowed("member", "/accounts", false)).toBe(false);
+    expect(pageAllowed("member", "/accountsabc", true)).toBe(false);
+    expect(pageAllowed("member", "/models", true)).toBe(false);
+    expect(pageAllowed("member", "/settings", true)).toBe(false);
+    // A plain member still lands on Usage.
+    expect(homeFor("member")).toBe("/usage");
+  });
+
+  it("reads the org's setting from /me, off when it is absent", () => {
+    expect(callerOf({ role: "member", platform_admin: false }).privateCredentials).toBe(false);
+    expect(
+      callerOf({ role: "member", platform_admin: false, private_credentials: true })
+        .privateCredentials,
+    ).toBe(true);
+    expect(holdsOnlyPrivate(caller("member"))).toBe(true);
+    expect(holdsOnlyPrivate(caller("admin"))).toBe(false);
   });
 });
 

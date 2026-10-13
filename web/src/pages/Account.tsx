@@ -591,6 +591,12 @@ const Details = ({ entry, now }: { readonly entry: CredentialEntry; readonly now
     ["Subscription until", until === undefined ? undefined : formatDate(until)],
     ["Project", entry.project_id],
     ["Tokens refreshed", refreshed === undefined ? entry.last_refresh : formatAgo(now - refreshed)],
+    [
+      "Used by",
+      entry.private === true
+        ? `Only you${entry.owner?.email === undefined ? "" : ` (${entry.owner.email})`}: a private account`
+        : "Everyone in the org: a shared account",
+    ],
     ["Connected", created === undefined ? undefined : formatDate(created)],
     ["Changed", updated === undefined ? undefined : formatDate(updated)],
     ["Requests served", formatCount(entry.success)],

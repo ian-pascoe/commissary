@@ -14,6 +14,7 @@ const NewOrg = () => {
   const create = useAction(createOrgAtom);
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
+  const [privateCredentials, setPrivateCredentials] = useState(false);
   const [problem, setProblem] = useState<string | undefined>(undefined);
   const ids = useId();
 
@@ -22,7 +23,11 @@ const NewOrg = () => {
     setProblem(undefined);
 
     const outcome = await create.run({
-      payload: { slug: slug.trim().toLowerCase(), name: name.trim() },
+      payload: {
+        slug: slug.trim().toLowerCase(),
+        name: name.trim(),
+        private_credentials: privateCredentials,
+      },
       reactivityKeys: ORGS,
     });
 
@@ -66,6 +71,19 @@ const NewOrg = () => {
       </label>
       <p className={kit["muted"]}>
         Lowercase letters, digits and hyphens; the panel opens at /o/{slug.trim() || "acme"}/.
+      </p>
+      <label className={styles["choice"]} htmlFor={`${ids}-private`}>
+        <input
+          id={`${ids}-private`}
+          type="checkbox"
+          checked={privateCredentials}
+          onChange={(event) => setPrivateCredentials(event.target.checked)}
+        />
+        <span>Let members connect private accounts and API keys</span>
+      </label>
+      <p className={kit["muted"]}>
+        A private account or API key is used only for its owner&rsquo;s requests; org admins see
+        that it exists, not how it is used. Org admins can change this later.
       </p>
       {problem === undefined ? null : <p className={kit["fieldError"]}>{problem}</p>}
       <div>
