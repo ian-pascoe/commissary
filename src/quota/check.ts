@@ -13,7 +13,7 @@
  */
 import { Clock, Data, Duration, Effect } from "effect";
 import type { HttpClient } from "effect/http";
-import type { Viewer } from "../credentials/ownership.ts";
+import { FULL_ACCESS, type Scope } from "../credentials/ownership.ts";
 import type { AccountResult, QuotaReport } from "../management/contract/credentials.ts";
 import { currentControlPlane, holdInvocation, type WorkerEnv } from "../platform/env.ts";
 import type { ControlPlaneStub, CurrentOrg } from "../platform/org.ts";
@@ -103,9 +103,9 @@ export const checkCredentialQuota = (
   options: {
     readonly sweepLease?: string;
     readonly sweep?: boolean;
-    /** Who asks: only an account they manage in full is checked (none: the cron sweep, every account). */
-    readonly viewer?: Viewer;
-  } = {},
+    /** Who asks: only an account they manage in full is checked (`FULL_ACCESS`: the cron sweep, every account). */
+    readonly viewer: Scope;
+  },
 ): Effect.Effect<
   QuotaCheckResult,
   QuotaControlPlaneError,
@@ -173,11 +173,8 @@ const renew = (token: string) =>
   call("renewQuotaSweepLease", (stub) => stub.renewQuotaSweepLease(token)).pipe(Effect.ignore);
 
 /** One account's outcome as a sweep reports it; a failed check is a result, never a failed sweep. */
-const checkForSweep = (token: string, viewer?: Viewer) => (id: string) =>
-  checkCredentialQuota(
-    { name: id },
-    { sweepLease: token, sweep: true, ...(viewer === undefined ? {} : { viewer }) },
-  ).pipe(
+const checkForSweep = (token: string, viewer: Scope) => (id: string) =>
+  checkCredentialQuota({ name: id }, { sweepLease: token, sweep: true, viewer }).pipe(
     Effect.flatMap((result) => {
       switch (result.kind) {
         case "checked": {
@@ -266,7 +263,7 @@ const keepLease = (token: string): Effect.Effect<void, never, WorkerEnv | Curren
  */
 export const sweepQuotas = (
   source: SweepSource,
-  viewer?: Viewer,
+  viewer: Scope,
 ): Effect.Effect<
   QuotaSweep,
   QuotaControlPlaneError,
@@ -327,7 +324,7 @@ export const runQuotaSweep: Effect.Effect<
   QuotaControlPlaneError,
   WorkerEnv | CurrentOrg | HttpClient.HttpClient
 > = Effect.gen(function* () {
-  const sweep = yield* sweepQuotas("cron");
+  const sweep = yield* sweepQuotas("cron", FULL_ACCESS);
 
   if (sweep.kind === "running") {
     yield* Effect.logInfo(

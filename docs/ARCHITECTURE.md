@@ -289,6 +289,11 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
   credentials with the owner. `membership.private_credentials` is the org setting "members may connect private
   credentials": on for `global` (the upgrade sets it), off for a new org unless `POST /orgs` chose it; off, `CredentialPool`
   derives every private credential as disabled (kept, not deleted) until it is on again.
+  - **Who a call runs for** (fail closed): every `ControlPlane` method that filters by ownership takes a required `Scope`
+    (`viewer`): the caller's `Viewer`, or `FULL_ACCESS` for the system (cron sweeps, the registry's model sources, the
+    public OAuth callback, migrations). There is no default, so a member-scoped route cannot forget it: leaving it out is a
+    type error, which `test/credentials-scope.test.ts` pins with `@ts-expect-error` per method next to a runtime test of
+    what each viewer reaches.
   - **Selection**: `PickRequest.memberId` (the caller's member id, also in the retry query) enters `pick` and `planRetry`;
     a private credential is a candidate only when `credential.owner === memberId` (`servesMember`), so a request of another
     member, of an org admin or of a service token never reaches it. For its owner it competes with the shared credentials
@@ -1897,7 +1902,9 @@ error codes are in `docs/ACCESS.md` "Members, roles and teams".
   (permanent `mem-…` id, lowercased unique email, role, who added them), `teams` and `team_members`, `service_tokens` (Client
   ID, name, role) and one `membership` row (auto-join, whether the admin lists were migrated, a change counter and the
   change the registry's index holds) and the org setting `private_credentials` (members may connect private credentials: `1`
-  for `global`, `0` for a new org unless `POST /orgs` chose it; `GET`/`PATCH /membership`, `/me` and the panel read it; an org
+  for `global`, `0` for a new org unless `POST /orgs` chose it (that route sets it in the new org's ControlPlane first and
+  creates the org in the registry second, so a failure creates nothing and an existing org never has another setting than
+  the one chosen); `GET`/`PATCH /membership`, `/me` and the panel read it; an org
   admin changes it, and a change makes the credential pool derive again). Members are not config entries: a config import replaces every entry and must not
   remove people. Every write takes the actor's role and checks it against the target in the same Durable Object call
   (`members/roles.ts`: `mayManageMember`, `mayChangeRoles`, `mayGrantTokenRole`, `holdsSensitivePowers`), so check and write

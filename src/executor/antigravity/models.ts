@@ -27,6 +27,7 @@ import {
 import type { ModelSource } from "../../registry/source.ts";
 import { antigravityUserAgent, currentAntigravityVersion } from "./version.ts";
 import { ANTIGRAVITY_BASE_URL_DAILY } from "./envelope.ts";
+import { FULL_ACCESS } from "../../credentials/ownership.ts";
 
 export const MODELS_PATH = "/v1internal:fetchAvailableModels";
 
@@ -226,7 +227,7 @@ export const refreshAntigravityModels = Effect.gen(function* () {
   const env = yield* WorkerEnv;
   const org = yield* CurrentOrg;
   const plane = controlPlaneOf(env, org);
-  const sources = yield* Effect.promise(() => plane.listModelSources());
+  const sources = yield* Effect.promise(() => plane.listModelSources(FULL_ACCESS));
   const now = Date.now();
   const version = yield* currentAntigravityVersion(env.CACHE, now);
   const results: Array<{ readonly id: string; readonly status: string }> = [];

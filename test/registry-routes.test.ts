@@ -1,4 +1,5 @@
 // /v1/models and /v1beta/models through the router with the Access gate, a faked registry and the real ControlPlane.
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { env } from "cloudflare:workers";
 import { Effect, Layer } from "effect";
 import { HttpRouter } from "effect/http";
@@ -272,6 +273,8 @@ oauth:
         refresh_token: "ref-secret-a",
         prefix: "team",
       }),
+      {},
+      FULL_ACCESS,
     );
     await stub.importAuthFile(
       "codex-a.json",
@@ -281,13 +284,17 @@ oauth:
         access_token: "tok-secret-c",
         plan_type: "free",
       }),
+      {},
+      FULL_ACCESS,
     );
     await stub.importAuthFile(
       "claude-off.json",
       JSON.stringify({ type: "claude", email: "off@x.com", access_token: "t", disabled: true }),
+      {},
+      FULL_ACCESS,
     );
 
-    const sources = await stub.listModelSources();
+    const sources = await stub.listModelSources(FULL_ACCESS);
     expect(JSON.stringify(sources)).not.toContain("secret");
     expect(sources.find((candidate) => candidate.id === "codex-a.json")).toMatchObject({
       provider: "codex",

@@ -1,6 +1,7 @@
 // Keyed `auth_index` (src/management/auth-index.ts): HMAC under the deployment key, and no raw config credential id
 // or unkeyed hash of key material in any management or proxy response. End to end through `exports.default.fetch`
 // (dev bypass on localhost, see vitest.config.ts); only the upstream provider is mocked, through the global `fetch`.
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { runInDurableObject } from "cloudflare:test";
 import { env, exports } from "cloudflare:workers";
 import { Layer, Logger, References } from "effect";
@@ -195,7 +196,7 @@ api-keys:
         });
 
         await refused.started;
-        expect(() => refused.apiKeysView()).toThrow(AuthIndexKeyError);
+        expect(() => refused.apiKeysView(FULL_ACCESS)).toThrow(AuthIndexKeyError);
       });
 
       for (const path of [
@@ -401,7 +402,7 @@ beforeAll(async () => {
   await resetUsageDb();
   const stored = await controlPlane().importConfig(YAML, "test");
   expect(stored.ok).toBe(true);
-  configIds = (await controlPlane().listCredentials())
+  configIds = (await controlPlane().listCredentials(FULL_ACCESS))
     .filter((entry) => entry.source === "config")
     .map((entry) => entry.id);
   expect(configIds).toHaveLength(3);
@@ -417,7 +418,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   globalThis.fetch = realFetch;
-  await controlPlane().removeCredentials(["claude-leak.json"]);
+  await controlPlane().removeCredentials(["claude-leak.json"], FULL_ACCESS);
   await controlPlane().importConfig("", "test");
 });
 
@@ -538,7 +539,7 @@ describe("no raw config id or unkeyed hash in any response", () => {
       }
 
       expect(
-        (await controlPlane().listCredentials()).filter((e) => e.source === "config"),
+        (await controlPlane().listCredentials(FULL_ACCESS)).filter((e) => e.source === "config"),
       ).toHaveLength(configIds.length);
 
       // The panel's address of an account and its usage filter.

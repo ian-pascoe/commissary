@@ -24,6 +24,7 @@ import type { ModelCatalogs } from "./catalog.ts";
 import type { ModelInfo } from "./model-info.ts";
 import { type ClientRegistration, ModelRegistryIndex } from "./registry.ts";
 import type { ModelSource } from "./source.ts";
+import { FULL_ACCESS } from "../credentials/ownership.ts";
 
 /** The ControlPlane could not provide the credential model sources. */
 export class ModelRegistryError extends Schema.TaggedError<ModelRegistryError>()(
@@ -201,7 +202,7 @@ export class ModelRegistry extends Context.Service<
           [
             catalogStore.load(usesEmbeddedCatalog(config.models.catalog)),
             Effect.tryPromise({
-              try: async () => await plane.listModelSources(),
+              try: async () => await plane.listModelSources(FULL_ACCESS),
               catch: (cause) =>
                 new ModelRegistryError({
                   message: "failed to read model sources from ControlPlane",

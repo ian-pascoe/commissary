@@ -14,6 +14,22 @@ export interface Viewer {
 }
 
 /**
+ * The ControlPlane itself (a cron sweep, an internal caller, a migration): it reaches every credential. Every method that
+ * filters by ownership takes a {@link Scope}, so a caller states which of the two it is: leaving the viewer out is a type
+ * error, never full access by default.
+ */
+export interface FullAccess {
+  readonly system: true;
+}
+
+export const FULL_ACCESS: FullAccess = { system: true };
+
+/** Who a management operation runs for: a viewer, or the system. */
+export type Scope = Viewer | FullAccess;
+
+export const isFullAccess = (scope: Scope): scope is FullAccess => "system" in scope;
+
+/**
  * - `full`: every management operation;
  * - `limited`: an org admin on a private credential: listed without details, may disable or remove it;
  * - `none`: the credential does not exist for this viewer.
@@ -21,7 +37,9 @@ export interface Viewer {
 export type Access = "full" | "limited" | "none";
 
 /** The viewer's access to a credential owned by `owner` (undefined: shared). */
-export const accessTo = (owner: string | undefined, viewer: Viewer): Access => {
+export const accessTo = (owner: string | undefined, viewer: Scope): Access => {
+  if (isFullAccess(viewer)) return "full";
+
   if (owner === undefined) return viewer.admin ? "full" : "none";
 
   if (viewer.member !== undefined && viewer.member === owner) return "full";

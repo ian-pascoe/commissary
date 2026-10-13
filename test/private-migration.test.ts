@@ -1,6 +1,7 @@
 // The upgrade to shared and private credentials (ADR 0023): each test starts from the storage a ControlPlane had before
 // ownership (no `owner` columns, no `private_credentials` column, no private key tables), restarts it so its constructor
 // migrates, and checks that everything that existed is shared and still works. A second restart changes nothing.
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { runInDurableObject } from "cloudflare:test";
 import { afterAll, describe, expect, it } from "vitest";
 import { CredentialStore } from "../src/credentials/store.ts";
@@ -46,7 +47,7 @@ describe("accounts stored before ownership", () => {
     const checkShared = async () => {
       await restart(stub);
 
-      const listed = await stub.listCredentials();
+      const listed = await stub.listCredentials(FULL_ACCESS);
 
       expect(listed.map((entry) => entry.id).toSorted()).toEqual(["old-a.json", "old-b.json"]);
 

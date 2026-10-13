@@ -14,7 +14,7 @@ import { HttpRouter } from "effect/http";
 import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
 import type { JsonObject } from "../json/index.ts";
 import { WorkerEnv } from "../platform/env.ts";
-import { controlPlaneOf } from "../platform/org.ts";
+import { controlPlaneOf, newOrgId } from "../platform/org.ts";
 import { platform, type PlatformStub } from "../platform/registry.ts";
 import type { OrgRecord, OrgWriteResult } from "../platform/registry-store.ts";
 import type { OrgView } from "./contract/orgs.ts";
@@ -146,22 +146,25 @@ const create = Effect.gen(function* () {
 
   if (slug === undefined || name === undefined) return yield* replyError(400, "invalid body");
   const now = yield* Clock.currentTimeMillis;
-  const result = yield* registry("createOrg", (stub) => stub.createOrg({ slug, name }, now));
+  const id = newOrgId();
 
-  if (!result.ok) return yield* refused(result);
-
-  // The creator chooses whether members of the new org may connect private credentials (off unless asked).
+  // The creator chooses whether members of the new org may connect private credentials (off unless asked). The org's
+  // ControlPlane takes the choice before the org exists in the registry: a failure here creates nothing (a retry is safe),
+  // and an org that does exist never has a different setting than the one chosen. A refused registry write leaves the
+  // unreachable ControlPlane of an id nobody holds, which has no slug and is never addressed.
   if (privateCredentials === true) {
     const env = yield* WorkerEnv;
 
     yield* Effect.tryPromise({
       try: async () =>
-        await controlPlaneOf(env, result.org.id).setMembershipSettings({
-          privateCredentials: true,
-        }),
+        await controlPlaneOf(env, id).setMembershipSettings({ privateCredentials: true }),
       catch: () => replyError(502, "control plane unavailable"),
     });
   }
+
+  const result = yield* registry("createOrg", (stub) => stub.createOrg({ slug, name, id }, now));
+
+  if (!result.ok) return yield* refused(result);
 
   return jsonReply(201, view(result.org));
 });

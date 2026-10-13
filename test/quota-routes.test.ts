@@ -1,5 +1,6 @@
 // `POST /v8/management/credentials/quota`: the Worker probes the provider usage endpoint with the credential's token
 // (mocked outbound HTTP) and the ControlPlane stores the report shown in the credential list.
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer, Schema } from "effect";
 import { FetchHttpClient } from "effect/http";
@@ -54,7 +55,12 @@ beforeEach(async () => {
 });
 
 const seedClaude = async (name = "claude-a.json"): Promise<void> => {
-  const result = await controlPlane().importAuthFile(name, JSON.stringify(claudeFile()));
+  const result = await controlPlane().importAuthFile(
+    name,
+    JSON.stringify(claudeFile()),
+    {},
+    FULL_ACCESS,
+  );
 
   expect(result.ok).toBe(true);
 };
@@ -162,6 +168,8 @@ describe("POST /credentials/quota", () => {
         refresh_token: "r",
         expired: "2999-01-01T00:00:00Z",
       }),
+      {},
+      FULL_ACCESS,
     );
 
     expect(imported.ok).toBe(true);
@@ -180,12 +188,14 @@ describe("POST /credentials/quota", () => {
     await controlPlane().importAuthFile(
       "claude-a.json",
       JSON.stringify(claudeFile({ access_token: "sk-ant-oat-other-account" })),
+      {},
+      FULL_ACCESS,
     );
 
     expect(await listedReport("claude-a.json")).toBeUndefined();
 
     await check("claude-a.json");
-    await controlPlane().removeCredential("claude-a.json");
+    await controlPlane().removeCredential("claude-a.json", FULL_ACCESS);
     await seedClaude();
 
     expect(await listedReport("claude-a.json")).toBeUndefined();
@@ -241,6 +251,8 @@ describe("checkQuota contract", () => {
         await controlPlane().importAuthFile(
           "qwen-a.json",
           JSON.stringify({ type: "qwen", access_token: "t", expired: "2999-01-01T00:00:00Z" }),
+          {},
+          FULL_ACCESS,
         );
       });
       const api = yield* client;
@@ -270,10 +282,14 @@ describe("quota-check cron task", () => {
         await controlPlane().importAuthFile(
           "claude-off.json",
           JSON.stringify(claudeFile({ disabled: true })),
+          {},
+          FULL_ACCESS,
         );
         await controlPlane().importAuthFile(
           "qwen-a.json",
           JSON.stringify({ type: "qwen", access_token: "t", expired: "2999-01-01T00:00:00Z" }),
+          {},
+          FULL_ACCESS,
         );
       });
 

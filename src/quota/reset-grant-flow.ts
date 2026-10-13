@@ -27,7 +27,7 @@ import type {
   ResetGrantOutcome,
   ResetGrantStatus,
 } from "../management/contract/credentials.ts";
-import type { Viewer } from "../credentials/ownership.ts";
+import type { Scope } from "../credentials/ownership.ts";
 import type { WorkerEnv } from "../platform/env.ts";
 import type { CurrentOrg } from "../platform/org.ts";
 import { call, checkCredentialQuota, type QuotaControlPlaneError } from "./check.ts";
@@ -145,7 +145,7 @@ const CONFLICTS = {
 const SETTLE_FAILED =
   "Anthropic answered, but the proxy could not record the answer; check resets before trying again";
 
-const target = (ref: Ref, viewer?: Viewer) =>
+const target = (ref: Ref, viewer: Scope) =>
   Effect.map(
     call("resetGrantTarget", (stub) => stub.resetGrantTarget(ref, viewer)),
     (result) => {
@@ -179,7 +179,7 @@ const refreshStatus = (id: string, token: string, mark: ResetGrantMark) =>
 /** `GET /credentials/reset-grants`: the account's status read now (and stored). */
 export const readResetGrants = (
   ref: Ref,
-  viewer?: Viewer,
+  viewer: Scope,
 ): Effect.Effect<ResetGrantReadResult, QuotaControlPlaneError, Requirements> =>
   Effect.gen(function* () {
     const resolved = yield* target(ref, viewer);
@@ -203,7 +203,7 @@ export const readResetGrants = (
 /** `POST /credentials/reset-grants/claim`: spends one reset of the account (see the module header). */
 export const claimResetGrant = (
   ref: Ref,
-  viewer?: Viewer,
+  viewer: Scope,
 ): Effect.Effect<ResetGrantClaimResult, QuotaControlPlaneError, Requirements> =>
   Effect.gen(function* () {
     const resolved = yield* target(ref, viewer);
@@ -300,7 +300,9 @@ export const claimResetGrant = (
 
     // The quota check also re-reads the grants; a failing check must not hide the claim's outcome.
     const checked = spent
-      ? yield* checkCredentialQuota({ name: id }).pipe(Effect.orElseSucceed(() => undefined))
+      ? yield* checkCredentialQuota({ name: id }, { viewer }).pipe(
+          Effect.orElseSucceed(() => undefined),
+        )
       : undefined;
 
     return {

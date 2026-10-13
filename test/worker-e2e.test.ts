@@ -1,6 +1,7 @@
 // End-to-end tests of the production Worker: `exports.default.fetch` (and the default export with a recording
 // ExecutionContext) with the real ControlPlane picker, model registry, D1 usage sink and Access gate (dev bypass on
 // localhost, see vitest.config.ts). Only the upstream provider is mocked, through the global `fetch`.
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { env, exports } from "cloudflare:workers";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index.ts";
@@ -72,7 +73,7 @@ const controlPlane = () => env.CONTROL_PLANE.getByName("global");
 
 /** Counters the ControlPlane keeps for the config API key (written by `report`). */
 const reportedCounts = async () => {
-  const entry = (await controlPlane().listCredentials()).find((summary) =>
+  const entry = (await controlPlane().listCredentials(FULL_ACCESS)).find((summary) =>
     summary.id.startsWith(CONFIG_KEY_ID),
   );
 
@@ -273,7 +274,7 @@ describe("production Worker end to end", () => {
     expect(await reportedCounts()).toEqual({ success: before.success, failed: before.failed + 1 });
     expect(stream.state.cancelled).toBe(true);
 
-    const summary = (await controlPlane().listCredentials()).find((entry) =>
+    const summary = (await controlPlane().listCredentials(FULL_ACCESS)).find((entry) =>
       entry.id.startsWith(CONFIG_KEY_ID),
     );
 

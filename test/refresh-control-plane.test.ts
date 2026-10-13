@@ -1,5 +1,6 @@
 // Token refresh through the ControlPlane Durable Object: alarm arming, alarm-driven refresh, request-time refresh RPC,
 // cron sweep. Upstream endpoints are mocked by replacing `fetch` (the DO runs in the test isolate).
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { runInDurableObject } from "cloudflare:test";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -78,20 +79,25 @@ describe("ControlPlane token refresh", () => {
     const stub = plane();
     const far = iso(Date.now() + 20 * HOUR);
     const near = iso(Date.now() + 8 * HOUR);
-    await stub.importAuthFile("claude-a.json", claudeFile({ expired: far }));
-    await stub.importAuthFile("claude-b.json", claudeFile({ expired: near }));
-    await stub.importAuthFile("vertex-a.json", {
-      type: "vertex",
-      project_id: "p",
-      service_account: {},
-    });
+    await stub.importAuthFile("claude-a.json", claudeFile({ expired: far }), {}, FULL_ACCESS);
+    await stub.importAuthFile("claude-b.json", claudeFile({ expired: near }), {}, FULL_ACCESS);
+    await stub.importAuthFile(
+      "vertex-a.json",
+      {
+        type: "vertex",
+        project_id: "p",
+        service_account: {},
+      },
+      {},
+      FULL_ACCESS,
+    );
     expect(await alarmOf(stub)).toBe(Date.parse(near) - 4 * HOUR);
 
-    await stub.removeCredential("claude-b.json");
+    await stub.removeCredential("claude-b.json", FULL_ACCESS);
     expect(await alarmOf(stub)).toBe(Date.parse(far) - 4 * HOUR);
-    await stub.setCredentialDisabled("claude-a.json", true); // disabled credentials are still refreshed (Go)
+    await stub.setCredentialDisabled("claude-a.json", true, FULL_ACCESS); // disabled credentials are still refreshed (Go)
     expect(await alarmOf(stub)).toBe(Date.parse(far) - 4 * HOUR);
-    await stub.removeCredential("claude-a.json");
+    await stub.removeCredential("claude-a.json", FULL_ACCESS);
     expect(await alarmOf(stub)).toBeNull();
   });
 
@@ -100,7 +106,12 @@ describe("ControlPlane token refresh", () => {
     const stub = plane();
     // Inside the 4 h lead: due immediately. workerd also fires the armed alarm on its own; the manager's per-credential
     // dedupe makes the explicit call below and the automatic run share one upstream refresh.
-    await stub.importAuthFile("claude-a.json", claudeFile({ expired: iso(Date.now() + HOUR) }));
+    await stub.importAuthFile(
+      "claude-a.json",
+      claudeFile({ expired: iso(Date.now() + HOUR) }),
+      {},
+      FULL_ACCESS,
+    );
     await runInDurableObject(stub, (instance) => instance.alarm());
 
     const calls = upstream.requests.filter((request) =>
@@ -126,7 +137,7 @@ describe("ControlPlane token refresh", () => {
   it("refreshNow recovers from a 401 once for concurrent callers and survives an eviction", async () => {
     const upstream = mockUpstream();
     const stub = plane();
-    await stub.importAuthFile("claude-a.json", claudeFile());
+    await stub.importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
 
     const results = await Promise.all(
       Array.from({ length: 5 }, () => stub.refreshNow("claude-a.json", "sk-ant-oat-old")),
@@ -142,7 +153,7 @@ describe("ControlPlane token refresh", () => {
       });
     }
 
-    const list = await stub.listCredentials();
+    const list = await stub.listCredentials(FULL_ACCESS);
     expect(JSON.stringify(list)).not.toContain("sk-ant-oat-2");
     expect(list[0]).toMatchObject({ credentialVersion: 2, status: "active" });
 
@@ -156,11 +167,11 @@ describe("ControlPlane token refresh", () => {
   it("reports refresh failures as structured results with back-off state", async () => {
     mockUpstream(() => new Response('{"error":"invalid_grant"}', { status: 400 }));
     const stub = plane();
-    await stub.importAuthFile("claude-a.json", claudeFile());
+    await stub.importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
     const result = await stub.refreshNow("claude-a.json");
     expect(result).toMatchObject({ ok: false, error: { code: "refresh_failed", httpStatus: 400 } });
     // the access token is still valid, so the credential keeps serving
-    expect((await stub.listCredentials())[0]).toMatchObject({
+    expect((await stub.listCredentials(FULL_ACCESS))[0]).toMatchObject({
       status: "active",
       unavailable: false,
       lastError: { httpStatus: 400 },
@@ -178,6 +189,8 @@ describe("ControlPlane token refresh", () => {
     await stub.importAuthFile(
       "claude-a.json",
       claudeFile({ expired: iso(Date.now() + 10 * HOUR) }),
+      {},
+      FULL_ACCESS,
     );
     await runInDurableObject(stub, (_instance, state) => state.storage.deleteAlarm());
     expect(await alarmOf(stub)).toBeNull();
@@ -191,6 +204,8 @@ describe("ControlPlane token refresh", () => {
     await global.importAuthFile(
       "claude-a.json",
       claudeFile({ expired: iso(Date.now() + 10 * HOUR) }),
+      {},
+      FULL_ACCESS,
     );
     await runInDurableObject(global, (_instance, state) => state.storage.deleteAlarm());
     const ctx = createExecutionContext();
@@ -205,7 +220,7 @@ describe("ControlPlane token refresh", () => {
 
   it("patchCredentialMetadata merges settings but never token material", async () => {
     const stub = plane();
-    await stub.importAuthFile("claude-a.json", claudeFile({ note: "x" }));
+    await stub.importAuthFile("claude-a.json", claudeFile({ note: "x" }), {}, FULL_ACCESS);
     expect(
       await stub.patchCredentialMetadata("claude-a.json", { project_id: "p1", note: null }),
     ).toEqual({ ok: true });

@@ -1,4 +1,5 @@
 // /v8/management/credentials* and /routing/cooldown/reset through the router with the real ControlPlane.
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { authIndexOf } from "./support/auth-index.ts";
 import {
@@ -404,7 +405,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
       "test",
     );
 
-    const entries = await controlPlane().listCredentials();
+    const entries = await controlPlane().listCredentials(FULL_ACCESS);
     const id = entries.find((entry) => entry.source === "config")!.id;
     const authIndex = authIndexOf(id);
 
@@ -426,7 +427,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     });
 
     const claudeKeyDisabled = async () => {
-      const view = (await controlPlane().apiKeysView()) as unknown as {
+      const view = (await controlPlane().apiKeysView(FULL_ACCESS)) as unknown as {
         families: { claude: Array<{ group: { keys: Array<{ disabled: boolean }> } }> };
       };
 
@@ -446,7 +447,9 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     expect(stored[0]!.keys[0]).toMatchObject({ "excluded-models": ["*"] });
     expect(stored[0]!.keys[0]!.auth_index).toBeUndefined();
     expect(
-      (await controlPlane().listCredentials()).find((entry) => entry.source === "config")!.id,
+      (await controlPlane().listCredentials(FULL_ACCESS)).find(
+        (entry) => entry.source === "config",
+      )!.id,
     ).toBe(id);
     expect(await claudeKeyDisabled()).toBe(true);
 
@@ -467,7 +470,9 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
       "test",
     );
 
-    const compat = (await controlPlane().listCredentials()).find((e) => e.source === "config")!;
+    const compat = (await controlPlane().listCredentials(FULL_ACCESS)).find(
+      (e) => e.source === "config",
+    )!;
 
     expect(
       await json(
@@ -690,7 +695,9 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     expect(one.status).toBe(200);
     expect(one.body).toMatchObject({ ok: true, auth: { name: "x.json" } });
     expect(JSON.stringify(one.body)).not.toContain("new-access");
-    expect((await controlPlane().getCredentialFile("x.json"))?.access_token).toBe("new-access");
+    expect((await controlPlane().getCredentialFile("x.json", FULL_ACCESS))?.access_token).toBe(
+      "new-access",
+    );
 
     const viaQuery = await json("/v8/management/credentials/refresh?name=y.json", {
       method: "POST",

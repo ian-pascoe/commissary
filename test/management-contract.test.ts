@@ -1,5 +1,6 @@
 // The shared management contract (src/management/contract) against the real handlers: the panel's generated client
 // calls the management routes through the Access gate and must decode what they answer.
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
@@ -98,19 +99,26 @@ beforeEach(async () => {
 /** Imports a Claude auth file into the ControlPlane. */
 const seed = (name: string, extra: Record<string, unknown> = {}) =>
   Effect.promise(async () => {
-    await controlPlane().importAuthFile(name, JSON.stringify(claudeFile(extra)));
+    await controlPlane().importAuthFile(name, JSON.stringify(claudeFile(extra)), {}, FULL_ACCESS);
   });
 
 describe("management contract", () => {
   it.effect("decodes the credential list", () =>
     Effect.gen(function* () {
       yield* Effect.promise(async () => {
-        await controlPlane().importAuthFile("claude-a.json", JSON.stringify(claudeFile()));
+        await controlPlane().importAuthFile(
+          "claude-a.json",
+          JSON.stringify(claudeFile()),
+          {},
+          FULL_ACCESS,
+        );
         await controlPlane().importAuthFile(
           "claude-b.json",
           JSON.stringify(
             claudeFile({ email: "b@x.com", priority: 2, note: "backup", disabled: true }),
           ),
+          {},
+          FULL_ACCESS,
         );
       });
 
@@ -463,6 +471,8 @@ describe("management contract", () => {
           await controlPlane().importAuthFile(
             "noref.json",
             JSON.stringify({ type: "claude", email: "n@x.com", access_token: "t" }),
+            {},
+            FULL_ACCESS,
           );
         });
         const api = yield* client;

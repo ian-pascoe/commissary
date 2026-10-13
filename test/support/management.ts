@@ -1,4 +1,5 @@
 // Test harness for the management routes: Access gate with a fake JWKS, real ControlPlane, mocked outbound HTTP.
+import { FULL_ACCESS } from "../../src/credentials/ownership.ts";
 import { env } from "cloudflare:workers";
 import { Context, Layer } from "effect";
 import { HttpRouter } from "effect/http";
@@ -64,8 +65,11 @@ export const resetControlPlane = async (): Promise<void> => {
 /** Restores a pristine ControlPlane of `org` (no credentials, default config). */
 export const resetOrgControlPlane = async (org: OrgId): Promise<void> => {
   const stub = controlPlane(org);
-  const entries = await stub.listCredentials();
-  await stub.removeCredentials(entries.map((entry) => entry.id));
+  const entries = await stub.listCredentials(FULL_ACCESS);
+  await stub.removeCredentials(
+    entries.map((entry) => entry.id),
+    FULL_ACCESS,
+  );
   await stub.importConfig("", "test");
 
   // An import leaves the price overrides alone.
