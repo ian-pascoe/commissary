@@ -608,7 +608,7 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
     `catalog_refresh_lease`, atomic on the object's clock, 2 min expiry, given back with its token; the refresh is bounded
     by its 30 s timeout so it is not renewed). The cron task and the panel therefore never download at once, in whichever
     isolates they run; the second gets `running` without a request being made. The invocation is held open with
-    `waitUntil` until the lease is given back. A ControlPlane that cannot be reached fails the refresh (exclusivity
+    `waitUntil` until the lease is given back. A Platform registry that cannot be reached fails the refresh (exclusivity
     cannot be shown); `embed` and `disabled` need no lease. The lease used to live in `global`'s ControlPlane
     (an unreleased lease there simply expires; the stale table is left unread).
 - **Catalog status and on-demand refresh** (`management/catalog-routes.ts`, `contract/catalog.ts`; no Go counterpart):

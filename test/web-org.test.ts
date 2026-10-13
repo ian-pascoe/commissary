@@ -13,6 +13,10 @@ describe("orgSlugOfPath", () => {
     expect(orgSlugOfPath(path)).toBe(slug);
   });
 
+  it("survives a bad percent-escape in the slug", () => {
+    expect(orgSlugOfPath("/o/%E0%A4%A/accounts")).toBe("%e0%a4%a");
+  });
+
   it.each(["/", "/accounts", "/o", "/o/", "/other/acme", "/x/o/acme"])(
     "finds none in %s",
     (path) => {

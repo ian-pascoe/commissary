@@ -2,8 +2,10 @@
 // management routes `/v8/management/orgs/<slug>/...`; the address without an org (`/`, `/accounts`) is the chooser, or
 // a redirect to the caller's only org (src/management/web-panel.ts). Pure helpers, shared by the router and the client.
 
-/** The management API prefix; `/me` and `/orgs...` under it are platform-level, every other route exists per org. */
-const API = "/v8/management";
+import { MANAGEMENT_API_PREFIX } from "#contract/api.ts";
+
+/** `/me` and `/orgs...` under the management prefix are platform-level, every other route exists per org. */
+const API = MANAGEMENT_API_PREFIX;
 
 const PANEL_ORG = /^\/o\/([^/]+)(?=\/|$)/i;
 
@@ -11,7 +13,14 @@ const PANEL_ORG = /^\/o\/([^/]+)(?=\/|$)/i;
 export const orgSlugOfPath = (pathname: string): string | undefined => {
   const slug = PANEL_ORG.exec(pathname)?.[1];
 
-  return slug === undefined ? undefined : decodeURIComponent(slug).toLowerCase();
+  if (slug === undefined) return undefined;
+
+  try {
+    return decodeURIComponent(slug).toLowerCase();
+  } catch {
+    // A bad escape names no org: the server answers it with 404 before the panel loads.
+    return slug.toLowerCase();
+  }
 };
 
 /** The router's base path for a panel path: `/o/acme` for `/o/acme/accounts`, `/` for an address without an org. */
@@ -23,7 +32,7 @@ export const panelBasepath = (pathname: string): string => {
 
 /** The panel address of a page of an org: `orgPanelPath("acme", "/accounts")` is `/o/acme/accounts`. */
 export const orgPanelPath = (slug: string, page = "/"): string =>
-  `/o/${encodeURIComponent(slug)}${page === "/" ? "/" : page}`;
+  `/o/${encodeURIComponent(slug)}${page}`;
 
 const isPlatformLevel = (rest: string): boolean => /^\/(me|orgs)(?=[/?#]|$)/.test(rest);
 

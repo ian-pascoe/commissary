@@ -4,7 +4,6 @@
  */
 import { Data, Effect } from "effect";
 import { WorkerEnv } from "./env.ts";
-import type { OrgRecord } from "./registry-store.ts";
 
 export type PlatformStub = ReturnType<Env["PLATFORM"]["getByName"]>;
 
@@ -13,7 +12,7 @@ export const PLATFORM_NAME = "platform";
 
 export const platformOf = (env: Env): PlatformStub => env.PLATFORM.getByName(PLATFORM_NAME);
 
-/** The Platform registry could not be reached; carries no payload, the cause is logged by the caller. */
+/** The Platform registry could not be reached; the message names the call, the caller logs it. */
 export class PlatformUnavailable extends Data.TaggedError("PlatformUnavailable")<{
   readonly message: string;
 }> {}
@@ -34,9 +33,3 @@ export const platform = <R>(
         }),
     });
   });
-
-/** The org with this id, if the registry lists it. */
-export const orgById = (
-  id: string,
-): Effect.Effect<OrgRecord | undefined, PlatformUnavailable, WorkerEnv> =>
-  platform("getOrgById", (stub) => stub.getOrgById(id));

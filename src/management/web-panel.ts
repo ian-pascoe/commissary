@@ -80,9 +80,8 @@ const orgRedirect = Effect.gen(function* () {
 
   // The org list's own link: a platform admin of one org reaches the chooser to create another.
   if (url.searchParams.has("choose")) return undefined;
-  const page = url.pathname === "/" ? "/" : url.pathname;
 
-  return `${PANEL_ORG_PREFIX}/${only.slug}${page}${url.search}`;
+  return `${PANEL_ORG_PREFIX}/${only.slug}${url.pathname}${url.search}`;
 }).pipe(Effect.catch(() => Effect.succeed(undefined)));
 
 /**

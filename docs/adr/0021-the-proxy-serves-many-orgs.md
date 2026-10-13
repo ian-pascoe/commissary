@@ -6,7 +6,7 @@ status: accepted
 
 This replaces ADR 0007. The proxy stops being one person's gateway: one deployment serves one or more orgs, so that an org can host the proxy for itself and we can run it as a hosted service with the same code. A self-hosted deployment is simply a deployment with one org. Each org has its own ControlPlane, the only writer of that org's state: its config entries (ADR 0025), credentials and cooldowns, login sessions, allowances and reset grants, members, teams, grants, proxy keys and spend counters. The single-writer design and its trade-off from ADR 0007 still hold, but per org: one org's traffic never waits on another's.
 
-A Platform registry, one object per deployment, holds what spans orgs: the list of orgs, the platform admins, which orgs each person belongs to, and which org each Access service token belongs to. It stays out of the request path for clients, because a proxy key names its own org.
+A Platform registry, one object per deployment, holds what spans orgs: the list of orgs, which orgs each person belongs to, and which org each Access service token belongs to. The platform admins are not in it: the deployment's settings (`PLATFORM_ADMIN_*`) name them, so they can always repair it. It stays out of the request path for clients, because a proxy key names its own org.
 
 ## Considered Options
 

@@ -328,7 +328,7 @@ const record = (outcome: RefreshOutcome): Effect.Effect<void, never, WorkerEnv> 
   });
 
 /**
- * One refresh under the refresh lease (ControlPlane, `catalog_refresh_lease`): cron and the panel never download at
+ * One refresh under the refresh lease (Platform registry, `catalog_refresh_lease`): cron and the panel never download at
  * once, whichever isolates they run in. The second one gets `status: "running"` without any request being made. A
  * Platform registry that cannot be reached fails the refresh (exclusivity cannot be shown); the stored catalog stays.
  * `disabled` and `embed` do not fetch and need no lease. The invocation is held open until the lease is given back

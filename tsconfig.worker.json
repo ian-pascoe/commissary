@@ -23,6 +23,7 @@
   "include": [
     "src",
     "test",
+    "infra/settings.ts",
     "web/src/lib/account-fields.ts",
     "web/src/lib/accounts.ts",
     "web/src/lib/batch.ts",

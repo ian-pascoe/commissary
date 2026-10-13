@@ -140,7 +140,7 @@ export class PlatformStore {
   listOrgs(): ReadonlyArray<OrgRecord> {
     return this.#sql
       .exec<OrgRow>(
-        `SELECT id, slug, name, created_at FROM orgs ORDER BY id <> 'global', created_at, id`,
+        `SELECT id, slug, name, created_at FROM orgs ORDER BY id <> '${GLOBAL_ORG}', created_at, id`,
       )
       .toArray()
       .map((row) => this.#record(row));
@@ -224,7 +224,7 @@ export class PlatformStore {
     return this.#sql
       .exec<OrgRow>(
         `SELECT o.id, o.slug, o.name, o.created_at FROM orgs o
-         JOIN org_members m ON m.org_id = o.id WHERE m.email = ? ORDER BY o.id <> 'global', o.created_at, o.id`,
+         JOIN org_members m ON m.org_id = o.id WHERE m.email = ? ORDER BY o.id <> '${GLOBAL_ORG}', o.created_at, o.id`,
         normalizeEmail(email),
       )
       .toArray()
