@@ -1,6 +1,7 @@
 // Mirrors CallerScope in sdk/cliproxy/session/identity.go (sha256 of a versioned prefix + caller credential).
 // The Go `userApiKey` is replaced by the Cloudflare Access principal.
 import { Context, Effect } from "effect";
+import type { OrgRole } from "../members/roles.ts";
 import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 
 /** The authenticated caller: an Access user (email) or an Access service token (client id). */
@@ -19,6 +20,13 @@ export interface AccessIdentity {
   readonly org: OrgId;
   /** The principal is a platform admin (`PLATFORM_ADMIN_*`, or the local dev bypass): it may manage every org. */
   readonly platformAdmin: boolean;
+  /**
+   * The principal's role in `org` (ADR 0022): `owner` for a platform admin, absent on a platform-level route for a
+   * principal that belongs to no org there (`access/policy.ts`).
+   */
+  readonly role?: OrgRole | undefined;
+  /** The member id of a person who belongs to `org` (usage records' `member_id`); absent for a service token. */
+  readonly memberId?: string | undefined;
 }
 
 /**
@@ -59,14 +67,19 @@ export const callerScope = (value: string, org: OrgId): Effect.Effect<string> =>
   );
 };
 
-/** The identity of `principal` in `org`; `platformAdmin` when it is on the platform admin lists. */
+/**
+ * The identity of `principal` in `org`; `platformAdmin` when it is on the platform admin lists (an owner of every org),
+ * `membership` its place in the org otherwise.
+ */
 export const makeIdentity = (
   principal: Principal,
   org: OrgId,
   platformAdmin = false,
+  membership?: { readonly role: OrgRole; readonly memberId?: string | undefined },
 ): Effect.Effect<AccessIdentity> =>
   Effect.gen(function* () {
     const id = principalId(principal);
+    const role = platformAdmin ? "owner" : membership?.role;
 
     return {
       principal,
@@ -74,5 +87,7 @@ export const makeIdentity = (
       callerScope: yield* callerScope(id, org),
       org,
       platformAdmin,
+      ...(role === undefined ? {} : { role }),
+      ...(membership?.memberId === undefined ? {} : { memberId: membership.memberId }),
     };
   });

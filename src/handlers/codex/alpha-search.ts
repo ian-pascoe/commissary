@@ -141,6 +141,7 @@ const handle = Effect.gen(function* () {
     endpoint: "POST /v1/alpha/search",
     principalId: identity.principalId,
     orgId: org,
+    ...(identity.memberId === undefined ? {} : { memberId: identity.memberId }),
     authId: credential.id,
     authType: credential.kind,
     source: credential.label ?? credential.id,

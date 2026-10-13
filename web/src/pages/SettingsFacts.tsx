@@ -1,5 +1,4 @@
-// The read-only parts of the Settings page: payload rule counts, the account error rules and the deployment's own
-// admins. Payload and error rules are set by importing a Go config document.
+// The read-only parts of the Settings page: payload rule counts, and the account error rules. Payload and error rules are set by importing a Go config document.
 import type { ReactNode } from "react";
 import type { RequestScopedErrorRule } from "#contract/api-keys.ts";
 import type { SettingsView } from "#contract/settings.ts";
@@ -121,30 +120,6 @@ export const ErrorRules = ({
         </table>
       )}
       <SetByImport what="error rules" />
-    </div>
-  );
-};
-
-/** `PLATFORM_ADMIN_EMAILS` / `PLATFORM_ADMIN_SERVICE_TOKENS`: admins this page cannot remove. */
-export const DeploymentAdmins = ({ admins }: { readonly admins: SettingsView["env_admins"] }) => {
-  const all = [...admins.emails, ...admins.service_tokens];
-
-  return (
-    <div className={styles["sub"]}>
-      <h3 className={styles["subTitle"]}>Always admins</h3>
-      <p className={styles["hint"]}>
-        Set on the deployment (PLATFORM_ADMIN_EMAILS, PLATFORM_ADMIN_SERVICE_TOKENS); not editable
-        here.
-      </p>
-      {all.length === 0 ? (
-        <p className={styles["quiet"]}>None set on the deployment.</p>
-      ) : (
-        <ul className={styles["admins"]}>
-          {all.map((admin) => (
-            <li key={admin}>{admin}</li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 };

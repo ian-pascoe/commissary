@@ -18,7 +18,8 @@
  * `model-rules-routes.ts`; the Settings page (`/settings`) and the config import (`/settings/import`) in
  * `settings-routes.ts`; Claude reset
  * grants (`/credentials/reset-grants`) in `reset-grant-routes.ts`; the model catalog's status and on-demand refresh (`/models/catalog`) in
- * `catalog-routes.ts`.
+ * `catalog-routes.ts`; the org's members, teams and service tokens (`/members`, `/membership`, `/teams`,
+ * `/service-tokens`) in `member-routes.ts`.
  */
 import { Effect, Layer } from "effect";
 import {
@@ -40,6 +41,7 @@ import { catalogRefreshHandler, catalogStatusHandler } from "./catalog-routes.ts
 import { credentialsBatchHandler } from "./credentials-batch.ts";
 import { credentialModelsHandler, credentialRoutes } from "./credentials-routes.ts";
 import { oauthRoutes } from "./oauth-routes.ts";
+import { memberRoutes } from "./member-routes.ts";
 import { orgRoutes } from "./org-routes.ts";
 import { priceRoutes } from "./price-routes.ts";
 import { quotaCheckHandler, quotaSweepHandler } from "./quota-routes.ts";
@@ -84,6 +86,7 @@ export const ManagementRoutes = HttpRouter.addAll(
       ...oauthRoutes,
       ...orgRoutes,
       ...priceRoutes,
+      ...memberRoutes,
       HttpRouter.route("GET", `${BASE}/credentials/models`, bound(credentialModelsHandler)),
       HttpRouter.route("POST", `${BASE}/credentials/batch`, credentialsBatchHandler),
       HttpRouter.route("POST", `${BASE}/credentials/quota`, bound(quotaCheckHandler)),

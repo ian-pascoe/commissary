@@ -15,6 +15,7 @@ export const UsageGroupBy = Schema.Literals([
   "model",
   "provider",
   "principal",
+  "member",
   "auth",
   "endpoint",
   "day",
@@ -59,7 +60,9 @@ export type UsageSummary = typeof UsageSummary.Type;
 
 /**
  * Filters: `since` inclusive and `until` exclusive (epoch milliseconds); `auth_index` is a credential's keyed index (the
- * `auth_index` of `/credentials`, `/api-keys` and the records). Grouped `by=auth`, the keys are `auth_index` values.
+ * `auth_index` of `/credentials`, `/api-keys` and the records). Grouped `by=auth`, the keys are `auth_index` values;
+ * grouped by `member`, member ids (`""` for records without one). A plain member reads only their own records, whatever
+ * the filters say.
  */
 export const UsageSummaryQuery = Schema.Struct({
   group_by: optional(UsageGroupBy),
@@ -68,6 +71,10 @@ export const UsageSummaryQuery = Schema.Struct({
   provider: optional(Schema.String),
   model: optional(Schema.String),
   principal: optional(Schema.String),
+  /** A member id of the org (`/members`). */
+  member: optional(Schema.String),
+  /** A team id of the org (`/teams`): the records of its members. */
+  team: optional(Schema.String),
   auth_index: optional(Schema.String),
   failed: optional(Schema.Literals(["true", "false"])),
   limit: optional(Schema.Number),
@@ -109,6 +116,8 @@ export const UsageSeriesQuery = Schema.Struct({
   provider: optional(Schema.String),
   model: optional(Schema.String),
   auth_index: optional(Schema.String),
+  member: optional(Schema.String),
+  team: optional(Schema.String),
 });
 
 const tokenBreakdown = Schema.Struct({
@@ -140,6 +149,8 @@ export const UsageRecord = Schema.Struct({
   endpoint: Schema.String,
   /** The Access principal id of the caller (the Go client API key), not an upstream credential. */
   api_key: Schema.String,
+  /** The caller's member id in the org; absent when they had none (or the record predates members). */
+  member_id: optional(Schema.String),
   request_id: Schema.String,
   failed: Schema.Boolean,
   stream: Schema.Boolean,
@@ -170,6 +181,10 @@ export const UsageRecordsQuery = Schema.Struct({
   provider: optional(Schema.String),
   model: optional(Schema.String),
   principal: optional(Schema.String),
+  /** A member id of the org (`/members`). */
+  member: optional(Schema.String),
+  /** A team id of the org (`/teams`): the records of its members. */
+  team: optional(Schema.String),
   auth_index: optional(Schema.String),
   failed: optional(Schema.Literals(["true", "false"])),
   limit: optional(Schema.Number),
@@ -193,6 +208,10 @@ export const UsageUnpricedQuery = Schema.Struct({
   provider: optional(Schema.String),
   model: optional(Schema.String),
   principal: optional(Schema.String),
+  /** A member id of the org (`/members`). */
+  member: optional(Schema.String),
+  /** A team id of the org (`/teams`): the records of its members. */
+  team: optional(Schema.String),
   auth_index: optional(Schema.String),
 });
 

@@ -6,31 +6,25 @@
  * entry of its own (ADR 0025, `config/entries.ts`): the view carries the revision of every stored setting, and a
  * write names the revision of each setting it changes (absent = 0, not stored). The ControlPlane refuses the write
  * with `409 conflict` when one of them changed since; writes to other settings never conflict. The patch is checked
- * (`settings.ts`: owned paths, value rules, survival through the config decoder, who may change the admin service
- * tokens, admin lock-out) before anything is stored; refusals carry `{error, message, path}`.
+ * (`settings.ts`: owned paths, value rules, survival through the config decoder) before anything is stored; refusals
+ * carry `{error, message, path}`.
  *
  * The import replaces every config entry of the org with a Go config document (YAML or JSON, v8 or legacy layout) in
  * one transaction, and answers the keys that have no effect on Workers, which it does not store (ADR 0015). It is the
- * one write of the whole configuration, and the same admin rules apply: only a service-token administrator or a
- * platform admin may change the admin service tokens, and a caller may not remove their own admin access. Those
- * checks read the stored config; the import names its change counter and is `409 conflict` when another write landed
- * in between, so they never pass on a stale read. A key whose secret is already stored keeps that key's credential id.
+ * one write of the whole configuration. Who manages the org is not part of it (members, ADR 0022): a document's
+ * `access.admin-*` lists are named as not applied. A key whose secret is already stored keeps that key's credential
+ * id.
  */
 import { Effect, Result, Schema } from "effect";
 import { HttpRouter } from "effect/http";
-import { platformAdminLists } from "../access/config.ts";
 import { AccessPrincipal } from "../access/principal.ts";
 import { decodeConfig, parseConfigYaml } from "../config/codec.ts";
 import { decodeStoredConfig } from "../config/store.ts";
 import { isJsonObject, type JsonObject } from "../json/index.ts";
-import { WorkerEnv } from "../platform/env.ts";
 import { Revisions } from "./contract/config.ts";
 import { boundedBodyText, bodyJson, controlPlane, handled, jsonReply, replyError } from "./http.ts";
 import {
   applySettingsPatch,
-  checkAdminLockout,
-  checkDocumentLockout,
-  checkServiceTokenAdmins,
   checkSurvival,
   type SettingsProblem,
   settingsView,
@@ -75,7 +69,6 @@ export const storedConfig = Effect.gen(function* () {
 });
 
 const view = Effect.gen(function* () {
-  const env = yield* WorkerEnv;
   const current = yield* storedConfig;
   const sources = yield* controlPlane("listModelSources", (stub) => stub.listModelSources());
 
@@ -86,7 +79,6 @@ const view = Effect.gen(function* () {
       version: current.version,
       revisions: current.revisions.settings,
       updatedAt: current.updatedAt,
-      envAdmins: platformAdminLists(env),
       prefixedCredentials: sources.filter((source) => (source.prefix ?? "").trim() !== "").length,
     }),
   );
@@ -95,13 +87,6 @@ const view = Effect.gen(function* () {
 const SaveBody = Schema.Struct({ revisions: Revisions });
 
 const invalidBody = () => replyError(400, "invalid body");
-
-/** Whether the caller stays an admin whatever the config says: a platform admin (`PLATFORM_ADMIN_*`, or the local dev bypass). */
-export const alwaysAdmin = Effect.gen(function* () {
-  const identity = yield* AccessPrincipal;
-
-  return identity.platformAdmin;
-});
 
 const save = Effect.gen(function* () {
   const raw = yield* bodyJson;
@@ -123,24 +108,6 @@ const save = Effect.gen(function* () {
 
   yield* failIf(checkSurvival(edits, normalised));
   const identity = yield* AccessPrincipal;
-
-  yield* failIf(
-    checkServiceTokenAdmins({
-      before: current.config,
-      after: normalised,
-      principal: identity.principal,
-      alwaysAdmin: yield* alwaysAdmin,
-    }),
-  );
-
-  yield* failIf(
-    checkAdminLockout({
-      edits,
-      after: normalised,
-      principal: identity.principal,
-      alwaysAdmin: yield* alwaysAdmin,
-    }),
-  );
 
   const changes = edits.map((edit) => {
     const id = edit.path.join(".");
@@ -181,16 +148,10 @@ const importDocument = Effect.gen(function* () {
     });
   }
 
-  const current = yield* storedConfig;
   const identity = yield* AccessPrincipal;
-  const always = yield* alwaysAdmin;
-  const rules = { before: current.config, after: parsed.success, principal: identity.principal };
-
-  yield* failIf(checkServiceTokenAdmins({ ...rules, alwaysAdmin: always }));
-  yield* failIf(checkDocumentLockout({ ...rules, alwaysAdmin: always }));
 
   const result = yield* controlPlane("importConfig", (stub) =>
-    stub.importConfig(text, identity.principalId, current.version),
+    stub.importConfig(text, identity.principalId),
   );
 
   if (!result.ok && result.error === "conflict")

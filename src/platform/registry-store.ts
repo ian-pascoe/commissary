@@ -52,10 +52,13 @@ export interface OrgIndex {
   readonly serviceTokens: ReadonlyArray<string>;
 }
 
-const MAX_NAME_LENGTH = 100;
+export const MAX_NAME_LENGTH = 100;
 
-/** A display name: 1 to 100 characters after trimming, without control characters. */
-const cleanName = (name: string): string | undefined => {
+/**
+ * A display name (of an org, a team or a service token): 1 to 100 characters after trimming, without control
+ * characters; `undefined` otherwise.
+ */
+export const cleanName = (name: string): string | undefined => {
   const trimmed = name.trim();
   // Code points, so one emoji counts as one character.
   const characters = Array.from(trimmed);

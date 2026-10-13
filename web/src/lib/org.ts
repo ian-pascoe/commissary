@@ -4,7 +4,7 @@
 
 import { MANAGEMENT_API_PREFIX } from "#contract/api.ts";
 
-/** `/me` and `/orgs...` under the management prefix are platform-level, every other route exists per org. */
+/** The management prefix; below it `/orgs...` is platform-level and every other route exists per org (`/me` too). */
 const API = MANAGEMENT_API_PREFIX;
 
 const PANEL_ORG = /^\/o\/([^/]+)(?=\/|$)/i;
@@ -34,12 +34,14 @@ export const panelBasepath = (pathname: string): string => {
 export const orgPanelPath = (slug: string, page = "/"): string =>
   `/o/${encodeURIComponent(slug)}${page}`;
 
-const isPlatformLevel = (rest: string): boolean => /^\/(me|orgs)(?=[/?#]|$)/.test(rest);
+// `/me` is not among them: addressed to an org it answers the caller's role in that org.
+const isPlatformLevel = (rest: string): boolean => /^\/orgs(?=[/?#]|$)/.test(rest);
 
 /**
  * `url` (an absolute URL or a path of the management API) addressed to the org `slug`: `/v8/management/credentials`
- * becomes `/v8/management/orgs/acme/credentials`. The platform-level routes (`/me`, `/orgs`, `/orgs/:slug`) and any
- * other URL stay as they are.
+ * becomes `/v8/management/orgs/acme/credentials`.
+ * `/me` is scoped too (it then answers the caller's role in the org). The platform-level routes (`/orgs`,
+ * `/orgs/:slug`) and any other URL stay as they are.
  */
 export const scopedApiUrl = (url: string, slug: string | undefined): string => {
   if (slug === undefined) return url;

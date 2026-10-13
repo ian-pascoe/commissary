@@ -383,7 +383,7 @@
   color: var(--quiet);
 }
 
-/* Provider groups, the account error rules, the platform admins. */
+/* Provider groups, the account error rules. */
 .sub {
   display: grid;
   gap: var(--space-1);
@@ -505,17 +505,6 @@
 }
 
 .matchCell {
-  overflow-wrap: anywhere;
-}
-
-.admins {
-  display: grid;
-  gap: var(--space-1);
-  margin: var(--space-1) 0 0;
-  padding: 0;
-  list-style: none;
-  font-size: var(--text-sm);
-  font-weight: 650;
   overflow-wrap: anywhere;
 }
 

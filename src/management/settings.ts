@@ -11,8 +11,6 @@
  * `config/entries.ts`); the route turns the leaf edits into entry writes.
  */
 import { Result, Schema } from "effect";
-import { type AdminLists, configAdminLists, isAdmin } from "../access/config.ts";
-import type { Principal } from "../access/principal.ts";
 import { parseGoDuration } from "../config/accessors.ts";
 import { encodeConfig } from "../config/codec.ts";
 import { Config } from "../config/schema.ts";
@@ -28,12 +26,8 @@ import {
 
 /** A refused write: the reply's status and `{error, message, path}`. */
 export interface SettingsProblem {
-  readonly status: 400 | 403 | 422;
-  readonly error:
-    | "not_a_setting"
-    | "invalid_setting"
-    | "would_remove_your_admin_access"
-    | "service_tokens_require_service_admin";
+  readonly status: 400 | 422;
+  readonly error: "not_a_setting" | "invalid_setting";
   readonly message: string;
   /** Dotted config path. */
   readonly path: string;
@@ -199,20 +193,6 @@ const valueRule = (key: string, value: Json): string | undefined => {
   if (typeof value === "string" && key === "upstream.claude.header-defaults.timezone")
     return isTimezone(value) ? undefined : `${quoted(value)} is not an IANA time zone`;
 
-  if (Array.isArray(value) && key === "access.admin-emails") {
-    const bad = value.find(
-      (email) => typeof email !== "string" || !/^[^\s@]+@[^\s@]+$/.test(email),
-    );
-
-    return bad === undefined ? undefined : `${quoted(bad)} is not an email address`;
-  }
-
-  if (Array.isArray(value) && key === "access.admin-service-tokens") {
-    const bad = value.find((id) => typeof id !== "string" || !/^\S+$/.test(id));
-
-    return bad === undefined ? undefined : `${quoted(bad)} is not a service token client id`;
-  }
-
   return undefined;
 };
 
@@ -310,80 +290,6 @@ export const checkSurvival = (
   return undefined;
 };
 
-const ADMIN_KEYS = new Set(["access.admin-emails", "access.admin-service-tokens"]);
-
-const lockedOut = (after: Config, principal: Principal): SettingsProblem | undefined => {
-  if (isAdmin(configAdminLists(after), principal)) return undefined;
-  const key = principal.kind === "user" ? "admin-emails" : "admin-service-tokens";
-
-  return problem(
-    422,
-    "would_remove_your_admin_access",
-    ["access", key],
-    "this change removes your own admin access; a platform admin (PLATFORM_ADMIN_*) can make it",
-  );
-};
-
-/**
- * The lock-out guard: a caller who is an admin only through the config's `access.admin-*` lists must not remove
- * themselves (`alwaysAdmin`: a platform admin, `PLATFORM_ADMIN_*`, or the local dev bypass).
- */
-export const checkAdminLockout = (input: {
-  readonly edits: ReadonlyArray<SettingsEdit>;
-  readonly after: Config;
-  readonly principal: Principal;
-  readonly alwaysAdmin: boolean;
-}): SettingsProblem | undefined =>
-  input.alwaysAdmin || !input.edits.some((edit) => ADMIN_KEYS.has(dotted(edit.path)))
-    ? undefined
-    : lockedOut(input.after, input.principal);
-
-const SERVICE_TOKENS_PATH = ["access", "admin-service-tokens"] as const;
-
-/**
- * Who may change `access.admin-service-tokens`: a service-token principal or a platform admin (`alwaysAdmin`:
- * `PLATFORM_ADMIN_*`, or the local dev bypass). An email admin who is only an admin through the config could otherwise
- * grant a service token admin rights (and with it the credential download, which is for service tokens only,
- * `credentials-routes.ts`). The list is compared as a set: reordering it changes nothing.
- */
-export const checkServiceTokenAdmins = (input: {
-  readonly before: Config;
-  readonly after: Config;
-  readonly principal: Principal;
-  readonly alwaysAdmin: boolean;
-}): SettingsProblem | undefined => {
-  if (input.alwaysAdmin || input.principal.kind === "service") return undefined;
-
-  const tokens = (config: Config): Json =>
-    [...new Set(config.access["admin-service-tokens"])].toSorted();
-
-  return jsonEquals(tokens(input.before), tokens(input.after))
-    ? undefined
-    : problem(
-        403,
-        "service_tokens_require_service_admin",
-        SERVICE_TOKENS_PATH,
-        "access.admin-service-tokens can only be changed with an Access service token that is an administrator, or by a platform admin (PLATFORM_ADMIN_*); see docs/ACCESS.md",
-      );
-};
-
-/** {@link checkAdminLockout} for a whole-document write (the config import): `before` is the stored config. */
-export const checkDocumentLockout = (input: {
-  readonly before: Config;
-  readonly after: Config;
-  readonly principal: Principal;
-  readonly alwaysAdmin: boolean;
-}): SettingsProblem | undefined => {
-  const lists = (config: Config): Json => [
-    [...config.access["admin-emails"]],
-    [...config.access["admin-service-tokens"]],
-  ];
-
-  return input.alwaysAdmin || jsonEquals(lists(input.before), lists(input.after))
-    ? undefined
-    : lockedOut(input.after, input.principal);
-};
-
 // --- view ----------------------------------------------------------------------------------------------------------
 
 const valuesJson = (tree: Tree, source: Json, prefix: ReadonlyArray<string>): JsonObject =>
@@ -418,7 +324,6 @@ export interface SettingsViewInput {
   readonly revisions: Revisions;
   /** Epoch milliseconds of the last write; 0 when nothing was stored. */
   readonly updatedAt: number;
-  readonly envAdmins: AdminLists;
   readonly prefixedCredentials: number;
 }
 
@@ -433,10 +338,6 @@ export const settingsView = (input: SettingsViewInput): SettingsView => {
     ...(input.updatedAt > 0 ? { updated_at: new Date(input.updatedAt).toISOString() } : {}),
     values: settingsValues(config),
     defaults: defaults(),
-    env_admins: {
-      emails: [...input.envAdmins.adminEmails].toSorted(),
-      service_tokens: [...input.envAdmins.adminServiceTokens].toSorted(),
-    },
     payload: {
       default: payload.default.length,
       "default-raw": payload["default-raw"].length,

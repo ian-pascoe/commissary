@@ -1,6 +1,8 @@
 // Usage: what the proxy served over a range (24 hours, 7 days, 30 days), narrowed by model, account, provider or
 // user: the totals, tokens per hour or day, a breakdown whose rows narrow the page further, and the request log
 // with each request's details. The range, breakdown and filters live in the address, so a view can be linked to.
+// A plain member sees their own requests only (the server narrows every read), without the account names, the
+// unpriced models and the Prices page, which are for org admins.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
@@ -10,7 +12,9 @@ import type { CredentialEntry } from "#contract/credentials.ts";
 import type { UsageGroup, UsageRecord, UsageSummary } from "#contract/usage.ts";
 import {
   credentialsAtom,
+  membersAtom,
   nowAtom,
+  teamsAtom,
   type UsageView,
   usageRecordsAtom,
   usageSeriesAtom,
@@ -33,11 +37,13 @@ import {
 } from "../lib/format.ts";
 import type { HistoryBar } from "../lib/history.ts";
 import { providerName } from "../lib/providers.ts";
+import { canManageMembers } from "../lib/role.ts";
+import { useRole } from "../lib/use-role.ts";
 import {
   activeFilters,
-  BREAKDOWNS,
   type Breakdown,
   breakdownOf,
+  breakdownsFor,
   FILTER_LABELS,
   type FilterKey,
   RANGES,
@@ -57,16 +63,29 @@ import styles from "./Usage.module.css";
 /** Accounts by auth index (summary keys, records and the account filter), to name them. */
 interface Names {
   readonly byIndex: ReadonlyMap<string, CredentialEntry>;
+  /** Member emails by member id. */
+  readonly members: ReadonlyMap<string, string>;
+  /** Team names by team id. */
+  readonly teams: ReadonlyMap<string, string>;
 }
 
 const useNames = (): Names => {
   const result = useAtomValue(credentialsAtom);
+  const people = useAtomValue(membersAtom);
+  const groups = useAtomValue(teamsAtom);
   const files = AsyncResult.isSuccess(result) ? result.value.files : [];
+  const members = AsyncResult.isSuccess(people) ? people.value.members : [];
+  const teams = AsyncResult.isSuccess(groups) ? groups.value.teams : [];
 
   return {
     byIndex: new Map(files.map((entry) => [entry.auth_index, entry])),
+    members: new Map(members.map((member) => [member.id, member.email])),
+    teams: new Map(teams.map((team) => [team.id, team.name])),
   };
 };
+
+/** A plain member may not read the accounts: nothing is named. */
+const NO_NAMES: Names = { byIndex: new Map(), members: new Map(), teams: new Map() };
 
 /** A breakdown row's or filter's value as the operator knows it. */
 const valueName = (key: FilterKey | Breakdown["id"], value: string, names: Names): string => {
@@ -82,6 +101,10 @@ const valueName = (key: FilterKey | Breakdown["id"], value: string, names: Names
 
     case "provider":
       return value === "" ? "Unknown provider" : providerName(value);
+    case "member":
+      return value === "" ? "No member" : (names.members.get(value) ?? value);
+    case "team":
+      return names.teams.get(value) ?? value;
     case "user":
     case "principal":
       return value === "" ? "Unknown user" : value;
@@ -98,6 +121,8 @@ const filtersOf = (search: UsageSearch): UsageFilters => ({
   provider: search.provider,
   account: search.account,
   user: search.user,
+  member: search.member,
+  team: search.team,
 });
 
 const useUsageSearch = () => {
@@ -366,6 +391,7 @@ const Summary = ({
   range,
   breakdown,
   names,
+  admin,
   onBreakdown,
   onNarrow,
 }: {
@@ -373,6 +399,8 @@ const Summary = ({
   readonly range: Range;
   readonly breakdown: Breakdown;
   readonly names: Names;
+  /** Whether the caller is an org admin: the unpriced models are theirs to price. */
+  readonly admin: boolean;
   readonly onBreakdown: (by: Breakdown["id"]) => void;
   readonly onNarrow: (key: FilterKey, value: string) => void;
 }) => {
@@ -398,11 +426,11 @@ const Summary = ({
             <Chart view={view} range={range} />
           </div>
         </section>
-        <Unpriced view={view} />
+        {admin ? <Unpriced view={view} /> : null}
         <Section title="Breakdown">
           <div className={styles["breakdownTabs"]}>
             <div className={kit["tabs"]} role="radiogroup" aria-label="Break down by">
-              {BREAKDOWNS.map((candidate) => (
+              {breakdownsFor(admin).map((candidate) => (
                 <button
                   key={candidate.id}
                   type="button"
@@ -723,12 +751,11 @@ const Log = ({
 // ---------------------------------------------------------------------------------------------------------------
 // Page
 
-export const UsagePage = () => {
+const UsageContent = ({ names, admin }: { readonly names: Names; readonly admin: boolean }) => {
   usePageTitle("Usage");
   const { search, update } = useUsageSearch();
-  const names = useNames();
   const range = rangeOf(search.range);
-  const breakdown = breakdownOf(search.by);
+  const breakdown = breakdownOf(search.by, breakdownsFor(admin));
   const filters = filtersOf(search);
   const view: UsageView = { range: range.id, filters };
   const failedOnly = search.failed === true;
@@ -741,9 +768,11 @@ export const UsagePage = () => {
       <header className={styles["head"]}>
         <div className={styles["titleRow"]}>
           <h1 className={styles["title"]}>Usage</h1>
-          <Link to="/usage/prices" className={kit["sectionLink"]}>
-            Prices
-          </Link>
+          {admin ? (
+            <Link to="/usage/prices" className={kit["sectionLink"]}>
+              Prices
+            </Link>
+          ) : null}
         </div>
         <div className={kit["tabs"]} role="radiogroup" aria-label="Range">
           {RANGES.map((candidate) => (
@@ -759,6 +788,21 @@ export const UsagePage = () => {
             </button>
           ))}
         </div>
+        {admin && names.teams.size > 0 ? (
+          <select
+            className={styles["teamPick"]}
+            aria-label="Team"
+            value={filters.team ?? ""}
+            onChange={(event) => update({ team: event.target.value || undefined })}
+          >
+            <option value="">All teams</option>
+            {[...names.teams].map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+        ) : null}
       </header>
       {active.length === 0 ? null : (
         <div className={styles["filters"]} aria-label="Narrowed to">
@@ -792,6 +836,7 @@ export const UsagePage = () => {
         range={range}
         breakdown={breakdown}
         names={names}
+        admin={admin}
         onBreakdown={(by) => update({ by })}
         onNarrow={(key, value) => update({ [key]: value })}
       />
@@ -804,5 +849,24 @@ export const UsagePage = () => {
         />
       </Fragment>
     </div>
+  );
+};
+
+const OrgAdminUsage = () => {
+  const names = useNames();
+
+  return <UsageContent names={names} admin />;
+};
+
+/** The page; an org admin's page names the accounts, a plain member's never asks for them. */
+export const UsagePage = () => {
+  const role = useRole();
+
+  if (role.kind !== "ready") return null;
+
+  return canManageMembers(role.caller) ? (
+    <OrgAdminUsage />
+  ) : (
+    <UsageContent names={NO_NAMES} admin={false} />
   );
 };

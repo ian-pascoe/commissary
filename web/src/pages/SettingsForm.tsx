@@ -229,16 +229,8 @@ export const SettingsSection = ({
 
     const spec = fieldOfPath(outcome.path);
 
-    if (
-      spec !== undefined &&
-      (outcome.error === "invalid_setting" || outcome.error === "would_remove_your_admin_access")
-    ) {
-      setServerErrors({
-        [spec.path]:
-          outcome.error === "invalid_setting"
-            ? sentence(outcome.detail ?? outcome.message)
-            : saveProblem(outcome.error, outcome.message),
-      });
+    if (spec !== undefined && outcome.error === "invalid_setting") {
+      setServerErrors({ [spec.path]: sentence(outcome.detail ?? outcome.message) });
 
       return focusField(spec.path);
     }

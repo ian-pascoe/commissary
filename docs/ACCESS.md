@@ -68,8 +68,8 @@ Set by the deploy from the settings above (Alchemy binds them as plain-text vari
 | `ACCESS_DEV_BYPASS`                                  | Set only by `alchemy dev` (local development); empty on deployed Workers                              |
 | `AUTH_INDEX_KEY`                                     | Secret (`secret_text`) HMAC key of `auth_index`: minted by the deploy, not a setting (below)          |
 
-Empty `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` fails closed: protected routes answer 500. An authenticated principal that is not on an
-admin list gets 403 on management routes but can still use the proxy endpoints.
+Empty `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` fails closed: protected routes answer 500. Past Access, what a principal may do
+depends on its role in the org it reaches ("Members, roles and teams" below): a principal with no role there gets 403.
 
 ### Platform admins and orgs
 
@@ -88,22 +88,60 @@ exists from the start with the slug `default` and holds everything the deploymen
 A **platform admin** (`PLATFORM_ADMIN_*`) manages every org through these addresses and is the only one who may list, create and
 rename orgs: anyone else gets `403 {"error":"platform_admin_required"}`. An org the registry does not list answers `404` to a
 platform admin and `403` to anyone else. The unscoped addresses (`/v8/management/credentials`, `/accounts`, ...) keep working
-and mean `global`, so existing scripts and bookmarks are unchanged. Until orgs have members of their own, an admin named only by the
-config document (`access.admin-emails`, below) keeps managing `global` and nothing else. `/` opens the panel of the only org the
-caller manages and asks which one to open when there are several (`/?choose` always asks, to create an org). A person's login
-and proxy keys are unaffected: clients reach their org with their key, not with the address.
+and mean `global`, so existing scripts and bookmarks are unchanged. `/` opens the panel of the only org the caller belongs to
+and asks which one to open when there are several (`/?choose` always asks, to create an org). A person's login and proxy keys
+are unaffected: clients reach their org with their key, not with the address.
 
 Renaming `ACCESS_ADMIN_*` to `PLATFORM_ADMIN_*` is the only settings change an upgrade asks for, and it can wait: the old names are
 merged with the new ones. A rename of an org's slug breaks the old address, not the org's data (stored under its permanent id).
 
-The config document can add admins too: `access.admin-emails` and `access.admin-service-tokens` (same formats) are merged with
-the two variables. The variables always apply and never need the config, so an env admin can repair a broken config or remove
-config admins; config admins are only looked up for principals that are not env admins, and an unreadable config denies them.
-Anyone who can edit the config can add admins this way, which is already admin-only, with one exception: only a **service-token**
-administrator or an env admin (`PLATFORM_ADMIN_EMAILS`, `PLATFORM_ADMIN_SERVICE_TOKENS`, the local dev bypass) may change
-`access.admin-service-tokens`, through `PATCH /settings` or `POST /settings/import`. An email admin who is
-one only through `access.admin-emails` gets `403 {"error":"service_tokens_require_service_admin","message":…}` and nothing is
-stored (writing the same list again is fine). Without it such an admin could grant a service token the credential download below.
+### Members, roles and teams
+
+Everyone else reaches an org as one of its **members** (ADR 0022). A member holds one **role** in the org: **org owner**,
+**org admin** or **plain member**; a person can be a member of several orgs with a role in each. A platform admin is an org
+owner of every org without being stored as a member. Members, teams and service tokens live in the org's ControlPlane, which
+the Worker asks on every request: a removed member, or a member whose role was lowered, is refused on their next request.
+
+| Who may                                                                                      |   Plain member    | Org admin |          Org owner           | Platform admin |
+| -------------------------------------------------------------------------------------------- | :---------------: | :-------: | :--------------------------: | :------------: |
+| Use the proxy endpoints of the org                                                           |         ✓         |     ✓     |              ✓               |       ✓        |
+| Open the org's panel; read usage (`GET /observability/usage/records`, `/summary`, `/series`) | own requests only |     ✓     |              ✓               |       ✓        |
+| Every other management route of the org (credentials, keys, models, settings, prices, ...)   |                   |     ✓     |              ✓               |       ✓        |
+| List members, teams and service tokens; manage teams                                         |                   |     ✓     |              ✓               |       ✓        |
+| Add or remove plain members; register or remove member service tokens                        |                   |     ✓     |              ✓               |       ✓        |
+| Add or remove org admins and owners; change any role                                         |                   |           |              ✓               |       ✓        |
+| Turn auto-join on or off (`PATCH /membership`)                                               |                   |           |              ✓               |       ✓        |
+| Give a service token a role above plain member; download a credential                        |                   |           | owner **service token** only |       ✓        |
+| List, create and rename orgs                                                                 |                   |           |                              |       ✓        |
+
+- **Adding a member** (`POST /members` with an email and a role) takes effect the next time the person signs in through Access;
+  no email is sent, and Access must still admit them (§2). Removing a member takes them off every team, and they are refused
+  from their next request on, even where auto-join is on: a person or service token an org admin removed does not join by
+  themselves again until an org admin adds (or registers) them back.
+- **Auto-join** (`GET`/`PATCH /membership`, `{"auto_join": true}`): with it on, a person Access admits who is not a member of
+  the org joins it as a plain member on their first request. It is on for `global`, so a self-hosted deployment keeps admitting
+  everyone its Access policies admit, and off for every new org, where only added members get in (`403` for anyone else, the
+  proxy endpoints included).
+- **Service tokens** (`/service-tokens`) are registered to one org by their Client ID with a role (`409 service_token_taken`
+  when another org has the token, also when two orgs register it at once: the one the registry indexes first keeps it). With
+  auto-join on, an unregistered token is admitted as a plain member without being stored,
+  so existing clients of `global` keep working; register it to give it a role.
+- **Teams** (`/teams`) are named groups of members within an org; an org admin filters usage by member (`member=<id>`) or team
+  (`team=<id>`) and groups a summary by member (`group_by=member`).
+- An org with members keeps at least one owner: lowering or removing the last owner answers `409 last_owner`.
+- **ADR 0006 per org**: giving a service token a role above plain member, and downloading a credential (§4), need a service
+  token that is an owner of the org, or a platform admin. A person's browser session is the credential most exposed to theft
+  and cannot grant itself those powers: a person who is an org owner registers only plain-member tokens
+  (`403 service_token_owner_required` otherwise).
+
+**Upgrading from config admin lists.** Before members, `global` was also managed by the config document's
+`access.admin-emails` and `access.admin-service-tokens`. The first time an org's ControlPlane is used after the upgrade, those
+lists become members of `global`, once: the platform admins of the time become org owners, `access.admin-emails` org admins and
+`access.admin-service-tokens` service tokens with the owner role (they could download credentials before). The lists then leave
+the config, `GET /settings` no longer shows them, and a Go config document imported later has its `access.admin-*` keys ignored
+(`not_applied`). In any other org the lists never granted anything and are only removed. The platform admins become stored
+owners of `global` even when the lists were empty: taking an email out of `PLATFORM_ADMIN_EMAILS` later ends its platform admin
+rights but not its `global` membership, which an org owner removes on the Members page (`DELETE /members/<id>`).
 
 `ACCESS_DEV_BYPASS` only applies to requests whose host is `localhost`, `127.0.0.1` or `[::1]`, and is refused (with a logged
 warning) whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set: a Worker wired to Access never skips it.
@@ -117,8 +155,8 @@ characters; a missing key is refused everywhere.
 
 1. The path is classified (`src/access/routes.ts`): `/v1*` (incl. `/v1beta`, `/v1internal`), `/openai/v1*`, `/backend-api/codex*` and the unprefixed
    aliases `/chat/completions`, `/completions`, `/responses` need a
-   principal; `/v8/management*` (also `/v8/management/orgs/<slug>/...`), the control panel (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/settings` with their
-   sub-paths, the same pages under `/o/<slug>/`, `/assets/*`) and `/management.html` (the upstream panel's old address, a redirect to `/`) need an admin;
+   principal; `/v8/management*` (also `/v8/management/orgs/<slug>/...`), the control panel (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/members`, `/settings` with their
+   sub-paths, the same pages under `/o/<slug>/`, `/assets/*`) and `/management.html` (the upstream panel's old address, a redirect to `/`) form the management zone;
    everything else (`/healthz`, the OAuth browser callbacks `/anthropic/callback`, `/codex/callback`,
    `/antigravity/callback`, `/callback`, `/devin/callback`) is public to the Worker.
    Matching is case-, slash- and percent-encoding-insensitive, so odd spellings cannot dodge the gate.
@@ -127,7 +165,12 @@ characters; a missing key is refused everywhere.
    30 s), `iss` = the team domain, `aud` contains one of `ACCESS_AUD`, `exp` required and `exp`/`nbf` valid (30 s clock skew).
 3. The principal is the `email` claim (users) or `common_name` (service token Client ID). It is recorded in usage records and
    scopes session state per caller.
-4. A missing header answers 401 `Missing API key`; an invalid token 401 `Invalid API key` (Go wording, so existing clients
+4. The org's ControlPlane admits the principal (`src/members/admission.ts`, auto-joining it where that is on) and the route's
+   policy (`src/access/policy.ts`) names the role it needs: a member role for the proxy endpoints, the org's panel pages and the
+   usage reads, org admin for every other management route. Who the caller is (`/v8/management/me`), the org list
+   (`/v8/management/orgs*`, whose handlers ask for a platform admin), the panel pages without an org, `/assets/*` and
+   `/management.html` need no role. A principal without the role gets 403 `Forbidden`.
+5. A missing header answers 401 `Missing API key`; an invalid token 401 `Invalid API key` (Go wording, so existing clients
    show familiar errors).
 
 Because the Worker trusts only the signed JWT, requests that skip Access (e.g. a `workers.dev` URL enabled by hand) are rejected.
@@ -174,13 +217,13 @@ put a server-side client in between.
   whether a typed value, key or alias name equals a stored secret or not.
 - Credential downloads (`GET /v8/management/credentials/download?name=<file>`) are the one way to read a stored token:
   the auth file verbatim, refresh token included, for moving an account to another deployment. Only a **service
-  token** administrator (`PLATFORM_ADMIN_SERVICE_TOKENS`, or `access.admin-service-tokens` in the config, §3) may call
-  it; an email admin gets `403 {"error":"download_requires_service_token","message":…}` before the file is looked up,
-  and a principal that is no admin the gate's `403 Forbidden`. A person's browser session is the credential most
+  token** that is an owner of the org (§3 "Members, roles and teams") or a platform admin may call it; any other org admin or
+  owner gets `403 {"error":"download_requires_service_token","message":…}` before the file is looked up, and a plain
+  member the gate's `403 Forbidden`. A person's browser session is the credential most
   exposed to theft, so the tokens are handed only to a client that was set up for automation (curl with
   `CF-Access-Client-Id`/`-Secret`, [MIGRATION.md](MIGRATION.md) §2). The panel never calls it. This narrows who can read a
   token; it does not make tokens unreachable to an email admin, who can still point a stored key at a host of their
-  choice (above). Treat admin access as access to every stored token: keep the admin lists short and prefer service tokens scoped to automation.
+  choice (above). Treat org admin access as access to every stored token: keep the org's admins few and prefer service tokens scoped to automation.
 - No response publishes a hash of a stored key. The handle of a credential (`auth_index`, also in panel URLs
   `/accounts/<auth_index>` and usage exports) is an HMAC under the per-deployment secret `AUTH_INDEX_KEY`, so it reveals
   nothing about the key (Go's unsalted index of a config key's id, itself an unsalted hash of the key, let anyone holding
@@ -230,17 +273,19 @@ service token, which does not depend on the device. Check the Cloudflare WARP/Ac
 
 ## Troubleshooting
 
-| Symptom                                    | Cause                                                                                                                  |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| 302 to `cloudflareaccess.com` in a CLI     | Service token headers missing/wrong, or no Service Auth policy for the token                                           |
-| 403 from Access (before the Worker)        | Token not in the Service Auth policy (name missing from `ACCESS_SERVICE_TOKENS`)                                       |
-| 500 `Authentication service error`         | `ACCESS_TEAM_DOMAIN` wrong (check the team name) or `ACCESS_AUD` empty                                                 |
-| 401 `Missing API key`                      | Request reached the Worker without Access (wrong hostname) or no JWT header                                            |
-| 401 `Invalid API key`                      | AUD/issuer mismatch, expired JWT                                                                                       |
-| 403 `Forbidden` on the panel               | Principal not in `PLATFORM_ADMIN_EMAILS` / `PLATFORM_ADMIN_SERVICE_TOKENS` (or the config's admin lists, for `global`) |
-| 403 `platform_admin_required`              | Listing, creating or renaming orgs needs a platform admin, not an admin named by the config                            |
-| 404 on `/o/<slug>/...`                     | No org has that slug (a platform admin sees 404; others 403)                                                           |
-| 403 `download_requires_service_token`      | Credential download called as an email admin: use a service token administrator                                        |
-| 403 `service_tokens_require_service_admin` | `access.admin-service-tokens` changed by a config-only email admin: use a service token administrator or an env admin  |
-| 403 `Cross-site request rejected`          | Browser request from another origin (or a proxy POST from a web app)                                                   |
-| 415 `Unsupported Content-Type`             | Management write without `content-type: application/json` (or YAML/multipart)                                          |
+| Symptom                                | Cause                                                                                                  |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| 302 to `cloudflareaccess.com` in a CLI | Service token headers missing/wrong, or no Service Auth policy for the token                           |
+| 403 from Access (before the Worker)    | Token not in the Service Auth policy (name missing from `ACCESS_SERVICE_TOKENS`)                       |
+| 500 `Authentication service error`     | `ACCESS_TEAM_DOMAIN` wrong (check the team name) or `ACCESS_AUD` empty                                 |
+| 401 `Missing API key`                  | Request reached the Worker without Access (wrong hostname) or no JWT header                            |
+| 401 `Invalid API key`                  | AUD/issuer mismatch, expired JWT                                                                       |
+| 403 `Forbidden`                        | No role in the org (add the member, or turn auto-join on), or a plain member on a route for org admins |
+| 403 `owner_required`                   | Adding or removing an org admin or owner, or changing a role, needs an org owner                       |
+| 403 `service_token_owner_required`     | A service token role above member needs an owner service token of the org, or a platform admin         |
+| 409 `last_owner`                       | The change would leave an org with members but no owner: make someone else an owner first              |
+| 403 `platform_admin_required`          | Listing, creating or renaming orgs needs a platform admin                                              |
+| 404 on `/o/<slug>/...`                 | No org has that slug (a platform admin sees 404; others 403)                                           |
+| 403 `download_requires_service_token`  | Credential download called by a person: use a service token that is an owner of the org                |
+| 403 `Cross-site request rejected`      | Browser request from another origin (or a proxy POST from a web app)                                   |
+| 415 `Unsupported Content-Type`         | Management write without `content-type: application/json` (or YAML/multipart)                          |

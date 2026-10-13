@@ -255,15 +255,6 @@ const COPY = {
 
   "models.catalog": { label: "Models", options: CATALOG_OPTIONS, inline: true },
 
-  "access.admin-emails": {
-    label: "Admin emails",
-    hint: "One per line. People who sign in through Access with these addresses can use this panel.",
-  },
-  "access.admin-service-tokens": {
-    label: "Admin service tokens",
-    hint: "One Access service token client id per line.",
-  },
-
   "oauth.auth-auto-refresh-workers": {
     label: "Accounts refreshed at once",
     hint: "0 = 16. How many account tokens one refresh run renews in parallel.",

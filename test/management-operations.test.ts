@@ -100,10 +100,10 @@ describe("legacy panel address", () => {
       }
   });
 
-  it("stays behind the admin gate", async () => {
+  it("stays behind Access, and redirects anyone it admits (the panel decides what they see)", async () => {
     for (const path of spellings) {
       expect((await call(path, { auth: false })).status, path).toBe(401);
-      expect((await call(path, { auth: await token("other@example.com") })).status, path).toBe(403);
+      expect((await call(path, { auth: await token("other@example.com") })).status, path).toBe(302);
     }
   });
 });

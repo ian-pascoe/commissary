@@ -6,7 +6,8 @@
  * New in the Workers port: Go serves the upstream panel at `/management.html` and a public JSON banner at `/`. Here
  * `/management.html` is a legacy redirect to `/` (`LEGACY_PANEL_REDIRECT`, deviation from Go). Every page path
  * answers the same `index.html`; the panel's router picks the page in the browser. Both pages and files are gated like
- * the management API (Access admin) because the Worker runs before static assets. The page talks to `/v8/management`
+ * the management API (Access, `access/policy.ts`: a page of an org needs a role in it) because the Worker runs before
+ * static assets. The page talks to `/v8/management`
  * on its own origin and sends no credentials of its own: Access authenticates those calls.
  */
 import { Effect } from "effect";
@@ -16,7 +17,7 @@ import { AccessPrincipal } from "../access/principal.ts";
 import { PANEL_ORG_PREFIX, PANEL_SECTIONS } from "../access/routes.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import { jsonReply } from "./http.ts";
-import { manageableOrgs } from "./org-routes.ts";
+import { openableOrgs } from "./org-routes.ts";
 
 export const PANEL_NOT_BUILT = "the control panel is not built; run `pnpm web:build`";
 
@@ -72,7 +73,7 @@ const requestUrl = Effect.gen(function* () {
 const orgRedirect = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
   const identity = yield* AccessPrincipal;
-  const orgs = yield* manageableOrgs(identity);
+  const orgs = yield* openableOrgs(identity);
   const [only] = orgs;
 
   if (orgs.length !== 1 || only === undefined) return undefined;

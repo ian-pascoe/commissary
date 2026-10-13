@@ -244,8 +244,17 @@ describe("management credentials: download, delete, models", () => {
     expect((await json(url, service)).status).toBe(400);
   });
 
-  it("refuses an email admin, before looking at the name or the file", async () => {
+  it("refuses an org owner who signs in as a person, before looking at the name or the file", async () => {
     await upload("x.json", claudeFile());
+
+    const added = await controlPlane().addMember(
+      { email: "owner@example.com", role: "owner" },
+      { role: "owner", sensitive: true },
+      "test",
+    );
+
+    expect(added.ok || added.error === "member_exists").toBe(true);
+    const owner = { auth: await token("owner@example.com") };
 
     const refusal = {
       status: 403,
@@ -257,12 +266,15 @@ describe("management credentials: download, delete, models", () => {
 
     // Same reply for a stored file, a missing one, an unsafe name and no name: it discloses nothing.
     for (const query of ["?name=x.json", "?name=nope.json", "?name=a/b.json", ""])
-      expect(await json(`/v8/management/credentials/download${query}`)).toMatchObject(refusal);
-    const body = (await json("/v8/management/credentials/download?name=x.json")).body;
+      expect(await json(`/v8/management/credentials/download${query}`, owner)).toMatchObject(
+        refusal,
+      );
+
+    const body = (await json("/v8/management/credentials/download?name=x.json", owner)).body;
     expect(JSON.stringify(body)).not.toContain("secret");
   });
 
-  it("leaves a principal that is no administrator at the gate's 403", async () => {
+  it("leaves a plain member at the gate's 403", async () => {
     await upload("x.json", claudeFile());
 
     for (const auth of [await token("stranger@example.com"), await serviceToken("other.access")]) {

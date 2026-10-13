@@ -29,6 +29,20 @@ export const NOT_APPLIED_RULES: ReadonlyArray<NotAppliedRule> = [
     isSet: (config) => config.access["api-keys"].length > 0,
   },
   {
+    key: "access.admin-emails",
+    reason:
+      "Org members and roles replace the config admin lists; add people on the Members page (docs/ACCESS.md).",
+    path: ["access", "admin-emails"],
+    isSet: (config) => config.access["admin-emails"].length > 0,
+  },
+  {
+    key: "access.admin-service-tokens",
+    reason:
+      "Org members and roles replace the config admin lists; register service tokens on the Members page.",
+    path: ["access", "admin-service-tokens"],
+    isSet: (config) => config.access["admin-service-tokens"].length > 0,
+  },
+  {
     key: "models.codex-catalog",
     reason: "The Codex client catalog is bundled with the Worker; it is not fetched.",
     path: ["models", "codex-catalog"],

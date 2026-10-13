@@ -11,6 +11,7 @@
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api";
 import { managementErrors } from "./errors.ts";
+import { OrgRole } from "./members.ts";
 
 /** One org of the registry. */
 export const OrgView = Schema.Struct({
@@ -42,16 +43,21 @@ export const UpdateOrg = Schema.Struct({
 
 export type UpdateOrg = typeof UpdateOrg.Type;
 
-/** An org the caller may manage, as the panel's org switcher lists it. */
+/** An org the caller belongs to, as the panel's org switcher lists it. */
 export const MyOrg = Schema.Struct({ slug: Schema.String, name: Schema.String });
 
 export type MyOrg = typeof MyOrg.Type;
 
-/** `GET /me`: who the caller is for the panel, and which orgs they manage. */
+/**
+ * `GET /me`: who the caller is for the panel, which orgs they may open, and their role in the org the request
+ * addresses (`/v8/management/orgs/<slug>/me`; `global` for the unscoped spelling).
+ */
 export const Me = Schema.Struct({
-  /** A platform admin manages every org and may create them. */
+  /** A platform admin is an owner of every org and may create orgs. */
   platform_admin: Schema.Boolean,
-  /** Every org for a platform admin; for anyone else the org their admin rights are in (`global`). */
+  /** The caller's role in the addressed org; `null` when they do not belong to it. */
+  role: Schema.NullOr(OrgRole),
+  /** Every org for a platform admin; for anyone else the orgs they are a member of. */
   orgs: Schema.Array(MyOrg),
 });
 
@@ -60,7 +66,7 @@ export type Me = typeof Me.Type;
 const slugParam = { params: { slug: Schema.String } };
 
 export class OrgsGroup extends HttpApiGroup.make("orgs").add(
-  /** The caller and the orgs they manage; any admin may ask. */
+  /** The caller and the orgs they belong to; anyone Access admits may ask. */
   HttpApiEndpoint.get("me", "/me", { success: Me, error: managementErrors }),
   /** Every org, `global` (slug `default` at first) leading. Platform admins only. */
   HttpApiEndpoint.get("list", "/orgs", { success: OrgList, error: managementErrors }),

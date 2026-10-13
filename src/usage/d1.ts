@@ -9,7 +9,9 @@
  * `acct_total_tokens` per key × UTC hour/day bucket) for the control panel's per-account quota-window bars.
  *
  * Every row belongs to one org (`org_id`, `migrations/0003_usage_org.sql`; ADR 0021) and every read takes the org and
- * filters on it, so one org never sees another org's records.
+ * filters on it, so one org never sees another org's records. A row names the caller's member id when they had one
+ * (`member_id`, `migrations/0005_usage_member.sql`; ADR 0022): reads filter by members (a team is its members) and
+ * group by member, and a plain member's reads are narrowed to their own records (`UsageFilter.own`).
  *
  * Every row carries its cost (`cost_micros`, `unpriced`; `migrations/0004_usage_cost.sql`, `pricing.ts`, ADR 0024), set
  * when the record is written and never recomputed. A record from before that migration, or one whose pricing failed, has no
@@ -49,6 +51,8 @@ export interface UsageRow {
   endpoint: string;
   principal_id: string;
   org_id: string;
+  /** The caller's member id (`migrations/0005_usage_member.sql`); `null` without a member record. */
+  member_id: string | null;
   auth_id: string;
   auth_type: string;
   source: string;
@@ -105,6 +109,7 @@ const INSERT_COLUMNS = [
   "endpoint",
   "principal_id",
   "org_id",
+  "member_id",
   "auth_id",
   "auth_type",
   "source",
@@ -171,6 +176,7 @@ export const recordToRow = (record: UsageRecord): Omit<UsageRow, "exported_at"> 
     endpoint: record.endpoint,
     principal_id: record.principalId,
     org_id: record.orgId,
+    member_id: trimmedOrNull(record.memberId),
     auth_id: record.authId,
     auth_type: record.authType.trim() === "" ? "unknown" : record.authType.trim(),
     source: record.source,
@@ -292,6 +298,7 @@ export const rowToPayload = (row: UsageRow, authIndexOf: AuthIndexer) => {
     endpoint: row.endpoint,
     auth_type: row.auth_type,
     api_key: row.principal_id,
+    ...(row.member_id === null ? {} : { member_id: row.member_id }),
     request_id: row.request_id,
     ...(row.trace_id === null ? {} : { trace_id: row.trace_id }),
     ...sessionPayload(row),
@@ -355,11 +362,23 @@ export interface UsageFilter {
   readonly provider?: string;
   readonly model?: string;
   readonly principal?: string;
+  /** Records of these members only (the `member` and `team` filters); an empty list matches nothing. */
+  readonly memberIds?: ReadonlyArray<string>;
+  /**
+   * The caller's own records only (a plain member): those with their member id, or with their Access principal for
+   * records written before members existed or without a member record.
+   */
+  readonly own?: OwnRecords;
   /** Keyed `auth_index` of the credential (`resolveAuthIds`). */
   readonly authIndex?: string;
   /** The live credential id the ControlPlane resolved `authIndex` to (`credentialIdOfAuthIndex`), if any. */
   readonly liveAuthId?: string;
   readonly failed?: boolean;
+}
+
+export interface OwnRecords {
+  readonly memberId: string | undefined;
+  readonly principalId: string;
 }
 
 interface FilterClauses {
@@ -395,6 +414,21 @@ const filterClauses = (
   if (filter.model !== undefined) add("model = ?", filter.model);
 
   if (filter.principal !== undefined) add("principal_id = ?", filter.principal);
+
+  // One JSON parameter however large the team: D1 binds at most 100 parameters per query.
+  if (filter.memberIds !== undefined)
+    add("member_id IN (SELECT value FROM json_each(?))", JSON.stringify(filter.memberIds));
+
+  if (filter.own !== undefined) {
+    params.push(filter.own.principalId);
+    const principal = `principal_id = ?${params.length}`;
+
+    if (filter.own.memberId === undefined) clauses.push(principal);
+    else {
+      params.push(filter.own.memberId);
+      clauses.push(`(member_id = ?${params.length} OR ${principal})`);
+    }
+  }
 
   if (authIds !== undefined) {
     const first = params.length + 1;
@@ -512,7 +546,15 @@ export const listUsageRecords = async (
   return { rows, nextBefore: more ? `${last.requested_at}:${last.request_id}` : undefined };
 };
 
-export const GROUP_BY = ["model", "provider", "principal", "auth", "endpoint", "day"] as const;
+export const GROUP_BY = [
+  "model",
+  "provider",
+  "principal",
+  "member",
+  "auth",
+  "endpoint",
+  "day",
+] as const;
 
 export type GroupBy = (typeof GROUP_BY)[number];
 
@@ -520,6 +562,7 @@ const GROUP_EXPRESSIONS: Readonly<Record<GroupBy, string>> = {
   model: "model",
   provider: "provider",
   principal: "principal_id",
+  member: "member_id",
   auth: "auth_id",
   endpoint: "endpoint",
   day: "strftime('%Y-%m-%d', requested_at / 1000, 'unixepoch')",
@@ -715,6 +758,10 @@ export interface UsageSeriesQuery {
   readonly authIndex?: string;
   /** See {@link UsageFilter.liveAuthId}. */
   readonly liveAuthId?: string;
+  /** See {@link UsageFilter.memberIds}. */
+  readonly memberIds?: ReadonlyArray<string>;
+  /** See {@link UsageFilter.own}. */
+  readonly own?: OwnRecords;
 }
 
 const compareKeys = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
@@ -749,6 +796,8 @@ export const summarizeUsageSeries = async (
       ...(query.model === undefined ? {} : { model: query.model }),
       ...(query.authIndex === undefined ? {} : { authIndex: query.authIndex }),
       ...(query.liveAuthId === undefined ? {} : { liveAuthId: query.liveAuthId }),
+      ...(query.memberIds === undefined ? {} : { memberIds: query.memberIds }),
+      ...(query.own === undefined ? {} : { own: query.own }),
     },
     authIndexOf,
   );

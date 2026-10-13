@@ -50,7 +50,10 @@ export const CREDENTIALS = ["credentials"] as const;
 /** Reads that depend on the list of orgs refetch after a mutation tagged with this key. */
 export const ORGS = ["orgs"] as const;
 
-/** Who the caller is and which orgs they manage (`GET /me`): the org switcher and the chooser read it. */
+/**
+ * Who the caller is, which orgs they belong to and their role in the org the panel shows (`GET /me`, addressed to
+ * the org on an org's pages): the shell, the page gates and the org chooser read it.
+ */
 export const meAtom = ManagementClient.query("orgs", "me", {
   reactivityKeys: ORGS,
   timeToLive: KEEP,
@@ -58,6 +61,59 @@ export const meAtom = ManagementClient.query("orgs", "me", {
 
 /** Creates an org (platform admins; call with `reactivityKeys: ORGS`). */
 export const createOrgAtom = ManagementClient.mutation("orgs", "create");
+
+/** The Members page refetches after a mutation tagged with this key. */
+export const MEMBERS = ["members"] as const;
+
+/** The org's people with their roles and teams. */
+export const membersAtom = ManagementClient.query("members", "list", {
+  reactivityKeys: MEMBERS,
+  timeToLive: KEEP,
+});
+
+export const teamsAtom = ManagementClient.query("members", "teams", {
+  reactivityKeys: MEMBERS,
+  timeToLive: KEEP,
+});
+
+export const serviceTokensAtom = ManagementClient.query("members", "serviceTokens", {
+  reactivityKeys: MEMBERS,
+  timeToLive: KEEP,
+});
+
+/** Whether anyone Access admits joins the org by themselves. */
+export const membershipAtom = ManagementClient.query("members", "settings", {
+  reactivityKeys: MEMBERS,
+  timeToLive: KEEP,
+});
+
+// Member, team and service token writes: call with `reactivityKeys: MEMBERS` so the lists refetch afterwards.
+export const addMemberAtom = ManagementClient.mutation("members", "add");
+
+export const updateMemberAtom = ManagementClient.mutation("members", "update");
+
+export const removeMemberAtom = ManagementClient.mutation("members", "remove");
+
+export const updateMembershipAtom = ManagementClient.mutation("members", "updateSettings");
+
+export const createTeamAtom = ManagementClient.mutation("members", "createTeam");
+
+export const renameTeamAtom = ManagementClient.mutation("members", "renameTeam");
+
+export const deleteTeamAtom = ManagementClient.mutation("members", "deleteTeam");
+
+export const addTeamMemberAtom = ManagementClient.mutation("members", "addTeamMember");
+
+export const removeTeamMemberAtom = ManagementClient.mutation("members", "removeTeamMember");
+
+export const registerServiceTokenAtom = ManagementClient.mutation(
+  "members",
+  "registerServiceToken",
+);
+
+export const updateServiceTokenAtom = ManagementClient.mutation("members", "updateServiceToken");
+
+export const removeServiceTokenAtom = ManagementClient.mutation("members", "removeServiceToken");
 
 /** Every credential with its state (`GET /credentials`). */
 export const credentialsAtom = ManagementClient.query("credentials", "list", {
@@ -122,7 +178,7 @@ export const usageSeriesAtom = Atom.family((view: UsageView) =>
         get(usageEpochAtom);
         const client = yield* ManagementClient;
         const now = yield* Clock.currentTimeMillis;
-        const { model, provider, auth_index } = filterQuery(view.filters);
+        const { model, provider, auth_index, member, team } = filterQuery(view.filters);
 
         // The series has no principal filter: the page shows no chart while a user filter is set.
         const series = yield* client.usage.series({
@@ -133,6 +189,8 @@ export const usageSeriesAtom = Atom.family((view: UsageView) =>
             ...(model === undefined ? {} : { model }),
             ...(provider === undefined ? {} : { provider }),
             ...(auth_index === undefined ? {} : { auth_index }),
+            ...(member === undefined ? {} : { member }),
+            ...(team === undefined ? {} : { team }),
           },
         });
 

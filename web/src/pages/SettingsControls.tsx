@@ -278,8 +278,6 @@ const control = (props: FieldProps): ReactNode => {
     case "tristate":
       return <Flag {...props} />;
     case "words":
-    case "emails":
-    case "tokens":
       return <Lines {...props} />;
     case "strategy":
     case "images":

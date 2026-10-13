@@ -53,13 +53,16 @@ describe("scopedApiUrl", () => {
     );
   });
 
+  it("addresses /me to the org, where it answers the caller's role in it", () => {
+    expect(scopedApiUrl("/v8/management/me", "acme")).toBe("/v8/management/orgs/acme/me");
+    expect(scopedApiUrl("/v8/management/me", undefined)).toBe("/v8/management/me");
+  });
+
   it("leaves the platform-level routes alone", () => {
     for (const url of [
-      "/v8/management/me",
       "/v8/management/orgs",
       "/v8/management/orgs/acme",
       "https://proxy.test/v8/management/orgs?x=1",
-      "/v8/management/me?x=1",
     ])
       expect(scopedApiUrl(url, "acme")).toBe(url);
   });

@@ -63,6 +63,15 @@ _Avoid_: owner (on its own), which also says whom a credential belongs to
 A named group of members within one org. Grants and spend limits can name a team.
 _Avoid_: group
 
+**Plain member**:
+A member with the lowest role: they use the proxy and see their own usage, and manage nothing.
+_Avoid_: user, viewer
+
+**Auto-join**:
+An org's setting that makes every person the org's sign-in admits a plain member on their first request. On for the
+first org of a self-hosted proxy, off for every org created later.
+_Avoid_: open signup, self-service
+
 **Client**:
 An application that sends model requests to the proxy, such as pi, Claude Code, Codex or an SDK.
 _Avoid_: caller, consumer, user

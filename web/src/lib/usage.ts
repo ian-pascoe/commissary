@@ -102,6 +102,10 @@ export interface UsageFilters {
   readonly account?: string | undefined;
   /** An Access principal. */
   readonly user?: string | undefined;
+  /** A member id of the org (`/members`). */
+  readonly member?: string | undefined;
+  /** A team id of the org (`/teams`): the records of its members. */
+  readonly team?: string | undefined;
 }
 
 export type FilterKey = keyof UsageFilters;
@@ -113,31 +117,44 @@ export interface Breakdown {
   readonly noun: string;
   /** The filter a row narrows to; endpoints cannot be filtered. */
   readonly filter: FilterKey | undefined;
+  /** Whether only an org admin sees it: a plain member's usage is theirs alone, and they may not read the accounts. */
+  readonly adminOnly: boolean;
 }
 
 export const BREAKDOWNS: ReadonlyArray<Breakdown> = [
-  { id: "model", label: "Model", noun: "Model", filter: "model" },
-  { id: "auth", label: "Account", noun: "Account", filter: "account" },
-  { id: "provider", label: "Provider", noun: "Provider", filter: "provider" },
-  { id: "principal", label: "User", noun: "User", filter: "user" },
-  { id: "endpoint", label: "Endpoint", noun: "Endpoint", filter: undefined },
+  { id: "model", label: "Model", noun: "Model", filter: "model", adminOnly: false },
+  { id: "auth", label: "Account", noun: "Account", filter: "account", adminOnly: true },
+  { id: "provider", label: "Provider", noun: "Provider", filter: "provider", adminOnly: false },
+  { id: "member", label: "Member", noun: "Member", filter: "member", adminOnly: true },
+  { id: "principal", label: "User", noun: "User", filter: "user", adminOnly: true },
+  { id: "endpoint", label: "Endpoint", noun: "Endpoint", filter: undefined, adminOnly: false },
 ];
+
+/** The breakdowns a caller is offered. */
+export const breakdownsFor = (admin: boolean): ReadonlyArray<Breakdown> =>
+  BREAKDOWNS.filter((breakdown) => admin || !breakdown.adminOnly);
 
 export const DEFAULT_BREAKDOWN: Breakdown = {
   id: "model",
   label: "Model",
   noun: "Model",
   filter: "model",
+  adminOnly: false,
 };
 
-export const breakdownOf = (id: string | undefined): Breakdown =>
-  BREAKDOWNS.find((breakdown) => breakdown.id === id) ?? DEFAULT_BREAKDOWN;
+/** The breakdown an address names, among those on offer (every one unless `offered` narrows them). */
+export const breakdownOf = (
+  id: string | undefined,
+  offered: ReadonlyArray<Breakdown> = BREAKDOWNS,
+): Breakdown => offered.find((breakdown) => breakdown.id === id) ?? DEFAULT_BREAKDOWN;
 
 export const FILTER_LABELS: Readonly<Record<FilterKey, string>> = {
   model: "Model",
   account: "Account",
   provider: "Provider",
   user: "User",
+  member: "Member",
+  team: "Team",
 };
 
 /** The filters as management API query parameters. */
@@ -146,13 +163,15 @@ export const filterQuery = (filters: UsageFilters) => ({
   ...(filters.provider === undefined ? {} : { provider: filters.provider }),
   ...(filters.account === undefined ? {} : { auth_index: filters.account }),
   ...(filters.user === undefined ? {} : { principal: filters.user }),
+  ...(filters.member === undefined ? {} : { member: filters.member }),
+  ...(filters.team === undefined ? {} : { team: filters.team }),
 });
 
 /** The filters that are set, in a fixed order. */
 export const activeFilters = (
   filters: UsageFilters,
 ): ReadonlyArray<{ readonly key: FilterKey; readonly value: string }> =>
-  (["model", "account", "provider", "user"] as const).flatMap((key) => {
+  (["model", "account", "provider", "user", "member", "team"] as const).flatMap((key) => {
     const value = filters[key];
 
     return value === undefined ? [] : [{ key, value }];
@@ -163,16 +182,18 @@ export const lenient = <S extends Schema.Top>(schema: S) =>
   Schema.optionalKey(schema.pipe(Schema.catchDecoding(() => Effect.succeedNone)));
 
 /**
- * The page's address: `/usage?range=week&by=auth&model=…&account=…&provider=…&user=…&failed=true`. A malformed
+ * The page's address: `/usage?range=week&by=auth&model=…&account=…&provider=…&user=…&member=…&team=…&failed=true`. A malformed
  * parameter is dropped on its own; the others still apply.
  */
 export const UsageSearch = Schema.Struct({
   range: lenient(Schema.Literals(["day", "week", "month"])),
-  by: lenient(Schema.Literals(["model", "auth", "provider", "principal", "endpoint"])),
+  by: lenient(Schema.Literals(["model", "auth", "provider", "member", "principal", "endpoint"])),
   model: lenient(Schema.String),
   provider: lenient(Schema.String),
   account: lenient(Schema.String),
   user: lenient(Schema.String),
+  member: lenient(Schema.String),
+  team: lenient(Schema.String),
   failed: lenient(Schema.Boolean),
 });
 

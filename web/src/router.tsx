@@ -7,6 +7,7 @@ import { AccountsPage } from "./pages/Accounts.tsx";
 import { ConnectPage } from "./pages/Connect.tsx";
 import { KeyGroupPage, NewKeyGroupPage } from "./pages/KeyGroup.tsx";
 import { KeysPage } from "./pages/Keys.tsx";
+import { MembersPage } from "./pages/Members.tsx";
 import { ModelRulesPage } from "./pages/ModelRules.tsx";
 import { ModelsPage } from "./pages/Models.tsx";
 import { OverviewPage } from "./pages/Overview.tsx";
@@ -65,6 +66,7 @@ const routeTree = rootRoute.addChildren([
     validateSearch: readPricesSearch,
     component: PricesPage,
   }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/members", component: MembersPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: SettingsPage }),
 ]);
 

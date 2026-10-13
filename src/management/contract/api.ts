@@ -10,6 +10,7 @@ import { HttpApi } from "effect/http-api";
 import { ApiKeysGroup } from "./api-keys.ts";
 import { CatalogGroup } from "./catalog.ts";
 import { CredentialsGroup } from "./credentials.ts";
+import { MembersGroup } from "./members.ts";
 import { OAuthGroup } from "./oauth.ts";
 import { OrgsGroup } from "./orgs.ts";
 import { PricesGroup } from "./prices.ts";
@@ -29,4 +30,5 @@ export class ManagementApi extends HttpApi.make("management")
   .add(SettingsGroup)
   .add(OrgsGroup)
   .add(PricesGroup)
+  .add(MembersGroup)
   .prefix(MANAGEMENT_API_PREFIX) {}

@@ -5,8 +5,9 @@
  *
  * The org list, creation and rename are platform-level: they belong to no org, and only a platform admin
  * (`PLATFORM_ADMIN_*`, `AccessIdentity.platformAdmin`) may use them (`403 platform_admin_required`). `GET /me` is for
- * any admin and says which orgs the control panel may open: all of them for a platform admin, `global` for an admin
- * named by its config. Creating an org only adds it to the registry; its ControlPlane starts empty when first used.
+ * anyone Access admits and says which orgs the control panel may open (all of them for a platform admin, the orgs the
+ * caller is a member of otherwise) and the caller's role in the addressed org. Creating an org only adds it to the
+ * registry; its ControlPlane starts empty when first used.
  */
 import { Clock, Effect, Match } from "effect";
 import { HttpRouter } from "effect/http";
@@ -41,17 +42,29 @@ const view = (org: OrgRecord): OrgView => ({
 });
 
 /**
- * The orgs the caller may open in the panel: every org for a platform admin; for anyone else the org their rights are
- * in (`global`), when the registry lists it.
+ * The orgs the caller may open in the panel: every org for a platform admin; for anyone else the orgs the Platform
+ * registry indexes them in (ADR 0022), and the org of the request when the gate admitted them there.
  */
-export const manageableOrgs = (
+export const openableOrgs = (
   identity: AccessIdentity,
 ): Effect.Effect<ReadonlyArray<OrgRecord>, Reply, WorkerEnv> =>
-  identity.platformAdmin
-    ? registry("listOrgs", (stub) => stub.listOrgs())
-    : registry("getOrgById", (stub) => stub.getOrgById(identity.org)).pipe(
-        Effect.map((org) => (org === undefined ? [] : [org])),
-      );
+  Effect.gen(function* () {
+    if (identity.platformAdmin) return yield* registry("listOrgs", (stub) => stub.listOrgs());
+    const { principal } = identity;
+
+    const indexed =
+      principal.kind === "user"
+        ? yield* registry("orgsOfEmail", (stub) => stub.orgsOfEmail(principal.email))
+        : yield* registry("orgOfServiceToken", (stub) =>
+            stub.orgOfServiceToken(principal.commonName),
+          ).pipe(Effect.map((org) => (org === undefined ? [] : [org])));
+
+    if (identity.role === undefined || indexed.some((org) => org.id === identity.org))
+      return indexed;
+    const current = yield* registry("getOrgById", (stub) => stub.getOrgById(identity.org));
+
+    return current === undefined ? indexed : [...indexed, current];
+  });
 
 const requirePlatformAdmin = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
@@ -64,10 +77,11 @@ const requirePlatformAdmin = Effect.gen(function* () {
 
 const me = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
-  const orgs = yield* manageableOrgs(identity);
+  const orgs = yield* openableOrgs(identity);
 
   return jsonReply(200, {
     platform_admin: identity.platformAdmin,
+    role: identity.role ?? null,
     orgs: orgs.map((org) => ({ slug: org.slug, name: org.name })),
   });
 });
