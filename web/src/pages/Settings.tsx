@@ -17,7 +17,7 @@ import type { SectionId } from "../lib/settings.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
 import { CATALOG_OPTIONS } from "./SettingsCopy.ts";
 import { SettingsSection } from "./SettingsForm.tsx";
-import { DeploymentAdmins, ErrorRules, PayloadRules } from "./SettingsFacts.tsx";
+import { ErrorRules, PayloadRules } from "./SettingsFacts.tsx";
 import styles from "./Settings.module.css";
 
 const JUMPS: ReadonlyArray<readonly [SectionId | "payload", string]> = [
@@ -28,7 +28,6 @@ const JUMPS: ReadonlyArray<readonly [SectionId | "payload", string]> = [
   ["images", "Images & video"],
   ["providers", "Providers"],
   ["catalogs", "Model catalog"],
-  ["admin", "Admin access"],
   ["refresh", "Account refresh"],
 ];
 
@@ -301,26 +300,6 @@ const Body = ({
         }
       >
         {({ field }) => <>{field("models.catalog")}</>}
-      </SettingsSection>
-
-      <SettingsSection
-        id="admin"
-        title="Admin access"
-        {...common}
-        lead={
-          <p className={styles["lead"]}>
-            Who can use this panel and the management API, besides the deployment&rsquo;s own
-            admins. A save that would remove your own access is refused.
-          </p>
-        }
-      >
-        {({ field }) => (
-          <>
-            <DeploymentAdmins admins={view.env_admins} />
-            {field("access.admin-emails")}
-            {field("access.admin-service-tokens")}
-          </>
-        )}
       </SettingsSection>
 
       <SettingsSection id="refresh" title="Account refresh" {...common}>

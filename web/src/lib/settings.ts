@@ -31,13 +31,12 @@ export type SectionId =
   | "images"
   | "providers"
   | "catalogs"
-  | "admin"
   | "refresh";
 
 /**
  * How a value is edited: `bool` a checkbox; `tristate` a checkbox over an unset Go pointer; `int` whole numbers ≥ 0;
  * `duration` a Go duration > 0; `bootstrap` a duration, whole seconds or 0 for unlimited; `text` trimmed text;
- * `model` a `gpt-` model or empty; `timezone` an IANA zone, `Local` or empty; `words`, `emails`, `tokens` one entry
+ * `model` a `gpt-` model or empty; `timezone` an IANA zone, `Local` or empty; `words` one entry
  * per line; `strategy` and `images` radio lists; `catalog` and `cooldown` a radio list with a text field.
  */
 export type FieldKind =
@@ -50,8 +49,6 @@ export type FieldKind =
   | "model"
   | "timezone"
   | "words"
-  | "emails"
-  | "tokens"
   | "strategy"
   | "images"
   | "catalog"
@@ -186,9 +183,6 @@ export const FIELDS: ReadonlyArray<FieldSpec> = [
 
   field("catalogs", "models.catalog", "catalog", "Model catalog"),
 
-  field("admin", "access.admin-emails", "emails", "Admin emails"),
-  field("admin", "access.admin-service-tokens", "tokens", "Admin service tokens"),
-
   field("refresh", "oauth.auth-auto-refresh-workers", "int", "Refresh concurrency"),
 ];
 
@@ -261,8 +255,6 @@ export const inputOf = (spec: FieldSpec, value: SettingValue | undefined): Input
     case "int":
       return typeof value === "number" ? String(value) : "0";
     case "words":
-    case "emails":
-    case "tokens":
       return strings(value).join("\n");
     case "images":
       return typeof value === "string" ? value : String(value === true);
@@ -354,8 +346,6 @@ const lines = (text: string): ReadonlyArray<string> =>
     .map((line) => line.trim())
     .filter((line) => line !== "");
 
-const EMAIL = /^[^\s@]+@[^\s@]+$/;
-
 export type Parsed =
   | { readonly ok: true; readonly value: SettingValue }
   | { readonly ok: false; readonly error: string };
@@ -375,7 +365,7 @@ const IMAGE_MODES = new Map<string, DisableImageGeneration>([
 ]);
 
 /**
- * The value an input stands for, normalised as the server stores it (trimmed, admin emails lower-case), or what is
+ * The value an input stands for, normalised as the server stores it (trimmed), or what is
  * wrong with it. The server refuses a value it would rewrite, so the page sends the stored form.
  */
 export const parseInput = (spec: FieldSpec, input: Input): Parsed => {
@@ -433,22 +423,6 @@ export const parseInput = (spec: FieldSpec, input: Input): Parsed => {
 
     case "words":
       return ok(lines(asText(input)));
-    case "emails": {
-      const entries = lines(asText(input)).map((line) => line.toLowerCase());
-      const bad = entries.find((entry) => !EMAIL.test(entry));
-
-      return bad === undefined ? ok(entries) : fail(`${quoted(bad)} is not an email address.`);
-    }
-
-    case "tokens": {
-      const entries = lines(asText(input));
-      const bad = entries.find((entry) => /\s/.test(entry));
-
-      return bad === undefined
-        ? ok(entries)
-        : fail(`${quoted(bad)} has a space; a client id has none.`);
-    }
-
     case "strategy":
       return ok(asText(input));
     case "images": {
@@ -756,8 +730,6 @@ export const saveProblem = (error: string | undefined, message: string): string 
   switch (error) {
     case "conflict":
       return "These settings changed elsewhere while saving. Reload to see the current settings; your edits stay in the form until you do.";
-    case "would_remove_your_admin_access":
-      return "This would remove your own admin access. Keep your address in the list, or ask a platform admin to make the change.";
     default:
       return message;
   }
@@ -835,7 +807,7 @@ export const valueText = (spec: FieldSpec, value: SettingValue | undefined): str
 
   if (spec.kind === "images") return IMAGE_NAMES.get(input) ?? input;
 
-  if (spec.kind === "words" || spec.kind === "emails" || spec.kind === "tokens") {
+  if (spec.kind === "words") {
     const entries = lines(input);
 
     return entries.length === 0 ? "none" : entries.join(", ");

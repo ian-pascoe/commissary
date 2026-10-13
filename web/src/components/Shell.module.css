@@ -261,3 +261,9 @@
     height: 2.75rem;
   }
 }
+
+/* Waiting for the caller's role, or not being able to read it. */
+.gate {
+  max-width: 40rem;
+  color: var(--quiet);
+}

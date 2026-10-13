@@ -6,6 +6,7 @@ import { formatLatency } from "../web/src/lib/format.ts";
 import {
   activeFilters,
   breakdownOf,
+  breakdownsFor,
   filterQuery,
   hourlyHistory,
   mergePoints,
@@ -91,6 +92,22 @@ describe("filters", () => {
     expect(breakdownOf("auth").filter).toBe("account");
     expect(breakdownOf("endpoint").filter).toBeUndefined();
     expect(breakdownOf("nonsense").id).toBe("model");
+    expect(breakdownOf("member").filter).toBe("member");
+  });
+
+  it("offers a plain member the breakdowns that need no account or member names", () => {
+    expect(breakdownsFor(false).map((breakdown) => breakdown.id)).toEqual([
+      "model",
+      "provider",
+      "endpoint",
+    ]);
+    expect(breakdownsFor(true).map((breakdown) => breakdown.id)).toContain("member");
+    expect(breakdownOf("auth", breakdownsFor(false)).id).toBe("model");
+  });
+
+  it("narrows to a member", () => {
+    expect(filterQuery({ member: "m1" })).toEqual({ member: "m1" });
+    expect(activeFilters({ member: "m1" })).toEqual([{ key: "member", value: "m1" }]);
   });
 });
 

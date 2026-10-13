@@ -21,7 +21,6 @@ import {
   rebaseDraft,
   draftSave,
   saveDraft,
-  sectionFields,
   type FieldSpec,
   spellDuration,
   valueAt,
@@ -92,7 +91,6 @@ const DEFAULTS: SettingsValues = {
     "video-result-auth-cache-ttl": "3h",
   },
   models: { catalog: "" },
-  access: { "admin-emails": [], "admin-service-tokens": [] },
 };
 
 const decodeValues = Schema.decodeUnknownSync(SettingsValues);
@@ -119,7 +117,6 @@ const view = (overrides: Partial<SettingsView> = {}): SettingsView => ({
   updated_at: "2026-10-11T11:00:00Z",
   values: DEFAULTS,
   defaults: DEFAULTS,
-  env_admins: { emails: ["owner@example.com"], service_tokens: [] },
   payload: { default: 0, "default-raw": 0, override: 0, "override-raw": 0, filter: 0 },
   prefixed_credentials: 0,
   request_scoped_errors: {},
@@ -140,13 +137,14 @@ describe("fields", () => {
 
     expect(new Set(paths).size).toBe(paths.length);
     expect(paths.every((path) => valueAt(DEFAULTS, path) !== undefined)).toBe(true);
-    expect(sectionFields("admin").map((entry) => entry.path)).toEqual([
-      "access.admin-emails",
-      "access.admin-service-tokens",
-    ]);
     expect(fieldOfPath("routing.session-affinity-ttl")?.path).toBe("routing.session-affinity-ttl");
-    expect(fieldOfPath("access.admin-emails.2")?.path).toBe("access.admin-emails");
-    expect(fieldOfPath("access.admin-emails[2]")?.path).toBe("access.admin-emails");
+    expect(fieldOfPath("oauth.providers.devin.sensitive-words.2")?.path).toBe(
+      "oauth.providers.devin.sensitive-words",
+    );
+    expect(fieldOfPath("oauth.providers.devin.sensitive-words[2]")?.path).toBe(
+      "oauth.providers.devin.sensitive-words",
+    );
+    expect(fieldOfPath("access.admin-emails")).toBeUndefined();
     expect(fieldOfPath("routing.retry")).toBeUndefined();
     expect(fieldOfPath(undefined)).toBeUndefined();
     expect(fieldId("routing.retry.request-retry")).toBe("setting-routing-retry-request-retry");
@@ -198,21 +196,6 @@ describe("inputs and checks", () => {
     expect(parseInput(timeout, "unlimited")).toEqual({ ok: true, value: "unlimited" });
     expect(parseInput(timeout, "")).toEqual({ ok: true, value: "0" });
     expect(parseInput(timeout, "later").ok).toBe(false);
-
-    const emails = spec("access.admin-emails");
-
-    expect(parseInput(emails, " Ian@Example.com \n\n ops@example.com")).toEqual({
-      ok: true,
-      value: ["ian@example.com", "ops@example.com"],
-    });
-    expect(parseInput(emails, "ian@example.com\nnot-an-email")).toEqual({
-      ok: false,
-      error: "“not-an-email” is not an email address.",
-    });
-
-    const tokens = spec("access.admin-service-tokens");
-
-    expect(parseInput(tokens, " abc.access \n")).toEqual({ ok: true, value: ["abc.access"] });
 
     const words = spec("oauth.providers.devin.sensitive-words");
 
@@ -300,10 +283,8 @@ describe("inputs and checks", () => {
   it("says a value in a few words", () => {
     expect(valueText(spec("routing.session-affinity"), true)).toBe("on");
     expect(valueText(spec("routing.strategy"), "fill-first")).toBe("fill-first");
-    expect(valueText(spec("access.admin-emails"), [])).toBe("none");
-    expect(valueText(spec("access.admin-emails"), ["a@x.test", "b@x.test"])).toBe(
-      "a@x.test, b@x.test",
-    );
+    expect(valueText(spec("oauth.providers.devin.sensitive-words"), [])).toBe("none");
+    expect(valueText(spec("oauth.providers.devin.sensitive-words"), ["a", "b"])).toBe("a, b");
     expect(valueText(spec("routing.cooldown.transient-error-cooldown-seconds"), 0)).toBe("60 s");
     expect(valueText(spec("models.catalog"), "embed")).toBe("embedded copy");
     expect(valueText(spec("multimedia.gpt-image-2-base-model"), "")).toBe("empty");

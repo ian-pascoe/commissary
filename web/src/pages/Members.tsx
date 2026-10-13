@@ -1,0 +1,199 @@
+// Members (/members): who belongs to the org and with which role, the teams they are on, the service tokens that may
+// call the management API, and whether people join by themselves. Admins manage plain members and teams; owners also
+// change roles, add admins and owners, and decide on auto-join. The server enforces every rule again: the page only
+// offers what the caller's role allows, and says why when a choice is missing.
+import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
+import { AsyncResult } from "effect/reactivity";
+import type { ReactNode } from "react";
+import {
+  MEMBERS,
+  membershipAtom,
+  membersAtom,
+  serviceTokensAtom,
+  teamsAtom,
+  updateMembershipAtom,
+} from "../api/client.ts";
+import { kit, Problem, Section } from "../components/Kit.tsx";
+import { failureMessage } from "../lib/failure.ts";
+import { type Caller, canManageMembers, canSetAutoJoin, roleLabel } from "../lib/role.ts";
+import { useAction } from "../lib/use-action.ts";
+import { usePageTitle } from "../lib/use-page-title.ts";
+import { useRole } from "../lib/use-role.ts";
+import styles from "./Members.module.css";
+import { NoteLine, useNote } from "./MembersNote.tsx";
+import { People } from "./MembersPeople.tsx";
+import { ServiceTokens } from "./MembersTokens.tsx";
+import { Teams } from "./MembersTeams.tsx";
+import { NotAllowed } from "./NotAllowed.tsx";
+
+/** What a list that is not there yet shows: its loading, or its failure with a retry. */
+const Waiting = ({
+  result,
+  retry,
+  what,
+}: {
+  readonly result: AsyncResult.AsyncResult<unknown, unknown>;
+  readonly retry: () => void;
+  readonly what: string;
+}) =>
+  AsyncResult.isFailure(result) ? (
+    <Problem onRetry={retry}>
+      Could not load {what}. {failureMessage(result)}
+    </Problem>
+  ) : (
+    <p className={kit["muted"]} aria-busy="true">
+      Loading {what}…
+    </p>
+  );
+
+/** One list's loading, its failure with a retry, and its content. */
+const Loaded = <A, E>({
+  result,
+  retry,
+  what,
+  children,
+}: {
+  readonly result: AsyncResult.AsyncResult<A, E>;
+  readonly retry: () => void;
+  readonly what: string;
+  readonly children: (value: A) => ReactNode;
+}) =>
+  AsyncResult.isSuccess(result) ? (
+    children(result.value)
+  ) : (
+    <Waiting result={result} retry={retry} what={what} />
+  );
+
+const AutoJoin = ({ caller }: { readonly caller: Caller }) => {
+  const result = useAtomValue(membershipAtom);
+  const retry = useAtomRefresh(membershipAtom);
+  const save = useAction(updateMembershipAtom);
+  const { note, settle, clear } = useNote();
+  const owner = canSetAutoJoin(caller);
+
+  return (
+    <Loaded result={result} retry={retry} what="the joining setting">
+      {({ auto_join: on }) => (
+        <>
+          <label className={styles["toggle"]}>
+            <input
+              type="checkbox"
+              checked={on}
+              disabled={!owner || save.busy}
+              onChange={async (event) => {
+                clear();
+
+                settle(
+                  await save.run({
+                    payload: { auto_join: event.target.checked },
+                    reactivityKeys: MEMBERS,
+                  }),
+                  event.target.checked
+                    ? "Everyone Access admits now joins as a member."
+                    : "Only people you add can join now.",
+                );
+              }}
+            />
+            <span>Let everyone Access admits join as a member</span>
+          </label>
+          <p className={kit["muted"]}>
+            {on
+              ? "On: anyone Cloudflare Access lets in joins this org as a plain member on their first request, and a service token Access admits is let in as a member without being registered."
+              : "Off: only people and service tokens listed here can use this org; anyone else Access admits is turned away."}{" "}
+            {owner
+              ? "Existing members and their roles do not change."
+              : `Only an owner can change this; you are ${roleLabel(caller.role).toLowerCase() === "admin" ? "an admin" : "a member"}.`}
+          </p>
+          <NoteLine note={note} />
+        </>
+      )}
+    </Loaded>
+  );
+};
+
+const Lists = ({ caller }: { readonly caller: Caller }) => {
+  const members = useAtomValue(membersAtom);
+  const teams = useAtomValue(teamsAtom);
+  const tokens = useAtomValue(serviceTokensAtom);
+  const retryMembers = useAtomRefresh(membersAtom);
+  const retryTeams = useAtomRefresh(teamsAtom);
+  const retryTokens = useAtomRefresh(serviceTokensAtom);
+
+  // The people list and the teams read each other: the rows show teams, a team lists its members.
+  const both =
+    AsyncResult.isSuccess(members) && AsyncResult.isSuccess(teams)
+      ? { members: members.value.members, teams: teams.value.teams }
+      : undefined;
+
+  return (
+    <>
+      <Section title="People">
+        {both === undefined ? (
+          <Waiting
+            result={AsyncResult.isSuccess(members) ? teams : members}
+            retry={() => {
+              retryMembers();
+              retryTeams();
+            }}
+            what="the members"
+          />
+        ) : (
+          <People members={both.members} teams={both.teams} caller={caller} />
+        )}
+      </Section>
+      <Section title="Teams">
+        {both === undefined ? (
+          <Waiting
+            result={AsyncResult.isSuccess(members) ? teams : members}
+            retry={() => {
+              retryMembers();
+              retryTeams();
+            }}
+            what="the teams"
+          />
+        ) : (
+          <Teams teams={both.teams} members={both.members} />
+        )}
+      </Section>
+      <Section title="Service tokens">
+        <p className={styles["lead"]}>
+          Access service tokens that may call this org&rsquo;s management API from scripts. Each
+          carries a role like a person does.
+        </p>
+        <Loaded result={tokens} retry={retryTokens} what="the service tokens">
+          {(value) => <ServiceTokens tokens={value.service_tokens} caller={caller} />}
+        </Loaded>
+      </Section>
+      <Section title="Joining">
+        <AutoJoin caller={caller} />
+      </Section>
+    </>
+  );
+};
+
+export const MembersPage = () => {
+  usePageTitle("Members");
+  const role = useRole();
+
+  if (role.kind !== "ready") return null;
+
+  if (!canManageMembers(role.caller)) return <NotAllowed home="/usage" />;
+
+  return (
+    <div className={kit["page"]}>
+      <header className={styles["head"]}>
+        <h1 className={styles["title"]}>Members</h1>
+        <p className={styles["intro"]}>
+          You are{" "}
+          {role.caller.platformAdmin
+            ? "a platform admin, an owner of every org"
+            : `an ${roleLabel(role.caller.role).toLowerCase()}`}
+          . Owners can do everything here. Admins add and remove plain members and manage teams;
+          adding or promoting admins and owners, changing roles and the joining setting are for
+          owners.
+        </p>
+      </header>
+      <Lists caller={role.caller} />
+    </div>
+  );
+};
