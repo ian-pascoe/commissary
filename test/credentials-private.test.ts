@@ -99,8 +99,17 @@ const files = async (org: Org, who: Auth): Promise<ReadonlyArray<Entry>> => {
 
   expect(reply.status).toBe(200);
 
-  return (reply.body as { files: ReadonlyArray<Entry> }).files;
+  const { files, others } = reply.body as {
+    files: ReadonlyArray<Entry>;
+    others?: ReadonlyArray<Entry>;
+  };
+
+  return [...files, ...(others ?? [])];
 };
+
+/** The existence-only rows of other members' private accounts that an org admin is given apart. */
+const others = async (org: Org, who: Auth): Promise<ReadonlyArray<Entry>> =>
+  ((await send(org, "/credentials", who)).body as { others?: ReadonlyArray<Entry> }).others ?? [];
 
 const upload = async (org: Org, who: Auth, name: string, query = "") =>
   await send(org, `/credentials?name=${name}${query}`, who, "POST", claudeFile());
@@ -159,8 +168,10 @@ describe("a member's private account", () => {
     });
     expect(JSON.stringify(seen)).not.toContain("sk-ant-oat-secret");
 
-    // Shared credentials stay entries in full.
+    // Shared credentials stay entries in full; the private ones of others are listed apart.
     expect(seen.find((file) => file.name === "shared.json")?.limited).toBeUndefined();
+    expect((await others(org, org.admin)).map((file) => file.name)).toEqual(["alice.json"]);
+    expect(await others(org, org.alice)).toEqual([]);
   });
 
   it("is downloadable by its owner and by no org admin", async () => {

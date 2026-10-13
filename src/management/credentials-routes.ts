@@ -115,12 +115,18 @@ const listCredentials = Effect.gen(function* () {
 
   const now = yield* Clock.currentTimeMillis;
 
-  const matching = entries
-    .filter(
-      (entry) =>
-        (name === "" || entry.name === name || entry.id === name) &&
-        (authIndex === "" || entry.auth_index === authIndex),
-    )
+  const named = entries.filter(
+    (entry) =>
+      (name === "" || entry.name === name || entry.id === name) &&
+      (authIndex === "" || entry.auth_index === authIndex),
+  );
+
+  // What an org admin sees of other members' private credentials (existence only) is listed apart from the
+  // accounts the caller manages.
+  const others = named.filter((entry) => entry.limited === true);
+
+  const matching = named
+    .filter((entry) => entry.limited !== true)
     .toSorted((a, b) => {
       const left = entryName(a);
       const right = entryName(b);
@@ -131,7 +137,12 @@ const listCredentials = Effect.gen(function* () {
 
   const observedAt = new Date(now).toISOString();
 
-  if (pagination === undefined) return jsonReply(200, { observed_at: observedAt, files: matching });
+  if (pagination === undefined)
+    return jsonReply(200, {
+      observed_at: observedAt,
+      files: matching,
+      ...(viewer.admin ? { others } : {}),
+    });
 
   const total = matching.length;
   const start = Math.min((pagination.page - 1) * pagination.pageSize, total);
@@ -140,6 +151,7 @@ const listCredentials = Effect.gen(function* () {
   return jsonReply(200, {
     observed_at: observedAt,
     files: matching.slice(start, end),
+    ...(viewer.admin ? { others } : {}),
     total,
     page: pagination.page,
     page_size: pagination.pageSize,

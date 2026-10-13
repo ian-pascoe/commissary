@@ -235,6 +235,12 @@ export type CredentialModelAlias = typeof CredentialModelAlias.Type;
  * `auth_index` filters; the file-only operations (delete, download, field edits, token refresh, batch actions) answer
  * `409 config_credential` (a batch: that `error` per account).
  */
+/** The member a private credential belongs to. */
+export const CredentialOwner = Schema.Struct({
+  member_id: Schema.String,
+  email: optional(Schema.String),
+});
+
 export const CredentialEntry = Schema.Struct({
   id: Schema.String,
   auth_index: Schema.String,
@@ -291,13 +297,42 @@ export const CredentialEntry = Schema.Struct({
    * panel's `/keys/<family>/<index>`).
    */
   key_group: optional(Schema.Struct({ family: Schema.String, index: Schema.Int })),
+  /** A private account (ADR 0023): used only for its owner's requests; `owner` says whose. Absent: a shared one. */
+  private: optional(Schema.Boolean),
+  owner: optional(CredentialOwner),
 });
 
 export type CredentialEntry = typeof CredentialEntry.Type;
 
+/**
+ * What an org admin sees of another member's private account (ADR 0023): that it exists, its provider, owner and
+ * label, and whether it is disabled (an org admin may disable or remove it). Nothing of its use, models, standing or
+ * quota, and it cannot be downloaded.
+ */
+export const LimitedCredentialEntry = Schema.Struct({
+  id: Schema.String,
+  auth_index: Schema.String,
+  name: Schema.String,
+  type: Schema.String,
+  provider: Schema.String,
+  label: Schema.String,
+  source: Schema.String,
+  disabled: Schema.Boolean,
+  limited: Schema.Literal(true),
+  private: Schema.Literal(true),
+  owner: CredentialOwner,
+});
+
+export type LimitedCredentialEntry = typeof LimitedCredentialEntry.Type;
+
+/**
+ * `GET /credentials`: `files` are the accounts the caller manages (shared ones for org admins, the caller's own
+ * private ones); `others` (org admins only) lists the other members' private accounts, existence only.
+ */
 export const CredentialList = Schema.Struct({
   observed_at: optional(Schema.String),
   files: Schema.Array(CredentialEntry),
+  others: optional(Schema.Array(LimitedCredentialEntry)),
 });
 
 const Ok = Schema.Struct({ status: Schema.Literal("ok") });
