@@ -1,5 +1,5 @@
 // What an org admin sees of other members' private accounts and API keys (ADR 0023): that each exists, its provider,
-// owner and label, nothing of its use. The admin may disable (accounts) or remove it, never open it.
+// owner and label, nothing of its use. An org admin may disable (accounts) or remove it, never open it.
 import { useState } from "react";
 import { ConfirmDialog, type ConfirmRequest } from "./Confirm.tsx";
 import { kit, Section } from "./Kit.tsx";
@@ -15,7 +15,7 @@ export interface PrivateRow {
   readonly disabled?: boolean;
 }
 
-/** Whether the change worked, and what to tell the operator when it did not. */
+/** Whether the change worked, and what to tell the person when it did not. */
 export interface Settled {
   readonly ok: boolean;
   readonly message?: string;

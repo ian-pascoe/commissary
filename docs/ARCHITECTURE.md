@@ -299,7 +299,9 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
     `disabled`; no file fields, quota, models or state) and `PATCH /credentials/status` (disable, enable) and `DELETE`
     work, nothing else; anybody else, and an org admin for any other operation, gets `404`. `GET /api-keys` likewise lists
     other members' private groups in `others` (`LimitedKeyGroup`: family, label, owner); an org admin can only remove one
-    (`DELETE /api-keys/groups` with `private`), since a private group is not in the config they edit. A shared credential
+    (`DELETE /api-keys/groups` with `private`) from the Keys page, since a private group is not in the config they edit; a
+    private key listed among the accounts (OpenCode Go) can also be disabled and enabled there (`PrivateKeyStore.setKeyExcludedAll`,
+    the `*` exclusion, like a shared key). A shared credential
     stays admin-only. A plain member reaches only their own private credentials through the same routes (`/credentials*`,
     `/oauth/*`, `/api-keys*`: `MEMBER_CREDENTIAL_ROUTES` in `access/policy.ts`); what they upload, log in or add is private
     whatever they send, an org admin's is shared unless `?private=true` (`private: true` for a key group) asks otherwise.

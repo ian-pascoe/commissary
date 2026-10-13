@@ -227,6 +227,12 @@ export const CredentialModelAlias = Schema.Struct({
 
 export type CredentialModelAlias = typeof CredentialModelAlias.Type;
 
+/** The member a private credential belongs to. */
+export const CredentialOwner = Schema.Struct({
+  member_id: Schema.String,
+  email: optional(Schema.String),
+});
+
 /**
  * One account of the credential list. `source` is `"file"` for an auth file (`id` and `name` are the file name) or
  * `"config"` for a config API key whose provider reports quota with the key (OpenCode Go): `id` and `name` are then its
@@ -235,12 +241,6 @@ export type CredentialModelAlias = typeof CredentialModelAlias.Type;
  * `auth_index` filters; the file-only operations (delete, download, field edits, token refresh, batch actions) answer
  * `409 config_credential` (a batch: that `error` per account).
  */
-/** The member a private credential belongs to. */
-export const CredentialOwner = Schema.Struct({
-  member_id: Schema.String,
-  email: optional(Schema.String),
-});
-
 export const CredentialEntry = Schema.Struct({
   id: Schema.String,
   auth_index: Schema.String,

@@ -18,6 +18,6 @@ A single document worked for one person editing their own proxy. With many membe
 - The raw configuration editor, secret placeholders and the Go-shaped `/config*` and `/config.yaml` routes are removed. The control panel edits each entry with its own form.
 - A Go config document can still be imported: the import turns it into entries once. Not-applied keys are named by the import and not stored, which replaces their round trip from ADR 0015.
 - An API key keeps its credential id when its secret is edited, so the edit no longer creates a new credential. This replaces the API key half of ADR 0016; accounts keep the Go auth file format.
-- A private API key is an entry owned by its member (ADR 0023), so org admins never receive its secret, its base URL or its headers.
+- A private API key is an entry owned by its member (ADR 0023), so org admins never receive its secret, its base URL or its headers. It is stored as an entry of the same shape in its own sealed table (`private_key_groups`), not among the org's config entries, so the org's configuration, its snapshot and its exports never contain it.
 - The `global` org's stored document is turned into entries the first time the ControlPlane starts with the new schema. The document is kept until the import has succeeded.
 - Code that reads settings keeps one in-memory view of the org's entries. A counter of changes per org tells each Worker isolate when to rebuild its view, as the config version does now.

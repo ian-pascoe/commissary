@@ -1095,6 +1095,14 @@ export class ControlPlane extends DurableObject<Env> {
     // Go has no compat loop in config_apikey_disable.go: an endpoint is disabled as a whole (`disabled` on its group).
     if (credential.attributes.compat_name !== undefined)
       return { ok: false, error: "compat_endpoint" };
+
+    // A private key is not in the org's config: its owner's sealed group holds it.
+    if (credential.owner !== undefined) {
+      return this.#privateKeys.setKeyExcludedAll(credential.id, disabled) === undefined
+        ? { ok: false, error: "not_found" }
+        : { ok: true, via: "config:excluded-models" };
+    }
+
     const stored = this.#config.setKeyExcludedAll(credential.id, disabled, by);
 
     if (stored.ok) return { ok: true, via: "config:excluded-models" };

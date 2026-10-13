@@ -4,6 +4,7 @@
 // credentials-ownership.test.ts; here the same rule is checked end to end.
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { orgAuthIndexer } from "../src/management/auth-index.ts";
 import { OrgId } from "../src/platform/org.ts";
 import { insertUsageRecord } from "../src/usage/d1.ts";
 import {
@@ -427,6 +428,38 @@ describe("a member's private API keys", () => {
 
       expect(refused.ok).toBe(false);
     }
+  });
+
+  it("can be disabled and enabled by an org admin, who then cannot use them either", async () => {
+    const org = await newOrg();
+
+    await put(org, org.alice, group("alice-ai", SECRET));
+
+    const plane = controlPlane(org);
+    const request = { providers: ["claude"], model: "claude-sonnet-4-5", memberId: org.alice.id };
+    const picked = await plane.pick(request);
+    const id = picked.ok ? picked.credential.id : "";
+    const adminViewer = { member: org.admin.id, admin: true };
+    const authIndex = orgAuthIndexer(env, OrgId.make(org.id))(id);
+
+    expect(id).toMatch(/^claude:apikey:/);
+    expect(
+      await plane.setCredentialDisabledByRef({ authIndex }, true, "admin", adminViewer),
+    ).toEqual({ ok: true, via: "config:excluded-models" });
+    expect((await plane.pick(request)).ok).toBe(false);
+
+    // Another member's viewer cannot reach it at all.
+    expect(
+      await plane.setCredentialDisabledByRef({ authIndex }, false, "bob", {
+        member: org.bob.id,
+        admin: false,
+      }),
+    ).toEqual({ ok: false, error: "not_found" });
+
+    expect(
+      await plane.setCredentialDisabledByRef({ authIndex }, false, "admin", adminViewer),
+    ).toEqual({ ok: true, via: "config:excluded-models" });
+    expect((await plane.pick(request)).ok).toBe(true);
   });
 
   it("are edited by their owner at their revision, and by nobody else", async () => {

@@ -218,7 +218,7 @@ put a server-side client in between.
 - Go's `POST /requests/api-call` (substitutes `$TOKEN$` into a request to any host the caller names, the upstream
   panel's quota probe) is not ported. Quota checks (`POST /credentials/quota`) call the auth file's own provider usage
   endpoint. Key tests (`POST /api-keys/probe`) send a config key to the `base-url` stored with it, and an admin can
-  change that `base-url` while keeping the key (`PUT /api-keys/groups`, or a config import): an admin can still direct a stored key to a host of their choice, and a plain member the same for their own private key groups
+  change that `base-url` while keeping the key (`PUT /api-keys/groups`, or a config import): an org admin can still direct a stored key to a host of their choice, and a plain member the same for their own private key groups
   (only their own key can be sent there). The replies carry no
   token.
 - No route reads a secret back. Provider API keys, client keys, header values and URL credentials are stored as config

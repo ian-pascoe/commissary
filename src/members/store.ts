@@ -265,7 +265,7 @@ export class MemberStore {
     for (const statement of SCHEMA) sql.exec(statement);
 
     // An org from before private credentials: `global` lets its members connect them (its Access traffic keeps
-    // working as it is), any other org leaves the choice to its admins.
+    // working as it is), any other org leaves the choice to its org admins.
     if (
       !sql
         .exec<{ name: string }>("PRAGMA table_info(membership)")

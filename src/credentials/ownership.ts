@@ -20,9 +20,6 @@ export interface Viewer {
  */
 export type Access = "full" | "limited" | "none";
 
-export const isPrivate = (credential: { readonly owner?: string | undefined }): boolean =>
-  credential.owner !== undefined;
-
 /** The viewer's access to a credential owned by `owner` (undefined: shared). */
 export const accessTo = (owner: string | undefined, viewer: Viewer): Access => {
   if (owner === undefined) return viewer.admin ? "full" : "none";

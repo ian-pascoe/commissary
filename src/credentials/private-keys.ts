@@ -15,12 +15,21 @@ import { decodeConfig } from "../config/codec.ts";
 import { documentOfEntries, type GroupRow, type KeyRow } from "../config/entries.ts";
 import { API_KEY_FAMILIES, type ApiKeyFamily, type Config } from "../config/schema.ts";
 import type { KeyGroupChange, WriteResult } from "../config/store.ts";
-import { isJsonArray, isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import {
+  isJsonArray,
+  isJsonObject,
+  type Json,
+  type JsonObject,
+  jsonEquals,
+} from "../json/index.ts";
 import type { Sealer } from "../secrets/cipher.ts";
 import { freshEntryId, GROUP_ID_KIND } from "./key-ids.ts";
 import { apiKeyIdKind } from "./synthesize.ts";
 
 const TABLE = "private_key_groups";
+
+const patternsOf = (value: Json | undefined): string[] =>
+  isJsonArray(value) ? value.filter((pattern) => typeof pattern === "string") : [];
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS ${TABLE} (
@@ -175,11 +184,55 @@ export class PrivateKeyStore {
     }
   }
 
-  /** Deletes every group of `owner` (a member who left the org keeps no private key behind). */
-  removeOwner(owner: string): void {
-    this.#transaction(() => {
-      this.#sql.exec(`DELETE FROM ${TABLE} WHERE owner = ?`, owner);
+  /**
+   * Disables or enables one private key by its credential id, the way a shared key is (`ConfigStore.setKeyExcludedAll`):
+   * `*` joins or leaves its `excluded-models`. The key's group keeps its revision, so the owner's open form still saves.
+   * `undefined`: no private key has that id.
+   */
+  setKeyExcludedAll(
+    credentialId: string,
+    disabled: boolean,
+  ): { readonly owner: string } | undefined {
+    return this.#transaction(() => {
+      const stored = this.#stored().find((group) =>
+        isJsonArray(group.group.keys)
+          ? group.group.keys.some((key) => isJsonObject(key) && key.id === credentialId)
+          : false,
+      );
+
+      if (stored === undefined || !isJsonArray(stored.group.keys)) return undefined;
+
+      const inherited = patternsOf(stored.group["excluded-models"]);
+
+      const keys = stored.group.keys.map((key): Json => {
+        if (!isJsonObject(key) || key.id !== credentialId) return key;
+
+        const effective = Array.isArray(key["excluded-models"])
+          ? patternsOf(key["excluded-models"])
+          : inherited;
+
+        const isStar = (pattern: string) => pattern.trim() === "*";
+
+        const next = disabled
+          ? effective.some(isStar)
+            ? effective
+            : [...effective, "*"]
+          : effective.filter((pattern) => !isStar(pattern));
+
+        const { "excluded-models": _own, ...rest } = key;
+
+        return jsonEquals(next, inherited) ? rest : { ...rest, "excluded-models": next };
+      });
+
+      this.#sql.exec(
+        `UPDATE ${TABLE} SET value = ?, updated_at = ? WHERE id = ?`,
+        this.#seal(stored.id, { ...stored.group, keys }),
+        this.#now(),
+        stored.id,
+      );
       this.#sql.exec(`UPDATE private_key_changes SET counter = counter + 1 WHERE id = 1`);
+
+      return { owner: stored.owner };
     });
   }
 

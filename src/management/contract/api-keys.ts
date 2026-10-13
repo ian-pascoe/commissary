@@ -355,7 +355,7 @@ const GroupFamilies = Schema.Struct({
 
 /**
  * What an org admin sees of another member's private key group (ADR 0023): that it exists, its provider, owner and
- * label. The `id` and `revision` let the admin remove it (`DELETE /api-keys/groups` with `private`).
+ * label. The `id` and `revision` let an org admin remove it (`DELETE /api-keys/groups` with `private`).
  */
 export const LimitedKeyGroup = Schema.Struct({
   id: Schema.String,
