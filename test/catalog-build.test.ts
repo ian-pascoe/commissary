@@ -44,7 +44,7 @@ const additionsWith = (providers: JsonObject) => {
 };
 
 describe("trimModelsDev", () => {
-  it("keeps what the catalog reads and drops the rest", () => {
+  it("keeps what the catalog and the price lookup read and drops the rest", () => {
     const doc = trimmed(documentText());
     const model = doc.anthropic.models["claude-test"];
 
@@ -54,7 +54,7 @@ describe("trimModelsDev", () => {
       release_date: "2026-01-01",
       reasoning: true,
     });
-    expect(model).not.toHaveProperty("cost");
+    expect(model?.cost).toEqual({ input: 1, output: 2, cache_read: 0.1 });
     expect(model).not.toHaveProperty("knowledge");
     expect(model).not.toHaveProperty("open_weights");
     expect(Object.keys(doc).toSorted()).toEqual([...MODELS_DEV_PROVIDERS].toSorted());
@@ -64,6 +64,49 @@ describe("trimModelsDev", () => {
     const once = JSON.stringify(trimmed(documentText()));
 
     expect(JSON.stringify(trimmed(once))).toBe(once);
+  });
+
+  it("keeps long-context tiers and drops the audio prices", () => {
+    const tiers = [
+      { input: 2.5, output: 15, cache_read: 0.25, tier: { type: "context", size: 200_000 } },
+    ];
+
+    const doc = trimmed(
+      documentText({
+        google: {
+          "gemini-tiered": mdModel("gemini-tiered", {
+            cost: {
+              input: 1.25,
+              output: 10,
+              input_audio: 3,
+              tiers,
+              context_over_200k: { input: 2.5, output: 15 },
+            },
+          }),
+        },
+      }),
+    );
+
+    expect(doc.google.models["gemini-tiered"]?.cost).toEqual({
+      input: 1.25,
+      output: 10,
+      tiers,
+      context_over_200k: { input: 2.5, output: 15 },
+    });
+  });
+
+  it("leaves a model in the catalog when its prices do not decode", () => {
+    const result = trimModelsDev(
+      documentText({
+        anthropic: { "claude-odd": mdModel("claude-odd", { cost: { input: "free" } }) },
+      }),
+    );
+
+    if (!result.ok) throw new Error(result.error);
+    const model = result.value.anthropic.models["claude-odd"];
+
+    expect(model?.id).toBe("claude-odd");
+    expect(model).not.toHaveProperty("cost");
   });
 
   it("flags free models of the gateways from their prices", () => {
