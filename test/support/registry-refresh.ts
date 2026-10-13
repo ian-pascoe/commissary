@@ -62,7 +62,7 @@ export const fakeConfig = (yaml: string) =>
     ),
   );
 
-/** The refresh lease as the ControlPlane hands it out: free unless `held` says who holds it. */
+/** The refresh lease as the Platform registry hands it out: free unless `held` says who holds it. */
 export interface FakeLease {
   held?: { source: "cron" | "panel"; startedAt: number };
   readonly taken: string[];
@@ -74,7 +74,7 @@ export const fakeLease = (): FakeLease => ({ taken: [], released: [] });
 export const workerEnv = (kv: FakeKv, lease: FakeLease = fakeLease()): Layer.Layer<WorkerEnv> =>
   Layer.succeed(WorkerEnv, {
     CACHE: kv as unknown as KVNamespace,
-    CONTROL_PLANE: {
+    PLATFORM: {
       getByName: () => ({
         takeCatalogRefreshLease: async (source: "cron" | "panel") => {
           lease.taken.push(source);

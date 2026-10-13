@@ -5,7 +5,8 @@
  * Jobs run one after another and are isolated: a failing job is logged and does not stop the others. A job is either
  * deployment-wide (`scope: "deployment"`: the shared model catalog, client versions, usage retention) and runs once, or
  * org-scoped (`scope: "org"`: credentials, quotas, entitlements) and runs once for every org with `CurrentOrg` set, so
- * it only ever reaches that org's ControlPlane (ADR 0021). One org's failure does not stop the next org.
+ * it only ever reaches that org's ControlPlane (ADR 0021). One org's failure does not stop the next org. The orgs
+ * are the ones the Platform registry lists ({@link registeredOrgs}).
  */
 import { Effect, Layer } from "effect";
 import { FetchHttpClient, type HttpClient } from "effect/http";
@@ -14,7 +15,8 @@ import { refreshAntigravityModels } from "./executor/antigravity/models.ts";
 import { refreshAntigravityVersion } from "./executor/antigravity/version.ts";
 import { causeSummary } from "./observability/cause.ts";
 import { currentControlPlane, WorkerEnv, WorkerExecutionContext } from "./platform/env.ts";
-import { CurrentOrg, DEPLOYMENT_ORGS, type OrgId } from "./platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG, type OrgId } from "./platform/org.ts";
+import { platform } from "./platform/registry.ts";
 import { runQuotaSweep } from "./quota/check.ts";
 import { CatalogStore } from "./registry/catalog-store.ts";
 import { refreshXaiClientVersion } from "./executor/xai/version.ts";
@@ -97,28 +99,52 @@ const isolated = <R>(
     ),
   );
 
-/** Runs all jobs for one cron invocation: deployment jobs once, org jobs once per org of `orgs`, in task order. */
+/**
+ * The ids of the orgs the Platform registry lists, in its order. When the registry cannot be reached the jobs still run
+ * for `global`, the org every deployment has had since before orgs existed, so one failing object does not stop the
+ * deployment's maintenance; the failure is logged.
+ */
+export const registeredOrgs: Effect.Effect<ReadonlyArray<OrgId>, never, WorkerEnv> = platform(
+  "listOrgs",
+  (stub) => stub.listOrgs(),
+).pipe(
+  Effect.map((orgs) => orgs.map((org) => org.id)),
+  Effect.catchTag("PlatformUnavailable", (error) =>
+    Effect.logError(
+      `scheduled tasks: ${error.message}; running the org jobs for ${GLOBAL_ORG} only`,
+    ).pipe(Effect.as([GLOBAL_ORG])),
+  ),
+);
+
+/**
+ * Runs all jobs for one cron invocation: deployment jobs once, org jobs once per org of `orgs` (the registry's orgs
+ * unless given), in task order.
+ */
 export const runScheduledTasks = (
   tasks: ReadonlyArray<ScheduledTask>,
   env: Env,
   ctx: ExecutionContext,
-  orgs: ReadonlyArray<OrgId> = DEPLOYMENT_ORGS,
+  orgs?: ReadonlyArray<OrgId>,
 ): Promise<void> =>
-  Effect.forEach(
-    tasks,
-    (task) =>
-      task.scope === "deployment"
-        ? isolated(task.name, task.run)
-        : Effect.forEach(
-            orgs,
-            (org) =>
-              isolated(`${task.name} (org ${org})`, task.run).pipe(
-                Effect.provideService(CurrentOrg, org),
-              ),
-            { discard: true },
-          ),
-    { discard: true },
-  ).pipe(
+  Effect.gen(function* () {
+    const targets = orgs ?? (yield* registeredOrgs);
+
+    yield* Effect.forEach(
+      tasks,
+      (task) =>
+        task.scope === "deployment"
+          ? isolated(task.name, task.run)
+          : Effect.forEach(
+              targets,
+              (org) =>
+                isolated(`${task.name} (org ${org})`, task.run).pipe(
+                  Effect.provideService(CurrentOrg, org),
+                ),
+              { discard: true },
+            ),
+      { discard: true },
+    );
+  }).pipe(
     Effect.provide(ScheduledLayer),
     Effect.provideService(WorkerEnv, env),
     Effect.provideService(WorkerExecutionContext, ctx),

@@ -2,7 +2,8 @@ import { env } from "cloudflare:workers";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { WorkerEnv } from "../src/platform/env.ts";
-import { CurrentOrg, OrgId } from "../src/platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
+import { platformOf } from "../src/platform/registry.ts";
 import { runScheduledTasks, type ScheduledTask, scheduledTasks } from "../src/scheduled.ts";
 
 const ctx = {} as unknown as ExecutionContext;
@@ -61,6 +62,57 @@ describe("scheduled dispatch", () => {
 
     await runScheduledTasks(tasks, env, ctx, [acme, other]);
     expect(log).toEqual(["shared", "per-org:other", "after:acme", "after:other"]);
+  });
+
+  it("reads the orgs of the Platform registry: global first, then every org created", async () => {
+    const created = await platformOf(env).createOrg({ slug: "cron-org", name: "Cron" }, 1);
+
+    if (!created.ok) throw new Error(created.message);
+    const log: string[] = [];
+
+    const tasks: ScheduledTask[] = [
+      {
+        name: "per-org",
+        scope: "org",
+        run: Effect.gen(function* () {
+          log.push(yield* CurrentOrg);
+        }),
+      },
+    ];
+
+    await runScheduledTasks(tasks, env, ctx);
+    expect(log[0]).toBe(GLOBAL_ORG);
+    expect(log).toContain(created.org.id);
+    expect(log).toHaveLength(new Set(log).size);
+  });
+
+  it("keeps running for global, and the deployment jobs, when the registry cannot be reached", async () => {
+    const log: string[] = [];
+
+    const down = {
+      ...env,
+      PLATFORM: {
+        getByName: () => ({
+          listOrgs: async () => {
+            throw new Error("down");
+          },
+        }),
+      },
+    } as unknown as Env;
+
+    const tasks: ScheduledTask[] = [
+      { name: "shared", scope: "deployment", run: Effect.sync(() => void log.push("shared")) },
+      {
+        name: "per-org",
+        scope: "org",
+        run: Effect.gen(function* () {
+          log.push(`per-org:${yield* CurrentOrg}`);
+        }),
+      },
+    ];
+
+    await runScheduledTasks(tasks, down, ctx);
+    expect(log).toEqual(["shared", `per-org:${GLOBAL_ORG}`]);
   });
 
   it("runs every credential job per org and the shared catalog once", () => {

@@ -1,8 +1,9 @@
 // The model catalog's status and on-demand refresh (`GET /models/catalog`, `POST /models/catalog/refresh`) through the
-// router with the real ControlPlane (settings, refresh lease) and KV, and mocked outbound HTTP.
+// router with the real ControlPlane (settings), the Platform registry (refresh lease) and KV, and mocked outbound HTTP.
 import { env } from "cloudflare:workers";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { CatalogRefresh, CatalogStatus } from "../src/management/contract/catalog.ts";
+import { platformOf } from "../src/platform/registry.ts";
 import { CATALOG_KEYS } from "../src/registry/catalog-store.ts";
 import { MODELS_DEV_URL } from "../src/registry/refresh.ts";
 import { documentText, mdModel } from "./support/models-dev.ts";
@@ -267,7 +268,7 @@ describe("concurrent refreshes", () => {
   });
 
   it("a refresh holding the lease (the scheduled one) refuses the panel's", async () => {
-    const taken = await controlPlane().takeCatalogRefreshLease("cron");
+    const taken = await platformOf(env).takeCatalogRefreshLease("cron");
 
     if (!taken.ok) throw new Error("lease was held");
 
@@ -277,7 +278,7 @@ describe("concurrent refreshes", () => {
     expect((refused.body as { message: string }).message).toContain("scheduled refresh");
     expect(harness.requests).toHaveLength(0);
 
-    await controlPlane().releaseCatalogRefreshLease(taken.lease.token);
+    await platformOf(env).releaseCatalogRefreshLease(taken.lease.token);
     expect((await post()).status).toBe(200);
   });
 

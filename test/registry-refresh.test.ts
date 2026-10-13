@@ -310,14 +310,14 @@ describe("refreshCatalogs (cron)", () => {
     }),
   );
 
-  it.effect("a ControlPlane that cannot be reached fails the refresh and records it", () =>
+  it.effect("the Platform registry that cannot be reached fails the refresh and records it", () =>
     Effect.gen(function* () {
       const kv = new FakeKv();
       const requested: string[] = [];
 
       const env = Layer.succeed(WorkerEnv, {
         CACHE: kv as unknown as KVNamespace,
-        CONTROL_PLANE: {
+        PLATFORM: {
           getByName: () => ({
             takeCatalogRefreshLease: async () => {
               throw new Error("down");
@@ -337,9 +337,12 @@ describe("refreshCatalogs (cron)", () => {
         ),
       );
 
-      assert.deepStrictEqual(outcome, { status: "failed", message: "control plane unavailable" });
+      assert.deepStrictEqual(outcome, {
+        status: "failed",
+        message: "platform registry unavailable",
+      });
       assert.deepStrictEqual(requested, []);
-      assert.isTrue(kv.data.get(CATALOG_KEYS.status)?.includes("control plane unavailable"));
+      assert.isTrue(kv.data.get(CATALOG_KEYS.status)?.includes("platform registry unavailable"));
     }),
   );
 

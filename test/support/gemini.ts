@@ -133,8 +133,8 @@ export const makeGeminiHarness = (options: GeminiHarnessOptions): GeminiHarness 
     ...env,
     ACCESS_TEAM_DOMAIN: "team",
     ACCESS_AUD: AUD,
-    ACCESS_ADMIN_EMAILS: "",
-    ACCESS_ADMIN_SERVICE_TOKENS: "",
+    PLATFORM_ADMIN_EMAILS: "",
+    PLATFORM_ADMIN_SERVICE_TOKENS: "",
     ACCESS_DEV_BYPASS: "",
     ...options.env,
   };

@@ -32,6 +32,8 @@ const identity = {
   principal: { kind: "user", email: "dev@example.com", sub: "sub" },
   principalId: "user:dev@example.com",
   callerScope: "scope-1",
+  org: GLOBAL_ORG,
+  platformAdmin: false,
 } as const;
 
 const request = {

@@ -1,6 +1,7 @@
 import { ControlPlane } from "./credentials/control-plane.ts";
 import { makeWebHandler } from "./http/app.ts";
 import { requestContext } from "./platform/env.ts";
+import { Platform } from "./platform/platform.ts";
 import { dispatchScheduled } from "./scheduled.ts";
 import { SessionState } from "./session-state/durable-object.ts";
 
@@ -9,7 +10,7 @@ const { handler } = makeWebHandler();
 
 // `SessionState` holds the replay/continuity caches; the Responses WebSocket keeps its state in the Worker invocation
 // that accepted the socket, not there (see docs/ARCHITECTURE.md).
-export { ControlPlane, SessionState };
+export { ControlPlane, Platform, SessionState };
 
 export default {
   fetch: (request, env, ctx) => handler(request, requestContext(env, ctx)),

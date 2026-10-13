@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { Context, Layer } from "effect";
 import { HttpRouter } from "effect/http";
 import { makeAccessLayer, makeWithAccess } from "../../src/access/layer.ts";
+import { orgAddressing } from "../../src/access/org-address.ts";
 import { RootRoutes } from "../../src/http/routes.ts";
 import { ManagementRoutes } from "../../src/management/routes.ts";
 import { OAuthCallbackRoutes } from "../../src/oauth/public-routes.ts";
@@ -30,14 +31,16 @@ export const ADMIN = "admin@example.com";
 export const SERVICE_ADMIN = "automation.access";
 
 /** Pass to `makeHarness` as the bindings to make `SERVICE_ADMIN` an administrator. */
-export const SERVICE_ADMIN_BINDINGS: Partial<Env> = { ACCESS_ADMIN_SERVICE_TOKENS: SERVICE_ADMIN };
+export const SERVICE_ADMIN_BINDINGS: Partial<Env> = {
+  PLATFORM_ADMIN_SERVICE_TOKENS: SERVICE_ADMIN,
+};
 
 const baseEnv = {
   ...env,
   ACCESS_TEAM_DOMAIN: "team",
   ACCESS_AUD: AUD,
-  ACCESS_ADMIN_EMAILS: ADMIN,
-  ACCESS_ADMIN_SERVICE_TOKENS: "",
+  PLATFORM_ADMIN_EMAILS: ADMIN,
+  PLATFORM_ADMIN_SERVICE_TOKENS: "",
   ACCESS_DEV_BYPASS: "",
 };
 
@@ -94,9 +97,7 @@ export const makeHarness = (
 
   const web = HttpRouter.toWebHandler(
     Layer.mergeAll(RootRoutes, OAuthCallbackRoutes, access, makeWithAccess(access)(routes)),
-    {
-      disableLogger: true,
-    },
+    { disableLogger: true, middleware: orgAddressing },
   );
 
   const call: Harness["call"] = async (path, init = {}) => {
@@ -126,6 +127,20 @@ export const makeHarness = (
     requests: outbound.requests,
     dispose: web.dispose,
   };
+};
+
+/**
+ * A Platform registry of its own for one harness (the Worker has one object per deployment, which the tests of a file
+ * share): pass `bindings` to `makeHarness`, and create and rename orgs through `platform` without touching other
+ * tests' orgs.
+ */
+export const isolatedPlatform = () => {
+  const stub = env.PLATFORM.getByName(`platform-${crypto.randomUUID()}`);
+
+  // SAFETY: only `getByName` is read from the binding (`platformOf`), and it answers with a real Platform stub.
+  const bindings = { PLATFORM: { getByName: () => stub } as unknown as Env["PLATFORM"] };
+
+  return { bindings: bindings satisfies Partial<Env>, platform: stub };
 };
 
 export const jsonInit = (method: string, body: Json): RequestInit => ({
