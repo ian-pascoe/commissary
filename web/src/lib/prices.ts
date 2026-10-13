@@ -16,6 +16,8 @@ export const KNOWN_PROVIDERS: ReadonlyArray<string> = [
   "gemini-interactions",
   "kimi",
   "meta",
+  "opencode-go",
+  "opencode-zen",
   "vertex",
   "xai",
 ];
@@ -134,6 +136,19 @@ export const validatePrice = (
   }
 
   return errors;
+};
+
+/** The override that already prices a draft's provider and model, however they are cased. */
+export const overrideOf = (
+  draft: PriceDraft,
+  existing: ReadonlyArray<PriceOverride>,
+): PriceOverride | undefined => {
+  const provider = lower(draft.provider);
+  const model = lower(draft.model);
+
+  return existing.find(
+    (entry) => lower(entry.provider) === provider && lower(entry.model) === model,
+  );
 };
 
 export const hasPriceErrors = (errors: PriceErrors): boolean => Object.keys(errors).length > 0;

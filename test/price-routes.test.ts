@@ -43,6 +43,7 @@ const create = async (body: Json = GPT) => {
   expect(response.status).toBe(200);
 
   // SAFETY: the shape is checked against the contract below.
+  // SAFETY: a saved override answers with these three fields (checked by the status assertions around it).
   return response.body as { id: string; revision: number; version: number };
 };
 
@@ -116,6 +117,7 @@ describe("price override routes", () => {
 
     expect(removed.status).toBe(200);
     expect(removed.body).toMatchObject({ status: "ok", id: saved.id, revision: 0 });
+    // SAFETY: the list answers `{ version, overrides }`.
     expect(((await harness.json(BASE)).body as { overrides: unknown[] }).overrides).toEqual([]);
 
     const missing = await harness.json(`${BASE}/price:nothing`, edit("DELETE", "0"));

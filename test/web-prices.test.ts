@@ -8,6 +8,7 @@ import {
   draftOf,
   EMPTY_DRAFT,
   hasPriceErrors,
+  overrideOf,
   parseRate,
   priceBody,
   priceProblem,
@@ -125,6 +126,17 @@ describe("price drafts", () => {
     });
 
     expect(draftFor({})).toEqual(EMPTY_DRAFT);
+  });
+
+  it("finds the override of a draft's provider and model, however they are cased", () => {
+    const existing = [override()];
+
+    expect(overrideOf({ ...EMPTY_DRAFT, provider: " CODEX ", model: "Gpt-5" }, existing)).toBe(
+      existing[0],
+    );
+    expect(
+      overrideOf({ ...EMPTY_DRAFT, provider: "codex", model: "gpt-6" }, existing),
+    ).toBeUndefined();
   });
 
   it("lists overrides by provider, then model", () => {

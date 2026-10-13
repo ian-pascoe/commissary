@@ -1399,13 +1399,14 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   each model's `cost`: input, output, cache read/write, reasoning and the long-context `tiers`; a model id also matches
   without a trailing `-YYYYMMDD`). `PRICE_PROVIDERS` maps a provider key to the models.dev providers whose prices
   apply (`claude` → `anthropic`, `codex` → `openai`, `gemini`/`gemini-interactions` → `google`, `vertex` →
-  `google-vertex`+`google`, `antigravity` → `google`+`anthropic`, `xai`, `meta`, `kimi` → `kimi-code-plan-global`,
-  OpenCode); subscription accounts cost the same as API keys (API-equivalent). Devin and OpenAI-compatible endpoints
-  have no catalog price: their models are unpriced until an override names them. Rates are US dollars per million tokens
+  `google-vertex`+`google`, `antigravity` → `google`+`anthropic`, `xai`, `meta`, `opencode-zen` → `opencode`,
+  `opencode-go`); subscription accounts cost the same as API keys (API-equivalent). Devin, Kimi (models.dev lists only
+  its zero-priced subscription plan) and OpenAI-compatible endpoints have no catalog price: their models are unpriced
+  until an override names them. Rates are US dollars per million tokens
   and one token at $1 per million is one micro-dollar, so the cost is the sum of tokens × rate rounded once; a missing
   cache rate charges those tokens at the input rate, reasoning tokens take the output rate unless a reasoning rate is
-  stated, tokens the provider reported only in total cost nothing, and a tier replaces the whole price when the
-  attempt's input exceeds its size. An unpriced record costs `0` and is flagged, except an attempt with no tokens at
+  stated, tokens the provider reported only in total cost nothing, and a long-context tier's rates apply when the
+  attempt's input exceeds its size (a rate the tier leaves out keeps the base price's). An unpriced record costs `0` and is flagged, except an attempt with no tokens at
   all (a refused request), which costs `0` and is not flagged. `UsagePricing` (`pricing-service.ts`) prices a record in
   the sink's detached `waitUntil` path, not on the request path: it reads the org's overrides through `ConfigReader`
   (a failed read is logged and the record is priced from the catalog alone) and the active catalog, then the bundled
@@ -1428,7 +1429,7 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   add `unpriced_requests` and a record `unpriced`. `.../unpriced` (filters `since|until|provider|model|principal|auth_index`)
   lists the provider and model pairs with flagged records, the busiest first, to give them a price. `GET|POST
   /price-overrides` and `PUT|DELETE /price-overrides/:id` (`price-routes.ts`, contract `prices.ts`) manage overrides like
-  the model rules: `If-Match` carries the entry's revision (`0` for a new one), `400 invalid_if_match`, `404`, `409
+  the model rules: `PUT` and `DELETE` carry the entry's revision in `If-Match` (`400 invalid_if_match`), `404`, `409
   conflict` (stale revision, or a second override for the same provider and model), `422 invalid_config` for a bad
   name or rate. Credentials appear as their keyed `auth_index` only: `group_by=auth` keys are mapped
   from the stored `auth_id` on read (series re-sorted by index), and the `auth_index` filter (case-insensitive) is

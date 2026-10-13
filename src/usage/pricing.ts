@@ -73,7 +73,9 @@ export const UNPRICED: UsageCost = { micros: 0, unpriced: true };
 
 /**
  * The models.dev providers whose prices apply to a provider key, in the order they are tried. Claude accounts cost
- * what Anthropic's API charges, Codex accounts what OpenAI's does, and so on.
+ * what Anthropic's API charges, Codex accounts what OpenAI's does, and so on. Kimi is left out: models.dev lists only
+ * its subscription plan (`kimi-code-plan-global`, every price zero), which would cost its traffic nothing without
+ * saying so; its models are unpriced until an override names them.
  */
 export const PRICE_PROVIDERS: ReadonlyMap<string, ReadonlyArray<ModelsDevProviderId>> = new Map([
   ["claude", ["anthropic"]],
@@ -85,8 +87,6 @@ export const PRICE_PROVIDERS: ReadonlyMap<string, ReadonlyArray<ModelsDevProvide
   ["antigravity", ["google", "anthropic"]],
   ["xai", ["xai"]],
   ["meta", ["meta"]],
-  ["kimi", ["kimi-code-plan-global"]],
-  ["kimi-ai", ["kimi-code-plan-global"]],
   ["opencode-zen", ["opencode"]],
   ["opencode-go", ["opencode-go"]],
 ]);

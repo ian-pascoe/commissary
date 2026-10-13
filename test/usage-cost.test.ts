@@ -42,6 +42,7 @@ const sink = D1UsageSink.pipe(
 const publish = async (record: UsageRecord): Promise<void> => {
   const pending: Array<Promise<unknown>> = [];
 
+  // SAFETY: the sink only calls waitUntil.
   const ctx = {
     waitUntil: (promise: Promise<unknown>) => void pending.push(promise),
   } as unknown as ExecutionContext;
@@ -239,6 +240,7 @@ describe("the cost of a record at write time", () => {
 
     const pending: Array<Promise<unknown>> = [];
 
+    // SAFETY: the sink only calls waitUntil.
     const ctx = {
       waitUntil: (promise: Promise<unknown>) => void pending.push(promise),
     } as unknown as ExecutionContext;

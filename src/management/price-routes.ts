@@ -4,7 +4,7 @@
  *
  * An override is a config entry (ADR 0025) of the request's org. `POST` creates one (`409 conflict` when the provider
  * and model already have one); `PUT` and `DELETE` name the revision they were based on in `If-Match` and answer `409
- * conflict` when it is stale, `404 not_found` for an id that never existed; a missing or malformed header is `400
+ * conflict` when it is stale, `404 not_found` for an id that does not exist when the header says `0` (a stale revision of a removed override is `409`); a missing or malformed header is `400
  * invalid_if_match`. A name that is empty or a price that is not a number from 0 to the cap is `422 invalid_config`
  * (a value of the wrong type is `400 invalid body`). A price applies to the usage recorded after the write: the cost
  * stored on a record is never recomputed.

@@ -323,7 +323,7 @@ export class ControlPlane extends DurableObject<Env> {
   /** The org's price overrides with their revisions (`ConfigStore.priceOverrides`) and the version they were read at. */
   priceOverrideEntries(): PriceOverridesWire {
     return {
-      version: this.#config.snapshot().version,
+      version: this.#config.version(),
       overrides: this.#config.priceOverrides(),
     };
   }

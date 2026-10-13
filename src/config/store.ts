@@ -372,6 +372,11 @@ export class ConfigStore {
     return this.#cached;
   }
 
+  /** The change counter: what `snapshot` and the entry lists report as `version`. */
+  version(): number {
+    return this.#counter().counter;
+  }
+
   /** The assembled document; `unchanged` (no document) when the caller already has `sinceVersion`. */
   snapshot(sinceVersion?: number): ConfigSnapshotWire {
     const { counter, updated_at: updatedAt } = this.#counter();

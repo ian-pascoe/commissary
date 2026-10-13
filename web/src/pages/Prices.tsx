@@ -18,6 +18,7 @@ import {
   draftOf,
   hasPriceErrors,
   KNOWN_PROVIDERS,
+  overrideOf,
   type PriceDraft,
   type PriceField,
   priceBody,
@@ -264,11 +265,7 @@ const Prices = ({
     const draft = draftFor(search);
 
     // The pair has a price already: edit that one.
-    const found = overrides.find(
-      (entry) =>
-        entry.provider.toLowerCase() === draft.provider.trim().toLowerCase() &&
-        entry.model.toLowerCase() === draft.model.trim().toLowerCase(),
-    );
+    const found = overrideOf(draft, overrides);
 
     return found === undefined ? { kind: "new", draft } : { kind: "edit", override: found };
   });

@@ -278,6 +278,13 @@ describe("the bundled catalog", () => {
     }
   });
 
+  it("leaves Kimi unpriced: models.dev lists only its subscription plan, at zero", () => {
+    const docs = [embeddedModelsDev()];
+
+    expect(PRICE_PROVIDERS.has("kimi")).toBe(false);
+    expect(catalogPrice(docs, "kimi", "kimi-for-coding")).toBeUndefined();
+  });
+
   it("names a models.dev provider for every provider key it prices", () => {
     expect([...PRICE_PROVIDERS.keys()].toSorted()).toEqual([
       "antigravity",
@@ -285,8 +292,6 @@ describe("the bundled catalog", () => {
       "codex",
       "gemini",
       "gemini-interactions",
-      "kimi",
-      "kimi-ai",
       "meta",
       "opencode-go",
       "opencode-zen",

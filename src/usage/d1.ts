@@ -12,8 +12,8 @@
  * filters on it, so one org never sees another org's records.
  *
  * Every row carries its cost (`cost_micros`, `unpriced`; `migrations/0004_usage_cost.sql`, `pricing.ts`, ADR 0024), set
- * when the record is written and never recomputed. A record from before that migration has no cost (`NULL`, summed as
- * nothing) and is not unpriced; summaries and series add the cost up, and `unpricedModels` lists what to give a price.
+ * when the record is written and never recomputed. A record from before that migration, or one whose pricing failed, has no
+ * cost (`NULL`, summed as nothing) and is not unpriced; summaries and series add the cost up, and `unpricedModels` lists what to give a price.
  *
  * Rows keep the credential id (`auth_id`); every read answers with the keyed `auth_index` instead
  * (`management/auth-index.ts`), computed on read under the deployment's key. A config credential id is an unsalted
