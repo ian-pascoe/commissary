@@ -933,6 +933,9 @@ panel paths and `/management.html` as `management`); there is no management key.
     config's key, trimmed and lower-cased. The answer is `{status, version, revision}` with the channel's new revision (`0`
     after a delete). `GET /routing/models` carries `revisions: {aliases: {channel: rev}, exclusions: {channel: rev}}` (read
     first, so a write landing in between makes the edit answer `409` instead of overwriting a change the view did not show).
+  - Price overrides (`price-routes.ts`, contract `prices.ts`; Workers addition): an org's price for a provider and model,
+    one entry each, see _Usage accounting and observability_ (Cost). They are not part of the config document, so
+    `GET /settings` and the import never carry them.
 - **Credentials** (`credentials-routes.ts`, `credential-entry.ts`, `credentials/field-patch.ts`): list (filters,
   pagination), upload (multipart or raw JSON + `?name=`), delete (`name`/`names`/`all`), download (the stored file,
   tokens included; deviation from Go: only a service-token admin may call it, an email admin gets
@@ -1175,7 +1178,13 @@ panel paths and `/management.html` as `management`); there is no management key.
   `readUsageSearch`, a malformed one dropped), reads `GET /observability/usage/summary`, `/series` (provider series
   summed in the browser; no principal filter, so no chart while a user filter is set) and `/records` (pages of 50
   through the `next_before` cursor); every range starts at its first bar. The shell's Refresh bumps one epoch atom
-  that every usage query reads, so they all refetch. Allowance figures (`web/src/lib/quota.ts`) come from the
+  that every usage query reads, so they all refetch. The page shows the period's **Cost**, the **Unpriced requests**
+  count, a Cost column per breakdown row, the cost in each request's details and, while models without a price have
+  requests in the view, a callout (from `/observability/usage/unpriced`, narrowed like the page) whose links open
+  `/usage/prices?provider=&model=`. **Prices** (`/usage/prices`, `web/src/pages/Prices.tsx`, model in
+  `web/src/lib/prices.ts`) lists, adds, edits and removes the org's price overrides over `/price-overrides`, with the
+  entry revision as `If-Match` (a `409` reloads the list and says to make the edit again); the form opens with the
+  provider and model from the address, or edits the override that has them. Allowance figures (`web/src/lib/quota.ts`) come from the
   stored quota check when it is newer than the last response's rate-limit headers, otherwise from the headers. Window
   history (`web/src/lib/history.ts`) sums `GET /observability/usage/series` hourly points into the account's past quota
   windows, counted back from the current reset (approximate for windows the provider starts on first use), or into days
@@ -1382,6 +1391,29 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   `WorkerEnv`/`WorkerExecutionContext` from the fiber context at publish time (not part of its type, so the conductor's
   attempt plumbing is unchanged). `migrations/` is applied by Alchemy on every deploy
   (`D1.Database` `migrations` in `alchemy.run.ts`). Failure bodies are truncated to 2 KiB.
+- **Cost** (`pricing.ts`, `pricing-service.ts`, `migrations/0004_usage_cost.sql`; Workers addition, ADR 0024): each record
+  stores the cost of its attempt in micro-dollars (`cost_micros`, `NULL` on records written before costs, never
+  backfilled) and an `unpriced` flag (`1` = no price found), with a partial index on flagged rows. The cost is the
+  token breakdown priced at the model's price: a **price override** of the org for the record's provider key and model
+  (case-insensitive) wins; otherwise the models.dev price the model catalog carries (`registry/models-dev.ts` keeps
+  each model's `cost`: input, output, cache read/write, reasoning and the long-context `tiers`; a model id also matches
+  without a trailing `-YYYYMMDD`). `PRICE_PROVIDERS` maps a provider key to the models.dev providers whose prices
+  apply (`claude` → `anthropic`, `codex` → `openai`, `gemini`/`gemini-interactions` → `google`, `vertex` →
+  `google-vertex`+`google`, `antigravity` → `google`+`anthropic`, `xai`, `meta`, `kimi` → `kimi-code-plan-global`,
+  OpenCode); subscription accounts cost the same as API keys (API-equivalent). Devin and OpenAI-compatible endpoints
+  have no catalog price: their models are unpriced until an override names them. Rates are US dollars per million tokens
+  and one token at $1 per million is one micro-dollar, so the cost is the sum of tokens × rate rounded once; a missing
+  cache rate charges those tokens at the input rate, reasoning tokens take the output rate unless a reasoning rate is
+  stated, tokens the provider reported only in total cost nothing, and a tier replaces the whole price when the
+  attempt's input exceeds its size. An unpriced record costs `0` and is flagged, except an attempt with no tokens at
+  all (a refused request), which costs `0` and is not flagged. `UsagePricing` (`pricing-service.ts`) prices a record in
+  the sink's detached `waitUntil` path, not on the request path: it reads the org's overrides through `ConfigReader`
+  (a failed read is logged and the record is priced from the catalog alone) and the active catalog, then the bundled
+  snapshot, so a catalog stored before costs existed still prices. The cost is fixed when the record is written: a
+  later override or catalog change prices later records only, which is the intended audit behaviour. Price overrides
+  are config entries in their own ControlPlane table (`config_price_overrides`, unique per lower-cased provider and
+  model, with a revision like every entry) so a Go-document import, which replaces the other entry tables, leaves them
+  alone; the table is created idempotently with the rest of the schema. Rates must be finite, from 0 to 100,000.
 - **Retention** (`retention.ts`, cron task `usage-retention`): deletes records older than `USAGE_RETENTION_DAYS` (default
   30, `0` = keep) in bounded batches, across every org (a deployment-wide cron task). `usage-statistics-enabled` and `redis-usage-queue-retention-seconds` are not used:
   persistence is always on when the `USAGE` binding exists.
@@ -1392,7 +1424,13 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   `.../series` (not in Go; the panel's per-account quota-window bars: `since` required, `until` default now, `bucket=hour|day`
   UTC, `group_by=auth|model|provider`, filters `provider|model|auth_index`; per key the points `{start, requests, failed,
   total_tokens}` (`acct_total_tokens`) of buckets with requests, one aggregate query; hour ranges are capped at 31 days and
-  day ranges at 400, else 400). Credentials appear as their keyed `auth_index` only: `group_by=auth` keys are mapped
+  day ranges at 400, else 400). `summary` totals and groups, `series` points and `records` carry `cost_micros`; summaries
+  add `unpriced_requests` and a record `unpriced`. `.../unpriced` (filters `since|until|provider|model|principal|auth_index`)
+  lists the provider and model pairs with flagged records, the busiest first, to give them a price. `GET|POST
+  /price-overrides` and `PUT|DELETE /price-overrides/:id` (`price-routes.ts`, contract `prices.ts`) manage overrides like
+  the model rules: `If-Match` carries the entry's revision (`0` for a new one), `400 invalid_if_match`, `404`, `409
+  conflict` (stale revision, or a second override for the same provider and model), `422 invalid_config` for a bad
+  name or rate. Credentials appear as their keyed `auth_index` only: `group_by=auth` keys are mapped
   from the stored `auth_id` on read (series re-sorted by index), and the `auth_index` filter (case-insensitive) is
   resolved by the ControlPlane to the live credential's id (`credentialIdOfAuthIndex`, no D1 read); only an index of
   no live credential (deleted, or matching nothing) reads the distinct `auth_id`s of the filtered rows
