@@ -88,9 +88,9 @@ describe("bucketing", () => {
         {
           key: authIndexOf("codex-a.json"),
           points: [
-            { start: D0, requests: 1, failed: 0, total_tokens: tokens },
-            { start: D0 + HOUR, requests: 2, failed: 1, total_tokens: 2 * tokens },
-            { start: D0 + 5 * HOUR, requests: 1, failed: 0, total_tokens: tokens },
+            { start: D0, requests: 1, failed: 0, total_tokens: tokens, cost_micros: 0 },
+            { start: D0 + HOUR, requests: 2, failed: 1, total_tokens: 2 * tokens, cost_micros: 0 },
+            { start: D0 + 5 * HOUR, requests: 1, failed: 0, total_tokens: tokens, cost_micros: 0 },
           ],
         },
       ],
@@ -113,9 +113,9 @@ describe("bucketing", () => {
         {
           key: authIndexOf("codex-a.json"),
           points: [
-            { start: D0 - DAY, requests: 1, failed: 0, total_tokens: tokens },
-            { start: D0, requests: 2, failed: 0, total_tokens: 2 * tokens },
-            { start: D0 + DAY, requests: 1, failed: 0, total_tokens: tokens },
+            { start: D0 - DAY, requests: 1, failed: 0, total_tokens: tokens, cost_micros: 0 },
+            { start: D0, requests: 2, failed: 0, total_tokens: 2 * tokens, cost_micros: 0 },
+            { start: D0 + DAY, requests: 1, failed: 0, total_tokens: tokens, cost_micros: 0 },
           ],
         },
       ],

@@ -76,7 +76,8 @@ describe("refreshCatalogs (cron)", () => {
       assert.isDefined(stored);
       assert.isFalse(stored?.includes("mistral-x"));
       assert.isFalse(stored?.includes("knowledge"));
-      assert.isFalse(stored?.includes("cost"));
+      // The prices stay: they cost usage records (ADR 0024).
+      assert.isTrue(stored?.includes("cache_read"));
       assert.isDefined(kv.data.get(CATALOG_KEYS.status));
 
       const again = yield* runRefresh(kv, { [MODELS_DEV_URL]: documentText() });
