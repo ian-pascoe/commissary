@@ -13,6 +13,7 @@ import {
   oauthCancelAtom,
   oauthStartAtom,
   oauthStatusAtom,
+  panelOrgSlug,
   uploadAtom,
 } from "../api/client.ts";
 import { kit, Problem } from "../components/Kit.tsx";
@@ -26,6 +27,7 @@ import {
 } from "../lib/connect.ts";
 import { asSentence } from "../lib/failure.ts";
 import { formatDuration } from "../lib/format.ts";
+import { scopedApiUrl } from "../lib/org.ts";
 import { useAction } from "../lib/use-action.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
 import styles from "./Connect.module.css";
@@ -391,11 +393,14 @@ const importVertex = async (file: File, location: string): Promise<VertexResult>
   let response: Response;
 
   try {
-    response = await fetch("/v8/management/oauth/import?provider=vertex", {
-      method: "POST",
-      body: form,
-      credentials: "same-origin",
-    });
+    response = await fetch(
+      scopedApiUrl("/v8/management/oauth/import?provider=vertex", panelOrgSlug),
+      {
+        method: "POST",
+        body: form,
+        credentials: "same-origin",
+      },
+    );
   } catch {
     return {
       ok: false,

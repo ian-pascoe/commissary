@@ -3,7 +3,15 @@ import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { Link, Outlet, useLocation } from "@tanstack/react-router";
 import { Plus, RefreshCw } from "lucide-react";
 import { useEffect, useRef } from "react";
-import { credentialsAtom, usageEpochAtom, usageLastDayAtom } from "../api/client.ts";
+import {
+  credentialsAtom,
+  meAtom,
+  panelOrgSlug,
+  usageEpochAtom,
+  usageLastDayAtom,
+} from "../api/client.ts";
+import { orgPanelPath } from "../lib/org.ts";
+import { AsyncResult } from "effect/reactivity";
 import styles from "./Shell.module.css";
 import { ThemeMenu } from "./ThemeMenu.tsx";
 
@@ -42,6 +50,48 @@ const RefreshButton = () => {
         className={busy ? styles["spinning"] : undefined}
       />
     </button>
+  );
+};
+
+const CHOOSER = "/?choose";
+
+/**
+ * Which org the panel shows, and the way to another: the orgs the caller manages (`GET /me`), and the chooser where a
+ * platform admin creates more. Nothing for a caller of one org who cannot create others.
+ */
+const OrgSwitcher = () => {
+  const me = useAtomValue(meAtom);
+
+  if (!AsyncResult.isSuccess(me)) return null;
+  const { orgs, platform_admin: platformAdmin } = me.value;
+
+  if (orgs.length < 2 && !platformAdmin) return null;
+  const current = orgs.find((org) => org.slug === panelOrgSlug);
+
+  return (
+    <label className={styles["org"]}>
+      <span className={styles["orgLabel"]}>Org</span>
+      <select
+        className={styles["orgSelect"]}
+        value={current?.slug ?? panelOrgSlug ?? ""}
+        onChange={(event) => {
+          const slug = event.target.value;
+
+          // A full load: the typed client addresses its org once, from the address the panel was opened at.
+          window.location.assign(slug === CHOOSER ? CHOOSER : orgPanelPath(slug));
+        }}
+      >
+        {current === undefined && panelOrgSlug !== undefined ? (
+          <option value={panelOrgSlug}>{panelOrgSlug}</option>
+        ) : null}
+        {orgs.map((org) => (
+          <option key={org.slug} value={org.slug}>
+            {org.name}
+          </option>
+        ))}
+        {platformAdmin ? <option value={CHOOSER}>All orgs…</option> : null}
+      </select>
+    </label>
   );
 };
 
@@ -114,6 +164,7 @@ export const Shell = () => {
             </ul>
           </nav>
           <div className={styles["actions"]}>
+            <OrgSwitcher />
             <Link to="/accounts/connect" className={styles["connect"]}>
               <Plus aria-hidden="true" size={16} strokeWidth={2.5} />
               <span className={styles["connectLabel"]}>Connect account</span>

@@ -101,6 +101,38 @@
   gap: var(--space-2);
 }
 
+/* The org switcher: sign ink on the bar, a frame like the other controls. */
+.org {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 650;
+}
+
+.orgLabel {
+  color: var(--bar-quiet);
+}
+
+.orgSelect {
+  height: 2.5rem;
+  max-width: 11rem;
+  padding: 0 var(--space-2);
+  background: transparent;
+  color: var(--on-bar);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  border: 2px solid currentcolor;
+  border-radius: var(--radius);
+}
+
+@media (max-width: 40rem) {
+  .orgLabel {
+    display: none;
+  }
+}
+
 .connect {
   display: inline-flex;
   align-items: center;

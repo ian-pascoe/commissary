@@ -1,7 +1,7 @@
 // The typed management API client (generated from the shared contract) and the atoms the pages read. Calls go to the
 // panel's own origin; Cloudflare Access authenticates them with the session cookie, so no credentials live here.
 import { Cause, Clock, Duration, Effect, Schema } from "effect";
-import { FetchHttpClient, HttpClientError } from "effect/http";
+import { FetchHttpClient, HttpClient, HttpClientError, HttpClientRequest } from "effect/http";
 import { Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 import { ManagementApi } from "#contract/api.ts";
 import { type BatchAction, batchLimit } from "#contract/credentials.ts";
@@ -10,6 +10,7 @@ import { type ChunkOutcome, chunks, foldOutcomes } from "../lib/batch.ts";
 import { causeMessage } from "../lib/failure.ts";
 import type { SettingsPatch, SettingsView } from "#contract/settings.ts";
 import { HISTORY_SPAN_MS } from "../lib/history.ts";
+import { orgSlugOfPath, scopedApiUrl } from "../lib/org.ts";
 import { type RuleChange, type RuleWrite, saveRuleChange } from "../lib/models.ts";
 import { type Edits, removeNotApplied, saveDraft } from "../lib/settings.ts";
 import {
@@ -22,12 +23,19 @@ import {
   type UsageFilters,
 } from "../lib/usage.ts";
 
+/** The org this panel page shows, from its address (`/o/<slug>/...`); none on the org chooser. */
+export const panelOrgSlug = orgSlugOfPath(window.location.pathname);
+
 export class ManagementClient extends AtomHttpApi.Service<ManagementClient>()(
   "cf-llm-proxy/ManagementClient",
   {
     api: ManagementApi,
     httpClient: FetchHttpClient.layer,
     baseUrl: window.location.origin,
+    // The pages call the routes of their org (`/v8/management/orgs/<slug>/...`); `/me` and `/orgs` are the platform's.
+    transformClient: HttpClient.mapRequest(
+      HttpClientRequest.updateUrl((url) => scopedApiUrl(url, panelOrgSlug)),
+    ),
   },
 ) {}
 
@@ -36,6 +44,18 @@ const KEEP = Duration.minutes(5);
 
 /** Every query that reads credentials refetches after a mutation tagged with this key. */
 export const CREDENTIALS = ["credentials"] as const;
+
+/** Reads that depend on the list of orgs refetch after a mutation tagged with this key. */
+export const ORGS = ["orgs"] as const;
+
+/** Who the caller is and which orgs they manage (`GET /me`): the org switcher and the chooser read it. */
+export const meAtom = ManagementClient.query("orgs", "me", {
+  reactivityKeys: ORGS,
+  timeToLive: KEEP,
+});
+
+/** Creates an org (platform admins; call with `reactivityKeys: ORGS`). */
+export const createOrgAtom = ManagementClient.mutation("orgs", "create");
 
 /** Every credential with its state (`GET /credentials`). */
 export const credentialsAtom = ManagementClient.query("credentials", "list", {

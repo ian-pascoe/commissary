@@ -34,6 +34,7 @@
     "web/src/lib/keys.ts",
     "web/src/lib/legacy-hash.ts",
     "web/src/lib/models.ts",
+    "web/src/lib/org.ts",
     "web/src/lib/providers.ts",
     "web/src/lib/quota.ts",
     "web/src/lib/raw-config.ts",
