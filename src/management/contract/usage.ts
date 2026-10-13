@@ -33,6 +33,10 @@ const usageTotalsFields = {
   reasoning_tokens: Schema.Number,
   unclassified_tokens: Schema.Number,
   total_tokens: Schema.Number,
+  /** Micro-dollars (1 USD = 1,000,000): the cost stored on the records, priced when each was written. */
+  cost_micros: Schema.Number,
+  /** Requests on a model that had no price when recorded (their cost is 0). */
+  unpriced_requests: Schema.Number,
   avg_latency_ms: Schema.Number,
   avg_ttft_ms: Schema.NullOr(Schema.Number),
 };
@@ -82,6 +86,7 @@ export const UsagePoint = Schema.Struct({
   requests: Schema.Number,
   failed: Schema.Number,
   total_tokens: Schema.Number,
+  cost_micros: Schema.Number,
 });
 
 export type UsagePoint = typeof UsagePoint.Type;
@@ -147,6 +152,10 @@ export const UsageRecord = Schema.Struct({
   session_id: optional(Schema.String),
   trace_id: optional(Schema.String),
   token_breakdown: tokenBreakdown,
+  /** Micro-dollars the request cost; absent on a record written before costs existed. */
+  cost_micros: optional(Schema.Number),
+  /** The model had no price when the request was recorded (the cost is 0); absent with `cost_micros`. */
+  unpriced: optional(Schema.Boolean),
 });
 
 export type UsageRecord = typeof UsageRecord.Type;
@@ -177,6 +186,29 @@ export const UsageRecordsPage = Schema.Struct({
 
 export type UsageRecordsPage = typeof UsageRecordsPage.Type;
 
+/** The filters of the unpriced list: the time range and the provider and model, as the summary's. */
+export const UsageUnpricedQuery = Schema.Struct({
+  since: optional(Schema.Number),
+  until: optional(Schema.Number),
+  provider: optional(Schema.String),
+  model: optional(Schema.String),
+});
+
+/** A provider and model pair with unpriced requests: what to give a price override. */
+export const UnpricedModel = Schema.Struct({
+  provider: Schema.String,
+  model: Schema.String,
+  requests: Schema.Number,
+  total_tokens: Schema.Number,
+});
+
+export type UnpricedModel = typeof UnpricedModel.Type;
+
+/** The busiest first. */
+export const UsageUnpriced = Schema.Struct({ models: Schema.Array(UnpricedModel) });
+
+export type UsageUnpriced = typeof UsageUnpriced.Type;
+
 export class UsageGroupApi extends HttpApiGroup.make("usage").add(
   HttpApiEndpoint.get("summary", "/observability/usage/summary", {
     query: UsageSummaryQuery,
@@ -186,6 +218,11 @@ export class UsageGroupApi extends HttpApiGroup.make("usage").add(
   HttpApiEndpoint.get("series", "/observability/usage/series", {
     query: UsageSeriesQuery,
     success: UsageSeries,
+    error: managementErrors,
+  }),
+  HttpApiEndpoint.get("unpriced", "/observability/usage/unpriced", {
+    query: UsageUnpricedQuery,
+    success: UsageUnpriced,
     error: managementErrors,
   }),
   HttpApiEndpoint.get("records", "/observability/usage/records", {

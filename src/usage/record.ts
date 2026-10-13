@@ -13,6 +13,7 @@ import {
   unclassifiedTokenBreakdown,
 } from "./accounting.ts";
 import type { OrgId } from "../platform/org.ts";
+import type { UsageCost } from "./pricing.ts";
 
 export interface UsageDetail {
   readonly inputTokens: number;
@@ -87,6 +88,8 @@ export interface UsageRecord {
   readonly parentSessionId?: string;
   /** Configured upstream base URL of the credential (Go `Record.BaseURL`). */
   readonly baseUrl?: string;
+  /** The attempt's cost, priced when the record is written (`pricing.ts`, ADR 0024); absent until then. */
+  readonly cost?: UsageCost;
 }
 
 /** gjson `.Int()` for numeric nodes; anything else counts as 0. */

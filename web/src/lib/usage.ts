@@ -86,6 +86,7 @@ export const mergePoints = (
             requests: seen.requests + point.requests,
             failed: seen.failed + point.failed,
             total_tokens: seen.total_tokens + point.total_tokens,
+            cost_micros: seen.cost_micros + point.cost_micros,
           },
     );
   }

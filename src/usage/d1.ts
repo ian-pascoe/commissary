@@ -11,6 +11,10 @@
  * Every row belongs to one org (`org_id`, `migrations/0003_usage_org.sql`; ADR 0021) and every read takes the org and
  * filters on it, so one org never sees another org's records.
  *
+ * Every row carries its cost (`cost_micros`, `unpriced`; `migrations/0004_usage_cost.sql`, `pricing.ts`, ADR 0024), set
+ * when the record is written and never recomputed. A record from before that migration has no cost (`NULL`, summed as
+ * nothing) and is not unpriced; summaries and series add the cost up, and `unpricedModels` lists what to give a price.
+ *
  * Rows keep the credential id (`auth_id`); every read answers with the keyed `auth_index` instead
  * (`management/auth-index.ts`), computed on read under the deployment's key. A config credential id is an unsalted
  * hash of its API key, so it never leaves the database: the `auth` grouping keys are indexes, and the credential filter
@@ -77,6 +81,10 @@ export interface UsageRow {
   acct_output_non_reasoning_tokens: number;
   acct_output_reasoning_tokens: number;
   acct_unclassified_tokens: number;
+  /** Micro-dollars; `null` for a record written before costs existed. */
+  cost_micros: number | null;
+  /** 1 when the model had no price (the cost is 0). */
+  unpriced: number;
   exported_at: number | null;
 }
 
@@ -129,6 +137,8 @@ const INSERT_COLUMNS = [
   "acct_output_non_reasoning_tokens",
   "acct_output_reasoning_tokens",
   "acct_unclassified_tokens",
+  "cost_micros",
+  "unpriced",
 ] as const satisfies ReadonlyArray<Column>;
 
 const INSERT_SQL = `INSERT OR IGNORE INTO usage_records (${INSERT_COLUMNS.join(", ")}) VALUES (${INSERT_COLUMNS.map(
@@ -195,6 +205,8 @@ export const recordToRow = (record: UsageRecord): Omit<UsageRow, "exported_at"> 
     acct_output_non_reasoning_tokens: breakdown.output.nonReasoningTokens,
     acct_output_reasoning_tokens: breakdown.output.reasoningTokens,
     acct_unclassified_tokens: breakdown.unclassifiedTokens,
+    cost_micros: record.cost?.micros ?? null,
+    unpriced: record.cost?.unpriced === true ? 1 : 0,
   };
 };
 
@@ -290,6 +302,9 @@ export const rowToPayload = (row: UsageRow, authIndexOf: AuthIndexer) => {
       ? {}
       : { response_service_tier: row.response_service_tier }),
     ...(row.response_model === null ? {} : { response_model: row.response_model }),
+    ...(row.cost_micros === null
+      ? {}
+      : { cost_micros: row.cost_micros, unpriced: row.unpriced === 1 }),
   };
 };
 
@@ -520,6 +535,8 @@ const AGGREGATES = `COUNT(*) AS requests,
   COALESCE(SUM(acct_output_reasoning_tokens), 0) AS reasoning_tokens,
   COALESCE(SUM(acct_unclassified_tokens), 0) AS unclassified_tokens,
   COALESCE(SUM(acct_total_tokens), 0) AS total_tokens,
+  COALESCE(SUM(cost_micros), 0) AS cost_micros,
+  COALESCE(SUM(unpriced), 0) AS unpriced_requests,
   COALESCE(AVG(latency_ms), 0) AS avg_latency_ms,
   AVG(ttft_ms) AS avg_ttft_ms`;
 
@@ -534,6 +551,10 @@ export interface UsageTotals {
   readonly reasoning_tokens: number;
   readonly unclassified_tokens: number;
   readonly total_tokens: number;
+  /** Micro-dollars: the cost stored on the records (records from before costs existed add nothing). */
+  readonly cost_micros: number;
+  /** Requests on a model that had no price when they were recorded. */
+  readonly unpriced_requests: number;
   readonly avg_latency_ms: number;
   readonly avg_ttft_ms: number | null;
 }
@@ -593,6 +614,8 @@ export const summarizeUsage = async (
       reasoning_tokens: 0,
       unclassified_tokens: 0,
       total_tokens: 0,
+      cost_micros: 0,
+      unpriced_requests: 0,
       avg_latency_ms: 0,
       avg_ttft_ms: null,
     },
@@ -602,6 +625,39 @@ export const summarizeUsage = async (
       return { ...group, key: query.groupBy === "auth" ? authIndexOf(key) : key };
     }),
   };
+};
+
+export interface UnpricedModel {
+  readonly provider: string;
+  readonly model: string;
+  readonly requests: number;
+  readonly total_tokens: number;
+}
+
+export const MAX_UNPRICED_MODELS = 100;
+
+/**
+ * The provider and model pairs of `org`'s unpriced records within `filter`, the busiest first: what an org admin would
+ * give a price override (a record keeps its cost, so a new override prices traffic from then on).
+ */
+export const unpricedModels = async (
+  db: D1Database,
+  org: OrgId,
+  filter: UsageFilter,
+  authIndexOf: AuthIndexer,
+): Promise<ReadonlyArray<UnpricedModel>> => {
+  const { where, params } = await resolvedClauses(db, org, filter, authIndexOf);
+
+  const result = await db
+    .prepare(
+      `SELECT provider, model, COUNT(*) AS requests, COALESCE(SUM(acct_total_tokens), 0) AS total_tokens
+       FROM usage_records${where} AND unpriced = 1 GROUP BY provider, model
+       ORDER BY requests DESC, total_tokens DESC, provider ASC, model ASC LIMIT ${MAX_UNPRICED_MODELS}`,
+    )
+    .bind(...params)
+    .all<UnpricedModel>();
+
+  return result.results;
 };
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -637,6 +693,8 @@ export interface UsagePoint {
   readonly requests: number;
   readonly failed: number;
   readonly total_tokens: number;
+  /** Micro-dollars. */
+  readonly cost_micros: number;
 }
 
 export interface UsageSeriesGroup {
@@ -667,10 +725,11 @@ interface SeriesRow {
   readonly requests: number;
   readonly failed: number;
   readonly total_tokens: number;
+  readonly cost_micros: number;
 }
 
 /**
- * Requests, failures and `acct_total_tokens` of `org` per `groupBy` key and UTC hour/day bucket (only buckets with requests),
+ * Requests, failures, `acct_total_tokens` and cost of `org` per `groupBy` key and UTC hour/day bucket (only buckets with requests),
  * series sorted by key, points by time. The first bucket may start before `since` (it holds the records from `since`).
  * The `auth` keys are keyed `auth_index` values.
  */
@@ -700,7 +759,8 @@ export const summarizeUsageSeries = async (
   const result = await db
     .prepare(
       `SELECT ${key} AS key, (requested_at / ${ms}) * ${ms} AS start, COUNT(*) AS requests,
-         COALESCE(SUM(failed), 0) AS failed, COALESCE(SUM(acct_total_tokens), 0) AS total_tokens
+         COALESCE(SUM(failed), 0) AS failed, COALESCE(SUM(acct_total_tokens), 0) AS total_tokens,
+         COALESCE(SUM(cost_micros), 0) AS cost_micros
        FROM usage_records${where} GROUP BY key, start ORDER BY key ASC, start ASC`,
     )
     .bind(...params)
@@ -723,6 +783,7 @@ export const summarizeUsageSeries = async (
       requests: row.requests,
       failed: row.failed,
       total_tokens: row.total_tokens,
+      cost_micros: row.cost_micros,
     });
   }
 

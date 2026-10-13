@@ -15,6 +15,7 @@ import {
   rowToPayload,
   summarizeUsage,
   type UsageRow,
+  unpricedModels,
 } from "../src/usage/d1.ts";
 import { D1UsageSink } from "../src/usage/d1-sink.ts";
 import { ensureTokenBreakdown } from "../src/usage/accounting.ts";
@@ -26,6 +27,7 @@ import { resetUsageDb, sampleRecord, statementsOf } from "./support/usage.ts";
 import initialMigration from "../migrations/0001_usage_records.sql?raw";
 import sessionsMigration from "../migrations/0002_usage_sessions.sql?raw";
 import orgMigration from "../migrations/0003_usage_org.sql?raw";
+import costMigration from "../migrations/0004_usage_cost.sql?raw";
 import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 
 let db: D1Database;
@@ -76,8 +78,90 @@ describe("migration 0003 (usage org)", () => {
     // Its index statements are idempotent, and new records carry their org.
     for (const statement of statementsOf(orgMigration).filter((sql) => sql.startsWith("CREATE")))
       await db.prepare(statement).run();
+
+    for (const statement of statementsOf(costMigration)) await db.prepare(statement).run();
     await insertUsageRecord(db, sampleRecord({ requestId: "new", orgId: OrgId.make("acme") }));
     expect((await listUsageRecords(db, OrgId.make("acme"), {}, authIndexOf)).rows).toHaveLength(1);
+  });
+});
+
+describe("migration 0004 (usage cost)", () => {
+  it("leaves the records written before costs without a cost and unflagged, and prices new ones", async () => {
+    await db.prepare("DROP TABLE usage_records").run();
+
+    for (const statement of [
+      ...statementsOf(initialMigration),
+      ...statementsOf(sessionsMigration),
+      ...statementsOf(orgMigration),
+    ])
+      await db.prepare(statement).run();
+
+    await db
+      .prepare(
+        `INSERT INTO usage_records (request_id, requested_at, provider, executor_type, model, alias, endpoint,
+           principal_id, auth_id, auth_type, source, org_id, acct_total_tokens) VALUES ('old', 1, 'codex', 'codex',
+           'gpt-5', 'gpt-5', 'POST /v1/responses', 'user:a', 'codex-a.json', 'oauth', 'a', 'global', 500)`,
+      )
+      .run();
+
+    for (const statement of statementsOf(costMigration)) await db.prepare(statement).run();
+
+    const [row] = await rows();
+    expect(row).toMatchObject({ request_id: "old", cost_micros: null, unpriced: 0 });
+
+    // A new record carries its cost; the old one sums as nothing and is not listed as unpriced.
+    await insertUsageRecord(
+      db,
+      sampleRecord({ requestId: "new", requestedAt: 2, cost: { micros: 1234, unpriced: false } }),
+    );
+    await insertUsageRecord(
+      db,
+      sampleRecord({ requestId: "free", requestedAt: 3, cost: { micros: 0, unpriced: true } }),
+    );
+
+    const summary = await summarizeUsage(db, GLOBAL_ORG, { groupBy: "model" }, authIndexOf);
+    expect(summary.totals).toMatchObject({ requests: 3, cost_micros: 1234, unpriced_requests: 1 });
+
+    const page = await listUsageRecords(db, GLOBAL_ORG, {}, authIndexOf);
+
+    expect(page.rows.map((record) => rowToPayload(record, authIndexOf))).toMatchObject([
+      { request_id: "free", cost_micros: 0, unpriced: true },
+      { request_id: "new", cost_micros: 1234, unpriced: false },
+      { request_id: "old" },
+    ]);
+    expect(rowToPayload(page.rows[2] as UsageRow, authIndexOf)).not.toHaveProperty("cost_micros");
+
+    // The index of unpriced traffic exists, and the migration's index statement is idempotent.
+    const indexes = await db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'usage_records'")
+      .all<{ readonly name: string }>();
+
+    expect(indexes.results.map((index) => index.name)).toContain("usage_records_org_unpriced");
+
+    for (const statement of statementsOf(costMigration).filter((sql) => sql.startsWith("CREATE")))
+      await db.prepare(statement).run();
+  });
+
+  it("lists the unpriced models of an org by requests, with its own totals per model", async () => {
+    const priced = { micros: 10, unpriced: false };
+    const free = { micros: 0, unpriced: true };
+
+    await insertUsageRecord(db, sampleRecord({ requestId: "a", model: "gpt-5", cost: priced }));
+    await insertUsageRecord(db, sampleRecord({ requestId: "b", model: "mystery", cost: free }));
+    await insertUsageRecord(db, sampleRecord({ requestId: "c", model: "mystery", cost: free }));
+    await insertUsageRecord(db, sampleRecord({ requestId: "d", model: "other", cost: free }));
+    await insertUsageRecord(
+      db,
+      sampleRecord({ requestId: "e", model: "theirs", cost: free, orgId: OrgId.make("acme") }),
+    );
+
+    const models = await unpricedModels(db, GLOBAL_ORG, {}, authIndexOf);
+
+    expect(models.map((entry) => [entry.provider, entry.model, entry.requests])).toEqual([
+      ["codex", "mystery", 2],
+      ["codex", "other", 1],
+    ]);
+    expect(await unpricedModels(db, GLOBAL_ORG, { model: "other" }, authIndexOf)).toHaveLength(1);
   });
 });
 
