@@ -40,6 +40,8 @@ export interface CredentialSnapshot {
   readonly prefix?: string;
   /** Bumped when token/key material changes (a refresh); results are reported against it. */
   readonly credentialVersion?: number;
+  /** A private credential (ADR 0023): the usage it earns is its owner's alone to read. */
+  readonly private?: boolean;
   /**
    * String attributes as in Go: `base_url`, `api_key`, `compat_name`, `provider_key`, `config_index`, `priority`,
    * `weight`, `header:<Name>` (custom upstream headers), ...

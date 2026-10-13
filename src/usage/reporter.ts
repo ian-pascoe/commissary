@@ -25,6 +25,8 @@ export interface UsageReporterInit {
   readonly orgId: OrgId;
   /** The caller's member id in the org (usage `member_id`), when they have one. */
   readonly memberId?: string;
+  /** The credential is private (ADR 0023): the record is its owner's alone to read. */
+  readonly private?: boolean;
   readonly authId: string;
   readonly authType: string;
   readonly source: string;
@@ -131,6 +133,7 @@ export class UsageReporter {
       principalId: init.principalId,
       orgId: init.orgId,
       ...(init.memberId === undefined ? {} : { memberId: init.memberId }),
+      ...(init.private === true ? { private: true } : {}),
       authId: init.authId,
       authType: init.authType,
       source: init.source,
@@ -196,6 +199,8 @@ export class UsageReporter {
       endpoint: init.endpoint,
       principalId: init.principalId,
       orgId: init.orgId,
+      ...(init.memberId === undefined ? {} : { memberId: init.memberId }),
+      ...(init.private === true ? { private: true } : {}),
       authId: init.authId,
       authType: init.authType,
       source: init.source,

@@ -3,8 +3,9 @@
 // and the org setting turns private credentials off without deleting them. Selection itself is tested in
 // credentials-ownership.test.ts; here the same rule is checked end to end.
 import { env } from "cloudflare:workers";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { OrgId } from "../src/platform/org.ts";
+import { insertUsageRecord } from "../src/usage/d1.ts";
 import {
   ADMIN,
   claudeFile,
@@ -13,12 +14,17 @@ import {
   makeHarness,
   token,
 } from "./support/management.ts";
+import { resetUsageDb, sampleRecord } from "./support/usage.ts";
 
 const registry = isolatedPlatform();
 
 const harness = makeHarness(undefined, registry.bindings);
 
 afterAll(harness.dispose);
+
+beforeAll(async () => {
+  await resetUsageDb();
+});
 
 type Payload = Parameters<typeof jsonInit>[1];
 
@@ -514,5 +520,92 @@ describe("a member's private API keys", () => {
     }
 
     expect((await list(org, org.admin)).families["claude"]).toEqual([]);
+  });
+});
+
+describe("usage of a private credential", () => {
+  const USAGE = "/observability/usage";
+
+  const requestIds = (reply: { body: unknown }) =>
+    (reply.body as { records: ReadonlyArray<{ request_id: string }> }).records
+      .map((record) => record.request_id)
+      .toSorted();
+
+  it("is read by its owner alone: org-wide summaries, listings, series and the queue leave it out", async () => {
+    const org = await newOrg();
+
+    for (const [requestId, who, isPrivate] of [
+      ["alice-private", org.alice, true],
+      ["alice-shared", org.alice, false],
+      ["bob-shared", org.bob, false],
+    ] as const)
+      await insertUsageRecord(
+        env.USAGE,
+        sampleRecord({
+          requestId,
+          orgId: OrgId.make(org.id),
+          principalId: "user:" + who.email,
+          memberId: who.id,
+          ...(isPrivate ? { private: true } : {}),
+        }),
+      );
+
+    // The owner reads theirs, flagged as private; nobody else does, an org admin included.
+    const mine = await send(org, USAGE + "/records", org.alice);
+
+    expect(requestIds(mine)).toEqual(["alice-private", "alice-shared"]);
+
+    expect(
+      (mine.body as { records: ReadonlyArray<{ request_id: string; private?: boolean }> }).records
+        .filter((record) => record.private === true)
+        .map((record) => record.request_id),
+    ).toEqual(["alice-private"]);
+
+    expect(requestIds(await send(org, USAGE + "/records", org.bob))).toEqual(["bob-shared"]);
+    expect(requestIds(await send(org, USAGE + "/records", org.admin))).toEqual([
+      "alice-shared",
+      "bob-shared",
+    ]);
+
+    // Filtering by the owner does not reveal it either.
+    expect(
+      requestIds(await send(org, USAGE + "/records?member=" + org.alice.id, org.admin)),
+    ).toEqual(["alice-shared"]);
+
+    const total = async (who: Auth) =>
+      (
+        (await send(org, USAGE + "/summary?group_by=member", who)).body as {
+          totals: { requests: number };
+        }
+      ).totals.requests;
+
+    expect(await total(org.admin)).toBe(2);
+    expect(await total(org.alice)).toBe(2);
+    expect(await total(org.bob)).toBe(1);
+
+    const seriesRequests = async (who: Auth) =>
+      (
+        (
+          await send(
+            org,
+            USAGE + "/series?since=1699999000000&until=1700001000000&bucket=day&group_by=model",
+            who,
+          )
+        ).body as {
+          series: ReadonlyArray<{ points: ReadonlyArray<{ requests: number }> }>;
+        }
+      ).series.reduce(
+        (sum, group) => sum + group.points.reduce((n, point) => n + point.requests, 0),
+        0,
+      );
+
+    expect(await seriesRequests(org.admin)).toBe(2);
+    expect(await seriesRequests(org.alice)).toBe(2);
+
+    const queued = await send(org, USAGE + "/queue?count=100", org.platform);
+
+    expect(
+      (queued.body as ReadonlyArray<{ request_id: string }>).map((record) => record.request_id),
+    ).not.toContain("alice-private");
   });
 });

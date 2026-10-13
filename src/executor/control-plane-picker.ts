@@ -53,6 +53,7 @@ export const toExecutorSnapshot = (credential: WireCredential): CredentialSnapsh
     kind,
     label: credential.label,
     credentialVersion: credential.credentialVersion,
+    ...(credential.owner === undefined ? {} : { private: true }),
     ...(credential.prefix === undefined || credential.prefix === ""
       ? {}
       : { prefix: credential.prefix }),

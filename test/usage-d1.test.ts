@@ -14,6 +14,7 @@ import {
   resolveAuthIds,
   rowToPayload,
   summarizeUsage,
+  summarizeUsageSeries,
   type UsageRow,
   unpricedModels,
 } from "../src/usage/d1.ts";
@@ -30,6 +31,7 @@ import sessionsMigration from "../migrations/0002_usage_sessions.sql?raw";
 import orgMigration from "../migrations/0003_usage_org.sql?raw";
 import costMigration from "../migrations/0004_usage_cost.sql?raw";
 import memberMigration from "../migrations/0005_usage_member.sql?raw";
+import privateMigration from "../migrations/0006_usage_private.sql?raw";
 import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 
 /** The D1 sink without pricing: records are stored as they are published. */
@@ -77,6 +79,14 @@ describe("migration 0003 (usage org)", () => {
       expect.arrayContaining(["usage_records_org", "usage_records_org_unexported"]),
     );
 
+    // Reads need the whole schema: apply the later migrations as a deploy does.
+    for (const statement of [
+      ...statementsOf(costMigration),
+      ...statementsOf(memberMigration),
+      ...statementsOf(privateMigration),
+    ])
+      await db.prepare(statement).run();
+
     expect((await listUsageRecords(db, GLOBAL_ORG, {}, authIndexOf)).rows).toHaveLength(1);
     expect((await listUsageRecords(db, OrgId.make("acme"), {}, authIndexOf)).rows).toHaveLength(0);
 
@@ -84,8 +94,6 @@ describe("migration 0003 (usage org)", () => {
     for (const statement of statementsOf(orgMigration).filter((sql) => sql.startsWith("CREATE")))
       await db.prepare(statement).run();
 
-    for (const statement of [...statementsOf(costMigration), ...statementsOf(memberMigration)])
-      await db.prepare(statement).run();
     await insertUsageRecord(db, sampleRecord({ requestId: "new", orgId: OrgId.make("acme") }));
     expect((await listUsageRecords(db, OrgId.make("acme"), {}, authIndexOf)).rows).toHaveLength(1);
   });
@@ -115,7 +123,8 @@ describe("migration 0004 (usage cost)", () => {
     const [row] = await rows();
     expect(row).toMatchObject({ request_id: "old", cost_micros: null, unpriced: 0 });
 
-    for (const statement of statementsOf(memberMigration)) await db.prepare(statement).run();
+    for (const statement of [...statementsOf(memberMigration), ...statementsOf(privateMigration)])
+      await db.prepare(statement).run();
 
     // A new record carries its cost; the old one sums as nothing and is not listed as unpriced.
     await insertUsageRecord(
@@ -193,7 +202,8 @@ describe("migration 0005 (usage member)", () => {
       )
       .run();
 
-    for (const statement of statementsOf(memberMigration)) await db.prepare(statement).run();
+    for (const statement of [...statementsOf(memberMigration), ...statementsOf(privateMigration)])
+      await db.prepare(statement).run();
 
     const [row] = await rows();
     expect(row).toMatchObject({ request_id: "old", member_id: null });
@@ -250,6 +260,106 @@ describe("migration 0005 (usage member)", () => {
 
     for (const statement of statementsOf(memberMigration).filter((sql) => sql.startsWith("CREATE")))
       await db.prepare(statement).run();
+  });
+});
+
+describe("migration 0006 (usage private)", () => {
+  it("leaves the records written before private credentials shared, and keeps private ones to their owner", async () => {
+    await db.prepare("DROP TABLE usage_records").run();
+
+    for (const statement of [
+      ...statementsOf(initialMigration),
+      ...statementsOf(sessionsMigration),
+      ...statementsOf(orgMigration),
+      ...statementsOf(costMigration),
+      ...statementsOf(memberMigration),
+    ])
+      await db.prepare(statement).run();
+
+    await db
+      .prepare(
+        "INSERT INTO usage_records (request_id, requested_at, provider, executor_type, model, alias, endpoint, " +
+          "principal_id, auth_id, auth_type, source, org_id, member_id) VALUES ('old', 1, 'codex', 'codex', " +
+          "'gpt-5', 'gpt-5', 'POST /v1/responses', 'user:a@example.com', 'codex-a.json', 'oauth', 'a', 'global', 'mem-a')",
+      )
+      .run();
+
+    for (const statement of statementsOf(privateMigration)) await db.prepare(statement).run();
+
+    const [row] = await rows();
+    expect(row).toMatchObject({ request_id: "old", private: 0 });
+
+    await insertUsageRecord(
+      db,
+      sampleRecord({ requestId: "mine", requestedAt: 2, memberId: "mem-a", private: true }),
+    );
+    await insertUsageRecord(
+      db,
+      sampleRecord({ requestId: "theirs", requestedAt: 3, memberId: "mem-b", private: true }),
+    );
+    await insertUsageRecord(db, sampleRecord({ requestId: "shared", requestedAt: 4 }));
+
+    const ids = async (privateOf?: string) =>
+      (
+        await listUsageRecords(
+          db,
+          GLOBAL_ORG,
+          privateOf === undefined ? {} : { privateOf },
+          authIndexOf,
+        )
+      ).rows
+        .map((record) => record.request_id)
+        .toSorted();
+
+    // Without a reader no private record is part of any read; the owner reads theirs only.
+    expect(await ids()).toEqual(["old", "shared"]);
+    expect(await ids("mem-a")).toEqual(["mine", "old", "shared"]);
+    expect(await ids("mem-c")).toEqual(["old", "shared"]);
+
+    const total = async (privateOf?: string) =>
+      (
+        await summarizeUsage(
+          db,
+          GLOBAL_ORG,
+          { groupBy: "model", ...(privateOf === undefined ? {} : { privateOf }) },
+          authIndexOf,
+        )
+      ).totals.requests;
+
+    expect(await total()).toBe(2);
+    expect(await total("mem-a")).toBe(3);
+
+    const seriesRequests = async (privateOf?: string) =>
+      (
+        await summarizeUsageSeries(
+          db,
+          GLOBAL_ORG,
+          {
+            since: 0,
+            until: 10 * 86_400_000,
+            bucket: "day",
+            groupBy: "model",
+            ...(privateOf === undefined ? {} : { privateOf }),
+          },
+          authIndexOf,
+        )
+      ).reduce((sum, group) => sum + group.points.reduce((n, point) => n + point.requests, 0), 0);
+
+    expect(await seriesRequests()).toBe(2);
+    expect(await seriesRequests("mem-a")).toBe(3);
+
+    // The export queue never carries a private record, to anyone.
+    const queued = (await popUsageQueue(db, GLOBAL_ORG, 100, 1000)).map(
+      (record) => record.request_id,
+    );
+
+    expect(queued.toSorted()).toEqual(["old", "shared"]);
+
+    const owned = (await listUsageRecords(db, GLOBAL_ORG, { privateOf: "mem-a" }, authIndexOf))
+      .rows;
+
+    expect(owned.find((record) => record.request_id === "mine")?.private).toBe(1);
+    expect(owned.find((record) => record.request_id === "shared")?.private).toBe(0);
   });
 });
 

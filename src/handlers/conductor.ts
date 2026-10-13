@@ -282,6 +282,7 @@ export const conduct = <T, R>(
             principalId: prepared.principalId,
             orgId: prepared.orgId,
             ...(prepared.memberId === undefined ? {} : { memberId: prepared.memberId }),
+            ...(credential.private === true ? { private: true } : {}),
             authId: credential.id,
             authType: credential.kind,
             source: credential.label ?? credential.id,

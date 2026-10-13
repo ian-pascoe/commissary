@@ -13,6 +13,10 @@
  * (`member_id`, `migrations/0005_usage_member.sql`; ADR 0022): reads filter by members (a team is its members) and
  * group by member, and a plain member's reads are narrowed to their own records (`UsageFilter.own`).
  *
+ * A row served by a private credential (`private`, `migrations/0006_usage_private.sql`; ADR 0023) belongs to the
+ * credential's owner: every read leaves it out unless the filter names the reader (`UsageFilter.privateOf`), who then
+ * reads their own private records only. The export queue never carries one.
+ *
  * Every row carries its cost (`cost_micros`, `unpriced`; `migrations/0004_usage_cost.sql`, `pricing.ts`, ADR 0024), set
  * when the record is written and never recomputed. A record from before that migration, or one whose pricing failed, has no
  * cost (`NULL`, summed as nothing) and is not unpriced; summaries and series add the cost up, and `unpricedModels` lists what to give a price.
@@ -53,6 +57,8 @@ export interface UsageRow {
   org_id: string;
   /** The caller's member id (`migrations/0005_usage_member.sql`); `null` without a member record. */
   member_id: string | null;
+  /** Served by a private credential (`migrations/0006_usage_private.sql`): `1`, else `0`. */
+  private: number;
   auth_id: string;
   auth_type: string;
   source: string;
@@ -110,6 +116,7 @@ const INSERT_COLUMNS = [
   "principal_id",
   "org_id",
   "member_id",
+  "private",
   "auth_id",
   "auth_type",
   "source",
@@ -177,6 +184,7 @@ export const recordToRow = (record: UsageRecord): Omit<UsageRow, "exported_at"> 
     principal_id: record.principalId,
     org_id: record.orgId,
     member_id: trimmedOrNull(record.memberId),
+    private: record.private === true ? 1 : 0,
     auth_id: record.authId,
     auth_type: record.authType.trim() === "" ? "unknown" : record.authType.trim(),
     source: record.source,
@@ -299,6 +307,7 @@ export const rowToPayload = (row: UsageRow, authIndexOf: AuthIndexer) => {
     auth_type: row.auth_type,
     api_key: row.principal_id,
     ...(row.member_id === null ? {} : { member_id: row.member_id }),
+    ...(row.private === 1 ? { private: true } : {}),
     request_id: row.request_id,
     ...(row.trace_id === null ? {} : { trace_id: row.trace_id }),
     ...sessionPayload(row),
@@ -336,7 +345,7 @@ export const popUsageQueue = async (
   const result = await db
     .prepare(
       `UPDATE usage_records SET exported_at = ?1 WHERE request_id IN (
-         SELECT request_id FROM usage_records WHERE org_id = ?3 AND exported_at IS NULL
+         SELECT request_id FROM usage_records WHERE org_id = ?3 AND exported_at IS NULL AND private = 0
          ORDER BY requested_at ASC, request_id ASC LIMIT ?2
        ) RETURNING *`,
     )
@@ -369,6 +378,11 @@ export interface UsageFilter {
    * records written before members existed or without a member record.
    */
   readonly own?: OwnRecords;
+  /**
+   * The member whose private records are read too (the caller). Records served by a private credential are left out
+   * of every read, except these: the ones of this member.
+   */
+  readonly privateOf?: string;
   /** Keyed `auth_index` of the credential (`resolveAuthIds`). */
   readonly authIndex?: string;
   /** The live credential id the ControlPlane resolved `authIndex` to (`credentialIdOfAuthIndex`), if any. */
@@ -404,6 +418,10 @@ const filterClauses = (
   };
 
   add("org_id = ?", org);
+
+  // Private traffic is its owner's alone: never part of an org-wide read.
+  if (filter.privateOf === undefined) clauses.push("private = 0");
+  else add("(private = 0 OR member_id = ?)", filter.privateOf);
 
   if (filter.since !== undefined) add("requested_at >= ?", filter.since);
 
@@ -762,6 +780,8 @@ export interface UsageSeriesQuery {
   readonly memberIds?: ReadonlyArray<string>;
   /** See {@link UsageFilter.own}. */
   readonly own?: OwnRecords;
+  /** See {@link UsageFilter.privateOf}. */
+  readonly privateOf?: string;
 }
 
 const compareKeys = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
@@ -798,6 +818,7 @@ export const summarizeUsageSeries = async (
       ...(query.liveAuthId === undefined ? {} : { liveAuthId: query.liveAuthId }),
       ...(query.memberIds === undefined ? {} : { memberIds: query.memberIds }),
       ...(query.own === undefined ? {} : { own: query.own }),
+      ...(query.privateOf === undefined ? {} : { privateOf: query.privateOf }),
     },
     authIndexOf,
   );

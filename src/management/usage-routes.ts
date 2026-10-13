@@ -177,6 +177,9 @@ const parseFilter = (params: URLSearchParams) =>
     // A plain member reads only their own records, whatever they asked for.
     const identity = yield* AccessPrincipal;
 
+    // Records served by a private credential are read by its owner alone, an org admin included.
+    if (identity.memberId !== undefined) filter.privateOf = identity.memberId;
+
     if (!identity.platformAdmin && identity.role === "member")
       filter.own = { memberId: identity.memberId, principalId: identity.principalId };
 
@@ -378,6 +381,7 @@ const usageSeries = Effect.gen(function* () {
         ...(filter.liveAuthId === undefined ? {} : { liveAuthId: filter.liveAuthId }),
         ...(filter.memberIds === undefined ? {} : { memberIds: filter.memberIds }),
         ...(filter.own === undefined ? {} : { own: filter.own }),
+        ...(filter.privateOf === undefined ? {} : { privateOf: filter.privateOf }),
       },
       authIndexOf,
     ),

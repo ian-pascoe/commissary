@@ -70,6 +70,8 @@ export interface UsageRecord {
   readonly orgId: OrgId;
   /** The caller's member id in the org (ADR 0022), when they have a member record there. */
   readonly memberId?: string;
+  /** Served by a private credential (ADR 0023): only its owner reads the record. */
+  readonly private?: boolean;
   readonly authId: string;
   readonly authType: string;
   readonly source: string;

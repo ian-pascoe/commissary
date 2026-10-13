@@ -143,6 +143,7 @@ const handle = Effect.gen(function* () {
     principalId: identity.principalId,
     orgId: org,
     ...(identity.memberId === undefined ? {} : { memberId: identity.memberId }),
+    ...(credential.private === true ? { private: true } : {}),
     authId: credential.id,
     authType: credential.kind,
     source: credential.label ?? credential.id,
