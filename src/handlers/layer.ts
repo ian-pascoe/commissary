@@ -16,7 +16,9 @@ import { ModelRegistryLive } from "../registry/live.ts";
 import { ExecutorRegistry } from "../executor/registry.ts";
 import { Thinking } from "../executor/thinking.ts";
 import { UpstreamWebSocketConnector } from "../executor/websocket/connector.ts";
+import { CatalogStore } from "../registry/catalog-store.ts";
 import { D1UsageSink } from "../usage/d1-sink.ts";
+import { UsagePricing } from "../usage/pricing-service.ts";
 import { UsageSink } from "../usage/sink.ts";
 import { ModelCapabilities } from "./model-capabilities.ts";
 import { ClaudeRoutes } from "./claude/routes.ts";
@@ -40,11 +42,18 @@ export interface ProxyLayerOptions {
   /** Defaults to the ControlPlane (`CredentialRefresher.none` for tests with API keys only). */
   readonly credentialRefresher?: Layer.Layer<CredentialRefresher>;
   readonly httpClient?: Layer.Layer<HttpClient.HttpClient>;
-  readonly usageSink?: Layer.Layer<UsageSink>;
+  /** Defaults to the D1 sink, which costs each record from the org's config and the catalog. */
+  readonly usageSink?: Layer.Layer<UsageSink, never, ConfigReader>;
   /** Upstream WebSocket dialer for the Codex/xAI transports (defaults to `fetch` with `Upgrade: websocket`). */
   readonly websocketConnector?: Layer.Layer<UpstreamWebSocketConnector>;
   readonly thinking?: Layer.Layer<Thinking>;
 }
+
+/** The D1 sink with the pricing of records (`UsagePricing`); reads the org's price overrides through `ConfigReader`. */
+const usageSinkLayer = D1UsageSink.pipe(
+  Layer.provide(UsagePricing.layer),
+  Layer.provide(CatalogStore.layer),
+);
 
 /** All proxy route layers (provider slices add theirs here). */
 export const ProxyRoutes = Layer.mergeAll(
@@ -72,7 +81,7 @@ export const makeProxyRoutes = (options: ProxyLayerOptions = {}) => {
     options.modelProviders ?? ModelProviders.registryLayer.pipe(Layer.provide(ModelRegistryLive)),
     options.credentialRefresher ?? CredentialRefresher.controlPlane,
     ExecutorRegistry.layer,
-    options.usageSink ?? D1UsageSink,
+    options.usageSink ?? usageSinkLayer,
     options.httpClient ?? FetchHttpClient.layer,
     options.websocketConnector ?? UpstreamWebSocketConnector.layerFetch,
     options.thinking ?? Thinking.live,

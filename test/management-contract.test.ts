@@ -158,6 +158,78 @@ describe("management contract", () => {
     }).pipe(through(harness)),
   );
 
+  it.effect("decodes the cost of usage in summaries, series, records and the unpriced list", () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(async () => {
+        const db = await resetUsageDb();
+
+        await insertUsageRecord(
+          db,
+          sampleRecord({ requestId: "p", cost: { micros: 2_500, unpriced: false } }),
+        );
+
+        await insertUsageRecord(
+          db,
+          sampleRecord({
+            requestId: "u",
+            requestedAt: 1_700_000_001_000,
+            model: "mystery",
+            cost: { micros: 0, unpriced: true },
+          }),
+        );
+      });
+
+      const api = yield* client;
+      const since = 1_600_000_000_000;
+      const summary = yield* api.usage.summary({ query: { group_by: "model", since } });
+
+      assert.strictEqual(summary.totals.cost_micros, 2_500);
+      assert.strictEqual(summary.totals.unpriced_requests, 1);
+
+      assert.deepStrictEqual(
+        summary.groups.map((group) => [group.key, group.cost_micros, group.unpriced_requests]),
+        [
+          ["gpt-5", 2_500, 0],
+          ["mystery", 0, 1],
+        ],
+      );
+
+      const series = yield* api.usage.series({
+        query: { since: 1_700_000_000_000 - 3_600_000, until: 1_700_000_000_000 + 3_600_000 },
+      });
+
+      assert.strictEqual(series.series[0]?.points[0]?.cost_micros, 2_500);
+
+      const page = yield* api.usage.records({ query: {} });
+
+      assert.deepStrictEqual(
+        page.records.map((record) => [record.request_id, record.cost_micros, record.unpriced]),
+        [
+          ["u", 0, true],
+          ["p", 2_500, false],
+        ],
+      );
+
+      const unpriced = yield* api.usage.unpriced({ query: { since } });
+
+      assert.deepStrictEqual(unpriced, {
+        models: [{ provider: "codex", model: "mystery", requests: 1, total_tokens: 130 }],
+      });
+
+      // The list narrows like the rest of the page: by account and by user.
+      const nobody = yield* api.usage.unpriced({
+        query: { since, principal: "nobody@example.com" },
+      });
+
+      const noAccount = yield* api.usage.unpriced({
+        query: { since, auth_index: "0000000000000000" },
+      });
+
+      assert.deepStrictEqual(nobody, { models: [] });
+      assert.deepStrictEqual(noAccount, { models: [] });
+    }).pipe(through(harness)),
+  );
+
   describe("usage records", () => {
     const seedRecords = Effect.promise(async () => {
       const db = await resetUsageDb();

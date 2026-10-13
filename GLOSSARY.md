@@ -459,7 +459,8 @@ are costed the same way as attempts on API keys.
 _Avoid_: charge, bill, spend (for one attempt)
 
 **Unpriced**:
-Said of an attempt on a model that has no price. It costs nothing toward spend limits.
+Said of an attempt on a model that has no price. It costs nothing toward spend limits; its usage record is flagged and
+the model is listed so an admin can give it a price override.
 _Avoid_: free
 
 **Spend**:

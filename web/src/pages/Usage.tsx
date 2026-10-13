@@ -15,6 +15,7 @@ import {
   usageRecordsAtom,
   usageSeriesAtom,
   usageSummaryAtom,
+  usageUnpricedAtom,
 } from "../api/client.ts";
 import { HistoryChart } from "../components/HistoryChart.tsx";
 import { kit, Problem, Section } from "../components/Kit.tsx";
@@ -23,6 +24,7 @@ import { accountName } from "../lib/accounts.ts";
 import { failureMessage } from "../lib/failure.ts";
 import {
   formatClock,
+  formatCost,
   formatCount,
   formatDay,
   formatLatency,
@@ -143,9 +145,11 @@ const Totals = ({ summary }: { readonly summary: UsageSummary }) => {
     ["Requests", formatCount(totals.requests)],
     ["Failed", formatCount(totals.failed), totals.failed > 0],
     ["Tokens", formatTokens(totals.total_tokens)],
+    ["Cost", formatCost(totals.cost_micros)],
   ];
 
   const details: ReadonlyArray<Figure> = [
+    ["Unpriced requests", formatCount(totals.unpriced_requests), totals.unpriced_requests > 0],
     ["Input", formatTokens(totals.input_tokens)],
     ["Output", formatTokens(totals.output_tokens)],
     ["Cache read", formatTokens(totals.cache_read_tokens)],
@@ -239,6 +243,9 @@ const BreakdownTable = ({
           <th scope="col" className={styles["number"]}>
             Tokens
           </th>
+          <th scope="col" className={styles["number"]}>
+            Cost
+          </th>
           <th scope="col" className={styles["shareHead"]}>
             <span className={kit["visuallyHidden"]}>Share of tokens</span>
           </th>
@@ -281,6 +288,14 @@ const BreakdownTable = ({
                 {formatTokens(group.cache_read_tokens)}
               </td>
               <td className={styles["number"]}>{formatTokens(group.total_tokens)}</td>
+              <td className={styles["number"]}>
+                {formatCost(group.cost_micros)}
+                {group.unpriced_requests > 0 ? (
+                  <span className={styles["unpricedNote"]}>
+                    {formatCount(group.unpriced_requests)} unpriced
+                  </span>
+                ) : null}
+              </td>
               <td className={styles["share"]} aria-hidden="true">
                 <span style={{ width: `${(group.total_tokens / largest) * 100}%` }} />
               </td>
@@ -294,6 +309,56 @@ const BreakdownTable = ({
     </table>
   );
 };
+
+/** Models served without a price cost nothing in the totals: say so, and send the operator to price them. */
+const Unpriced = ({ view }: { readonly view: UsageView }) => {
+  const result = useAtomValue(usageUnpricedAtom(view));
+
+  if (!AsyncResult.isSuccess(result) || result.value.models.length === 0) return null;
+  const { models } = result.value;
+  const shown = models.slice(0, UNPRICED_SHOWN);
+  const more = models.length - shown.length;
+
+  return (
+    <section className={styles["unpriced"]} aria-label="Unpriced models">
+      <p className={styles["unpricedTitle"]}>
+        <TrailMark />
+        {models.length === 1 ? "A model has" : `${formatCount(models.length)} models have`} no
+        price, so its requests count as $0.00
+      </p>
+      <ul className={styles["unpricedList"]}>
+        {shown.map((model) => (
+          <li key={`${model.provider}/${model.model}`}>
+            <span>
+              {providerName(model.provider)} · {model.model === "" ? "Unknown model" : model.model}
+              <span className={styles["secondary"]}>
+                {formatCount(model.requests)} {model.requests === 1 ? "request" : "requests"}
+              </span>
+            </span>
+            <Link
+              to="/usage/prices"
+              search={{ provider: model.provider, model: model.model }}
+              className={kit["sectionLink"]}
+            >
+              Add a price
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {more > 0 ? (
+        <p className={styles["hint"]}>
+          And {formatCount(more)} more. Open <Link to="/usage/prices">Prices</Link> to add them.
+        </p>
+      ) : null}
+      <p className={styles["hint"]}>
+        A price applies to requests from then on; requests already recorded keep their cost.
+      </p>
+    </section>
+  );
+};
+
+/** Unpriced models listed before "and N more". */
+const UNPRICED_SHOWN = 5;
 
 /** Totals, chart and breakdown: one summary request feeds the totals and the table. */
 const Summary = ({
@@ -333,6 +398,7 @@ const Summary = ({
             <Chart view={view} range={range} />
           </div>
         </section>
+        <Unpriced view={view} />
         <Section title="Breakdown">
           <div className={styles["breakdownTabs"]}>
             <div className={kit["tabs"]} role="radiogroup" aria-label="Break down by">
@@ -379,6 +445,13 @@ const Summary = ({
 // ---------------------------------------------------------------------------------------------------------------
 // Request log
 
+/** What a request cost as recorded; requests from before costs were kept have none. */
+const recordCost = (record: UsageRecord): string => {
+  if (record.unpriced === true) return "No price, counted as $0.00";
+
+  return record.cost_micros === undefined ? "Not recorded" : formatCost(record.cost_micros);
+};
+
 const Detail = ({ record }: { readonly record: UsageRecord }) => {
   const breakdown = record.token_breakdown;
 
@@ -399,6 +472,7 @@ const Detail = ({ record }: { readonly record: UsageRecord }) => {
     ["Cache write", formatCount(breakdown.input.cache_write_tokens)],
     ["Output", formatCount(breakdown.output.total_tokens)],
     ["Reasoning", formatCount(breakdown.output.reasoning_tokens)],
+    ["Cost", recordCost(record)],
     ...(record.reasoning_effort === "" ? [] : [["Effort", record.reasoning_effort] as const]),
     ...(record.service_tier === "" ? [] : [["Service tier", record.service_tier] as const]),
     ...(record.session_id === undefined ? [] : [["Session", record.session_id] as const]),
@@ -665,7 +739,12 @@ export const UsagePage = () => {
   return (
     <div className={kit["page"]}>
       <header className={styles["head"]}>
-        <h1 className={styles["title"]}>Usage</h1>
+        <div className={styles["titleRow"]}>
+          <h1 className={styles["title"]}>Usage</h1>
+          <Link to="/usage/prices" className={kit["sectionLink"]}>
+            Prices
+          </Link>
+        </div>
         <div className={kit["tabs"]} role="radiogroup" aria-label="Range">
           {RANGES.map((candidate) => (
             <button

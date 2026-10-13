@@ -10,6 +10,7 @@ const point = (start: number, tokens: number, requests = 1): UsagePoint => ({
   requests,
   failed: 0,
   total_tokens: tokens,
+  cost_micros: 0,
 });
 
 const NOW = Date.parse("2026-10-10T12:00:00.000Z");

@@ -8,6 +8,8 @@ import {
   type ConfigSnapshotWire,
   type ImportResult,
   type KeyGroupChange,
+  type PriceOverrideChange,
+  type PriceOverridesWire,
   type SettingChange,
   type WriteResult,
 } from "../config/store.ts";
@@ -316,6 +318,22 @@ export class ControlPlane extends DurableObject<Env> {
   /** The assembled config document with the revision of every entry (what the management routes edit). */
   configEntries(): ConfigEntriesWire {
     return this.#config.entries();
+  }
+
+  /** The org's price overrides with their revisions (`ConfigStore.priceOverrides`) and the version they were read at. */
+  priceOverrideEntries(): PriceOverridesWire {
+    return {
+      version: this.#config.version(),
+      overrides: this.#config.priceOverrides(),
+    };
+  }
+
+  /** Creates, replaces or deletes (`value: null`) one price override at the revision it names. */
+  writePriceOverride(
+    change: PriceOverrideChange,
+    by: string,
+  ): WriteResult<{ readonly id: string; readonly revision: number }> {
+    return this.#config.writePriceOverride(change, by);
   }
 
   /** Writes settings entries, each at the revision it names (`config/store.ts`); `by` is the writing principal. */

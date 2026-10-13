@@ -22,6 +22,7 @@ const point = (start: number, tokens: number, requests = 1, failed = 0): UsagePo
   requests,
   failed,
   total_tokens: tokens,
+  cost_micros: tokens * 10,
 });
 
 const NOW = Date.parse("2026-10-10T12:30:00.000Z");

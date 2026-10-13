@@ -5,7 +5,7 @@ import { Effect, Layer, Match } from "effect";
 import { type HttpBody, HttpClient, HttpClientResponse, HttpRouter } from "effect/http";
 import { makeAccessLayer, makeWithAccess } from "../../src/access/layer.ts";
 import { parseConfigYaml } from "../../src/config/codec.ts";
-import { ConfigReader } from "../../src/config/reader.ts";
+import { ConfigReader, type ConfigSnapshot } from "../../src/config/reader.ts";
 import type { Config } from "../../src/config/schema.ts";
 import type { CredentialPicker } from "../../src/executor/picker.ts";
 import { StaticCredentialPickerLayer } from "../../src/executor/static-picker.ts";
@@ -73,10 +73,16 @@ export const mockHttpClient = (
     ),
   );
 
-export const staticConfigReader = (config: Config): Layer.Layer<ConfigReader> =>
+export const staticConfigReader = (
+  config: Config,
+  priceOverrides: ConfigSnapshot["priceOverrides"] = [],
+): Layer.Layer<ConfigReader> =>
   Layer.succeed(
     ConfigReader,
-    ConfigReader.of({ get: Effect.succeed({ version: 1, config }), invalidate: Effect.void }),
+    ConfigReader.of({
+      get: Effect.succeed({ version: 1, config, priceOverrides }),
+      invalidate: Effect.void,
+    }),
   );
 
 export const loadConfig = (yaml: string): Promise<Config> =>

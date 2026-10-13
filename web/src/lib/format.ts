@@ -23,6 +23,41 @@ export const formatTokens = (value: number): string => {
   return counts.format(value);
 };
 
+const dollars = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+});
+
+const fineDollars = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 4,
+  maximumFractionDigits: 4,
+});
+
+/**
+ * A cost kept in millionths of a US dollar: 1_234_567 → "$1.23", 4_200 → "$0.0042", 0 → "$0.00". Under a cent it keeps
+ * four decimals, and a cost too small for that reads "<$0.0001", so a used model never prints as free.
+ */
+export const formatCost = (micros: number): string => {
+  if (micros <= 0) return dollars.format(0);
+
+  if (micros < 100) return "<$0.0001";
+
+  if (micros < 10_000) return fineDollars.format(micros / 1e6);
+
+  return dollars.format(micros / 1e6);
+};
+
+/** A price in US dollars per million tokens: 1.25 → "$1.25", 0.075 → "$0.075", 15 → "$15.00". */
+export const formatRate = (rate: number): string => {
+  const text = dollars.format(rate);
+
+  return Number(text.slice(1).replaceAll(",", "")) === rate
+    ? text
+    : `$${new Intl.NumberFormat("en-US", { maximumFractionDigits: 6 }).format(rate)}`;
+};
+
 /** 68.6 → "69%"; shares above 0 but under 1 read "<1%" so a used window never prints as empty. */
 export const formatPercent = (value: number): string => {
   if (value > 0 && value < 1) return "<1%";

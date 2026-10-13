@@ -5,14 +5,16 @@
  *
  * Shared by the sync script (`pnpm catalog:sync`, run by Node directly, so this module imports nothing but `effect`)
  * and by the cron refresh (`refresh.ts`). Decoding strips every key the schemas do not name, so the output keeps the
- * models.dev shape: trimming a trimmed document is a no-op and the runtime parser accepts both. Prices (`cost`) are
- * dropped; the one thing read from them, OpenCode's free tier (both prices zero), is kept as `free: true` on the two
- * OpenCode providers. `reasoning_options: null` on a model (models.dev sends it for models that reason without knobs)
+ * models.dev shape: trimming a trimmed document is a no-op and the runtime parser accepts both. Prices (`cost`, US
+ * dollars per million tokens) are kept: they price usage records (`usage/pricing.ts`, ADR 0024). A `cost` that does not
+ * decode is dropped on its own and leaves the model in the catalog. OpenCode's free tier (both prices zero) is also
+ * kept as `free: true` on the two OpenCode providers. `reasoning_options: null` on a model (models.dev sends it for
+ * models that reason without knobs)
  * is kept as `[]`, so "reasons, no knobs" survives trimming. A malformed model entry is skipped and counted
  * (`skipped`); a missing provider or one without any usable model rejects
  * the document, so a broken upstream document never replaces a good one.
  */
-import { Result, Schema, type Types } from "effect";
+import { Effect, Result, Schema, type Types } from "effect";
 
 /** models.dev provider ids the proxy reads; every one must be present in a document. */
 export const MODELS_DEV_PROVIDERS = [
@@ -46,6 +48,37 @@ const ReasoningOption = Schema.Struct({
 
 export type ReasoningOption = typeof ReasoningOption.Type;
 
+/** What a model charges per million tokens of each kind, in US dollars; a kind models.dev does not list is absent. */
+const RateFields = {
+  input: optional(Schema.Finite),
+  output: optional(Schema.Finite),
+  cache_read: optional(Schema.Finite),
+  cache_write: optional(Schema.Finite),
+};
+
+const Rates = Schema.Struct(RateFields);
+
+/**
+ * A model's prices. `tiers` are models.dev's long-context prices (`tier.size` is the context length above which they
+ * apply); `context_over_200k` is the older spelling of the 200k tier. The audio prices models.dev also lists are not
+ * read.
+ */
+const Cost = Schema.Struct({
+  ...RateFields,
+  reasoning: optional(Schema.Finite),
+  tiers: optional(
+    Schema.Array(
+      Schema.Struct({
+        ...RateFields,
+        tier: optional(Schema.Struct({ type: Schema.String, size: Schema.Finite })),
+      }),
+    ),
+  ),
+  context_over_200k: optional(Rates),
+});
+
+export type ModelsDevCost = typeof Cost.Type;
+
 const ModelFields = {
   id: Schema.String,
   name: optional(Schema.String),
@@ -66,21 +99,20 @@ const ModelFields = {
   ),
   /** Per-model AI SDK package; overrides the provider's `npm`. */
   provider: optional(Schema.Struct({ npm: optional(Schema.String) })),
+  /** Prices; a malformed one is dropped rather than failing the model. */
+  cost: optional(Cost.pipe(Schema.catchDecoding(() => Effect.succeedNone))),
 };
 
-/** A trimmed model (no prices). */
+/** A trimmed model. */
 export const ModelsDevModel = Schema.Struct({ ...ModelFields, free: optional(Schema.Boolean) });
 
 export type ModelsDevModel = typeof ModelsDevModel.Type;
 
-/** A model as models.dev sends it: the price fields are read once (for `free`) and dropped. */
+/** A model as models.dev sends it. */
 const RawModel = Schema.Struct({
   ...ModelFields,
   reasoning_options: optional(Schema.NullOr(Schema.Array(ReasoningOption))),
   free: optional(Schema.Boolean),
-  cost: optional(
-    Schema.Struct({ input: optional(Schema.Finite), output: optional(Schema.Finite) }),
-  ),
 });
 
 const ProviderHead = Schema.Struct({
@@ -124,7 +156,8 @@ const decodeModel = Schema.decodeUnknownResult(RawModel);
 type Head = typeof ProviderHead.Type;
 
 const trimModel = (id: ModelsDevProviderId, raw: typeof RawModel.Type): ModelsDevModel => {
-  const { cost, free, ...rest } = raw;
+  const { free, ...rest } = raw;
+  const { cost } = rest;
   const isFree = free === true || (FREE_FLAGGED.has(id) && cost?.input === 0 && cost.output === 0);
 
   // `reasoning_options: null` (reasons, no knobs) is kept as an empty list, in the key's place.

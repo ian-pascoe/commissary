@@ -12,7 +12,8 @@
  * export's `auth_index`, the `auth_index` filter); the stored credential id is never answered, and the old `auth_id`
  * filter is refused (400) rather than ignored. Go's `GET /observability/usage/api-keys` (`GetAPIKeyUsage`, api_key_usage.go,
  * per-key counters for the upstream panel) is not ported: the Keys page's `GET /api-keys` carries the same counters.
- * Every route reads the records of the request's org only (ADR 0021).
+ * `summary`, `series` and `records` carry the cost stored on each record (`cost_micros`, ADR 0024) and `unpriced`
+ * lists the provider and model pairs that had no price. Every route reads the records of the request's org only (ADR 0021).
  */
 import { Clock, Effect } from "effect";
 import { HttpRouter } from "effect/http";
@@ -35,6 +36,7 @@ import {
   summarizeUsage,
   summarizeUsageSeries,
   type UsageFilter,
+  unpricedModels,
 } from "../usage/d1.ts";
 import { controlPlane, handled, jsonReply, queryParams, replyError } from "./http.ts";
 
@@ -249,6 +251,26 @@ const usageSummary = Effect.gen(function* () {
   return jsonReply(200, { group_by: groupBy, totals: summary.totals, groups: summary.groups });
 });
 
+/** `GET /unpriced`: the provider and model pairs with unpriced requests, the busiest first. */
+const usageUnpriced = Effect.gen(function* () {
+  const params = yield* queryParams;
+  const scoped = new URLSearchParams();
+
+  for (const name of ["since", "until", "provider", "model", "principal", "auth_index"]) {
+    const value = params.get(name);
+
+    if (value !== null) scoped.set(name, value);
+  }
+
+  const filter = yield* parseFilter(scoped);
+  const db = yield* usageDb;
+  const org = yield* CurrentOrg;
+  const authIndexOf = yield* currentAuthIndexer;
+  const models = yield* query("unpriced", () => unpricedModels(db, org, filter, authIndexOf));
+
+  return jsonReply(200, { models });
+});
+
 /** `GET /series`: per key × UTC hour/day bucket requests, failures and total tokens (v2 `acct_total_tokens`). */
 const usageSeries = Effect.gen(function* () {
   const params = yield* queryParams;
@@ -322,4 +344,5 @@ export const usageRoutes = [
   HttpRouter.route("GET", `${BASE}/records`, handled(usageRecords)),
   HttpRouter.route("GET", `${BASE}/series`, handled(usageSeries)),
   HttpRouter.route("GET", `${BASE}/summary`, handled(usageSummary)),
+  HttpRouter.route("GET", `${BASE}/unpriced`, handled(usageUnpriced)),
 ];
