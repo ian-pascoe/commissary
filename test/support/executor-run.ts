@@ -16,6 +16,7 @@ import type {
 } from "../../src/executor/types.ts";
 import type { Json } from "../../src/json/index.ts";
 import { UsageReporter } from "../../src/usage/reporter.ts";
+import { GLOBAL_ORG } from "../../src/platform/org.ts";
 
 export interface RecordedCall {
   readonly url: string;
@@ -64,6 +65,7 @@ export const newUsage = (provider: string, stream = false): UsageReporter =>
     alias: "m",
     endpoint: "POST /v1/test",
     principalId: "user:test",
+    orgId: GLOBAL_ORG,
     authId: "a",
     authType: "oauth",
     source: "s",

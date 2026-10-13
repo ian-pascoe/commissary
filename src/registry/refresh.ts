@@ -19,6 +19,7 @@ import type { HttpClientResponse } from "effect/http";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { ConfigReader } from "../config/reader.ts";
 import { holdInvocation, WorkerEnv } from "../platform/env.ts";
+import { controlPlaneOf, CurrentOrg, GLOBAL_ORG } from "../platform/org.ts";
 import type { SweepLease } from "../quota/sweep-lease.ts";
 import {
   catalogsFromModelsDev,
@@ -257,6 +258,12 @@ const refreshNow = (
     };
   });
 
+/**
+ * The model catalog is shared by every org, so its refresh lease is deployment-wide: it lives in the `global` org's
+ * ControlPlane, where it was before orgs existed.
+ */
+const catalogLeaseHolder = (env: Env) => controlPlaneOf(env, GLOBAL_ORG);
+
 type Taken =
   | { readonly kind: "taken"; readonly token: string }
   | { readonly kind: "held"; readonly held: SweepLease }
@@ -267,7 +274,7 @@ const takeLease = (trigger: RefreshTrigger): Effect.Effect<Taken, never, WorkerE
     const env = yield* WorkerEnv;
 
     return yield* Effect.tryPromise(async (): Promise<Taken> => {
-      const taken = await env.CONTROL_PLANE.getByName("global").takeCatalogRefreshLease(trigger);
+      const taken = await catalogLeaseHolder(env).takeCatalogRefreshLease(trigger);
 
       return taken.ok
         ? { kind: "taken", token: taken.lease.token }
@@ -279,9 +286,9 @@ const releaseLease = (token: string): Effect.Effect<void, never, WorkerEnv> =>
   Effect.gen(function* () {
     const env = yield* WorkerEnv;
 
-    yield* Effect.tryPromise(() =>
-      env.CONTROL_PLANE.getByName("global").releaseCatalogRefreshLease(token),
-    ).pipe(Effect.ignore);
+    yield* Effect.tryPromise(() => catalogLeaseHolder(env).releaseCatalogRefreshLease(token)).pipe(
+      Effect.ignore,
+    );
   });
 
 const record = (outcome: RefreshOutcome): Effect.Effect<void, never, WorkerEnv> =>
@@ -365,13 +372,17 @@ export const refreshModelsDev = (
   );
 };
 
-/** Cron task `model-catalog-refresh`: {@link refreshModelsDev} with the stored `models.catalog` setting. */
+/**
+ * Cron task `model-catalog-refresh`: {@link refreshModelsDev} with the stored `models.catalog` setting. The catalog is
+ * deployment-wide, so the setting is the `global` org's.
+ */
 export const refreshCatalogs: Effect.Effect<
   RefreshOutcome,
   never,
   HttpClient.HttpClient | WorkerEnv | ConfigReader | CatalogStore
 > = Effect.gen(function* () {
   const configured = yield* ConfigReader.use((reader) => reader.get).pipe(
+    Effect.provideService(CurrentOrg, GLOBAL_ORG),
     Effect.map((snapshot) => snapshot.config.models.catalog),
     Effect.catch((error) =>
       Effect.logWarning(

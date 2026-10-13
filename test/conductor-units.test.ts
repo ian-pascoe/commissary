@@ -22,6 +22,7 @@ import { builtinTranslators } from "../src/translator/builtin.ts";
 import { Formats } from "../src/translator/formats.ts";
 import type { JsonObject } from "../src/json/index.ts";
 import { loadConfig } from "./support/pool.ts";
+import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 
 const headers = (init: Record<string, string>) => new Headers(init);
 
@@ -623,6 +624,7 @@ describe("CredentialRefresher over the ControlPlane", () => {
         terminal: false,
       });
     }).pipe(
+      Effect.provideService(CurrentOrg, GLOBAL_ORG),
       Effect.provide(
         CredentialRefresher.layerFor(() => ({
           refreshNow: () => Promise.reject(new Error("rpc down")),

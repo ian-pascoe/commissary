@@ -12,6 +12,7 @@ import {
   type TokenBreakdown,
   unclassifiedTokenBreakdown,
 } from "./accounting.ts";
+import type { OrgId } from "../platform/org.ts";
 
 export interface UsageDetail {
   readonly inputTokens: number;
@@ -64,6 +65,8 @@ export interface UsageRecord {
   readonly endpoint: string;
   /** Access principal (replaces Go's client API key). */
   readonly principalId: string;
+  /** The org the request belongs to (ADR 0021); usage queries only ever read one org's records. */
+  readonly orgId: OrgId;
   readonly authId: string;
   readonly authType: string;
   readonly source: string;

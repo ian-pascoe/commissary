@@ -1,4 +1,5 @@
 import { Context, Effect, Option } from "effect";
+import { type ControlPlaneStub, controlPlaneOf, CurrentOrg, GLOBAL_ORG } from "./org.ts";
 
 /**
  * Cloudflare bindings (`env`) of the current Worker invocation.
@@ -16,12 +17,24 @@ export class WorkerExecutionContext extends Context.Service<
   ExecutionContext
 >()("cf-llm-proxy/platform/WorkerExecutionContext") {}
 
-/** Builds the per-request context passed as the second argument of the web handler. */
+/**
+ * Builds the per-request context passed as the second argument of the web handler. Every request belongs to the org
+ * `global` for now (ADR 0021); resolving the org from the request replaces this default later.
+ */
 export const requestContext = (
   env: Env,
   ctx: ExecutionContext,
-): Context.Context<WorkerEnv | WorkerExecutionContext> =>
-  Context.make(WorkerEnv, env).pipe(Context.add(WorkerExecutionContext, ctx));
+): Context.Context<WorkerEnv | WorkerExecutionContext | CurrentOrg> =>
+  Context.make(WorkerEnv, env).pipe(
+    Context.add(WorkerExecutionContext, ctx),
+    Context.add(CurrentOrg, GLOBAL_ORG),
+  );
+
+/** The ControlPlane of the current org (`controlPlaneOf`). */
+export const currentControlPlane: Effect.Effect<ControlPlaneStub, never, WorkerEnv | CurrentOrg> =
+  Effect.gen(function* () {
+    return controlPlaneOf(yield* WorkerEnv, yield* CurrentOrg);
+  });
 
 const noop = (): void => undefined;
 

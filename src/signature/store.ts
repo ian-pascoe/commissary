@@ -11,6 +11,7 @@ import {
   type SignatureWrite,
   signatureStoreKey,
 } from "./cache.ts";
+import { GLOBAL_ORG, type OrgId, orgScopedName } from "../platform/org.ts";
 
 export interface SignatureStore {
   get(modelName: string, text: string): Promise<string | undefined>;
@@ -21,32 +22,37 @@ export interface SignatureStore {
 /** KV `expirationTtl` is in seconds (minimum 60). */
 const TTL_SECONDS = SIGNATURE_CACHE_TTL_MS / 1000;
 
-/** `CACHE` KV backed store. */
-export const makeKvSignatureStore = (kv: KVNamespace): SignatureStore => ({
-  get: async (modelName, text) => {
-    try {
-      const value = await kv.get(signatureStoreKey(modelName, text));
+/** `CACHE` KV backed store of `org` (keys scoped with `orgScopedName`, unchanged for `global`). */
+export const makeKvSignatureStore = (kv: KVNamespace, org: OrgId = GLOBAL_ORG): SignatureStore => {
+  const key = (modelName: string, text: string): string =>
+    orgScopedName(org, signatureStoreKey(modelName, text));
 
-      return value === null ? undefined : value;
-    } catch {
-      return undefined;
-    }
-  },
-  put: async ({ modelName, text, signature }) => {
-    try {
-      await kv.put(signatureStoreKey(modelName, text), signature, { expirationTtl: TTL_SECONDS });
-    } catch {
-      // best effort
-    }
-  },
-  delete: async (modelName, text) => {
-    try {
-      await kv.delete(signatureStoreKey(modelName, text));
-    } catch {
-      // best effort
-    }
-  },
-});
+  return {
+    get: async (modelName, text) => {
+      try {
+        const value = await kv.get(key(modelName, text));
+
+        return value === null ? undefined : value;
+      } catch {
+        return undefined;
+      }
+    },
+    put: async ({ modelName, text, signature }) => {
+      try {
+        await kv.put(key(modelName, text), signature, { expirationTtl: TTL_SECONDS });
+      } catch {
+        // best effort
+      }
+    },
+    delete: async (modelName, text) => {
+      try {
+        await kv.delete(key(modelName, text));
+      } catch {
+        // best effort
+      }
+    },
+  };
+};
 
 /** Store for tests and for deployments without the `CACHE` binding. */
 export const makeMemorySignatureStore = (): SignatureStore & {

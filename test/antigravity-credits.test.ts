@@ -26,6 +26,7 @@ import {
   type UpstreamCall,
 } from "./support/pipeline.ts";
 import { makePool, poolPickerLayer } from "./support/pool.ts";
+import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 
 const identity = {
   principal: { kind: "user", email: "dev@example.com", sub: "sub" },
@@ -72,7 +73,7 @@ const run = async (
 ) => {
   resetMemoryAntigravityState();
 
-  if (options.seed !== undefined) await options.seed(antigravityStateFor({}));
+  if (options.seed !== undefined) await options.seed(antigravityStateFor({}, GLOBAL_ORG));
   const harness = await makePool(yaml);
 
   for (const name of options.names ?? ["a", "b"]) {
@@ -115,6 +116,7 @@ const run = async (
       Effect.provide(layer),
       Effect.provideService(AccessPrincipal, identity),
       Effect.provideService(WorkerEnv, {} as Env),
+      Effect.provideService(CurrentOrg, GLOBAL_ORG),
       Effect.result,
     ),
   );

@@ -7,6 +7,7 @@ import { ConfigStoreError } from "../src/config/errors.ts";
 import { ConfigReader, ConfigSource } from "../src/config/reader.ts";
 import { decodeStoredConfig, type ConfigSnapshotWire } from "../src/config/store.ts";
 import { WorkerEnv } from "../src/platform/env.ts";
+import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 
 // Each test uses its own Durable Object instance; production uses getByName("global").
 const controlPlane = () => env.CONTROL_PLANE.getByName(crypto.randomUUID());
@@ -135,7 +136,12 @@ describe("ControlPlane config storage (Workers pool)", () => {
       const put = yield* Effect.promise(async () => await global.putConfig(YAML));
       assert.isTrue(put.ok);
       const reader = yield* ConfigReader;
-      const snapshot = yield* reader.get.pipe(Effect.provideService(WorkerEnv, env));
+
+      const snapshot = yield* reader.get.pipe(
+        Effect.provideService(WorkerEnv, env),
+        Effect.provideService(CurrentOrg, GLOBAL_ORG),
+      );
+
       assert.strictEqual(snapshot.config.routing.strategy, "fill-first");
       assert.strictEqual(snapshot.config["api-keys"].claude[0]?.keys[0]?.weight, 2);
       assert.strictEqual(snapshot.version, put.ok ? put.version : -1);
@@ -195,7 +201,10 @@ const makeFakeSource = Effect.gen(function* () {
 
 describe("ConfigReader cache", () => {
   const run = <A, E>(
-    body: (source: FakeSource, reader: ConfigReader["Service"]) => Effect.Effect<A, E, WorkerEnv>,
+    body: (
+      source: FakeSource,
+      reader: ConfigReader["Service"],
+    ) => Effect.Effect<A, E, WorkerEnv | CurrentOrg>,
   ) =>
     Effect.gen(function* () {
       const source = yield* makeFakeSource;
@@ -204,7 +213,10 @@ describe("ConfigReader cache", () => {
         Effect.provide(ConfigReader.layer({ ttl: 5_000 }).pipe(Layer.provide(source.layer))),
       );
 
-      return yield* body(source, reader).pipe(Effect.provideService(WorkerEnv, env));
+      return yield* body(source, reader).pipe(
+        Effect.provideService(WorkerEnv, env),
+        Effect.provideService(CurrentOrg, GLOBAL_ORG),
+      );
     });
 
   it.effect("serves from cache within the TTL, then re-checks the version", () =>

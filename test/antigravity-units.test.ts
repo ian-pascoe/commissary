@@ -75,6 +75,7 @@ import {
 import { builtinTranslators } from "../src/translator/builtin.ts";
 import { makeTranslationState } from "../src/translator/registry.ts";
 import { mockHttpClient, type UpstreamCall } from "./support/pipeline.ts";
+import { CurrentOrg, GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 
 const LONG_SIGNATURE = "S".repeat(80);
 
@@ -414,6 +415,35 @@ describe("state and credits", () => {
     expect(await state.claimCreditsRefresh(id, 8)).toBe(false);
   });
 
+  it("keeps each org's cooldowns, credits and probe slot apart; global keeps its keys", async () => {
+    const acme = OrgId.make("acme");
+    const id = `org-${crypto.randomUUID()}`;
+    const global = makeKvAntigravityState(env.CACHE, GLOBAL_ORG);
+    const scoped = antigravityStateFor(env, acme);
+
+    await global.markShortCooldown(id, "claude-x", 30_000, 1_000);
+    await global.markCreditsExhausted(id, 5);
+    expect(await scoped.shortCooldownRemaining(id, "claude-x", 2_000)).toBe(0);
+    expect(await scoped.credits(id)).toBeUndefined();
+    expect(await env.CACHE.get(`ag:credits:${id}`)).not.toBeNull();
+
+    await scoped.markShortCooldown(id, "claude-x", 60_000, 1_000);
+    expect(await env.CACHE.get(`org.acme.ag:credits:${id}`)).toBeNull();
+    expect(await scoped.shortCooldownRemaining(id, "claude-x", 2_000)).toBe(59_000);
+    expect(await global.shortCooldownRemaining(id, "claude-x", 2_000)).toBe(29_000);
+
+    const now = Date.now();
+    expect(await sessionStateCreditsClaim(env.SESSION_STATE, GLOBAL_ORG)(id, now)).toBe(true);
+    expect(await sessionStateCreditsClaim(env.SESSION_STATE, acme)(id, now)).toBe(true);
+    expect(await sessionStateCreditsClaim(env.SESSION_STATE, acme)(id, now + 1)).toBe(false);
+
+    const memoryGlobal = makeMemoryAntigravityState(GLOBAL_ORG);
+    await memoryGlobal.markCreditsExhausted(id, now);
+    expect(await makeMemoryAntigravityState(acme).credits(id)).toBeUndefined();
+    expect(modelsKey(GLOBAL_ORG, "c")).toBe("ag:models:c");
+    expect(modelsKey(acme, "c")).toBe("org.acme.ag:models:c");
+  });
+
   it("claims the credits probe slot atomically in the SessionState Durable Object", async () => {
     const claim = sessionStateCreditsClaim(env.SESSION_STATE);
     const id = `lock-${crypto.randomUUID()}`;
@@ -426,7 +456,7 @@ describe("state and credits", () => {
     expect(await claim(id, now + CREDITS_REFRESH_INTERVAL_MS + 1)).toBe(true);
     expect(await claim(`other-${id}`, now)).toBe(true);
     // The production store uses it whenever the binding exists.
-    const state = antigravityStateFor(env);
+    const state = antigravityStateFor(env, GLOBAL_ORG);
     const second = `lock-${crypto.randomUUID()}`;
     expect(await state.claimCreditsRefresh(second, now)).toBe(true);
     expect(await state.claimCreditsRefresh(second, now + 1)).toBe(false);
@@ -563,12 +593,12 @@ describe("model catalog probes", () => {
     const id = `antigravity-${crypto.randomUUID()}.json`;
     const calls: UpstreamCall[] = [];
     await env.CACHE.put(
-      modelsKey("known"),
+      modelsKey(GLOBAL_ORG, "known"),
       JSON.stringify({ hints: { modelIds: ["a"], webSearchModelIds: [] }, fetchedAt: 1 }),
     );
-    expect([...(await loadAntigravityHints(env.CACHE, ["known", "missing"])).keys()]).toEqual([
-      "known",
-    ]);
+    expect([
+      ...(await loadAntigravityHints(env.CACHE, GLOBAL_ORG, ["known", "missing"])).keys(),
+    ]).toEqual(["known"]);
 
     const plane = {
       listModelSources: async () => [
@@ -596,6 +626,7 @@ describe("model catalog probes", () => {
           ),
         ),
         Effect.provideService(WorkerEnv, stubEnv),
+        Effect.provideService(CurrentOrg, GLOBAL_ORG),
       ),
     );
 
@@ -606,7 +637,7 @@ describe("model catalog probes", () => {
     );
     expect(calls[0]?.headers["authorization"]).toBe("Bearer tok");
     expect(JSON.parse(calls[0]?.body ?? "{}")).toEqual({ project: "proj" });
-    const stored = (await loadAntigravityHints(env.CACHE, [id])).get(id);
+    const stored = (await loadAntigravityHints(env.CACHE, GLOBAL_ORG, [id])).get(id);
     expect(stored).toEqual({
       modelIds: ["claude-sonnet-4-5", "gemini-3-pro-high"],
       webSearchModelIds: ["gemini-3-pro-high"],
@@ -617,17 +648,19 @@ describe("model catalog probes", () => {
       refreshAntigravityModels.pipe(
         Effect.provide(mockHttpClient(calls, () => new Response("down", { status: 503 }))),
         Effect.provideService(WorkerEnv, stubEnv),
+        Effect.provideService(CurrentOrg, GLOBAL_ORG),
       ),
     );
 
     expect(failed).toEqual([{ id, status: "transient" }]);
-    expect((await loadAntigravityHints(env.CACHE, [id])).get(id)).toEqual(stored);
+    expect((await loadAntigravityHints(env.CACHE, GLOBAL_ORG, [id])).get(id)).toEqual(stored);
 
     // The failure window suppresses the next probe.
     const backoff = await Effect.runPromise(
       refreshAntigravityModels.pipe(
         Effect.provide(mockHttpClient(calls, () => new Response("never", { status: 500 }))),
         Effect.provideService(WorkerEnv, stubEnv),
+        Effect.provideService(CurrentOrg, GLOBAL_ORG),
       ),
     );
 

@@ -2,9 +2,11 @@
 import { env } from "cloudflare:workers";
 import initial from "../../migrations/0001_usage_records.sql?raw";
 import sessions from "../../migrations/0002_usage_sessions.sql?raw";
+import orgs from "../../migrations/0003_usage_org.sql?raw";
+import { GLOBAL_ORG } from "../../src/platform/org.ts";
 import { emptyUsageDetail, type UsageRecord } from "../../src/usage/record.ts";
 
-const statementsOf = (sql: string): string[] =>
+export const statementsOf = (sql: string): string[] =>
   sql
     .split("\n")
     .filter((line) => !line.trim().startsWith("--"))
@@ -18,9 +20,17 @@ const statementsOf = (sql: string): string[] =>
  * COLUMN` has no IF NOT EXISTS, so a duplicate-column failure of an already migrated database is ignored.
  */
 export const resetUsageDb = async (db: D1Database = env.USAGE): Promise<D1Database> => {
-  for (const statement of [...statementsOf(initial), ...statementsOf(sessions)]) {
+  for (const statement of [
+    ...statementsOf(initial),
+    ...statementsOf(sessions),
+    ...statementsOf(orgs),
+  ]) {
     try {
-      await db.prepare(statement.replace(/^CREATE (TABLE|INDEX)/, "CREATE $1 IF NOT EXISTS")).run();
+      await db
+        .prepare(
+          statement.replace(/^CREATE (TABLE|INDEX) (?!IF NOT EXISTS)/, "CREATE $1 IF NOT EXISTS "),
+        )
+        .run();
     } catch (error) {
       if (!/duplicate column name/i.test(String(error))) throw error;
     }
@@ -40,6 +50,7 @@ export const sampleRecord = (overrides: Partial<UsageRecord> = {}): UsageRecord 
   alias: "gpt-5",
   endpoint: "POST /v1/responses",
   principalId: "user:dev@example.com",
+  orgId: GLOBAL_ORG,
   authId: "codex-a.json",
   authType: "oauth",
   source: "dev@example.com",

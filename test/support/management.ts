@@ -1,12 +1,13 @@
 // Test harness for the management routes: Access gate with a fake JWKS, real ControlPlane, mocked outbound HTTP.
 import { env } from "cloudflare:workers";
-import { Layer } from "effect";
+import { Context, Layer } from "effect";
 import { HttpRouter } from "effect/http";
 import { makeAccessLayer, makeWithAccess } from "../../src/access/layer.ts";
 import { RootRoutes } from "../../src/http/routes.ts";
 import { ManagementRoutes } from "../../src/management/routes.ts";
 import { OAuthCallbackRoutes } from "../../src/oauth/public-routes.ts";
 import { requestContext } from "../../src/platform/env.ts";
+import { controlPlaneOf, CurrentOrg, GLOBAL_ORG, type OrgId } from "../../src/platform/org.ts";
 import { CatalogStore } from "../../src/registry/catalog-store.ts";
 import { ModelRegistryLive } from "../../src/registry/live.ts";
 import {
@@ -49,11 +50,12 @@ export const token = async (email: string = ADMIN): Promise<string> =>
 export const serviceToken = async (commonName: string): Promise<string> =>
   await signToken({ key, now: Math.floor(Date.now() / 1000), claims: serviceClaims(commonName) });
 
-export const controlPlane = () => env.CONTROL_PLANE.getByName("global");
+/** The ControlPlane of `org` (`global` by default). */
+export const controlPlane = (org: OrgId = GLOBAL_ORG) => controlPlaneOf(env, org);
 
-/** Restores a pristine ControlPlane (no credentials, default config). */
-export const resetControlPlane = async (): Promise<void> => {
-  const stub = controlPlane();
+/** Restores a pristine ControlPlane of `org` (no credentials, default config). */
+export const resetControlPlane = async (org: OrgId = GLOBAL_ORG): Promise<void> => {
+  const stub = controlPlane(org);
   const entries = await stub.listCredentials();
   await stub.removeCredentials(entries.map((entry) => entry.id));
   await stub.putConfig("");
@@ -72,9 +74,11 @@ export interface Harness {
   readonly dispose: () => Promise<void>;
 }
 
+/** `org`: the org every request of the harness belongs to (the Worker resolves `global` for now). */
 export const makeHarness = (
   http: MockHandler = () => ({ status: 404 }),
   bindings: Partial<Env> = {},
+  org: OrgId = GLOBAL_ORG,
 ): Harness => {
   const outbound = mockHttp(http);
   const access = makeAccessLayer(fakeJwksLayer(makeFakeJwks([key])));
@@ -98,7 +102,7 @@ export const makeHarness = (
 
     return await web.handler(
       new Request(`https://proxy.test${path}`, { ...rest, headers }),
-      requestContext({ ...baseEnv, ...bindings }, ctx),
+      Context.add(requestContext({ ...baseEnv, ...bindings }, ctx), CurrentOrg, org),
     );
   };
 

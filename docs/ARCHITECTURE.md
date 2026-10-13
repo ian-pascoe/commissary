@@ -52,30 +52,56 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
 ## Runtime topology
 
 - **Worker** (stateless): routing, Access verification, request handling, translation, upstream `fetch`, streaming.
-- **`ControlPlane` Durable Object** (singleton, `getByName("global")`, SQLite storage): config document, credentials,
-  selection cursors, cooldown/quota state, session affinity, OAuth login sessions, refresh scheduling via alarms.
-  It is the single writer for credential state, which replaces the Go `singleflight`/mutex/goroutine machinery. The
-  Worker talks to it through JS RPC methods (e.g. `pick`, `report`, `getConfig`).
+- **Orgs** (ADR 0021, `src/platform/org.ts`): one deployment serves many orgs, and every request and scheduled job
+  belongs to exactly one. The per-request `CurrentOrg` service carries its id (`OrgId`: lowercase letters, digits and
+  inner hyphens); `requestContext` provides it next to `WorkerEnv`, and for now it is always `global`, the org of the
+  deployment that existed before orgs (later slices resolve it from the proxy key or the management URL). `CurrentOrg`
+  is a required service, not a default: code that reaches org state without an org does not compile.
+- **`ControlPlane` Durable Object** (one per org, named by the org id: `controlPlaneOf(env, org)` is the only
+  `getByName` of the namespace; `currentControlPlane` resolves the request's; SQLite storage): config document,
+  credentials, selection cursors, cooldown/quota state, session affinity, OAuth login sessions, refresh scheduling via
+  alarms. It is the single writer for its org's credential state, which replaces the Go `singleflight`/mutex/goroutine
+  machinery, and knows its org from its own name (`ctx.id.name`). The Worker talks to it through JS RPC methods (e.g.
+  `pick`, `report`, `getConfig`). The org `global` keeps the object it always had (`getByName("global")`), so upgrading
+  moves no data.
+- **Org-scoped names**: everything the Worker derives for an org outside its ControlPlane is named per org with
+  `orgScopedName(org, name)`: unchanged for `global` (so existing KV entries, SessionState instances and live sessions
+  survive the upgrade), `org.<org>.<name>` for any other org. That covers the SessionState addresses (the store name),
+  the KV entries of org data (Antigravity cooldowns, credits and model entitlements, the signature cache, xAI video
+  bindings), the Antigravity credits-probe slot and OAuth callback states. Caller scopes hash the org in for any org but
+  `global` (`callerScope(principal, org)`), and `auth_index` values use a key derived per org from `AUTH_INDEX_KEY`
+  (`orgAuthIndexer`; `global` keeps the deployment key, so existing handles and panel links do not change). Worker-side
+  caches of org data (the `ConfigReader` snapshots, the registry snapshots, the per-isolate signature cache and
+  Antigravity state) are keyed by org.
+- **Deployment-wide state**: the model catalog (KV copy, refresh status and refresh lease) and the client versions
+  (Antigravity, xAI) are shared by every org. The catalog's source, `models.catalog`, is a deployment setting: only the
+  `global` org's config may set it (another org's `ConfigStore` refuses a document that does, `422` through the
+  management API), every org's `ConfigReader` snapshot carries `global`'s value, and every refresh (cron or any org's
+  panel) uses `global`'s setting and the refresh lease in `global`'s ControlPlane, so no org can repoint the shared
+  catalog.
 - **`SessionState` Durable Object** (one instance per store + caller scope + session key, `getByName`, SQLite storage):
   the replay and continuity caches (Codex/xAI/Claude/Kimi/Gemini/Antigravity reasoning replay, Claude continuity, Devin turn
   counter, Antigravity Interactions continuation) with TTL and compare-and-swap semantics, see "SessionState Durable Object".
   The Responses WebSocket does **not** use it: that state lives in the Worker invocation that accepted the socket (see
   "Responses WebSocket transports").
 - **KV `CACHE`**: the model catalog (one trimmed models.dev document, refreshed by cron or on demand) and the status of its
-  last refresh, best-effort caches (signature cache) with `expirationTtl`.
-- **D1 `USAGE`**: usage records written with `ctx.waitUntil`.
+  last refresh, best-effort caches (signature cache) with `expirationTtl`; org data under org-scoped keys.
+- **D1 `USAGE`**: usage records written with `ctx.waitUntil`, each with its `org_id`; every query filters on it.
 - **Static assets** (`public/`, Worker runs first): the control panel (`web/` build).
 - **Cron trigger** (every 3 h, production only; `src/scheduled.ts`): the model catalog refresh (the one
   models.dev document: every provider's models, OpenCode's included), Antigravity version and model entitlements, xAI client version, usage retention, the Devin user status, a
-  safety sweep that re-arms credential refresh alarms, and the quota check of connected accounts.
+  safety sweep that re-arms credential refresh alarms, and the quota check of connected accounts. A job is
+  deployment-wide (catalog, client versions, usage retention: once per run) or org-scoped (entitlements, Devin status,
+  refresh sweep, quota check: once per org of `DEPLOYMENT_ORGS`, with `CurrentOrg` set, a failure in one org not
+  stopping the next). `DEPLOYMENT_ORGS` is `["global"]` until the Platform registry lists the orgs.
 
 Request flow:
 
 ```
 client -> Cloudflare Access -> Worker
-  verify Cf-Access-Jwt-Assertion -> principal (email | service token common_name)
+  verify Cf-Access-Jwt-Assertion -> principal (email | service token common_name); CurrentOrg (global for now)
   handler parses body (entry protocol) -> resolve model/providers (registry + config, suffixes, aliases)
-  loop (retry rounds): ControlPlane.pick(...) -> credential snapshot + lease
+  loop (retry rounds): ControlPlane.pick(...) of the request's org -> credential snapshot + lease
       executor: translate request -> thinking -> provider shaping -> payload rules (final) -> fetch upstream
       translate response (stream: one SSE line at a time with per-request state)
       ControlPlane.report(lease, result) -> cooldown/quota bookkeeping
@@ -122,7 +148,9 @@ client -> Cloudflare Access -> Worker
   with a monotonically increasing version. RPC: `getConfig(sinceVersion?)` (returns `unchanged: true` when the caller
   is current) and `putConfig(yamlOrJson, expectedVersion?)` (validates; returns a structured result with `invalid` /
   `conflict` instead of throwing). The Worker reads through `ConfigReader` (`src/config/reader.ts`): per-isolate
-  snapshot, 5 s TTL then a version check, stale-if-error.
+  snapshot per org, 5 s TTL then a version check, stale-if-error. Each org's ControlPlane stores its own document;
+  deployment settings (`DEPLOYMENT_SETTINGS` in `config/store.ts`, today `models.catalog`) are accepted in the
+  `global` org's config only, and `ConfigReader` puts `global`'s value into every other org's snapshot.
 - **Payload rules (`src/config/payload/`)**: `applyPayloadRules(config, request, payload)` is the single final barrier;
   it mutates `payload` in place (callers pass a freshly built body and a distinct `original`). The Codex tool-schema
   integer normalisation that Go performs inside the same function lives in `executor/helps/payload.ts` (`finalizePayload`: normalise
@@ -154,6 +182,11 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
 
 ## Credentials and selection (ControlPlane)
 
+- **Per org**: each org's ControlPlane (`controlPlaneOf(env, org)`, see Runtime topology) holds that org's config,
+  credentials, cooldowns, quota state, session affinity and OAuth logins; nothing below is shared between orgs. The
+  Worker-side picker (`ControlPlanePickerLayer`) and refresher (`CredentialRefresher.controlPlane`) resolve the stub
+  from `WorkerEnv` and `CurrentOrg` on every call, so the same credential name in two orgs is two credentials with
+  separate cooldowns, and its `auth_index` differs between them (`orgAuthIndexer`).
 - **Sources** (`src/credentials/`): auth JSON files imported through `importAuthFile`/`upsertCredential` (stored verbatim in
   the DO's SQLite `credentials` table, the file _is_ the metadata) and API keys synthesised from `api-keys` config with
   the Go content-hash ids (`synthesize.ts`, verified against the Go synthesizer via `tools/fixturegen/credentials`).
@@ -1364,13 +1397,16 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   `exported_at` for the queue; `migrations/0002_usage_sessions.sql` adds `session_id`, `parent_session_id` and `base_url`: the
   explicit, derived (`derived:ctx:v1:...`) or LCP (`lcp:v1:...`) session identity of the attempt - the LCP one comes back
   from `pick` - and the credential's configured upstream base URL; the queue export projects the session ids to canonical
-  UUIDs like Go's `NormalizeToCanonicalUUID`, the parent only when it differs). `D1UsageSink` (default in `makeProxyRoutes`) inserts through `ctx.waitUntil` (awaits when
+  UUIDs like Go's `NormalizeToCanonicalUUID`, the parent only when it differs). `migrations/0003_usage_org.sql` adds
+  `org_id` (`NOT NULL DEFAULT 'global'`, so records from before orgs are `global`'s) with `(org_id, requested_at)`
+  indexes: the writer stores the request's `CurrentOrg`, and every listing, summary, series, export and queue query
+  filters on it. `D1UsageSink` (default in `makeProxyRoutes`) inserts through `ctx.waitUntil` (awaits when
   `waitUntil` throws), logs failures with request id and message only and never fails the request. The sink reads
   `WorkerEnv`/`WorkerExecutionContext` from the fiber context at publish time (not part of its type, so the conductor's
   attempt plumbing is unchanged). `migrations/` is applied by Alchemy on every deploy
   (`D1.Database` `migrations` in `alchemy.run.ts`). Failure bodies are truncated to 2 KiB.
 - **Retention** (`retention.ts`, cron task `usage-retention`): deletes records older than `USAGE_RETENTION_DAYS` (default
-  30, `0` = keep) in bounded batches. `usage-statistics-enabled` and `redis-usage-queue-retention-seconds` are not used:
+  30, `0` = keep) in bounded batches, across every org (a deployment-wide cron task). `usage-statistics-enabled` and `redis-usage-queue-retention-seconds` are not used:
   persistence is always on when the `USAGE` binding exists.
 - **Management** (`management/usage-routes.ts`): `GET /v8/management/observability/usage/queue?count=N` (atomically pops the oldest unexported records, Go queue JSON with
   `token_breakdown`; `api_key` = Access principal id, `auth_index` = the management (keyed) `auth_index`) and the Workers
@@ -1527,7 +1563,9 @@ endpoint.
 Replaces the per-process maps of `internal/cache` (and the Home KV): `SESSION_STATE.getByName(<store>:<sha256(scope, session)[:32]>)`
 is one instance per store, caller scope and session key (session keys are caller-isolated by their store, either by hashing the
 Access `callerScope` into the key (Codex, xAI, Kimi, Antigravity), by prefixing it (Claude) or through the `scope` address part
-(Gemini cache, Devin counter)); the instance holds a handful of `key -> string` entries in SQLite.
+(Gemini cache, Devin counter)); the instance holds a handful of `key -> string` entries in SQLite. The store name is
+org-scoped (`orgScopedName`: unchanged for `global`, so live sessions survive the upgrade), and so are caller scopes, so
+two orgs never share an instance.
 
 - **Protocol** (`protocol.ts`, DO method `run(ops, now)`): ops `get` (optional sliding `extendTtlMs`), `put` (TTL, `ifGeneration`,
   `maxEntries`), `delete` (`ifGeneration`) and `incr` (atomic counter), executed in order in one `transactionSync`; results are
@@ -1785,7 +1823,8 @@ Port of the management OAuth handlers (`auth_files_provider_oauth.go`, `auth_fil
 - **Public browser callbacks** (`/anthropic/callback`, `/codex/callback`, `/antigravity/callback`, `/callback`, `/devin/callback`;
   `public-routes.ts`) exist for users that rewrite the localhost host to the Worker. They are outside the Access admin gate, so
   they only act on the `state` of a pending _callback_ login of the route's provider and answer with a static page (no-store,
-  never containing code/state/tokens/errors); everything else is a neutral 400.
+  never containing code/state/tokens/errors); everything else is a neutral 400. The state of a login names its org
+  (`orgScopedName`: `org.<org>.<hex>`, a bare state is `global`'s), so the callback asks only that org's ControlPlane.
 
 Deviations from Go: the Antigravity login uses the Go fallback client version `2.9.1` (the executor reads the polled Hub version, see
 _Antigravity provider_) and project discovery runs inside the login (non-fatal; the executor repeats it when `project_id` is missing); a transport failure or 5xx of one xAI/Kimi poll keeps waiting instead of ending the login; Codex

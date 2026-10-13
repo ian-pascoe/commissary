@@ -11,6 +11,7 @@ import { configCredentials, openAICompatModelIds } from "../executor/config-cred
 import { ExecutionError } from "../executor/errors.ts";
 import type { SpawnAgentSource } from "../executor/helps/codex-multi-agent-v2.ts";
 import type { WorkerEnv } from "../platform/env.ts";
+import type { CurrentOrg } from "../platform/org.ts";
 import { ModelRegistry } from "../registry/service.ts";
 
 export class ModelProviders extends Context.Service<
@@ -19,21 +20,29 @@ export class ModelProviders extends Context.Service<
     /** Providers able to serve exactly this model id, in preference order (Go `GetModelProviders`). */
     readonly providersFor: (
       model: string,
-    ) => Effect.Effect<ReadonlyArray<string>, ExecutionError, WorkerEnv>;
+    ) => Effect.Effect<ReadonlyArray<string>, ExecutionError, WorkerEnv | CurrentOrg>;
     /** First available model of any provider (Go `GetFirstAvailableModel("")`), used for `auto`. */
-    readonly firstAvailableModel: Effect.Effect<string | undefined, ExecutionError, WorkerEnv>;
+    readonly firstAvailableModel: Effect.Effect<
+      string | undefined,
+      ExecutionError,
+      WorkerEnv | CurrentOrg
+    >;
     /**
      * Registry type of `model` (`registry.LookupModelInfo(model).Type`, e.g. `openai-image`); `undefined` when the
      * model is unknown. Optional so test doubles that only route models need not implement it.
      */
     readonly modelType?: (
       model: string,
-    ) => Effect.Effect<string | undefined, ExecutionError, WorkerEnv>;
+    ) => Effect.Effect<string | undefined, ExecutionError, WorkerEnv | CurrentOrg>;
     /**
      * The registry data behind the `spawn_agent` model list of Codex multi-agent v2 requests (available models, the
      * Codex client catalog, model lookups). Optional like `modelType`.
      */
-    readonly spawnAgentSource?: Effect.Effect<SpawnAgentSource, ExecutionError, WorkerEnv>;
+    readonly spawnAgentSource?: Effect.Effect<
+      SpawnAgentSource,
+      ExecutionError,
+      WorkerEnv | CurrentOrg
+    >;
   }
 >()("cf-llm-proxy/handlers/ModelProviders") {
   /**

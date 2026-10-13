@@ -22,7 +22,11 @@ import { parseClaudeUsage } from "../src/usage/parsers.ts";
 import { pruneExpiredUsage, retentionDays } from "../src/usage/retention.ts";
 import { UsageSink } from "../src/usage/sink.ts";
 import { authIndexOf } from "./support/auth-index.ts";
-import { resetUsageDb, sampleRecord } from "./support/usage.ts";
+import { resetUsageDb, sampleRecord, statementsOf } from "./support/usage.ts";
+import initialMigration from "../migrations/0001_usage_records.sql?raw";
+import sessionsMigration from "../migrations/0002_usage_sessions.sql?raw";
+import orgMigration from "../migrations/0003_usage_org.sql?raw";
+import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 
 let db: D1Database;
 
@@ -36,6 +40,46 @@ const rows = async () =>
       .prepare("SELECT * FROM usage_records ORDER BY requested_at, request_id")
       .all<UsageRow>()
   ).results;
+
+describe("migration 0003 (usage org)", () => {
+  it("moves the records written before orgs into global and indexes the org", async () => {
+    await db.prepare("DROP TABLE usage_records").run();
+
+    for (const statement of [...statementsOf(initialMigration), ...statementsOf(sessionsMigration)])
+      await db.prepare(statement).run();
+
+    // A row as the previous schema stored it.
+    await db
+      .prepare(
+        `INSERT INTO usage_records (request_id, requested_at, provider, executor_type, model, alias, endpoint,
+           principal_id, auth_id, auth_type, source) VALUES ('old', 1, 'codex', 'codex', 'gpt-5', 'gpt-5',
+           'POST /v1/responses', 'user:a', 'codex-a.json', 'oauth', 'a')`,
+      )
+      .run();
+
+    for (const statement of statementsOf(orgMigration)) await db.prepare(statement).run();
+
+    const [row] = await rows();
+    expect(row).toMatchObject({ request_id: "old", org_id: "global" });
+
+    const indexes = await db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'usage_records'")
+      .all<{ readonly name: string }>();
+
+    expect(indexes.results.map((index) => index.name)).toEqual(
+      expect.arrayContaining(["usage_records_org", "usage_records_org_unexported"]),
+    );
+
+    expect((await listUsageRecords(db, GLOBAL_ORG, {}, authIndexOf)).rows).toHaveLength(1);
+    expect((await listUsageRecords(db, OrgId.make("acme"), {}, authIndexOf)).rows).toHaveLength(0);
+
+    // Its index statements are idempotent, and new records carry their org.
+    for (const statement of statementsOf(orgMigration).filter((sql) => sql.startsWith("CREATE")))
+      await db.prepare(statement).run();
+    await insertUsageRecord(db, sampleRecord({ requestId: "new", orgId: OrgId.make("acme") }));
+    expect((await listUsageRecords(db, OrgId.make("acme"), {}, authIndexOf)).rows).toHaveLength(1);
+  });
+});
 
 describe("D1 usage sink", () => {
   it("persists the record through ctx.waitUntil without blocking the caller", async () => {
@@ -233,19 +277,19 @@ describe("export queue (GET /observability/usage/queue)", () => {
       );
     }
 
-    const first = await popUsageQueue(db, 2, 5000);
+    const first = await popUsageQueue(db, GLOBAL_ORG, 2, 5000);
     expect(first.map((row) => row.request_id)).toEqual(["r0", "r1"]);
     expect(first.every((row) => row.exported_at === 5000)).toBe(true);
-    const second = await popUsageQueue(db, 10, 6000);
+    const second = await popUsageQueue(db, GLOBAL_ORG, 10, 6000);
     expect(second.map((row) => row.request_id)).toEqual(["r2", "r3", "r4"]);
-    expect(await popUsageQueue(db, 1, 7000)).toEqual([]);
+    expect(await popUsageQueue(db, GLOBAL_ORG, 1, 7000)).toEqual([]);
     // Exported records stay available for the listing endpoints.
     expect(await rows()).toHaveLength(5);
   });
 
   it("renders the Go queue payload shape", async () => {
     await insertUsageRecord(db, sampleRecord({ requestId: "r1", ttftMs: 15, stream: true }));
-    const [row] = await popUsageQueue(db, 1, 1);
+    const [row] = await popUsageQueue(db, GLOBAL_ORG, 1, 1);
     const payload = rowToPayload(row as UsageRow, authIndexOf);
     expect(payload).toMatchObject({
       timestamp: "2023-11-14T22:13:20.000Z",
@@ -335,12 +379,13 @@ describe("listing and summary", () => {
 
   it("lists newest first with keyset pagination and filters", async () => {
     const { base } = await seed();
-    const page1 = await listUsageRecords(db, { limit: 2 }, authIndexOf);
+    const page1 = await listUsageRecords(db, GLOBAL_ORG, { limit: 2 }, authIndexOf);
     expect(page1.rows.map((row) => row.request_id)).toEqual(["c", "b"]);
     expect(page1.nextBefore).toBeDefined();
 
     const page2 = await listUsageRecords(
       db,
+      GLOBAL_ORG,
       { limit: 2, before: page1.nextBefore as string },
       authIndexOf,
     );
@@ -348,19 +393,24 @@ describe("listing and summary", () => {
     expect(page2.rows.map((row) => row.request_id)).toEqual(["a"]);
     expect(page2.nextBefore).toBeUndefined();
     expect(
-      (await listUsageRecords(db, { model: "gpt-5" }, authIndexOf)).rows.map(
+      (await listUsageRecords(db, GLOBAL_ORG, { model: "gpt-5" }, authIndexOf)).rows.map(
         (row) => row.request_id,
       ),
     ).toEqual(["b", "a"]);
     expect(
-      (await listUsageRecords(db, { principal: "user:a", failed: true }, authIndexOf)).rows.map(
-        (row) => row.request_id,
-      ),
+      (
+        await listUsageRecords(db, GLOBAL_ORG, { principal: "user:a", failed: true }, authIndexOf)
+      ).rows.map((row) => row.request_id),
     ).toEqual(["c"]);
     expect(
-      (await listUsageRecords(db, { since: base + 500, until: base + 2000 }, authIndexOf)).rows.map(
-        (row) => row.request_id,
-      ),
+      (
+        await listUsageRecords(
+          db,
+          GLOBAL_ORG,
+          { since: base + 500, until: base + 2000 },
+          authIndexOf,
+        )
+      ).rows.map((row) => row.request_id),
     ).toEqual(["b"]);
   });
 
@@ -378,29 +428,34 @@ describe("listing and summary", () => {
     expect(
       await resolveAuthIds(
         noDb,
+        GLOBAL_ORG,
         { authIndex: authIndexOf("live.json"), liveAuthId: "live.json" },
         authIndexOf,
       ),
     ).toEqual(["live.json"]);
 
     // A deleted credential (no live id) or a live id of another index: the distinct stored ids decide.
-    expect(await resolveAuthIds(db, { authIndex: authIndexOf("gone.json") }, authIndexOf)).toEqual([
-      "gone.json",
-    ]);
+    expect(
+      await resolveAuthIds(db, GLOBAL_ORG, { authIndex: authIndexOf("gone.json") }, authIndexOf),
+    ).toEqual(["gone.json"]);
     expect(
       await resolveAuthIds(
         db,
+        GLOBAL_ORG,
         { authIndex: authIndexOf("gone.json"), liveAuthId: "live.json" },
         authIndexOf,
       ),
     ).toEqual(["gone.json"]);
-    expect(await resolveAuthIds(db, { authIndex: "0000000000000000" }, authIndexOf)).toEqual([]);
-    expect(await resolveAuthIds(noDb, {}, authIndexOf)).toBeUndefined();
+    expect(
+      await resolveAuthIds(db, GLOBAL_ORG, { authIndex: "0000000000000000" }, authIndexOf),
+    ).toEqual([]);
+    expect(await resolveAuthIds(noDb, GLOBAL_ORG, {}, authIndexOf)).toBeUndefined();
 
     expect(
       (
         await listUsageRecords(
           db,
+          GLOBAL_ORG,
           { authIndex: authIndexOf("live.json"), liveAuthId: "live.json" },
           authIndexOf,
         )
@@ -410,7 +465,7 @@ describe("listing and summary", () => {
 
   it("summarises the v2 buckets overall and per group", async () => {
     await seed();
-    const byModel = await summarizeUsage(db, { groupBy: "model" }, authIndexOf);
+    const byModel = await summarizeUsage(db, GLOBAL_ORG, { groupBy: "model" }, authIndexOf);
     expect(byModel.totals).toMatchObject({
       requests: 3,
       failed: 1,
@@ -425,11 +480,12 @@ describe("listing and summary", () => {
       ["gpt-5", 2, 260],
       ["gpt-4", 1, 0],
     ]);
-    const byDay = await summarizeUsage(db, { groupBy: "day" }, authIndexOf);
+    const byDay = await summarizeUsage(db, GLOBAL_ORG, { groupBy: "day" }, authIndexOf);
     expect(byDay.groups.map((group) => group.key)).toEqual(["2023-11-15", "2023-11-14"]);
 
     const empty = await summarizeUsage(
       db,
+      GLOBAL_ORG,
       { groupBy: "provider", since: 0, until: 1 },
       authIndexOf,
     );

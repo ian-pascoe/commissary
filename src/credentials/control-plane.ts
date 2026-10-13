@@ -29,7 +29,7 @@ import {
 import { CredentialStore } from "./store.ts";
 import type { CredentialSummary } from "./summary.ts";
 import type { ModelSource } from "../registry/source.ts";
-import { type AuthIndexer, deploymentAuthIndexer } from "../management/auth-index.ts";
+import { type AuthIndexer, orgAuthIndexer } from "../management/auth-index.ts";
 import {
   type ApiKeyProbeTargetResult,
   buildApiKeyProbeTarget,
@@ -74,6 +74,7 @@ import {
   mergeQuotaReport,
   type QuotaOutcome,
 } from "../quota/report.ts";
+import { orgOfControlPlane, type OrgId } from "../platform/org.ts";
 import { QuotaReportStore } from "../quota/store.ts";
 import { type SweepSource, SweepLeaseStore, type TakeLease } from "../quota/sweep-lease.ts";
 import {
@@ -214,8 +215,8 @@ export type SetDisabledResult =
     };
 
 /**
- * Singleton Durable Object (`CONTROL_PLANE.getByName("global")`): the single writer for config, credentials,
- * cooldown state and refresh scheduling (see docs/ARCHITECTURE.md).
+ * One Durable Object per org (`controlPlaneOf(env, org)`, named by the org id; ADR 0021): the single writer for the
+ * org's config, credentials, cooldown state and refresh scheduling (see docs/ARCHITECTURE.md).
  *
  * Implements the config store, the credential store/selection (`pick`, `report`, credential management) and OAuth
  * token refresh (`alarm`, `refreshNow`, `ensureFresh`, `sweepRefresh`; see `refresh/manager.ts`). Methods are exposed to the Worker through JS RPC and exchange plain data only.
@@ -229,17 +230,20 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #sweepLease: SweepLeaseStore;
   readonly #catalogLease: SweepLeaseStore;
   readonly #grants: ResetGrantStore;
+  /** The org this object serves, from its name. */
+  readonly #org: OrgId;
   /**
-   * The deployment's keyed `auth_index` (`AUTH_INDEX_KEY`, indexer cached per isolate). Resolved per call so a refused
-   * key fails the calls that need an index, not the Durable Object's constructor.
+   * The org's keyed `auth_index` (`orgAuthIndexer`, cached per isolate). Resolved per call so a refused key fails the
+   * calls that need an index, not the Durable Object's constructor.
    */
   readonly #authIndex: AuthIndexer = (credentialId) =>
-    deploymentAuthIndexer(this.env)(credentialId);
+    orgAuthIndexer(this.env, this.#org)(credentialId);
   #configView: ConfigView | undefined;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.#config = new ConfigStore(ctx.storage.sql);
+    this.#org = orgOfControlPlane(ctx.id);
+    this.#config = new ConfigStore(ctx.storage.sql, Date.now, this.#org);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
 
@@ -265,6 +269,7 @@ export class ControlPlane extends DurableObject<Env> {
       workers: () => this.#currentConfig().config.oauth["auth-auto-refresh-workers"],
     });
     this.#oauth = makeOAuthService({
+      org: this.#org,
       metaMintUrl: env.META_MINT_URL,
       sessions: new OAuthSessions(new SqliteSessionTable(ctx.storage.sql)),
       sink: {

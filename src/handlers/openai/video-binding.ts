@@ -4,11 +4,13 @@
  * Go source: sdk/api/handlers/openai/openai_videos_handlers.go (videoAuthBindingStore, defaultVideoAuthBindingTTL,
  * bindVideoAuthID*, contextWithVideoAuthBinding, modelWithVideoAuthBinding). The Go store is process memory; on
  * Workers the binding lives in KV `CACHE` with a TTL (`multimedia.video-result-auth-cache-ttl`, default 3 h), keyed by
- * the hash of the video id.
+ * the hash of the video id within the org (`orgScopedName`: unchanged for `global`), so another org's request cannot
+ * pin its retrieval to this org's credential.
  */
 import { createHash } from "node:crypto";
 import { Effect } from "effect";
 import { WorkerEnv } from "../../platform/env.ts";
+import { CurrentOrg, type OrgId, orgScopedName } from "../../platform/org.ts";
 
 export interface VideoBinding {
   readonly authId: string;
@@ -19,8 +21,11 @@ export interface VideoBinding {
 /** KV expiration TTLs must be at least 60 s. */
 const MIN_TTL_SECONDS = 60;
 
-const keyOf = (videoId: string): string =>
-  `xai/video-binding/${createHash("sha256").update(videoId.trim()).digest("hex")}`;
+const keyOf = (org: OrgId, videoId: string): string =>
+  orgScopedName(
+    org,
+    `xai/video-binding/${createHash("sha256").update(videoId.trim()).digest("hex")}`,
+  );
 
 /** `bindVideoAuthID`: best effort (a KV failure only loses the pin). */
 export const saveVideoBinding = (videoId: string, binding: VideoBinding, ttlMs: number) =>
@@ -30,8 +35,9 @@ export const saveVideoBinding = (videoId: string, binding: VideoBinding, ttlMs: 
 
     if (id === "" || authId === "") return;
     const env = yield* WorkerEnv;
+    const org = yield* CurrentOrg;
     yield* Effect.tryPromise(() =>
-      env.CACHE.put(keyOf(id), JSON.stringify({ authId, model: binding.model.trim() }), {
+      env.CACHE.put(keyOf(org, id), JSON.stringify({ authId, model: binding.model.trim() }), {
         expirationTtl: Math.max(MIN_TTL_SECONDS, Math.ceil(ttlMs / 1000)),
       }),
     ).pipe(
@@ -49,8 +55,9 @@ export const loadVideoBinding = (videoId: string) =>
 
     if (id === "") return undefined;
     const env = yield* WorkerEnv;
+    const org = yield* CurrentOrg;
 
-    const stored = yield* Effect.tryPromise(() => env.CACHE.get(keyOf(id))).pipe(
+    const stored = yield* Effect.tryPromise(() => env.CACHE.get(keyOf(org, id))).pipe(
       Effect.orElseSucceed(() => null),
     );
 

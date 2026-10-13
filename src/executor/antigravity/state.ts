@@ -7,11 +7,13 @@
  * checked on read) and falls back to per-isolate maps without a binding. KV failures never fail a request: unknown
  * state is optimistic (credits assumed available, no cooldown). The balance-probe slot is a lock and needs an atomic
  * claim, which KV cannot give: it is a create-if-absent write in the `SessionState` Durable Object (per credential,
- * TTL 10 min), with the per-isolate map as fallback.
+ * TTL 10 min), with the per-isolate map as fallback. Credential ids are only unique within an org, so every key and
+ * address is scoped to the org (`orgScopedName`; unchanged for `global`).
  */
 import { createHash } from "node:crypto";
 import type { SessionState } from "../../session-state/durable-object.ts";
 import { addressName } from "../../session-state/client.ts";
+import { GLOBAL_ORG, type OrgId, orgScopedName } from "../../platform/org.ts";
 
 export const CREDITS_TTL_MS = 30 * 60_000;
 
@@ -56,39 +58,43 @@ const memoryCredits = new Map<
 
 const memoryRefresh = new Map<string, number>();
 
-/** Per-isolate implementation (tests and deployments without KV). */
-export const makeMemoryAntigravityState = (): AntigravityState => ({
-  shortCooldownRemaining: async (authId, model, now) => {
-    const deadline = memoryCooldowns.get(`${authId}|${model}`) ?? 0;
+/** Per-isolate implementation of `org` (tests and deployments without KV). */
+export const makeMemoryAntigravityState = (org: OrgId = GLOBAL_ORG): AntigravityState => {
+  const key = (authId: string): string => `${org}|${authId}`;
 
-    return Math.max(0, deadline - now);
-  },
-  markShortCooldown: async (authId, model, durationMs, now) => {
-    memoryCooldowns.set(`${authId}|${model}`, now + durationMs);
-  },
-  credits: async (authId) => {
-    const entry = memoryCredits.get(authId);
+  return {
+    shortCooldownRemaining: async (authId, model, now) => {
+      const deadline = memoryCooldowns.get(`${key(authId)}|${model}`) ?? 0;
 
-    return entry === undefined || entry.expires <= Date.now() ? undefined : entry.record;
-  },
-  setCredits: async (authId, record) => {
-    memoryCredits.set(authId, { record, expires: Date.now() + CREDITS_TTL_MS });
-  },
-  markCreditsExhausted: async (authId, now) => {
-    memoryCredits.set(authId, {
-      record: { creditAmount: 0, minCreditAmount: 1, paidTierId: "", updatedAt: now },
-      expires: now + CREDITS_TTL_MS,
-    });
-  },
-  claimCreditsRefresh: async (authId, now) => {
-    const last = memoryRefresh.get(authId);
+      return Math.max(0, deadline - now);
+    },
+    markShortCooldown: async (authId, model, durationMs, now) => {
+      memoryCooldowns.set(`${key(authId)}|${model}`, now + durationMs);
+    },
+    credits: async (authId) => {
+      const entry = memoryCredits.get(key(authId));
 
-    if (last !== undefined && now - last < CREDITS_REFRESH_INTERVAL_MS) return false;
-    memoryRefresh.set(authId, now);
+      return entry === undefined || entry.expires <= Date.now() ? undefined : entry.record;
+    },
+    setCredits: async (authId, record) => {
+      memoryCredits.set(key(authId), { record, expires: Date.now() + CREDITS_TTL_MS });
+    },
+    markCreditsExhausted: async (authId, now) => {
+      memoryCredits.set(key(authId), {
+        record: { creditAmount: 0, minCreditAmount: 1, paidTierId: "", updatedAt: now },
+        expires: now + CREDITS_TTL_MS,
+      });
+    },
+    claimCreditsRefresh: async (authId, now) => {
+      const last = memoryRefresh.get(key(authId));
 
-    return true;
-  },
-});
+      if (last !== undefined && now - last < CREDITS_REFRESH_INTERVAL_MS) return false;
+      memoryRefresh.set(key(authId), now);
+
+      return true;
+    },
+  };
+};
 
 /** Test hook: clears the per-isolate maps. */
 export const resetMemoryAntigravityState = (): void => {
@@ -102,13 +108,15 @@ export type CreditsRefreshClaim = (authId: string, now: number) => Promise<boole
 
 const CREDITS_LOCK_STORE = "antigravity-credits-probe";
 
-/** {@link CreditsRefreshClaim} over the `SessionState` Durable Object (`put` with `ifGeneration: 0`). */
+/**
+ * {@link CreditsRefreshClaim} of `org` over the `SessionState` Durable Object (`put` with `ifGeneration: 0`).
+ */
 export const sessionStateCreditsClaim =
-  (namespace: DurableObjectNamespace<SessionState>): CreditsRefreshClaim =>
+  (namespace: DurableObjectNamespace<SessionState>, org: OrgId = GLOBAL_ORG): CreditsRefreshClaim =>
   async (authId, now) => {
     try {
       const stub = namespace.getByName(
-        addressName({ store: CREDITS_LOCK_STORE, scope: "", session: authId }),
+        orgScopedName(org, addressName({ store: CREDITS_LOCK_STORE, scope: "", session: authId })),
       );
 
       const [result] = await stub.run(
@@ -130,10 +138,11 @@ export const sessionStateCreditsClaim =
     }
   };
 
-/** KV-backed implementation; every KV failure degrades to "no state". */
+/** KV-backed implementation for `org`; every KV failure degrades to "no state". */
 export const makeKvAntigravityState = (
   kv: KVNamespace,
-  claimRefresh: CreditsRefreshClaim = makeMemoryAntigravityState().claimCreditsRefresh,
+  org: OrgId = GLOBAL_ORG,
+  claimRefresh: CreditsRefreshClaim = makeMemoryAntigravityState(org).claimCreditsRefresh,
 ): AntigravityState => {
   const swallow = async <T>(run: () => Promise<T>, fallback: T): Promise<T> => {
     try {
@@ -144,9 +153,9 @@ export const makeKvAntigravityState = (
   };
 
   const cooldownKey = (authId: string, model: string): string =>
-    `ag:sc:${authId}:${hashModel(model)}`;
+    orgScopedName(org, `ag:sc:${authId}:${hashModel(model)}`);
 
-  const creditsKey = (authId: string): string => `ag:credits:${authId}`;
+  const creditsKey = (authId: string): string => orgScopedName(org, `ag:credits:${authId}`);
 
   const putCredits = (authId: string, record: CreditsRecord): Promise<void> =>
     swallow(
@@ -188,8 +197,8 @@ export const makeKvAntigravityState = (
 };
 
 /**
- * The state store for an invocation: KV when the binding exists, the probe slot in the `SessionState` Durable Object
- * when that binding exists.
+ * The state store of `org` for an invocation: KV when the binding exists, the probe slot in the `SessionState` Durable
+ * Object when that binding exists.
  */
 export const antigravityStateFor = (
   env:
@@ -198,10 +207,11 @@ export const antigravityStateFor = (
         readonly SESSION_STATE?: DurableObjectNamespace<SessionState>;
       }
     | undefined,
+  org: OrgId,
 ): AntigravityState => {
-  if (env?.CACHE === undefined) return makeMemoryAntigravityState();
+  if (env?.CACHE === undefined) return makeMemoryAntigravityState(org);
 
   return env.SESSION_STATE === undefined
-    ? makeKvAntigravityState(env.CACHE)
-    : makeKvAntigravityState(env.CACHE, sessionStateCreditsClaim(env.SESSION_STATE));
+    ? makeKvAntigravityState(env.CACHE, org)
+    : makeKvAntigravityState(env.CACHE, org, sessionStateCreditsClaim(env.SESSION_STATE, org));
 };

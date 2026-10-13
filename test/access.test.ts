@@ -29,6 +29,7 @@ import {
 } from "./support/access.ts";
 import type { FakeJwks, TestKey } from "./support/access.ts";
 import { env } from "cloudflare:workers";
+import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 
 const NOW_MS = 1_700_000_000_000;
 
@@ -259,7 +260,9 @@ describe("authenticateRequest", () => {
     body: Effect.Effect<
       A,
       E,
-      import("../src/platform/env.ts").WorkerEnv | import("../src/access/jwks.ts").AccessJwks
+      | import("../src/platform/env.ts").WorkerEnv
+      | import("../src/access/jwks.ts").AccessJwks
+      | import("../src/platform/org.ts").CurrentOrg
     >,
   ) => withJwks(state, body.pipe(Effect.provideContext(context)));
 
@@ -416,19 +419,35 @@ describe("principal", () => {
   it.effect("callerScope mirrors the Go derivation", () =>
     Effect.gen(function* () {
       assert.strictEqual(
-        yield* callerScope("user:alice@example.com"),
+        yield* callerScope("user:alice@example.com", GLOBAL_ORG),
         "21cd36b03d03c619f37e1df80f5e22b7c4c9319b4e8151ea93327b51520a06e9",
       );
       assert.strictEqual(
-        yield* callerScope("service:abc.access"),
+        yield* callerScope("service:abc.access", GLOBAL_ORG),
         "84a7bf2e7053ab5a89f0f60fc4e2fc30abb4cf0284421d8bb85ff4d38254733a",
       );
-      assert.strictEqual(yield* callerScope("  "), "");
-      const identity = yield* makeIdentity({ kind: "service", commonName: "abc.access" });
+      assert.strictEqual(yield* callerScope("  ", GLOBAL_ORG), "");
+
+      const identity = yield* makeIdentity(
+        { kind: "service", commonName: "abc.access" },
+        GLOBAL_ORG,
+      );
+
       assert.strictEqual(
         identity.callerScope,
         "84a7bf2e7053ab5a89f0f60fc4e2fc30abb4cf0284421d8bb85ff4d38254733a",
       );
+    }),
+  );
+
+  it.effect("callerScope keeps one principal's scopes in two orgs apart", () =>
+    Effect.gen(function* () {
+      const acme = yield* callerScope("user:alice@example.com", OrgId.make("acme"));
+      const other = yield* callerScope("user:alice@example.com", OrgId.make("other"));
+      assert.match(acme, /^[0-9a-f]{64}$/);
+      assert.notStrictEqual(acme, other);
+      assert.notStrictEqual(acme, yield* callerScope("user:alice@example.com", GLOBAL_ORG));
+      assert.strictEqual(yield* callerScope("  ", OrgId.make("acme")), "");
     }),
   );
 

@@ -22,6 +22,7 @@ import { metaFlow } from "./flows/meta.ts";
 import type { CallbackFlow, CredentialRecord, DeviceFlow, Flow } from "./flows/types.ts";
 import { xaiFlow } from "./flows/xai.ts";
 import { generateState, randomHex } from "./encoding.ts";
+import { type OrgId, orgScopedName } from "../platform/org.ts";
 import { isValidOAuthState, normalizeCallbackProvider, type OAuthProvider } from "./names.ts";
 import { type CredentialSink, saveCredentialRecord } from "./record.ts";
 import type { OAuthSession, OAuthSessions } from "./session-store.ts";
@@ -67,6 +68,11 @@ export type CallbackResult =
   | { readonly ok: false; readonly status: number; readonly error: string };
 
 export interface OAuthServiceOptions {
+  /**
+   * The org of the ControlPlane that holds the sessions. Callback states carry it (`orgScopedName`), so the public
+   * browser callback, which has no Access identity, can find the org's ControlPlane.
+   */
+  readonly org: OrgId;
   readonly sessions: OAuthSessions;
   readonly sink: CredentialSink;
   /** `META_MINT_URL` override of the Meta key-mint endpoint. */
@@ -107,13 +113,14 @@ export interface OAuthService {
 }
 
 export const makeOAuthService = ({
+  org,
   sessions,
   sink,
   metaMintUrl,
 }: OAuthServiceOptions): OAuthService => {
   const startCallback = (flow: CallbackFlow, now: number): Effect.Effect<StartResult> =>
     Effect.gen(function* () {
-      const state = generateState();
+      const state = orgScopedName(org, generateState());
       const started = yield* flow.start({ state }).pipe(Effect.result);
 
       if (Result.isFailure(started)) {

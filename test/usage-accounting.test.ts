@@ -30,6 +30,7 @@ import {
   type UsageDetail,
 } from "../src/usage/record.ts";
 import { UsageReporter } from "../src/usage/reporter.ts";
+import { GLOBAL_ORG } from "../src/platform/org.ts";
 
 const MAX = Number.MAX_SAFE_INTEGER;
 
@@ -626,6 +627,7 @@ describe("UsageReporter accounting", () => {
       alias: "m",
       endpoint: "POST /v1/x",
       principalId: "user:a@x.com",
+      orgId: GLOBAL_ORG,
       authId: "a",
       authType: "oauth",
       source: "s",

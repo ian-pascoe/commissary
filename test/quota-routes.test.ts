@@ -22,6 +22,7 @@ import {
 } from "./support/management.ts";
 import { type MockReply, mockHttp, routes } from "./support/refresh.ts";
 import { env } from "cloudflare:workers";
+import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 
 const QUOTA = "/v8/management/credentials/quota";
 
@@ -300,6 +301,6 @@ describe("quota-check cron task", () => {
 
       assert.isDefined(report);
       assert.isUndefined(yield* Effect.promise(() => listedReport("claude-off.json")));
-    }),
+    }).pipe(Effect.provideService(CurrentOrg, GLOBAL_ORG)),
   );
 });

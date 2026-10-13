@@ -36,6 +36,7 @@ import {
   type UpstreamCall,
 } from "./support/pipeline.ts";
 import { makePool, poolPickerLayer } from "./support/pool.ts";
+import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 
 const data = (event: Json): string => `data: ${JSON.stringify(event)}`;
 
@@ -93,6 +94,7 @@ const reader = (overrides: Partial<CodexStreamOptions> = {}) => {
     alias: "m",
     endpoint: "e",
     principalId: "p",
+    orgId: GLOBAL_ORG,
     authId: "a",
     authType: "oauth",
     source: "s",
@@ -403,6 +405,7 @@ describe("bootstrap failover through the conductor", () => {
         Effect.provide(layer),
         Effect.provideService(AccessPrincipal, identity),
         Effect.provideService(WorkerEnv, {} as Env),
+        Effect.provideService(CurrentOrg, GLOBAL_ORG),
         Effect.result,
       ),
     );

@@ -18,6 +18,7 @@ import {
   postJson,
   sseResponse,
 } from "./support/pipeline.ts";
+import { GLOBAL_ORG } from "../src/platform/org.ts";
 
 const YAML = `
 api-keys:
@@ -315,6 +316,7 @@ describe("Gemini and Interactions clients through the executor", () => {
       alias: "upstream-model",
       endpoint: "POST /x",
       principalId: "p",
+      orgId: GLOBAL_ORG,
       authId: "c",
       authType: "apikey",
       source: "s",

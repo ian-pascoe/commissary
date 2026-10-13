@@ -10,6 +10,7 @@ import { ensureTokenBreakdown } from "./accounting.ts";
 import { mergeStreamUsageDetail } from "./parsers.ts";
 import type { UsageDetail, UsageRecord } from "./record.ts";
 import { emptyUsageDetail, hasNonZeroTokenUsage } from "./record.ts";
+import type { OrgId } from "../platform/org.ts";
 
 export interface UsageReporterInit {
   readonly requestId: string;
@@ -21,6 +22,7 @@ export interface UsageReporterInit {
   readonly alias: string;
   readonly endpoint: string;
   readonly principalId: string;
+  readonly orgId: OrgId;
   readonly authId: string;
   readonly authType: string;
   readonly source: string;
@@ -125,6 +127,7 @@ export class UsageReporter {
       alias: init.alias,
       endpoint: init.endpoint,
       principalId: init.principalId,
+      orgId: init.orgId,
       authId: init.authId,
       authType: init.authType,
       source: init.source,
@@ -189,6 +192,7 @@ export class UsageReporter {
       alias: init.alias,
       endpoint: init.endpoint,
       principalId: init.principalId,
+      orgId: init.orgId,
       authId: init.authId,
       authType: init.authType,
       source: init.source,

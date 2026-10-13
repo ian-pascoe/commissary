@@ -8,7 +8,8 @@ import { Data, Effect, Stream } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { causeSummary } from "../observability/cause.ts";
-import { WorkerEnv } from "../platform/env.ts";
+import { currentControlPlane, type WorkerEnv } from "../platform/env.ts";
+import type { ControlPlaneStub, CurrentOrg } from "../platform/org.ts";
 
 const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
 
@@ -31,19 +32,17 @@ export class Reply extends Data.TaggedError("Reply")<{
 export const replyError = (status: number, error: string, extra: JsonObject = {}): Reply =>
   new Reply({ response: jsonReply(status, { error, ...extra }) });
 
-type Stub = ReturnType<Env["CONTROL_PLANE"]["getByName"]>;
-
-/** Calls the singleton ControlPlane; a failed RPC is logged (never with payloads) and answered with 502. */
+/** Calls the current org's ControlPlane; a failed RPC is logged (never with payloads) and answered with 502. */
 export const controlPlane = <R>(
   label: string,
-  call: (stub: Stub) => R,
-): Effect.Effect<Awaited<R>, Reply, WorkerEnv> =>
+  call: (stub: ControlPlaneStub) => R,
+): Effect.Effect<Awaited<R>, Reply, WorkerEnv | CurrentOrg> =>
   Effect.gen(function* () {
-    const env = yield* WorkerEnv;
+    const stub = yield* currentControlPlane;
 
     return yield* Effect.tryPromise({
       // RPC results are promise-pipelining stubs; `await` yields the plain data.
-      try: async (): Promise<Awaited<R>> => await call(env.CONTROL_PLANE.getByName("global")),
+      try: async (): Promise<Awaited<R>> => await call(stub),
       catch: (cause) => (cause instanceof Error ? cause.message : "unknown error"),
     }).pipe(
       Effect.catch((message) =>

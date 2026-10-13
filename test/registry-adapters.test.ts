@@ -8,6 +8,7 @@ import { WorkerEnv } from "../src/platform/env.ts";
 import { embeddedCatalogs } from "../src/registry/catalog.ts";
 import { buildSnapshot, ModelRegistry, ModelRegistryError } from "../src/registry/service.ts";
 import { configOf, source } from "./support/registry-sources.ts";
+import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 
 const snapshot = (yaml = "") =>
   buildSnapshot({
@@ -47,6 +48,7 @@ describe("ModelProviders.registryLayer", () => {
       assert.deepStrictEqual(yield* models.providersFor("no-such-model"), []);
       assert.isDefined(yield* models.firstAvailableModel);
     }).pipe(
+      Effect.provideService(CurrentOrg, GLOBAL_ORG),
       Effect.provide(ModelProviders.registryLayer),
       Effect.provide(registryLayer()),
       Effect.provide(env),
@@ -60,6 +62,7 @@ describe("ModelProviders.registryLayer", () => {
       assert.instanceOf(error, ExecutionError);
       assert.strictEqual(error.status, 503);
     }).pipe(
+      Effect.provideService(CurrentOrg, GLOBAL_ORG),
       Effect.provide(ModelProviders.registryLayer),
       Effect.provide(failingRegistry),
       Effect.provide(env),
@@ -95,6 +98,7 @@ describe("ModelCapabilities.registryLayer", () => {
           "claude-sonnet-4-5-20250929",
         );
       }).pipe(
+        Effect.provideService(CurrentOrg, GLOBAL_ORG),
         Effect.provide(ModelCapabilities.registryLayer),
         Effect.provide(registryLayer()),
         Effect.provide(env),
@@ -121,6 +125,7 @@ describe("ModelCapabilities.registryLayer", () => {
 
         assert.isUndefined(unknown.modelInfo);
       }).pipe(
+        Effect.provideService(CurrentOrg, GLOBAL_ORG),
         Effect.provide(ModelCapabilities.registryLayer),
         Effect.provide(registryLayer()),
         Effect.provide(env),
@@ -133,6 +138,7 @@ describe("ModelCapabilities.registryLayer", () => {
       const resolved = yield* capabilities.thinking("m", credential("claude-a.json", "claude"));
       assert.deepStrictEqual(resolved, { modelInfo: undefined, lookup: undefined });
     }).pipe(
+      Effect.provideService(CurrentOrg, GLOBAL_ORG),
       Effect.provide(ModelCapabilities.registryLayer),
       Effect.provide(failingRegistry),
       Effect.provide(env),

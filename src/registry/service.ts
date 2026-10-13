@@ -3,7 +3,7 @@
  *
  * It combines three inputs: the model sources of all credentials (ControlPlane `listModelSources`), the config
  * (`ConfigReader`) and the catalogs (`CatalogStore`: KV copy refreshed by cron, embedded fallback), and exposes an
- * immutable `RegistrySnapshot` that is cached per isolate for a few seconds.
+ * immutable `RegistrySnapshot` of the current org that is cached per isolate and org for a few seconds.
  *
  * Pipeline usage (slice #5): `snapshot.providersForModel(model)` is `util.GetProviderName`, and
  * `snapshot.lookupModelInfo` has the `ModelInfoLookup` shape the thinking pipeline expects
@@ -13,7 +13,8 @@ import { Clock, Context, Effect, Layer, Ref, Result, Schema } from "effect";
 import { ConfigReader } from "../config/reader.ts";
 import type { ConfigStoreError } from "../config/errors.ts";
 import type { Config } from "../config/schema.ts";
-import { WorkerEnv } from "../platform/env.ts";
+import { currentControlPlane, WorkerEnv } from "../platform/env.ts";
+import { CurrentOrg, type OrgId } from "../platform/org.ts";
 import { projectModel } from "./availability.ts";
 import { assembleCredentialModels } from "./credential-models.ts";
 import { CatalogStore } from "./catalog-store.ts";
@@ -134,7 +135,7 @@ export class ModelRegistry extends Context.Service<
     readonly snapshot: Effect.Effect<
       RegistrySnapshot,
       ModelRegistryError | ConfigStoreError,
-      WorkerEnv
+      WorkerEnv | CurrentOrg
     >;
     /**
      * A snapshot built right now from a freshly read config (the config reader's cache is dropped first), stored in
@@ -144,7 +145,7 @@ export class ModelRegistry extends Context.Service<
     readonly fresh: Effect.Effect<
       RegistrySnapshot,
       ModelRegistryError | ConfigStoreError,
-      WorkerEnv
+      WorkerEnv | CurrentOrg
     >;
   }
 >()("cf-llm-proxy/registry/ModelRegistry") {
@@ -154,10 +155,16 @@ export class ModelRegistry extends Context.Service<
     Effect.gen(function* () {
       const configReader = yield* ConfigReader;
       const catalogStore = yield* CatalogStore;
-      const cache = yield* Ref.make<RegistrySnapshot | undefined>(undefined);
+      // Snapshots per org: each org has its own credentials and config.
+      const cache = yield* Ref.make<ReadonlyMap<OrgId, RegistrySnapshot>>(new Map());
+
+      const store = (org: OrgId, snapshot: RegistrySnapshot) =>
+        Ref.update(cache, (all) => new Map(all).set(org, snapshot));
 
       const build = Effect.gen(function* () {
         const env = yield* WorkerEnv;
+        const org = yield* CurrentOrg;
+        const plane = yield* currentControlPlane;
 
         const { config, version } = yield* configReader.get;
 
@@ -165,7 +172,7 @@ export class ModelRegistry extends Context.Service<
           [
             catalogStore.load(usesEmbeddedCatalog(config.models.catalog)),
             Effect.tryPromise({
-              try: async () => await env.CONTROL_PLANE.getByName("global").listModelSources(),
+              try: async () => await plane.listModelSources(),
               catch: (cause) =>
                 new ModelRegistryError({
                   message: "failed to read model sources from ControlPlane",
@@ -178,7 +185,7 @@ export class ModelRegistry extends Context.Service<
 
         const now = yield* Clock.currentTimeMillis;
         // Antigravity credentials serve the entitlements of their last `fetchAvailableModels` probe (KV).
-        const enriched = yield* Effect.promise(() => withAntigravityHints(env.CACHE, sources));
+        const enriched = yield* Effect.promise(() => withAntigravityHints(env.CACHE, org, sources));
 
         return buildSnapshot({
           sources: enriched,
@@ -191,13 +198,14 @@ export class ModelRegistry extends Context.Service<
 
       const snapshot = Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
-        const cached = yield* Ref.get(cache);
+        const org = yield* CurrentOrg;
+        const cached = (yield* Ref.get(cache)).get(org);
 
         if (cached !== undefined && now - cached.now < SNAPSHOT_TTL_MS) return cached;
         const built = yield* build.pipe(Effect.result);
 
         if (Result.isSuccess(built)) {
-          yield* Ref.set(cache, built.success);
+          yield* store(org, built.success);
 
           return built.success;
         }
@@ -217,7 +225,7 @@ export class ModelRegistry extends Context.Service<
       const fresh = Effect.gen(function* () {
         yield* configReader.invalidate;
         const built = yield* build;
-        yield* Ref.set(cache, built);
+        yield* store(yield* CurrentOrg, built);
 
         return built;
       });

@@ -37,6 +37,7 @@ import {
 import { splitLines } from "../../http/sse.ts";
 import { fetchProjectId } from "../../oauth/flows/antigravity.ts";
 import { WorkerEnv, WorkerExecutionContext } from "../../platform/env.ts";
+import { controlPlaneOf, CurrentOrg, GLOBAL_ORG, type OrgId } from "../../platform/org.ts";
 import {
   isolateSignatureCache,
   type MemorySignatureCache,
@@ -173,6 +174,8 @@ interface Attempt {
   readonly state: AntigravityState;
   readonly kv: KVNamespace | undefined;
   readonly signatures: MemorySignatureCache;
+  /** The request's org: the state, signatures and credential belong to it. */
+  readonly org: OrgId;
   readonly waitUntil: ((promise: Promise<unknown>) => void) | undefined;
   readonly accessToken: string;
   /** `project_id` of the credential (discovered through `loadCodeAssist` when the stored one is missing). */
@@ -199,6 +202,8 @@ export const makeAntigravityExecutor = (
   ) {
     const env = Option.getOrUndefined(yield* Effect.serviceOption(WorkerEnv));
     const ctx = Option.getOrUndefined(yield* Effect.serviceOption(WorkerExecutionContext));
+    // Like `WorkerEnv`, optional so the executor runs outside a request (unit tests); every request provides it.
+    const org = Option.getOrElse(yield* Effect.serviceOption(CurrentOrg), () => GLOBAL_ORG);
 
     const accessToken =
       typeof context.credential.metadata["access_token"] === "string"
@@ -237,12 +242,9 @@ export const makeAntigravityExecutor = (
       if (env !== undefined) {
         yield* Effect.tryPromise(
           async () =>
-            await env.CONTROL_PLANE.getByName("global").patchCredentialMetadata(
-              context.credential.id,
-              {
-                project_id: project,
-              },
-            ),
+            await controlPlaneOf(env, org).patchCredentialMetadata(context.credential.id, {
+              project_id: project,
+            }),
         ).pipe(Effect.ignore);
       }
     }
@@ -252,9 +254,10 @@ export const makeAntigravityExecutor = (
       request,
       options,
       project,
-      state: antigravityStateFor(env),
+      org,
+      state: antigravityStateFor(env, org),
       kv: env?.CACHE,
-      signatures: isolateSignatureCache(),
+      signatures: isolateSignatureCache(org),
       waitUntil:
         typeof ctx?.waitUntil === "function" ? (promise) => ctx.waitUntil(promise) : undefined,
       accessToken,
@@ -274,7 +277,8 @@ export const makeAntigravityExecutor = (
     );
 
   const persistSignatures = (attempt: Attempt): Effect.Effect<void> => {
-    const store = attempt.kv === undefined ? undefined : makeKvSignatureStore(attempt.kv);
+    const store =
+      attempt.kv === undefined ? undefined : makeKvSignatureStore(attempt.kv, attempt.org);
 
     if (store === undefined) return Effect.void;
     const flush = flushSignatureWrites(attempt.signatures, store);
@@ -390,7 +394,12 @@ export const makeAntigravityExecutor = (
 
     if (texts.length > 0 && kv !== undefined) {
       yield* Effect.promise(() =>
-        prefetchSignatures(attempt.signatures, makeKvSignatureStore(kv), baseModel, texts),
+        prefetchSignatures(
+          attempt.signatures,
+          makeKvSignatureStore(kv, attempt.org),
+          baseModel,
+          texts,
+        ),
       );
     }
 
@@ -943,7 +952,12 @@ export const makeAntigravityExecutor = (
 
     if (texts.length > 0 && kv !== undefined) {
       yield* Effect.promise(() =>
-        prefetchSignatures(attempt.signatures, makeKvSignatureStore(kv), baseModel, texts),
+        prefetchSignatures(
+          attempt.signatures,
+          makeKvSignatureStore(kv, attempt.org),
+          baseModel,
+          texts,
+        ),
       );
     }
 

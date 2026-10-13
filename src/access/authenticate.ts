@@ -3,6 +3,7 @@ import { Effect, Result } from "effect";
 import { ConfigurationError, ForbiddenError, InternalError, UnauthorizedError } from "../errors.ts";
 import type { ConfigStoreError } from "../config/errors.ts";
 import { WorkerEnv } from "../platform/env.ts";
+import { CurrentOrg } from "../platform/org.ts";
 import { type AdminLists, devBypass, isAdmin, loadAccessConfig } from "./config.ts";
 import type { AccessIdentity, Principal } from "./principal.ts";
 import { makeIdentity } from "./principal.ts";
@@ -15,7 +16,7 @@ export const ACCESS_JWT_HEADER = "cf-access-jwt-assertion";
 export type AccessError = UnauthorizedError | ForbiddenError | InternalError | ConfigurationError;
 
 /** Additional admin allow-lists (the config document's `access.admin-*`); a failure only denies, never errors. */
-export type ExtraAdmins = Effect.Effect<AdminLists, ConfigStoreError, WorkerEnv>;
+export type ExtraAdmins = Effect.Effect<AdminLists, ConfigStoreError, WorkerEnv | CurrentOrg>;
 
 let devBypassRefusalLogged = false;
 
@@ -58,14 +59,15 @@ export const authenticateRequest = (
   requestUrl: string,
   zone: Exclude<AccessZone, "public">,
   extraAdmins?: ExtraAdmins,
-): Effect.Effect<AccessIdentity, AccessError, WorkerEnv | AccessJwks> =>
+): Effect.Effect<AccessIdentity, AccessError, WorkerEnv | CurrentOrg | AccessJwks> =>
   Effect.gen(function* () {
     const env = yield* WorkerEnv;
+    const org = yield* CurrentOrg;
     const bypass = devBypass(env, requestUrl);
 
     if (bypass?._tag === "Active") {
       // Local `alchemy dev` only; the bypass principal is an administrator.
-      return yield* makeIdentity({ kind: "user", email: bypass.email, sub: "dev-bypass" });
+      return yield* makeIdentity({ kind: "user", email: bypass.email, sub: "dev-bypass" }, org);
     }
 
     if (bypass?._tag === "Refused") yield* warnDevBypassRefused;
@@ -81,5 +83,5 @@ export const authenticateRequest = (
       return yield* new ForbiddenError({ message: "Forbidden" });
     }
 
-    return yield* makeIdentity(principal);
+    return yield* makeIdentity(principal, org);
   });
