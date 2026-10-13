@@ -1197,7 +1197,13 @@ panel paths and `/management.html` as `management`); there is no management key.
   `/usage/prices?provider=&model=`. **Prices** (`/usage/prices`, `web/src/pages/Prices.tsx`, model in
   `web/src/lib/prices.ts`) lists, adds, edits and removes the org's price overrides over `/price-overrides`, with the
   entry revision as `If-Match` (a `409` reloads the list and says to make the edit again); the form opens with the
-  provider and model from the address, or edits the override that has them. Allowance figures (`web/src/lib/quota.ts`) come from the
+  provider and model from the address, or edits the override that has them. The Usage page also breaks down and filters
+  by member (`by=member`, `?member=`, shown by email). **Members** (`/members`, `web/src/pages/Members*.tsx`, rules in
+  `web/src/lib/role.ts`) lists the org's members, teams and service tokens and offers only what the caller's role allows
+  (read from the org-scoped `GET /me`): admins add and remove plain members and manage teams, owners change roles and
+  auto-join, and a token role above member is offered to a platform admin only. A plain member's panel is the Usage page
+  alone: the nav lists nothing else, `/` lands on Usage, other pages show a not-allowed note, and Usage hides the
+  breakdowns and lists they cannot read. Allowance figures (`web/src/lib/quota.ts`) come from the
   stored quota check when it is newer than the last response's rate-limit headers, otherwise from the headers. Window
   history (`web/src/lib/history.ts`) sums `GET /observability/usage/series` hourly points into the account's past quota
   windows, counted back from the current reset (approximate for windows the provider starts on first use), or into days
