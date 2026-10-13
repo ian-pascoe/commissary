@@ -98,6 +98,21 @@ export const boundedBodyText = (maxBytes: number) =>
     return text + decoder.decode();
   });
 
+/**
+ * The revision an entry edit is based on (`If-Match`: `"12"`, `W/"12"` or `12`; 0 for an entry not stored yet); an
+ * absent or malformed header is `400 invalid_if_match`.
+ */
+export const ifMatch = Effect.gen(function* () {
+  const request = yield* HttpServerRequest.HttpServerRequest;
+  const raw = request.headers["if-match"]?.trim() ?? "";
+  const match = /^(?:W\/)?(?:"(\d{1,15})"|(\d{1,15}))$/.exec(raw);
+  const digits = match?.[1] ?? match?.[2];
+
+  if (digits === undefined) return yield* replyError(400, "invalid_if_match");
+
+  return Number(digits);
+});
+
 /** Request body parsed as JSON (any value); 400 `invalid body` otherwise. */
 export const bodyJson = Effect.gen(function* () {
   const text = yield* bodyText;

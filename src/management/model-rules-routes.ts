@@ -11,12 +11,12 @@
  * which nothing would be kept is `422 invalid_config`.
  */
 import { Effect } from "effect";
-import { HttpRouter, HttpServerRequest } from "effect/http";
+import { HttpRouter } from "effect/http";
 import { AccessPrincipal } from "../access/principal.ts";
 import { decodeConfig } from "../config/codec.ts";
 import type { ChannelRuleKind, WriteResult } from "../config/store.ts";
 import { isJsonArray, type Json } from "../json/index.ts";
-import { bodyJson, controlPlane, handled, jsonReply, replyError } from "./http.ts";
+import { bodyJson, controlPlane, handled, ifMatch, jsonReply, replyError } from "./http.ts";
 
 const BASE = "/v8/management/model-rules";
 
@@ -25,18 +25,6 @@ const CONFIG_KEYS: Readonly<Record<ChannelRuleKind, "model-alias" | "excluded-mo
   aliases: "model-alias",
   exclusions: "excluded-models",
 };
-
-/** The revision the edit is based on (`If-Match`); absent or malformed is `400 invalid_if_match`. */
-const ifMatch = Effect.gen(function* () {
-  const request = yield* HttpServerRequest.HttpServerRequest;
-  const raw = request.headers["if-match"]?.trim() ?? "";
-  const match = /^(?:W\/)?(?:"(\d{1,15})"|(\d{1,15}))$/.exec(raw);
-  const digits = match?.[1] ?? match?.[2];
-
-  if (digits === undefined) return yield* replyError(400, "invalid_if_match");
-
-  return Number(digits);
-});
 
 /** The `:channel` parameter as the config keys it (trimmed, lower-case); empty is `400 invalid_channel`. */
 const channelParam = Effect.gen(function* () {

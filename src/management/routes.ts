@@ -41,6 +41,7 @@ import { credentialsBatchHandler } from "./credentials-batch.ts";
 import { credentialModelsHandler, credentialRoutes } from "./credentials-routes.ts";
 import { oauthRoutes } from "./oauth-routes.ts";
 import { orgRoutes } from "./org-routes.ts";
+import { priceRoutes } from "./price-routes.ts";
 import { quotaCheckHandler, quotaSweepHandler } from "./quota-routes.ts";
 import { claimResetGrantHandler, resetGrantsHandler } from "./reset-grant-routes.ts";
 import { modelRuleRoutes } from "./model-rules-routes.ts";
@@ -82,6 +83,7 @@ export const ManagementRoutes = HttpRouter.addAll(
       ...usageRoutes,
       ...oauthRoutes,
       ...orgRoutes,
+      ...priceRoutes,
       HttpRouter.route("GET", `${BASE}/credentials/models`, bound(credentialModelsHandler)),
       HttpRouter.route("POST", `${BASE}/credentials/batch`, credentialsBatchHandler),
       HttpRouter.route("POST", `${BASE}/credentials/quota`, bound(quotaCheckHandler)),
