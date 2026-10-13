@@ -159,7 +159,7 @@ export const activeFilters = (
   });
 
 /** A parameter that is dropped, rather than failing the whole address, when its value is malformed. */
-const lenient = <S extends Schema.Top>(schema: S) =>
+export const lenient = <S extends Schema.Top>(schema: S) =>
   Schema.optionalKey(schema.pipe(Schema.catchDecoding(() => Effect.succeedNone)));
 
 /**

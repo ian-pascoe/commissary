@@ -256,7 +256,7 @@ const usageUnpriced = Effect.gen(function* () {
   const params = yield* queryParams;
   const scoped = new URLSearchParams();
 
-  for (const name of ["since", "until", "provider", "model"]) {
+  for (const name of ["since", "until", "provider", "model", "principal", "auth_index"]) {
     const value = params.get(name);
 
     if (value !== null) scoped.set(name, value);

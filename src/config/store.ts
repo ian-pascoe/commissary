@@ -30,6 +30,7 @@
  * is not: readers take `global`'s value (`config/reader.ts`).
  */
 import { Effect, Result } from "effect";
+import { MAX_OVERRIDE_PRICE } from "../management/contract/prices.ts";
 import {
   assignEntryIds,
   freshEntryId,
@@ -206,9 +207,6 @@ type Table = (typeof TABLES)[keyof typeof TABLES];
 
 /** One override per provider and model, however they are cased. */
 const PRICE_OVERRIDES = "config_price_overrides";
-
-/** The largest price (USD per million tokens) an override may state: a typo guard, not a market bound. */
-export const MAX_OVERRIDE_PRICE = 100_000;
 
 const ENTRY_COLUMNS = `revision INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT NOT NULL`;
 

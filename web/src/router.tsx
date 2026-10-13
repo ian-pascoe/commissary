@@ -11,11 +11,13 @@ import { ModelRulesPage } from "./pages/ModelRules.tsx";
 import { ModelsPage } from "./pages/Models.tsx";
 import { OverviewPage } from "./pages/Overview.tsx";
 import { NotFound } from "./pages/NotFound.tsx";
+import { PricesPage } from "./pages/Prices.tsx";
 import { SettingsPage } from "./pages/Settings.tsx";
 import { UsagePage } from "./pages/Usage.tsx";
 import { readNewKeySearch } from "./lib/keys.ts";
 import { legacyHashTarget } from "./lib/legacy-hash.ts";
 import { panelBasepath } from "./lib/org.ts";
+import { readPricesSearch } from "./lib/prices.ts";
 import { readUsageSearch } from "./lib/usage.ts";
 
 const rootRoute = createRootRoute({ component: Shell, notFoundComponent: NotFound });
@@ -56,6 +58,12 @@ const routeTree = rootRoute.addChildren([
     path: "/usage",
     validateSearch: readUsageSearch,
     component: UsagePage,
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/usage/prices",
+    validateSearch: readPricesSearch,
+    component: PricesPage,
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: SettingsPage }),
 ]);

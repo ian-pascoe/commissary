@@ -215,6 +215,18 @@ describe("management contract", () => {
       assert.deepStrictEqual(unpriced, {
         models: [{ provider: "codex", model: "mystery", requests: 1, total_tokens: 130 }],
       });
+
+      // The list narrows like the rest of the page: by account and by user.
+      const nobody = yield* api.usage.unpriced({
+        query: { since, principal: "nobody@example.com" },
+      });
+
+      const noAccount = yield* api.usage.unpriced({
+        query: { since, auth_index: "0000000000000000" },
+      });
+
+      assert.deepStrictEqual(nobody, { models: [] });
+      assert.deepStrictEqual(noAccount, { models: [] });
     }).pipe(through(harness)),
   );
 

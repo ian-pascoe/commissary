@@ -197,6 +197,56 @@
   color: var(--quiet);
 }
 
+/* A breakdown row's requests that had no price: under its cost, in the warning colour. */
+.unpricedNote {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--danger);
+}
+
+/* Models without a price: the one callout on the page, with a way to fix each. */
+.unpriced {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 2px solid var(--danger);
+  border-radius: var(--radius);
+}
+
+.unpricedTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 700;
+}
+
+.unpricedList {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+
+.unpricedList li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-4);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.titleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-5);
+}
+
 /* The request log. */
 .log > thead th:nth-child(1) {
   width: 11rem;

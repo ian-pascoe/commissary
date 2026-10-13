@@ -6,6 +6,7 @@ import { Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 import { ManagementApi } from "#contract/api.ts";
 import { type BatchAction, batchLimit } from "#contract/credentials.ts";
 import { ManagementError } from "#contract/errors.ts";
+import type { PriceOverrideBody, PriceOverrideSaved } from "#contract/prices.ts";
 import type { RoutingModels } from "#contract/routing.ts";
 import { type ChunkOutcome, chunks, foldOutcomes } from "../lib/batch.ts";
 import { causeMessage } from "../lib/failure.ts";
@@ -136,6 +137,23 @@ export const usageSeriesAtom = Atom.family((view: UsageView) =>
         });
 
         return { now, points: mergePoints(series.series) };
+      }),
+    )
+    .pipe(Atom.setIdleTTL(KEEP)),
+);
+
+/** The provider and model pairs with unpriced requests in a view, the busiest first (what to give a price override). */
+export const usageUnpricedAtom = Atom.family((view: UsageView) =>
+  ManagementClient.runtime
+    .atom((get) =>
+      Effect.gen(function* () {
+        get(usageEpochAtom);
+        const client = yield* ManagementClient;
+        const now = yield* Clock.currentTimeMillis;
+
+        return yield* client.usage.unpriced({
+          query: { since: rangeStart(rangeOf(view.range), now), ...filterQuery(view.filters) },
+        });
       }),
     )
     .pipe(Atom.setIdleTTL(KEEP)),
@@ -302,6 +320,65 @@ export const saveRuleAtom = Atom.family((_key: string) =>
           Effect.die,
         ),
       ),
+  ),
+);
+
+/** The Prices page refetches after a mutation tagged with this key. */
+export const PRICES = ["prices"] as const;
+
+/** The org's price overrides with the revision of each (writes send it back). */
+export const priceOverridesAtom = ManagementClient.query("prices", "list", {
+  reactivityKeys: PRICES,
+  timeToLive: KEEP,
+});
+
+/** One price override write: add, replace (with the override's revision as `If-Match`) or remove. */
+export type PriceWrite =
+  | { readonly kind: "create"; readonly body: PriceOverrideBody }
+  | {
+      readonly kind: "replace";
+      readonly id: string;
+      readonly revision: number;
+      readonly body: PriceOverrideBody;
+    }
+  | { readonly kind: "remove"; readonly id: string; readonly revision: number };
+
+/**
+ * A price write; the list refetches afterwards, also after a refusal that stays (409: another edit landed first).
+ * Transport and decoding failures become defects, as in the generated mutations, so the failure is a
+ * `ManagementError` or none.
+ */
+export const savePriceAtom = ManagementClient.runtime.fn((write: PriceWrite) =>
+  Effect.gen(function* () {
+    const client = yield* ManagementClient;
+
+    const call = (): Effect.Effect<
+      PriceOverrideSaved,
+      ManagementError | Schema.SchemaError | HttpClientError.HttpClientError
+    > => {
+      switch (write.kind) {
+        case "create":
+          return client.prices.create({ payload: write.body });
+        case "replace":
+          return client.prices.replace({
+            params: { id: write.id },
+            headers: { "if-match": String(write.revision) },
+            payload: write.body,
+          });
+        case "remove":
+          return client.prices.remove({
+            params: { id: write.id },
+            headers: { "if-match": String(write.revision) },
+          });
+      }
+    };
+
+    return yield* Reactivity.mutation(call(), PRICES).pipe(reloadOnConflict(PRICES));
+  }).pipe(
+    Effect.catchIf(
+      (error) => Schema.isSchemaError(error) || HttpClientError.isHttpClientError(error),
+      Effect.die,
+    ),
   ),
 );
 

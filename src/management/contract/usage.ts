@@ -186,12 +186,14 @@ export const UsageRecordsPage = Schema.Struct({
 
 export type UsageRecordsPage = typeof UsageRecordsPage.Type;
 
-/** The filters of the unpriced list: the time range and the provider and model, as the summary's. */
+/** The filters of the unpriced list: the time range, provider, model, user and account, as the summary's. */
 export const UsageUnpricedQuery = Schema.Struct({
   since: optional(Schema.Number),
   until: optional(Schema.Number),
   provider: optional(Schema.String),
   model: optional(Schema.String),
+  principal: optional(Schema.String),
+  auth_index: optional(Schema.String),
 });
 
 /** A provider and model pair with unpriced requests: what to give a price override. */

@@ -14,6 +14,9 @@ import { managementErrors } from "./errors.ts";
 
 const optional = Schema.optionalKey;
 
+/** The largest price (USD per million tokens) an override may state: a typo guard, not a market bound. */
+export const MAX_OVERRIDE_PRICE = 100_000;
+
 /** The provider and model of a usage record and the prices to cost its tokens at. */
 export const PriceOverrideBody = Schema.Struct({
   /** The provider key of the usage record (`codex`, `claude`, `gemini`, an OpenAI-compatible endpoint's name, ...). */
