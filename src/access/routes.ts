@@ -39,6 +39,7 @@ export const PANEL_SECTIONS = [
   "models",
   "usage",
   "settings",
+  "members",
   "assets",
 ] as const;
 

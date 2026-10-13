@@ -88,7 +88,8 @@ export type ServiceTokenList = typeof ServiceTokenList.Type;
 export const RegisterServiceToken = Schema.Struct({
   client_id: Schema.String,
   name: Schema.optionalKey(Schema.String),
-  role: OrgRole,
+  /** `member` when left out. */
+  role: Schema.optionalKey(OrgRole),
 });
 
 export type RegisterServiceToken = typeof RegisterServiceToken.Type;

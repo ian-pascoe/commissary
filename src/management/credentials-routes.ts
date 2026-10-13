@@ -6,9 +6,10 @@
  * (`PatchAuthFileStatus`, `PatchAuthFileFields`), auth_files_refresh.go (`RefreshAuthFiles`), quota.go (`ResetQuota`).
  * Auth files live in the ControlPlane Durable Object instead of a directory; the credential `id` is the file name.
  * Differences: a field patch refused for its value answers `422 {error, path}` naming the field (Go: `400`), and the
- * list masks secret-looking header values (`field-patch.ts`, `credential-entry.ts`), and the download answers only
- * service-token administrators (`403 download_requires_service_token` for an email admin): the file carries the
- * access and refresh tokens, and a service token is the credential meant for automation (`docs/ACCESS.md`).
+ * list masks secret-looking header values (`field-patch.ts`, `credential-entry.ts`), and the download answers only a
+ * service token that is an org owner, or a platform admin (`403 download_requires_service_token` otherwise; ADR 0006's
+ * rule per org, ADR 0022): the file carries the access and refresh tokens, and a service token is the credential
+ * meant for automation (`docs/ACCESS.md`).
  *
  * The list also carries the config API keys whose provider reports quota with the key (OpenCode Go, `source:
  * "config"`, named by their `auth_index`; `credential-entry.ts`). File-only operations naming one of them (delete,
@@ -18,6 +19,7 @@
 import { Clock, Effect } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { AccessPrincipal } from "../access/principal.ts";
+import { holdsSensitivePowers } from "../members/roles.ts";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { ModelRegistry } from "../registry/service.ts";
 import {
@@ -334,12 +336,12 @@ const deleteCredentials = Effect.gen(function* () {
 // --- download / models -------------------------------------------------------------------------------------------
 
 const downloadCredential = Effect.gen(function* () {
-  const { principal } = yield* AccessPrincipal;
+  const identity = yield* AccessPrincipal;
 
-  if (principal.kind !== "service")
+  if (!holdsSensitivePowers(identity))
     return yield* replyError(403, "download_requires_service_token", {
       message:
-        "downloading a credential file discloses its tokens: call this endpoint with an Access service token (see docs/ACCESS.md)",
+        "downloading a credential file discloses its tokens: call this endpoint with an Access service token that is an org owner, or as a platform admin (see docs/ACCESS.md)",
     });
   const name = (yield* queryParams).get("name")?.trim() ?? "";
 
