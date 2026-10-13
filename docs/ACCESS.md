@@ -115,15 +115,18 @@ the Worker asks on every request: a removed member, or a member whose role was l
 | List, create and rename orgs                                                                 |                   |           |                              |       ✓        |
 
 - **Adding a member** (`POST /members` with an email and a role) takes effect the next time the person signs in through Access;
-  no email is sent, and Access must still admit them (§2). Removing a member takes them off every team.
+  no email is sent, and Access must still admit them (§2). Removing a member takes them off every team, and they are refused
+  from their next request on, even where auto-join is on: a person or service token an org admin removed does not join by
+  themselves again until an org admin adds (or registers) them back.
 - **Auto-join** (`GET`/`PATCH /membership`, `{"auto_join": true}`): with it on, a person Access admits who is not a member of
   the org joins it as a plain member on their first request. It is on for `global`, so a self-hosted deployment keeps admitting
   everyone its Access policies admit, and off for every new org, where only added members get in (`403` for anyone else, the
   proxy endpoints included).
 - **Service tokens** (`/service-tokens`) are registered to one org by their Client ID with a role (`409 service_token_taken`
-  when another org has the token). With auto-join on, an unregistered token is admitted as a plain member without being stored,
+  when another org has the token, also when two orgs register it at once: the one the registry indexes first keeps it). With
+  auto-join on, an unregistered token is admitted as a plain member without being stored,
   so existing clients of `global` keep working; register it to give it a role.
-- **Teams** (`/teams`) are named groups of members within an org; an admin filters usage by member (`member=<id>`) or team
+- **Teams** (`/teams`) are named groups of members within an org; an org admin filters usage by member (`member=<id>`) or team
   (`team=<id>`) and groups a summary by member (`group_by=member`).
 - An org with members keeps at least one owner: lowering or removing the last owner answers `409 last_owner`.
 - **ADR 0006 per org**: giving a service token a role above plain member, and downloading a credential (§4), need a service
@@ -136,7 +139,9 @@ the Worker asks on every request: a removed member, or a member whose role was l
 lists become members of `global`, once: the platform admins of the time become org owners, `access.admin-emails` org admins and
 `access.admin-service-tokens` service tokens with the owner role (they could download credentials before). The lists then leave
 the config, `GET /settings` no longer shows them, and a Go config document imported later has its `access.admin-*` keys ignored
-(`not_applied`). In any other org the lists never granted anything and are only removed.
+(`not_applied`). In any other org the lists never granted anything and are only removed. The platform admins become stored
+owners of `global` even when the lists were empty: taking an email out of `PLATFORM_ADMIN_EMAILS` later ends its platform admin
+rights but not its `global` membership, which an org owner removes on the Members page (`DELETE /members/<id>`).
 
 `ACCESS_DEV_BYPASS` only applies to requests whose host is `localhost`, `127.0.0.1` or `[::1]`, and is refused (with a logged
 warning) whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set: a Worker wired to Access never skips it.
