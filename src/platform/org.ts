@@ -41,10 +41,14 @@ export const controlPlaneOf = (env: Env, org: OrgId): ControlPlaneStub =>
 
 /**
  * The org a ControlPlane serves, from its Durable Object id. Every ControlPlane is reached by name
- * ({@link controlPlaneOf}); an object whose name is not an org id (only tests create those) serves `global`.
+ * ({@link controlPlaneOf}), so an object without an org id as its name is a bug: it throws rather than serving `global`
+ * (whose keys and deployment settings another org must never get).
  */
-export const orgOfControlPlane = (id: DurableObjectId): OrgId =>
-  id.name !== undefined && Schema.is(OrgId)(id.name) ? id.name : GLOBAL_ORG;
+export const orgOfControlPlane = (id: DurableObjectId): OrgId => {
+  if (id.name !== undefined && Schema.is(OrgId)(id.name)) return id.name;
+
+  throw new Error(`ControlPlane ${id.toString()} is not named by an org id`);
+};
 
 /**
  * `name` within `org`: unchanged for `global`, so the names stored before orgs existed stay valid, and

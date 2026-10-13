@@ -10,8 +10,8 @@
  */
 import { createHash } from "node:crypto";
 import { Clock, Data, Effect, Option, Schema } from "effect";
-import { WorkerEnv } from "../platform/env.ts";
-import { CurrentOrg, GLOBAL_ORG, type OrgId, orgScopedName } from "../platform/org.ts";
+import { optionalRequestOrg, WorkerEnv } from "../platform/env.ts";
+import { GLOBAL_ORG, type OrgId, orgScopedName } from "../platform/org.ts";
 import type { SessionState } from "./durable-object.ts";
 import { MemoryStateTable, StateEngine } from "./engine.ts";
 import type { SessionAddress, StateOp, StateResult } from "./protocol.ts";
@@ -105,14 +105,15 @@ export const orgBackend = (backend: SessionStateBackend, org: OrgId): SessionSta
 
 /**
  * The backend of the current request's org: the Durable Object when `WorkerEnv` binds it, else `fallback`. Both
- * services are optional so stores also run outside a request (unit tests); every request provides them.
+ * services are optional so stores also run outside a request (unit tests); a request without its org is a defect
+ * (`optionalRequestOrg`).
  */
 export const resolveBackend = (
   fallback: SessionStateBackend = isolateMemoryBackend,
 ): Effect.Effect<SessionStateBackend> =>
   Effect.gen(function* () {
     const env = yield* Effect.serviceOption(WorkerEnv);
-    const org = Option.getOrElse(yield* Effect.serviceOption(CurrentOrg), () => GLOBAL_ORG);
+    const org = yield* optionalRequestOrg;
 
     const backend =
       Option.isSome(env) && env.value.SESSION_STATE !== undefined

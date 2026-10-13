@@ -1,9 +1,10 @@
 // The org boundary (ADR 0021): two orgs in one deployment keep their config, credentials, cooldowns, usage and
 // auth indexes apart, and the org `global` keeps everything it had before orgs existed.
 import { env } from "cloudflare:workers";
-import { Effect, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { ConfigReader } from "../src/config/reader.ts";
+import { ConfigStoreError } from "../src/config/errors.ts";
+import { ConfigReader, ConfigSource } from "../src/config/reader.ts";
 import { makeControlPlanePicker } from "../src/executor/control-plane-picker.ts";
 import { WorkerEnv } from "../src/platform/env.ts";
 import {
@@ -11,6 +12,7 @@ import {
   CurrentOrg,
   GLOBAL_ORG,
   OrgId,
+  orgOfControlPlane,
   orgOfScopedName,
   orgScopedName,
 } from "../src/platform/org.ts";
@@ -18,24 +20,30 @@ import { resolveBackend } from "../src/session-state/client.ts";
 import { loadVideoBinding, saveVideoBinding } from "../src/handlers/openai/video-binding.ts";
 import { insertUsageRecord } from "../src/usage/d1.ts";
 import { authIndexOf } from "./support/auth-index.ts";
-import { claudeFile, makeHarness, resetControlPlane } from "./support/management.ts";
+import { claudeFile, makeHarness, resetOrgControlPlane } from "./support/management.ts";
 import { resetUsageDb, sampleRecord } from "./support/usage.ts";
 
-/** A fresh org per test file run: its ControlPlane starts empty. */
+/** Fresh orgs per test file run: their ControlPlanes start empty. */
 const ACME = OrgId.make(`acme-${crypto.randomUUID().slice(0, 8)}`);
+
+const BETA = OrgId.make(`beta-${crypto.randomUUID().slice(0, 8)}`);
 
 const global = makeHarness(undefined, {}, GLOBAL_ORG);
 
 const acme = makeHarness(undefined, {}, ACME);
 
+const beta = makeHarness(undefined, {}, BETA);
+
 afterAll(async () => {
   await global.dispose();
   await acme.dispose();
+  await beta.dispose();
 });
 
 beforeEach(async () => {
-  await resetControlPlane(GLOBAL_ORG);
-  await resetControlPlane(ACME);
+  await resetOrgControlPlane(GLOBAL_ORG);
+  await resetOrgControlPlane(ACME);
+  await resetOrgControlPlane(BETA);
 });
 
 const putYaml = (yaml: string) => ({
@@ -108,6 +116,13 @@ describe("two orgs in one deployment", () => {
     expect(inGlobal?.auth_index).toBe(authIndexOf(name));
     expect(inAcme?.auth_index).toMatch(/^[0-9a-f]{16}$/);
     expect(inAcme?.auth_index).not.toBe(inGlobal?.auth_index);
+
+    expect(
+      (await beta.json(`/v8/management/credentials?name=${name}`, upload(claudeFile()))).status,
+    ).toBe(200);
+    const [inBeta] = await credentials(beta);
+    expect(inBeta?.auth_index).toMatch(/^[0-9a-f]{16}$/);
+    expect(new Set([inAcme?.auth_index, inBeta?.auth_index, inGlobal?.auth_index]).size).toBe(3);
   });
 });
 
@@ -343,5 +358,49 @@ describe("session state and video bindings", () => {
       model: "grok",
     });
     expect(await inOrg(GLOBAL_ORG)(loadVideoBinding(videoId))).toBeUndefined();
+  });
+});
+
+describe("fail closed", () => {
+  it("a request without its org is a defect, not a read of global's session state", async () => {
+    const exit = await Effect.runPromiseExit(
+      resolveBackend().pipe(Effect.provideService(WorkerEnv, env)),
+    );
+
+    expect(exit._tag).toBe("Failure");
+  });
+
+  it("a ControlPlane not named by an org id has no org (its constructor throws)", () => {
+    expect(() => orgOfControlPlane(env.CONTROL_PLANE.newUniqueId())).toThrow(
+      /not named by an org id/,
+    );
+    expect(() => orgOfControlPlane(env.CONTROL_PLANE.idFromName("Not_An_Org"))).toThrow();
+    expect(orgOfControlPlane(env.CONTROL_PLANE.idFromName("acme"))).toBe("acme");
+  });
+
+  it("another org's config read fails while global's config cannot be read", async () => {
+    const failing = Layer.succeed(
+      ConfigSource,
+      ConfigSource.of({
+        fetch: () =>
+          Effect.gen(function* () {
+            const org = yield* CurrentOrg;
+
+            return org === GLOBAL_ORG
+              ? yield* new ConfigStoreError({ message: "unreachable" })
+              : { version: 1, document: "{}", unchanged: false, updatedAt: 0 };
+          }),
+      }),
+    );
+
+    const read = await Effect.runPromiseExit(
+      ConfigReader.use((reader) => reader.get).pipe(
+        Effect.provide(ConfigReader.layer().pipe(Layer.provide(failing))),
+        Effect.provideService(WorkerEnv, env),
+        Effect.provideService(CurrentOrg, ACME),
+      ),
+    );
+
+    expect(read._tag).toBe("Failure");
   });
 });

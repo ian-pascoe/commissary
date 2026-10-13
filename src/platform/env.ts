@@ -1,5 +1,11 @@
 import { Context, Effect, Option } from "effect";
-import { type ControlPlaneStub, controlPlaneOf, CurrentOrg, GLOBAL_ORG } from "./org.ts";
+import {
+  type ControlPlaneStub,
+  controlPlaneOf,
+  CurrentOrg,
+  GLOBAL_ORG,
+  type OrgId,
+} from "./org.ts";
 
 /**
  * Cloudflare bindings (`env`) of the current Worker invocation.
@@ -35,6 +41,24 @@ export const currentControlPlane: Effect.Effect<ControlPlaneStub, never, WorkerE
   Effect.gen(function* () {
     return controlPlaneOf(yield* WorkerEnv, yield* CurrentOrg);
   });
+
+/**
+ * The org of code whose type cannot require {@link CurrentOrg} (the SessionState backends and the Antigravity executor,
+ * which also run outside a request in unit tests): `global` only when there is no request at all (no `WorkerEnv`). A
+ * request without an org is a defect, never a silent read of `global`'s state.
+ */
+export const optionalRequestOrg: Effect.Effect<OrgId> = Effect.gen(function* () {
+  const org = yield* Effect.serviceOption(CurrentOrg);
+
+  if (Option.isSome(org)) return org.value;
+
+  if (Option.isSome(yield* Effect.serviceOption(WorkerEnv)))
+    return yield* Effect.die(
+      new Error("CurrentOrg is not provided for a request that has WorkerEnv"),
+    );
+
+  return GLOBAL_ORG;
+});
 
 const noop = (): void => undefined;
 

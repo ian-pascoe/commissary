@@ -20,9 +20,29 @@ import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
  * Settings that only the `global` org's config may set, with the value read from it: `models.catalog`, the source of
  * the model catalog every org shares (ADR 0021).
  */
-export const DEPLOYMENT_SETTINGS = [
-  { key: "models.catalog", value: (config: Config): string => config.models.catalog.trim() },
-] as const;
+export const DEPLOYMENT_SETTINGS: ReadonlyArray<DeploymentSetting> = [
+  {
+    key: "models.catalog",
+    isSet: (config) => config.models.catalog.trim() !== "",
+    copy: (config, deployment) =>
+      config.models.catalog === deployment.models.catalog
+        ? config
+        : { ...config, models: { ...config.models, catalog: deployment.models.catalog } },
+  },
+];
+
+export interface DeploymentSetting {
+  /** The setting's key as the config document spells it. */
+  readonly key: string;
+  /** Whether `config` sets it (a value other than the default). */
+  readonly isSet: (config: Config) => boolean;
+  /** `config` with the setting's value taken from `deployment`, the `global` org's config (`config` when equal). */
+  readonly copy: (config: Config, deployment: Config) => Config;
+}
+
+/** `config` with every deployment setting taken from `deployment`, the `global` org's config. */
+export const withDeploymentSettings = (config: Config, deployment: Config): Config =>
+  DEPLOYMENT_SETTINGS.reduce((current, setting) => setting.copy(current, deployment), config);
 
 /** What `getConfig` returns over RPC (plain data only). */
 export interface ConfigSnapshotWire {
@@ -64,7 +84,7 @@ export class ConfigStore {
   readonly #org: OrgId;
 
   /** `org`: the org whose config this is; only `global`'s accepts the deployment settings. */
-  constructor(sql: SqlStorage, now: () => number = Date.now, org: OrgId = GLOBAL_ORG) {
+  constructor(sql: SqlStorage, org: OrgId, now: () => number = Date.now) {
     this.#sql = sql;
     this.#now = now;
     this.#org = org;
@@ -126,7 +146,7 @@ export class ConfigStore {
       return { ok: false, error: "invalid", message: parsed.failure.message };
 
     if (this.#org !== GLOBAL_ORG) {
-      const set = DEPLOYMENT_SETTINGS.filter((setting) => setting.value(parsed.success) !== "");
+      const set = DEPLOYMENT_SETTINGS.filter((setting) => setting.isSet(parsed.success));
 
       if (set.length > 0)
         return {

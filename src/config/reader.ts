@@ -8,14 +8,15 @@
  *
  * Deployment settings: the model catalog is shared by every org, so its source (`models.catalog`) is the `global`
  * org's setting. Another org's snapshot carries `global`'s value (its own ControlPlane refuses to store one,
- * `ConfigStore`), so every reader of `models.catalog` sees the one setting that decides the shared catalog.
+ * `ConfigStore`), so every reader of `models.catalog` sees the one setting that decides the shared catalog. The
+ * settings are listed in `DEPLOYMENT_SETTINGS` (`config/store.ts`), which both the store and this reader apply.
  */
 import { Clock, Context, Duration, Effect, Layer, Ref } from "effect";
 import { currentControlPlane, type WorkerEnv } from "../platform/env.ts";
 import { CurrentOrg, GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 import { ConfigStoreError } from "./errors.ts";
 import type { Config } from "./schema.ts";
-import { decodeStoredConfig, type ConfigSnapshotWire } from "./store.ts";
+import { decodeStoredConfig, withDeploymentSettings, type ConfigSnapshotWire } from "./store.ts";
 
 export interface ConfigSnapshot {
   readonly version: number;
@@ -149,22 +150,12 @@ export const makeConfigReader = Effect.fnUntraced(function* (options: ConfigRead
 
     if (org === GLOBAL_ORG) return snapshot;
 
-    // The deployment settings come from `global`; without its config, the org's own (default) value stands.
-    const catalog = yield* own(GLOBAL_ORG).pipe(
-      Effect.map((deployment) => deployment.config.models.catalog),
-      Effect.catch((error) =>
-        Effect.logWarning(
-          `global config unavailable for deployment settings: ${error.message}`,
-        ).pipe(Effect.as(snapshot.config.models.catalog)),
-      ),
-    );
+    // The deployment settings come from `global` only: without its config (never read, unreachable) the read fails
+    // like any config read, rather than serve the org's own default for a setting `global` decides.
+    const deployment = yield* own(GLOBAL_ORG);
+    const config = withDeploymentSettings(snapshot.config, deployment.config);
 
-    return catalog === snapshot.config.models.catalog
-      ? snapshot
-      : {
-          version: snapshot.version,
-          config: { ...snapshot.config, models: { ...snapshot.config.models, catalog } },
-        };
+    return config === snapshot.config ? snapshot : { version: snapshot.version, config };
   });
 
   return ConfigReader.of({

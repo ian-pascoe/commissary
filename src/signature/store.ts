@@ -11,7 +11,7 @@ import {
   type SignatureWrite,
   signatureStoreKey,
 } from "./cache.ts";
-import { GLOBAL_ORG, type OrgId, orgScopedName } from "../platform/org.ts";
+import { type OrgId, orgScopedName } from "../platform/org.ts";
 
 export interface SignatureStore {
   get(modelName: string, text: string): Promise<string | undefined>;
@@ -23,7 +23,7 @@ export interface SignatureStore {
 const TTL_SECONDS = SIGNATURE_CACHE_TTL_MS / 1000;
 
 /** `CACHE` KV backed store of `org` (keys scoped with `orgScopedName`, unchanged for `global`). */
-export const makeKvSignatureStore = (kv: KVNamespace, org: OrgId = GLOBAL_ORG): SignatureStore => {
+export const makeKvSignatureStore = (kv: KVNamespace, org: OrgId): SignatureStore => {
   const key = (modelName: string, text: string): string =>
     orgScopedName(org, signatureStoreKey(modelName, text));
 

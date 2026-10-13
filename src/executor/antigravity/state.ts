@@ -13,7 +13,7 @@
 import { createHash } from "node:crypto";
 import type { SessionState } from "../../session-state/durable-object.ts";
 import { addressName } from "../../session-state/client.ts";
-import { GLOBAL_ORG, type OrgId, orgScopedName } from "../../platform/org.ts";
+import { type OrgId, orgScopedName } from "../../platform/org.ts";
 
 export const CREDITS_TTL_MS = 30 * 60_000;
 
@@ -59,7 +59,7 @@ const memoryCredits = new Map<
 const memoryRefresh = new Map<string, number>();
 
 /** Per-isolate implementation of `org` (tests and deployments without KV). */
-export const makeMemoryAntigravityState = (org: OrgId = GLOBAL_ORG): AntigravityState => {
+export const makeMemoryAntigravityState = (org: OrgId): AntigravityState => {
   const key = (authId: string): string => `${org}|${authId}`;
 
   return {
@@ -112,7 +112,7 @@ const CREDITS_LOCK_STORE = "antigravity-credits-probe";
  * {@link CreditsRefreshClaim} of `org` over the `SessionState` Durable Object (`put` with `ifGeneration: 0`).
  */
 export const sessionStateCreditsClaim =
-  (namespace: DurableObjectNamespace<SessionState>, org: OrgId = GLOBAL_ORG): CreditsRefreshClaim =>
+  (namespace: DurableObjectNamespace<SessionState>, org: OrgId): CreditsRefreshClaim =>
   async (authId, now) => {
     try {
       const stub = namespace.getByName(
@@ -141,7 +141,7 @@ export const sessionStateCreditsClaim =
 /** KV-backed implementation for `org`; every KV failure degrades to "no state". */
 export const makeKvAntigravityState = (
   kv: KVNamespace,
-  org: OrgId = GLOBAL_ORG,
+  org: OrgId,
   claimRefresh: CreditsRefreshClaim = makeMemoryAntigravityState(org).claimCreditsRefresh,
 ): AntigravityState => {
   const swallow = async <T>(run: () => Promise<T>, fallback: T): Promise<T> => {

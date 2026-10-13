@@ -36,8 +36,8 @@ import {
 } from "../../json/index.ts";
 import { splitLines } from "../../http/sse.ts";
 import { fetchProjectId } from "../../oauth/flows/antigravity.ts";
-import { WorkerEnv, WorkerExecutionContext } from "../../platform/env.ts";
-import { controlPlaneOf, CurrentOrg, GLOBAL_ORG, type OrgId } from "../../platform/org.ts";
+import { optionalRequestOrg, WorkerEnv, WorkerExecutionContext } from "../../platform/env.ts";
+import { controlPlaneOf, type OrgId } from "../../platform/org.ts";
 import {
   isolateSignatureCache,
   type MemorySignatureCache,
@@ -202,8 +202,8 @@ export const makeAntigravityExecutor = (
   ) {
     const env = Option.getOrUndefined(yield* Effect.serviceOption(WorkerEnv));
     const ctx = Option.getOrUndefined(yield* Effect.serviceOption(WorkerExecutionContext));
-    // Like `WorkerEnv`, optional so the executor runs outside a request (unit tests); every request provides it.
-    const org = Option.getOrElse(yield* Effect.serviceOption(CurrentOrg), () => GLOBAL_ORG);
+    // Like `WorkerEnv`, optional so the executor runs outside a request (unit tests); a request must carry it.
+    const org = yield* optionalRequestOrg;
 
     const accessToken =
       typeof context.credential.metadata["access_token"] === "string"

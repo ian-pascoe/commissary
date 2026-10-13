@@ -53,8 +53,13 @@ export const serviceToken = async (commonName: string): Promise<string> =>
 /** The ControlPlane of `org` (`global` by default). */
 export const controlPlane = (org: OrgId = GLOBAL_ORG) => controlPlaneOf(env, org);
 
+/** Restores a pristine ControlPlane of `global` (no credentials, default config); usable as a `beforeEach` hook. */
+export const resetControlPlane = async (): Promise<void> => {
+  await resetOrgControlPlane(GLOBAL_ORG);
+};
+
 /** Restores a pristine ControlPlane of `org` (no credentials, default config). */
-export const resetControlPlane = async (org: OrgId = GLOBAL_ORG): Promise<void> => {
+export const resetOrgControlPlane = async (org: OrgId): Promise<void> => {
   const stub = controlPlane(org);
   const entries = await stub.listCredentials();
   await stub.removeCredentials(entries.map((entry) => entry.id));

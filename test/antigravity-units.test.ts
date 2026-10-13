@@ -388,7 +388,7 @@ describe("SSE handling", () => {
 
 describe("state and credits", () => {
   it("tracks short cooldowns in memory", async () => {
-    const state = makeMemoryAntigravityState();
+    const state = makeMemoryAntigravityState(GLOBAL_ORG);
     await state.markShortCooldown("a", "m", 30_000, 1000);
     expect(await state.shortCooldownRemaining("a", "m", 11_000)).toBe(20_000);
     expect(await state.shortCooldownRemaining("a", "m", 40_000)).toBe(0);
@@ -396,7 +396,7 @@ describe("state and credits", () => {
   });
 
   it("persists short cooldowns and credits in KV and degrades without state", async () => {
-    const state = makeKvAntigravityState(env.CACHE);
+    const state = makeKvAntigravityState(env.CACHE, GLOBAL_ORG);
     const id = `kv-${crypto.randomUUID()}`;
     await state.markShortCooldown(id, "claude-x", 30_000, 1_000);
     expect(await state.shortCooldownRemaining(id, "claude-x", 11_000)).toBe(20_000);
@@ -445,7 +445,7 @@ describe("state and credits", () => {
   });
 
   it("claims the credits probe slot atomically in the SessionState Durable Object", async () => {
-    const claim = sessionStateCreditsClaim(env.SESSION_STATE);
+    const claim = sessionStateCreditsClaim(env.SESSION_STATE, GLOBAL_ORG);
     const id = `lock-${crypto.randomUUID()}`;
     const now = Date.now();
     // Concurrent claims of one credential: exactly one wins (KV get-then-put let both through).

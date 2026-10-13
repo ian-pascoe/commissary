@@ -243,7 +243,7 @@ export class ControlPlane extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.#org = orgOfControlPlane(ctx.id);
-    this.#config = new ConfigStore(ctx.storage.sql, Date.now, this.#org);
+    this.#config = new ConfigStore(ctx.storage.sql, this.#org);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
 

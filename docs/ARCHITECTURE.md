@@ -56,12 +56,15 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
   belongs to exactly one. The per-request `CurrentOrg` service carries its id (`OrgId`: lowercase letters, digits and
   inner hyphens); `requestContext` provides it next to `WorkerEnv`, and for now it is always `global`, the org of the
   deployment that existed before orgs (later slices resolve it from the proxy key or the management URL). `CurrentOrg`
-  is a required service, not a default: code that reaches org state without an org does not compile.
+  is a required service, not a default: code that reaches org state without an org does not compile, and where a type
+  cannot require it (the SessionState backends and the Antigravity executor also run outside a request in unit tests)
+  a request without an org is a defect (`optionalRequestOrg`), never a silent read of `global`'s state.
 - **`ControlPlane` Durable Object** (one per org, named by the org id: `controlPlaneOf(env, org)` is the only
   `getByName` of the namespace; `currentControlPlane` resolves the request's; SQLite storage): config document,
   credentials, selection cursors, cooldown/quota state, session affinity, OAuth login sessions, refresh scheduling via
   alarms. It is the single writer for its org's credential state, which replaces the Go `singleflight`/mutex/goroutine
-  machinery, and knows its org from its own name (`ctx.id.name`). The Worker talks to it through JS RPC methods (e.g.
+  machinery, and knows its org from its own name (`ctx.id.name`; an object not named by an org id throws instead of
+  serving `global`). The Worker talks to it through JS RPC methods (e.g.
   `pick`, `report`, `getConfig`). The org `global` keeps the object it always had (`getByName("global")`), so upgrading
   moves no data.
 - **Org-scoped names**: everything the Worker derives for an org outside its ControlPlane is named per org with
@@ -76,7 +79,8 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
 - **Deployment-wide state**: the model catalog (KV copy, refresh status and refresh lease) and the client versions
   (Antigravity, xAI) are shared by every org. The catalog's source, `models.catalog`, is a deployment setting: only the
   `global` org's config may set it (another org's `ConfigStore` refuses a document that does, `422` through the
-  management API), every org's `ConfigReader` snapshot carries `global`'s value, and every refresh (cron or any org's
+  management API), every org's `ConfigReader` snapshot carries `global`'s value (the read fails while `global`'s
+  config was never read and cannot be, rather than fall back to the org's default), and every refresh (cron or any org's
   panel) uses `global`'s setting and the refresh lease in `global`'s ControlPlane, so no org can repoint the shared
   catalog.
 - **`SessionState` Durable Object** (one instance per store + caller scope + session key, `getByName`, SQLite storage):
