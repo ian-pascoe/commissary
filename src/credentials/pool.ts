@@ -83,6 +83,14 @@ export interface PoolOptions {
    * changes. Default on.
    */
   readonly privateCredentials?: () => boolean;
+  /**
+   * The private API key groups of every member (`private-keys.ts`) with the counter that moves when they change; each
+   * owner's config yields credentials that carry the owner. Called on every operation, so it must be cheap.
+   */
+  readonly privateKeys?: () => {
+    readonly version: number;
+    readonly configs: ReadonlyArray<{ readonly owner: string; readonly config: Config }>;
+  };
 }
 
 /** A stored (auth file) credential with its runtime state: the unit the refresh manager works on. */
@@ -110,6 +118,7 @@ export type UpsertResult =
 
 interface View {
   readonly configVersion: number;
+  readonly privateVersion: number;
   readonly settings: SelectionSettings;
   readonly cooldown: CooldownSettings;
   readonly credentials: ReadonlyMap<string, Credential>;
@@ -125,6 +134,7 @@ export class CredentialPool {
   readonly #newId: () => string;
   readonly #decorate: (credential: Credential) => Credential;
   readonly #privateCredentials: () => boolean;
+  readonly #privateKeys: NonNullable<PoolOptions["privateKeys"]>;
   readonly #rotation = new RotationState();
   readonly #affinity = new SessionCache();
   readonly #lcp = new MerklePrefixMatcher();
@@ -139,14 +149,21 @@ export class CredentialPool {
     this.#newId = options.newId ?? (() => crypto.randomUUID());
     this.#decorate = options.decorate ?? ((credential) => credential);
     this.#privateCredentials = options.privateCredentials ?? (() => true);
+    this.#privateKeys = options.privateKeys ?? (() => ({ version: 0, configs: [] }));
     this.#states = options.store.loadStates();
   }
 
   /** Rebuilds the derived credential set when the config or the stored credentials changed. */
   #current(): View {
     const { version, config } = this.#config();
+    const privateKeys = this.#privateKeys();
 
-    if (this.#view !== undefined && this.#view.configVersion === version) return this.#view;
+    if (
+      this.#view !== undefined &&
+      this.#view.configVersion === version &&
+      this.#view.privateVersion === privateKeys.version
+    )
+      return this.#view;
     const now = this.#now();
     const credentials = new Map<string, Credential>();
 
@@ -166,6 +183,15 @@ export class CredentialPool {
 
     for (const credential of synthesizeConfigCredentials(config, now))
       credentials.set(credential.id, credential);
+
+    // A member's private API keys: their credentials carry the owner, and are disabled like private accounts.
+    for (const { owner, config: ownerConfig } of privateKeys.configs)
+      for (const credential of synthesizeConfigCredentials(ownerConfig, now))
+        credentials.set(credential.id, {
+          ...credential,
+          owner,
+          ...(privateAllowed ? {} : { disabled: true }),
+        });
 
     // Config credentials are content-addressed: state of ids that disappeared (rotated keys) is garbage.
     for (const id of this.#states.keys()) {
@@ -187,6 +213,7 @@ export class CredentialPool {
     this.#lcp.setTtl(ttl);
     this.#view = {
       configVersion: version,
+      privateVersion: privateKeys.version,
       credentials,
       settings: {
         strategy: config.routing.strategy,

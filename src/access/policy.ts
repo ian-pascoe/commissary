@@ -39,6 +39,8 @@ const MEMBER_READS = [
  */
 const CREDENTIAL = `${MANAGEMENT_PREFIX}/credentials`;
 
+const API_KEYS = `${MANAGEMENT_PREFIX}/api-keys`;
+
 const MEMBER_CREDENTIAL_ROUTES: ReadonlyArray<{
   readonly methods: ReadonlyArray<string>;
   readonly path: string;
@@ -60,6 +62,9 @@ const MEMBER_CREDENTIAL_ROUTES: ReadonlyArray<{
   { methods: ["DELETE"], path: `${MANAGEMENT_PREFIX}/oauth/session` },
   { methods: ["POST"], path: `${MANAGEMENT_PREFIX}/oauth/callback` },
   { methods: ["POST"], path: `${MANAGEMENT_PREFIX}/oauth/import` },
+  { methods: ["GET"], path: API_KEYS },
+  { methods: ["PUT", "DELETE"], path: `${API_KEYS}/groups` },
+  { methods: ["POST"], path: `${API_KEYS}/probe` },
 ];
 
 const ME = `${MANAGEMENT_PREFIX}/me`;

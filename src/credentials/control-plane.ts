@@ -42,7 +42,9 @@ import {
 } from "../management/api-keys-probe.ts";
 import { buildApiKeysList } from "../management/api-keys-view.ts";
 import { locateKey } from "../management/api-keys-write.ts";
+import { API_KEY_FAMILIES } from "../config/schema.ts";
 import { configKeyIds } from "./key-ids.ts";
+import { PrivateKeyStore } from "./private-keys.ts";
 import {
   buildConfigCredentialEntry,
   buildCredentialEntry,
@@ -285,6 +287,8 @@ export class ControlPlane extends DurableObject<Env> {
   /** The org's data key: seals and opens the stored secrets once the object started. */
   readonly #secrets = new OrgSecrets();
   readonly #members: MemberStore;
+  /** The members' private API key groups (sealed rows of their own, never config entries). */
+  readonly #privateKeys: PrivateKeyStore;
   /** The org this object serves, from its name. */
   readonly #org: OrgId;
   /**
@@ -308,6 +312,7 @@ export class ControlPlane extends DurableObject<Env> {
 
     this.#config = new ConfigStore(ctx.storage.sql, this.#org, transaction, this.#secrets);
     this.#members = new MemberStore(ctx.storage.sql, this.#org, transaction);
+    this.#privateKeys = new PrivateKeyStore(ctx.storage.sql, transaction, this.#secrets);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
 
@@ -316,6 +321,7 @@ export class ControlPlane extends DurableObject<Env> {
       store: credentials,
       config: () => this.#currentConfig(),
       privateCredentials: () => this.#members.privateCredentials(),
+      privateKeys: () => this.#privateKeys.owners(),
       decorate: (credential) => this.#refresh.decorate(credential),
     });
     this.#refresh = new RefreshManager({
@@ -1101,18 +1107,140 @@ export class ControlPlane extends DurableObject<Env> {
   // --- API keys page (src/management/api-keys-*.ts) ------------------------------------------------------------
 
   /** The `api-keys` groups with runtime state: one snapshot of config version and credential pool (no secrets). */
-  apiKeysView(_viewer?: Viewer): WireJsonObject {
+  apiKeysView(viewer?: Viewer): WireJsonObject {
     const { version, config } = this.#currentConfig();
     const { groups } = this.#config.entries().revisions;
+    const entries = this.#pool.entries();
+    const now = Date.now();
 
-    return buildApiKeysList(
-      version,
-      groups,
-      config,
-      this.#pool.entries(),
-      Date.now(),
-      this.#authIndex,
-    );
+    // Shared groups are for org admins (and internal callers); everyone else sees none of them.
+    const view =
+      viewer === undefined || viewer.admin
+        ? buildApiKeysList(version, groups, config, entries, now, this.#authIndex)
+        : buildApiKeysList(
+            version,
+            {},
+            this.#privateKeys.configOf("").config,
+            entries,
+            now,
+            this.#authIndex,
+          );
+
+    if (viewer === undefined) return view;
+
+    // The viewer's own private groups in full; an org admin also sees that other members' exist (ADR 0023).
+    if (viewer.member !== undefined) {
+      const mine = this.#privateKeys.configOf(viewer.member);
+
+      view.own =
+        buildApiKeysList(version, mine.revisions, mine.config, entries, now, this.#authIndex)
+          .families ?? {};
+    }
+
+    if (viewer.admin) view.others = this.#limitedKeyGroups(viewer.member, entries);
+
+    return view;
+  }
+
+  /** What an org admin sees of the private key groups of other members: that each exists, nothing of its use. */
+  #limitedKeyGroups(
+    viewer: string | undefined,
+    entries: ReadonlyArray<RefreshTarget>,
+  ): WireJsonObject[] {
+    const credentials = new Map(entries.map(({ credential }) => [credential.id, credential]));
+
+    return this.#privateKeys.owners().configs.flatMap((owned) => {
+      if (owned.owner === viewer) return [];
+      const ids = configKeyIds(owned.config, { includeDisabledGroups: true });
+      const email = this.#members.member(owned.owner)?.email;
+
+      return API_KEY_FAMILIES.flatMap((family) =>
+        owned.config["api-keys"][family].flatMap((group, index): WireJsonObject[] => {
+          if (group.id === undefined) return [];
+
+          const first = ids[family][index]?.keys
+            .map((id) => (id === undefined ? undefined : credentials.get(id)))
+            .find((credential) => credential !== undefined);
+
+          return [
+            {
+              id: group.id,
+              revision: owned.revisions[group.id] ?? 0,
+              family,
+              provider: first?.provider ?? family,
+              label: first?.label ?? family,
+              limited: true,
+              ...ownerFields(owned.owner, email),
+            },
+          ];
+        }),
+      );
+    });
+  }
+
+  /**
+   * The private key groups of the viewer as a config document, for the Worker to check a write against (the same way
+   * it checks one against the org's config); refused unless the viewer is a member and the org allows private
+   * credentials.
+   */
+  privateKeyConfig(viewer: Viewer):
+    | {
+        readonly ok: true;
+        readonly version: number;
+        readonly document: string;
+        readonly revisions: Readonly<Record<string, number>>;
+      }
+    | { readonly ok: false; readonly error: "forbidden"; readonly message: string } {
+    const refused = this.#privateKeyRefusal(viewer);
+
+    if (refused !== undefined) return refused;
+    const mine = this.#privateKeys.configOf(viewer.member ?? "");
+
+    return {
+      ok: true,
+      version: mine.version,
+      document: JSON.stringify(mine.document),
+      revisions: mine.revisions,
+    };
+  }
+
+  #privateKeyRefusal(
+    viewer: Viewer,
+  ): { readonly ok: false; readonly error: "forbidden"; readonly message: string } | undefined {
+    if (viewer.member === undefined)
+      return { ok: false, error: "forbidden", message: "private credentials belong to members" };
+
+    return this.#members.privateCredentials()
+      ? undefined
+      : {
+          ok: false,
+          error: "forbidden",
+          message: "private credentials are turned off for this org",
+        };
+  }
+
+  /**
+   * Writes or deletes one private key group of the viewer at the revision it names. An org admin may also delete a
+   * member's private group (`group: null`), whatever the org setting says; nothing else of another member's.
+   */
+  writePrivateKeyGroup(
+    change: KeyGroupChange,
+    by: string,
+    viewer: Viewer,
+  ):
+    | WriteResult<{ readonly id: string; readonly revision: number }>
+    | { readonly ok: false; readonly error: "forbidden"; readonly message: string } {
+    const owner = change.id === undefined ? undefined : this.#privateKeys.ownerOf(change.id);
+
+    // Deleting a private group is for its owner at any time, and for org admins (ADR 0023).
+    if (change.group === null && owner !== undefined && (viewer.admin || owner === viewer.member))
+      return this.#privateKeys.write(owner, change, by);
+
+    const refused = this.#privateKeyRefusal(viewer);
+
+    if (refused !== undefined) return refused;
+
+    return this.#privateKeys.write(viewer.member ?? "", change, by);
   }
 
   /**
