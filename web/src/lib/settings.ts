@@ -762,7 +762,7 @@ export const saveProblem = (error: string | undefined, message: string): string 
     case "conflict":
       return "The configuration changed again while saving. Reload to see the current settings; your edits stay in the form until you do.";
     case "would_remove_your_admin_access":
-      return "This would remove your own admin access. Keep your address in the list, or ask a deployment admin to make the change.";
+      return "This would remove your own admin access. Keep your address in the list, or ask a platform admin to make the change.";
     default:
       return message;
   }

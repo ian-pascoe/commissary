@@ -11,10 +11,14 @@ interface __BaseEnv_Env {
   ACCESS_TEAM_DOMAIN: string;
   /** Comma separated Access application AUD tags; empty fails closed. */
   ACCESS_AUD: string;
-  /** Comma separated management admin emails. */
-  ACCESS_ADMIN_EMAILS: string;
-  /** Comma separated management admin service token Client IDs. */
-  ACCESS_ADMIN_SERVICE_TOKENS: string;
+  /** Comma separated platform admin emails: manage every org and the Platform registry (ADR 0022). */
+  PLATFORM_ADMIN_EMAILS: string;
+  /** Comma separated platform admin service token Client IDs. */
+  PLATFORM_ADMIN_SERVICE_TOKENS: string;
+  /** @deprecated Alias of `PLATFORM_ADMIN_EMAILS`, read for one release (a warning is logged). */
+  ACCESS_ADMIN_EMAILS?: string;
+  /** @deprecated Alias of `PLATFORM_ADMIN_SERVICE_TOKENS`, read for one release (a warning is logged). */
+  ACCESS_ADMIN_SERVICE_TOKENS?: string;
   /** Local development only: treats loopback requests as this admin. Never set when deployed. */
   ACCESS_DEV_BYPASS: string;
   /** Days of usage history kept in D1; 0 keeps everything. */
@@ -28,12 +32,14 @@ interface __BaseEnv_Env {
   AUTH_INDEX_KEY: string;
   CONTROL_PLANE: DurableObjectNamespace<import("./index").ControlPlane>;
   SESSION_STATE: DurableObjectNamespace<import("./index").SessionState>;
+  /** The Platform registry: one object per deployment (`platformOf`, src/platform/registry.ts). */
+  PLATFORM: DurableObjectNamespace<import("./index").Platform>;
 }
 
 declare namespace Cloudflare {
   interface GlobalProps {
     mainModule: typeof import("./index");
-    durableNamespaces: "ControlPlane" | "SessionState";
+    durableNamespaces: "ControlPlane" | "SessionState" | "Platform";
   }
 
   interface Env extends __BaseEnv_Env {}

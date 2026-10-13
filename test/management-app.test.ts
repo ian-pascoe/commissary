@@ -34,7 +34,12 @@ describe("control panel in the application", () => {
       JSON.stringify(claudeFile()),
     );
 
-    const page = await get("/");
+    // The only org of the caller opens at its own address.
+    const root = await get("/");
+    expect(root.status).toBe(302);
+    expect(root.headers.get("location")).toBe("/o/default/");
+
+    const page = await get("/o/default/");
     expect(page.status).toBe(200);
     expect(await page.text()).toBe(PANEL_HTML);
 

@@ -15,6 +15,10 @@ export interface AccessIdentity {
   readonly principalId: string;
   /** Irreversible namespace used to isolate session state between callers (`callerScope(principalId, org)`). */
   readonly callerScope: string;
+  /** The org the request is for: the org addressed by a management URL, otherwise the request's `CurrentOrg`. */
+  readonly org: OrgId;
+  /** The principal is a platform admin (`PLATFORM_ADMIN_*`, or the local dev bypass): it may manage every org. */
+  readonly platformAdmin: boolean;
 }
 
 /**
@@ -55,10 +59,20 @@ export const callerScope = (value: string, org: OrgId): Effect.Effect<string> =>
   );
 };
 
-/** The identity of `principal` in `org`. */
-export const makeIdentity = (principal: Principal, org: OrgId): Effect.Effect<AccessIdentity> =>
+/** The identity of `principal` in `org`; `platformAdmin` when it is on the platform admin lists. */
+export const makeIdentity = (
+  principal: Principal,
+  org: OrgId,
+  platformAdmin = false,
+): Effect.Effect<AccessIdentity> =>
   Effect.gen(function* () {
     const id = principalId(principal);
 
-    return { principal, principalId: id, callerScope: yield* callerScope(id, org) };
+    return {
+      principal,
+      principalId: id,
+      callerScope: yield* callerScope(id, org),
+      org,
+      platformAdmin,
+    };
   });

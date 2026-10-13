@@ -1,6 +1,7 @@
 /**
  * The control panel built from `web/` (`pnpm web:build` writes `public/index.html` and `public/assets/*`): `/`, its
- * page paths (`access/routes.ts` `PANEL_SECTIONS`) and the bundled files under `/assets`.
+ * page paths (`access/routes.ts` `PANEL_SECTIONS`), the same pages under an org (`/o/<slug>/accounts`, routed as the
+ * unscoped page by `access/org-address.ts`) and the bundled files under `/assets`.
  *
  * New in the Workers port: Go serves the upstream panel at `/management.html` and a public JSON banner at `/`. Here
  * `/management.html` is a legacy redirect to `/` (`LEGACY_PANEL_REDIRECT`, deviation from Go). Every page path
@@ -10,9 +11,12 @@
  */
 import { Effect } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
-import { PANEL_SECTIONS } from "../access/routes.ts";
+import { addressedSlug } from "../access/org-address.ts";
+import { AccessPrincipal } from "../access/principal.ts";
+import { PANEL_ORG_PREFIX, PANEL_SECTIONS } from "../access/routes.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import { jsonReply } from "./http.ts";
+import { manageableOrgs } from "./org-routes.ts";
 
 export const PANEL_NOT_BUILT = "the control panel is not built; run `pnpm web:build`";
 
@@ -60,8 +64,44 @@ const requestUrl = Effect.gen(function* () {
   return new URL(request.originalUrl, "http://localhost");
 });
 
-/** `GET /` and every panel page path: the panel's `index.html` (the assets binding serves it for `/`). */
+/**
+ * Where an unscoped panel page (`/`, `/accounts`, ...) goes when the caller manages exactly one org: the same page of
+ * that org (`/o/<slug>/accounts`), the query kept. `undefined` when the caller manages none or several (or the registry
+ * cannot be read), or the address asks for the chooser (`?choose`): the panel itself then asks which org to open.
+ */
+const orgRedirect = Effect.gen(function* () {
+  const request = yield* HttpServerRequest.HttpServerRequest;
+  const identity = yield* AccessPrincipal;
+  const orgs = yield* manageableOrgs(identity);
+  const [only] = orgs;
+
+  if (orgs.length !== 1 || only === undefined) return undefined;
+  const url = new URL(request.url, "http://localhost");
+
+  // The org list's own link: a platform admin of one org reaches the chooser to create another.
+  if (url.searchParams.has("choose")) return undefined;
+
+  return `${PANEL_ORG_PREFIX}/${only.slug}${url.pathname}${url.search}`;
+}).pipe(Effect.catch(() => Effect.succeed(undefined)));
+
+/**
+ * `GET /`, every panel page path and the same pages of an org (`/o/<slug>/accounts`): the panel's `index.html` (the
+ * assets binding serves it for `/`). The panel reads its org from the address; an address without one redirects to the
+ * only org of the caller (`orgRedirect`) and otherwise serves the panel, which shows the org chooser.
+ */
 export const webPanelPage = Effect.gen(function* () {
+  const request = yield* HttpServerRequest.HttpServerRequest;
+
+  if (addressedSlug(request) === undefined) {
+    const target = yield* orgRedirect;
+
+    if (target !== undefined)
+      return HttpServerResponse.redirect(target, {
+        status: 302,
+        headers: { "cache-control": "no-store" },
+      });
+  }
+
   const url = yield* requestUrl;
 
   const asset = yield* fetchAsset(

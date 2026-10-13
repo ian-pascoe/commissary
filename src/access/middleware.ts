@@ -3,6 +3,7 @@
 import { Effect, Match, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { ConfigReader } from "../config/reader.ts";
+import { CurrentOrg, type OrgId } from "../platform/org.ts";
 import { authenticateRequest } from "./authenticate.ts";
 import type { AccessError } from "./authenticate.ts";
 import { configAdminLists } from "./config.ts";
@@ -33,6 +34,12 @@ const PUBLIC_ROUTE_IDENTITY: AccessIdentity = {
   get callerScope(): string {
     return noPrincipal();
   },
+  get org(): OrgId {
+    return noPrincipal();
+  },
+  get platformAdmin(): boolean {
+    return noPrincipal();
+  },
 };
 
 const errorResponse = (status: number, message: string) =>
@@ -48,6 +55,7 @@ export const accessErrorResponse = (
   return Match.value(error).pipe(
     Match.tag("UnauthorizedError", (denied) => Effect.succeed(errorResponse(401, denied.message))),
     Match.tag("ForbiddenError", (denied) => Effect.succeed(errorResponse(403, denied.message))),
+    Match.tag("NotFoundError", (missing) => Effect.succeed(errorResponse(404, missing.message))),
     Match.orElse((failure) =>
       Effect.logError(`authentication middleware error: ${failure._tag}: ${failure.message}`).pipe(
         Effect.as(errorResponse(500, "Authentication service error")),
@@ -58,10 +66,12 @@ export const accessErrorResponse = (
 
 /**
  * Global middleware: requests under the protected prefixes (see `routes.ts`) must carry a valid Access JWT, and
- * `/v8/management*` additionally needs an admin principal (`ACCESS_ADMIN_*` env lists plus the config document's
- * `access.admin-*` keys). Cross-site requests and cross-origin WebSocket upgrades are refused first (`csrf.ts`).
- * Everything else (`/healthz`, `/`, unknown paths) is passed through untouched. On success the principal is available
- * to handlers as `AccessPrincipal`.
+ * `/v8/management*` and the panel additionally need an admin principal: a platform admin (`PLATFORM_ADMIN_*`), who
+ * manages every org, or one named by the `access.admin-*` keys of the config document, who manages `global`. Cross-site
+ * requests and cross-origin WebSocket upgrades are refused first (`csrf.ts`). Everything else (`/healthz`, unknown
+ * paths) is passed through untouched. On success the principal is available to handlers as `AccessPrincipal`, and
+ * `CurrentOrg` is the org of the request: the org addressed by an org-scoped management URL (`org-address.ts`),
+ * unchanged otherwise.
  *
  * Register it after `CorsLayer` so that 401/403 responses still carry CORS headers and preflights are not gated.
  */
@@ -102,7 +112,10 @@ export const AccessGate = HttpRouter.middleware<{ provides: AccessPrincipal }>()
         if (Result.isFailure(authenticated))
           return yield* accessErrorResponse(authenticated.failure);
 
-        return yield* Effect.provideService(app, AccessPrincipal, authenticated.success);
+        return yield* app.pipe(
+          Effect.provideService(AccessPrincipal, authenticated.success),
+          Effect.provideService(CurrentOrg, authenticated.success.org),
+        );
       });
   }),
   { global: true },

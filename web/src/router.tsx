@@ -20,6 +20,7 @@ import { SettingsPage } from "./pages/Settings.tsx";
 import { UsagePage } from "./pages/Usage.tsx";
 import { readNewKeySearch } from "./lib/keys.ts";
 import { legacyHashTarget } from "./lib/legacy-hash.ts";
+import { panelBasepath } from "./lib/org.ts";
 import { readUsageSearch } from "./lib/usage.ts";
 
 const rootRoute = createRootRoute({ component: Shell, notFoundComponent: NotFound });
@@ -70,15 +71,21 @@ const routeTree = rootRoute.addChildren([
   }),
 ]);
 
-// An upstream panel bookmark (`/management.html#/auth-files`, redirected to `/#/auth-files`) opens the page that
-// replaced it. Before the router reads the location.
-const legacyTarget =
-  window.location.pathname === "/" ? legacyHashTarget(window.location.hash) : undefined;
+// The panel of an org lives under `/o/<slug>` (the router's base path), so its pages keep the paths above.
+const basepath = panelBasepath(window.location.pathname);
 
-if (legacyTarget !== undefined) window.history.replaceState(null, "", legacyTarget);
+// An upstream panel bookmark (`/management.html#/auth-files`, redirected to `/#/auth-files`) opens the page that
+// replaced it, in the org the Worker redirected `/` to. Before the router reads the location.
+const atRoot = ["/", `${basepath}/`, basepath].includes(window.location.pathname);
+
+const legacyTarget = atRoot ? legacyHashTarget(window.location.hash) : undefined;
+
+if (legacyTarget !== undefined)
+  window.history.replaceState(null, "", `${basepath === "/" ? "" : basepath}${legacyTarget}`);
 
 export const router = createRouter({
   routeTree,
+  basepath,
   defaultPreload: "intent",
   scrollRestoration: true,
 });

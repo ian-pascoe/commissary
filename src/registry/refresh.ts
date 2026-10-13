@@ -19,7 +19,8 @@ import type { HttpClientResponse } from "effect/http";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { ConfigReader } from "../config/reader.ts";
 import { holdInvocation, WorkerEnv } from "../platform/env.ts";
-import { controlPlaneOf, CurrentOrg, GLOBAL_ORG } from "../platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG } from "../platform/org.ts";
+import { platformOf } from "../platform/registry.ts";
 import type { SweepLease } from "../quota/sweep-lease.ts";
 import {
   catalogsFromModelsDev,
@@ -259,10 +260,10 @@ const refreshNow = (
   });
 
 /**
- * The model catalog is shared by every org, so its refresh lease is deployment-wide: it lives in the `global` org's
- * ControlPlane, where it was before orgs existed.
+ * The model catalog is shared by every org, so its refresh lease is deployment-wide: it lives in the Platform registry
+ * (it was in the `global` org's ControlPlane before the registry existed, which no other org should have to reach).
  */
-const catalogLeaseHolder = (env: Env) => controlPlaneOf(env, GLOBAL_ORG);
+const catalogLeaseHolder = (env: Env) => platformOf(env);
 
 type Taken =
   | { readonly kind: "taken"; readonly token: string }
@@ -327,9 +328,9 @@ const record = (outcome: RefreshOutcome): Effect.Effect<void, never, WorkerEnv> 
   });
 
 /**
- * One refresh under the refresh lease (ControlPlane, `catalog_refresh_lease`): cron and the panel never download at
+ * One refresh under the refresh lease (Platform registry, `catalog_refresh_lease`): cron and the panel never download at
  * once, whichever isolates they run in. The second one gets `status: "running"` without any request being made. A
- * ControlPlane that cannot be reached fails the refresh (exclusivity cannot be shown); the stored catalog stays.
+ * Platform registry that cannot be reached fails the refresh (exclusivity cannot be shown); the stored catalog stays.
  * `disabled` and `embed` do not fetch and need no lease. The invocation is held open until the lease is given back
  * (`holdInvocation`), so a request the client abandoned still releases it; a lease never released expires.
  */
@@ -352,7 +353,7 @@ export const refreshModelsDev = (
       taken,
     }): Effect.Effect<RefreshOutcome, never, HttpClient.HttpClient | WorkerEnv | CatalogStore> => {
       if (taken.kind === "unavailable")
-        return Effect.succeed(failed("control plane unavailable")).pipe(Effect.tap(record));
+        return Effect.succeed(failed("platform registry unavailable")).pipe(Effect.tap(record));
 
       if (taken.kind === "held") {
         const by = taken.held.source === "cron" ? "the scheduled refresh" : "the panel";

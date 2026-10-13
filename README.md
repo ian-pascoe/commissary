@@ -72,13 +72,13 @@ cp .env.example .env
 
 Fill in at least these (`.env` is git-ignored; shell variables override it):
 
-| Variable                                        | Example           | Purpose                                                                         |
-| ----------------------------------------------- | ----------------- | ------------------------------------------------------------------------------- |
-| `CF_LLM_PROXY_DOMAIN`                           | `llm.example.com` | Hostname of the proxy; its zone must be in the account                          |
-| `ACCESS_TEAM_DOMAIN`                            | `myteam`          | Your Zero Trust team name                                                       |
-| `ACCESS_ALLOW_EMAILS` / `_EMAIL_DOMAINS`        | `you@example.com` | Who may sign in through the browser                                             |
-| `ACCESS_SERVICE_TOKENS`                         | `laptop,ci`       | One Access service token is created per name, for your tools                    |
-| `ACCESS_ADMIN_EMAILS` / `_ADMIN_SERVICE_TOKENS` | `you@example.com` | Who may open the control panel and management API (emails, service token names) |
+| Variable                                          | Example           | Purpose                                                                                                           |
+| ------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `CF_LLM_PROXY_DOMAIN`                             | `llm.example.com` | Hostname of the proxy; its zone must be in the account                                                            |
+| `ACCESS_TEAM_DOMAIN`                              | `myteam`          | Your Zero Trust team name                                                                                         |
+| `ACCESS_ALLOW_EMAILS` / `_EMAIL_DOMAINS`          | `you@example.com` | Who may sign in through the browser                                                                               |
+| `ACCESS_SERVICE_TOKENS`                           | `laptop,ci`       | One Access service token is created per name, for your tools                                                      |
+| `PLATFORM_ADMIN_EMAILS` / `_ADMIN_SERVICE_TOKENS` | `you@example.com` | Platform admins: who may open the control panel and management API, and create orgs (emails, service token names) |
 
 Every other setting is optional; see [Configuration](#configuration). The Worker needs **no provider secrets** in
 `.env`: accounts and API keys are added later through the control panel and stored in a Durable Object.
@@ -154,21 +154,21 @@ plus `/openai/v1/videos` and `/backend-api/codex/{responses,responses/compact,al
 Deploy settings live in `.env` (template with comments: [`.env.example`](.env.example)). Runtime settings (routing,
 model aliases, payload rules, retries, …) are edited in the control panel's config editor and stored in the Worker.
 
-| Variable                         | Default    | Purpose                                                                                           |
-| -------------------------------- | ---------- | ------------------------------------------------------------------------------------------------- |
-| `CF_LLM_PROXY_DOMAIN`            | (required) | Custom hostname of the Worker and of its Access application                                       |
-| `ACCESS_TEAM_DOMAIN`             | (required) | Zero Trust team name or `<team>.cloudflareaccess.com`                                             |
-| `ACCESS_ALLOW_EMAILS`            |            | Emails allowed to sign in (comma separated)                                                       |
-| `ACCESS_ALLOW_EMAIL_DOMAINS`     |            | Email domains allowed to sign in                                                                  |
-| `ACCESS_SERVICE_TOKENS`          |            | Names of the service tokens to create, one per client or machine                                  |
-| `ACCESS_ALLOW_SERVICE_TOKEN_IDS` |            | Service tokens managed elsewhere (by token ID) to admit as well, e.g. CI's                        |
-| `ACCESS_ADMIN_EMAILS`            |            | Admins of the control panel and management API                                                    |
-| `ACCESS_ADMIN_SERVICE_TOKENS`    |            | Service token names (from `ACCESS_SERVICE_TOKENS`) or Client IDs that are admins                  |
-| `ACCESS_SESSION_DURATION`        | `24h`      | Access session length for browser sign-ins                                                        |
-| `ACCESS_SERVICE_TOKEN_HEADER`    |            | Accept service tokens as JSON in one header (e.g. `x-api-key`) for clients without custom headers |
-| `ACCESS_AUD`                     |            | Use an Access application you manage yourself instead of creating one                             |
-| `USAGE_RETENTION_DAYS`           | `30`       | How long usage records are kept in D1                                                             |
-| `CF_LLM_PROXY_CPU_MS`            | `300000`   | CPU limit per request in ms; lower it on plans with smaller limits                                |
+| Variable                         | Default    | Purpose                                                                                                                            |
+| -------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `CF_LLM_PROXY_DOMAIN`            | (required) | Custom hostname of the Worker and of its Access application                                                                        |
+| `ACCESS_TEAM_DOMAIN`             | (required) | Zero Trust team name or `<team>.cloudflareaccess.com`                                                                              |
+| `ACCESS_ALLOW_EMAILS`            |            | Emails allowed to sign in (comma separated)                                                                                        |
+| `ACCESS_ALLOW_EMAIL_DOMAINS`     |            | Email domains allowed to sign in                                                                                                   |
+| `ACCESS_SERVICE_TOKENS`          |            | Names of the service tokens to create, one per client or machine                                                                   |
+| `ACCESS_ALLOW_SERVICE_TOKEN_IDS` |            | Service tokens managed elsewhere (by token ID) to admit as well, e.g. CI's                                                         |
+| `PLATFORM_ADMIN_EMAILS`          |            | Platform admins of the control panel and management API (replaces `ACCESS_ADMIN_EMAILS`, still read)                               |
+| `PLATFORM_ADMIN_SERVICE_TOKENS`  |            | Service token names (from `ACCESS_SERVICE_TOKENS`) or Client IDs that are platform admins (replaces `ACCESS_ADMIN_SERVICE_TOKENS`) |
+| `ACCESS_SESSION_DURATION`        | `24h`      | Access session length for browser sign-ins                                                                                         |
+| `ACCESS_SERVICE_TOKEN_HEADER`    |            | Accept service tokens as JSON in one header (e.g. `x-api-key`) for clients without custom headers                                  |
+| `ACCESS_AUD`                     |            | Use an Access application you manage yourself instead of creating one                                                              |
+| `USAGE_RETENTION_DAYS`           | `30`       | How long usage records are kept in D1                                                                                              |
+| `CF_LLM_PROXY_CPU_MS`            | `300000`   | CPU limit per request in ms; lower it on plans with smaller limits                                                                 |
 
 [ACCESS.md](docs/ACCESS.md) explains what each Access setting creates, how the Worker validates requests, and how to
 extend the policies (IdP groups, device posture).
@@ -198,7 +198,7 @@ preview stage on `workers.dev`. The CI credentials are code too (`stacks/github.
 | Deploy fails on the custom domain         | `CF_LLM_PROXY_DOMAIN` must be a hostname on a zone in the same Cloudflare account          |
 | CLI gets a 302 to `cloudflareaccess.com`  | Service token headers are missing or wrong, or the token is not in `ACCESS_SERVICE_TOKENS` |
 | 500 `Authentication service error`        | `ACCESS_TEAM_DOMAIN` is wrong                                                              |
-| 403 `Forbidden` on the control panel      | Your email or token is not in `ACCESS_ADMIN_EMAILS` / `ACCESS_ADMIN_SERVICE_TOKENS`        |
+| 403 `Forbidden` on the control panel      | Your email or token is not in `PLATFORM_ADMIN_EMAILS` / `PLATFORM_ADMIN_SERVICE_TOKENS`    |
 | A model is missing from `/v1/models`      | No connected account or API key serves it; check the Accounts and Models pages             |
 | Responses WebSocket closes with 1011/1012 | It hit the Worker CPU limit; clients reconnect, or use HTTP/SSE                            |
 

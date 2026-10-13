@@ -134,7 +134,7 @@ export const ErrorRules = ({
   );
 };
 
-/** `ACCESS_ADMIN_EMAILS` / `ACCESS_ADMIN_SERVICE_TOKENS`: admins this page cannot remove. */
+/** `PLATFORM_ADMIN_EMAILS` / `PLATFORM_ADMIN_SERVICE_TOKENS`: admins this page cannot remove. */
 export const DeploymentAdmins = ({ admins }: { readonly admins: SettingsView["env_admins"] }) => {
   const all = [...admins.emails, ...admins.service_tokens];
 
@@ -142,7 +142,8 @@ export const DeploymentAdmins = ({ admins }: { readonly admins: SettingsView["en
     <div className={styles["sub"]}>
       <h3 className={styles["subTitle"]}>Always admins</h3>
       <p className={styles["hint"]}>
-        Set on the deployment (ACCESS_ADMIN_EMAILS, ACCESS_ADMIN_SERVICE_TOKENS); not editable here.
+        Set on the deployment (PLATFORM_ADMIN_EMAILS, PLATFORM_ADMIN_SERVICE_TOKENS); not editable
+        here.
       </p>
       {all.length === 0 ? (
         <p className={styles["quiet"]}>None set on the deployment.</p>

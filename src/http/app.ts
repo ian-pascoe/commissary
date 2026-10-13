@@ -1,6 +1,7 @@
 import { Layer } from "effect";
 import { HttpRouter } from "effect/http";
 import { AccessLayer, withAccess } from "../access/layer.ts";
+import { orgAddressing } from "../access/org-address.ts";
 import { ProxyLayer } from "../handlers/layer.ts";
 import { ManagementRoutesLive } from "../management/routes.ts";
 import { WorkersLoggerLayer } from "../observability/logger.ts";
@@ -30,4 +31,5 @@ export const AppLayer = Layer.mergeAll(
  * Creates the Web `Request` handler. Per-request services (`WorkerEnv`, `WorkerExecutionContext`) are supplied as
  * the second argument of `handler`; see `requestContext` in `platform/env.ts`.
  */
-export const makeWebHandler = () => HttpRouter.toWebHandler(AppLayer, { disableLogger: true });
+export const makeWebHandler = () =>
+  HttpRouter.toWebHandler(AppLayer, { disableLogger: true, middleware: orgAddressing });

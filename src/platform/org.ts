@@ -24,9 +24,18 @@ export type OrgId = typeof OrgId.Type;
 export const GLOBAL_ORG: OrgId = OrgId.make("global");
 
 /**
- * The orgs scheduled work runs for. Only `global` until the Platform registry lists the deployment's orgs.
+ * An org slug: what addresses the org in URLs (`/o/<slug>/accounts`, `/v8/management/orgs/<slug>/...`). The same
+ * characters as an {@link OrgId}, but a slug can be renamed while the id, which names the org's Durable Objects and
+ * stored data, never changes.
  */
-export const DEPLOYMENT_ORGS: ReadonlyArray<OrgId> = [GLOBAL_ORG];
+export const OrgSlug = Schema.String.check(
+  Schema.isPattern(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/),
+).pipe(Schema.brand("OrgSlug"));
+
+export type OrgSlug = typeof OrgSlug.Type;
+
+/** The slug the Platform registry gives the org `global` when it first starts; a platform admin can rename it. */
+export const DEFAULT_ORG_SLUG: OrgSlug = OrgSlug.make("default");
 
 /** The org of the current request or scheduled job. */
 export class CurrentOrg extends Context.Service<CurrentOrg, OrgId>()(

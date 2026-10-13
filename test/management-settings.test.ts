@@ -370,7 +370,7 @@ describe("management settings", () => {
 
       expect(kept).toMatchObject({ status: 200, body: { version: version + 1 } });
 
-      // A deployment admin may remove anyone.
+      // A platform admin may remove anyone.
       const removed = await as(ADMIN, { access: { "admin-emails": null } }, version + 1);
 
       expect(removed).toMatchObject({ status: 200, body: { version: version + 2 } });

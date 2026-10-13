@@ -15,6 +15,7 @@ export default defineConfig({
         durableObjects: {
           CONTROL_PLANE: { className: "ControlPlane", useSQLite: true },
           SESSION_STATE: { className: "SessionState", useSQLite: true },
+          PLATFORM: { className: "Platform", useSQLite: true },
         },
         kvNamespaces: ["CACHE"],
         d1Databases: ["USAGE"],
@@ -26,8 +27,8 @@ export default defineConfig({
         bindings: {
           ACCESS_TEAM_DOMAIN: "",
           ACCESS_AUD: "",
-          ACCESS_ADMIN_EMAILS: "",
-          ACCESS_ADMIN_SERVICE_TOKENS: "",
+          PLATFORM_ADMIN_EMAILS: "",
+          PLATFORM_ADMIN_SERVICE_TOKENS: "",
           // End-to-end tests through `exports.default.fetch` authenticate with the dev bypass, which only applies to
           // loopback hosts (`http://localhost/...`) while ACCESS_TEAM_DOMAIN/ACCESS_AUD stay empty; other hosts still
           // fail closed (`https://proxy.test/...` answers 500 without Access settings).

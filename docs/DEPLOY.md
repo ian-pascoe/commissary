@@ -23,7 +23,7 @@ A stage named `pr-<number>` is a preview (`infra/settings.ts`):
 - Its own Worker on `workers.dev`, protected by its own Access application. The Worker enrolls into it (Alchemy's
   Worker `access` prop), so Access covers the `workers.dev` URL; no custom hostname is needed.
 - Same policies as production: `ACCESS_ALLOW_*` for people, `ACCESS_ALLOW_SERVICE_TOKEN_IDS` for the CI token. Same
-  admins (`ACCESS_ADMIN_EMAILS`).
+  platform admins (`PLATFORM_ADMIN_EMAILS`).
 - Empty KV, D1 and Durable Objects, and no cron trigger. A preview has no provider credentials, so it serves the panel,
   the management API and the routes but cannot proxy real requests. Add credentials through its panel if you need to.
 - `CF_LLM_PROXY_DOMAIN`, `ACCESS_AUD` and `ACCESS_SERVICE_TOKENS` are ignored.
@@ -79,6 +79,15 @@ the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --pro
 
 - **Control panel.** CI builds the control panel from `web/` (`pnpm web:build`) before each deploy; nothing else is
   installed into `public/`.
+- **Platform registry and orgs.** The `Platform` Durable Object (the list of orgs, ADR 0021) is a new class that the
+  next deploy adds; its tables are created on first use, so there is no migration to run, and the org `global` (slug
+  `default`) exists from the start with everything the deployment stored before. Nothing has to change in `.env` or
+  in GitHub: `ACCESS_ADMIN_EMAILS` and `ACCESS_ADMIN_SERVICE_TOKENS` are still read, as aliases of
+  `PLATFORM_ADMIN_EMAILS` and `PLATFORM_ADMIN_SERVICE_TOKENS`, and the Worker logs a warning until they are renamed
+  (rename them in `.env` and, for CI, in the GitHub variables: `pnpm ci:setup` writes the new name). The addresses of the
+  panel and the management API without an org keep meaning `global`; the panel at `/` then redirects to `/o/default/`
+  (see [ACCESS.md](ACCESS.md#platform-admins-and-orgs)). The model catalog's refresh lease moved to the registry; an
+  unreleased one in the old place only expires.
 - **State.** Deploys use the Alchemy state store in the account (`Cloudflare.state()`), shared by CI and local
   machines; `deploy --yes` also upgrades the state store when Alchemy needs a newer version.
 - **Concurrency.** One deploy per stage at a time, never cancelled midway; a newer push to `main` waits for the

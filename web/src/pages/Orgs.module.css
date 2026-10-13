@@ -1,0 +1,54 @@
+.page {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: var(--space-8) var(--page-gutter);
+}
+
+.title {
+  font-size: var(--text-xl);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.list {
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.org {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--rule);
+  border-radius: var(--radius);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.org:hover,
+.org:focus-visible {
+  border-color: var(--text);
+}
+
+.orgName {
+  font-weight: 700;
+}
+
+.orgSlug {
+  font-size: var(--text-xs);
+  color: var(--quiet);
+}
+
+.create {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 2px solid var(--rule);
+}

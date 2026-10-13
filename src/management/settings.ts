@@ -343,13 +343,13 @@ const lockedOut = (after: Config, principal: Principal): SettingsProblem | undef
     422,
     "would_remove_your_admin_access",
     ["access", key],
-    "this change removes your own admin access; a deployment admin (ACCESS_ADMIN_*) can make it",
+    "this change removes your own admin access; a platform admin (PLATFORM_ADMIN_*) can make it",
   );
 };
 
 /**
  * The lock-out guard: a caller who is an admin only through the config's `access.admin-*` lists must not remove
- * themselves (`alwaysAdmin`: a deployment admin, `ACCESS_ADMIN_*`, or the local dev bypass).
+ * themselves (`alwaysAdmin`: a platform admin, `PLATFORM_ADMIN_*`, or the local dev bypass).
  */
 export const checkAdminLockout = (input: {
   readonly edits: ReadonlyArray<SettingsEdit>;
@@ -364,8 +364,8 @@ export const checkAdminLockout = (input: {
 const SERVICE_TOKENS_PATH = ["access", "admin-service-tokens"] as const;
 
 /**
- * Who may change `access.admin-service-tokens`: a service-token principal or a deployment admin (`alwaysAdmin`:
- * `ACCESS_ADMIN_*`, or the local dev bypass). An email admin who is only an admin through the config could otherwise
+ * Who may change `access.admin-service-tokens`: a service-token principal or a platform admin (`alwaysAdmin`:
+ * `PLATFORM_ADMIN_*`, or the local dev bypass). An email admin who is only an admin through the config could otherwise
  * grant a service token admin rights (and with it the credential download, which is for service tokens only,
  * `credentials-routes.ts`). The list is compared as a set: reordering it changes nothing.
  */
@@ -386,7 +386,7 @@ export const checkServiceTokenAdmins = (input: {
         403,
         "service_tokens_require_service_admin",
         SERVICE_TOKENS_PATH,
-        "access.admin-service-tokens can only be changed with an Access service token that is an administrator, or by a deployment admin (ACCESS_ADMIN_*); see docs/ACCESS.md",
+        "access.admin-service-tokens can only be changed with an Access service token that is an administrator, or by a platform admin (PLATFORM_ADMIN_*); see docs/ACCESS.md",
       );
 };
 

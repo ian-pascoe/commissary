@@ -9,8 +9,8 @@
  * stored; refusals carry `{error, message, path}`.
  */
 import { Effect, Result, Schema } from "effect";
-import { HttpRouter, HttpServerRequest } from "effect/http";
-import { devBypassEmail, envAdminLists, isAdmin } from "../access/config.ts";
+import { HttpRouter } from "effect/http";
+import { platformAdminLists } from "../access/config.ts";
 import { AccessPrincipal } from "../access/principal.ts";
 import { decodeConfig } from "../config/codec.ts";
 import { decodeStoredConfig } from "../config/store.ts";
@@ -68,7 +68,7 @@ const view = Effect.gen(function* () {
       config: current.config,
       version: current.version,
       updatedAt: current.updatedAt,
-      envAdmins: envAdminLists(env),
+      envAdmins: platformAdminLists(env),
       prefixedCredentials: sources.filter((source) => (source.prefix ?? "").trim() !== "").length,
     }),
   );
@@ -78,16 +78,11 @@ const SaveBody = Schema.Struct({ version: ConfigVersion });
 
 const invalidBody = () => replyError(400, "invalid body");
 
-/** Whether the caller stays an admin whatever the config says (`ACCESS_ADMIN_*` or the local dev bypass). */
+/** Whether the caller stays an admin whatever the config says: a platform admin (`PLATFORM_ADMIN_*`, or the local dev bypass). */
 export const alwaysAdmin = Effect.gen(function* () {
-  const env = yield* WorkerEnv;
-  const request = yield* HttpServerRequest.HttpServerRequest;
   const identity = yield* AccessPrincipal;
 
-  return (
-    isAdmin(envAdminLists(env), identity.principal) ||
-    devBypassEmail(env, request.originalUrl) !== undefined
-  );
+  return identity.platformAdmin;
 });
 
 const save = Effect.gen(function* () {

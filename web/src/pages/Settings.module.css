@@ -393,7 +393,7 @@
   color: var(--quiet);
 }
 
-/* Provider groups, the account error rules, the deployment admins. */
+/* Provider groups, the account error rules, the platform admins. */
 .sub {
   display: grid;
   gap: var(--space-1);

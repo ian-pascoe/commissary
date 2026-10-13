@@ -114,7 +114,7 @@ export default Alchemy.Stack(
       ACCESS_TEAM_DOMAIN: settings.teamDomain,
       ACCESS_ALLOW_EMAILS: settings.allowEmails.join(","),
       ACCESS_ALLOW_EMAIL_DOMAINS: settings.allowEmailDomains.join(","),
-      ACCESS_ADMIN_EMAILS: settings.adminEmails.join(","),
+      PLATFORM_ADMIN_EMAILS: settings.adminEmails.join(","),
       ACCESS_SESSION_DURATION: settings.sessionDuration,
       ACCESS_ALLOW_SERVICE_TOKEN_IDS: checkToken.serviceTokenId,
     } satisfies Record<string, string | Output.Output<string>>;

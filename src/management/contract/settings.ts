@@ -13,7 +13,7 @@
  * `version`; `409 conflict` when `version` is stale (no retry: re-read and re-apply); `400 not_a_setting` for a path
  * that is not a setting; `422 invalid_setting` with `message` and `path` for a value the config would not keep as sent
  * (invalid duration, unknown catalog source, a value the normaliser rewrites, ...); `422
- * would_remove_your_admin_access` when a caller who is not a deployment admin removes themselves from the config's
+ * would_remove_your_admin_access` when a caller who is not a platform admin removes themselves from the config's
  * admin lists.
  *
  * The raw configuration is the whole document as YAML without defaults, every secret masked as `[redacted#n]…abcd`
@@ -168,9 +168,9 @@ export const SETTINGS_TREE = {
     catalog: Schema.String,
   },
   access: {
-    /** Extend `ACCESS_ADMIN_EMAILS` (lower-case). */
+    /** Extend `PLATFORM_ADMIN_EMAILS` (lower-case). */
     "admin-emails": Strings,
-    /** Extend `ACCESS_ADMIN_SERVICE_TOKENS` (Access service token client ids). */
+    /** Extend `PLATFORM_ADMIN_SERVICE_TOKENS` (Access service token client ids). */
     "admin-service-tokens": Strings,
   },
 } as const satisfies SettingsTree;
@@ -289,7 +289,7 @@ export const SettingsView = Schema.Struct({
   /** The values of an empty config: "default" captions and Reset. */
   defaults: SettingsValues,
   not_applied: Schema.Array(NotApplied),
-  /** `ACCESS_ADMIN_EMAILS` / `ACCESS_ADMIN_SERVICE_TOKENS`: always admins, not editable here. */
+  /** `PLATFORM_ADMIN_EMAILS` / `PLATFORM_ADMIN_SERVICE_TOKENS`: always admins, not editable here. */
   env_admins: Schema.Struct({ emails: Strings, service_tokens: Strings }),
   /** `requests.payload` rule counts per kind (edited in the raw configuration). */
   payload: PayloadCounts,

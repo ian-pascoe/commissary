@@ -500,7 +500,7 @@ export const rawProblem = (
     case "invalid_secret_placeholder":
       return "This placeholder was edited. Keep it exactly as [redacted#n], or replace the whole value with a new secret.";
     case "would_remove_your_admin_access":
-      return "This would remove your own admin access. Keep your address in access.admin-emails, or ask a deployment admin to make the change.";
+      return "This would remove your own admin access. Keep your address in access.admin-emails, or ask a platform admin to make the change.";
     case "body_too_large":
       return "The configuration is larger than 512 KiB, which the server does not accept.";
     default:

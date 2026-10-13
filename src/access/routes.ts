@@ -1,5 +1,8 @@
 // Route policy: which paths need Cloudflare Access authentication (mirrors the Go route groups in
-// internal/api/server_routes.go that use AuthMiddleware) and which need an administrator.
+// internal/api/server_routes.go that use AuthMiddleware) and which need an administrator. Also the org addresses of the
+// management zone (ADR 0021), which are new in the Workers port.
+import { Schema } from "effect";
+import { OrgSlug } from "../platform/org.ts";
 
 /**
  * Paths under these prefixes require a verified Access principal. `/v1` also covers `/v1beta*` and `/v1internal`;
@@ -42,17 +45,133 @@ export const PANEL_SECTIONS = [
 const inSection = (path: string, section: string): boolean =>
   path === `/${section}` || path.startsWith(`/${section}/`);
 
+/** Where the org of a panel page comes from: `/o/<slug>/accounts` is the page `/accounts` of the org `<slug>`. */
+export const PANEL_ORG_PREFIX = "/o";
+
+/** The segment after `/v8/management` that is followed by an org slug: `/v8/management/orgs/<slug>/config`. */
+export const ORGS_SEGMENT = "orgs";
+
 const isPanelPath = (path: string): boolean =>
-  path === "/" || PANEL_SECTIONS.some((section) => inSection(path, section));
+  path === "/" ||
+  path.startsWith(`${PANEL_ORG_PREFIX}/`) ||
+  PANEL_SECTIONS.some((section) => inSection(path, section));
+
+const isOrgSlug = Schema.is(OrgSlug);
+
+const decodedLowercase = (segment: string): string => {
+  try {
+    return decodeURIComponent(segment).toLowerCase();
+  } catch {
+    return segment.toLowerCase();
+  }
+};
+
+/** An org addressed by the path of a management request, and the path the request has once the org is taken out. */
+export interface OrgAddress {
+  readonly slug: OrgSlug;
+  /** `/v8/management/<rest>` for `/v8/management/orgs/<slug>/<rest>`, `/<page>` for `/o/<slug>/<page>` (`/` for none). */
+  readonly path: string;
+}
+
+/**
+ * The org a path addresses, `undefined` for a path of no org: `/v8/management/orgs/<slug>/<rest>` (the management API
+ * of the org; `/v8/management/orgs` and `/v8/management/orgs/<slug>` themselves are platform-level routes and address
+ * none) and `/o/<slug>[/<page>]` (a page of the panel, not `/assets`). Like the router, it skips duplicate slashes and
+ * compares the fixed segments case-insensitively and percent-decoded; the rest of the path stays as sent.
+ */
+export const parseOrgAddress = (pathname: string): OrgAddress | undefined => {
+  const segments = pathname.split("/");
+  let index = 0;
+
+  const next = (): string | undefined => {
+    while (segments[index] === "") index++;
+    const segment = segments[index];
+
+    if (segment === undefined) return undefined;
+    index++;
+
+    return decodedLowercase(segment);
+  };
+
+  // The rest of the path from the next non-empty segment, as sent.
+  const rest = (): string | undefined => {
+    while (segments[index] === "") index++;
+
+    return segments[index] === undefined ? undefined : segments.slice(index).join("/");
+  };
+
+  const first = next();
+
+  if (first === "v8") {
+    if (next() !== "management" || next() !== ORGS_SEGMENT) return undefined;
+    const slug = next();
+    const path = rest();
+
+    if (slug === undefined || !isOrgSlug(slug) || path === undefined) return undefined;
+
+    // No orgs inside an org.
+    return decodedLowercase(path.split("/")[0] ?? "") === ORGS_SEGMENT
+      ? undefined
+      : { slug, path: `${MANAGEMENT_PREFIX}/${path}` };
+  }
+
+  if (first === PANEL_ORG_PREFIX.slice(1)) {
+    const slug = next();
+
+    if (slug === undefined || !isOrgSlug(slug)) return undefined;
+    const path = rest();
+
+    if (path === undefined) return { slug, path: "/" };
+    const section = decodedLowercase(path.split("/")[0] ?? "");
+
+    return PANEL_SECTIONS.some((page) => page !== "assets" && page === section)
+      ? { slug, path: `/${path}` }
+      : undefined;
+  }
+
+  return undefined;
+};
+
+/**
+ * The address of the org in a request URL (absolute or origin-relative), with the URL the request has once the org is
+ * taken out: the path of {@link parseOrgAddress} and the query unchanged. `undefined` for a URL of no org.
+ */
+export const scopedUrl = (
+  requestUrl: string,
+): { readonly slug: OrgSlug; readonly url: string } | undefined => {
+  let parsed: URL;
+
+  try {
+    parsed = new URL(requestUrl, "http://invalid.invalid");
+  } catch {
+    return undefined;
+  }
+
+  // The raw path: `URL` leaves the percent-encoding and the duplicate slashes of the request alone.
+  const address = parseOrgAddress(parsed.pathname);
+
+  return address === undefined
+    ? undefined
+    : { slug: address.slug, url: `${address.path}${parsed.search}` };
+};
+
+/** The path of a (normalised) path once its org is taken out: the page or API path the router matches. */
+export const unscopedPath = (path: string): string => parseOrgAddress(path)?.path ?? path;
 
 /**
  * Whether a normalised path (`normalizedPath`) is a page a browser may open from another site: the panel's pages
- * (not `/assets`) and the legacy panel address. The management API (`/v8/management*`) never is.
+ * (not `/assets`), also those of an org (`/o/<slug>/accounts`), and the legacy panel address. The management API
+ * (`/v8/management*`) never is.
  */
-export const isPanelPagePath = (path: string): boolean =>
-  path === "/" ||
-  path === LEGACY_PANEL_PATH ||
-  PANEL_SECTIONS.some((section) => section !== "assets" && inSection(path, section));
+export const isPanelPagePath = (path: string): boolean => {
+  const page = unscopedPath(path);
+
+  return (
+    page === "/" ||
+    page === LEGACY_PANEL_PATH ||
+    PANEL_SECTIONS.some((section) => section !== "assets" && inSection(page, section))
+  );
+};
 
 export type AccessZone = "public" | "protected" | "management";
 

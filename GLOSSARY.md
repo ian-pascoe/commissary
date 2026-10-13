@@ -30,6 +30,18 @@ _Avoid_: SaaS, cloud, multi-tenant mode
 A person named by the deployment who can repair any org, and the only one who can create orgs on a self-hosted proxy.
 _Avoid_: operator, superuser, admin (on its own)
 
+**Org slug**:
+The short name that addresses an org in URLs (`/o/acme/accounts`, `/v8/management/orgs/acme/...`): lowercase letters,
+digits and inner hyphens, unique across the proxy, and renamable. It is not the org's id, which never changes and names
+its stored data.
+_Avoid_: org name (a free-text display name), handle, subdomain
+
+**Platform registry**:
+The deployment's own record of what spans orgs: the list of orgs with their slugs, which orgs each person and each service
+token belong to, and the lease that keeps the shared model catalog to one refresh at a time. Platform admins are not in it;
+the deployment's settings name them.
+_Avoid_: org table, tenant directory
+
 **Member**:
 A person who belongs to an org, with one role there. A person can be a member of several orgs.
 _Avoid_: user, seat, operator
