@@ -288,6 +288,7 @@ export class ControlPlane extends DurableObject<Env> {
     this.#pool = new CredentialPool({
       store: credentials,
       config: () => this.#currentConfig(),
+      privateCredentials: () => this.#members.privateCredentials(),
       decorate: (credential) => this.#refresh.decorate(credential),
     });
     this.#refresh = new RefreshManager({
@@ -479,14 +480,27 @@ export class ControlPlane extends DurableObject<Env> {
   membershipSettings(): MembershipSettingsWire {
     this.#ensureMembership();
 
-    return { autoJoin: this.#members.autoJoin() };
+    return {
+      autoJoin: this.#members.autoJoin(),
+      privateCredentials: this.#members.privateCredentials(),
+    };
   }
 
-  setMembershipSettings(settings: MembershipSettingsWire): MembershipSettingsWire {
+  /** Changes the settings named; `privateCredentials` turns every private credential off or on again at once. */
+  setMembershipSettings(settings: Partial<MembershipSettingsWire>): MembershipSettingsWire {
     this.#ensureMembership();
-    this.#members.setAutoJoin(settings.autoJoin);
 
-    return { autoJoin: this.#members.autoJoin() };
+    if (settings.autoJoin !== undefined) this.#members.setAutoJoin(settings.autoJoin);
+
+    if (
+      settings.privateCredentials !== undefined &&
+      settings.privateCredentials !== this.#members.privateCredentials()
+    ) {
+      this.#members.setPrivateCredentials(settings.privateCredentials);
+      this.#pool.invalidate();
+    }
+
+    return this.membershipSettings();
   }
 
   listTeams(): ReadonlyArray<TeamRecord> {

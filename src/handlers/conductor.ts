@@ -441,6 +441,7 @@ export const conduct = <T, R>(
               model: prepared.routeModel,
               ...(credits ? { ignoreCooldown: true } : {}),
               callerScope: prepared.callerScope,
+              ...(prepared.memberId === undefined ? {} : { memberId: prepared.memberId }),
               excludedIds,
               retryRound: round,
               requestRetry: settings.requestRetry,
@@ -618,6 +619,7 @@ export const conduct = <T, R>(
           ...(error.retryAfterMs === undefined ? {} : { retryAfterMs: error.retryAfterMs }),
           maxWaitMs: settings.maxWaitMs,
           ...(prepared.pinnedId === undefined ? {} : { pinnedAuthId: prepared.pinnedId }),
+          ...(prepared.memberId === undefined ? {} : { memberId: prepared.memberId }),
           ...(prepared.disallowFreeAuth === true ? { disallowFreeCodex: true } : {}),
         });
 

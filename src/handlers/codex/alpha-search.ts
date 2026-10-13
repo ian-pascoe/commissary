@@ -113,6 +113,7 @@ const handle = Effect.gen(function* () {
       providers: ["codex"],
       model,
       callerScope: identity.callerScope,
+      ...(identity.memberId === undefined ? {} : { memberId: identity.memberId }),
       ...(sessionId !== "" ? { session: { id: sessionId } } : {}),
     }),
   );

@@ -39,6 +39,8 @@ export const Credential = Schema.Struct({
   /** Model namespace (`team-a/gpt-5`), without slashes. */
   prefix: optional(Schema.String),
   disabled: Schema.Boolean,
+  /** The member a private credential belongs to; absent for a shared credential (ADR 0023). */
+  owner: optional(Schema.String),
   /** Higher is preferred; only the highest available tier is selectable. */
   priority: Schema.Int,
   /** Weighted round-robin weight; `0` excludes the credential under that strategy. */

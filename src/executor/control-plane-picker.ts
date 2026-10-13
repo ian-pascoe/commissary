@@ -102,6 +102,7 @@ export const makeControlPlanePicker = (api: (env: Env, org: OrgId) => ControlPla
           ...(request.retryRound === undefined ? {} : { retryRound: request.retryRound }),
           ...(request.requestRetry === undefined ? {} : { requestRetry: request.requestRetry }),
           ...(request.pinnedId === undefined ? {} : { pinnedAuthId: request.pinnedId }),
+          ...(request.memberId === undefined ? {} : { memberId: request.memberId }),
           ...(request.disallowFreeAuth === true ? { disallowFreeCodex: true } : {}),
           ...(request.preferWebsockets === true ? { preferWebsockets: true } : {}),
           ...(request.ignoreCooldown === true ? { ignoreCooldown: true } : {}),

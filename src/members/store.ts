@@ -69,6 +69,8 @@ export interface ServiceTokenRecord {
 export interface MembershipSettingsWire {
   /** Every person Access admits joins as a plain member on their first request. */
   readonly autoJoin: boolean;
+  /** Members may connect private credentials, and the private credentials they connected are used (ADR 0023). */
+  readonly privateCredentials: boolean;
 }
 
 /** What the Platform registry indexes for the org, and the change it reflects. */
@@ -157,6 +159,7 @@ const removedToken = (clientId: string) => `service:${clientId}`;
 
 interface StateRow {
   auto_join: number;
+  private_credentials: number;
   admins_migrated: number;
   counter: number;
   index_synced: number;
@@ -260,6 +263,15 @@ export class MemberStore {
     this.#now = now;
 
     for (const statement of SCHEMA) sql.exec(statement);
+
+    // An org from before private credentials lets its members connect them, as `global` does.
+    if (
+      !sql
+        .exec<{ name: string }>("PRAGMA table_info(membership)")
+        .toArray()
+        .some((column) => column.name === "private_credentials")
+    )
+      sql.exec("ALTER TABLE membership ADD COLUMN private_credentials INTEGER NOT NULL DEFAULT 1");
 
     sql.exec(
       `INSERT OR IGNORE INTO membership (id, auto_join, admins_migrated, counter, index_synced)
@@ -374,6 +386,14 @@ export class MemberStore {
 
   setAutoJoin(on: boolean): void {
     this.#sql.exec(`UPDATE membership SET auto_join = ? WHERE id = 1`, on ? 1 : 0);
+  }
+
+  privateCredentials(): boolean {
+    return this.#state().private_credentials === 1;
+  }
+
+  setPrivateCredentials(on: boolean): void {
+    this.#sql.exec(`UPDATE membership SET private_credentials = ? WHERE id = 1`, on ? 1 : 0);
   }
 
   // --- members ------------------------------------------------------------------------------------------------
@@ -703,7 +723,7 @@ export class MemberStore {
   #state(): StateRow {
     const row = this.#sql
       .exec<StateRow>(
-        `SELECT auto_join, admins_migrated, counter, index_synced FROM membership WHERE id = 1`,
+        `SELECT auto_join, private_credentials, admins_migrated, counter, index_synced FROM membership WHERE id = 1`,
       )
       .toArray()[0];
 
