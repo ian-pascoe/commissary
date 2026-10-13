@@ -78,6 +78,35 @@ export class RegistrySnapshot {
   responsesWebSearchCapability = (modelId: string): boolean | undefined =>
     this.index.responsesWebSearchCapability(modelId);
 
+  readonly #memberViews = new Map<string, RegistrySnapshot>();
+
+  /**
+   * The registry as one caller may list it (ADR 0023): a private credential's models belong to its owner, so every
+   * other caller, an org admin included, gets the registry without them. The snapshot itself serves routing, where a
+   * private credential is only ever a candidate for its owner (the picker); `undefined` is a caller without a member.
+   */
+  visibleTo = (memberId: string | undefined): RegistrySnapshot => {
+    if (!this.sources.some((source) => source.owner !== undefined)) return this;
+    const key = memberId ?? "";
+    const cached = this.#memberViews.get(key);
+
+    if (cached !== undefined) return cached;
+
+    const view = buildSnapshot({
+      sources: this.sources.filter(
+        (source) => source.owner === undefined || source.owner === memberId,
+      ),
+      config: this.config,
+      catalogs: this.catalogs,
+      now: this.now,
+      configVersion: this.configVersion,
+    });
+
+    this.#memberViews.set(key, view);
+
+    return view;
+  };
+
   /** Models with at least one usable credential, sorted by id (`GetAvailableModelInfos`). */
   availableModels = (): ModelInfo[] => this.index.availableModels(this.now);
 

@@ -9,6 +9,7 @@
  * than overwriting a change the view did not show.
  */
 import { Clock, Effect } from "effect";
+import { AccessPrincipal } from "../access/principal.ts";
 import { routingView } from "../registry/routing-view.ts";
 import { ModelRegistry } from "../registry/service.ts";
 import { currentAuthIndexer } from "./auth-index.ts";
@@ -27,9 +28,11 @@ const routingModels = Effect.gen(function* () {
   );
 
   const now = yield* Clock.currentTimeMillis;
+  const identity = yield* AccessPrincipal;
 
   return jsonReply(200, {
-    ...routingView(snapshot, now, yield* currentAuthIndexer),
+    // An org admin sees no model of another member's private credential (ADR 0023).
+    ...routingView(snapshot.visibleTo(identity.memberId), now, yield* currentAuthIndexer),
     revisions: { aliases: entries.revisions.aliases, exclusions: entries.revisions.exclusions },
   });
 });

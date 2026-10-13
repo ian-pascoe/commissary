@@ -6,6 +6,7 @@
  */
 import { Effect } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
+import { AccessPrincipal } from "../access/principal.ts";
 import { buildCodexClientModels, supportsApplyPatchProviders } from "./codex-client-models.ts";
 import {
   respondGeminiDetail,
@@ -44,7 +45,8 @@ const v1Models = (registry: Registry) =>
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const url = new URL(request.originalUrl, "http://localhost");
-    const snapshot = yield* registry.snapshot;
+    const identity = yield* AccessPrincipal;
+    const snapshot = (yield* registry.snapshot).visibleTo(identity.memberId);
 
     const reply = respondModels(
       snapshot.availableModels(),
@@ -89,7 +91,8 @@ const v1betaModels = (registry: Registry) =>
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const url = new URL(request.originalUrl, "http://localhost");
-    const snapshot = yield* registry.snapshot;
+    const identity = yield* AccessPrincipal;
+    const snapshot = (yield* registry.snapshot).visibleTo(identity.memberId);
     const models = snapshot.availableModels();
     const action = remainder(url.pathname, "/v1beta/models");
 

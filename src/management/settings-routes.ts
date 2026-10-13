@@ -79,7 +79,9 @@ const view = Effect.gen(function* () {
       version: current.version,
       revisions: current.revisions.settings,
       updatedAt: current.updatedAt,
-      prefixedCredentials: sources.filter((source) => (source.prefix ?? "").trim() !== "").length,
+      prefixedCredentials: sources.filter(
+        (source) => source.owner === undefined && (source.prefix ?? "").trim() !== "",
+      ).length,
     }),
   );
 });
