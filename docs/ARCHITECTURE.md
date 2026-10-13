@@ -81,8 +81,9 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
   construction so a deployment gains it without a migration): what spans orgs. The list of orgs (`orgs`: permanent `id`,
   unique `slug`, `name`, `created_at`; `global` is seeded as slug `default`, name `Default` and left alone afterwards, so
   a rename sticks), the indexes of which orgs a person (`org_members`) and an Access service token
-  (`org_service_tokens`) belong to (kept empty until orgs have members; the orgs' ControlPlanes stay authoritative, so
-  the indexes are repairable), and the catalog refresh lease (below). Platform admins are not stored in it: the
+  (`org_service_tokens`) belong to (a copy of the orgs' members and service tokens, pushed by the Worker: see "Members,
+  roles and teams"; the orgs' ControlPlanes stay authoritative, so the indexes are repairable), and the catalog refresh
+  lease (below). Platform admins are not stored in it: the
   deployment's variables name them (see Authentication), so they can always repair the registry. See "Orgs in
   addresses" below.
 - **Deployment-wide state**: the model catalog (KV copy, refresh status and refresh lease) and the client versions
@@ -153,8 +154,10 @@ client -> Cloudflare Access -> Worker
 - **Config (`src/config/`)**: the canonical document is the v8 layout restricted to keys that apply on Workers
   (`schema.ts`, kebab-case keys as in YAML). `codec.ts` imports YAML/JSON (v8, legacy flat layout and historical v8
   spellings, see `document.ts`), validates, normalises (`normalize.ts`, port of the Go `Sanitize*` functions) and
-  encodes it back to the v8 layout (`encodeConfig`, which config entries are made of). Added keys without a Go counterpart: `access.admin-emails` and
-  `access.admin-service-tokens` (the management allow-list of `global`, merged with the `PLATFORM_ADMIN_*` variables, see Authentication).
+  encodes it back to the v8 layout (`encodeConfig`, which config entries are made of). The schema still decodes
+  `access.admin-emails` and `access.admin-service-tokens` (a Workers addition from before members) so an old stored document
+  can be migrated, but they are no settings: an import lists them as `not_applied`, and a ControlPlane that stored them
+  hands them to the members migration once (see "Members, roles and teams").
   Keys that are accepted but have no effect on Workers are listed in `config/not-applied.ts` with a one-line reason (and
   MIGRATION.md); the import names them in its answer (`not_applied`) and stores none of them (ADR 0025), so the Settings
   view carries no such list. `requests.proxy-url` is accepted but ignored. Unknown/inapplicable keys are dropped on import.
@@ -941,10 +944,6 @@ panel paths and `/management.html` as `management`); there is no management key.
     `api-keys` family or group field) and are passed on unscrubbed: scrubbing stored secrets out of an echoed key would
     itself tell a right guess from a wrong one. So a refused write reads the same whether a typed value, key or alias
     name equals a stored secret or not.
-  - Admin service tokens (Workers addition): every write that can change `access.admin-service-tokens` (`PATCH /settings`
-    and `POST /settings/import`) refuses a change by an email admin who is one only through the config
-    (`403 service_tokens_require_service_admin`, `checkServiceTokenAdmins` in `settings.ts`; service-token administrators
-    and env admins may), compared as a set against the stored list so rewriting the same list is fine.
   - Model rules (`model-rules-routes.ts`, contract `routing.ts`; Workers addition, Go's panel writes `oauth-model-alias` and
     `oauth-excluded-models` through `/config` paths): `PUT|DELETE /model-rules/aliases/:channel` and
     `/model-rules/exclusions/:channel` replace or remove one channel's whole list, which is one entry. The request names the
@@ -1082,9 +1081,9 @@ panel paths and `/management.html` as `management`); there is no management key.
   silently). Every setting is a config entry of its own, by dotted path (_Storage_ above).
   - `GET /settings`: every Settings-owned value (`SETTINGS_TREE`: routing, retries/cooldowns, requests/streaming,
     upstream provider flags and header defaults, Codex client flags, refresh concurrency, OAuth provider settings,
-    multimedia, model catalogs, config admin lists) in config spelling with defaults filled (unset Go pointers are
+    multimedia, model catalogs) in config spelling with defaults filled (unset Go pointers are
     `null`), the `defaults`, the config `version` and `updated_at`, `revisions` (the revision of every stored setting by
-    dotted path; a setting at its default is not stored and is not listed, revision 0), `env_admins` (`PLATFORM_ADMIN_*`),
+    dotted path; a setting at its default is not stored and is not listed, revision 0),
     `payload` rule counts per kind, `prefixed_credentials` and the read-only `request_scoped_errors` map. There is no
     `not_applied` list: not-applied keys are never stored, only the import names them. **No secrets**: API keys, proxy
     URLs and client keys are never in the view.
@@ -1094,14 +1093,9 @@ panel paths and `/management.html` as `management`); there is no management key.
     and not-applied keys answer `400 not_a_setting`, like any path that is no setting; invalid values
     `422 invalid_setting` with `message` and `path` (naming the value, e.g. `“EST” is not an IANA time zone`; type, then rules: Go
     durations > 0, non-negative counts, strategy literal, `gpt-` model prefix, catalog `""`/`embed`/`disabled`/http(s),
-    IANA time zone or `Local`, email-shaped admin entries); then the edited document is dry-run through the config
+    IANA time zone or `Local`); then the edited document is dry-run through the config
     decoder and every written leaf must come back unchanged (a value the normaliser trims, lower-cases or clamps is
-    refused with its path instead of "succeeding"). Only a service-token administrator or an env admin may change
-    `access.admin-service-tokens`: an email admin who is one only through the config gets
-    `403 service_tokens_require_service_admin` (also on `POST /settings/import`; a Workers addition: the
-    credential download is for service tokens only, so an email admin must not be able to grant that right, see
-    `docs/ACCESS.md`). A caller who is an admin only through `access.admin-*` cannot
-    remove themselves (`422 would_remove_your_admin_access`; platform admins and the dev bypass can). Ok:
+    refused with its path instead of "succeeding"). Ok:
     `{status: "ok", version, revisions}`: the new revision of each changed setting (`0` for one reset to its default).
   - `POST /settings/import` (body: YAML or JSON text, `application/yaml`, `text/yaml` or `application/json`, at most
     512 KiB, `413 body_too_large` beyond; counted while it is read): the **only** write of the whole configuration. It
@@ -1109,10 +1103,8 @@ panel paths and `/management.html` as `management`); there is no management key.
     reads it) in one transaction, so what the document does not set goes back to its default and every key group,
     key, rule list and payload rule it does not list is deleted. It answers `{status: "ok", version, not_applied}`:
     the keys that have no effect on Workers, which are not stored (`config/not-applied.ts`; ADR 0015's round trip
-    through the stored document is replaced by this answer). The same admin guards as `PATCH /settings` apply
-    (`403 service_tokens_require_service_admin`; no self lock-out, `422 would_remove_your_admin_access`); they read
-    the stored config, and the import names the change counter of that read, so a write landing in between makes it
-    `409 conflict` (send it again) instead of passing the guards on a stale config. A key whose secret a stored key
+    through the stored document is replaced by this answer). Who manages the org is not part of the document: its
+    `access.admin-*` lists are named as not applied (members, ADR 0022). A key whose secret a stored key
     of its family has keeps that key's id (a secret edited in the panel no longer matches its content hash), so
     re-importing a document keeps credential ids and auth indexes. Invalid YAML
     is `422 invalid_config` with `message`, `line` and `column` (a fixed sentence per error code, never the source; YAML
@@ -1407,7 +1399,9 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   UUIDs like Go's `NormalizeToCanonicalUUID`, the parent only when it differs). `migrations/0003_usage_org.sql` adds
   `org_id` (`NOT NULL DEFAULT 'global'`, so records from before orgs are `global`'s) with `(org_id, requested_at)`
   indexes: the writer stores the request's `CurrentOrg`, and every listing, summary, series, export and queue query
-  filters on it. `D1UsageSink` (default in `makeProxyRoutes`) inserts through `ctx.waitUntil` (awaits when
+  filters on it. `migrations/0005_usage_member.sql` adds `member_id` (the caller's member id in the org, `NULL` for records
+  from before members and for callers admitted without a member record) with an `(org_id, member_id, requested_at)` index.
+  `D1UsageSink` (default in `makeProxyRoutes`) inserts through `ctx.waitUntil` (awaits when
   `waitUntil` throws), logs failures with request id and message only and never fails the request. The sink reads
   `WorkerEnv`/`WorkerExecutionContext` from the fiber context at publish time (not part of its type, so the conductor's
   attempt plumbing is unchanged). `migrations/` is applied by Alchemy on every deploy
@@ -1441,13 +1435,16 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   persistence is always on when the `USAGE` binding exists.
 - **Management** (`management/usage-routes.ts`): `GET /v8/management/observability/usage/queue?count=N` (atomically pops the oldest unexported records, Go queue JSON with
   `token_breakdown`; `api_key` = Access principal id, `auth_index` = the management (keyed) `auth_index`) and the Workers
-  additions `.../records` (filters `since|until|provider|model|principal|auth_index|failed`, `limit`, keyset `before`) and
-  `.../summary` (`group_by=model|provider|principal|auth|endpoint|day`, totals per v2 bucket, avg latency/TTFT) and
+  additions `.../records` (filters `since|until|provider|model|principal|member|team|auth_index|failed`, `limit`, keyset
+  `before`; `team` is the team's member ids, one `json_each` parameter so a large team stays within D1's bound parameters)
+  and `.../summary` (`group_by=model|provider|principal|member|auth|endpoint|day`, totals per v2 bucket, avg latency/TTFT) and
   `.../series` (not in Go; the panel's per-account quota-window bars: `since` required, `until` default now, `bucket=hour|day`
-  UTC, `group_by=auth|model|provider`, filters `provider|model|auth_index`; per key the points `{start, requests, failed,
+  UTC, `group_by=auth|model|provider`, filters `provider|model|member|team|auth_index`; per key the points `{start, requests, failed,
   total_tokens}` (`acct_total_tokens`) of buckets with requests, one aggregate query; hour ranges are capped at 31 days and
   day ranges at 400, else 400). `summary` totals and groups, `series` points and `records` carry `cost_micros`; summaries
-  add `unpriced_requests` and a record `unpriced`. `.../unpriced` (filters `since|until|provider|model|principal|auth_index`)
+  add `unpriced_requests` and a record `unpriced` (and `member_id` when it has one). A plain member may read `records`,
+  `summary` and `series` and is narrowed to their own records whatever the filters say (`member_id` = theirs, or
+  `principal_id` = theirs for records without one). `.../unpriced` (filters `since|until|provider|model|principal|member|team|auth_index`)
   lists the provider and model pairs with flagged records, the busiest first, to give them a price. `GET|POST
   /price-overrides` and `PUT|DELETE /price-overrides/:id` (`price-routes.ts`, contract `prices.ts`) manage overrides like
   the model rules: `PUT` and `DELETE` carry the entry's revision in `If-Match` (`400 invalid_if_match`), `404`, `409
@@ -1814,31 +1811,66 @@ management API and the panel (the proxy endpoints still name it with the caller'
   `/v8/management*` and to the panel pages applies to the scoped spellings too.
 - The slug is resolved by the Platform registry (`getOrgBySlug`) **after** authentication, so an unauthenticated caller
   learns nothing about which slugs exist. A platform admin gets the org; a slug the registry does not list is `404` for a
-  platform admin and `403` for anyone else (also for an admin named only by the config document, who is limited to
-  `global`'s slug as the registry currently lists it, so renaming `default` does not lock them out). A registry that cannot be reached fails a scoped address
+  platform admin and `403` for anyone else; a known slug then needs the caller to be a member of the org (see
+  "Members, roles and teams"). A registry that cannot be reached fails a scoped address
   with `500` (the org cannot be told); the unscoped addresses need no lookup and keep working.
 
 Platform-level routes (`org-routes.ts`, contract group `orgs`, `src/management/contract/orgs.ts`):
 
-| Route                              | Who            | Does                                                                                         |
-| ---------------------------------- | -------------- | -------------------------------------------------------------------------------------------- |
-| `GET /v8/management/me`            | any admin      | `{platform_admin, orgs: [{slug, name}]}`: every org for a platform admin, `global` otherwise |
-| `GET /v8/management/orgs`          | platform admin | every org, `global` first                                                                    |
-| `POST /v8/management/orgs`         | platform admin | creates `{slug, name}`; `201`, `409 slug_taken`, `422 invalid_slug`/`invalid_name`           |
-| `PATCH /v8/management/orgs/<slug>` | platform admin | changes `slug` and/or `name`; the id never changes, so stored data stays where it is         |
+| Route                              | Who            | Does                                                                                                                                                                       |
+| ---------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /v8/management/me`            | anyone         | `{platform_admin, role, orgs: [{slug, name}]}`: `role` in the addressed org (`null` without one); every org for a platform admin, the orgs the caller belongs to otherwise |
+| `GET /v8/management/orgs`          | platform admin | every org, `global` first                                                                                                                                                  |
+| `POST /v8/management/orgs`         | platform admin | creates `{slug, name}`; `201`, `409 slug_taken`, `422 invalid_slug`/`invalid_name`                                                                                         |
+| `PATCH /v8/management/orgs/<slug>` | platform admin | changes `slug` and/or `name`; the id never changes, so stored data stays where it is                                                                                       |
 
 Anyone else gets `403 platform_admin_required` on the three org routes. The panel reads `/me` for its org switcher.
 
 **Panel.** The panel of an org is the same single-page app served at `/o/<slug>/...` (the Worker answers every page path of
 every org with `index.html`). The app reads its org from the address: TanStack Router's `basepath` is `/o/<slug>`, and the
-typed client rewrites each request to `/v8/management/orgs/<slug>/...` except `/me` and `/orgs` (`web/src/lib/org.ts`,
+typed client rewrites each request to `/v8/management/orgs/<slug>/...` except `/orgs` (`web/src/lib/org.ts`,
 `ManagementClient`'s `transformClient`; the one hand-written request, the Vertex import, does the same). The shell shows an
-org switcher to anyone who manages several orgs or may create them; choosing an org reloads the app at its address. An
-address without an org (`/`, `/accounts`, ...) goes through `orgRedirect` (`web-panel.ts`): a caller who manages exactly
+org switcher to anyone who belongs to several orgs or may create them; choosing an org reloads the app at its address. An
+address without an org (`/`, `/accounts`, ...) goes through `orgRedirect` (`web-panel.ts`): a caller who belongs to exactly
 one org is redirected (`302`, uncached, path and query kept) to the same page of it; otherwise the app loads without an
 org and shows the **chooser** (the orgs of `/me`, and for a platform admin a form that creates one). `/?choose` skips the
 redirect, so a platform admin of one org can reach the form. Bookmarks and clients of the unscoped management API are
 unaffected.
+
+## Members, roles and teams (`src/members/`, `src/access/policy.ts`, `src/management/member-routes.ts`)
+
+Workers addition, no Go counterpart (Go has one management key for everything); ADR 0022. The permission matrix and the
+error codes are in `docs/ACCESS.md` "Members, roles and teams".
+
+- **Store** (`members/store.ts` `MemberStore`, in each org's ControlPlane, SQLite, tables `CREATE IF NOT EXISTS`): `members`
+  (permanent `mem-…` id, lowercased unique email, role, who added them), `teams` and `team_members`, `service_tokens` (Client
+  ID, name, role) and one `membership` row (auto-join, whether the admin lists were migrated, a change counter and the
+  change the registry's index holds). Members are not config entries: a config import replaces every entry and must not
+  remove people. Every write takes the actor's role and checks it against the target in the same Durable Object call
+  (`members/roles.ts`: `mayManageMember`, `mayChangeRoles`, `mayGrantTokenRole`, `holdsSensitivePowers`), so check and write
+  cannot interleave with another request; refusals are data (`{ok: false, error, message}`) that `member-routes.ts` maps to
+  statuses.
+- **Admission** (`members/admission.ts`, called by the Access gate on every protected request): the org's ControlPlane
+  answers the principal's role and member id (`admit`), joining a person as a plain member when auto-join is on; a
+  platform admin is an owner without joining. The ControlPlane is asked on every request, so removing a member or lowering
+  a role applies on the next one. An unreachable ControlPlane fails the request (500) unless the caller is a platform admin
+  or the route is platform-level. `AccessIdentity` carries `role` and `memberId`; proxy handlers write the member id into
+  usage records (`member_id`, `migrations/0005_usage_member.sql`).
+- **Policy** (`access/policy.ts` `routeAccess`): platform-level (no role: `/v8/management/me`, `/v8/management/orgs*`, panel
+  pages without an org, `/assets`, `/management.html`), member (the proxy endpoints, the org's panel pages, `GET` usage
+  records/summary/series, where a plain member is narrowed to their own records: by member id, or by Access principal for
+  records from before members), admin (every other management route). Owner-only and ADR 0006 checks live in the handlers
+  (role changes, auto-join, service token roles above member, the credential download).
+- **Registry index**: the Platform registry lists which orgs each person and service token belong to, for `/me` and the
+  panel's org switcher. Each member or token change bumps the ControlPlane's counter; the Worker then pushes the org's lists
+  (`syncOrgIndex`: `membershipIndex` → `replaceOrgIndex` → `markIndexSynced(counter)`), and admission retries a push that
+  failed. A service token belongs to one org: registering one the registry indexes for another org answers
+  `409 service_token_taken`.
+- **Migration** (`members/migration.ts`, once per ControlPlane, before member calls, a settings write or a config import): the
+  config admin lists of `global` become members in one transaction with their removal from the config: the platform
+  admins of the time owners, `access.admin-emails` admins, `access.admin-service-tokens` owner service tokens. A stored
+  document from before config entries keeps its admin lists as entries until then. In any other org the lists are only
+  removed.
 
 ## Authentication (Cloudflare Access)
 
@@ -1849,13 +1881,11 @@ unaffected.
   `iss` = team domain, `aud` contains the application AUD tag, `exp`/`nbf`). JWKS is cached per isolate.
 - Principal: `email` for users, `common_name` (service token client id) for service tokens. The principal replaces the
   Go `userApiKey` for usage records and the `caller_scope` hash used to isolate session state.
-- Management routes require the principal to match an admin allow-list (emails / service token ids), in addition to Access
-  policy: the `PLATFORM_ADMIN_EMAILS`/`PLATFORM_ADMIN_SERVICE_TOKENS` variables (the **platform admins**: always checked
-  first, no I/O, so one can always repair the config and the registry; the deprecated `ACCESS_ADMIN_EMAILS`/
-  `ACCESS_ADMIN_SERVICE_TOKENS` are merged in as aliases and logged once as a warning) united with the config document's
-  `access.admin-emails`/`access.admin-service-tokens` (read through a `ConfigReader` built into the gate; an unreadable
-  config denies non-platform admins). A platform admin manages every org the registry lists; an admin named only by the
-  config document manages the org `global` and nothing else, until orgs have members of their own (ADR 0022).
+- Past Access, every protected request needs a role in its org (see "Members, roles and teams"): the
+  `PLATFORM_ADMIN_EMAILS`/`PLATFORM_ADMIN_SERVICE_TOKENS` variables name the **platform admins**, owners of every org (checked
+  first, no I/O, so one can always repair an org and the registry; the deprecated `ACCESS_ADMIN_EMAILS`/
+  `ACCESS_ADMIN_SERVICE_TOKENS` are merged in as aliases and logged once as a warning); anyone else is admitted by the org's
+  ControlPlane. The route's policy (`access/policy.ts`) names the role it needs.
 - Cross-site protections (`access/csrf.ts`, before authentication; new in the port because the Access session cookie is sent by
   browsers automatically): state-changing requests are refused on protected and management zones when `Sec-Fetch-Site` is
   `cross-site`/`same-site` or `Origin` is another host; management requests of any method with a foreign `Origin` (or a

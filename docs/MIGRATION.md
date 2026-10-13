@@ -5,10 +5,10 @@ The Workers port reads the Go `config.yaml` and the Go auth files (`*.json`), so
 
 ## 0. Management access from a terminal
 
-The management API needs an Access **admin**. For scripts, add a service token name to `ACCESS_SERVICE_TOKENS` and to
-`PLATFORM_ADMIN_SERVICE_TOKENS` in `.env` and deploy (see [ACCESS.md](ACCESS.md); its credentials land in
-`.alchemy/access-service-tokens.json`), or add a Client ID to `access.admin-service-tokens` in the config once an env
-admin has set it up, then:
+The management API needs an **org admin** (or a platform admin). For scripts, add a service token name to
+`ACCESS_SERVICE_TOKENS` and to `PLATFORM_ADMIN_SERVICE_TOKENS` in `.env` and deploy (see [ACCESS.md](ACCESS.md); its
+credentials land in `.alchemy/access-service-tokens.json`), or register its Client ID to the org with a role
+(`POST /v8/management/service-tokens`, the Members page) once a platform admin has set it up, then:
 
 ```bash
 M=https://proxy.example.com/v8/management
@@ -141,8 +141,9 @@ replaces the tokens but keeps your per-file settings.
 
 ### Exporting an account (Worker to Worker, or back to files)
 
-A stored auth file, tokens included, can be downloaded to move an account to another deployment. The download is limited to
-**service-token administrators** (§0); an email admin, including in the panel, gets `403 download_requires_service_token`:
+A stored auth file, tokens included, can be downloaded to move an account to another deployment. The download is limited to a
+**service token that is an owner of the org**, or a platform admin (§0); a person, including in the panel, gets
+`403 download_requires_service_token`:
 
 ```bash
 curl "${H[@]}" "$M/credentials/download?name=claude-ab12cd34-me@example.com.json" -o claude-ab12cd34-me@example.com.json

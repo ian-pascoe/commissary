@@ -9,14 +9,23 @@ web
 ## Stack
 
 Control panel: React 19 + Vite with Effect Atom (`effect/reactivity`, `@effect/atom-react`) for state and data, a typed
-client derived from an Effect `HttpApi` contract shared with the Worker, TanStack Router, accessible headless primitives. Served by the Worker's static assets at `/`, behind the Cloudflare Access admin gate. The rest
+client derived from an Effect `HttpApi` contract shared with the Worker, TanStack Router, accessible headless primitives. Served by the Worker's static assets at `/`, behind the Cloudflare Access gate. The rest
 of the project is TypeScript + Effect v4 on Cloudflare Workers, deployed with Alchemy.
 
 ## Users
 
-One operator: the owner of the deployment, who is also its only administrator. Uses the panel on a desktop browser, in
-English, signed in through Cloudflare Access. Day to day the proxy is consumed by coding agents (pi, Claude Code, Codex)
-on the same person's machines; the panel is where they go to check on it or change it.
+The members of each org the deployment serves, signed in through Cloudflare Access, on a desktop browser, in English.
+Each holds a role in their org:
+
+- **Org owners and org admins** run the org: they connect accounts, manage API keys, models and settings, and decide
+  who belongs (the Members page: members, teams, service tokens, auto-join). Owners also change roles. On a self-hosted
+  deployment this is often one person, the owner of the deployment, who is also a **platform admin** (owner of every
+  org, the only one who creates orgs).
+- **Plain members** use the proxy from their coding agents and open the panel only to see their own usage; every other
+  page is closed to them.
+
+Day to day the proxy is consumed by coding agents (pi, Claude Code, Codex) on the members' machines; the panel is where
+they go to check on it or change it.
 
 ## Product Purpose
 
