@@ -309,6 +309,7 @@ describe("GET /me", () => {
         platform_admin: false,
         role: "admin",
         orgs: [{ slug: "renamed-home", name: "Default" }],
+        private_credentials: true,
       });
     } finally {
       await patch("renamed-home", { slug: "default" });
