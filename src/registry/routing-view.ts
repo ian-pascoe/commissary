@@ -275,6 +275,8 @@ export const routingView = (
       config,
       catalogs: snapshot.catalogs,
       nowSeconds: Math.floor(now / 1000),
+      // A member's view: the models their grants do not reach are not routes they can see.
+      grants: snapshot.grantFilter,
     },
   };
 
