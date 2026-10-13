@@ -8,6 +8,7 @@ import { migrateLegacyAdmins } from "../src/members/migration.ts";
 import { MemberStore } from "../src/members/store.ts";
 import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 import { controlPlane, makeHarness } from "./support/management.ts";
+import { orgDataKey } from "./support/secrets.ts";
 
 const harness = makeHarness();
 
@@ -24,14 +25,17 @@ const beforeMembers = async (org: OrgId = GLOBAL_ORG) => {
   });
 };
 
-/** Settings entries as a ControlPlane wrote them before members. */
+/** Settings entries as a ControlPlane wrote them before members (sealed with the org's data key, ADR 0027). */
 const seedSettings = async (org: OrgId, settings: Record<string, unknown>) => {
-  await runInDurableObject(controlPlane(org), (_instance, state) => {
+  await runInDurableObject(controlPlane(org), async (instance, state) => {
+    await instance.started;
+    const cipher = await orgDataKey(state, org);
+
     for (const [id, value] of Object.entries(settings))
       state.storage.sql.exec(
         `INSERT INTO config_settings (id, value, revision, updated_at, updated_by) VALUES (?, ?, 1, 0, 'test')`,
         id,
-        JSON.stringify(value),
+        cipher.seal(JSON.stringify(value), `config_settings/${id}`),
       );
   });
 };
@@ -100,9 +104,12 @@ describe("the global migration of the admin lists", () => {
 
   it("imports the lists of a config document from before config entries", async () => {
     // A fresh object, so its config has never been read: the stores of `global` run on its storage.
-    const fresh = controlPlane(OrgId.make(`fresh-${crypto.randomUUID().slice(0, 8)}`));
+    const freshOrg = OrgId.make(`fresh-${crypto.randomUUID().slice(0, 8)}`);
+    const fresh = controlPlane(freshOrg);
 
-    const migrated = await runInDurableObject(fresh, (_instance, state) => {
+    const migrated = await runInDurableObject(fresh, async (instance, state) => {
+      await instance.started;
+      const cipher = await orgDataKey(state, freshOrg);
       const sql = state.storage.sql;
       const transaction = <T>(body: () => T): T => state.storage.transactionSync(body);
       sql.exec(
@@ -113,15 +120,18 @@ describe("the global migration of the admin lists", () => {
       );
       sql.exec(
         `INSERT OR REPLACE INTO config (id, version, document, updated_at) VALUES (1, 7, ?, 1000)`,
-        JSON.stringify({
-          access: {
-            "admin-emails": ["legacy@example.com"],
-            "admin-service-tokens": ["old.access"],
-          },
-          routing: { strategy: "fill-first" },
-        }),
+        cipher.seal(
+          JSON.stringify({
+            access: {
+              "admin-emails": ["legacy@example.com"],
+              "admin-service-tokens": ["old.access"],
+            },
+            routing: { strategy: "fill-first" },
+          }),
+          "config/1",
+        ),
       );
-      const config = new ConfigStore(sql, GLOBAL_ORG, transaction);
+      const config = new ConfigStore(sql, GLOBAL_ORG, transaction, cipher);
       const members = new MemberStore(sql, GLOBAL_ORG, transaction);
       migrateLegacyAdmins(config, members, ["Boss@example.com"]);
 
