@@ -2,11 +2,9 @@
 // internal/api/server_middleware.go: flat `{"error": "..."}` bodies).
 import { Effect, Match, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { ConfigReader } from "../config/reader.ts";
 import { CurrentOrg, type OrgId } from "../platform/org.ts";
 import { authenticateRequest } from "./authenticate.ts";
 import type { AccessError } from "./authenticate.ts";
-import { configAdminLists } from "./config.ts";
 import { crossSiteRejection } from "./csrf.ts";
 import { AccessJwks } from "./jwks.ts";
 import { AccessPrincipal } from "./principal.ts";
@@ -40,6 +38,12 @@ const PUBLIC_ROUTE_IDENTITY: AccessIdentity = {
   get platformAdmin(): boolean {
     return noPrincipal();
   },
+  get role(): undefined {
+    return noPrincipal();
+  },
+  get memberId(): undefined {
+    return noPrincipal();
+  },
 };
 
 const errorResponse = (status: number, message: string) =>
@@ -65,9 +69,9 @@ export const accessErrorResponse = (
 };
 
 /**
- * Global middleware: requests under the protected prefixes (see `routes.ts`) must carry a valid Access JWT, and
- * `/v8/management*` and the panel additionally need an admin principal: a platform admin (`PLATFORM_ADMIN_*`), who
- * manages every org, or one named by the `access.admin-*` keys of the config document, who manages `global`. Cross-site
+ * Global middleware: requests under the protected prefixes (see `routes.ts`) must carry a valid Access JWT and come
+ * from a member of the request's org with the role the route needs (`policy.ts`, ADR 0022): a platform admin
+ * (`PLATFORM_ADMIN_*`) is an owner of every org, anyone else has the role their membership gives them. Cross-site
  * requests and cross-origin WebSocket upgrades are refused first (`csrf.ts`). Everything else (`/healthz`, unknown
  * paths) is passed through untouched. On success the principal is available to handlers as `AccessPrincipal`, and
  * `CurrentOrg` is the org of the request: the org addressed by an org-scoped management URL (`org-address.ts`),
@@ -79,11 +83,6 @@ export const AccessGate = HttpRouter.middleware<{ provides: AccessPrincipal }>()
   Effect.gen(function* () {
     // Resolved when the layer is built (once per isolate); `WorkerEnv` stays a per-request service.
     const jwks = yield* AccessJwks;
-    const reader = yield* ConfigReader;
-
-    const configAdmins = reader.get.pipe(
-      Effect.map((snapshot) => configAdminLists(snapshot.config)),
-    );
 
     return (app) =>
       Effect.gen(function* () {
@@ -104,7 +103,7 @@ export const AccessGate = HttpRouter.middleware<{ provides: AccessPrincipal }>()
         if (rejection !== undefined) return errorResponse(rejection.status, rejection.message);
 
         const authenticated = yield* Effect.result(
-          authenticateRequest(request.headers, request.originalUrl, zone, configAdmins).pipe(
+          authenticateRequest(request.headers, request.originalUrl, zone, request.method).pipe(
             Effect.provideService(AccessJwks, jwks),
           ),
         );

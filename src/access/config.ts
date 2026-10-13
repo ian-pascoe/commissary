@@ -2,7 +2,6 @@
 // New in the Workers port (Go used `access.api-keys`); see docs/ARCHITECTURE.md "Authentication".
 import { Data, Effect } from "effect";
 import { ConfigurationError } from "../errors.ts";
-import type { Config } from "../config/schema.ts";
 import type { Principal } from "./principal.ts";
 
 export interface AccessConfig {
@@ -115,27 +114,13 @@ export const loadAccessConfig = (
   });
 };
 
-/** Admin allow-lists (platform admins, or an org's config admins): lowercased emails and service token client ids. */
+/** The platform admin allow-lists: lowercased emails and service token client ids. */
 export type AdminLists = Pick<AccessConfig, "adminEmails" | "adminServiceTokens">;
 
 export const isAdmin = (lists: AdminLists, principal: Principal) =>
   principal.kind === "user"
     ? lists.adminEmails.has(principal.email.toLowerCase())
     : lists.adminServiceTokens.has(principal.commonName);
-
-/**
- * The `access.admin-emails` / `access.admin-service-tokens` keys of the config document. They extend the platform
- * admins for the org `global` only, until orgs have members of their own; the platform admins always apply, so one of
- * them can repair a broken config.
- */
-export const configAdminLists = (config: Pick<Config, "access">): AdminLists => ({
-  adminEmails: new Set(
-    config.access["admin-emails"].map((email) => email.trim().toLowerCase()).filter(Boolean),
-  ),
-  adminServiceTokens: new Set(
-    config.access["admin-service-tokens"].map((id) => id.trim()).filter(Boolean),
-  ),
-});
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 

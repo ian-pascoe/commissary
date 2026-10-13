@@ -251,6 +251,18 @@ const SCHEMA = [
 /** Who wrote the entries a migration imported. */
 export const MIGRATION_PRINCIPAL = "migration";
 
+/**
+ * The admin lists of the config from before members (ADR 0022). They are no settings any more: a ControlPlane that
+ * still stores them hands them to the members migration (`legacyAdmins`), which removes them (`dropLegacyAdmins`).
+ */
+const LEGACY_ADMIN_SETTINGS = ["access.admin-emails", "access.admin-service-tokens"] as const;
+
+/** The config admin lists a ControlPlane stored before members. */
+export interface StoredAdminLists {
+  readonly emails: ReadonlyArray<string>;
+  readonly serviceTokens: ReadonlyArray<string>;
+}
+
 interface Counter {
   counter: number;
   updated_at: number;
@@ -879,6 +891,48 @@ export class ConfigStore {
     return { ok: true, version, notApplied: notAppliedSettings(parsed.success) };
   }
 
+  // --- the admin lists from before members ------------------------------------------------------------------------
+
+  /** The config admin lists still stored (empty once {@link dropLegacyAdmins} ran). */
+  legacyAdmins(): StoredAdminLists {
+    this.#ensure();
+
+    const [emails, serviceTokens] = LEGACY_ADMIN_SETTINGS.map((id) => {
+      const row = this.#sql
+        .exec<ValueRow>(`SELECT id, value FROM ${TABLES.settings} WHERE id = ?`, id)
+        .toArray()[0];
+
+      return row === undefined ? [] : patterns(this.#open(TABLES.settings, id, row.value));
+    });
+
+    return { emails: emails ?? [], serviceTokens: serviceTokens ?? [] };
+  }
+
+  /**
+   * Removes the config admin lists (inside the caller's transaction, with the members migration); a change of the
+   * config when they were stored, nothing otherwise.
+   */
+  dropLegacyAdmins(): boolean {
+    this.#ensure();
+    const placeholders = LEGACY_ADMIN_SETTINGS.map(() => "?").join(", ");
+
+    const stored = this.#sql
+      .exec<ValueRow>(
+        `SELECT id FROM ${TABLES.settings} WHERE id IN (${placeholders})`,
+        ...LEGACY_ADMIN_SETTINGS,
+      )
+      .toArray();
+
+    if (stored.length === 0) return false;
+    this.#bump();
+    this.#sql.exec(
+      `DELETE FROM ${TABLES.settings} WHERE id IN (${placeholders})`,
+      ...LEGACY_ADMIN_SETTINGS,
+    );
+
+    return true;
+  }
+
   // --- internals --------------------------------------------------------------------------------------------------
 
   /**
@@ -1193,10 +1247,10 @@ export class ConfigStore {
 
       // A stored document that no longer decodes fails here, and the next use tries again: never serve an empty
       // config in its place.
-      const rows =
-        legacy === undefined
-          ? undefined
-          : this.#rowsOf(withoutEntryIds(Effect.runSync(decodeConfig(parse(legacy.document)))));
+      const legacyConfig =
+        legacy === undefined ? undefined : Effect.runSync(decodeConfig(parse(legacy.document)));
+
+      const rows = legacyConfig === undefined ? undefined : this.#withLegacyAdmins(legacyConfig);
 
       this.#transaction(() => {
         const counter = legacy === undefined ? 0 : legacy.version + 1;
@@ -1210,8 +1264,9 @@ export class ConfigStore {
         if (rows !== undefined) this.#replace(rows, counter, MIGRATION_PRINCIPAL);
       });
 
-      if (legacy !== undefined) {
-        const dropped = notAppliedSettings(Effect.runSync(decodeConfig(parse(legacy.document))));
+      if (legacyConfig !== undefined) {
+        const kept = new Set<string>(LEGACY_ADMIN_SETTINGS);
+        const dropped = notAppliedSettings(legacyConfig).filter((key) => !kept.has(key));
 
         if (dropped.length > 0)
           Effect.runSync(
@@ -1223,6 +1278,25 @@ export class ConfigStore {
     }
 
     this.#ready = true;
+  }
+
+  /**
+   * The rows of a document from before config entries, with its admin lists kept as settings entries for the members
+   * migration to take over.
+   */
+  #withLegacyAdmins(config: Config): EntryRows {
+    const rows = this.#rowsOf(withoutEntryIds(config));
+
+    const admins = LEGACY_ADMIN_SETTINGS.flatMap((id): SettingRow[] => {
+      const value =
+        id === "access.admin-emails"
+          ? config.access["admin-emails"]
+          : config.access["admin-service-tokens"];
+
+      return value.length === 0 ? [] : [{ id, value: [...value] }];
+    });
+
+    return { ...rows, settings: [...rows.settings, ...admins] };
   }
 
   /** The single-row document of a ControlPlane from before config entries, if any (opened). */

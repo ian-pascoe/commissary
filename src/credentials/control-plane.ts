@@ -100,6 +100,20 @@ import {
   settleClaim,
 } from "../quota/reset-grants.ts";
 import { buildQuotaTarget, type QuotaTargetResult } from "../quota/target.ts";
+import { platformAdminLists } from "../access/config.ts";
+import { migrateLegacyAdmins } from "../members/migration.ts";
+import type { Actor } from "../members/roles.ts";
+import {
+  type Admission,
+  MemberStore,
+  type MemberRecord,
+  type MemberResult,
+  type MembershipIndex,
+  type MembershipSettingsWire,
+  type PrincipalRef,
+  type ServiceTokenRecord,
+  type TeamRecord,
+} from "../members/store.ts";
 
 const decodePickRequest = Schema.decodeUnknownSync(PickRequest);
 
@@ -243,6 +257,7 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #grants: ResetGrantStore;
   /** The org's data key: seals and opens the stored secrets once the object started. */
   readonly #secrets = new OrgSecrets();
+  readonly #members: MemberStore;
   /** The org this object serves, from its name. */
   readonly #org: OrgId;
   /**
@@ -265,6 +280,7 @@ export class ControlPlane extends DurableObject<Env> {
     const credentials = new CredentialStore(ctx.storage.sql, this.#secrets);
 
     this.#config = new ConfigStore(ctx.storage.sql, this.#org, transaction, this.#secrets);
+    this.#members = new MemberStore(ctx.storage.sql, this.#org, transaction);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
 
@@ -340,11 +356,15 @@ export class ControlPlane extends DurableObject<Env> {
    * `unchanged: true` answer instead of the full document.
    */
   getConfig(sinceVersion?: number): ConfigSnapshotWire {
+    this.#ensureMembership();
+
     return this.#config.snapshot(sinceVersion);
   }
 
   /** The assembled config document with the revision of every entry (what the management routes edit). */
   configEntries(): ConfigEntriesWire {
+    this.#ensureMembership();
+
     return this.#config.entries();
   }
 
@@ -369,6 +389,8 @@ export class ControlPlane extends DurableObject<Env> {
     changes: ReadonlyArray<SettingChange>,
     by: string,
   ): WriteResult<{ readonly revisions: Readonly<Record<string, number>> }> {
+    this.#ensureMembership();
+
     return this.#config.writeSettings(changes, by);
   }
 
@@ -397,7 +419,161 @@ export class ControlPlane extends DurableObject<Env> {
    * (`conflict` when another write landed since).
    */
   importConfig(text: string, by: string, basedOn?: number): ImportResult {
+    this.#ensureMembership();
+
     return this.#config.importDocument(text, by, basedOn);
+  }
+
+  // --- members, teams and service tokens (ADR 0022, `members/store.ts`) ------------------------------------------
+
+  /**
+   * Moves the config admin lists from before members into members, once (`members/migration.ts`). Checked on every
+   * call that reads members or the config, so it runs before either is used; afterwards it is one row read.
+   */
+  #ensureMembership(): void {
+    if (this.#members.adminsMigrated()) return;
+
+    migrateLegacyAdmins(
+      this.#config,
+      this.#members,
+      platformAdminLists(this.env).adminEmails,
+      (body) => this.ctx.storage.transactionSync(body),
+    );
+  }
+
+  /** The role of a principal in the org (`MemberStore.admit`); `autoJoin` lets a person join when the org allows it. */
+  admit(principal: PrincipalRef, autoJoin: boolean): Admission | undefined {
+    this.#ensureMembership();
+
+    return this.#members.admit(principal, autoJoin);
+  }
+
+  listMembers(): ReadonlyArray<MemberRecord> {
+    this.#ensureMembership();
+
+    return this.#members.members();
+  }
+
+  addMember(
+    input: { readonly email: string; readonly role: string },
+    actor: Actor,
+    by: string,
+  ): MemberResult<MemberRecord> {
+    this.#ensureMembership();
+
+    return this.#members.addMember(input, actor, by);
+  }
+
+  setMemberRole(id: string, role: string, actor: Actor): MemberResult<MemberRecord> {
+    this.#ensureMembership();
+
+    return this.#members.setMemberRole(id, role, actor);
+  }
+
+  removeMember(id: string, actor: Actor): MemberResult<{ readonly email: string }> {
+    this.#ensureMembership();
+
+    return this.#members.removeMember(id, actor);
+  }
+
+  membershipSettings(): MembershipSettingsWire {
+    this.#ensureMembership();
+
+    return { autoJoin: this.#members.autoJoin() };
+  }
+
+  setMembershipSettings(settings: MembershipSettingsWire): MembershipSettingsWire {
+    this.#ensureMembership();
+    this.#members.setAutoJoin(settings.autoJoin);
+
+    return { autoJoin: this.#members.autoJoin() };
+  }
+
+  listTeams(): ReadonlyArray<TeamRecord> {
+    this.#ensureMembership();
+
+    return this.#members.teams();
+  }
+
+  createTeam(name: string): MemberResult<TeamRecord> {
+    this.#ensureMembership();
+
+    return this.#members.createTeam(name);
+  }
+
+  renameTeam(id: string, name: string): MemberResult<TeamRecord> {
+    this.#ensureMembership();
+
+    return this.#members.renameTeam(id, name);
+  }
+
+  deleteTeam(id: string): MemberResult<true> {
+    this.#ensureMembership();
+
+    return this.#members.deleteTeam(id);
+  }
+
+  addTeamMember(teamId: string, memberId: string): MemberResult<TeamRecord> {
+    this.#ensureMembership();
+
+    return this.#members.addTeamMember(teamId, memberId);
+  }
+
+  removeTeamMember(teamId: string, memberId: string): MemberResult<TeamRecord> {
+    this.#ensureMembership();
+
+    return this.#members.removeTeamMember(teamId, memberId);
+  }
+
+  /** The member ids of a team, `undefined` for an unknown team (usage filters). */
+  teamMemberIds(teamId: string): ReadonlyArray<string> | undefined {
+    this.#ensureMembership();
+
+    return this.#members.teamMemberIds(teamId);
+  }
+
+  listServiceTokens(): ReadonlyArray<ServiceTokenRecord> {
+    this.#ensureMembership();
+
+    return this.#members.serviceTokens();
+  }
+
+  registerServiceToken(
+    input: { readonly clientId: string; readonly name?: string | undefined; readonly role: string },
+    actor: Actor,
+    by: string,
+  ): MemberResult<ServiceTokenRecord> {
+    this.#ensureMembership();
+
+    return this.#members.registerToken(input, actor, by);
+  }
+
+  setServiceTokenRole(
+    clientId: string,
+    role: string,
+    actor: Actor,
+  ): MemberResult<ServiceTokenRecord> {
+    this.#ensureMembership();
+
+    return this.#members.setTokenRole(clientId, role, actor);
+  }
+
+  removeServiceToken(clientId: string, actor: Actor): MemberResult<true> {
+    this.#ensureMembership();
+
+    return this.#members.removeToken(clientId, actor);
+  }
+
+  /** Who the Platform registry should index for the org, and whether it has caught up (`members/admission.ts`). */
+  membershipIndex(): MembershipIndex {
+    this.#ensureMembership();
+
+    return this.#members.index();
+  }
+
+  /** The Platform registry holds the index of `counter`. */
+  markIndexSynced(counter: number): void {
+    this.#members.markIndexSynced(counter);
   }
 
   /**

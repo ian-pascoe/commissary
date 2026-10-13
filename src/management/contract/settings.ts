@@ -13,14 +13,13 @@
  * `version` and the new revision of each changed setting; `409 conflict` when one of them changed since (re-read the
  * setting and re-apply; a save of other settings never conflicts); `400 not_a_setting` for a path that is not a
  * setting; `422 invalid_setting` with `message` and `path` for a value the config would not keep as sent (invalid
- * duration, unknown catalog source, a value the normaliser rewrites, ...); `422 would_remove_your_admin_access` when a
- * caller who is not a platform admin removes themselves from the config's admin lists.
+ * duration, unknown catalog source, a value the normaliser rewrites, ...). Who manages the org is not a setting: the
+ * Members page (`members.ts`, ADR 0022).
  *
  * The import takes a Go config document as the request body (YAML or JSON, v8 or legacy layout, at most 512 KiB) and
  * replaces every config entry of the org with it in one transaction. It answers the new `version` and `not_applied`:
  * the keys that have no effect on Workers, which are not stored (MIGRATION.md). `422 invalid_config` with `message`
- * (and `path`, `line`, `column` when known) for a document the config refuses; the admin rules of a save apply;
- * `409 conflict` when another write landed while the import was checked (send it again). A key whose secret a stored
+ * (and `path`, `line`, `column` when known) for a document the config refuses; `409 conflict` when another write landed while the import was checked (send it again). A key whose secret a stored
  * key of its family has keeps that key's id, and so its `auth_index`.
  */
 import { Schema } from "effect";
@@ -158,12 +157,6 @@ export const SETTINGS_TREE = {
     /** The models.dev catalog source: `""` official (`https://models.dev/api.json`), `embed`, `disabled` or an http(s) URL. */
     catalog: Schema.String,
   },
-  access: {
-    /** Extend `PLATFORM_ADMIN_EMAILS` (lower-case). */
-    "admin-emails": Strings,
-    /** Extend `PLATFORM_ADMIN_SERVICE_TOKENS` (Access service token client ids). */
-    "admin-service-tokens": Strings,
-  },
 } as const satisfies SettingsTree;
 
 type ValuesFields<T extends SettingsTree> = {
@@ -238,8 +231,6 @@ export const SettingsView = Schema.Struct({
   values: SettingsValues,
   /** The values of an empty config: "default" captions and Reset. */
   defaults: SettingsValues,
-  /** `PLATFORM_ADMIN_EMAILS` / `PLATFORM_ADMIN_SERVICE_TOKENS`: always admins, not editable here. */
-  env_admins: Schema.Struct({ emails: Strings, service_tokens: Strings }),
   /** `requests.payload` rule counts per kind (set by the config import). */
   payload: PayloadCounts,
   /** Accounts and API keys with a model prefix (what `routing.force-model-prefix` acts on). */

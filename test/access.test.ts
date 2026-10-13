@@ -7,18 +7,11 @@ import {
   resetAccessWarnings,
   warnDeprecatedAdminVariables,
 } from "../src/access/authenticate.ts";
-import {
-  configAdminLists,
-  devBypass,
-  devBypassEmail,
-  isAdmin,
-  loadAccessConfig,
-} from "../src/access/config.ts";
+import { devBypass, devBypassEmail, isAdmin, loadAccessConfig } from "../src/access/config.ts";
 import { JWKS_REFRESH_COOLDOWN_MS } from "../src/access/jwks.ts";
 import { callerScope, makeIdentity, principalId } from "../src/access/principal.ts";
 import { classifyPath } from "../src/access/routes.ts";
 import { verifyAccessJwt } from "../src/access/verify.ts";
-import { ConfigStoreError } from "../src/config/errors.ts";
 import { requestContext } from "../src/platform/env.ts";
 import {
   AUD,
@@ -33,7 +26,7 @@ import {
 } from "./support/access.ts";
 import type { FakeJwks, TestKey } from "./support/access.ts";
 import { env } from "cloudflare:workers";
-import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
+import { controlPlaneOf, GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 import { platformOf } from "../src/platform/registry.ts";
 
 const NOW_MS = 1_700_000_000_000;
@@ -55,6 +48,19 @@ const withJwks = <A, E>(
     yield* TestClock.setTime(NOW_MS);
 
     return yield* body.pipe(Effect.provide(fakeJwksLayer(state)));
+  });
+
+/** Who adds the members these tests need: an org owner with the sensitive powers. */
+const OWNER = { role: "owner", sensitive: true } as const;
+
+/** Makes `email` a member of `org` with `role` (the member routes are tested in members.test.ts). */
+const addMember = (org: OrgId, email: string, role: "owner" | "admin" | "member") =>
+  Effect.promise(async () => {
+    const added = await controlPlaneOf(env, org).addMember({ email, role }, OWNER, "test");
+
+    if (!added.ok) throw new Error(added.message);
+
+    return added.value;
   });
 
 const token = (key: TestKey, overrides: Partial<Parameters<typeof signToken>[0]> = {}) =>
@@ -334,71 +340,62 @@ describe("authenticateRequest", () => {
     ),
   );
 
-  it.effect("extends the env admins with the config document's access.admin-* keys", () =>
+  it.effect("admits members with the role the route needs, and nobody once removed", () =>
     run(
       makeFakeJwks([keyA]),
       Effect.gen(function* () {
-        const url = "https://proxy.test/v8/management/config";
+        const config = "https://proxy.test/v8/management/config";
+        const usage = "https://proxy.test/v8/management/observability/usage/records";
+        const stub = controlPlaneOf(env, GLOBAL_ORG);
+        const carol = yield* addMember(GLOBAL_ORG, "carol@example.com", "admin");
+        const dan = yield* addMember(GLOBAL_ORG, "dan@example.com", "member");
 
-        const lists = configAdminLists({
-          access: {
-            "api-keys": [],
-            "admin-emails": [" Carol@Example.com "],
-            "admin-service-tokens": ["cfg.access"],
-          },
-        });
+        const as = (email: string) =>
+          token(keyA, { claims: userClaims(email) }).pipe(
+            Effect.map((jwt) => ({ "cf-access-jwt-assertion": jwt })),
+          );
 
-        let reads = 0;
+        const asCarol = yield* as("Carol@Example.com");
+        const identity = yield* authenticateRequest(asCarol, config, "management");
+        assert.strictEqual(identity.role, "admin");
+        assert.strictEqual(identity.memberId, carol.id);
+        assert.isFalse(identity.platformAdmin);
 
-        const extra = Effect.sync(() => {
-          reads++;
-
-          return lists;
-        });
-
-        const carol = {
-          "cf-access-jwt-assertion": yield* token(keyA, {
-            claims: userClaims("carol@example.com"),
-          }),
-        };
-
+        // A plain member reads usage and uses the proxy, but no admin route.
+        const asDan = yield* as("dan@example.com");
+        assert.strictEqual((yield* authenticateRequest(asDan, usage, "management")).role, "member");
         assert.strictEqual(
-          (yield* authenticateRequest(carol, url, "management", extra)).principalId,
-          "user:carol@example.com",
-        );
-        assert.strictEqual(
-          (yield* Effect.flip(authenticateRequest(carol, url, "management")))._tag,
+          (yield* Effect.flip(authenticateRequest(asDan, usage, "management", "DELETE")))._tag,
           "ForbiddenError",
         );
-
-        const svc = {
-          "cf-access-jwt-assertion": yield* token(keyA, { claims: serviceClaims("cfg.access") }),
-        };
-
         assert.strictEqual(
-          (yield* authenticateRequest(svc, url, "management", extra)).principalId,
-          "service:cfg.access",
-        );
-        // Env admins never need the config (an admin can always repair a broken document).
-        reads = 0;
-
-        const admin = {
-          "cf-access-jwt-assertion": yield* token(keyA, {
-            claims: userClaims("admin@example.com"),
-          }),
-        };
-
-        const broken = Effect.fail(new ConfigStoreError({ message: "control plane down" }));
-        assert.strictEqual(
-          (yield* authenticateRequest(admin, url, "management", broken)).principal.kind,
-          "user",
-        );
-        // A config that cannot be read denies everyone else.
-        assert.strictEqual(
-          (yield* Effect.flip(authenticateRequest(carol, url, "management", broken)))._tag,
+          (yield* Effect.flip(authenticateRequest(asDan, config, "management")))._tag,
           "ForbiddenError",
         );
-        assert.strictEqual(reads, 0);
+        assert.strictEqual(
+          (yield* authenticateRequest(asDan, "https://proxy.test/v1/models", "protected")).memberId,
+          dan.id,
+        );
+
+        // Removed: refused on the next request.
+        yield* Effect.promise(async () => await stub.removeMember(carol.id, OWNER));
+        yield* Effect.promise(() => stub.setMembershipSettings({ autoJoin: false }));
+
+        try {
+          assert.strictEqual(
+            (yield* Effect.flip(authenticateRequest(asCarol, config, "management")))._tag,
+            "ForbiddenError",
+          );
+          assert.strictEqual(
+            (yield* Effect.flip(
+              authenticateRequest(asCarol, "https://proxy.test/v1/models", "protected"),
+            ))._tag,
+            "ForbiddenError",
+          );
+        } finally {
+          yield* Effect.promise(() => stub.setMembershipSettings({ autoJoin: true }));
+          yield* Effect.promise(async () => await stub.removeMember(dan.id, OWNER));
+        }
       }),
     ),
   );
@@ -449,12 +446,6 @@ describe("authenticateRequest and orgs", () => {
         claims: userClaims(email),
       }),
     }));
-
-  const configAdmin = Effect.succeed(
-    configAdminLists({
-      access: { "api-keys": [], "admin-emails": ["carol@example.com"], "admin-service-tokens": [] },
-    }),
-  );
 
   const registered = (slug: string) =>
     Effect.promise(async () => {
@@ -527,7 +518,7 @@ describe("authenticateRequest and orgs", () => {
         );
         assert.strictEqual(
           (yield* Effect.flip(
-            authenticateRequest(yield* as("carol@example.com"), url, "management", configAdmin),
+            authenticateRequest(yield* as("carol@example.com"), url, "management"),
           ))._tag,
           "ForbiddenError",
         );
@@ -546,17 +537,17 @@ describe("authenticateRequest and orgs", () => {
     ),
   );
 
-  it.effect("limits an admin named by the config document to the org global", () =>
+  it.effect("limits an org admin to the orgs they are a member of", () =>
     run(
       Effect.gen(function* () {
         yield* registered("acme-limits");
-        const carol = yield* as("carol@example.com");
+        const carol = yield* as("erin@example.com");
+        yield* addMember(GLOBAL_ORG, "erin@example.com", "admin");
 
         const own = yield* authenticateRequest(
           carol,
           "https://proxy.test/v8/management/orgs/default/config",
           "management",
-          configAdmin,
         );
 
         assert.strictEqual(own.org, GLOBAL_ORG);
@@ -567,7 +558,6 @@ describe("authenticateRequest and orgs", () => {
             carol,
             "https://proxy.test/v8/management/config",
             "management",
-            configAdmin,
           )).org,
           GLOBAL_ORG,
         );
@@ -577,7 +567,7 @@ describe("authenticateRequest and orgs", () => {
           "https://proxy.test/o/acme-limits/accounts",
         ]) {
           assert.strictEqual(
-            (yield* Effect.flip(authenticateRequest(carol, url, "management", configAdmin)))._tag,
+            (yield* Effect.flip(authenticateRequest(carol, url, "management")))._tag,
             "ForbiddenError",
           );
         }

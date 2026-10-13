@@ -1,4 +1,4 @@
-// Authentication of one request: Access JWT -> principal -> (for management) admin check and the org the request is for.
+// Authentication of one request: Access JWT -> principal -> the org the request is for and the caller's role in it.
 // New in the Workers port.
 import { Effect, Result } from "effect";
 import {
@@ -8,20 +8,16 @@ import {
   NotFoundError,
   UnauthorizedError,
 } from "../errors.ts";
-import type { ConfigStoreError } from "../config/errors.ts";
 import { WorkerEnv } from "../platform/env.ts";
-import { CurrentOrg, GLOBAL_ORG, type OrgId, type OrgSlug } from "../platform/org.ts";
+import { admitPrincipal } from "../members/admission.ts";
+import { roleAtLeast } from "../members/roles.ts";
+import { CurrentOrg, type OrgId, type OrgSlug } from "../platform/org.ts";
 import { platform } from "../platform/registry.ts";
-import {
-  type AdminLists,
-  deprecatedAdminVariables,
-  devBypass,
-  isAdmin,
-  loadAccessConfig,
-} from "./config.ts";
+import { deprecatedAdminVariables, devBypass, isAdmin, loadAccessConfig } from "./config.ts";
 import type { AccessIdentity, Principal } from "./principal.ts";
 import { makeIdentity } from "./principal.ts";
 import type { AccessJwks } from "./jwks.ts";
+import { routeAccess, type RouteAccess } from "./policy.ts";
 import { type AccessZone, scopedUrl } from "./routes.ts";
 import { verifyAccessJwt } from "./verify.ts";
 
@@ -33,12 +29,6 @@ export type AccessError =
   | NotFoundError
   | InternalError
   | ConfigurationError;
-
-/**
- * Additional admin allow-lists of an org (the config document's `access.admin-*`); a failure only denies, never errors.
- * They apply to the org `global` only, until orgs have members of their own.
- */
-export type ExtraAdmins = Effect.Effect<AdminLists, ConfigStoreError, WorkerEnv | CurrentOrg>;
 
 let devBypassRefusalLogged = false;
 
@@ -76,29 +66,6 @@ export const resetAccessWarnings = (): void => {
   deprecatedAdminLogged = false;
 };
 
-/** The platform admins first (no I/O); the config admins of the org `global` only for principals that are not. */
-const mayManage = (
-  platformAdmin: boolean,
-  org: OrgId,
-  principal: Principal,
-  extra: ExtraAdmins | undefined,
-) =>
-  Effect.gen(function* () {
-    if (platformAdmin) return true;
-
-    // Until orgs have members, the config admin lists extend the platform admins for `global` only.
-    if (extra === undefined || org !== GLOBAL_ORG) return false;
-    const lists = yield* Effect.result(extra.pipe(Effect.provideService(CurrentOrg, org)));
-
-    if (Result.isFailure(lists)) {
-      yield* Effect.logWarning("config admin allow-list unavailable; only PLATFORM_ADMIN_* apply");
-
-      return false;
-    }
-
-    return isAdmin(lists.success, principal);
-  });
-
 /**
  * The org a management request is for: the org addressed by the URL (`slug`, looked up in the Platform registry), the
  * request's `CurrentOrg` otherwise. An unknown slug is a 404 for a platform admin (who may create it), and a 403 like
@@ -122,21 +89,48 @@ const targetOrg = (slug: OrgSlug | undefined, platformAdmin: boolean) =>
   });
 
 /**
+ * The caller's place in `org`: a platform admin is an owner of every org (and keeps a member id where they are a
+ * member, without joining); anyone else needs the role the route asks for (`policy.ts`), a platform-level route none.
+ * The org's ControlPlane is asked on every request, so a removed member loses access at once.
+ */
+const admitted = (principal: Principal, org: OrgId, platformAdmin: boolean, needs: RouteAccess) =>
+  Effect.gen(function* () {
+    const admission = yield* Effect.result(admitPrincipal(org, principal, !platformAdmin));
+
+    if (Result.isFailure(admission)) {
+      yield* Effect.logWarning(`membership unavailable: ${admission.failure.message}`);
+
+      if (!platformAdmin && needs !== "platform")
+        return yield* new InternalError({ message: admission.failure.message });
+
+      return yield* makeIdentity(principal, org, platformAdmin);
+    }
+
+    const membership = admission.success;
+
+    if (!platformAdmin && needs !== "platform" && !roleAtLeast(membership?.role, needs))
+      return yield* new ForbiddenError({ message: "Forbidden" });
+
+    return yield* makeIdentity(principal, org, platformAdmin, membership);
+  });
+
+/**
  * Authenticates a request for the given zone.
  *
  * `headers` must expose lowercased header names; `requestUrl` is the full URL as the client sent it (the dev bypass reads
- * its host; a management URL may address an org, `/v8/management/orgs/<slug>/...`, see `routes.ts`). `extraAdmins`
- * extends the platform admins for the management zone. Failures use the Go auth middleware wording (`Missing API key`,
- * `Invalid API key`).
+ * its host; a management URL may address an org, `/v8/management/orgs/<slug>/...`, see `routes.ts`). `method` decides,
+ * with the path, the role the request needs (`policy.ts`). Failures use the Go auth middleware wording (`Missing API
+ * key`, `Invalid API key`).
  *
- * The identity carries the org of the request: the addressed org, the `CurrentOrg` otherwise. A platform admin may
- * manage every org; anyone else only `global`, and only when the config document's admin lists name them.
+ * The identity carries the org of the request (the addressed org, the `CurrentOrg` otherwise) and the caller's role in
+ * it. A platform admin is an owner of every org; anyone else needs a role in the org (`403` otherwise), except on a
+ * platform-level route.
  */
 export const authenticateRequest = (
   headers: Readonly<Record<string, string | undefined>>,
   requestUrl: string,
   zone: Exclude<AccessZone, "public">,
-  extraAdmins?: ExtraAdmins,
+  method = "GET",
 ): Effect.Effect<AccessIdentity, AccessError, WorkerEnv | CurrentOrg | AccessJwks> =>
   Effect.gen(function* () {
     const env = yield* WorkerEnv;
@@ -164,15 +158,7 @@ export const authenticateRequest = (
 
     const principal: Principal = yield* verifyAccessJwt(token, config);
     const platformAdmin = isAdmin(config, principal);
+    const org = zone === "management" ? yield* targetOrg(slug, platformAdmin) : yield* CurrentOrg;
 
-    if (zone !== "management")
-      return yield* makeIdentity(principal, yield* CurrentOrg, platformAdmin);
-
-    const org = yield* targetOrg(slug, platformAdmin);
-
-    if (!(yield* mayManage(platformAdmin, org, principal, extraAdmins))) {
-      return yield* new ForbiddenError({ message: "Forbidden" });
-    }
-
-    return yield* makeIdentity(principal, org, platformAdmin);
+    return yield* admitted(principal, org, platformAdmin, routeAccess(method, requestUrl, zone));
   });
