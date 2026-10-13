@@ -2,7 +2,7 @@
 // user: the totals, tokens per hour or day, a breakdown whose rows narrow the page further, and the request log
 // with each request's details. The range, breakdown and filters live in the address, so a view can be linked to.
 // A plain member sees their own requests only (the server narrows every read), without the account names, the
-// unpriced models and the Prices page, which are for admins.
+// unpriced models and the Prices page, which are for org admins.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
@@ -14,6 +14,7 @@ import {
   credentialsAtom,
   membersAtom,
   nowAtom,
+  teamsAtom,
   type UsageView,
   usageRecordsAtom,
   usageSeriesAtom,
@@ -64,22 +65,27 @@ interface Names {
   readonly byIndex: ReadonlyMap<string, CredentialEntry>;
   /** Member emails by member id. */
   readonly members: ReadonlyMap<string, string>;
+  /** Team names by team id. */
+  readonly teams: ReadonlyMap<string, string>;
 }
 
 const useNames = (): Names => {
   const result = useAtomValue(credentialsAtom);
   const people = useAtomValue(membersAtom);
+  const groups = useAtomValue(teamsAtom);
   const files = AsyncResult.isSuccess(result) ? result.value.files : [];
   const members = AsyncResult.isSuccess(people) ? people.value.members : [];
+  const teams = AsyncResult.isSuccess(groups) ? groups.value.teams : [];
 
   return {
     byIndex: new Map(files.map((entry) => [entry.auth_index, entry])),
     members: new Map(members.map((member) => [member.id, member.email])),
+    teams: new Map(teams.map((team) => [team.id, team.name])),
   };
 };
 
 /** A plain member may not read the accounts: nothing is named. */
-const NO_NAMES: Names = { byIndex: new Map(), members: new Map() };
+const NO_NAMES: Names = { byIndex: new Map(), members: new Map(), teams: new Map() };
 
 /** A breakdown row's or filter's value as the operator knows it. */
 const valueName = (key: FilterKey | Breakdown["id"], value: string, names: Names): string => {
@@ -97,6 +103,8 @@ const valueName = (key: FilterKey | Breakdown["id"], value: string, names: Names
       return value === "" ? "Unknown provider" : providerName(value);
     case "member":
       return value === "" ? "No member" : (names.members.get(value) ?? value);
+    case "team":
+      return names.teams.get(value) ?? value;
     case "user":
     case "principal":
       return value === "" ? "Unknown user" : value;
@@ -114,6 +122,7 @@ const filtersOf = (search: UsageSearch): UsageFilters => ({
   account: search.account,
   user: search.user,
   member: search.member,
+  team: search.team,
 });
 
 const useUsageSearch = () => {
@@ -779,6 +788,21 @@ const UsageContent = ({ names, admin }: { readonly names: Names; readonly admin:
             </button>
           ))}
         </div>
+        {admin && names.teams.size > 0 ? (
+          <select
+            className={styles["teamPick"]}
+            aria-label="Team"
+            value={filters.team ?? ""}
+            onChange={(event) => update({ team: event.target.value || undefined })}
+          >
+            <option value="">All teams</option>
+            {[...names.teams].map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+        ) : null}
       </header>
       {active.length === 0 ? null : (
         <div className={styles["filters"]} aria-label="Narrowed to">
@@ -828,20 +852,20 @@ const UsageContent = ({ names, admin }: { readonly names: Names; readonly admin:
   );
 };
 
-const AdminUsage = () => {
+const OrgAdminUsage = () => {
   const names = useNames();
 
   return <UsageContent names={names} admin />;
 };
 
-/** The page; an admin's names the accounts, a plain member's never asks for them. */
+/** The page; an org admin's page names the accounts, a plain member's never asks for them. */
 export const UsagePage = () => {
   const role = useRole();
 
   if (role.kind !== "ready") return null;
 
   return canManageMembers(role.caller) ? (
-    <AdminUsage />
+    <OrgAdminUsage />
   ) : (
     <UsageContent names={NO_NAMES} admin={false} />
   );

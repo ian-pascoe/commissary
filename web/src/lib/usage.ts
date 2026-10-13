@@ -104,6 +104,8 @@ export interface UsageFilters {
   readonly user?: string | undefined;
   /** A member id of the org (`/members`). */
   readonly member?: string | undefined;
+  /** A team id of the org (`/teams`): the records of its members. */
+  readonly team?: string | undefined;
 }
 
 export type FilterKey = keyof UsageFilters;
@@ -152,6 +154,7 @@ export const FILTER_LABELS: Readonly<Record<FilterKey, string>> = {
   provider: "Provider",
   user: "User",
   member: "Member",
+  team: "Team",
 };
 
 /** The filters as management API query parameters. */
@@ -161,13 +164,14 @@ export const filterQuery = (filters: UsageFilters) => ({
   ...(filters.account === undefined ? {} : { auth_index: filters.account }),
   ...(filters.user === undefined ? {} : { principal: filters.user }),
   ...(filters.member === undefined ? {} : { member: filters.member }),
+  ...(filters.team === undefined ? {} : { team: filters.team }),
 });
 
 /** The filters that are set, in a fixed order. */
 export const activeFilters = (
   filters: UsageFilters,
 ): ReadonlyArray<{ readonly key: FilterKey; readonly value: string }> =>
-  (["model", "account", "provider", "user", "member"] as const).flatMap((key) => {
+  (["model", "account", "provider", "user", "member", "team"] as const).flatMap((key) => {
     const value = filters[key];
 
     return value === undefined ? [] : [{ key, value }];
@@ -178,7 +182,7 @@ export const lenient = <S extends Schema.Top>(schema: S) =>
   Schema.optionalKey(schema.pipe(Schema.catchDecoding(() => Effect.succeedNone)));
 
 /**
- * The page's address: `/usage?range=week&by=auth&model=…&account=…&provider=…&user=…&member=…&failed=true`. A malformed
+ * The page's address: `/usage?range=week&by=auth&model=…&account=…&provider=…&user=…&member=…&team=…&failed=true`. A malformed
  * parameter is dropped on its own; the others still apply.
  */
 export const UsageSearch = Schema.Struct({
@@ -189,6 +193,7 @@ export const UsageSearch = Schema.Struct({
   account: lenient(Schema.String),
   user: lenient(Schema.String),
   member: lenient(Schema.String),
+  team: lenient(Schema.String),
   failed: lenient(Schema.Boolean),
 });
 

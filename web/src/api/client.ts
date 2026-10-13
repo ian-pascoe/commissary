@@ -178,7 +178,7 @@ export const usageSeriesAtom = Atom.family((view: UsageView) =>
         get(usageEpochAtom);
         const client = yield* ManagementClient;
         const now = yield* Clock.currentTimeMillis;
-        const { model, provider, auth_index, member } = filterQuery(view.filters);
+        const { model, provider, auth_index, member, team } = filterQuery(view.filters);
 
         // The series has no principal filter: the page shows no chart while a user filter is set.
         const series = yield* client.usage.series({
@@ -190,6 +190,7 @@ export const usageSeriesAtom = Atom.family((view: UsageView) =>
             ...(provider === undefined ? {} : { provider }),
             ...(auth_index === undefined ? {} : { auth_index }),
             ...(member === undefined ? {} : { member }),
+            ...(team === undefined ? {} : { team }),
           },
         });
 

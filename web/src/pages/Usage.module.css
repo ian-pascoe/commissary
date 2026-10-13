@@ -504,3 +504,16 @@
     border-bottom: 1px solid var(--hairline);
   }
 }
+
+/* The team filter beside the range tabs. */
+.teamPick {
+  height: 2.5rem;
+  max-width: 14rem;
+  padding: 0 var(--space-3);
+  background: var(--field);
+  color: var(--text);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: var(--text-sm);
+}

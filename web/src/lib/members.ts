@@ -1,4 +1,4 @@
-// The Members page's model: what a refused write tells the operator, the checks that mirror the server's, and how
+// The Members page's model: what a refused write tells the caller, the checks that mirror the server's, and how
 // members, teams and service tokens are read together. Pure: no DOM, tested in test/web-members.test.ts.
 import type { MemberView, ServiceTokenView, TeamView } from "#contract/members.ts";
 import { asSentence } from "./failure.ts";
@@ -15,7 +15,7 @@ export const memberProblem = (
 ): string => {
   switch (error) {
     case "owner_required":
-      return "Only an org owner can do this: adding or changing admins and owners, changing roles, or removing an admin or owner.";
+      return "Only an org owner can do this: adding or changing org admins and owners, changing roles, or removing an org admin or owner.";
     case "admin_required":
       return "Only an org admin can do this.";
     case "service_token_owner_required":
@@ -35,7 +35,7 @@ export const memberProblem = (
     case "invalid_role":
       return "That role does not exist.";
     case "invalid_name":
-      return "A name is 1 to 100 characters.";
+      return `A name is 1 to ${TEAM_NAME_MAX} characters.`;
     case "invalid_client_id":
       return "That is not a valid service token client id. Copy the Client ID of the token from Cloudflare Access (it ends in .access).";
     case "member_not_found":
@@ -49,7 +49,10 @@ export const memberProblem = (
   }
 };
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** The server's rule (`validEmail`, src/members/store.ts): the client never refuses an address the server accepts. */
+const EMAIL = /^[^\s@,;<>"]+@[^\s@,;<>"]+$/;
+
+export const EMAIL_MAX = 254;
 
 /** An email as the server stores it: trimmed and lower-case. */
 export const normalizeEmail = (text: string): string => text.trim().toLowerCase();
@@ -60,11 +63,20 @@ export const emailProblem = (text: string): string | undefined => {
 
   if (email === "") return "Enter an email address.";
 
-  return EMAIL.test(email) ? undefined : `“${text.trim()}” is not an email address.`;
+  return email.length <= EMAIL_MAX && EMAIL.test(email)
+    ? undefined
+    : `“${text.trim()}” is not an email address.`;
 };
 
-/** A team name is 1 to 100 characters. */
+/** A team name is 1 to 100 characters (code points, as the server counts), without control characters. */
 export const TEAM_NAME_MAX = 100;
+
+/** Whether a character is a control character (the server refuses those in names). */
+const isControl = (character: string): boolean => {
+  const code = character.codePointAt(0) ?? 0;
+
+  return code < 0x20 || code === 0x7f;
+};
 
 /** What is wrong with a typed team name, or `undefined`; `others` are the other teams' names (unique, any case). */
 export const teamNameProblem = (
@@ -75,7 +87,12 @@ export const teamNameProblem = (
 
   if (name === "") return "Enter a name.";
 
-  if (name.length > TEAM_NAME_MAX) return `A name is up to ${TEAM_NAME_MAX} characters.`;
+  // Code points, as the server counts them.
+  const characters = Array.from(name);
+
+  if (characters.length > TEAM_NAME_MAX) return `A name is up to ${TEAM_NAME_MAX} characters.`;
+
+  if (characters.some(isControl)) return "A name has no control characters.";
 
   return others.some((other) => other.trim().toLowerCase() === name.toLowerCase())
     ? "A team with that name exists already."
@@ -91,7 +108,7 @@ export const clientIdProblem = (text: string): string | undefined => {
   return /\s/.test(id) ? "A client id has no spaces." : undefined;
 };
 
-/** Owners first, then admins, then members; each by email. */
+/** Org owners first, then org admins, then members; each by email. */
 export const sortMembers = (members: ReadonlyArray<MemberView>): ReadonlyArray<MemberView> => {
   const order = { owner: 0, admin: 1, member: 2 } as const;
 
@@ -136,7 +153,7 @@ export const membersOfTeam = (
 export const tokenName = (token: ServiceTokenView): string =>
   token.name === "" ? token.client_id : token.name;
 
-/** The count of each role among members, for the summary line ("1 owner, 2 admins, 5 members"). */
+/** The count of each role among members, for the summary line ("1 org owner, 2 org admins, 5 members"). */
 export const roleCounts = (members: ReadonlyArray<MemberView>): string => {
   const parts = (["owner", "admin", "member"] as const).flatMap((role) => {
     const count = members.filter((member) => member.role === role).length;

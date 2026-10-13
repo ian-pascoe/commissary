@@ -1,21 +1,15 @@
-// Teams: named groups of members, created, renamed and deleted by admins. A team has no powers of its own; it only
+// Teams: named groups of members, created, renamed and deleted by org admins. A team has no powers of its own; it only
 // groups people. A member's teams show on their row in the people list as well.
 import { Check, Pencil, Plus, X } from "lucide-react";
 import { type FormEvent, useId, useState } from "react";
 import type { MemberView, TeamView } from "#contract/members.ts";
-import {
-  addTeamMemberAtom,
-  createTeamAtom,
-  deleteTeamAtom,
-  MEMBERS,
-  removeTeamMemberAtom,
-  renameTeamAtom,
-} from "../api/client.ts";
+import { createTeamAtom, deleteTeamAtom, MEMBERS, renameTeamAtom } from "../api/client.ts";
 import { ConfirmDialog, type ConfirmRequest } from "../components/Confirm.tsx";
 import { kit } from "../components/Kit.tsx";
 import { membersOfTeam, sortMembers, sortTeams, teamNameProblem } from "../lib/members.ts";
 import { useAction } from "../lib/use-action.ts";
 import styles from "./Members.module.css";
+import { useTeamMembership } from "./MembersMembership.ts";
 import { NoteLine, useNote } from "./MembersNote.tsx";
 
 /** A name field with its problem, shown once the form has been tried. */
@@ -63,7 +57,6 @@ const NameForm = ({
           id={`${ids}-name`}
           className={kit["input"]}
           value={name}
-          maxLength={100}
           autoComplete="off"
           aria-invalid={problem !== undefined}
           aria-describedby={`${ids}-problem`}
@@ -218,12 +211,12 @@ export const Teams = ({
   const create = useAction(createTeamAtom);
   const rename = useAction(renameTeamAtom);
   const remove = useAction(deleteTeamAtom);
-  const join = useAction(addTeamMemberAtom);
-  const leave = useAction(removeTeamMemberAtom);
-  const { note, settle, clear } = useNote();
+  const noteState = useNote();
+  const { note, settle, clear } = noteState;
+  const membership = useTeamMembership(noteState);
   const [renaming, setRenaming] = useState<string | undefined>(undefined);
   const [confirm, setConfirm] = useState<ConfirmRequest | undefined>(undefined);
-  const busy = create.busy || rename.busy || remove.busy || join.busy || leave.busy;
+  const busy = create.busy || rename.busy || remove.busy || membership.busy;
 
   const askDelete = (team: TeamView) => {
     clear();
@@ -274,29 +267,8 @@ export const Teams = ({
                 );
               }}
               onDelete={() => askDelete(team)}
-              onJoin={async (member) => {
-                clear();
-
-                settle(
-                  await join.run({
-                    params: { id: team.id },
-                    payload: { member_id: member.id },
-                    reactivityKeys: MEMBERS,
-                  }),
-                  `Added ${member.email} to ${team.name}.`,
-                );
-              }}
-              onLeave={async (member) => {
-                clear();
-
-                settle(
-                  await leave.run({
-                    params: { id: team.id, memberId: member.id },
-                    reactivityKeys: MEMBERS,
-                  }),
-                  `Took ${member.email} off ${team.name}.`,
-                );
-              }}
+              onJoin={(member) => membership.join(team, member)}
+              onLeave={(member) => membership.leave(team, member)}
             />
           ))}
         </ul>

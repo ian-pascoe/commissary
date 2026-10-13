@@ -1187,7 +1187,7 @@ panel paths and `/management.html` as `management`); there is no management key.
   rules and account error rules are read-only there ("Set … by importing a Go config document (POST /settings/import)."; the import has no panel
   UI yet, see _Config entries_). There is no raw configuration editor (removed with its CodeMirror dependencies, ADR 0025).
   The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
-  address (`?range=&by=&model=&provider=&account=&user=&failed=`, decoded per parameter by `web/src/lib/usage.ts`
+  address (`?range=&by=&model=&provider=&account=&user=&member=&team=&failed=`, decoded per parameter by `web/src/lib/usage.ts`
   `readUsageSearch`, a malformed one dropped), reads `GET /observability/usage/summary`, `/series` (provider series
   summed in the browser; no principal filter, so no chart while a user filter is set) and `/records` (pages of 50
   through the `next_before` cursor); every range starts at its first bar. The shell's Refresh bumps one epoch atom
@@ -1198,7 +1198,7 @@ panel paths and `/management.html` as `management`); there is no management key.
   `web/src/lib/prices.ts`) lists, adds, edits and removes the org's price overrides over `/price-overrides`, with the
   entry revision as `If-Match` (a `409` reloads the list and says to make the edit again); the form opens with the
   provider and model from the address, or edits the override that has them. The Usage page also breaks down and filters
-  by member (`by=member`, `?member=`, shown by email). **Members** (`/members`, `web/src/pages/Members*.tsx`, rules in
+  by member (`by=member`, `?member=`, shown by email) and filters by team (`?team=`, a picker of the org's teams). **Members** (`/members`, `web/src/pages/Members*.tsx`, rules in
   `web/src/lib/role.ts`) lists the org's members, teams and service tokens and offers only what the caller's role allows
   (read from the org-scoped `GET /me`): admins add and remove plain members and manage teams, owners change roles and
   auto-join, and a token role above member is offered to a platform admin only. A plain member's panel is the Usage page

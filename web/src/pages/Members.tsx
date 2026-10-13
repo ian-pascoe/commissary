@@ -1,6 +1,6 @@
 // Members (/members): who belongs to the org and with which role, the teams they are on, the service tokens that may
-// call the management API, and whether people join by themselves. Admins manage plain members and teams; owners also
-// change roles, add admins and owners, and decide on auto-join. The server enforces every rule again: the page only
+// call the management API, and whether people join by themselves. Org org admins manage plain members and teams; org owners
+// also change roles, add org admins and org owners, and decide on auto-join. The server enforces every rule again: the page only
 // offers what the caller's role allows, and says why when a choice is missing.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
@@ -15,7 +15,7 @@ import {
 } from "../api/client.ts";
 import { kit, Problem, Section } from "../components/Kit.tsx";
 import { failureMessage } from "../lib/failure.ts";
-import { type Caller, canManageMembers, canSetAutoJoin, roleLabel } from "../lib/role.ts";
+import { type Caller, canManageMembers, canSetAutoJoin, roleAs } from "../lib/role.ts";
 import { useAction } from "../lib/use-action.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
 import { useRole } from "../lib/use-role.ts";
@@ -102,7 +102,7 @@ const AutoJoin = ({ caller }: { readonly caller: Caller }) => {
               : "Off: only people and service tokens listed here can use this org; anyone else Access admits is turned away."}{" "}
             {owner
               ? "Existing members and their roles do not change."
-              : `Only an owner can change this; you are ${roleLabel(caller.role).toLowerCase() === "admin" ? "an admin" : "a member"}.`}
+              : `Only an org owner can change this; you are ${roleAs(caller.role)}.`}
           </p>
           <NoteLine note={note} />
         </>
@@ -186,11 +186,11 @@ export const MembersPage = () => {
         <p className={styles["intro"]}>
           You are{" "}
           {role.caller.platformAdmin
-            ? "a platform admin, an owner of every org"
-            : `an ${roleLabel(role.caller.role).toLowerCase()}`}
-          . Owners can do everything here. Admins add and remove plain members and manage teams;
-          adding or promoting admins and owners, changing roles and the joining setting are for
-          owners.
+            ? "a platform admin, an org owner of every org"
+            : roleAs(role.caller.role)}
+          . Org owners can do everything here. Org admins add and remove plain members and manage
+          teams; adding or promoting org admins and owners, changing roles and the joining setting
+          are for org owners.
         </p>
       </header>
       <Lists caller={role.caller} />

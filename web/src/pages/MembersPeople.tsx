@@ -3,14 +3,7 @@
 import { Plus, X } from "lucide-react";
 import { type FormEvent, useId, useState } from "react";
 import type { MemberView, TeamView } from "#contract/members.ts";
-import {
-  addMemberAtom,
-  addTeamMemberAtom,
-  MEMBERS,
-  removeMemberAtom,
-  removeTeamMemberAtom,
-  updateMemberAtom,
-} from "../api/client.ts";
+import { addMemberAtom, MEMBERS, removeMemberAtom, updateMemberAtom } from "../api/client.ts";
 import { ConfirmDialog, type ConfirmRequest } from "../components/Confirm.tsx";
 import { kit } from "../components/Kit.tsx";
 import {
@@ -36,6 +29,7 @@ import {
 } from "../lib/role.ts";
 import { useAction } from "../lib/use-action.ts";
 import styles from "./Members.module.css";
+import { useTeamMembership } from "./MembersMembership.ts";
 import { NoteLine, useNote } from "./MembersNote.tsx";
 
 const AddMember = ({
@@ -115,7 +109,7 @@ const AddMember = ({
         {problem ??
           (roles.length > 1
             ? `${roleSummary(role)} They get access the next time they sign in; no email is sent.`
-            : "They join as a plain member and get access the next time they sign in; no email is sent. Only an owner adds admins and owners.")}
+            : "They join as a plain member and get access the next time they sign in; no email is sent. Only an org owner adds org admins and owners.")}
       </p>
     </form>
   );
@@ -262,11 +256,11 @@ export const People = ({
   const add = useAction(addMemberAtom);
   const update = useAction(updateMemberAtom);
   const remove = useAction(removeMemberAtom);
-  const join = useAction(addTeamMemberAtom);
-  const leave = useAction(removeTeamMemberAtom);
-  const { note, settle, clear } = useNote();
+  const noteState = useNote();
+  const { note, settle, clear } = noteState;
+  const membership = useTeamMembership(noteState);
   const [confirm, setConfirm] = useState<ConfirmRequest | undefined>(undefined);
-  const busy = add.busy || update.busy || remove.busy || join.busy || leave.busy;
+  const busy = add.busy || update.busy || remove.busy || membership.busy;
 
   const askRemove = (member: MemberView) => {
     clear();
@@ -330,29 +324,8 @@ export const People = ({
                 );
               }}
               onRemove={() => askRemove(member)}
-              onJoin={async (team) => {
-                clear();
-
-                settle(
-                  await join.run({
-                    params: { id: team.id },
-                    payload: { member_id: member.id },
-                    reactivityKeys: MEMBERS,
-                  }),
-                  `Added ${member.email} to ${team.name}.`,
-                );
-              }}
-              onLeave={async (team) => {
-                clear();
-
-                settle(
-                  await leave.run({
-                    params: { id: team.id, memberId: member.id },
-                    reactivityKeys: MEMBERS,
-                  }),
-                  `Took ${member.email} off ${team.name}.`,
-                );
-              }}
+              onJoin={(team) => membership.join(team, member)}
+              onLeave={(team) => membership.leave(team, member)}
             />
           ))}
         </tbody>

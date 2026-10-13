@@ -51,8 +51,8 @@ const UsageRefresh = () => {
   return <RefreshIcon busy={usage.waiting} onRefresh={() => bumpUsage((epoch) => epoch + 1)} />;
 };
 
-/** An admin's Refresh: the accounts and the usage. */
-const AdminRefresh = () => {
+/** An org admin's Refresh: the accounts and the usage. */
+const OrgAdminRefresh = () => {
   const credentials = useAtomValue(credentialsAtom);
   const usage = useAtomValue(usageLastDayAtom);
   const refreshCredentials = useAtomRefresh(credentialsAtom);
@@ -223,7 +223,7 @@ export const Shell = () => {
                 <span className={styles["connectLabel"]}>Connect account</span>
               </Link>
             ) : null}
-            {role.kind === "ready" ? admin ? <AdminRefresh /> : <UsageRefresh /> : null}
+            {role.kind === "ready" ? admin ? <OrgAdminRefresh /> : <UsageRefresh /> : null}
             <ThemeMenu />
           </div>
         </div>

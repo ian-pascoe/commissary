@@ -94,7 +94,6 @@ const RegisterToken = ({
             id={`${ids}-name`}
             className={kit["input"]}
             autoComplete="off"
-            maxLength={100}
             placeholder="CI"
             value={name}
             onChange={(event) => setName(event.target.value)}

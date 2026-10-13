@@ -105,9 +105,14 @@ describe("filters", () => {
     expect(breakdownOf("auth", breakdownsFor(false)).id).toBe("model");
   });
 
-  it("narrows to a member", () => {
+  it("narrows to a member and to a team", () => {
     expect(filterQuery({ member: "m1" })).toEqual({ member: "m1" });
     expect(activeFilters({ member: "m1" })).toEqual([{ key: "member", value: "m1" }]);
+    expect(filterQuery({ team: "t1", model: "gpt-5" })).toEqual({ model: "gpt-5", team: "t1" });
+    expect(activeFilters({ team: "t1", member: "m1" })).toEqual([
+      { key: "member", value: "m1" },
+      { key: "team", value: "t1" },
+    ]);
   });
 });
 
@@ -123,6 +128,17 @@ describe("readUsageSearch", () => {
         extra: "x",
       }),
     ).toEqual({ range: "week", model: "gpt-5", account: "codex-a.json", failed: true });
+  });
+
+  it("reads the member and team filters of the address", () => {
+    expect(readUsageSearch({ by: "member", member: "m1", team: "t1" })).toEqual({
+      by: "member",
+      member: "m1",
+      team: "t1",
+    });
+    expect(readUsageSearch({ team: "t1" })).toEqual({ team: "t1" });
+    expect(readUsageSearch({ team: 7 })).toEqual({});
+    expect(readUsageSearch({ team: undefined })).toEqual({});
   });
 
   it("drops a malformed value instead of failing", () => {
