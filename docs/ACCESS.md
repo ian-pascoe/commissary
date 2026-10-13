@@ -9,16 +9,16 @@ authenticates the caller (identity provider login or a service token), then forw
 `pnpm run deploy` (`alchemy.run.ts`, `infra/access.ts`) provisions Access together with the Worker, from the
 settings in `.env` (template: `.env.example`):
 
-| Setting                                              | Creates / sets                                                                                                  |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `CF_LLM_PROXY_DOMAIN`                                | A **self-hosted application** on that hostname (empty path: the whole hostname), and the Worker's custom domain |
-| `ACCESS_ALLOW_EMAILS`, `ACCESS_ALLOW_EMAIL_DOMAINS`  | A reusable **Allow** policy (interactive login with your identity providers)                                    |
-| `ACCESS_SERVICE_TOKENS` (names)                      | One **service token** per name and a **Service Auth** policy that admits exactly those tokens                   |
-| `ACCESS_ALLOW_SERVICE_TOKEN_IDS`                     | Adds service tokens managed elsewhere (by token ID, e.g. CI's) to the **Service Auth** policy                   |
-| `ACCESS_SESSION_DURATION`                            | Session duration of the application (default `24h`)                                                             |
-| `ACCESS_SERVICE_TOKEN_HEADER`                        | Optional single-header service tokens (section 5)                                                               |
-| `ACCESS_TEAM_DOMAIN`                                 | Worker variable (issuer and JWKS host); your Zero Trust team name                                               |
-| `ACCESS_ADMIN_EMAILS`, `ACCESS_ADMIN_SERVICE_TOKENS` | Worker variables: management admins (token names from `ACCESS_SERVICE_TOKENS` are replaced by their Client IDs) |
+| Setting                                                  | Creates / sets                                                                                                  |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `CF_LLM_PROXY_DOMAIN`                                    | A **self-hosted application** on that hostname (empty path: the whole hostname), and the Worker's custom domain |
+| `ACCESS_ALLOW_EMAILS`, `ACCESS_ALLOW_EMAIL_DOMAINS`      | A reusable **Allow** policy (interactive login with your identity providers)                                    |
+| `ACCESS_SERVICE_TOKENS` (names)                          | One **service token** per name and a **Service Auth** policy that admits exactly those tokens                   |
+| `ACCESS_ALLOW_SERVICE_TOKEN_IDS`                         | Adds service tokens managed elsewhere (by token ID, e.g. CI's) to the **Service Auth** policy                   |
+| `ACCESS_SESSION_DURATION`                                | Session duration of the application (default `24h`)                                                             |
+| `ACCESS_SERVICE_TOKEN_HEADER`                            | Optional single-header service tokens (section 5)                                                               |
+| `ACCESS_TEAM_DOMAIN`                                     | Worker variable (issuer and JWKS host); your Zero Trust team name                                               |
+| `PLATFORM_ADMIN_EMAILS`, `PLATFORM_ADMIN_SERVICE_TOKENS` | Worker variables: platform admins (token names from `ACCESS_SERVICE_TOKENS` are replaced by their Client IDs)   |
 
 The application's **AUD tag** is passed to the Worker as `ACCESS_AUD` automatically. The deploy also sets the application's
 cookie to **SameSite=Lax** and **HTTP Only**, so the `CF_Authorization` session cookie is not sent with cross-site
@@ -58,23 +58,49 @@ Need IdP groups, device posture or other rules? Extend the policies in `infra/ac
 
 Set by the deploy from the settings above (Alchemy binds them as plain-text variables):
 
-| Variable                      | Meaning                                                                                               |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `ACCESS_TEAM_DOMAIN`          | `myteam`, `myteam.cloudflareaccess.com` or `https://myteam.cloudflareaccess.com` (issuer + JWKS host) |
-| `ACCESS_AUD`                  | AUD tag(s) of the application(s), comma separated                                                     |
-| `ACCESS_ADMIN_EMAILS`         | Admins for `/v8/management*` and the panels (comma/space separated, case-insensitive)                 |
-| `ACCESS_ADMIN_SERVICE_TOKENS` | Service token **Client IDs** allowed to administer (the full `….access` id)                           |
-| `ACCESS_DEV_BYPASS`           | Set only by `alchemy dev` (local development); empty on deployed Workers                              |
-| `AUTH_INDEX_KEY`              | Secret (`secret_text`) HMAC key of `auth_index`: minted by the deploy, not a setting (below)          |
+| Variable                                             | Meaning                                                                                               |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `ACCESS_TEAM_DOMAIN`                                 | `myteam`, `myteam.cloudflareaccess.com` or `https://myteam.cloudflareaccess.com` (issuer + JWKS host) |
+| `ACCESS_AUD`                                         | AUD tag(s) of the application(s), comma separated                                                     |
+| `PLATFORM_ADMIN_EMAILS`                              | Platform admins: manage every org and create orgs (comma/space separated, case-insensitive)           |
+| `PLATFORM_ADMIN_SERVICE_TOKENS`                      | Service token **Client IDs** that are platform admins (the full `….access` id)                        |
+| `ACCESS_ADMIN_EMAILS`, `ACCESS_ADMIN_SERVICE_TOKENS` | Deprecated names of the two above: still read and merged with them, and logged once as a warning      |
+| `ACCESS_DEV_BYPASS`                                  | Set only by `alchemy dev` (local development); empty on deployed Workers                              |
+| `AUTH_INDEX_KEY`                                     | Secret (`secret_text`) HMAC key of `auth_index`: minted by the deploy, not a setting (below)          |
 
 Empty `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` fails closed: protected routes answer 500. An authenticated principal that is not on an
 admin list gets 403 on management routes but can still use the proxy endpoints.
+
+### Platform admins and orgs
+
+The deployment serves one or more **orgs** (ADR 0021). The Platform registry (a Durable Object) lists them; the first, `global`,
+exists from the start with the slug `default` and holds everything the deployment stored before orgs existed. Each org has a
+**slug** (1-63 lowercase letters, digits and inner hyphens) that addresses it:
+
+| What              | Address                                                                   |
+| ----------------- | ------------------------------------------------------------------------- |
+| Panel of an org   | `/o/<slug>/` (`/o/<slug>/accounts`, `/keys`, `/models`, ...)              |
+| Management API    | `/v8/management/orgs/<slug>/<route>` (every route below `/v8/management`) |
+| Org list, create  | `GET`/`POST /v8/management/orgs`                                          |
+| Rename an org     | `PATCH /v8/management/orgs/<slug>` (name and/or slug)                     |
+| Who am I, my orgs | `GET /v8/management/me`                                                   |
+
+A **platform admin** (`PLATFORM_ADMIN_*`) manages every org through these addresses and is the only one who may list, create and
+rename orgs: anyone else gets `403 {"error":"platform_admin_required"}`. An org the registry does not list answers `404` to a
+platform admin and `403` to anyone else. The unscoped addresses (`/v8/management/credentials`, `/accounts`, ...) keep working
+and mean `global`, so existing scripts and bookmarks are unchanged. Until orgs have members of their own, an admin named only by the
+config document (`access.admin-emails`, below) keeps managing `global` and nothing else. `/` opens the panel of the only org the
+caller manages and asks which one to open when there are several (`/?choose` always asks, to create an org). A person's login
+and proxy keys are unaffected: clients reach their org with their key, not with the address.
+
+Renaming `ACCESS_ADMIN_*` to `PLATFORM_ADMIN_*` is the only settings change an upgrade asks for, and it can wait: the old names are
+merged with the new ones. A rename of an org's slug breaks the old address, not the org's data (stored under its permanent id).
 
 The config document can add admins too: `access.admin-emails` and `access.admin-service-tokens` (same formats) are merged with
 the two variables. The variables always apply and never need the config, so an env admin can repair a broken config or remove
 config admins; config admins are only looked up for principals that are not env admins, and an unreadable config denies them.
 Anyone who can edit the config can add admins this way, which is already admin-only, with one exception: only a **service-token**
-administrator or an env admin (`ACCESS_ADMIN_EMAILS`, `ACCESS_ADMIN_SERVICE_TOKENS`, the local dev bypass) may change
+administrator or an env admin (`PLATFORM_ADMIN_EMAILS`, `PLATFORM_ADMIN_SERVICE_TOKENS`, the local dev bypass) may change
 `access.admin-service-tokens`, through `PATCH /settings`, `PUT /settings/config` (and its `check`) or `/config*`. An email admin who is
 one only through `access.admin-emails` gets `403 {"error":"service_tokens_require_service_admin","message":…}` and nothing is
 stored (writing the same list again is fine). Without it such an admin could grant a service token the credential download below.
@@ -91,8 +117,8 @@ characters; a missing key is refused everywhere.
 
 1. The path is classified (`src/access/routes.ts`): `/v1*` (incl. `/v1beta`, `/v1internal`), `/openai/v1*`, `/backend-api/codex*` and the unprefixed
    aliases `/chat/completions`, `/completions`, `/responses` need a
-   principal; `/v8/management*`, the control panel (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/settings` with their
-   sub-paths, `/assets/*`) and `/management.html` (the upstream panel's old address, a redirect to `/`) need an admin;
+   principal; `/v8/management*` (also `/v8/management/orgs/<slug>/...`), the control panel (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/settings` with their
+   sub-paths, the same pages under `/o/<slug>/`, `/assets/*`) and `/management.html` (the upstream panel's old address, a redirect to `/`) need an admin;
    everything else (`/healthz`, the OAuth browser callbacks `/anthropic/callback`, `/codex/callback`,
    `/antigravity/callback`, `/callback`, `/devin/callback`) is public to the Worker.
    Matching is case-, slash- and percent-encoding-insensitive, so odd spellings cannot dodge the gate.
@@ -151,7 +177,7 @@ put a server-side client in between.
   or alias name equals a stored secret or not.
 - Credential downloads (`GET /v8/management/credentials/download?name=<file>`) are the one way to read a stored token:
   the auth file verbatim, refresh token included, for moving an account to another deployment. Only a **service
-  token** administrator (`ACCESS_ADMIN_SERVICE_TOKENS`, or `access.admin-service-tokens` in the config, §3) may call
+  token** administrator (`PLATFORM_ADMIN_SERVICE_TOKENS`, or `access.admin-service-tokens` in the config, §3) may call
   it; an email admin gets `403 {"error":"download_requires_service_token","message":…}` before the file is looked up,
   and a principal that is no admin the gate's `403 Forbidden`. A person's browser session is the credential most
   exposed to theft, so the tokens are handed only to a client that was set up for automation (curl with
@@ -207,15 +233,17 @@ service token, which does not depend on the device. Check the Cloudflare WARP/Ac
 
 ## Troubleshooting
 
-| Symptom                                    | Cause                                                                                                                 |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| 302 to `cloudflareaccess.com` in a CLI     | Service token headers missing/wrong, or no Service Auth policy for the token                                          |
-| 403 from Access (before the Worker)        | Token not in the Service Auth policy (name missing from `ACCESS_SERVICE_TOKENS`)                                      |
-| 500 `Authentication service error`         | `ACCESS_TEAM_DOMAIN` wrong (check the team name) or `ACCESS_AUD` empty                                                |
-| 401 `Missing API key`                      | Request reached the Worker without Access (wrong hostname) or no JWT header                                           |
-| 401 `Invalid API key`                      | AUD/issuer mismatch, expired JWT                                                                                      |
-| 403 `Forbidden` on the panel               | Principal not in `ACCESS_ADMIN_EMAILS` / `ACCESS_ADMIN_SERVICE_TOKENS`                                                |
-| 403 `download_requires_service_token`      | Credential download called as an email admin: use a service token administrator                                       |
-| 403 `service_tokens_require_service_admin` | `access.admin-service-tokens` changed by a config-only email admin: use a service token administrator or an env admin |
-| 403 `Cross-site request rejected`          | Browser request from another origin (or a proxy POST from a web app)                                                  |
-| 415 `Unsupported Content-Type`             | Management write without `content-type: application/json` (or YAML/multipart)                                         |
+| Symptom                                    | Cause                                                                                                                  |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| 302 to `cloudflareaccess.com` in a CLI     | Service token headers missing/wrong, or no Service Auth policy for the token                                           |
+| 403 from Access (before the Worker)        | Token not in the Service Auth policy (name missing from `ACCESS_SERVICE_TOKENS`)                                       |
+| 500 `Authentication service error`         | `ACCESS_TEAM_DOMAIN` wrong (check the team name) or `ACCESS_AUD` empty                                                 |
+| 401 `Missing API key`                      | Request reached the Worker without Access (wrong hostname) or no JWT header                                            |
+| 401 `Invalid API key`                      | AUD/issuer mismatch, expired JWT                                                                                       |
+| 403 `Forbidden` on the panel               | Principal not in `PLATFORM_ADMIN_EMAILS` / `PLATFORM_ADMIN_SERVICE_TOKENS` (or the config's admin lists, for `global`) |
+| 403 `platform_admin_required`              | Listing, creating or renaming orgs needs a platform admin, not an admin named by the config                            |
+| 404 on `/o/<slug>/...`                     | No org has that slug (a platform admin sees 404; others 403)                                                           |
+| 403 `download_requires_service_token`      | Credential download called as an email admin: use a service token administrator                                        |
+| 403 `service_tokens_require_service_admin` | `access.admin-service-tokens` changed by a config-only email admin: use a service token administrator or an env admin  |
+| 403 `Cross-site request rejected`          | Browser request from another origin (or a proxy POST from a web app)                                                   |
+| 415 `Unsupported Content-Type`             | Management write without `content-type: application/json` (or YAML/multipart)                                          |

@@ -6,7 +6,7 @@ The Workers port reads the Go `config.yaml` and the Go auth files (`*.json`), so
 ## 0. Management access from a terminal
 
 The management API needs an Access **admin**. For scripts, add a service token name to `ACCESS_SERVICE_TOKENS` and to
-`ACCESS_ADMIN_SERVICE_TOKENS` in `.env` and deploy (see [ACCESS.md](ACCESS.md); its credentials land in
+`PLATFORM_ADMIN_SERVICE_TOKENS` in `.env` and deploy (see [ACCESS.md](ACCESS.md); its credentials land in
 `.alchemy/access-service-tokens.json`), or add a Client ID to `access.admin-service-tokens` in the config once an env
 admin has set it up, then:
 

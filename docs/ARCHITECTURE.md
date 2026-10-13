@@ -76,12 +76,21 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
   (`orgAuthIndexer`; `global` keeps the deployment key, so existing handles and panel links do not change). Worker-side
   caches of org data (the `ConfigReader` snapshots, the registry snapshots, the per-isolate signature cache and
   Antigravity state) are keyed by org.
+- **`Platform` Durable Object** (the Platform registry, `src/platform/{platform,registry,registry-store}.ts`; one object
+  per deployment, `platformOf(env)` = `getByName("platform")`, SQLite storage, tables `CREATE IF NOT EXISTS` on
+  construction so a deployment gains it without a migration): what spans orgs. The list of orgs (`orgs`: permanent `id`,
+  unique `slug`, `name`, `created_at`; `global` is seeded as slug `default`, name `Default` and left alone afterwards, so
+  a rename sticks), the indexes of which orgs a person (`org_members`) and an Access service token
+  (`org_service_tokens`) belong to (kept empty until orgs have members; the orgs' ControlPlanes stay authoritative, so
+  the indexes are repairable), and the catalog refresh lease (below). Platform admins are not stored in it: the
+  deployment's variables name them (see Authentication), so they can always repair the registry. See "Orgs in
+  addresses" below.
 - **Deployment-wide state**: the model catalog (KV copy, refresh status and refresh lease) and the client versions
   (Antigravity, xAI) are shared by every org. The catalog's source, `models.catalog`, is a deployment setting: only the
   `global` org's config may set it (another org's `ConfigStore` refuses a document that does, `422` through the
   management API), every org's `ConfigReader` snapshot carries `global`'s value (the read fails while `global`'s
   config was never read and cannot be, rather than fall back to the org's default), and every refresh (cron or any org's
-  panel) uses `global`'s setting and the refresh lease in `global`'s ControlPlane, so no org can repoint the shared
+  panel) uses `global`'s setting and the refresh lease in the Platform registry, so no org can repoint the shared
   catalog.
 - **`SessionState` Durable Object** (one instance per store + caller scope + session key, `getByName`, SQLite storage):
   the replay and continuity caches (Codex/xAI/Claude/Kimi/Gemini/Antigravity reasoning replay, Claude continuity, Devin turn
@@ -96,8 +105,9 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
   models.dev document: every provider's models, OpenCode's included), Antigravity version and model entitlements, xAI client version, usage retention, the Devin user status, a
   safety sweep that re-arms credential refresh alarms, and the quota check of connected accounts. A job is
   deployment-wide (catalog, client versions, usage retention: once per run) or org-scoped (entitlements, Devin status,
-  refresh sweep, quota check: once per org of `DEPLOYMENT_ORGS`, with `CurrentOrg` set, a failure in one org not
-  stopping the next). `DEPLOYMENT_ORGS` is `["global"]` until the Platform registry lists the orgs.
+  refresh sweep, quota check: once per org the Platform registry lists, `global` first, with `CurrentOrg` set, a failure in one org not
+  stopping the next). When the registry cannot be read the org jobs run for `global` alone, so a registry outage does not
+  stop the deployment's own jobs.
 
 Request flow:
 
@@ -144,7 +154,7 @@ client -> Cloudflare Access -> Worker
   (`schema.ts`, kebab-case keys as in YAML). `codec.ts` imports YAML/JSON (v8, legacy flat layout and historical v8
   spellings, see `document.ts`), validates, normalises (`normalize.ts`, port of the Go `Sanitize*` functions) and
   exports YAML (defaults omitted). Added keys without a Go counterpart: `access.admin-emails` and
-  `access.admin-service-tokens` (management allow-list merged with the `ACCESS_ADMIN_*` variables, see Authentication).
+  `access.admin-service-tokens` (the management allow-list of `global`, merged with the `PLATFORM_ADMIN_*` variables, see Authentication).
   Keys that are accepted but have no effect on Workers are listed in `config/not-applied.ts` with a one-line reason (and
   MIGRATION.md); storing a document that sets one logs a warning, and the Settings view lists them (names only). `requests.proxy-url` is accepted but
   ignored. Unknown/inapplicable keys are dropped on import.
@@ -593,13 +603,14 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
     `embed` = delete the stored copy and serve the bundled snapshot, `disabled` = never refresh, otherwise one http(s)
     URL. `models.codex-catalog` and `models.devin-catalog` are accepted and no longer have an effect (listed under
     _Not applied_).
-  - _One refresh at a time_: a download takes the **catalog refresh lease** in the ControlPlane
+  - _One refresh at a time_: a download takes the **catalog refresh lease** in the Platform registry
     (`takeCatalogRefreshLease` / `releaseCatalogRefreshLease`: the same `SweepLeaseStore` as the quota sweep, table
     `catalog_refresh_lease`, atomic on the object's clock, 2 min expiry, given back with its token; the refresh is bounded
     by its 30 s timeout so it is not renewed). The cron task and the panel therefore never download at once, in whichever
     isolates they run; the second gets `running` without a request being made. The invocation is held open with
     `waitUntil` until the lease is given back. A ControlPlane that cannot be reached fails the refresh (exclusivity
-    cannot be shown); `embed` and `disabled` need no lease.
+    cannot be shown); `embed` and `disabled` need no lease. The lease used to live in `global`'s ControlPlane
+    (an unreleased lease there simply expires; the stale table is left unread).
 - **Catalog status and on-demand refresh** (`management/catalog-routes.ts`, `contract/catalog.ts`; no Go counterpart):
   `GET /v8/management/models/catalog` answers `{mode, source_host?, source_problem?, stored, refreshed_at?, last_attempt?,
   models}`: the `models.catalog` mode (`official`, `embed`, `disabled`, `custom` with the host of the address, never the
@@ -1032,7 +1043,7 @@ panel paths and `/management.html` as `management`); there is no management key.
   - `GET /settings`: every Settings-owned value (`SETTINGS_TREE`: routing, retries/cooldowns, requests/streaming,
     upstream provider flags and header defaults, Codex client flags, refresh concurrency, OAuth provider settings,
     multimedia, model catalogs, config admin lists) in config spelling with defaults filled (unset Go pointers are
-    `null`), the `defaults`, the config `version` and `updated_at`, `env_admins` (`ACCESS_ADMIN_*`), `payload` rule
+    `null`), the `defaults`, the config `version` and `updated_at`, `env_admins` (`PLATFORM_ADMIN_*`), `payload` rule
     counts per kind, `prefixed_credentials`, the read-only `request_scoped_errors` map and `not_applied` (key + reason
     of each inert key that is set). **No secrets**: API keys, proxy URLs and client keys are never in the view.
   - `PATCH /settings {version, patch}`: `patch` is a deep partial of the values; `null` removes the key from the
@@ -1766,6 +1777,47 @@ Grok/GPT/recognised checks, Gemini replay, ~500 sanitiser runs over synthetic hi
   and foreign `encrypted_content` for compat models. Fixtures: corpus `executor-compat.json` runs the Go helper itself
   (`corpusCase.executor`).
 
+## Orgs in addresses (`src/access/org-address.ts`, `src/management/org-routes.ts`)
+
+An org is addressed by its slug (ADR 0021), in two places, and the address is the only thing that names an org to the
+management API and the panel (the proxy endpoints still name it with the caller's key):
+
+- **`/v8/management/orgs/<slug>/<route>`** and **`/o/<slug>/<page>`** (`parseOrgAddress`, `routes.ts`). `orgAddressing` is a
+  router middleware around the whole application: it takes the org prefix out of the URL before routing, so every
+  management handler and the panel page handler are written once, for an unscoped path, and run against the org the address
+  names (the `CurrentOrg` they read). The unscoped path means `global`. Matching is case-, slash- and
+  percent-encoding-insensitive like the rest of the classification (`/V8/Management//Orgs/Acme/config`), and
+  `/v8/management/orgs` and `/v8/management/orgs/<slug>` (no route after the slug) are not prefixes: they are the
+  platform-level routes below. The CSRF guards and the admin gate see the original URL, so every rule that applies to
+  `/v8/management*` and to the panel pages applies to the scoped spellings too.
+- The slug is resolved by the Platform registry (`getOrgBySlug`) **after** authentication, so an unauthenticated caller
+  learns nothing about which slugs exist. A platform admin gets the org; a slug the registry does not list is `404` for a
+  platform admin and `403` for anyone else (also for an admin named only by the config document, who is limited to
+  `global`'s slug as the registry currently lists it, so renaming `default` does not lock them out). A registry that cannot be reached fails a scoped address
+  with `500` (the org cannot be told); the unscoped addresses need no lookup and keep working.
+
+Platform-level routes (`org-routes.ts`, contract group `orgs`, `src/management/contract/orgs.ts`):
+
+| Route                              | Who            | Does                                                                                         |
+| ---------------------------------- | -------------- | -------------------------------------------------------------------------------------------- |
+| `GET /v8/management/me`            | any admin      | `{platform_admin, orgs: [{slug, name}]}`: every org for a platform admin, `global` otherwise |
+| `GET /v8/management/orgs`          | platform admin | every org, `global` first                                                                    |
+| `POST /v8/management/orgs`         | platform admin | creates `{slug, name}`; `201`, `409 slug_taken`, `422 invalid_slug`/`invalid_name`           |
+| `PATCH /v8/management/orgs/<slug>` | platform admin | changes `slug` and/or `name`; the id never changes, so stored data stays where it is         |
+
+Anyone else gets `403 platform_admin_required` on the three org routes. The panel reads `/me` for its org switcher.
+
+**Panel.** The panel of an org is the same single-page app served at `/o/<slug>/...` (the Worker answers every page path of
+every org with `index.html`). The app reads its org from the address: TanStack Router's `basepath` is `/o/<slug>`, and the
+typed client rewrites each request to `/v8/management/orgs/<slug>/...` except `/me` and `/orgs` (`web/src/lib/org.ts`,
+`ManagementClient`'s `transformClient`; the one hand-written request, the Vertex import, does the same). The shell shows an
+org switcher to anyone who manages several orgs or may create them; choosing an org reloads the app at its address. An
+address without an org (`/`, `/accounts`, ...) goes through `orgRedirect` (`web-panel.ts`): a caller who manages exactly
+one org is redirected (`302`, uncached, path and query kept) to the same page of it; otherwise the app loads without an
+org and shows the **chooser** (the orgs of `/me`, and for a platform admin a form that creates one). `/?choose` skips the
+redirect, so a platform admin of one org can reach the form. Bookmarks and clients of the unscoped management API are
+unaffected.
+
 ## Authentication (Cloudflare Access)
 
 - Access application on the Worker's custom domain, provisioned with the Worker by `alchemy.run.ts`/`infra/access.ts`
@@ -1776,9 +1828,12 @@ Grok/GPT/recognised checks, Gemini replay, ~500 sanitiser runs over synthetic hi
 - Principal: `email` for users, `common_name` (service token client id) for service tokens. The principal replaces the
   Go `userApiKey` for usage records and the `caller_scope` hash used to isolate session state.
 - Management routes require the principal to match an admin allow-list (emails / service token ids), in addition to Access
-  policy: the `ACCESS_ADMIN_EMAILS`/`ACCESS_ADMIN_SERVICE_TOKENS` variables (always checked first, no I/O, so an env admin can
-  always repair the config) united with the config document's `access.admin-emails`/`access.admin-service-tokens` (read through
-  a `ConfigReader` built into the gate; an unreadable config denies non-env admins).
+  policy: the `PLATFORM_ADMIN_EMAILS`/`PLATFORM_ADMIN_SERVICE_TOKENS` variables (the **platform admins**: always checked
+  first, no I/O, so one can always repair the config and the registry; the deprecated `ACCESS_ADMIN_EMAILS`/
+  `ACCESS_ADMIN_SERVICE_TOKENS` are merged in as aliases and logged once as a warning) united with the config document's
+  `access.admin-emails`/`access.admin-service-tokens` (read through a `ConfigReader` built into the gate; an unreadable
+  config denies non-platform admins). A platform admin manages every org the registry lists; an admin named only by the
+  config document manages the org `global` and nothing else, until orgs have members of their own (ADR 0022).
 - Cross-site protections (`access/csrf.ts`, before authentication; new in the port because the Access session cookie is sent by
   browsers automatically): state-changing requests are refused on protected and management zones when `Sec-Fetch-Site` is
   `cross-site`/`same-site` or `Origin` is another host; management requests of any method with a foreign `Origin` (or a
