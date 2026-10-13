@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted, amended by ADR-0026 for hosted proxies
 ---
 
 # Access authenticates people; the proxy authorizes them and issues proxy keys to clients
