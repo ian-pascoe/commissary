@@ -20,6 +20,11 @@
  * yet imports that document on first use, in one transaction, and keeps the row. The counter continues from the
  * document's version, so every cached view is rebuilt. Not-applied keys are dropped, as on import.
  *
+ * Price overrides (ADR 0024) are entries of an org too, in a table of their own (`config_price_overrides`) rather than
+ * part of the config document: they take revisions from the same counter, so a write names the revision it is based on
+ * and moves the version readers rebuild on, but an import of a Go config document leaves them alone (Go's config has
+ * no prices). The table is created when missing, so a ControlPlane that predates it gains it on its next start.
+ *
  * Deployment settings (`DEPLOYMENT_SETTINGS`) decide something every org shares; only the `global` org stores them.
  * Another org's store refuses a write or an import that sets one (`invalid`), so a setting never looks applied when it
  * is not: readers take `global`'s value (`config/reader.ts`).
@@ -91,6 +96,40 @@ export interface ConfigSnapshotWire {
   readonly unchanged: boolean;
   /** Epoch milliseconds of the last write (0 when nothing was stored). */
   readonly updatedAt: number;
+  /** The org's price overrides; omitted with the document (`unchanged`). */
+  readonly priceOverrides?: ReadonlyArray<PriceOverrideEntry>;
+}
+
+/** The prices of a price override: US dollars per million tokens (`usage/pricing.ts`). */
+export interface PriceOverrideValue {
+  /** The provider key of the usage record (`codex`, `claude`, an OpenAI-compatible endpoint's name, ...). */
+  readonly provider: string;
+  readonly model: string;
+  readonly input: number;
+  readonly output: number;
+  readonly cache_read?: number;
+  readonly cache_write?: number;
+}
+
+/** A stored price override. */
+export interface PriceOverrideEntry extends PriceOverrideValue {
+  readonly id: string;
+  readonly revision: number;
+  readonly updated_at: number;
+  readonly updated_by: string;
+}
+
+/** What the management routes read (`priceOverrideEntries` over RPC): the overrides and the version they were read at. */
+export interface PriceOverridesWire {
+  readonly version: number;
+  readonly overrides: ReadonlyArray<PriceOverrideEntry>;
+}
+
+/** A price override write: `value` `null` deletes it; no `id` creates one (`revision` 0). */
+export interface PriceOverrideChange {
+  readonly id?: string;
+  readonly revision: number;
+  readonly value: PriceOverrideValue | null;
 }
 
 /** The revision of every stored entry by kind (absent = 0). Key groups carry the revision of their keys too. */
@@ -165,6 +204,12 @@ const TABLES = {
 
 type Table = (typeof TABLES)[keyof typeof TABLES];
 
+/** One override per provider and model, however they are cased. */
+const PRICE_OVERRIDES = "config_price_overrides";
+
+/** The largest price (USD per million tokens) an override may state: a typo guard, not a market bound. */
+export const MAX_OVERRIDE_PRICE = 100_000;
+
 const ENTRY_COLUMNS = `revision INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT NOT NULL`;
 
 const SCHEMA = [
@@ -186,6 +231,11 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS config_payload_rules (
      id TEXT PRIMARY KEY, kind TEXT NOT NULL, position INTEGER NOT NULL, value TEXT NOT NULL, ${ENTRY_COLUMNS}
    )`,
+  `CREATE TABLE IF NOT EXISTS ${PRICE_OVERRIDES} (
+     id TEXT PRIMARY KEY, provider TEXT NOT NULL, model TEXT NOT NULL, value TEXT NOT NULL, ${ENTRY_COLUMNS}
+   )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS config_price_overrides_model
+     ON ${PRICE_OVERRIDES} (provider COLLATE NOCASE, model COLLATE NOCASE)`,
 ];
 
 /** Who wrote the entries a migration imported. */
@@ -219,6 +269,17 @@ interface PayloadSqlRow extends ValueRow {
   position: number;
 }
 
+interface PriceSqlRow {
+  id: string;
+  provider: string;
+  model: string;
+  value: string;
+  revision: number;
+  updated_at: number;
+  updated_by: string;
+  [column: string]: SqlStorageValue;
+}
+
 interface LegacyRow {
   version: number;
   document: string;
@@ -248,6 +309,26 @@ const parseObject = (text: string): JsonObject => {
   const value = parse(text);
 
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value : {};
+};
+
+/** Why a price override's value is refused, if it is (names, then each price a finite number in range). */
+const priceRefusal = (value: PriceOverrideValue): string | undefined => {
+  if (value.provider.trim() === "" || value.model.trim() === "")
+    return "a price override names a provider and a model";
+
+  for (const [name, rate] of [
+    ["input", value.input],
+    ["output", value.output],
+    ["cache_read", value.cache_read],
+    ["cache_write", value.cache_write],
+  ] as const) {
+    if (rate === undefined && (name === "cache_read" || name === "cache_write")) continue;
+
+    if (typeof rate !== "number" || !Number.isFinite(rate) || rate < 0 || rate > MAX_OVERRIDE_PRICE)
+      return `${name} must be a price from 0 to ${MAX_OVERRIDE_PRICE} US dollars per million tokens`;
+  }
+
+  return undefined;
 };
 
 export class ConfigStore {
@@ -300,7 +381,41 @@ export class ConfigStore {
     if (sinceVersion !== undefined && sinceVersion === counter)
       return { version: counter, unchanged: true, updatedAt };
 
-    return { version: counter, unchanged: false, document: this.current().document, updatedAt };
+    return {
+      version: counter,
+      unchanged: false,
+      document: this.current().document,
+      updatedAt,
+      priceOverrides: this.priceOverrides(),
+    };
+  }
+
+  /** The org's price overrides, by provider and model. */
+  priceOverrides(): ReadonlyArray<PriceOverrideEntry> {
+    return this.#sql
+      .exec<PriceSqlRow>(
+        `SELECT id, provider, model, value, revision, updated_at, updated_by FROM ${PRICE_OVERRIDES}
+         ORDER BY provider, model COLLATE NOCASE, id`,
+      )
+      .toArray()
+      .map((row) => {
+        const rates = parseObject(row.value);
+        const cacheRead = rates["cache_read"];
+        const cacheWrite = rates["cache_write"];
+
+        return {
+          id: row.id,
+          provider: row.provider,
+          model: row.model,
+          input: Number(rates["input"]),
+          output: Number(rates["output"]),
+          ...(typeof cacheRead === "number" ? { cache_read: cacheRead } : {}),
+          ...(typeof cacheWrite === "number" ? { cache_write: cacheWrite } : {}),
+          revision: row.revision,
+          updated_at: row.updated_at,
+          updated_by: row.updated_by,
+        };
+      });
   }
 
   /** The assembled document with the revision of every entry (`EntryRevisions`). */
@@ -401,6 +516,104 @@ export class ConfigStore {
       else this.#upsertValue(table, channel, value, next, by);
 
       return { revision: value === null ? 0 : next };
+    });
+  }
+
+  /**
+   * Creates, replaces or deletes (`value: null`) one price override. It names the revision it is based on (0 to create);
+   * a second override for a provider and model that already has one is a `conflict`.
+   */
+  writePriceOverride(
+    change: PriceOverrideChange,
+    by: string,
+  ): WriteResult<{ readonly id: string; readonly revision: number }> {
+    const invalid = change.value === null ? undefined : priceRefusal(change.value);
+
+    if (invalid !== undefined) return refuse("invalid", invalid);
+
+    return this.#write((revision) => {
+      const existing =
+        change.id === undefined
+          ? undefined
+          : this.#sql
+              .exec<PriceSqlRow>(
+                `SELECT id, provider, model, value, revision, updated_at, updated_by FROM ${PRICE_OVERRIDES}
+                 WHERE id = ?`,
+                change.id,
+              )
+              .toArray()[0];
+
+      if (change.id !== undefined && existing === undefined)
+        throw new Refusal(
+          change.revision === 0
+            ? refuse("not_found", "price override not found")
+            : refuse("conflict", "the price override was deleted"),
+        );
+
+      if (existing === undefined && change.revision !== 0)
+        throw new Refusal(refuse("conflict", "a new price override is written at revision 0"));
+
+      if (existing !== undefined && existing.revision !== change.revision)
+        throw new Refusal(
+          refuse(
+            "conflict",
+            `price override is at revision ${existing.revision}, not ${change.revision}`,
+          ),
+        );
+
+      if (change.value === null) {
+        if (existing === undefined)
+          throw new Refusal(refuse("invalid", "there is no price override to delete"));
+        this.#sql.exec(`DELETE FROM ${PRICE_OVERRIDES} WHERE id = ?`, existing.id);
+
+        return { id: existing.id, revision: 0 };
+      }
+
+      const provider = change.value.provider.trim().toLowerCase();
+      const model = change.value.model.trim();
+
+      const taken = this.#sql
+        .exec<{ id: string }>(
+          `SELECT id FROM ${PRICE_OVERRIDES}
+           WHERE provider = ? COLLATE NOCASE AND model = ? COLLATE NOCASE AND id IS NOT ?`,
+          provider,
+          model,
+          existing?.id ?? null,
+        )
+        .toArray()[0];
+
+      if (taken !== undefined)
+        throw new Refusal(
+          refuse("conflict", `a price override for ${provider} ${model} exists: ${taken.id}`),
+        );
+
+      const id = existing?.id ?? freshEntryId("price");
+
+      const rates = {
+        input: change.value.input,
+        output: change.value.output,
+        ...(change.value.cache_read === undefined ? {} : { cache_read: change.value.cache_read }),
+        ...(change.value.cache_write === undefined
+          ? {}
+          : { cache_write: change.value.cache_write }),
+      };
+
+      this.#sql.exec(
+        `INSERT INTO ${PRICE_OVERRIDES} (id, provider, model, value, revision, updated_at, updated_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (id) DO UPDATE SET provider = excluded.provider, model = excluded.model,
+           value = excluded.value, revision = excluded.revision, updated_at = excluded.updated_at,
+           updated_by = excluded.updated_by`,
+        id,
+        provider,
+        model,
+        JSON.stringify(rates),
+        revision,
+        this.#now(),
+        by,
+      );
+
+      return { id, revision };
     });
   }
 

@@ -15,12 +15,15 @@ import { Clock, Context, Duration, Effect, Layer, Ref } from "effect";
 import { currentControlPlane, type WorkerEnv } from "../platform/env.ts";
 import { CurrentOrg, GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 import { ConfigStoreError } from "./errors.ts";
+import type { PriceOverride } from "../usage/pricing.ts";
 import type { Config } from "./schema.ts";
 import { decodeStoredConfig, withDeploymentSettings, type ConfigSnapshotWire } from "./store.ts";
 
 export interface ConfigSnapshot {
   readonly version: number;
   readonly config: Config;
+  /** The org's price overrides (ADR 0024); they move the version like any config write. */
+  readonly priceOverrides: ReadonlyArray<PriceOverride>;
 }
 
 /**
@@ -120,7 +123,12 @@ export const makeConfigReader = Effect.fnUntraced(function* (options: ConfigRead
         ),
       );
 
-      const snapshot: ConfigSnapshot = { version: wire.version, config };
+      const snapshot: ConfigSnapshot = {
+        version: wire.version,
+        config,
+        priceOverrides: wire.priceOverrides ?? [],
+      };
+
       yield* store(org, { snapshot, checkedAt: now });
 
       return snapshot;
@@ -155,7 +163,7 @@ export const makeConfigReader = Effect.fnUntraced(function* (options: ConfigRead
     const deployment = yield* own(GLOBAL_ORG);
     const config = withDeploymentSettings(snapshot.config, deployment.config);
 
-    return config === snapshot.config ? snapshot : { version: snapshot.version, config };
+    return config === snapshot.config ? snapshot : { ...snapshot, config };
   });
 
   return ConfigReader.of({

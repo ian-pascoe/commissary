@@ -67,6 +67,13 @@ export const resetOrgControlPlane = async (org: OrgId): Promise<void> => {
   const entries = await stub.listCredentials();
   await stub.removeCredentials(entries.map((entry) => entry.id));
   await stub.importConfig("", "test");
+
+  // An import leaves the price overrides alone.
+  for (const override of (await stub.priceOverrideEntries()).overrides)
+    await stub.writePriceOverride(
+      { id: override.id, revision: override.revision, value: null },
+      "test",
+    );
 };
 
 export interface Harness {
