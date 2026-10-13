@@ -4,6 +4,7 @@ import { env } from "cloudflare:workers";
 import { Context, Layer } from "effect";
 import { HttpRouter } from "effect/http";
 import { makeAccessLayer, makeWithAccess } from "../../src/access/layer.ts";
+import type { AccessPrincipal } from "../../src/access/principal.ts";
 import { orgAddressing } from "../../src/access/org-address.ts";
 import { RootRoutes } from "../../src/http/routes.ts";
 import { ManagementRoutes } from "../../src/management/routes.ts";
@@ -93,11 +94,19 @@ export interface Harness {
   readonly dispose: () => Promise<void>;
 }
 
-/** `org`: the org every request of the harness belongs to (the Worker resolves `global` for now). */
+/**
+ * `org`: the org every request of the harness belongs to (the Worker resolves `global` for now). `proxyRoutes`: stand-in
+ * proxy routes behind the same gate, for tests of what reaches them.
+ */
 export const makeHarness = (
   http: MockHandler = () => ({ status: 404 }),
   bindings: Partial<Env> = {},
   org: OrgId = GLOBAL_ORG,
+  proxyRoutes: Layer.Layer<
+    never,
+    never,
+    HttpRouter.HttpRouter | HttpRouter.Request<"Requires", AccessPrincipal>
+  > = Layer.empty,
 ): Harness => {
   const outbound = mockHttp(http);
   const access = makeAccessLayer(fakeJwksLayer(makeFakeJwks([key])));
@@ -107,7 +116,12 @@ export const makeHarness = (
   );
 
   const web = HttpRouter.toWebHandler(
-    Layer.mergeAll(RootRoutes, OAuthCallbackRoutes, access, makeWithAccess(access)(routes)),
+    Layer.mergeAll(
+      RootRoutes,
+      OAuthCallbackRoutes,
+      access,
+      makeWithAccess(access)(Layer.mergeAll(routes, proxyRoutes)),
+    ),
     { disableLogger: true, middleware: orgAddressing },
   );
 

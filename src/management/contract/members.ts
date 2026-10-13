@@ -104,19 +104,29 @@ export type UpdateServiceToken = typeof UpdateServiceToken.Type;
  * request (and admits unregistered service tokens as plain members without storing them). On for `global`, off for
  * new orgs. `private_credentials` lets plain members connect private credentials, and keeps the ones they connected
  * in use (ADR 0023): on for `global`, chosen when an org is created; turning it off disables the private credentials
- * without deleting them. Changing `auto_join` is for org owners, `private_credentials` for org admins.
+ * without deleting them. `access_clients` lets the proxy routes accept an Access sign-in (`Cf-Access-Jwt-Assertion` or
+ * `cf-access-token`) instead of a proxy key, for clients set up before proxy keys (`docs/MIGRATION.md`). An Access
+ * sign-in names no org, so it only ever reaches `global`: the setting exists there only (on by default), and other orgs
+ * take proxy keys alone. Changing `auto_join` and `access_clients` is for org owners, `private_credentials` for org
+ * admins.
  */
 export const MembershipSettings = Schema.Struct({
   auto_join: Schema.Boolean,
   private_credentials: Schema.Boolean,
+  /** `global` only. */
+  access_clients: Schema.optionalKey(Schema.Boolean),
 });
 
 export type MembershipSettings = typeof MembershipSettings.Type;
 
-/** `PATCH /membership`: the settings to change (at least one). */
+/**
+ * `PATCH /membership`: the settings to change (at least one). `access_clients` in an org other than `global` answers
+ * `422 access_clients_global_only`.
+ */
 export const UpdateMembershipSettings = Schema.Struct({
   auto_join: Schema.optionalKey(Schema.Boolean),
   private_credentials: Schema.optionalKey(Schema.Boolean),
+  access_clients: Schema.optionalKey(Schema.Boolean),
 });
 
 export type UpdateMembershipSettings = typeof UpdateMembershipSettings.Type;

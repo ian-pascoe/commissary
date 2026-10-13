@@ -5,7 +5,9 @@ import { Schema } from "effect";
 import { OrgSlug } from "../platform/org.ts";
 
 /**
- * Paths under these prefixes require a verified Access principal. `/v1` also covers `/v1beta*` and `/v1internal`;
+ * Paths under these prefixes require a caller: a proxy key or, where the org still accepts them, an Access sign-in on
+ * the proxy routes (`authenticate.ts`), an Access sign-in on `/v8/management`. `/v1` also covers `/v1beta*` and
+ * `/v1internal`;
  * `/chat/completions`, `/completions` and `/responses` are the unprefixed aliases of the `/v1` routes (not in Go, see
  * handlers/openai/routes.ts).
  */
@@ -40,6 +42,7 @@ export const PANEL_SECTIONS = [
   "usage",
   "settings",
   "members",
+  "proxy-keys",
   "assets",
 ] as const;
 

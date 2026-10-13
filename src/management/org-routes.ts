@@ -54,11 +54,11 @@ export const openableOrgs = (
     const { principal } = identity;
 
     const indexed =
-      principal.kind === "user"
-        ? yield* registry("orgsOfEmail", (stub) => stub.orgsOfEmail(principal.email))
-        : yield* registry("orgOfServiceToken", (stub) =>
+      principal.kind === "service"
+        ? yield* registry("orgOfServiceToken", (stub) =>
             stub.orgOfServiceToken(principal.commonName),
-          ).pipe(Effect.map((org) => (org === undefined ? [] : [org])));
+          ).pipe(Effect.map((org) => (org === undefined ? [] : [org])))
+        : yield* registry("orgsOfEmail", (stub) => stub.orgsOfEmail(principal.email));
 
     if (identity.role === undefined || indexed.some((org) => org.id === identity.org))
       return indexed;

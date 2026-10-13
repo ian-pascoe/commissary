@@ -34,7 +34,7 @@ export interface Actor {
  */
 export const holdsSensitivePowers = (identity: {
   readonly platformAdmin: boolean;
-  readonly principal: { readonly kind: "user" | "service" };
+  readonly principal: { readonly kind: "user" | "service" | "key" };
   readonly role?: OrgRole | undefined;
 }): boolean =>
   identity.platformAdmin || (identity.principal.kind === "service" && identity.role === "owner");

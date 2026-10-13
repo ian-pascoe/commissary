@@ -11,6 +11,7 @@ const SENSITIVE_HEADERS = new Set([
   "x-api-key",
   "x-goog-api-key",
   "cf-access-jwt-assertion",
+  "cf-access-token",
   "cf-access-client-id",
   "cf-access-client-secret",
 ]);

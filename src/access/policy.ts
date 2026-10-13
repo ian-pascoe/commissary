@@ -6,8 +6,9 @@
  *   (`/v8/management/orgs`, `/v8/management/orgs/<slug>`; their handlers ask for a platform admin), the panel's pages
  *   without an org (they redirect to an org of the caller or show the org chooser), its bundle files and the old
  *   panel's address.
- * - **member**: any role in the org: the proxy routes, the panel's pages of the org, and reading usage (a plain member
- *   sees only their own requests, `management/usage-routes.ts`).
+ * - **member**: any role in the org: the proxy routes, the panel's pages of the org, reading usage (a plain member
+ *   sees only their own requests, `management/usage-routes.ts`) and their own proxy keys
+ *   (`management/proxy-key-routes.ts`).
  * - **admin**: everything else of the management API. Some routes need more and say so in their handler: changing a
  *   role (org owner), downloading a credential or giving a service token a role above member (ADR 0006's rule per
  *   org, `members/roles.ts` `holdsSensitivePowers`).
@@ -67,6 +68,9 @@ const MEMBER_CREDENTIAL_ROUTES: ReadonlyArray<{
   { methods: ["POST"], path: `${API_KEYS}/probe` },
 ];
 
+/** A member's own proxy keys (`management/proxy-key-routes.ts`, which limits a plain member to their keys). */
+const PROXY_KEYS = `${MANAGEMENT_PREFIX}/proxy-keys`;
+
 const ME = `${MANAGEMENT_PREFIX}/me`;
 
 const ORGS = `${MANAGEMENT_PREFIX}/${ORGS_SEGMENT}`;
@@ -102,6 +106,7 @@ export const routeAccess = (
     if (isPanelPagePath(route)) return "platform";
   } else if (isPanelPagePath(route)) return "member";
 
+  if (route === PROXY_KEYS || route.startsWith(`${PROXY_KEYS}/`)) return "member";
   const reading = method === "GET" || method === "HEAD";
 
   if (reading && MEMBER_READS.includes(route)) return "member";

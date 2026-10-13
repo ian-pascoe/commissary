@@ -4,17 +4,30 @@ import { Context, Effect } from "effect";
 import type { OrgRole } from "../members/roles.ts";
 import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 
-/** The authenticated caller: an Access user (email) or an Access service token (client id). */
+/**
+ * The authenticated caller: an Access user (email), an Access service token (client id), or a proxy key a member
+ * presented on a proxy route (ADR 0022, `proxy-key.ts`; never on a management route).
+ */
 export type Principal =
   | { readonly kind: "user"; readonly email: string; readonly sub: string }
-  | { readonly kind: "service"; readonly commonName: string };
+  | { readonly kind: "service"; readonly commonName: string }
+  | {
+      readonly kind: "key";
+      readonly keyId: string;
+      /** The member the key belongs to, and their email at the time it was verified. */
+      readonly memberId: string;
+      readonly email: string;
+    };
 
 /** A verified principal plus the identifiers derived from it. */
 export interface AccessIdentity {
   readonly principal: Principal;
-  /** Stable text identity for usage records: `user:<lowercased email>` or `service:<common_name>`. */
+  /** Stable text identity for usage records: `user:<lowercased email>`, `service:<common_name>` or `key:<key id>`. */
   readonly principalId: string;
-  /** Irreversible namespace used to isolate session state between callers (`callerScope(principalId, org)`). */
+  /**
+   * Irreversible namespace used to isolate session state between callers (`callerScope(principalId, org)`). A proxy
+   * key takes its member's scope (`user:<email>`), so one member's tools share session state.
+   */
   readonly callerScope: string;
   /** The org the request is for: the org addressed by a management URL, otherwise the request's `CurrentOrg`. */
   readonly org: OrgId;
@@ -39,10 +52,20 @@ export class AccessPrincipal extends Context.Service<AccessPrincipal, AccessIden
   "cf-llm-proxy/access/AccessPrincipal",
 ) {}
 
-export const principalId = (principal: Principal): string =>
-  principal.kind === "user"
-    ? `user:${principal.email.toLowerCase()}`
-    : `service:${principal.commonName}`;
+export const principalId = (principal: Principal): string => {
+  switch (principal.kind) {
+    case "user":
+      return `user:${principal.email.toLowerCase()}`;
+    case "service":
+      return `service:${principal.commonName}`;
+    case "key":
+      return `key:${principal.keyId}`;
+  }
+};
+
+/** What the caller scope is derived from: the principal, or the member a proxy key belongs to. */
+const scopeSource = (principal: Principal): string =>
+  principal.kind === "key" ? `user:${principal.email.toLowerCase()}` : principalId(principal);
 
 const CALLER_SCOPE_PREFIX = "cli-proxy-api:caller-scope:v1\u0000";
 
@@ -84,7 +107,7 @@ export const makeIdentity = (
     return {
       principal,
       principalId: id,
-      callerScope: yield* callerScope(id, org),
+      callerScope: yield* callerScope(scopeSource(principal), org),
       org,
       platformAdmin,
       ...(role === undefined ? {} : { role }),
