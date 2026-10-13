@@ -369,12 +369,18 @@ _using a reset_.
 
 **Config entry**:
 One stored part of an org's configuration, such as a setting, key group, API key, model rule or payload rule. Each is
-created, changed and deleted on its own.
+created, changed and deleted on its own. A setting at its default is not stored.
 _Avoid_: config document, config row, record
 
 **Revision**:
-The counter of one config entry that each write to it must name. A write based on an older revision is refused.
-_Avoid_: version (on its own), config version
+The counter of one config entry that each write to it must name. A write based on an older revision is refused. An entry
+that is not stored is at revision 0.
+_Avoid_: version (for one entry)
+
+**Change counter**:
+The counter of an org's config writes, which moves on every write. The entries a write changes take its new value as their
+revision. Its value is the config version, which readers use to rebuild their cached view of the org's configuration.
+_Avoid_: revision (for the whole org)
 
 **Settings**:
 An org's typed options, edited on the Settings page.
@@ -383,6 +389,11 @@ _Avoid_: config, configuration (for settings alone)
 **Go config document**:
 The Go server's configuration file, which an org can import into config entries.
 _Avoid_: config file, config.yaml, config document
+
+**Config import**:
+Replacing every config entry of an org with a Go config document in one transaction. It names the not-applied keys and is the
+only write of the whole configuration.
+_Avoid_: restore, upload, sync
 
 **Layout**:
 The shape of a Go config document: the v8 layout or the legacy flat layout. Both can be imported.

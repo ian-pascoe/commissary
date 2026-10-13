@@ -12,7 +12,7 @@ the same world covers Accounts, API keys, Models, Usage, Settings. Visitor mode:
 
 Audience and job: the single operator (PRODUCT.md). Weekly: which account is closest to its limit, when it frees up,
 what failed, what the last day cost. Occasionally: connect or re-authorize an account. Rarely: keys, model rules,
-settings, raw config.
+settings.
 
 Scene: a desktop monitor in an ordinary lit room during the working day, between agent runs; a glance, not a session.
 Light ground follows from it.

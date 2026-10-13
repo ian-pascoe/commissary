@@ -152,7 +152,8 @@ plus `/openai/v1/videos` and `/backend-api/codex/{responses,responses/compact,al
 ## Configuration
 
 Deploy settings live in `.env` (template with comments: [`.env.example`](.env.example)). Runtime settings (routing,
-model aliases, payload rules, retries, …) are edited in the control panel's config editor and stored in the Worker.
+model aliases, retries, …) are edited in the control panel and stored in the Worker as config entries; a Go `config.yaml`
+(payload rules included) is imported with `POST /v8/management/settings/import` ([docs/MIGRATION.md](docs/MIGRATION.md)).
 
 | Variable                         | Default    | Purpose                                                                                                                            |
 | -------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |

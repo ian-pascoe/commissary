@@ -153,18 +153,36 @@ client -> Cloudflare Access -> Worker
 - **Config (`src/config/`)**: the canonical document is the v8 layout restricted to keys that apply on Workers
   (`schema.ts`, kebab-case keys as in YAML). `codec.ts` imports YAML/JSON (v8, legacy flat layout and historical v8
   spellings, see `document.ts`), validates, normalises (`normalize.ts`, port of the Go `Sanitize*` functions) and
-  exports YAML (defaults omitted). Added keys without a Go counterpart: `access.admin-emails` and
+  encodes it back to the v8 layout (`encodeConfig`, which config entries are made of). Added keys without a Go counterpart: `access.admin-emails` and
   `access.admin-service-tokens` (the management allow-list of `global`, merged with the `PLATFORM_ADMIN_*` variables, see Authentication).
   Keys that are accepted but have no effect on Workers are listed in `config/not-applied.ts` with a one-line reason (and
-  MIGRATION.md); storing a document that sets one logs a warning, and the Settings view lists them (names only). `requests.proxy-url` is accepted but
-  ignored. Unknown/inapplicable keys are dropped on import.
-- **Storage**: the `ControlPlane` DO (`src/credentials/control-plane.ts`) stores the canonical JSON in a SQLite table
-  with a monotonically increasing version. RPC: `getConfig(sinceVersion?)` (returns `unchanged: true` when the caller
-  is current) and `putConfig(yamlOrJson, expectedVersion?)` (validates; returns a structured result with `invalid` /
-  `conflict` instead of throwing). The Worker reads through `ConfigReader` (`src/config/reader.ts`): per-isolate
-  snapshot per org, 5 s TTL then a version check, stale-if-error. Each org's ControlPlane stores its own document;
-  deployment settings (`DEPLOYMENT_SETTINGS` in `config/store.ts`, today `models.catalog`) are accepted in the
-  `global` org's config only, and `ConfigReader` puts `global`'s value into every other org's snapshot.
+  MIGRATION.md); the import names them in its answer (`not_applied`) and stores none of them (ADR 0025), so the Settings
+  view carries no such list. `requests.proxy-url` is accepted but ignored. Unknown/inapplicable keys are dropped on import.
+- **Storage** (ADR 0025): the `ControlPlane` DO (`src/credentials/control-plane.ts`) keeps the org's configuration as
+  config entries in SQLite (`ConfigStore`, `src/config/store.ts`; the pure mapping between a `Config` and its rows is
+  `src/config/entries.ts`). Every setting (by dotted path, e.g. `routing.strategy`), every API key group, every API key
+  (its id is its credential id), every channel's model aliases, every channel's model exclusions and every payload rule
+  is a row of its own with a `revision`, `updated_at` and `updated_by`. One change counter per org (`config_changes`)
+  moves on every write and is the config `version`; each entry a write changes takes the counter's new value as its
+  revision. A missing entry has revision 0, and so has a setting at its default, which is not stored. Since the counter
+  never goes back, an entry deleted and created again never repeats a revision. A write names the revision of every entry
+  it changes and is refused (`conflict`) when one is stale, so writes to different entries never conflict; its rows are
+  applied and the assembled config decoded in one storage transaction, and a write that would leave an invalid config is
+  rolled back (`invalid`). RPC: `getConfig(sinceVersion?)` (the assembled config, `unchanged: true` when the caller is
+  current), `configEntries()` (that config with the revision of every entry, which the management routes edit),
+  `writeSettings`, `writeChannelRule`, `writeKeyGroup` and `importConfig(text, by)` (all return a structured result with
+  `invalid` / `conflict` instead of throwing). The ControlPlane assembles the config from the entries (`current()` /
+  `snapshot()`) and only re-assembles it when the counter moved. The Worker reads through `ConfigReader`
+  (`src/config/reader.ts`): per-isolate snapshot per org, 5 s TTL then a version check, stale-if-error, so readers still
+  rebuild their cached views when the version moves. Each org's ControlPlane stores its own entries; deployment settings
+  (`DEPLOYMENT_SETTINGS` in `config/store.ts`, today `models.catalog`) are accepted in the `global` org's config only, and
+  `ConfigReader` puts `global`'s value into every other org's snapshot.
+- **Config migration** (`ConfigStore`, a Durable Object SQLite schema migration; there is no D1 migration): a
+  ControlPlane that stored the config as one document (the former single `config` row, config-version 8) and has no
+  entries yet imports it on first start, in one transaction. The Config is the same, credential ids are the same (the Go
+  content hash of each key, so auth indexes do not change), the counter continues after the document's version (every
+  cached view rebuilds), the old row is kept, and the entries it writes have `updated_by = "migration"`. Not-applied keys
+  are dropped, as on import.
 - **Payload rules (`src/config/payload/`)**: `applyPayloadRules(config, request, payload)` is the single final barrier;
   it mutates `payload` in place (callers pass a freshly built body and a distinct `original`). The Codex tool-schema
   integer normalisation that Go performs inside the same function lives in `executor/helps/payload.ts` (`finalizePayload`: normalise
@@ -650,8 +668,8 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
   `reason` = first matching pattern, `rule_scope` channel/account/key), else read from the credential state like
   `projectModel` (`quota` / `cooling` with `until`, `unavailable`, `available`). `listed` and `providers` come from the
   index, so they equal `/v1/models`; a model whose only routes are cooling is unlisted but still shown. The body also carries
-  `oauth.model-alias`, `oauth.excluded-models`, `force_model_prefix`, per-channel account counts and `config_version` (the
-  `If-Match` value of rule edits, see _Config_ below). Contract: `contract/routing.ts`.
+  `oauth.model-alias`, `oauth.excluded-models`, `force_model_prefix`, per-channel account counts, `config_version` and `revisions` (the revision of each
+  channel's rules by channel, the `If-Match` value of rule edits, see _Config entries_ below). Contract: `contract/routing.ts`.
 - Fixtures: `go run ./tools/fixturegen/registry` drives the real Go handlers (`OpenAIModels`, `ClaudeModels`,
   `GeminiModels`, `GeminiGetHandler`, `WriteModelListResponse` detail mode) against a real `registry.ModelRegistry` and records
   bodies and registry queries (`test/fixtures/registry.json`).
@@ -878,54 +896,43 @@ Port of `internal/api/handlers/management` for the `/v8/management` routes that 
 control panel at `/` (`web/`, through `contract/`) and may change incompatibly: routes keep Go's response shapes where
 that is cheap, but scripts written for the Go server are not guaranteed to keep working. The upstream panel (`Cli-Proxy-API-Management-Center`) is not served:
 its address redirects to `/` (_Legacy panel address_ below), and the routes only it needed are gone (`requests/api-call`,
-the operational and log routes listed under _Also not ported_) or masked (`GET /config*`). Auth is the Access admin gate only (`access/routes.ts` classifies `/v8/management*`, the
+the operational and log routes listed under _Also not ported_) or replaced by the config entry routes (_Config entries_). Auth is the Access admin gate only (`access/routes.ts` classifies `/v8/management*`, the
 panel paths and `/management.html` as `management`); there is no management key.
 
-- **Config** (`config-routes.ts`, `config-document.ts`): `GET|PUT|PATCH /config`, `GET|PUT /config.yaml`,
-  `GET|PUT|PATCH|DELETE /config/*path`. `/config` serves the ControlPlane's canonical document (defaults included),
-  `/config.yaml` the sparse YAML export. Writes are read-modify-write over the JSON document with `putConfig(text,
-  expectedVersion)` (retried on a concurrent write, `409 conflict` after four attempts); the ControlPlane validates
-  (`422 invalid_config`). Paths address mapping keys, DELETE prunes emptied parents, PATCH deep-merges. `auth_index` is
-  stripped on write; unlike Go it is not injected on read (its consumer, the upstream panel's `api-call`, is gone). The
-  Go read-only Home revision paths and TURN secret handling do not exist in the Workers schema. Deviation from Go
-  (masked reads): `GET /config`, `/config/<path>` and `/config.yaml` mask every secret with `config-secrets.ts`
-  `maskDocument`, numbered over the whole document of the version exactly as `GET /settings/config` (`/config.yaml` is
-  that editor's YAML byte for byte; a subtree read keeps the whole document's numbers). Deviation from Go (writes
-  restore nothing): every write (`PUT /config`, `PUT /config.yaml`, path `PUT`/`PATCH`/`DELETE`) refuses a string
-  carrying a placeholder marker (`[redacted…`, `[new secret]`, any case; `maskedValueAt`) with
-  `422 masked_value {path, message}` pointing to `PUT /settings/config`, and stores nothing. The guard covers
-  non-secret fields too (there `422 masked_value_outside_secret_field`, the raw editor's code), because the raw editor
-  refuses markers outside secret positions (one stored there would block every later raw save); a marker the stored
-  document already holds at the same path passes (written before the guard). Paths are those of the v8 layout, also
-  for a legacy-layout `PUT /config.yaml` (reported where the import moves the value). Plain new secrets are stored as
-  sent, so a Go `config.yaml` import keeps working; the lossless round trip of a masked document is the raw editor's
-  (version-pinned restore). Deviation from Go (value-free errors): config errors never quote a value
-  (`config/codec.ts`: a YAML syntax error is a fixed sentence per `yaml` error code from `config/yaml-message.ts`,
-  never the library's text, plus `line`/`column`; an unresolvable alias `invalid YAML: unresolvable aliases`; a
-  schema error its expectation and `path`, formatted without `got <input>`; `disable-image-generation` without its
-  value). They name at most keys of the written document (the `path`, an unknown `api-keys` family or group field)
-  and are passed on unscrubbed: scrubbing stored secrets out of an echoed key would itself tell a right guess from a
-  wrong one. So a refused write reads the same whether a typed value, key or alias name equals a stored secret or
-  not. The same messages serve `/settings/config`. Workers addition (admin service tokens): every write refuses a
-  change of `access.admin-service-tokens` by an email admin who is one only through the config
-  (`403 service_tokens_require_service_admin`, `checkServiceTokenAdmins` in `settings.ts`; service-token administrators
-  and env admins may), compared as a set against the stored document so rewriting the same list is fine. Stored keys win
-  here too (`key-duplicates.ts`) for the path writes (`PUT|PATCH /config/*path`): the keys at, under or containing the
-  written path count as typed, the others are the stored ones the write carries over, and a typed key equal to a stored
-  one of another group is dropped before the normaliser's first-wins can evict the stored one (a `DELETE` puts no key in).
-  Only the whole-document writes (`PUT /config`, `PUT /config.yaml`) keep Go's first-wins: they replace the document,
-  so every key in them is typed and there is no stored key to tell apart.
-  Deviation from Go (paths):
-  segments `__proto__`, `constructor` and `prototype` are `400 invalid_path` (they would reach `Object.prototype`;
-  writes use own properties only and `mergePatch` skips a `__proto__` key), and the path is read from the URL as the
-  router matched it (`configPathOfUrl`: duplicate slashes, percent-encoding and case of the prefix). Deviation from Go
-  (optimistic concurrency for stale panels): GETs answer `ETag: "<version>"`; a write with `If-Match: "<version>"`
-  (also `W/"<v>"` or the bare number; `*` = none) is a single attempt against exactly that version (a changed config
-  answers `409 conflict` before the edit runs, nothing is stored; a malformed header `400 invalid_if_match`) and
-  applies to `PUT /config`, `PUT /config.yaml` and the path writes. Ok replies add `version` (the stored one) next to
-  `config-version: 8`. Without `If-Match` nothing changes. The Models page sends
-  `routing/models.config_version` this way (`contract/routing.ts`: `putAliases`, `deleteAliases`, `putExclusions`,
-  `deleteExclusions`), because it replaces whole per-channel lists.
+- **Config entries** (`settings-routes.ts`, `api-keys-routes.ts`, `model-rules-routes.ts`, contract `config.ts`): Go's
+  management API reads and edits the whole configuration as one document (`GET|PUT|PATCH /config`, `GET|PUT /config.yaml`,
+  `GET|PUT|PATCH|DELETE /config/*path`) and writes without a version. Dropping those routes is a deliberate difference
+  (ADR 0025, ADR 0019): the Workers port stores every setting, key group, API key, channel rule list and payload rule as a
+  config entry with a revision (_Storage_ above), and each route below edits its own kind of entry and names the revision
+  it read. A stale revision, or a group that vanished, answers `409 conflict` and stores nothing; a write of another
+  entry never conflicts. Answers carry the new change counter as `version` (`Saved`, `EntrySaved` in `contract/config.ts`).
+  - **Removed**: `GET|PUT|PATCH /config`, `GET|PUT /config.yaml`, `GET|PUT|PATCH|DELETE /config/*path`,
+    `GET /settings/config`, `POST /settings/config/check`, `PUT /settings/config` and
+    `PUT|DELETE /config/oauth/model-alias|excluded-models/:channel` answer `404` now (still behind the admin gate). With
+    them go the raw configuration editor and its masking and placeholder machinery (`config-secrets.ts`,
+    `settings-raw.ts`, `config-document.ts`): no route reads the whole document back, and no route reads a secret back
+    at all (the API keys page shows previews, the settings view carries no secret), so there is nothing to mask and
+    nothing to restore. The one whole-configuration write is the import (_Settings_ below).
+  - Config errors never quote a value (`config/codec.ts`: a YAML syntax error is a fixed sentence per `yaml` error code
+    from `config/yaml-message.ts`, never the library's text, plus `line`/`column`; an unresolvable alias
+    `invalid YAML: unresolvable aliases`; a schema error its expectation and `path`, formatted without `got <input>`;
+    `disable-image-generation` without its value). They name at most keys of the written document (the `path`, an unknown
+    `api-keys` family or group field) and are passed on unscrubbed: scrubbing stored secrets out of an echoed key would
+    itself tell a right guess from a wrong one. So a refused write reads the same whether a typed value, key or alias
+    name equals a stored secret or not.
+  - Admin service tokens (Workers addition): every write that can change `access.admin-service-tokens` (`PATCH /settings`
+    and `POST /settings/import`) refuses a change by an email admin who is one only through the config
+    (`403 service_tokens_require_service_admin`, `checkServiceTokenAdmins` in `settings.ts`; service-token administrators
+    and env admins may), compared as a set against the stored list so rewriting the same list is fine.
+  - Model rules (`model-rules-routes.ts`, contract `routing.ts`; Workers addition, Go's panel writes `oauth-model-alias` and
+    `oauth-excluded-models` through `/config` paths): `PUT|DELETE /model-rules/aliases/:channel` and
+    `/model-rules/exclusions/:channel` replace or remove one channel's whole list, which is one entry. The request names the
+    revision it was based on in `If-Match` (`12`, `"12"` or `W/"12"`; `0` for a channel without rules): a missing or
+    malformed header is `400 invalid_if_match`, a channel changed since `409 conflict`, a `DELETE` of a channel without
+    rules `404 not_found`, and a list of which the normaliser would keep nothing `422 invalid_config`. The channel is the
+    config's key, trimmed and lower-cased. The answer is `{status, version, revision}` with the channel's new revision (`0`
+    after a delete). `GET /routing/models` carries `revisions: {aliases: {channel: rev}, exclusions: {channel: rev}}` (read
+    first, so a write landing in between makes the edit answer `409` instead of overwriting a change the view did not show).
 - **Credentials** (`credentials-routes.ts`, `credential-entry.ts`, `credentials/field-patch.ts`): list (filters,
   pagination), upload (multipart or raw JSON + `?name=`), delete (`name`/`names`/`all`), download (the stored file,
   tokens included; deviation from Go: only a service-token admin may call it, an email admin gets
@@ -994,23 +1001,27 @@ panel paths and `/management.html` as `management`); there is no management key.
 - **API keys** (`api-keys-routes.ts`, `api-keys-view.ts`, `api-keys-write.ts`, `api-keys-probe.ts`, contract `api-keys.ts`):
   the control panel's keys page. Workers addition, no Go counterpart (Go's panel edits whole family arrays with raw keys).
   - `GET /api-keys`: every `api-keys` group (all families, compat endpoints included) with the config `version`, the
-    effective base URL and, per key, `auth_index`, a `[redacted]…abcd` preview, `disabled` (effective `excluded-models`
+    group's `id` and `revision` (its config entry, see _Config entries_), the effective base URL and, per key, `auth_index`, a `[redacted]…abcd` preview, `disabled` (effective `excluded-models`
     holds `*`) and the runtime of its credential (`auth_index`, counters, cooldowns, last error; not its id). Built in the ControlPlane
     (`apiKeysView`) from one snapshot of config and credential pool. **Secrets never leave**: keys are previews, every
     header value is masked (`[redacted]…`) except safe headers and pure client copies (`maskHeaders`), `proxy-url` and `experimental-cch-signing` (no effect
     on Workers) are left out and only reported as group `warnings`.
-  - `PUT /api-keys/groups` (`{version, family, index?, group}`: replace or append) and `DELETE /api-keys/groups`
-    (`{version, family, index}`): the Worker reads the stored config, answers `409 conflict` when `version` is stale,
-    applies the edit to the document, dry-runs it through the config decoder and stores it with
-    `putConfig(text, version)` **without retry** (the panel re-reads and the user decides). A key in a written group is
-    `auth_index` (keep the stored secret; same credential id) and/or `api-key` (new secret, new id); an unknown
-    `auth_index` is `409 unknown_auth_index`, a missing group `404 group not found`. Hidden settings and masked header
+  - `PUT /api-keys/groups` (`{family, id?, revision, group}`: replace the group `id` at `revision`, or add one after the
+    family's last, with no `id` and `revision` 0) and `DELETE /api-keys/groups` (`{family, id, revision}`): a group and its
+    keys are config entries (ADR 0025). The Worker reads the entries, answers `409 conflict` when the group changed since
+    `revision` or vanished (a write of another group never conflicts), applies the edit to the assembled document,
+    dry-runs it through the config decoder and writes the group alone (`writeKeyGroup`) **without retry** (the panel
+    re-reads and the user decides). The answer is `{status, version, id, revision}` (the group's new revision; `0` once
+    deleted). A key in a written group is `auth_index` (keep the stored secret) and/or `api-key` (new secret): a key is
+    an entry whose id is its credential id, so editing the secret of a key keeps its credential id and so its
+    `auth_index` (the old document model made it a new credential); an unknown `auth_index` is `409 unknown_auth_index`,
+    a missing group `404 group not found`. Hidden settings and masked header
     values are carried over from the stored entry, so a write is lossless. The config normaliser drops groups and keys
     silently (codex without `base-url`, empty keys, ...): the dry run compares the result with the request and answers
     `422` with the reason when the written group's own shape caused the loss. Duplicate keys are the exception and are
     dropped silently, as Go's `Sanitize*Keys` do (Go answers `200`; the Workers port used to answer `422 duplicate
     key`). Deviations from Go, deliberate: (1) a `422` for a typed key equal to a stored one would let an admin
-    confirm a guessed secret, so the reply (`{status, version}`, the version always advancing by one) is the same for a
+    confirm a guessed secret, so the reply (`{status, version, id, revision}`, the version always advancing) is the same for a
     right and a wrong guess: the reply does not confirm a guess, the next read does. (2) Stored keys win (Go keeps the
     first of a family's duplicates, which would let a typed key in an earlier group delete the stored key, or the
     whole group, of a later one): for the families Go deduplicates across groups (gemini, interactions, vertex;
@@ -1022,9 +1033,9 @@ panel paths and `/management.html` as `management`); there is no management key.
     collision found by trying a value would confirm a guess (an admin could try header values on a key kept by
     `auth_index`) and is dropped silently instead. A key kept by `auth_index` that the edit makes equal to a key of
     another group by its `prefix` alone is `422` (the other key differs only by a value the caller can read). `checkSurvival` asserts that every other group keeps its key count. A group
-    left without keys (a new group, or a replaced one, made only of copies) is dropped as any empty group, and the
-    reply is the same `{status, version}`. The stored document is already canonical (`ConfigStore.put`
-    round-trips it), so list positions are document positions.
+    left without keys (a new group, or a replaced one, made only of copies) is stored but not shown, as the list leaves
+    out a group without keys, and the reply is the same. The assembled document is canonical (the store decodes it on every
+    write), so list positions are document positions.
   - `POST /api-keys/probe {auth_index}`: one connection test, made by the **Worker** with the credential's own base URL
     and headers (the ControlPlane only hands over the target, `apiKeyProbeTarget`, like `quotaProbeTarget`): a model
     listing (gemini/interactions `/v1beta/models` paged, claude `/v1/models` with `x-api-key` on api.anthropic.com
@@ -1035,96 +1046,52 @@ panel paths and `/management.html` as `management`); there is no management key.
   - `PATCH /credentials/status` (`auth_index`; `name` addresses auth files only) on a config API key adds or removes `*` in its
     `excluded-models` (Go `toggleConfigAPIKeyExcludedAll`; answers `via: "config:excluded-models"`, `excluded_pattern: "*"`);
     the id and `auth_index` do not change. A compat key answers `409`: disable the endpoint (its group's `disabled`).
-  - `configKeyIds` (`config-document.ts`) maps config positions to credential ids through the synthesised credentials;
+  - `configKeyIds` (`credentials/key-ids.ts`) maps config positions to credential ids through the synthesised credentials;
     the ControlPlane and the keys page share it. `includeDisabledGroups` also addresses the keys of a disabled compat
     group (they have no credentials in the pool).
-- **Settings** (`settings-routes.ts`, `settings.ts`, contract `settings.ts`): the control panel's Settings page. Workers
-  addition, no Go counterpart (Go v8 edits `/config` paths without a version and normalises silently).
+- **Settings** (`settings-routes.ts`, `settings.ts`, contract `settings.ts`): the control panel's Settings page and the
+  config import. Workers addition, no Go counterpart (Go v8 edits `/config` paths without a version and normalises
+  silently). Every setting is a config entry of its own, by dotted path (_Storage_ above).
   - `GET /settings`: every Settings-owned value (`SETTINGS_TREE`: routing, retries/cooldowns, requests/streaming,
     upstream provider flags and header defaults, Codex client flags, refresh concurrency, OAuth provider settings,
     multimedia, model catalogs, config admin lists) in config spelling with defaults filled (unset Go pointers are
-    `null`), the `defaults`, the config `version` and `updated_at`, `env_admins` (`PLATFORM_ADMIN_*`), `payload` rule
-    counts per kind, `prefixed_credentials`, the read-only `request_scoped_errors` map and `not_applied` (key + reason
-    of each inert key that is set). **No secrets**: API keys, proxy URLs and client keys are never in the view.
-  - `PATCH /settings {version, patch}`: `patch` is a deep partial of the values; `null` removes the key from the
-    document (back to its default). The not-applied keys with a mapping path accept `null` only. Unknown paths answer
-    `400 not_a_setting`; invalid values `422 invalid_setting` with `message` and `path` (naming the value, e.g. `“EST” is not an IANA time zone`; type, then rules: Go
+    `null`), the `defaults`, the config `version` and `updated_at`, `revisions` (the revision of every stored setting by
+    dotted path; a setting at its default is not stored and is not listed, revision 0), `env_admins` (`PLATFORM_ADMIN_*`),
+    `payload` rule counts per kind, `prefixed_credentials` and the read-only `request_scoped_errors` map. There is no
+    `not_applied` list: not-applied keys are never stored, only the import names them. **No secrets**: API keys, proxy
+    URLs and client keys are never in the view.
+  - `PATCH /settings {revisions, patch}`: `patch` is a deep partial of the values; `null` resets a setting to its default
+    (its entry is deleted). `revisions` names the revision of each setting the patch changes (absent = 0): a setting
+    changed since answers `409 conflict` and nothing is stored, and writes to other settings never conflict. Unknown paths
+    and not-applied keys answer `400 not_a_setting`, like any path that is no setting; invalid values
+    `422 invalid_setting` with `message` and `path` (naming the value, e.g. `“EST” is not an IANA time zone`; type, then rules: Go
     durations > 0, non-negative counts, strategy literal, `gpt-` model prefix, catalog `""`/`embed`/`disabled`/http(s),
     IANA time zone or `Local`, email-shaped admin entries); then the edited document is dry-run through the config
     decoder and every written leaf must come back unchanged (a value the normaliser trims, lower-cases or clamps is
     refused with its path instead of "succeeding"). Only a service-token administrator or an env admin may change
     `access.admin-service-tokens`: an email admin who is one only through the config gets
-    `403 service_tokens_require_service_admin` (also on `PUT /settings/config` and `/config*`; a Workers addition: the
+    `403 service_tokens_require_service_admin` (also on `POST /settings/import`; a Workers addition: the
     credential download is for service tokens only, so an email admin must not be able to grant that right, see
     `docs/ACCESS.md`). A caller who is an admin only through `access.admin-*` cannot
-    remove themselves (`422 would_remove_your_admin_access`; deployment admins and the dev bypass can). Stored with
-    `putConfig(text, version)` without retry: a stale `version` is `409 conflict`. Ok: `{status: "ok", version}`.
+    remove themselves (`422 would_remove_your_admin_access`; platform admins and the dev bypass can). Ok:
+    `{status: "ok", version, revisions}`: the new revision of each changed setting (`0` for one reset to its default).
+  - `POST /settings/import` (body: YAML or JSON text, `application/yaml`, `text/yaml` or `application/json`, at most
+    512 KiB, `413 body_too_large` beyond; counted while it is read): the **only** write of the whole configuration. It
+    replaces **every** config entry of the org with a Go config document (v8 or legacy layout, as `config/codec.ts`
+    reads it) in one transaction, so what the document does not set goes back to its default and every key group,
+    key, rule list and payload rule it does not list is deleted. It answers `{status: "ok", version, not_applied}`:
+    the keys that have no effect on Workers, which are not stored (`config/not-applied.ts`; ADR 0015's round trip
+    through the stored document is replaced by this answer). The same admin guards as `PATCH /settings` apply
+    (`403 service_tokens_require_service_admin`; no self lock-out, `422 would_remove_your_admin_access`). Invalid YAML
+    is `422 invalid_config` with `message`, `line` and `column` (a fixed sentence per error code, never the source; YAML
+    parsed with the 1.2 core schema, custom tags, merge keys and a `%YAML 1.1` directive refused, anchors expanded); a
+    config that does not decode is `422 invalid_config` with `path` when known, and so is a document that sets a
+    deployment setting (`models.catalog`) in an org other than `global`. Because it replaces everything, every key in the
+    document is typed and there is no stored key to protect: Go's first-wins deduplication of keys applies inside the
+    imported document, and the reply cannot tell a typed key from a stored one (nothing stored is kept). The panel has no UI
+    for it yet: it is for `curl` and scripts (MIGRATION.md).
   - `ManagementError` decodes the optional `message` and `path` of an error body, so the panel can show the reason
-    and focus the field, and the `line`/`column` of a raw configuration that is not valid YAML.
-- **Raw configuration** (`settings-raw-routes.ts`, `settings-raw.ts`, `config-secrets.ts`, contract `settings.ts`): the
-  control panel's configuration editor. Workers addition (Go's `GET /config.yaml` serves the file with its secrets
-  and writes without a version). The panel never reads `GET /config*` (masked the same way, but their writes cannot
-  restore placeholders); these routes are its only view of the whole document and the one lossless round trip.
-  - `GET /settings/config`: `{version, yaml, secrets}`, the stored document as sparse YAML (`sparseDocument`, the
-    `/config.yaml` export without defaults) with every secret masked. Secret positions (`config-secrets.ts`, pure):
-    `access.api-keys` entries; every `api-keys` key; every group, key and payload-rule header value except pure client
-    copies (`$Header`, `$CPA-SESSION-ID`; a template such as `$CPA-SESSION-ID:sk-…` is masked) and the allow-list of
-    protocol/client headers (`User-Agent`, `Accept`, `Content-Type`, `Anthropic-Version`/`-Beta`, `OpenAI-Beta`,
-    `HTTP-Referer`, `X-Title`, ...), names compared trimmed and lower-cased as the normaliser stores them: the rules
-    the Keys and Account pages share (`contract/headers.ts`); strings under payload `params` whose path's last part or inner key
-    looks secret (key, token, secret, sig, auth, pass, pwd, cred, session), and the whole JSON text of a `*-raw`
-    parameter when a key anywhere inside it looks secret by that rule (`{"api_key": "sk-…"}`: one secret); and
-    in URLs (`requests.proxy-url`, model catalogs, group and key `base-url`/`proxy-url`) the user info and the values
-    of secret-looking query and fragment parameters. A whole value becomes `[redacted#n]…abcd` (last four characters
-    only when the value is longer than eight), a URL part `[redacted#n]` without tail; `n` is 1-based in document
-    order.
-  - `POST /settings/config/check` and `PUT /settings/config` take `{version, yaml}`. The body is counted while it is
-    read (chunked too) and refused past 512 KiB (`413 body_too_large`). A stale `version` is `409 conflict` before
-    parsing (placeholders are bound to the version they were read at). The YAML is parsed with the 1.2 core schema
-    without the YAML 1.1 tags it would still resolve (`resolveKnownTags: false`); custom tags (`!!binary`,
-    `!!timestamp`, `!!set`, `!!omap`, `!!pairs`, `!!merge`, ...), merge keys (`<<`) and a `%YAML 1.1` directive are
-    `422 invalid_yaml` with `message`, `line`, `column` (a fixed sentence per error code, never the source); anchors are
-    expanded. Placeholders are restored by
-    index from the stored document when they sit at a secret position (whatever group they moved to); a placeholder
-    or marker elsewhere, or a stored `$…` secret placed in a header, is `422 masked_value_outside_secret_field`, an
-    index the version does not have `422 unknown_secret_reference`, a malformed one `422 invalid_secret_placeholder`,
-    each with its `path`; plain text at a secret position is a new secret. The result is decoded like a stored
-    document (`422 invalid_config` with `path` when known; value-free messages, not scrubbed, see `/config`).
-    Then the guards of `PATCH /settings` apply (users and service tokens): `403 service_tokens_require_service_admin`
-    when a config-only email admin changes `access.admin-service-tokens`, then the admin lock-out check. Stored
-    keys win here too: a typed `api-key` (not behind a `[redacted#n]` placeholder) equal to a kept key of another
-    group or of its own group is dropped before the document is stored (`keepStoredKeys`), never the stored one; the
-    review does not show it (typed values are never compared with stored ones) and the reply is the same.
-  - The review is computed from a second decode where unguessable per-request tags stand for the restored secrets
-    (keeping what the normaliser decides on: a JSON secret is stood in for by a JSON string, or by
-    `{"secret": <tag>}` when it names a secret-looking key so a `*-raw` parameter stays masked, so `*-raw` payload rules
-    survive alike, and a `dca:` prefix, so Meta drops the same keys), so kept and new secrets (and `dropped`) are told
-    apart by origin, never by comparing values: typing a guess of a stored secret answers the same whether it is right
-    or not. Fail-safe on that decode: a tag the masking would still show (a normaliser rename or move took a restored
-    secret out of a secret position) is `422 masked_value_outside_secret_field` with its path; it never compares real
-    values, so it is no guessing oracle either. `check` stores nothing and answers the masked
-    canonical result (`[new secret]…abcd` for new ones), `dropped` (input paths not stored as written: unknown or
-    legacy keys, entries the normaliser removes or rewrites), `not_applied`, the kept/new secret counts and
-    `moved_secrets`: each kept secret now sent elsewhere than where it was stored (another family, or for
-    `api-keys` keys and headers another key or group `base-url`, for URL credentials another URL; URLs compared without
-    their secrets, path included, host case and a trailing `/` aside: a shared gateway host serves many accounts), as
-    `{path, placeholder, from, to}`: its `[redacted#n]…abcd` and the family (or config section) and upstream host
-    before and after. Only the host (lower-cased, port kept) is named: it is who receives the secret, while user info,
-    path and query can carry secrets or account ids of their own. `PUT` stores with `putConfig(text, version)` and answers `{status: "ok", version, dropped, not_applied,
-    moved_secrets}`; a document whose canonical form equals the stored one and in which no secret was typed is not
-    written and keeps its `version` (`RawEdit.unchanged`: the tagged decode equals the decode of the untouched editor
-    text, so typed text is never compared with stored secrets; a typed secret always writes and advances the `version`,
-    even when it equals a stored one or is dropped as a copy of it).
-  - Limitations: only the canonical document is stored, so comments, key order and anchors in the edited text are
-    not kept, and a secret is never shown back once stored. Moving a kept secret to another host is allowed (an admin
-    may re-point an upstream); the panel's review names each moved secret by placeholder with both hosts, marks its line
-    and asks for a confirmation before Save. Saving a typed copy of a stored secret
-    next to it drops the typed copy (the stored one is kept, `keepStoredKeys`) without the review showing it (the
-    review never compares typed values with stored ones); the next read shows it. Two kept keys with the same stored value whose identities an edit
-    makes equal (e.g. Gemini groups that differ only by `prefix`) are deduplicated too: the review decodes once more
-    with one stand-in per shared value and lists the removed entry in `dropped`. A restored URL secret must stay
-    exactly in the masked part of the URL both as written and as stored (trimmed), unless the field keeps its stored
-    text.
+    and focus the field.
 - **Also not ported** (only the upstream panel called these; all answer `404`): `server/latest-version`
   (GitHub release lookup), the file-log routes (`GET|DELETE /observability/logs`, `/observability/logs/errors/*`,
   `/observability/logs/requests/*`; Workers have no log files), `routing/model-definitions/:channel` (static catalogs;
@@ -1170,8 +1137,9 @@ panel paths and `/management.html` as `management`); there is no management key.
   its own section, keys by their last characters with state, recent requests, a connection test, clear cooldowns and
   enable/disable; `/keys/$family/$index` and `/keys/new?family=` edit or add one group: endpoint, keys typed in once,
   models with discovery through the probe, exclusions, delete; reads `GET /api-keys` and writes one group with
-  `PUT /api-keys/groups` carrying the list's `version`, existing keys by `auth_index`, everything the form does not
-  show kept as stored; a `409` offers a reload); Models (`/models`: every model clients can call, plus the hidden ones
+  `PUT /api-keys/groups` carrying the group's `id` and `revision`, existing keys by `auth_index`, everything the form
+  does not show kept as stored; delete sends `id` and `revision` too; a `409` shows a Reload button and no automatic
+  refetch, so the draft stays); Models (`/models`: every model clients can call, plus the hidden ones
   no account serves now, ordered by standing, filters All / Needs attention / Hidden, search over names, aliases and
   accounts, each model's routes with their account or key, upstream name, alias or exclusion and the rule's channel,
   cooldowns with clear; a catalog line under the title ("Catalog refreshed 2 h ago · from models.dev", "shipped copy" while
@@ -1179,36 +1147,22 @@ panel paths and `/management.html` as `management`); there is no management key.
   (models added/removed, already up to date, the failure reason, "already running"); the button is off, with the reason, while
   the source is Embedded copy or Off; `/models/rules` edits the channel rules `oauth-model-alias` and `oauth-excluded-models`, one
   section per channel with a live count of the models a pattern matches; reads `GET /routing/models` and writes one
-  channel's list with `PUT`/`DELETE /config/oauth/model-alias|excluded-models/:channel` carrying the view's
-  `config_version` as `If-Match`; on `409` the edit is re-applied once to a fresh read, and a second refusal or a
+  channel's list with `PUT`/`DELETE /model-rules/aliases|exclusions/:channel` carrying the channel's revision from the
+  view's `revisions` as `If-Match`; on `409` the edit is planned again once on a fresh read, and a second refusal or a
   changed entry offers a reload); Settings (`/settings`: the settings that apply on Workers in sections, Routing,
   Retries & cooldowns, Requests & streaming, Payload rules, Images & video, Providers, Model catalog (one source field), Admin access,
-  Account refresh, and Not applied on Workers when the configuration sets keys that do nothing here (each removable); one
+  Account refresh; one
   form per section whose draft is a delta of the touched fields (`web/src/lib/settings.ts`), saved with
-  `PATCH /settings` carrying the view's `version` and only the changed leaves (`null` back to the default); inputs
+  `PATCH /settings` carrying the `revisions` of the changed settings and only the changed leaves (`null` back to the default); inputs
   are checked and normalised as the server would (trimmed, admin emails lower-case) before sending; after a save the
   view refetches and the other sections' drafts rebase onto it, listing a changed field that moved on the server; on
-  `409` the delta is re-applied once to a fresh read, and a `422` lands under the field its `path` names (the message
+  `409` the panel re-reads and re-applies the delta once, stopping with the list of fields that moved when it still does not
+  apply, and a `422` lands under the field its `path` names (the message
   names the bad value; the hint says what is expected); other save outcomes show in the section's sticky save bar; the
   jump list counts each section's unsaved changes and leaving the page with any asks first (`useBlocker`); payload
-  rules and account error rules are read-only there, each linking its key in the raw configuration); Raw configuration
-  (`/settings/config`, linked from the Settings head: the whole configuration as masked YAML from
-  `GET /settings/config`, the escape hatch for what has no typed home (payload rules, account error rules,
-  `oauth.settings`), with a list of where each concept lives. A lazy route, its own chunk with CodeMirror 6 and `yaml`:
-  YAML highlighting, line numbers, search, history, bracket matching, no Tab capture, live YAML syntax diagnostics
-  (`web/src/lib/raw-config.ts` parses as the server does), secret placeholders marked and atomic. The editor runs in a
-  shadow root: CodeMirror's `style-mod` writes a `<style>` element into a document, which the panel's
-  `style-src 'self'` refuses, but a constructed stylesheet (`adoptedStyleSheets`) into a shadow root, so the CSP stays
-  as it is; its theme uses the semantic colour tokens, which inherit into the shadow tree. Review changes posts
-  `POST /settings/config/check` and shows the line diff (Myers, unchanged runs folded) from the stored text to the
-  canonical result, what would not be kept, what has no effect on Workers, secrets kept and new, and secrets now sent to
-  another provider or host (each by placeholder with both hosts, its diff line marked), which Save requires confirming; Save is `PUT /settings/config` with the read's `version`
-  and refetches every view that reads the configuration. A `422` marks the line and column (`invalid_yaml`) or the key
-  its `path` names in the editor and moves the cursor there, the message led by a "Line n" button that goes back to it; a `409` (or a newer read while editing) offers Reload or
-  Copy my draft and never merges, since placeholders are bound to the version they were read at, and Reload and a save
-  start the editor over without undo history for the same reason. `#<dotted.path>` in the address (the Settings rule
-  notes, the Keys form's kept-settings notice at `#api-keys.<family>.<index>`) puts the cursor on that key (its line tinted until the next edit or click), or
-  its deepest present ancestor with a note when the key is at its default. Leaving with a draft asks first). The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
+  rules and account error rules are read-only there ("Set … by importing a config document."; the import has no panel
+  UI yet, see _Config entries_). There is no raw configuration editor (removed with its CodeMirror dependencies, ADR 0025).
+  The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
   address (`?range=&by=&model=&provider=&account=&user=&failed=`, decoded per parameter by `web/src/lib/usage.ts`
   `readUsageSearch`, a malformed one dropped), reads `GET /observability/usage/summary`, `/series` (provider series
   summed in the browser; no principal filter, so no chart while a user filter is set) and `/records` (pages of 50
@@ -1225,17 +1179,17 @@ panel paths and `/management.html` as `management`); there is no management key.
   `cache-control: no-store`. It stays in the management zone (`access/routes.ts` `LEGACY_PANEL_PATH`): `401`
   unauthenticated, `403` for non-admins, no CORS. The browser keeps the old `#/auth-files`-style fragment over the
   redirect, and the panel maps it on boot to the page that replaced it (`web/src/lib/legacy-hash.ts`: auth files and
-  quota → `/accounts`, OAuth → `/accounts/connect`, providers → `/keys`, OAuth rule editors → `/models/rules`, config →
-  `/settings/config`, system → `/settings`, the rest → `/`).
+  quota → `/accounts`, OAuth → `/accounts/connect`, providers → `/keys`, OAuth rule editors → `/models/rules`, config and
+  system → `/settings`, the rest → `/`).
 - Deviations from Go: `/` serves the control panel (admins only) instead of the public JSON banner; cooldown `reason`s are
   limited to the quota reason / last error code; `GET /credentials` always returns JSON timestamps as RFC 3339 strings;
   `POST /credentials/quota`, `POST /credentials/quota/all`, `POST /credentials/batch` and the entries' `quota_report`
   are Workers additions (see _Quota check_), as are `/credentials/reset-grants` and the entries' `reset_grants` (see
-  _Claude reset grants_). The API keys
-  and Settings routes, including the raw configuration editor, are Workers additions (secrets never in their
-  responses, masked as `[redacted#n]` placeholders restored on save; versioned writes; values the normaliser would
-  rewrite refused with `422` instead of silently changed); `GET /config*` are masked the same way and refuse
-  placeholders on write (_Config_ above). Config API keys can be toggled
+  _Claude reset grants_). The API keys,
+  Settings (with the import) and model rule routes are Workers additions (secrets never in their responses and never read
+  back; every write names the revision of the entry it changes and a stale one is `409`; values the normaliser would
+  rewrite refused with `422` instead of silently changed). Go's whole-document `/config*` routes are not ported
+  (_Config entries_ above). Config API keys can be toggled
   (Go answers the same through `excluded-models`); compat keys cannot, only their endpoint.
 
 ## Quota check (`src/quota/`, `src/management/quota-routes.ts`)
@@ -1786,7 +1740,7 @@ management API and the panel (the proxy endpoints still name it with the caller'
   router middleware around the whole application: it takes the org prefix out of the URL before routing, so every
   management handler and the panel page handler are written once, for an unscoped path, and run against the org the address
   names (the `CurrentOrg` they read). The unscoped path means `global`. Matching is case-, slash- and
-  percent-encoding-insensitive like the rest of the classification (`/V8/Management//Orgs/Acme/config`), and
+  percent-encoding-insensitive like the rest of the classification (`/V8/Management//Orgs/Acme/settings`), and
   `/v8/management/orgs` and `/v8/management/orgs/<slug>` (no route after the slug) are not prefixes: they are the
   platform-level routes below. The CSRF guards and the admin gate see the original URL, so every rule that applies to
   `/v8/management*` and to the panel pages applies to the scoped spellings too.
@@ -1839,7 +1793,7 @@ unaffected.
   `cross-site`/`same-site` or `Origin` is another host; management requests of any method with a foreign `Origin` (or a
   cross-site `Sec-Fetch-Site`, unless a `GET`/`HEAD` with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document` to a
   panel page or `/management.html`: `routes.ts` `isPanelPagePath`; frames, `/assets` and `/v8/management*` never) too; WebSocket upgrades with a foreign `Origin`; management writes need
-  JSON (multipart for `POST /credentials`, YAML for `PUT /config.yaml`) or no body (415). The CORS middleware adds no headers in
+  JSON (multipart for `POST /credentials`, YAML for `POST /settings/import`) or no body (415). The CORS middleware adds no headers in
   the management zone (deviation from Go's `*`).
 - Implementation notes (`src/access/`): the gate is a _global_ router middleware that matches protected path
   prefixes (default-deny for `/v1*`, `/openai/v1*`, `/backend-api/codex*`, the unprefixed `/chat/completions`,

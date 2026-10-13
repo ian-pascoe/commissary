@@ -9,8 +9,7 @@ web
 ## Stack
 
 Control panel: React 19 + Vite with Effect Atom (`effect/reactivity`, `@effect/atom-react`) for state and data, a typed
-client derived from an Effect `HttpApi` contract shared with the Worker, TanStack Router, accessible headless primitives,
-CodeMirror for raw config. Served by the Worker's static assets at `/`, behind the Cloudflare Access admin gate. The rest
+client derived from an Effect `HttpApi` contract shared with the Worker, TanStack Router, accessible headless primitives. Served by the Worker's static assets at `/`, behind the Cloudflare Access admin gate. The rest
 of the project is TypeScript + Effect v4 on Cloudflare Workers, deployed with Alchemy.
 
 ## Users
@@ -39,7 +38,7 @@ compatibility is not a goal.
 - Weekly: check health, account quota and usage.
 - Occasionally: connect a new account or re-authorize one (device-code, pasted-callback, Vertex service-account import,
   credential JSON upload).
-- Rarely: edit provider API keys, model aliases/exclusions, routing and other settings, or the raw config.
+- Rarely: edit provider API keys, model aliases/exclusions, routing and other settings.
 - Every pull request gets a preview deployment on workers.dev with empty storage; production is
   https://proxy.ianpascoe.dev.
 
