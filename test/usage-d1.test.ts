@@ -1,6 +1,6 @@
 // D1 persistence of usage records: schema, sink (ctx.waitUntil), export queue, listing, summary and retention.
 import { env } from "cloudflare:workers";
-import { Effect, Logger, References } from "effect";
+import { Effect, Layer, Logger, References } from "effect";
 import { TestClock } from "effect/testing";
 import { beforeEach, describe, expect, it } from "vitest";
 import { WorkerEnv, WorkerExecutionContext } from "../src/platform/env.ts";
@@ -18,6 +18,7 @@ import {
   unpricedModels,
 } from "../src/usage/d1.ts";
 import { D1UsageSink } from "../src/usage/d1-sink.ts";
+import { UsagePricing } from "../src/usage/pricing-service.ts";
 import { ensureTokenBreakdown } from "../src/usage/accounting.ts";
 import { parseClaudeUsage } from "../src/usage/parsers.ts";
 import { pruneExpiredUsage, retentionDays } from "../src/usage/retention.ts";
@@ -29,6 +30,9 @@ import sessionsMigration from "../migrations/0002_usage_sessions.sql?raw";
 import orgMigration from "../migrations/0003_usage_org.sql?raw";
 import costMigration from "../migrations/0004_usage_cost.sql?raw";
 import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
+
+/** The D1 sink without pricing: records are stored as they are published. */
+const sink = D1UsageSink.pipe(Layer.provide(UsagePricing.none));
 
 let db: D1Database;
 
@@ -184,7 +188,7 @@ describe("D1 usage sink", () => {
       const sink = yield* UsageSink;
       yield* sink.publish(record);
     }).pipe(
-      Effect.provide(D1UsageSink),
+      Effect.provide(sink),
       Effect.provideService(WorkerEnv, env),
       Effect.provideService(WorkerExecutionContext, ctx),
       Effect.runPromise,
@@ -269,7 +273,7 @@ describe("D1 usage sink", () => {
       Effect.gen(function* () {
         yield* (yield* UsageSink).publish(record);
       }).pipe(
-        Effect.provide(D1UsageSink),
+        Effect.provide(sink),
         Effect.provide(capture),
         Effect.provideService(WorkerEnv, bindings),
         Effect.provideService(WorkerExecutionContext, ctx),
@@ -298,7 +302,7 @@ describe("D1 usage sink", () => {
     await Effect.gen(function* () {
       yield* (yield* UsageSink).publish(sampleRecord());
     }).pipe(
-      Effect.provide(D1UsageSink),
+      Effect.provide(sink),
       Effect.provideService(WorkerEnv, env),
       Effect.provideService(WorkerExecutionContext, ctx),
       Effect.runPromise,
