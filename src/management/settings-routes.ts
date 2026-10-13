@@ -23,6 +23,7 @@ import { decodeStoredConfig } from "../config/store.ts";
 import { isJsonObject, type JsonObject } from "../json/index.ts";
 import { Revisions } from "./contract/config.ts";
 import { boundedBodyText, bodyJson, controlPlane, handled, jsonReply, replyError } from "./http.ts";
+import { currentViewer } from "./viewer.ts";
 import {
   applySettingsPatch,
   checkSurvival,
@@ -70,7 +71,8 @@ export const storedConfig = Effect.gen(function* () {
 
 const view = Effect.gen(function* () {
   const current = yield* storedConfig;
-  const sources = yield* controlPlane("listModelSources", (stub) => stub.listModelSources());
+  const viewer = yield* currentViewer;
+  const sources = yield* controlPlane("listModelSources", (stub) => stub.listModelSources(viewer));
 
   return jsonReply(
     200,
@@ -79,7 +81,9 @@ const view = Effect.gen(function* () {
       version: current.version,
       revisions: current.revisions.settings,
       updatedAt: current.updatedAt,
-      prefixedCredentials: sources.filter((source) => (source.prefix ?? "").trim() !== "").length,
+      prefixedCredentials: sources.filter(
+        (source) => source.owner === undefined && (source.prefix ?? "").trim() !== "",
+      ).length,
     }),
   );
 });

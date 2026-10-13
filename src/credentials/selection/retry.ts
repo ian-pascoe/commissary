@@ -17,6 +17,7 @@ import {
   type CredentialState,
   executorKey,
 } from "../model.ts";
+import { servesMember } from "../ownership.ts";
 import { availabilityBlock, isBlockedForModel } from "./availability.ts";
 import { canonicalModelKey } from "./model-name.ts";
 import { type ModelRoute, resolveModelRoute, type RoutingContext } from "./routing.ts";
@@ -41,6 +42,8 @@ export const RetryQuery = Schema.Struct({
   /** `routing.retry.max-retry-interval` in milliseconds; non-positive never waits. */
   maxWaitMs: Schema.Number,
   pinnedAuthId: optional(Schema.String),
+  /** The member the request is for: private credentials of others do not keep a retry alive. */
+  memberId: optional(Schema.String),
   requireAuthKind: optional(AuthKind),
   disallowFreeCodex: optional(Schema.Boolean),
 });
@@ -214,6 +217,8 @@ export const planRetry = (input: RetryPlanInput): RetryPlan => {
 
   for (const { credential, state } of input.credentials) {
     if (credential.disabled || state.status === "disabled") continue;
+
+    if (!servesMember(credential, query.memberId)) continue;
 
     if (pinned !== "" && credential.id !== pinned) continue;
 

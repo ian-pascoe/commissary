@@ -44,6 +44,7 @@ import {
   unpricedModels,
 } from "../usage/d1.ts";
 import { controlPlane, handled, jsonReply, queryParams, replyError } from "./http.ts";
+import { viewerOf } from "./viewer.ts";
 
 const BASE = "/v8/management/observability/usage";
 
@@ -176,6 +177,9 @@ const parseFilter = (params: URLSearchParams) =>
     // A plain member reads only their own records, whatever they asked for.
     const identity = yield* AccessPrincipal;
 
+    // Records served by a private credential are read by its owner alone, an org admin included.
+    if (identity.memberId !== undefined) filter.privateOf = identity.memberId;
+
     if (!identity.platformAdmin && identity.role === "member")
       filter.own = { memberId: identity.memberId, principalId: identity.principalId };
 
@@ -184,7 +188,7 @@ const parseFilter = (params: URLSearchParams) =>
 
       // A live credential narrows D1 to its id directly; only other indexes read the distinct ids (`resolveAuthIds`).
       const live = yield* controlPlane("credentialIdOfAuthIndex", (stub) =>
-        stub.credentialIdOfAuthIndex(authIndex.toLowerCase()),
+        stub.credentialIdOfAuthIndex(authIndex.toLowerCase(), viewerOf(identity)),
       );
 
       if (live !== undefined) filter.liveAuthId = live;
@@ -377,6 +381,7 @@ const usageSeries = Effect.gen(function* () {
         ...(filter.liveAuthId === undefined ? {} : { liveAuthId: filter.liveAuthId }),
         ...(filter.memberIds === undefined ? {} : { memberIds: filter.memberIds }),
         ...(filter.own === undefined ? {} : { own: filter.own }),
+        ...(filter.privateOf === undefined ? {} : { privateOf: filter.privateOf }),
       },
       authIndexOf,
     ),

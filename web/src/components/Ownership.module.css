@@ -1,0 +1,11 @@
+.ownership {
+  max-width: 44rem;
+  color: var(--quiet);
+}
+
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text);
+}

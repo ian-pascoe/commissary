@@ -102,11 +102,24 @@ export type UpdateServiceToken = typeof UpdateServiceToken.Type;
 /**
  * `GET|PATCH /membership`: `auto_join` lets every person Access admits join the org as a plain member on their first
  * request (and admits unregistered service tokens as plain members without storing them). On for `global`, off for
- * new orgs.
+ * new orgs. `private_credentials` lets plain members connect private credentials, and keeps the ones they connected
+ * in use (ADR 0023): on for `global`, chosen when an org is created; turning it off disables the private credentials
+ * without deleting them. Changing `auto_join` is for org owners, `private_credentials` for org admins.
  */
-export const MembershipSettings = Schema.Struct({ auto_join: Schema.Boolean });
+export const MembershipSettings = Schema.Struct({
+  auto_join: Schema.Boolean,
+  private_credentials: Schema.Boolean,
+});
 
 export type MembershipSettings = typeof MembershipSettings.Type;
+
+/** `PATCH /membership`: the settings to change (at least one). */
+export const UpdateMembershipSettings = Schema.Struct({
+  auto_join: Schema.optionalKey(Schema.Boolean),
+  private_credentials: Schema.optionalKey(Schema.Boolean),
+});
+
+export type UpdateMembershipSettings = typeof UpdateMembershipSettings.Type;
 
 const idParam = { params: { id: Schema.String } };
 
@@ -143,7 +156,7 @@ export class MembersGroup extends HttpApiGroup.make("members")
       error: managementErrors,
     }),
     HttpApiEndpoint.patch("updateSettings", "/membership", {
-      payload: MembershipSettings,
+      payload: UpdateMembershipSettings,
       success: MembershipSettings,
       error: managementErrors,
     }),

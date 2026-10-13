@@ -70,6 +70,8 @@ export class OAuthGroup extends HttpApiGroup.make("oauth").add(
     query: {
       provider: OAuthProvider,
       flow: optional(Schema.Literal("device")),
+      /** The login connects the caller's private account (ADR 0023); a plain member's always does. */
+      private: optional(Schema.Literal("true")),
     },
     success: OAuthStart,
     error: managementErrors,

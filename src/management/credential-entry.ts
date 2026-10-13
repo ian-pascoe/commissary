@@ -245,6 +245,38 @@ export const buildConfigCredentialEntry = (
   return entry;
 };
 
+/** The ownership fields of a private credential's entry: who owns it. */
+export const ownerFields = (owner: string, email: string | undefined): JsonObject => ({
+  private: true,
+  owner: { member_id: owner, ...(email === undefined ? {} : { email }) },
+});
+
+/**
+ * What an org admin sees of another member's private credential (ADR 0023): that it exists, its provider, owner and
+ * label, and whether it is disabled (they may disable or remove it). Nothing of its use, models, standing or quota.
+ */
+export const buildLimitedEntry = (
+  credential: Credential,
+  ownerEmail: string | undefined,
+  authIndex: AuthIndexer,
+): JsonObject => {
+  const index = authIndex(credential.id);
+  const name = credential.source === "config" ? index : credential.id;
+
+  return {
+    id: name,
+    auth_index: index,
+    name,
+    type: credential.provider,
+    provider: credential.provider,
+    label: credential.label,
+    source: credential.source,
+    disabled: credential.disabled || credential.excludedModels.some(isDisablingPattern),
+    limited: true,
+    ...ownerFields(credential.owner ?? "", ownerEmail),
+  };
+};
+
 /**
  * Builds the panel entry of an auth-file credential. `now` is epoch milliseconds; `authIndex` is the deployment's
  * indexer; `quotaReport` is the credential's last quota check, when there was one, and `resetGrants` its last reset

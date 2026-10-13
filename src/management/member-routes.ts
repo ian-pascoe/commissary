@@ -25,7 +25,7 @@ import {
   AddMember,
   AddTeamMember,
   type MemberView,
-  MembershipSettings,
+  UpdateMembershipSettings,
   RegisterServiceToken,
   type ServiceTokenView,
   TeamName,
@@ -177,23 +177,37 @@ const removeMember = Effect.gen(function* () {
 const membershipSettings = Effect.gen(function* () {
   const settings = yield* controlPlane("membershipSettings", (stub) => stub.membershipSettings());
 
-  return jsonReply(200, { auto_join: settings.autoJoin });
+  return jsonReply(200, {
+    auto_join: settings.autoJoin,
+    private_credentials: settings.privateCredentials,
+  });
 });
 
 const updateMembershipSettings = Effect.gen(function* () {
   const { actor } = yield* caller;
+  const input = yield* body(UpdateMembershipSettings);
 
-  if (!roleAtLeast(actor.role, "owner"))
+  if (input.auto_join === undefined && input.private_credentials === undefined)
+    return yield* replyError(400, "invalid body");
+
+  if (input.auto_join !== undefined && !roleAtLeast(actor.role, "owner"))
     return yield* replyError(403, "owner_required", {
       message: "only an org owner can change who may join the org",
     });
-  const input = yield* body(MembershipSettings);
 
   const settings = yield* controlPlane("setMembershipSettings", (stub) =>
-    stub.setMembershipSettings({ autoJoin: input.auto_join }),
+    stub.setMembershipSettings({
+      ...(input.auto_join === undefined ? {} : { autoJoin: input.auto_join }),
+      ...(input.private_credentials === undefined
+        ? {}
+        : { privateCredentials: input.private_credentials }),
+    }),
   );
 
-  return jsonReply(200, { auto_join: settings.autoJoin });
+  return jsonReply(200, {
+    auto_join: settings.autoJoin,
+    private_credentials: settings.privateCredentials,
+  });
 });
 
 // --- teams -----------------------------------------------------------------------------------------------------------

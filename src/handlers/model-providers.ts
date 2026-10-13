@@ -5,7 +5,8 @@
  * slice replaces the config-backed implementation below with the full catalog (static models, OAuth credentials,
  * availability/quota state); the service interface stays the same.
  */
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Option } from "effect";
+import { AccessPrincipal } from "../access/principal.ts";
 import { ConfigReader } from "../config/reader.ts";
 import { configCredentials, openAICompatModelIds } from "../executor/config-credentials.ts";
 import { ExecutionError } from "../executor/errors.ts";
@@ -67,15 +68,21 @@ export class ModelProviders extends Context.Service<
         firstAvailableModel: Effect.map(snapshot, (current) => current.firstAvailableModel()),
         modelType: (model) =>
           Effect.map(snapshot, (current) => current.lookupModelInfo(model, "")?.type),
-        spawnAgentSource: Effect.map(snapshot, (current): SpawnAgentSource => ({
-          availableModels: current.availableModels().map((model) => ({
-            id: model.id,
-            ...(model.description === undefined ? {} : { description: model.description }),
-            ...(model.displayName === undefined ? {} : { displayName: model.displayName }),
-          })),
-          catalog: current.catalogs.codexClient,
-          lookupModel: (modelId) => current.lookupModelInfo(modelId, ""),
-        })),
+        // The model list a request may name: a private credential's models are its owner's (ADR 0023).
+        spawnAgentSource: Effect.gen(function* () {
+          const identity = yield* Effect.serviceOption(AccessPrincipal);
+          const current = (yield* snapshot).visibleTo(Option.getOrUndefined(identity)?.memberId);
+
+          return {
+            availableModels: current.availableModels().map((model) => ({
+              id: model.id,
+              ...(model.description === undefined ? {} : { description: model.description }),
+              ...(model.displayName === undefined ? {} : { displayName: model.displayName }),
+            })),
+            catalog: current.catalogs.codexClient,
+            lookupModel: (modelId) => current.lookupModelInfo(modelId, ""),
+          } satisfies SpawnAgentSource;
+        }),
       });
     }),
   );

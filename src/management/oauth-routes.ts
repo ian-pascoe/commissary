@@ -15,6 +15,7 @@ import { isJsonObject, type Json } from "../json/index.ts";
 import { isValidOAuthState } from "../oauth/names.ts";
 import { bodyJson, controlPlane, handled, jsonReply, queryParams, replyError } from "./http.ts";
 import { oauthImportRoutes } from "./oauth-import.ts";
+import { currentViewer } from "./viewer.ts";
 
 const BASE = "/v8/management/oauth";
 
@@ -25,13 +26,19 @@ const startLogin = Effect.gen(function* () {
   const params = yield* queryParams;
   const domain = params.get("domain")?.trim() || params.get("channel")?.trim() || undefined;
   const flow = params.get("flow")?.trim() || undefined;
+  const viewer = yield* currentViewer;
 
+  // A plain member's login connects their private credential, an org admin's a shared one unless `private=true`.
   const result = yield* controlPlane("oauthStart", (stub) =>
-    stub.oauthStart({
-      provider: params.get("provider") ?? "",
-      ...(domain === undefined ? {} : { domain }),
-      ...(flow === undefined ? {} : { flow }),
-    }),
+    stub.oauthStart(
+      {
+        provider: params.get("provider") ?? "",
+        ...(domain === undefined ? {} : { domain }),
+        ...(flow === undefined ? {} : { flow }),
+      },
+      viewer,
+      params.get("private") === "true",
+    ),
   );
 
   if (!result.ok) return jsonReply(result.status, { error: result.error });
@@ -52,7 +59,8 @@ const loginStatus = Effect.gen(function* () {
   if (state === "") return jsonReply(200, { status: "ok" });
 
   if (!isValidOAuthState(state)) return jsonReply(400, { status: "error", error: "invalid state" });
-  const result = yield* controlPlane("oauthStatus", (stub) => stub.oauthStatus(state));
+  const viewer = yield* currentViewer;
+  const result = yield* controlPlane("oauthStatus", (stub) => stub.oauthStatus(state, viewer));
 
   return jsonReply(200, result);
 });
@@ -63,7 +71,11 @@ const cancelLogin = Effect.gen(function* () {
   if (state === "") return jsonReply(400, { status: "error", error: "missing state" });
 
   if (!isValidOAuthState(state)) return jsonReply(400, { status: "error", error: "invalid state" });
-  const { cancelled } = yield* controlPlane("oauthCancel", (stub) => stub.oauthCancel(state));
+  const viewer = yield* currentViewer;
+
+  const { cancelled } = yield* controlPlane("oauthCancel", (stub) =>
+    stub.oauthCancel(state, viewer),
+  );
 
   return jsonReply(200, { status: "ok", cancelled });
 });
@@ -97,13 +109,18 @@ const completeLogin = (parts: CallbackParts & { readonly redirectUrl?: string })
           "";
     }
 
+    const viewer = yield* currentViewer;
+
     const result = yield* controlPlane("oauthCallback", (stub) =>
-      stub.oauthCallback({
-        ...(parts.provider === "" ? {} : { provider: parts.provider }),
-        state,
-        code,
-        error,
-      }),
+      stub.oauthCallback(
+        {
+          ...(parts.provider === "" ? {} : { provider: parts.provider }),
+          state,
+          code,
+          error,
+        },
+        viewer,
+      ),
     );
 
     return result.ok

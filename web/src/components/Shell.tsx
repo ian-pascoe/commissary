@@ -167,10 +167,13 @@ const Gate = ({ role }: { readonly role: RoleState }) => {
       );
     case "ready":
       // A plain member's home is Usage.
-      if (pathname === "/" && !pageAllowed(role.caller.role, pathname))
+      if (
+        pathname === "/" &&
+        !pageAllowed(role.caller.role, pathname, role.caller.privateCredentials)
+      )
         return <Navigate to={homeFor(role.caller.role)} replace />;
 
-      return pageAllowed(role.caller.role, pathname) ? (
+      return pageAllowed(role.caller.role, pathname, role.caller.privateCredentials) ? (
         <Outlet />
       ) : (
         <NotAllowed home={homeFor(role.caller.role)} />
@@ -181,8 +184,13 @@ const Gate = ({ role }: { readonly role: RoleState }) => {
 export const Shell = () => {
   const nav = usePageLinkStrip();
   const role = useRole();
-  const pages = role.kind === "ready" ? pagesFor(role.caller.role) : [];
+
+  const pages =
+    role.kind === "ready" ? pagesFor(role.caller.role, role.caller.privateCredentials) : [];
+
   const admin = role.kind === "ready" && canManageMembers(role.caller);
+  // A plain member connects private accounts where the org allows it (ADR 0023).
+  const connects = admin || (role.kind === "ready" && role.caller.privateCredentials);
 
   return (
     <>
@@ -217,7 +225,7 @@ export const Shell = () => {
           </nav>
           <div className={styles["actions"]}>
             <OrgSwitcher />
-            {admin ? (
+            {connects ? (
               <Link to="/accounts/connect" className={styles["connect"]}>
                 <Plus aria-hidden="true" size={16} strokeWidth={2.5} />
                 <span className={styles["connectLabel"]}>Connect account</span>

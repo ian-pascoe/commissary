@@ -122,8 +122,6 @@ describe("the permission matrix", () => {
       ["GET", "/members"],
       ["GET", "/teams"],
       ["GET", "/service-tokens"],
-      ["GET", "/credentials"],
-      ["GET", "/api-keys"],
       ["DELETE", USAGE],
     ] as const)
       expect(await statusOf(slug, path, member, method), `${method} ${path}`).toBe(403);

@@ -5,7 +5,7 @@ import { Shell } from "./components/Shell.tsx";
 import { AccountPage } from "./pages/Account.tsx";
 import { AccountsPage } from "./pages/Accounts.tsx";
 import { ConnectPage } from "./pages/Connect.tsx";
-import { KeyGroupPage, NewKeyGroupPage } from "./pages/KeyGroup.tsx";
+import { KeyGroupPage, NewKeyGroupPage, OwnKeyGroupPage } from "./pages/KeyGroup.tsx";
 import { KeysPage } from "./pages/Keys.tsx";
 import { MembersPage } from "./pages/Members.tsx";
 import { ModelRulesPage } from "./pages/ModelRules.tsx";
@@ -47,6 +47,11 @@ const routeTree = rootRoute.addChildren([
     getParentRoute: () => rootRoute,
     path: "/keys/$family/$index",
     component: KeyGroupPage,
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/keys/private/$family/$index",
+    component: OwnKeyGroupPage,
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/models", component: ModelsPage }),
   createRoute({

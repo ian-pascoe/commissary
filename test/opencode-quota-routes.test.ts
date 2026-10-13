@@ -1,6 +1,7 @@
 // OpenCode Go keys on the Accounts page: `GET /credentials` lists the config keys whose provider reports quota (named
 // by their auth_index, the key masked), the quota check and the cron sweep probe `{base}/usage` with the key (mocked
 // outbound HTTP), the file-only operations refuse them with `409 config_credential`, and an edited key starts afresh.
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { assert, describe, it } from "@effect/vitest";
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
@@ -191,7 +192,7 @@ describe("POST /credentials/quota for an OpenCode Go key", () => {
   });
 
   it("answers 404 for the raw credential id and for other config keys", async () => {
-    const ids = (await controlPlane().listCredentials()).map((entry) => entry.id);
+    const ids = (await controlPlane().listCredentials(FULL_ACCESS)).map((entry) => entry.id);
 
     expect(ids.length).toBeGreaterThan(0);
 
@@ -259,7 +260,7 @@ describe("an edited OpenCode Go key", () => {
 
     expect(summary).toEqual({ checked: 1, failed: 0 });
 
-    const ids = (await controlPlane().listCredentials()).map((entry) => entry.id);
+    const ids = (await controlPlane().listCredentials(FULL_ACCESS)).map((entry) => entry.id);
     const rows = await reportRows();
 
     expect(rows).toHaveLength(1);

@@ -2,6 +2,7 @@
 // /credentials/quota/all`) through the router with the real ControlPlane: per-account results, partial failure, unknown
 // names, the admin gate, cross-site write protection, the sweep lease shared with the cron task (renewal, expiry,
 // release however the sweep ends), and the contract.
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { assert, describe, it } from "@effect/vitest";
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
@@ -113,7 +114,12 @@ afterAll(async () => {
 });
 
 const seed = async (name: string, extra: Record<string, unknown> = {}): Promise<void> => {
-  const result = await controlPlane().importAuthFile(name, JSON.stringify(claudeFile(extra)));
+  const result = await controlPlane().importAuthFile(
+    name,
+    JSON.stringify(claudeFile(extra)),
+    {},
+    FULL_ACCESS,
+  );
 
   expect(result.ok).toBe(true);
 };
@@ -171,7 +177,7 @@ describe("POST /credentials/batch", () => {
       "test",
     );
 
-    const configKey = (await controlPlane().listCredentials()).find(
+    const configKey = (await controlPlane().listCredentials(FULL_ACCESS)).find(
       (entry) => entry.source === "config",
     );
 
@@ -208,9 +214,9 @@ describe("POST /credentials/batch", () => {
         { name: "ghost.json", ok: true },
       ],
     });
-    expect((await controlPlane().listCredentials()).some((entry) => entry.id === configId)).toBe(
-      true,
-    );
+    expect(
+      (await controlPlane().listCredentials(FULL_ACCESS)).some((entry) => entry.id === configId),
+    ).toBe(true);
   });
 
   it("deletes the named accounts, keeping the rest; a name already gone counts as deleted", async () => {
@@ -287,6 +293,8 @@ describe("POST /credentials/batch", () => {
     await controlPlane().importAuthFile(
       "noref.json",
       JSON.stringify({ type: "claude", email: "n@x.com", access_token: "t" }),
+      {},
+      FULL_ACCESS,
     );
 
     const ok = await batch({ action: "refresh", names: ["a.json", "noref.json"] });
@@ -307,7 +315,9 @@ describe("POST /credentials/batch", () => {
       failed: 0,
       skipped: 1,
     });
-    expect((await controlPlane().getCredentialFile("a.json"))?.access_token).toBe("new-access");
+    expect((await controlPlane().getCredentialFile("a.json", FULL_ACCESS))?.access_token).toBe(
+      "new-access",
+    );
   });
 
   it("a failed refresh gives a fixed reason and the status, never the upstream body", async () => {
@@ -427,7 +437,9 @@ describe("POST /credentials/batch", () => {
       auth: await token("other@example.com"),
     });
 
-    expect(stranger.status).toBe(403);
+    // A plain member's batch reaches their own private accounts only: the shared file stays, and its name reads as
+    // already gone (a delete answers every unknown name `ok`).
+    expect(stranger.status).toBe(200);
     await stranger.body?.cancel();
     expect((await files()).map((file) => file.name)).toEqual(["a.json"]);
   });
@@ -483,6 +495,8 @@ describe("POST /credentials/quota/all", () => {
     await controlPlane().importAuthFile(
       "qwen-a.json",
       JSON.stringify({ type: "qwen", access_token: "t", expired: "2999-01-01T00:00:00Z" }),
+      {},
+      FULL_ACCESS,
     );
 
     const { status, body } = await harness.json(QUOTA_ALL, { method: "POST" });
@@ -581,13 +595,14 @@ describe("POST /credentials/quota/all", () => {
     expect(anonymous.status).toBe(401);
     await anonymous.body?.cancel();
 
+    // A plain member sweeps their own private accounts: none here, so nothing is checked.
     const stranger = await harness.call(QUOTA_ALL, {
       method: "POST",
       auth: await token("other@example.com"),
     });
 
-    expect(stranger.status).toBe(403);
-    await stranger.body?.cancel();
+    expect(stranger.status).toBe(200);
+    expect(await stranger.json()).toMatchObject({ checked: 0, failed: 0, results: [] });
 
     const forged = await harness.call(QUOTA_ALL, {
       method: "POST",
@@ -679,7 +694,7 @@ describe("recordQuotaReport", () => {
   it("drops an outcome for tokens replaced during the check, as a refresh result is dropped", async () => {
     await seed("a.json");
 
-    const version = (await controlPlane().listCredentials()).find(
+    const version = (await controlPlane().listCredentials(FULL_ACCESS)).find(
       (entry) => entry.id === "a.json",
     )?.credentialVersion;
 
@@ -690,6 +705,8 @@ describe("recordQuotaReport", () => {
     await controlPlane().importAuthFile(
       "a.json",
       JSON.stringify(claudeFile({ access_token: "sk-ant-oat-new" })),
+      {},
+      FULL_ACCESS,
     );
 
     expect(
@@ -697,9 +714,9 @@ describe("recordQuotaReport", () => {
         credentialVersion: version ?? 0,
       }),
     ).toEqual({ kind: "stale" });
-    expect(await controlPlane().getCredentialFile("a.json")).toBeDefined();
+    expect(await controlPlane().getCredentialFile("a.json", FULL_ACCESS)).toBeDefined();
 
-    const current = (await controlPlane().listCredentials()).find(
+    const current = (await controlPlane().listCredentials(FULL_ACCESS)).find(
       (entry) => entry.id === "a.json",
     )?.credentialVersion;
 
@@ -867,7 +884,7 @@ describe("sweepQuotas gives the lease back", () => {
 
       const { held, ctx } = recordingContext();
 
-      const failed = yield* sweepQuotas("panel").pipe(
+      const failed = yield* sweepQuotas("panel", FULL_ACCESS).pipe(
         Effect.provide(mockHttp(() => ({ status: 500 })).layer),
         Effect.provideService(WorkerEnv, plane.fakeEnv),
         Effect.provideService(WorkerExecutionContext, ctx),
@@ -894,7 +911,7 @@ describe("sweepQuotas gives the lease back", () => {
         return await new Promise<MockReply>(() => undefined);
       });
 
-      const fiber = yield* sweepQuotas("panel").pipe(
+      const fiber = yield* sweepQuotas("panel", FULL_ACCESS).pipe(
         Effect.provide(hanging.layer),
         Effect.provideService(WorkerEnv, plane.fakeEnv),
         Effect.provideService(WorkerExecutionContext, ctx),
@@ -919,7 +936,7 @@ describe("sweepQuotas gives the lease back", () => {
         const plane = fakePlane({ targets: async () => [], take: () => gate });
         const { held, ctx } = recordingContext();
 
-        const fiber = yield* sweepQuotas("panel").pipe(
+        const fiber = yield* sweepQuotas("panel", FULL_ACCESS).pipe(
           Effect.provide(mockHttp(() => ({ status: 500 })).layer),
           Effect.provideService(WorkerEnv, plane.fakeEnv),
           Effect.provideService(WorkerExecutionContext, ctx),
@@ -958,7 +975,7 @@ describe("sweepQuotas keeps its lease", () => {
           target: () => new Promise<void>(() => undefined),
         });
 
-        const fiber = yield* sweepQuotas("panel").pipe(
+        const fiber = yield* sweepQuotas("panel", FULL_ACCESS).pipe(
           Effect.provide(mockHttp(() => ({ status: 500 })).layer),
           Effect.provideService(WorkerEnv, plane.fakeEnv),
           Effect.provideService(WorkerExecutionContext, recordingContext().ctx),

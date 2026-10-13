@@ -1,5 +1,6 @@
 // POST /v8/management/oauth/import?provider=vertex through the router with the real ControlPlane, and the private-key
 // normalisation against the Go `NormalizeServiceAccountMap` (test/fixtures/session.json, tools/fixturegen/session).
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { normalizePrivateKey } from "../src/credentials/refresh/vertex.ts";
 import fixtures from "./fixtures/session.json";
@@ -106,7 +107,7 @@ describe("POST /v8/management/oauth/import", () => {
         location: "us-central1",
       },
     });
-    const stored = await controlPlane().getCredentialFile("vertex-my-proj_1.json");
+    const stored = await controlPlane().getCredentialFile("vertex-my-proj_1.json", FULL_ACCESS);
     expect(stored).toMatchObject({
       type: "vertex",
       project_id: "my proj/1",
@@ -138,7 +139,7 @@ describe("POST /v8/management/oauth/import", () => {
 
     expect(fromQuery.body).toMatchObject({ location: "europe-west4" });
     const name = (fromQuery.body as { "auth-file": string })["auth-file"];
-    await controlPlane().patchCredentialFields({ name }, { priority: 7 });
+    await controlPlane().patchCredentialFields({ name }, { priority: 7 }, FULL_ACCESS);
 
     const fromForm = await json(
       `${IMPORT}?provider=vertex&location=ignored`,
@@ -146,7 +147,7 @@ describe("POST /v8/management/oauth/import", () => {
     );
 
     expect(fromForm.body).toMatchObject({ location: "asia-east1" });
-    expect(await controlPlane().getCredentialFile(name)).toMatchObject({
+    expect(await controlPlane().getCredentialFile(name, FULL_ACCESS)).toMatchObject({
       location: "asia-east1",
       type: "vertex",
       priority: 7,

@@ -151,6 +151,8 @@ export const UsageRecord = Schema.Struct({
   api_key: Schema.String,
   /** The caller's member id in the org; absent when they had none (or the record predates members). */
   member_id: optional(Schema.String),
+  /** Served by one of the caller's private credentials (ADR 0023); only its owner reads such a record. */
+  private: optional(Schema.Boolean),
   request_id: Schema.String,
   failed: Schema.Boolean,
   stream: Schema.Boolean,

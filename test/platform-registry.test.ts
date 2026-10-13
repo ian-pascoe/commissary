@@ -3,7 +3,7 @@
 import { evictDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ORG_SLUG, GLOBAL_ORG } from "../src/platform/org.ts";
+import { DEFAULT_ORG_SLUG, GLOBAL_ORG, newOrgId } from "../src/platform/org.ts";
 import { PLATFORM_NAME, platformOf } from "../src/platform/registry.ts";
 
 const fresh = () => env.PLATFORM.getByName(`registry-${crypto.randomUUID()}`);
@@ -41,6 +41,16 @@ describe("seed", () => {
 });
 
 describe("orgs", () => {
+  it("creates an org under the id the caller prepared", async () => {
+    const platform = fresh();
+    const id = newOrgId();
+    const created = await platform.createOrg({ slug: "prepared", name: "Prepared", id }, NOW);
+
+    if (!created.ok) throw new Error(created.message);
+    expect(created.org.id).toBe(id);
+    expect((await platform.getOrgById(id))?.slug).toBe("prepared");
+  });
+
   it("creates an org under a fresh id and refuses a slug in use", async () => {
     const platform = fresh();
     const created = await platform.createOrg({ slug: "acme", name: "  Acme Inc  " }, NOW);

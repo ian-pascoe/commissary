@@ -5,6 +5,7 @@ import sessions from "../../migrations/0002_usage_sessions.sql?raw";
 import orgs from "../../migrations/0003_usage_org.sql?raw";
 import costs from "../../migrations/0004_usage_cost.sql?raw";
 import members from "../../migrations/0005_usage_member.sql?raw";
+import privates from "../../migrations/0006_usage_private.sql?raw";
 import { GLOBAL_ORG } from "../../src/platform/org.ts";
 import { emptyUsageDetail, type UsageRecord } from "../../src/usage/record.ts";
 
@@ -28,6 +29,7 @@ export const resetUsageDb = async (db: D1Database = env.USAGE): Promise<D1Databa
     ...statementsOf(orgs),
     ...statementsOf(costs),
     ...statementsOf(members),
+    ...statementsOf(privates),
   ]) {
     try {
       await db

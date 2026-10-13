@@ -40,6 +40,8 @@ export interface CredentialSnapshot {
   readonly prefix?: string;
   /** Bumped when token/key material changes (a refresh); results are reported against it. */
   readonly credentialVersion?: number;
+  /** A private credential (ADR 0023): the usage it earns is its owner's alone to read. */
+  readonly private?: boolean;
   /**
    * String attributes as in Go: `base_url`, `api_key`, `compat_name`, `provider_key`, `config_index`, `priority`,
    * `weight`, `header:<Name>` (custom upstream headers), ...
@@ -63,6 +65,8 @@ export interface PickRequest {
   readonly model: string;
   /** Caller isolation scope (`AccessPrincipal.callerScope`). */
   readonly callerScope: string;
+  /** The member the request is for: their private credentials are candidates, no one else's (ADR 0023). */
+  readonly memberId?: string;
   /** Session identity for affinity/stickiness, when the request carries one. */
   readonly session?: PickSession;
   /** Conversation fingerprints for the LCP matcher (requests without an explicit `session`). */

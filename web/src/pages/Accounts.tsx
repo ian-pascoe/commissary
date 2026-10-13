@@ -76,8 +76,11 @@ import { providerName } from "../lib/providers.ts";
 import { checksQuota, windowLevel, windowPace } from "../lib/quota.ts";
 import { resetsBrief } from "../lib/reset-grants.ts";
 import { useAction } from "../lib/use-action.ts";
+import { holdsOnlyPrivate } from "../lib/role.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
+import { useRole } from "../lib/use-role.ts";
 import styles from "./Accounts.module.css";
+import { OtherPrivateAccounts } from "./AccountsOthers.tsx";
 
 /** Requests per account are counted over the recent-requests ring: ten-minute buckets. */
 const BUCKET_MS = 10 * 60_000;
@@ -303,6 +306,7 @@ const Row = ({
             <span id={`${pickId}-provider`} className={styles["provider"]}>
               {providerName(entry.provider)}
               {config ? <span className={styles["source"]}>Config key</span> : null}
+              {entry.private === true ? <span className={styles["source"]}>Private</span> : null}
             </span>
             {selection === undefined ? (
               <Link
@@ -873,6 +877,20 @@ const Head = ({ children }: { readonly children?: ReactNode }) => (
   </header>
 );
 
+/** A plain member's page is theirs alone: say so, and what the org's admins can tell of it. */
+const OwnLead = () => {
+  const role = useRole();
+
+  if (role.kind !== "ready" || !holdsOnlyPrivate(role.caller)) return null;
+
+  return (
+    <p className={styles["empty"]}>
+      Your private accounts: only your own requests use them. Org admins see that each exists, its
+      provider and its label, and nothing of how you use it.
+    </p>
+  );
+};
+
 export const AccountsPage = () => {
   usePageTitle("Accounts");
   const result = useAtomValue(credentialsAtom);
@@ -896,13 +914,17 @@ export const AccountsPage = () => {
           </>
         ),
         onSuccess: ({ value }) => {
+          const others = value.others ?? [];
+
           if (value.files.length === 0) {
             return (
               <>
                 <Head />
+                <OwnLead />
                 <p className={styles["empty"]}>
                   No accounts yet. Connect one to let the proxy answer requests with it.
                 </p>
+                <OtherPrivateAccounts others={others} />
               </>
             );
           }
@@ -914,7 +936,9 @@ export const AccountsPage = () => {
               <Head>
                 <CheckAllQuotas accounts={accounts} />
               </Head>
+              <OwnLead />
               <List accounts={accounts} />
+              <OtherPrivateAccounts others={others} />
             </>
           );
         },

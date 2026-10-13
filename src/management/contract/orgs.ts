@@ -30,8 +30,15 @@ export const OrgList = Schema.Struct({ orgs: Schema.Array(OrgView) });
 
 export type OrgList = typeof OrgList.Type;
 
-/** `POST /orgs`: 1-63 lowercase letters, digits and inner hyphens; a display name of up to 100 characters. */
-export const CreateOrg = Schema.Struct({ slug: Schema.String, name: Schema.String });
+/**
+ * `POST /orgs`: 1-63 lowercase letters, digits and inner hyphens; a display name of up to 100 characters.
+ * `private_credentials` chooses whether members may connect private credentials in the new org (default: no).
+ */
+export const CreateOrg = Schema.Struct({
+  slug: Schema.String,
+  name: Schema.String,
+  private_credentials: Schema.optionalKey(Schema.Boolean),
+});
 
 export type CreateOrg = typeof CreateOrg.Type;
 
@@ -59,6 +66,11 @@ export const Me = Schema.Struct({
   role: Schema.NullOr(OrgRole),
   /** Every org for a platform admin; for anyone else the orgs they are a member of. */
   orgs: Schema.Array(MyOrg),
+  /**
+   * Whether the addressed org lets members connect private credentials (`private_credentials` of `/membership`): the
+   * panel offers a plain member their own Accounts page only then. Absent when the caller belongs to no org there.
+   */
+  private_credentials: Schema.optionalKey(Schema.Boolean),
 });
 
 export type Me = typeof Me.Type;

@@ -1,6 +1,7 @@
 // Claude reset grants: the pure status parsing, grant choice and claim journal (src/quota/reset-grants.ts), then
 // `GET /v8/management/credentials/reset-grants` and `POST .../claim` through the router with the real ControlPlane and
 // mocked Anthropic endpoints, the quota check's tolerated grant read, the contract and the Access/CSRF gates.
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { assert, describe, it } from "@effect/vitest";
 import { runInDurableObject } from "cloudflare:test";
 import { env, exports } from "cloudflare:workers";
@@ -478,7 +479,7 @@ beforeEach(async () => {
 const INDEX = authIndexOf("claude-a.json");
 
 const seed = async (name = "claude-a.json", file: Record<string, unknown> = claudeFile()) => {
-  const result = await controlPlane().importAuthFile(name, JSON.stringify(file));
+  const result = await controlPlane().importAuthFile(name, JSON.stringify(file), {}, FULL_ACCESS);
 
   expect(result.ok).toBe(true);
 };
@@ -503,7 +504,7 @@ const listed = async (name = "claude-a.json") => {
 
 /** The grant mark the ControlPlane hands out now (what a status read started now would be stored under). */
 const markOf = async (authIndex = INDEX) => {
-  const target = await controlPlane().resetGrantTarget({ authIndex });
+  const target = await controlPlane().resetGrantTarget({ authIndex }, FULL_ACCESS);
 
   if (!target.ok) throw new Error("no reset grant target");
 
@@ -598,11 +599,12 @@ describe("GET /credentials/reset-grants", () => {
   it("is refused to non-admins", async () => {
     await seed();
 
+    // A plain member reaches only their own private accounts: a shared one is as good as absent.
     const response = await harness.call(`${GRANTS}?auth_index=${INDEX}`, {
       auth: await token("other@example.com"),
     });
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(404);
     await response.body?.cancel();
     expect(harness.requests).toHaveLength(0);
   });
@@ -774,7 +776,7 @@ describe("POST /credentials/reset-grants/claim", () => {
       auth: await token("other@example.com"),
     });
 
-    expect(denied.status).toBe(403);
+    expect(denied.status).toBe(404);
     await denied.body?.cancel();
 
     const forged = await exports.default.fetch(
@@ -820,7 +822,7 @@ describe("claim races and failures", () => {
 
   it("refuses claims on a disabled account; reads stay allowed", async () => {
     await seed();
-    await controlPlane().setCredentialDisabled("claude-a.json", true);
+    await controlPlane().setCredentialDisabled("claude-a.json", true, FULL_ACCESS);
 
     expect(await claim()).toMatchObject({
       status: 409,
@@ -862,7 +864,7 @@ describe("claim races and failures", () => {
 
     // Removed and re-created under the same name during a claim's read: no claim is sent.
     onStatus = async () => {
-      await controlPlane().removeCredential("claude-a.json");
+      await controlPlane().removeCredential("claude-a.json", FULL_ACCESS);
       await seed();
     };
 
@@ -1008,7 +1010,7 @@ describe("claim races and failures", () => {
     expect(sent(CLAIM_URL)).toHaveLength(0);
 
     // Removed, then the organization is added again under another name: still busy.
-    await controlPlane().removeCredential("claude-a.json");
+    await controlPlane().removeCredential("claude-a.json", FULL_ACCESS);
     await seed("claude-b.json", claudeFile({ access_token: "sk-ant-oat-second-file" }));
     const indexB = authIndexOf("claude-b.json");
 
@@ -1030,7 +1032,9 @@ describe("claim races and failures", () => {
     await seed();
     await readGrants();
     await beginElsewhere("on-the-wire");
-    expect(await controlPlane().removeCredentials(["claude-a.json"])).toEqual(["claude-a.json"]);
+    expect(await controlPlane().removeCredentials(["claude-a.json"], FULL_ACCESS)).toEqual([
+      "claude-a.json",
+    ]);
 
     // The status is gone with the credential; the claim in flight still holds its organization.
     await seed();
@@ -1154,7 +1158,7 @@ describe("claim races and failures", () => {
       );
 
       const fiber = yield* Effect.forkChild(
-        claimResetGrant({ authIndex: INDEX }).pipe(
+        claimResetGrant({ authIndex: INDEX }, FULL_ACCESS).pipe(
           Effect.provide(outbound.layer),
           Effect.provideService(WorkerEnv, env),
         ),

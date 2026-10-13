@@ -45,7 +45,11 @@ export type ImportFailureReason =
   | "empty"
   | "missing_type"
   | "unsupported_type"
-  | "invalid_weight";
+  | "invalid_weight"
+  /** The importer may not store this credential (a private one the org does not allow). */
+  | "forbidden"
+  /** A credential of another owner already has this name. */
+  | "name_taken";
 
 export type ParsedAuthFile =
   | {

@@ -15,6 +15,7 @@ import {
   putKeyGroupAtom,
 } from "../api/client.ts";
 import { kit, Problem, Section } from "../components/Kit.tsx";
+import { addsPrivately, Ownership } from "../components/Ownership.tsx";
 import { TrailMark } from "../components/Signs.tsx";
 import { failureMessage } from "../lib/failure.ts";
 import { formatCount } from "../lib/format.ts";
@@ -43,9 +44,12 @@ import {
 } from "../lib/keys.ts";
 import { useAction } from "../lib/use-action.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
+import { useRole } from "../lib/use-role.ts";
 import styles from "./KeyGroup.module.css";
 
 const editRoute = getRouteApi("/keys/$family/$index");
+
+const ownRoute = getRouteApi("/keys/private/$family/$index");
 
 const newRoute = getRouteApi("/keys/new");
 
@@ -213,10 +217,13 @@ const Discover = ({
 const GroupForm = ({
   family,
   view,
+  privately,
   onReload,
 }: {
   readonly family: ApiKeyFamily;
   readonly view: AnyGroupView | undefined;
+  /** The group is the caller's private one (ADR 0023). */
+  readonly privately: boolean;
   readonly onReload: () => void;
 }) => {
   const ids = useId();
@@ -253,7 +260,7 @@ const GroupForm = ({
       return;
     }
 
-    const request = putGroupRequest(family, view, draft);
+    const request = putGroupRequest(family, view, draft, privately);
 
     // One branch per request shape: the mutation takes a union of argument objects, not a union payload.
     const outcome = await save.run(
@@ -664,10 +671,12 @@ const GroupForm = ({
 const DeleteGroup = ({
   family,
   view,
+  privately,
   onReload,
 }: {
   readonly family: ApiKeyFamily;
   readonly view: AnyGroupView;
+  readonly privately: boolean;
   readonly onReload: () => void;
 }) => {
   const remove = useAction(deleteKeyGroupAtom);
@@ -701,7 +710,12 @@ const DeleteGroup = ({
             event.preventDefault();
 
             const outcome = await remove.run({
-              payload: { family, id: view.id, revision: view.revision },
+              payload: {
+                family,
+                id: view.id,
+                revision: view.revision,
+                ...(privately ? { private: true } : {}),
+              },
               reactivityKeys: API_KEYS,
             });
 
@@ -767,8 +781,20 @@ const Loaded = ({ children }: { readonly children: (list: ApiKeysList) => ReactN
   });
 };
 
-export const KeyGroupPage = () => {
-  const { family, index } = editRoute.useParams();
+export const KeyGroupPage = () => <ExistingGroup {...editRoute.useParams()} privately={false} />;
+
+/** One of the caller's own private groups (`/keys/private/<family>/<index>`). */
+export const OwnKeyGroupPage = () => <ExistingGroup {...ownRoute.useParams()} privately={true} />;
+
+const ExistingGroup = ({
+  family,
+  index,
+  privately,
+}: {
+  readonly family: string;
+  readonly index: string;
+  readonly privately: boolean;
+}) => {
   const retry = useAtomRefresh(apiKeysAtom);
   const known = isFamily(family) ? family : undefined;
   const position = /^\d+$/.test(index) ? Number(index) : -1;
@@ -776,7 +802,11 @@ export const KeyGroupPage = () => {
   return (
     <Loaded>
       {(list) => {
-        const groups: ReadonlyArray<AnyGroupView> = known === undefined ? [] : list.families[known];
+        const families = privately ? list.own : list.families;
+
+        const groups: ReadonlyArray<AnyGroupView> =
+          known === undefined ? [] : (families?.[known] ?? []);
+
         const view = groups.find((group) => group.index === position);
 
         if (known === undefined || view === undefined) return <MissingGroup />;
@@ -785,6 +815,7 @@ export const KeyGroupPage = () => {
           <GroupPage
             family={known}
             view={view}
+            privately={privately}
             // A reload remounts the form with what is stored now.
             key={`${view.id}:${view.revision}`}
             onReload={retry}
@@ -798,10 +829,12 @@ export const KeyGroupPage = () => {
 const GroupPage = ({
   family,
   view,
+  privately,
   onReload,
 }: {
   readonly family: ApiKeyFamily;
   readonly view: AnyGroupView;
+  readonly privately: boolean;
   readonly onReload: () => void;
 }) => {
   const title = groupTitle(family, view);
@@ -812,12 +845,15 @@ const GroupPage = ({
       <header className={styles["head"]}>
         <Back />
         <div>
-          <p className={styles["provider"]}>{familyName(family)}</p>
+          <p className={styles["provider"]}>
+            {familyName(family)}
+            {privately ? " · private to you" : ""}
+          </p>
           <h1 className={styles["name"]}>{title}</h1>
         </div>
       </header>
-      <GroupForm family={family} view={view} onReload={onReload} />
-      <DeleteGroup family={family} view={view} onReload={onReload} />
+      <GroupForm family={family} view={view} privately={privately} onReload={onReload} />
+      <DeleteGroup family={family} view={view} privately={privately} onReload={onReload} />
     </div>
   );
 };
@@ -842,6 +878,9 @@ const MissingGroup = () => {
 export const NewKeyGroupPage = () => {
   const { family } = newRoute.useSearch();
   const retry = useAtomRefresh(apiKeysAtom);
+  const role = useRole();
+  const caller = role.kind === "ready" ? role.caller : undefined;
+  const [mine, setMine] = useState(false);
   usePageTitle(family === undefined ? "Add API key" : `Add ${familyName(family)} key`);
 
   return (
@@ -871,12 +910,16 @@ export const NewKeyGroupPage = () => {
       ) : (
         <Loaded>
           {(list) => (
-            <GroupForm
-              key={`${family}:${list.version}`}
-              family={family}
-              view={undefined}
-              onReload={retry}
-            />
+            <>
+              <Ownership caller={caller} noun="API key group" chosen={mine} onChange={setMine} />
+              <GroupForm
+                key={`${family}:${list.version}`}
+                family={family}
+                view={undefined}
+                privately={addsPrivately(caller, mine)}
+                onReload={retry}
+              />
+            </>
           )}
         </Loaded>
       )}

@@ -20,6 +20,10 @@ export const OrgId = Schema.String.check(
 
 export type OrgId = typeof OrgId.Type;
 
+/** A fresh permanent org id. Never derived from the slug: a renamed org's old slug may be taken again. */
+export const newOrgId = (): OrgId =>
+  OrgId.make(`org-${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`);
+
 /** The org of the deployment that existed before orgs: its ControlPlane has always been named `global`. */
 export const GLOBAL_ORG: OrgId = OrgId.make("global");
 

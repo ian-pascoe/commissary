@@ -106,11 +106,13 @@ the Worker asks on every request: a removed member, or a member whose role was l
 | -------------------------------------------------------------------------------------------- | :---------------: | :-------: | :--------------------------: | :------------: |
 | Use the proxy endpoints of the org                                                           |         ✓         |     ✓     |              ✓               |       ✓        |
 | Open the org's panel; read usage (`GET /observability/usage/records`, `/summary`, `/series`) | own requests only |     ✓     |              ✓               |       ✓        |
+| Connect, list, disable and remove their **own private** accounts and API keys (see below)    |  ✓ where allowed  |     ✓     |              ✓               |       ✓        |
 | Every other management route of the org (credentials, keys, models, settings, prices, ...)   |                   |     ✓     |              ✓               |       ✓        |
 | List members, teams and service tokens; manage teams                                         |                   |     ✓     |              ✓               |       ✓        |
 | Add or remove plain members; register or remove member service tokens                        |                   |     ✓     |              ✓               |       ✓        |
 | Add or remove org admins and owners; change any role                                         |                   |           |              ✓               |       ✓        |
 | Turn auto-join on or off (`PATCH /membership`)                                               |                   |           |              ✓               |       ✓        |
+| Allow or stop private credentials (`PATCH /membership`, `private_credentials`)               |                   |     ✓     |              ✓               |       ✓        |
 | Give a service token a role above plain member; download a credential                        |                   |           | owner **service token** only |       ✓        |
 | List, create and rename orgs                                                                 |                   |           |                              |       ✓        |
 
@@ -122,6 +124,17 @@ the Worker asks on every request: a removed member, or a member whose role was l
   the org joins it as a plain member on their first request. It is on for `global`, so a self-hosted deployment keeps admitting
   everyone its Access policies admit, and off for every new org, where only added members get in (`403` for anyone else, the
   proxy endpoints included).
+- **Shared and private credentials** (ADR 0023): every account and API key belongs to the org (**shared**, managed by org admins,
+  as before) or to one member (**private**). A private credential is used only for its owner's requests, never for an org
+  admin's, another member's or a service token's. Its owner manages it through the same routes as an org admin manages a shared
+  one (`/credentials*`, `/oauth/*`, `/api-keys*`; what a plain member creates is always private); an org admin sees that it
+  exists (provider, owner, label, whether it is disabled) in `GET /credentials` and `GET /api-keys` (`others`), may disable
+  or remove it, and reaches nothing else about it: no models, quota, usage or file, and `404` for any other operation. Its
+  download is refused to everyone but its owner (`403 private_credential`, also for an owner service token). Private traffic
+  is left out of org-wide usage summaries, series, listings and exports; only the owner reads it. `private_credentials` of
+  `/membership` is the org setting: on for `global` and for a new org only when `POST /orgs` asks; turning it off disables
+  every private credential of the org (kept, not deleted) and refuses new ones (`403`) until it is turned on again. Everything
+  that existed before is shared.
 - **Service tokens** (`/service-tokens`) are registered to one org by their Client ID with a role (`409 service_token_taken`
   when another org has the token, also when two orgs register it at once: the one the registry indexes first keeps it). With
   auto-join on, an unregistered token is admitted as a plain member without being stored,
@@ -205,7 +218,8 @@ put a server-side client in between.
 - Go's `POST /requests/api-call` (substitutes `$TOKEN$` into a request to any host the caller names, the upstream
   panel's quota probe) is not ported. Quota checks (`POST /credentials/quota`) call the auth file's own provider usage
   endpoint. Key tests (`POST /api-keys/probe`) send a config key to the `base-url` stored with it, and an admin can
-  change that `base-url` while keeping the key (`PUT /api-keys/groups`, or a config import): an admin can still direct a stored key to a host of their choice. The replies carry no
+  change that `base-url` while keeping the key (`PUT /api-keys/groups`, or a config import): an org admin can still direct a stored key to a host of their choice, and a plain member the same for their own private key groups
+  (only their own key can be sent there). The replies carry no
   token.
 - No route reads a secret back. Provider API keys, client keys, header values and URL credentials are stored as config
   entries (ADR 0025) and never leave the Worker: `GET /api-keys` shows a `[redacted]…abcd` preview, `GET /settings` carries
@@ -221,7 +235,8 @@ put a server-side client in between.
   owner gets `403 {"error":"download_requires_service_token","message":…}` before the file is looked up, and a plain
   member the gate's `403 Forbidden`. A person's browser session is the credential most
   exposed to theft, so the tokens are handed only to a client that was set up for automation (curl with
-  `CF-Access-Client-Id`/`-Secret`, [MIGRATION.md](MIGRATION.md) §2). The panel never calls it. This narrows who can read a
+  `CF-Access-Client-Id`/`-Secret`, [MIGRATION.md](MIGRATION.md) §2). The panel never calls it. A private credential is downloaded
+  by its owner alone (their own session may, it is their own token); any other caller gets `403 private_credential`. This narrows who can read a
   token; it does not make tokens unreachable to an email admin, who can still point a stored key at a host of their
   choice (above). Treat org admin access as access to every stored token: keep the org's admins few and prefer service tokens scoped to automation.
 - No response publishes a hash of a stored key. The handle of a credential (`auth_index`, also in panel URLs
@@ -286,6 +301,8 @@ service token, which does not depend on the device. Check the Cloudflare WARP/Ac
 | 409 `last_owner`                       | The change would leave an org with members but no owner: make someone else an owner first              |
 | 403 `platform_admin_required`          | Listing, creating or renaming orgs needs a platform admin                                              |
 | 404 on `/o/<slug>/...`                 | No org has that slug (a platform admin sees 404; others 403)                                           |
+| 403 `private_credential`               | Download of a member's private credential by anyone but its owner                                      |
+| 403 `private_credentials_unavailable`  | Adding a private API key group where the org does not let members hold private credentials             |
 | 403 `download_requires_service_token`  | Credential download called by a person: use a service token that is an owner of the org                |
 | 403 `Cross-site request rejected`      | Browser request from another origin (or a proxy POST from a web app)                                   |
 | 415 `Unsupported Content-Type`         | Management write without `content-type: application/json` (or YAML/multipart)                          |

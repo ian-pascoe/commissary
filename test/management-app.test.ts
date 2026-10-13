@@ -1,5 +1,6 @@
 // The management routes mounted in the real application layer (`makeWebHandler`), reached through the local Access
 // dev bypass: what `alchemy dev` does for the panel.
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { env } from "cloudflare:workers";
 import { afterAll, describe, expect, it } from "vitest";
 import { makeWebHandler } from "../src/http/app.ts";
@@ -32,6 +33,8 @@ describe("control panel in the application", () => {
     await env.CONTROL_PLANE.getByName("global").importAuthFile(
       "claude-a.json",
       JSON.stringify(claudeFile()),
+      {},
+      FULL_ACCESS,
     );
 
     // The only org of the caller opens at its own address.

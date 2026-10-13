@@ -15,6 +15,7 @@ import { boundSessionIdentity } from "../../session-routing/identity.ts";
 import { lcpNamespace, type MerklePrefixMatcher } from "../../session-routing/matcher.ts";
 import { type Credential, type CredentialState, executorKey } from "../model.ts";
 import { affinityKey, isSubagentSession, type SessionCache } from "./affinity.ts";
+import { servesMember } from "../ownership.ts";
 import { isBlockedForModel } from "./availability.ts";
 import { authNotFound, authUnavailable, modelCooldown, providerNotFound } from "./failures.ts";
 import { canonicalModelKey } from "./model-name.ts";
@@ -134,6 +135,8 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
     const { credential } = entry;
 
     if (credential.disabled) continue;
+
+    if (!servesMember(credential, request.memberId)) continue;
 
     if (pinned !== "" && credential.id !== pinned) continue;
 

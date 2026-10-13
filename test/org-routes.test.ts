@@ -1,6 +1,7 @@
 // Orgs through the management API (ADR 0021): platform admins list, create and rename orgs, address one with
 // `/v8/management/orgs/<slug>/...`, and everyone else keeps to `global`. Through the router with the real ControlPlanes
 // and a Platform registry of its own (`isolatedPlatform`).
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { ApiKeysList } from "../src/management/contract/api-keys.ts";
 import type { RoutingModels } from "../src/management/contract/routing.ts";
@@ -105,6 +106,46 @@ describe("creating an org", () => {
       (reply.body as OrgBody).id,
     );
     expect(reply.headers.get("cache-control")).toBe("no-store");
+  });
+
+  describe("the private credentials choice", () => {
+    const privateCredentialsOf = async (id: string) =>
+      (await controlPlane(OrgId.make(id)).membershipSettings()).privateCredentials;
+
+    it("is on in the org's ControlPlane when asked for, and off otherwise", async () => {
+      const on = await create({ slug: "priv-on", name: "On", private_credentials: true });
+      const off = await create({ slug: "priv-off", name: "Off" });
+
+      expect(on.status).toBe(201);
+      expect(off.status).toBe(201);
+      expect(await privateCredentialsOf((on.body as OrgBody).id)).toBe(true);
+      expect(await privateCredentialsOf((off.body as OrgBody).id)).toBe(false);
+      expect((await orgs()).map((org) => org.slug)).toEqual(
+        expect.arrayContaining(["priv-on", "priv-off"]),
+      );
+    });
+
+    it("leaves no org and no changed setting when the registry refuses the write", async () => {
+      const first = await create({ slug: "priv-first", name: "First" });
+      const before = (await orgs()).length;
+
+      const taken = await create({ slug: "priv-first", name: "Again", private_credentials: true });
+      const invalid = await create({ slug: "Not Valid", name: "A", private_credentials: true });
+
+      expect(taken.status).toBe(409);
+      expect(invalid.status).toBe(422);
+      expect((await orgs()).length).toBe(before);
+      // The org that holds the slug keeps its own setting.
+      expect(await privateCredentialsOf((first.body as OrgBody).id)).toBe(false);
+    });
+
+    it("refuses a value that is not a boolean before anything is created", async () => {
+      const before = (await orgs()).length;
+      const reply = await create({ slug: "priv-bad", name: "Bad", private_credentials: "yes" });
+
+      expect(reply.status).toBe(400);
+      expect((await orgs()).length).toBe(before);
+    });
   });
 
   it("keeps slugs unique", async () => {
@@ -248,6 +289,7 @@ describe("who may manage the list of orgs", () => {
       platform_admin: false,
       role: "member",
       orgs: [{ slug: "default", name: "Default" }],
+      private_credentials: true,
     });
     expect((await harness.json("/v8/management/orgs", { auth: false })).status).toBe(401);
   });
@@ -298,6 +340,7 @@ describe("GET /me", () => {
       platform_admin: false,
       role: "admin",
       orgs: [{ slug: "default", name: "Default" }],
+      private_credentials: true,
     });
 
     await patch("default", { slug: "renamed-home" });
@@ -307,6 +350,7 @@ describe("GET /me", () => {
         platform_admin: false,
         role: "admin",
         orgs: [{ slug: "renamed-home", name: "Default" }],
+        private_credentials: true,
       });
     } finally {
       await patch("renamed-home", { slug: "default" });
@@ -342,7 +386,9 @@ describe("org-scoped management routes", () => {
 
     // ... it is in that org's ControlPlane, and only there.
     expect(
-      (await controlPlane(OrgId.make(acme.id)).listCredentials()).map((entry) => entry.id),
+      (await controlPlane(OrgId.make(acme.id)).listCredentials(FULL_ACCESS)).map(
+        (entry) => entry.id,
+      ),
     ).not.toEqual([]);
     expect(await credentialNames("/v8/management/orgs/scoped-acme")).toEqual(["claude-acme.json"]);
     expect(await credentialNames("/v8/management")).toEqual([]);

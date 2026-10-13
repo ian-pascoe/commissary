@@ -19,6 +19,8 @@ export interface StoredCredential {
   readonly provider: string;
   readonly metadata: JsonObject;
   readonly credentialVersion: number;
+  /** The member a private credential belongs to (a column beside the file JSON); absent: shared. */
+  readonly owner?: string;
   readonly createdAt: number;
   readonly updatedAt: number;
 }
@@ -236,6 +238,7 @@ export const deriveFileCredential = (
     authKind: "oauth",
     label: email !== "" ? email : provider,
     ...(prefix === undefined ? {} : { prefix }),
+    ...(stored.owner === undefined ? {} : { owner: stored.owner }),
     disabled: metadata.disabled === true,
     priority: priority ?? 0,
     weight,

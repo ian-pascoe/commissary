@@ -52,3 +52,9 @@
   padding-top: var(--space-4);
   border-top: 2px solid var(--rule);
 }
+
+.choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}

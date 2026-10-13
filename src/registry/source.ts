@@ -20,6 +20,8 @@ export interface ModelSource {
   readonly label: string;
   readonly prefix?: string;
   readonly disabled: boolean;
+  /** The member whose private credential this is (ADR 0023); absent for a shared credential. */
+  readonly owner?: string;
   /** `attributes.plan_type` (Codex OAuth tier). */
   readonly planType?: string;
   /** OpenAI-compatibility credential (`compat_name` attribute or provider `openai-compatibility`). */
@@ -51,6 +53,7 @@ export const toModelSource = (credential: Credential, state: CredentialState): M
     label: credential.label,
     ...(credential.prefix === undefined ? {} : { prefix: credential.prefix }),
     disabled: credential.disabled,
+    ...(credential.owner === undefined ? {} : { owner: credential.owner }),
     ...(planType === "" ? {} : { planType }),
     compat: isCompat(credential),
     excludedModels: credential.excludedModels,

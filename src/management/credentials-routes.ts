@@ -22,6 +22,7 @@ import { AccessPrincipal } from "../access/principal.ts";
 import { holdsSensitivePowers } from "../members/roles.ts";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { ModelRegistry } from "../registry/service.ts";
+import { currentViewer } from "./viewer.ts";
 import {
   bodyJson,
   bodyObject,
@@ -83,7 +84,8 @@ const entryName = (entry: JsonObject): string => text(entry.name);
  */
 const refuseConfigKey = (name: string) =>
   Effect.gen(function* () {
-    const config = yield* controlPlane("isConfigKey", (stub) => stub.isConfigKey(name));
+    const viewer = yield* currentViewer;
+    const config = yield* controlPlane("isConfigKey", (stub) => stub.isConfigKey(name, viewer));
 
     if (config) {
       return yield* replyError(409, "config_credential", {
@@ -105,18 +107,26 @@ const listCredentials = Effect.gen(function* () {
   // Indexes are lower-case hex; match them case-insensitively like every other `auth_index` input.
   const authIndex = params.get("auth_index")?.trim().toLowerCase() ?? "";
 
+  const viewer = yield* currentViewer;
+
   const entries = yield* controlPlane("listCredentialEntries", (stub) =>
-    stub.listCredentialEntries(),
+    stub.listCredentialEntries(viewer),
   );
 
   const now = yield* Clock.currentTimeMillis;
 
-  const matching = entries
-    .filter(
-      (entry) =>
-        (name === "" || entry.name === name || entry.id === name) &&
-        (authIndex === "" || entry.auth_index === authIndex),
-    )
+  const named = entries.filter(
+    (entry) =>
+      (name === "" || entry.name === name || entry.id === name) &&
+      (authIndex === "" || entry.auth_index === authIndex),
+  );
+
+  // What an org admin sees of other members' private credentials (existence only) is listed apart from the
+  // accounts the caller manages.
+  const others = named.filter((entry) => entry.limited === true);
+
+  const matching = named
+    .filter((entry) => entry.limited !== true)
     .toSorted((a, b) => {
       const left = entryName(a);
       const right = entryName(b);
@@ -127,7 +137,12 @@ const listCredentials = Effect.gen(function* () {
 
   const observedAt = new Date(now).toISOString();
 
-  if (pagination === undefined) return jsonReply(200, { observed_at: observedAt, files: matching });
+  if (pagination === undefined)
+    return jsonReply(200, {
+      observed_at: observedAt,
+      files: matching,
+      ...(viewer.admin ? { others } : {}),
+    });
 
   const total = matching.length;
   const start = Math.min((pagination.page - 1) * pagination.pageSize, total);
@@ -136,6 +151,7 @@ const listCredentials = Effect.gen(function* () {
   return jsonReply(200, {
     observed_at: observedAt,
     files: matching.slice(start, end),
+    ...(viewer.admin ? { others } : {}),
     total,
     page: pagination.page,
     page_size: pagination.pageSize,
@@ -150,21 +166,34 @@ interface Upload {
   readonly content: string;
 }
 
-/** Stores one auth file; the error text is what the panel shows for that file. */
-const storeUpload = (upload: Upload) =>
+/**
+ * Stores one auth file; the error text is what the panel shows for that file. A plain member's upload is their private
+ * credential; an org admin's is shared unless `?private=true` asks for a private one. Refused (`403`) where the org
+ * does not let members hold private credentials.
+ */
+const storeUpload = (upload: Upload, wantPrivate: boolean) =>
   Effect.gen(function* () {
     const name = upload.name.trim();
 
     if (!name.toLowerCase().endsWith(".json")) return "file must be .json";
 
     if (unsafeName(name)) return "invalid name";
+    const viewer = yield* currentViewer;
 
     const result = yield* controlPlane("importAuthFile", (stub) =>
-      stub.importAuthFile(name, upload.content),
+      stub.importAuthFile(name, upload.content, { private: wantPrivate }, viewer),
     );
 
-    return result.ok ? undefined : `invalid auth file: ${result.message}`;
+    if (result.ok) return undefined;
+
+    if (result.reason === "forbidden")
+      return yield* replyError(403, "forbidden", { message: result.message });
+
+    return result.reason === "name_taken" ? result.message : `invalid auth file: ${result.message}`;
   });
+
+/** `?private=true`: the upload (or login) is for the caller's own private credential. */
+const wantsPrivate = (params: URLSearchParams): boolean => params.get("private") === "true";
 
 /** Files of a multipart form, ordered by field name like Go; `undefined` when the body is not multipart. */
 const multipartUploads = Effect.gen(function* () {
@@ -201,6 +230,7 @@ const multipartUploads = Effect.gen(function* () {
 });
 
 const uploadCredentials = Effect.gen(function* () {
+  const wantPrivate = wantsPrivate(yield* queryParams);
   const uploads = yield* multipartUploads;
 
   if (uploads !== undefined) {
@@ -209,7 +239,7 @@ const uploadCredentials = Effect.gen(function* () {
     const failed: JsonObject[] = [];
 
     for (const upload of uploads) {
-      const error = yield* storeUpload(upload);
+      const error = yield* storeUpload(upload, wantPrivate);
 
       if (error === undefined) stored.push(upload.name.trim());
       else failed.push({ name: upload.name, error });
@@ -236,7 +266,7 @@ const uploadCredentials = Effect.gen(function* () {
   if (!name.toLowerCase().endsWith(".json"))
     return yield* replyError(400, "name must end with .json");
   const content = yield* bodyText;
-  const error = yield* storeUpload({ name, content });
+  const error = yield* storeUpload({ name, content }, wantPrivate);
 
   return error === undefined ? jsonReply(200, { status: "ok" }) : yield* replyError(400, error);
 });
@@ -287,12 +317,20 @@ const deleteCredentials = Effect.gen(function* () {
   const all = params.get("all");
 
   if (all === "true" || all === "1" || all === "*") {
+    const viewer = yield* currentViewer;
+
     const entries = yield* controlPlane("listCredentialEntries", (stub) =>
-      stub.listCredentialEntries(),
+      stub.listCredentialEntries(viewer),
     );
 
-    const ids = entries.filter((entry) => entry.source === "file").map((entry) => text(entry.id));
-    const removed = yield* controlPlane("removeCredentials", (stub) => stub.removeCredentials(ids));
+    // "All" is the caller's own: an org admin does not remove the private credentials of members they merely see.
+    const ids = entries
+      .filter((entry) => entry.source === "file" && entry.limited !== true)
+      .map((entry) => text(entry.id));
+
+    const removed = yield* controlPlane("removeCredentials", (stub) =>
+      stub.removeCredentials(ids, viewer),
+    );
 
     return jsonReply(200, { status: "ok", deleted: removed.length });
   }
@@ -304,7 +342,11 @@ const deleteCredentials = Effect.gen(function* () {
 
   if (names.length === 1 && unsafe !== undefined) return yield* replyError(400, "invalid name");
   const safe = names.filter((name) => !unsafeName(name));
-  const removed = yield* controlPlane("removeCredentials", (stub) => stub.removeCredentials(safe));
+  const viewer = yield* currentViewer;
+
+  const removed = yield* controlPlane("removeCredentials", (stub) =>
+    stub.removeCredentials(safe, viewer),
+  );
 
   if (names.length === 1) {
     if (removed.length === 1) return jsonReply(200, { status: "ok" });
@@ -319,7 +361,7 @@ const deleteCredentials = Effect.gen(function* () {
     (name) =>
       unsafeName(name)
         ? Effect.succeed({ name, error: "invalid name" })
-        : controlPlane("isConfigKey", (stub) => stub.isConfigKey(name)).pipe(
+        : controlPlane("isConfigKey", (stub) => stub.isConfigKey(name, viewer)).pipe(
             Effect.map((config) => ({
               name,
               error: config ? "config_credential" : "auth file not found",
@@ -337,16 +379,32 @@ const deleteCredentials = Effect.gen(function* () {
 
 const downloadCredential = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
+  const viewer = yield* currentViewer;
+  const name = (yield* queryParams).get("name")?.trim() ?? "";
 
-  if (!holdsSensitivePowers(identity))
+  // A private credential is its owner's alone: not even an org admin with the sensitive powers downloads it.
+  const { access, private: isPrivate } = yield* controlPlane("credentialAccess", (stub) =>
+    stub.credentialAccess(name, viewer),
+  );
+
+  if (access === "limited") {
+    return yield* replyError(403, "private_credential", {
+      message: "a private credential can be downloaded only by its owner",
+    });
+  }
+
+  // Its owner may download it with their session; a shared credential keeps ADR 0006's rule.
+  if (!holdsSensitivePowers(identity) && !(access === "full" && isPrivate))
     return yield* replyError(403, "download_requires_service_token", {
       message:
         "downloading a credential file discloses its tokens: call this endpoint with an Access service token that is an org owner, or as a platform admin (see docs/ACCESS.md)",
     });
-  const name = (yield* queryParams).get("name")?.trim() ?? "";
 
   if (unsafeName(name)) return yield* replyError(400, "invalid name");
-  const file = yield* controlPlane("getCredentialFile", (stub) => stub.getCredentialFile(name));
+
+  const file = yield* controlPlane("getCredentialFile", (stub) =>
+    stub.getCredentialFile(name, viewer),
+  );
 
   if (file === undefined) {
     yield* refuseConfigKey(name);
@@ -365,20 +423,28 @@ const credentialModels = Effect.gen(function* () {
 
   if (name === "") return yield* replyError(400, "name is required");
   const registry = yield* ModelRegistry;
+  const viewer = yield* currentViewer;
 
   const snapshot = yield* registry.snapshot.pipe(
     Effect.mapError(() => replyError(502, "model registry unavailable")),
   );
 
   // Auth files by id; config keys only by their `auth_index` (the name the list gives them): a config credential id is
-  // derived from its key, so answering for one would confirm guesses.
-  const file = snapshot.sources.some((source) => source.source === "file" && source.id === name);
+  // derived from its key, so answering for one would confirm guesses. The models of a private credential are its
+  // owner's to see, and of a shared one an org admin's.
+  const { access } = yield* controlPlane("credentialAccess", (stub) =>
+    stub.credentialAccess(name, viewer),
+  );
+
+  const file =
+    access === "full" &&
+    snapshot.sources.some((source) => source.source === "file" && source.id === name);
 
   const configId =
     file || !/^[0-9a-f]{16}$/i.test(name)
       ? undefined
       : yield* controlPlane("credentialIdOfAuthIndex", (stub) =>
-          stub.credentialIdOfAuthIndex(name.toLowerCase()),
+          stub.credentialIdOfAuthIndex(name.toLowerCase(), viewer),
         );
 
   const id =
@@ -419,10 +485,11 @@ const patchStatus = Effect.gen(function* () {
   if (typeof body.disabled !== "boolean") return yield* replyError(400, "disabled is required");
 
   const { principalId } = yield* AccessPrincipal;
+  const viewer = yield* currentViewer;
 
   const result = yield* controlPlane("setCredentialDisabledByRef", (stub) =>
     // SAFETY: typeof body.disabled === "boolean" was checked above; the narrowing is lost inside the callback.
-    stub.setCredentialDisabledByRef(refOf(body), body.disabled as boolean, principalId),
+    stub.setCredentialDisabledByRef(refOf(body), body.disabled as boolean, principalId, viewer),
   );
 
   // A config API key is disabled through its excluded-models (`*`), like Go answers.
@@ -463,9 +530,10 @@ const patchFields = Effect.gen(function* () {
 
   if (name === "") return yield* replyError(400, "name is required");
   const { name: _name, ...fields } = body;
+  const viewer = yield* currentViewer;
 
   const result = yield* controlPlane("patchCredentialFields", (stub) =>
-    stub.patchCredentialFields({ name }, fields),
+    stub.patchCredentialFields({ name }, fields, viewer),
   );
 
   if (result.ok) return jsonReply(200, { status: "ok" });
@@ -497,10 +565,11 @@ const refreshCredentials = Effect.gen(function* () {
 
   if (!isJsonObject(body)) return yield* replyError(400, "invalid request body");
   const all = body.all === true || params.get("all") === "true";
+  const viewer = yield* currentViewer;
 
   if (all) {
     const results = yield* controlPlane("refreshAllCredentials", (stub) =>
-      stub.refreshAllCredentials(),
+      stub.refreshAllCredentials(viewer),
     );
 
     return jsonReply(200, { ok: true, results });
@@ -512,7 +581,7 @@ const refreshCredentials = Effect.gen(function* () {
   if (name === "") return yield* replyError(400, "name or all=true is required");
 
   const result = yield* controlPlane("refreshCredential", (stub) =>
-    stub.refreshCredential({ name, ...(authIndex === "" ? {} : { authIndex }) }),
+    stub.refreshCredential({ name, ...(authIndex === "" ? {} : { authIndex }) }, viewer),
   );
 
   if (result.ok) return jsonReply(200, { ok: true, auth: result.entry });
@@ -532,8 +601,10 @@ const resetCooldown = Effect.gen(function* () {
 
   if (authIndex === "") return yield* replyError(400, "auth_index is required");
 
+  const viewer = yield* currentViewer;
+
   const result = yield* controlPlane("resetCredentialCooldown", (stub) =>
-    stub.resetCredentialCooldown({ authIndex }),
+    stub.resetCredentialCooldown({ authIndex }, viewer),
   );
 
   if (!result.ok) return yield* replyError(404, "auth not found");

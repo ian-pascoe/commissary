@@ -17,6 +17,7 @@ import { Effect, Schema } from "effect";
 import { HttpRouter, type HttpServerRequest } from "effect/http";
 import { AccessPrincipal } from "../access/principal.ts";
 import { decodeConfig, decodeRawConfig } from "../config/codec.ts";
+import { decodeStoredConfig } from "../config/store.ts";
 import { keyIdentities } from "../config/normalize.ts";
 import type { WriteResult } from "../config/store.ts";
 import { configKeyIds } from "../credentials/key-ids.ts";
@@ -39,6 +40,7 @@ import {
 } from "./contract/api-keys.ts";
 import { bodyJson, controlPlane, handled, jsonReply, type Reply, replyError } from "./http.ts";
 import { storedConfig } from "./settings-routes.ts";
+import { currentViewer } from "./viewer.ts";
 
 const BASE = "/v8/management/api-keys";
 
@@ -66,8 +68,12 @@ const conflict = () => replyError(409, "conflict");
 const refuse = <A>(edit: Edit<A>) =>
   edit.ok ? Effect.succeed(edit.value) : Effect.fail(replyError(edit.status, edit.error));
 
+type GroupWriteResult =
+  | WriteResult<{ readonly id: string; readonly revision: number }>
+  | { readonly ok: false; readonly error: "forbidden"; readonly message: string };
+
 /** The answer to a group write. */
-const written = (result: WriteResult<{ readonly id: string; readonly revision: number }>) => {
+const written = (result: GroupWriteResult) => {
   if (result.ok)
     return Effect.succeed(
       jsonReply(200, {
@@ -76,6 +82,11 @@ const written = (result: WriteResult<{ readonly id: string; readonly revision: n
         id: result.id,
         revision: result.revision,
       }),
+    );
+
+  if (result.error === "forbidden")
+    return Effect.fail(
+      replyError(403, "private_credentials_unavailable", { message: result.message }),
     );
 
   if (result.error === "conflict") return Effect.fail(conflict());
@@ -110,8 +121,30 @@ const familyOf = (
   family: ApiKeyFamily,
 ) => config["api-keys"][family];
 
+/**
+ * The caller's private key groups as the config the write is checked against (what `storedConfig` is for the org's
+ * shared groups); refused unless the org lets members have private credentials.
+ */
+const privateStoredConfig = Effect.gen(function* () {
+  const viewer = yield* currentViewer;
+  const wire = yield* controlPlane("privateKeyConfig", (stub) => stub.privateKeyConfig(viewer));
+
+  if (!wire.ok)
+    return yield* replyError(403, "private_credentials_unavailable", { message: wire.message });
+
+  const config = yield* decodeStoredConfig(wire.document).pipe(
+    Effect.mapError(() => replyError(500, "invalid_config")),
+  );
+
+  // SAFETY: the document is the serialized JSON object of the member's private groups (`PrivateKeyStore`).
+  const document = JSON.parse(wire.document) as JsonObject;
+
+  return { document, config };
+});
+
 const list = Effect.gen(function* () {
-  const view = yield* controlPlane("apiKeysView", (stub) => stub.apiKeysView());
+  const viewer = yield* currentViewer;
+  const view = yield* controlPlane("apiKeysView", (stub) => stub.apiKeysView(viewer));
 
   return jsonReply(200, view);
 });
@@ -135,7 +168,11 @@ const putGroup = Effect.gen(function* () {
 
   // The decoder accepted `raw`, so `group` is an object.
   if (!isJsonObject(group)) return yield* invalidBody();
-  const current = yield* storedConfig;
+  const viewer = yield* currentViewer;
+  // A plain member only ever writes private groups; an org admin chooses.
+  const asPrivate = value.private === true || !viewer.admin;
+
+  const current = asPrivate ? yield* privateStoredConfig : yield* storedConfig;
   const index = yield* indexOf(current.config, value.family, value.id);
   const ids = configKeyIds(current.config, { includeDisabledGroups: true });
   const authIndexOf = yield* currentAuthIndexer;
@@ -170,17 +207,18 @@ const putGroup = Effect.gen(function* () {
 
   const { principalId } = yield* AccessPrincipal;
 
-  const result = yield* controlPlane("writeKeyGroup", (stub) =>
-    stub.writeKeyGroup(
-      {
-        family: value.family,
-        ...(value.id === undefined ? {} : { id: value.id }),
-        revision: value.revision,
-        group: write.group,
-      },
-      principalId,
-    ),
-  );
+  const change = {
+    family: value.family,
+    ...(value.id === undefined ? {} : { id: value.id }),
+    revision: value.revision,
+    group: write.group,
+  };
+
+  const result = asPrivate
+    ? yield* controlPlane("writePrivateKeyGroup", (stub) =>
+        stub.writePrivateKeyGroup(change, principalId, viewer),
+      )
+    : yield* controlPlane("writeKeyGroup", (stub) => stub.writeKeyGroup(change, principalId));
 
   return yield* written(result);
 });
@@ -188,13 +226,15 @@ const putGroup = Effect.gen(function* () {
 const deleteGroup = Effect.gen(function* () {
   const { value } = yield* decoded(DeleteGroupRequest);
   const { principalId } = yield* AccessPrincipal;
+  const viewer = yield* currentViewer;
+  const change = { family: value.family, id: value.id, revision: value.revision, group: null };
 
-  const result = yield* controlPlane("writeKeyGroup", (stub) =>
-    stub.writeKeyGroup(
-      { family: value.family, id: value.id, revision: value.revision, group: null },
-      principalId,
-    ),
-  );
+  const result =
+    value.private === true || !viewer.admin
+      ? yield* controlPlane("writePrivateKeyGroup", (stub) =>
+          stub.writePrivateKeyGroup(change, principalId, viewer),
+        )
+      : yield* controlPlane("writeKeyGroup", (stub) => stub.writeKeyGroup(change, principalId));
 
   return yield* written(result);
 });
@@ -205,8 +245,10 @@ const probe = Effect.gen(function* () {
 
   if (authIndex === "") return yield* replyError(400, "auth_index is required");
 
+  const viewer = yield* currentViewer;
+
   const resolved = yield* controlPlane("apiKeyProbeTarget", (stub) =>
-    stub.apiKeyProbeTarget(authIndex),
+    stub.apiKeyProbeTarget(authIndex, viewer),
   );
 
   if (!resolved.ok) return yield* replyError(404, "api key not found");

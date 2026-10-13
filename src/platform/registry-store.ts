@@ -9,7 +9,7 @@
  * existed before orgs, so upgrading needs no settings and moves no data.
  */
 import { Schema } from "effect";
-import { DEFAULT_ORG_SLUG, GLOBAL_ORG, OrgId, OrgSlug } from "./org.ts";
+import { DEFAULT_ORG_SLUG, GLOBAL_ORG, newOrgId, OrgId, OrgSlug } from "./org.ts";
 
 /** An org as the registry lists it. */
 export interface OrgRecord {
@@ -22,7 +22,12 @@ export interface OrgRecord {
   readonly createdAt: number;
 }
 
-export type OrgInput = { readonly slug: string; readonly name: string };
+/** `id`: the permanent id to create the org under (a caller that prepared the org's ControlPlane first); default: a fresh one. */
+export type OrgInput = {
+  readonly slug: string;
+  readonly name: string;
+  readonly id?: OrgId;
+};
 
 export type OrgPatch = { readonly slug?: string; readonly name?: string };
 
@@ -177,7 +182,7 @@ export class PlatformStore {
       return { ok: false, error: "slug_taken", message: `the slug “${input.slug}” is in use` };
 
     // Never derived from the slug: a renamed org's old slug may be taken again, and its id must stay unique.
-    const id = OrgId.make(`org-${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`);
+    const id = input.id ?? newOrgId();
 
     this.#sql.exec(
       `INSERT INTO orgs (id, slug, name, created_at) VALUES (?, ?, ?, ?)`,

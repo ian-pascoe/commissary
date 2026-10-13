@@ -1,4 +1,5 @@
 // Cooldown/quota state, retry planning and the Worker-side picker through the real ControlPlane Durable Object.
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { env } from "cloudflare:workers";
 import { evictDurableObject } from "cloudflare:test";
 import { Effect } from "effect";
@@ -35,7 +36,7 @@ const fail = (httpStatus: number, extra: Record<string, unknown> = {}) => ({
 describe("ControlPlane report -> cooldown (Workers pool)", () => {
   it("cools a rate-limited credential per model and answers model_cooldown with Retry-After", async () => {
     const stub = plane();
-    await stub.importAuthFile("claude-a.json", claudeFile());
+    await stub.importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
     const request = { providers: ["claude"], model: "claude-sonnet-4-5" };
     const first = picked(await stub.pick(request));
     await stub.report(first.lease, fail(429, { retryAfterMs: 90_000 }));
@@ -54,13 +55,13 @@ describe("ControlPlane report -> cooldown (Workers pool)", () => {
     // Another model of the same credential is unaffected.
     expect((await stub.pick({ providers: ["claude"], model: "claude-opus-4-1" })).ok).toBe(true);
 
-    const [summary] = await stub.listCredentials();
+    const [summary] = await stub.listCredentials(FULL_ACCESS);
     expect(summary).toMatchObject({ failed: 1, lastError: { httpStatus: 429 } });
   });
 
   it("credential-scoped failures block every model and success of a request-scoped failure changes nothing", async () => {
     const stub = plane();
-    await stub.importAuthFile("claude-a.json", claudeFile());
+    await stub.importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
     const first = picked(await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" }));
     await stub.report(first.lease, fail(400, { requestScoped: true }));
     expect((await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" })).ok).toBe(true);
@@ -73,7 +74,7 @@ describe("ControlPlane report -> cooldown (Workers pool)", () => {
 
   it("planRetry answers over RPC", async () => {
     const stub = plane();
-    await stub.importAuthFile("claude-a.json", claudeFile());
+    await stub.importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
     const first = picked(await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" }));
     await stub.report(first.lease, fail(429, { retryAfterMs: 20_000 }));
 
@@ -103,7 +104,7 @@ describe("ControlPlane report -> cooldown (Workers pool)", () => {
       const name = crypto.randomUUID();
       const stub = plane(name);
       await stub.importConfig(yaml, "test");
-      await stub.importAuthFile("claude-a.json", claudeFile());
+      await stub.importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
       const first = picked(await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" }));
       await stub.report(first.lease, fail(500));
       await evictDurableObject(stub);

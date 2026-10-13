@@ -95,17 +95,18 @@ const status = async (state: string) =>
   (await json(`/v8/management/oauth/status?state=${state}`)).body;
 
 describe("management oauth routes", () => {
-  it("requires the admin gate", async () => {
+  it("requires a signed-in member of the org", async () => {
     expect(
       (await call("/v8/management/oauth/auth-url?provider=claude", { auth: false })).status,
     ).toBe(401);
+    // A plain member starts a login for their own private credential.
     expect(
       (
         await call("/v8/management/oauth/auth-url?provider=claude", {
           auth: await token("other@x.com"),
         })
       ).status,
-    ).toBe(403);
+    ).toBe(200);
     expect(
       (await call("/v8/management/oauth/callback", { method: "POST", auth: false })).status,
     ).toBe(401);

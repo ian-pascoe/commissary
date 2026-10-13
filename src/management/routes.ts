@@ -29,6 +29,7 @@ import {
   type HttpServerRequest,
   type HttpServerResponse,
 } from "effect/http";
+import type { AccessPrincipal } from "../access/principal.ts";
 import { LEGACY_PANEL_PATH } from "../access/routes.ts";
 import { routeServices } from "../http/route-services.ts";
 import type { WorkerEnv } from "../platform/env.ts";
@@ -67,6 +68,7 @@ export const ManagementRoutes = HttpRouter.addAll(
 
     const bound = <
       R extends
+        | AccessPrincipal
         | ModelRegistry
         | HttpClient.HttpClient
         | CatalogStore

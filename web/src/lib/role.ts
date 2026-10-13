@@ -2,7 +2,8 @@
 // functions keep the panel from offering a control that would be refused. Pure: no DOM, tested in
 // test/web-role.test.ts.
 //
-// Roles: org owner > org admin > member. A plain member may only read their own usage; org admins manage the org's configuration,
+// Roles: org owner > org admin > member. A plain member may only read their own usage, and, where the org lets members
+// connect private credentials (ADR 0023), manage their own private accounts and API keys; org admins manage the org's configuration,
 // plain members and teams; org owners also change roles, add org admins and org owners, and decide who may join by themselves. A
 // platform admin is an org owner of every org.
 import type { Me } from "#contract/orgs.ts";
@@ -60,35 +61,45 @@ export interface PanelPage {
   readonly label: string;
   /** The least role that opens the page. */
   readonly role: OrgRole;
+  /** A plain member opens it too where the org lets members connect private credentials (their own rows only). */
+  readonly privateMembers?: boolean;
 }
 
 /** The pages of the shell's nav, in order. A plain member's panel is the Usage page. */
 export const PAGES: ReadonlyArray<PanelPage> = [
   { to: "/", label: "Overview", role: "admin" },
-  { to: "/accounts", label: "Accounts", role: "admin" },
-  { to: "/keys", label: "API keys", role: "admin" },
+  { to: "/accounts", label: "Accounts", role: "admin", privateMembers: true },
+  { to: "/keys", label: "API keys", role: "admin", privateMembers: true },
   { to: "/models", label: "Models", role: "admin" },
   { to: "/usage", label: "Usage", role: "member" },
   { to: "/members", label: "Members", role: "admin" },
   { to: "/settings", label: "Settings", role: "admin" },
 ];
 
-/** The nav links a role sees. */
-export const pagesFor = (role: OrgRole): ReadonlyArray<PanelPage> =>
-  PAGES.filter((page) => atLeast(role, page.role));
+/** The nav links a role sees; `privateCredentials`: the org lets members connect private credentials. */
+export const pagesFor = (role: OrgRole, privateCredentials = false): ReadonlyArray<PanelPage> =>
+  PAGES.filter(
+    (page) => atLeast(role, page.role) || (privateCredentials && page.privateMembers === true),
+  );
 
-/** The page a role lands on when the one asked for is not theirs: the first page of their nav. */
-export const homeFor = (role: OrgRole): string => pagesFor(role)[0]?.to ?? "/usage";
+/** The page a role lands on when the one asked for is not theirs: the Overview for org admins, Usage for the rest. */
+export const homeFor = (role: OrgRole): string => (atLeast(role, "admin") ? "/" : "/usage");
 
 const trimmed = (pathname: string): string =>
   pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
 
+const within = (pathname: string, page: string): boolean =>
+  trimmed(pathname) === page || pathname.startsWith(`${page}/`);
+
 /**
  * Whether a role may open a page of the panel (`pathname` is relative to the org's base path). Sub-pages of a page
- * need an org admin, like `/usage/prices`, except the page itself.
+ * need an org admin, like `/usage/prices`, except the page itself. A plain member opens the pages of their own
+ * private accounts and API keys, with their sub-pages, where the org lets members connect private credentials.
  */
-export const pageAllowed = (role: OrgRole, pathname: string): boolean =>
-  atLeast(role, "admin") || trimmed(pathname) === "/usage";
+export const pageAllowed = (role: OrgRole, pathname: string, privateCredentials = false): boolean =>
+  atLeast(role, "admin") ||
+  trimmed(pathname) === "/usage" ||
+  (privateCredentials && (within(pathname, "/accounts") || within(pathname, "/keys")));
 
 // ---------------------------------------------------------------------------------------------------------------
 // Members and teams
@@ -97,12 +108,20 @@ export const pageAllowed = (role: OrgRole, pathname: string): boolean =>
 export interface Caller {
   readonly role: OrgRole;
   readonly platformAdmin: boolean;
+  /** The org lets members connect private credentials (ADR 0023). */
+  readonly privateCredentials: boolean;
 }
 
-export const callerOf = (me: Pick<Me, "role" | "platform_admin">): Caller => ({
+export const callerOf = (
+  me: Pick<Me, "role" | "platform_admin"> & { readonly private_credentials?: boolean | undefined },
+): Caller => ({
   role: effectiveRole(me),
   platformAdmin: me.platform_admin,
+  privateCredentials: me.private_credentials === true,
 });
+
+/** Whether the caller connects their own private credentials: a plain member (where allowed) holds nothing else. */
+export const holdsOnlyPrivate = (caller: Caller): boolean => !atLeast(caller.role, "admin");
 
 /** Org admins manage plain members and teams; org owners everyone. */
 export const canManageMembers = (caller: Caller): boolean => atLeast(caller.role, "admin");

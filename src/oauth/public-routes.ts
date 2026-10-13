@@ -14,6 +14,7 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { controlPlane } from "../management/http.ts";
 import { isValidOAuthState, type OAuthProvider } from "./names.ts";
 import { CurrentOrg, orgOfScopedName } from "../platform/org.ts";
+import { FULL_ACCESS } from "../credentials/ownership.ts";
 
 const HEADERS = {
   "cache-control": "no-store",
@@ -60,7 +61,8 @@ const callbackHandler = (provider: OAuthProvider) =>
     if (org === undefined) return rejected;
 
     const result = yield* controlPlane("oauthCallback", (stub) =>
-      stub.oauthCallback({ provider, state, code, error }),
+      // The provider's redirect has no Access identity: the state is the secret, and its session knows the owner.
+      stub.oauthCallback({ provider, state, code, error }, FULL_ACCESS),
     ).pipe(
       Effect.provideService(CurrentOrg, org),
       Effect.catch(() => Effect.succeed(undefined)),

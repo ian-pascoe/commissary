@@ -340,22 +340,47 @@ export const CompatGroupView = Schema.Struct({
 
 export type CompatGroupView = typeof CompatGroupView.Type;
 
-/** `GET /api-keys`: every group, with its id and revision. */
+const GroupFamilies = Schema.Struct({
+  gemini: Schema.Array(GroupView),
+  interactions: Schema.Array(GroupView),
+  vertex: Schema.Array(GroupView),
+  codex: Schema.Array(GroupView),
+  claude: Schema.Array(GroupView),
+  xai: Schema.Array(GroupView),
+  meta: Schema.Array(GroupView),
+  "opencode-zen": Schema.Array(GroupView),
+  "opencode-go": Schema.Array(GroupView),
+  "openai-compatibility": Schema.Array(CompatGroupView),
+});
+
+/**
+ * What an org admin sees of another member's private key group (ADR 0023): that it exists, its provider, owner and
+ * label. The `id` and `revision` let an org admin remove it (`DELETE /api-keys/groups` with `private`).
+ */
+export const LimitedKeyGroup = Schema.Struct({
+  id: Schema.String,
+  revision: Revision,
+  family: ApiKeyFamily,
+  provider: Schema.String,
+  label: Schema.String,
+  limited: Schema.Literal(true),
+  private: Schema.Literal(true),
+  owner: Schema.Struct({ member_id: Schema.String, email: optional(Schema.String) }),
+});
+
+export type LimitedKeyGroup = typeof LimitedKeyGroup.Type;
+
+/**
+ * `GET /api-keys`: every group, with its id and revision. `families` holds the org's shared groups (empty for a plain
+ * member). `own` holds the caller's private groups in full (a member only), `others` lists the other members'
+ * private groups for an org admin, existence only.
+ */
 export const ApiKeysList = Schema.Struct({
   /** The org's change counter. */
   version: Schema.Int,
-  families: Schema.Struct({
-    gemini: Schema.Array(GroupView),
-    interactions: Schema.Array(GroupView),
-    vertex: Schema.Array(GroupView),
-    codex: Schema.Array(GroupView),
-    claude: Schema.Array(GroupView),
-    xai: Schema.Array(GroupView),
-    meta: Schema.Array(GroupView),
-    "opencode-zen": Schema.Array(GroupView),
-    "opencode-go": Schema.Array(GroupView),
-    "openai-compatibility": Schema.Array(CompatGroupView),
-  }),
+  families: GroupFamilies,
+  own: optional(GroupFamilies),
+  others: optional(Schema.Array(LimitedKeyGroup)),
 });
 
 export type ApiKeysList = typeof ApiKeysList.Type;
@@ -405,12 +430,15 @@ export const PutGroupRequest = Schema.Union([
     family: KeyGroupFamily,
     id: optional(Schema.String),
     revision: Revision,
+    /** The group is the caller's private group (always so for a plain member). */
+    private: optional(Schema.Boolean),
     group: GroupInput,
   }),
   Schema.Struct({
     family: Schema.Literal("openai-compatibility"),
     id: optional(Schema.String),
     revision: Revision,
+    private: optional(Schema.Boolean),
     group: CompatGroupInput,
   }),
 ]);
@@ -421,6 +449,8 @@ export const DeleteGroupRequest = Schema.Struct({
   family: ApiKeyFamily,
   id: Schema.String,
   revision: Revision,
+  /** The group is a private one (the caller's own, or any member's for an org admin). */
+  private: optional(Schema.Boolean),
 });
 
 export type DeleteGroupRequest = typeof DeleteGroupRequest.Type;

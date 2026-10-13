@@ -113,6 +113,18 @@ describe("keySections", () => {
   it("is empty without keys", () => {
     expect(keySections(list({}))).toEqual([]);
   });
+
+  it("lists the caller's private groups after the shared ones, marked and never merged", () => {
+    const own = list({ claude: [group({ name: "mine" }, 0)] }).families;
+    const sections = keySections({ ...list({ claude: [group({}, 0)] }), own });
+
+    expect(sections.map((section) => [section.id, section.caption])).toEqual([
+      ["claude", undefined],
+      ["own:claude", "Private to you"],
+    ]);
+    expect(sections[0]?.groups[0]?.private).toBeUndefined();
+    expect(sections[1]?.groups[0]).toMatchObject({ family: "claude", index: 0, private: true });
+  });
 });
 
 describe("groups", () => {
@@ -319,6 +331,20 @@ describe("the group form", () => {
       },
     });
     expect(JSON.stringify(request)).not.toContain("redacted]…abcd");
+  });
+
+  it("marks a write to the caller's private group", () => {
+    const view = group();
+
+    expect(putGroupRequest("claude", view, draftOf(view), true)).toMatchObject({
+      id: "g0",
+      private: true,
+    });
+    expect(putGroupRequest("claude", undefined, draftOf(view), true)).toMatchObject({
+      revision: 0,
+      private: true,
+    });
+    expect(putGroupRequest("claude", view, draftOf(view))).not.toHaveProperty("private");
   });
 
   it("writes a replaced key's new secret with its auth_index", () => {

@@ -22,6 +22,7 @@ import { Effect } from "effect";
 import type { Json } from "../json/index.ts";
 import { checkCredentialQuota, sweepQuotas } from "../quota/check.ts";
 import { bodyObject, handled, jsonReply, replyError } from "./http.ts";
+import { currentViewer } from "./viewer.ts";
 
 const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");
 
@@ -32,10 +33,15 @@ const checkQuota = Effect.gen(function* () {
 
   if (name === "") return yield* replyError(400, "name is required");
 
-  const result = yield* checkCredentialQuota({
-    name,
-    ...(authIndex === "" ? {} : { authIndex }),
-  }).pipe(
+  const viewer = yield* currentViewer;
+
+  const result = yield* checkCredentialQuota(
+    {
+      name,
+      ...(authIndex === "" ? {} : { authIndex }),
+    },
+    { viewer },
+  ).pipe(
     Effect.catchTag("QuotaControlPlaneError", (error) =>
       Effect.logError(`management ${error.operation} failed: ${error.message}`).pipe(
         Effect.andThen(Effect.fail(replyError(502, "control plane unavailable"))),
@@ -60,7 +66,10 @@ const checkQuota = Effect.gen(function* () {
 const iso = (ms: number): string => new Date(ms).toISOString();
 
 const checkAllQuotas = Effect.gen(function* () {
-  const sweep = yield* sweepQuotas("panel").pipe(
+  // The caller's own accounts: an org admin's check never reaches a private credential.
+  const viewer = yield* currentViewer;
+
+  const sweep = yield* sweepQuotas("panel", viewer).pipe(
     Effect.catchTag("QuotaControlPlaneError", (error) =>
       Effect.logError(`management ${error.operation} failed: ${error.message}`).pipe(
         Effect.andThen(Effect.fail(replyError(502, "control plane unavailable"))),

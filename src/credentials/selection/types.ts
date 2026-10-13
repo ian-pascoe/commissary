@@ -56,6 +56,11 @@ export const PickRequest = Schema.Struct({
   requestRetry: optional(Schema.Int),
   /** Restrict selection to one credential (`pinned_auth_id`). */
   pinnedAuthId: optional(Schema.String),
+  /**
+   * The member the request is for. A private credential is a candidate only for the member that owns it; a request
+   * without one (a service token) is served by shared credentials only.
+   */
+  memberId: optional(Schema.String),
   requireAuthKind: optional(AuthKind),
   /** Skip Codex credentials on the free plan. */
   disallowFreeCodex: optional(Schema.Boolean),

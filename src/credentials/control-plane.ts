@@ -16,7 +16,15 @@ import {
 import type { JsonObject } from "../json/index.ts";
 import { isTokenPayloadKey } from "./merge.ts";
 import { CredentialPool, type ConfigView, type RefreshTarget, type UpsertResult } from "./pool.ts";
-import { type Credential, executorKey } from "./model.ts";
+import { type Credential, type CredentialState, executorKey } from "./model.ts";
+import {
+  type Access,
+  accessTo,
+  FULL_ACCESS,
+  isFullAccess,
+  type Scope,
+  type Viewer,
+} from "./ownership.ts";
 import {
   RefreshManager,
   type RefreshOptions,
@@ -41,10 +49,14 @@ import {
 } from "../management/api-keys-probe.ts";
 import { buildApiKeysList } from "../management/api-keys-view.ts";
 import { locateKey } from "../management/api-keys-write.ts";
+import { API_KEY_FAMILIES } from "../config/schema.ts";
 import { configKeyIds } from "./key-ids.ts";
+import { PrivateKeyStore } from "./private-keys.ts";
 import {
   buildConfigCredentialEntry,
   buildCredentialEntry,
+  buildLimitedEntry,
+  ownerFields,
 } from "../management/credential-entry.ts";
 import {
   apiCallToken,
@@ -169,6 +181,24 @@ const listed = ({ credential }: RefreshTarget): boolean =>
   (credential.source === "config" && isConfigQuotaProvider(executorKey(credential)));
 
 /**
+ * Whether `viewer` reaches a credential owned by `owner`: `full` for the operations of its owner (or of an org admin
+ * on a shared credential), `reach` also for the ones an org admin has on a private credential (list, disable, remove).
+ * The system (`FULL_ACCESS`: cron sweeps, internal callers) reaches everything.
+ */
+const reaches = (viewer: Scope, owner: string | undefined, need: "full" | "reach"): boolean => {
+  const access = accessTo(owner, viewer);
+
+  return need === "full" ? access === "full" : access !== "none";
+};
+
+/** The refusal of a name another owner's credential already holds: it must not say whose it is. */
+const NAME_TAKEN = {
+  ok: false,
+  reason: "name_taken",
+  message: "a credential with this name already exists",
+} as const;
+
+/**
  * A failed batch refresh as the panel shows it: a fixed reason per failure code plus the upstream status. The
  * refresher's own message is never passed on: it can quote the upstream body, which may echo the refresh token.
  */
@@ -252,12 +282,15 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #pool: CredentialPool;
   readonly #refresh: RefreshManager;
   readonly #oauth: OAuthService;
+  readonly #sessions: OAuthSessions;
   readonly #quota: QuotaReportStore;
   readonly #sweepLease: SweepLeaseStore;
   readonly #grants: ResetGrantStore;
   /** The org's data key: seals and opens the stored secrets once the object started. */
   readonly #secrets = new OrgSecrets();
   readonly #members: MemberStore;
+  /** The members' private API key groups (sealed rows of their own, never config entries). */
+  readonly #privateKeys: PrivateKeyStore;
   /** The org this object serves, from its name. */
   readonly #org: OrgId;
   /**
@@ -281,6 +314,7 @@ export class ControlPlane extends DurableObject<Env> {
 
     this.#config = new ConfigStore(ctx.storage.sql, this.#org, transaction, this.#secrets);
     this.#members = new MemberStore(ctx.storage.sql, this.#org, transaction);
+    this.#privateKeys = new PrivateKeyStore(ctx.storage.sql, transaction, this.#secrets);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
 
@@ -288,6 +322,8 @@ export class ControlPlane extends DurableObject<Env> {
     this.#pool = new CredentialPool({
       store: credentials,
       config: () => this.#currentConfig(),
+      privateCredentials: () => this.#members.privateCredentials(),
+      privateKeys: () => this.#privateKeys.owners(),
       decorate: (credential) => this.#refresh.decorate(credential),
     });
     this.#refresh = new RefreshManager({
@@ -300,20 +336,31 @@ export class ControlPlane extends DurableObject<Env> {
       metaMintUrl: env.META_MINT_URL,
       workers: () => this.#currentConfig().config.oauth["auth-auto-refresh-workers"],
     });
+    this.#sessions = new OAuthSessions(new SqliteSessionTable(ctx.storage.sql));
     this.#oauth = makeOAuthService({
       org: this.#org,
       metaMintUrl: env.META_MINT_URL,
-      sessions: new OAuthSessions(new SqliteSessionTable(ctx.storage.sql)),
+      sessions: this.#sessions,
       sink: {
-        get: (name) => this.#pool.refreshTarget(name)?.credential.metadata,
-        list: () =>
-          this.#pool.refreshTargets().map(({ credential }) => ({
-            id: credential.id,
-            type: typeof credential.metadata.type === "string" ? credential.metadata.type : "",
-            metadata: credential.metadata,
-          })),
-        save: async (name, metadata) => {
-          const result = this.#upsert(name, metadata, false);
+        get: (name, owner) => {
+          const target = this.#pool.refreshTarget(name);
+
+          return target !== undefined && target.credential.owner === owner
+            ? target.credential.metadata
+            : undefined;
+        },
+        list: (owner) =>
+          this.#pool
+            .refreshTargets()
+            .filter(({ credential }) => credential.owner === owner)
+            .map(({ credential }) => ({
+              id: credential.id,
+              type: typeof credential.metadata.type === "string" ? credential.metadata.type : "",
+              metadata: credential.metadata,
+            })),
+        save: async (name, metadata, owner) => {
+          if (this.#ownerClash(name, owner)) return { ok: false, message: NAME_TAKEN.message };
+          const result = this.#upsert(name, metadata, false, owner);
 
           if (!result.ok) return { ok: false, message: result.message };
           await this.#rearm();
@@ -321,7 +368,7 @@ export class ControlPlane extends DurableObject<Env> {
           return { ok: true };
         },
         remove: async (id) => {
-          await this.removeCredential(id);
+          await this.removeCredential(id, FULL_ACCESS);
         },
       },
     });
@@ -479,14 +526,27 @@ export class ControlPlane extends DurableObject<Env> {
   membershipSettings(): MembershipSettingsWire {
     this.#ensureMembership();
 
-    return { autoJoin: this.#members.autoJoin() };
+    return {
+      autoJoin: this.#members.autoJoin(),
+      privateCredentials: this.#members.privateCredentials(),
+    };
   }
 
-  setMembershipSettings(settings: MembershipSettingsWire): MembershipSettingsWire {
+  /** Changes the settings named; `privateCredentials` turns every private credential off or on again at once. */
+  setMembershipSettings(settings: Partial<MembershipSettingsWire>): MembershipSettingsWire {
     this.#ensureMembership();
-    this.#members.setAutoJoin(settings.autoJoin);
 
-    return { autoJoin: this.#members.autoJoin() };
+    if (settings.autoJoin !== undefined) this.#members.setAutoJoin(settings.autoJoin);
+
+    if (
+      settings.privateCredentials !== undefined &&
+      settings.privateCredentials !== this.#members.privateCredentials()
+    ) {
+      this.#members.setPrivateCredentials(settings.privateCredentials);
+      this.#pool.invalidate();
+    }
+
+    return this.membershipSettings();
   }
 
   listTeams(): ReadonlyArray<TeamRecord> {
@@ -598,9 +658,12 @@ export class ControlPlane extends DurableObject<Env> {
     return this.#pool.report(decodeLease(lease), decodeReportResult(result));
   }
 
-  /** What the model registry needs from every credential (provider, prefix, exclusions, aliases, model state); no secrets. */
-  listModelSources(): ModelSource[] {
-    return this.#pool.modelSources();
+  /**
+   * What the model registry needs from the credentials `scope` reaches (provider, prefix, exclusions, aliases, model
+   * state, owner); no secrets. The registry reads them as `FULL_ACCESS` and narrows them itself per caller.
+   */
+  listModelSources(scope: Scope): ModelSource[] {
+    return this.#pool.modelSources().filter((source) => reaches(scope, source.owner, "reach"));
   }
 
   /**
@@ -611,9 +674,13 @@ export class ControlPlane extends DurableObject<Env> {
     return this.#pool.planRetry(decodeRetryQuery(query));
   }
 
-  /** All credentials with runtime state; token material is redacted. */
-  listCredentials(): CredentialSummary[] {
-    return this.#pool.list();
+  /** The credentials `scope` reaches, with runtime state; token material is redacted. */
+  listCredentials(scope: Scope): CredentialSummary[] {
+    return this.#pool.list().filter((summary) => {
+      const target = this.#pool.refreshTarget(summary.id);
+
+      return target === undefined || reaches(scope, target.credential.owner, "reach");
+    });
   }
 
   /**
@@ -623,9 +690,9 @@ export class ControlPlane extends DurableObject<Env> {
   async upsertCredential(
     name: string,
     content: string | JsonObject,
-    options?: { mergeExisting?: boolean },
+    options?: { mergeExisting?: boolean; owner?: string },
   ): Promise<UpsertResult> {
-    const result = this.#upsert(name, content, options?.mergeExisting ?? true);
+    const result = this.#upsert(name, content, options?.mergeExisting ?? true, options?.owner);
 
     if (result.ok) await this.#rearm();
 
@@ -639,17 +706,69 @@ export class ControlPlane extends DurableObject<Env> {
   async importAuthFile(
     name: string,
     content: string | JsonObject,
-    options: { readonly mergeExisting?: boolean } = {},
+    options: { readonly mergeExisting?: boolean; readonly private?: boolean },
+    viewer: Scope,
   ): Promise<UpsertResult> {
-    const result = this.#upsert(name, content, options.mergeExisting === true);
+    const owner = this.#importOwner(viewer, options.private === true);
+
+    if (!owner.ok) return owner.failure;
+
+    if (this.#ownerClash(name, owner.owner)) return NAME_TAKEN;
+    const result = this.#upsert(name, content, options.mergeExisting === true, owner.owner);
 
     if (result.ok) await this.#rearm();
 
     return result;
   }
 
+  /**
+   * Who owns a credential `viewer` imports: an org admin imports for the org unless they ask for a private one, a plain
+   * member always for themselves, and only while the org lets members hold private credentials. The system: shared.
+   */
+  #importOwner(
+    viewer: Scope,
+    wantPrivate: boolean,
+  ):
+    | { readonly ok: true; readonly owner: string | undefined }
+    | { readonly ok: false; readonly failure: UpsertResult & { readonly ok: false } } {
+    if (isFullAccess(viewer) || (viewer.admin && !wantPrivate))
+      return { ok: true, owner: undefined };
+
+    if (viewer.member === undefined) {
+      return {
+        ok: false,
+        failure: {
+          ok: false,
+          reason: "forbidden",
+          message: "only a member can hold a private credential",
+        },
+      };
+    }
+
+    if (!this.#members.privateCredentials()) {
+      return {
+        ok: false,
+        failure: {
+          ok: false,
+          reason: "forbidden",
+          message: "private credentials are turned off for this org",
+        },
+      };
+    }
+
+    return { ok: true, owner: viewer.member };
+  }
+
+  /** Whether auth file `name` is stored under another owner than `owner` (a name belongs to one credential). */
+  #ownerClash(name: string, owner: string | undefined): boolean {
+    const existing = this.#pool.refreshTarget(name);
+
+    return existing !== undefined && existing.credential.owner !== owner;
+  }
+
   /** Removes a stored credential and its runtime state. */
-  async removeCredential(id: string): Promise<{ readonly removed: boolean }> {
+  async removeCredential(id: string, scope: Scope): Promise<{ readonly removed: boolean }> {
+    if (!this.#reaches(id, scope, "reach")) return { removed: false };
     const removed = this.#pool.remove(id);
 
     if (removed) {
@@ -663,12 +782,33 @@ export class ControlPlane extends DurableObject<Env> {
   }
 
   /** Removes several stored credentials; returns the ids that existed. */
-  async removeCredentials(ids: ReadonlyArray<string>): Promise<string[]> {
-    const removed = this.#removeMany(ids);
+  async removeCredentials(ids: ReadonlyArray<string>, viewer: Scope): Promise<string[]> {
+    const removed = this.#removeMany(this.#reachable(ids, viewer, "reach"));
 
     if (removed.length > 0) await this.#rearm();
 
     return removed;
+  }
+
+  /** The names of `ids` that are no stored credential or that `viewer` reaches (a hidden one is as good as absent). */
+  #reachable(ids: ReadonlyArray<string>, viewer: Scope, need: "full" | "reach"): string[] {
+    return ids.filter((id) => {
+      const target = this.#pool.refreshTarget(id);
+
+      return target === undefined || reaches(viewer, target.credential.owner, need);
+    });
+  }
+
+  /** Whether `scope` reaches the stored credential `id` (an unknown one is nobody's to refuse). */
+  #reaches(id: string, scope: Scope, need: "full" | "reach"): boolean {
+    const target = this.#pool.refreshTarget(id);
+
+    return target === undefined || reaches(scope, target.credential.owner, need);
+  }
+
+  /** The entries of the credential pool `viewer` reaches. */
+  #scope(viewer: Scope, need: "full" | "reach"): RefreshTarget[] {
+    return this.#pool.entries().filter(({ credential }) => reaches(viewer, credential.owner, need));
   }
 
   /**
@@ -696,7 +836,12 @@ export class ControlPlane extends DurableObject<Env> {
   }
 
   /** Disables or re-enables a stored credential (persisted as `disabled` in its file JSON). */
-  async setCredentialDisabled(id: string, disabled: boolean): Promise<SetDisabledResult> {
+  async setCredentialDisabled(
+    id: string,
+    disabled: boolean,
+    scope: Scope,
+  ): Promise<SetDisabledResult> {
+    if (!this.#reaches(id, scope, "reach")) return { ok: false, error: "not_found" };
     const result = this.#pool.setDisabled(id, disabled);
 
     if (result !== "ok") return { ok: false, error: result };
@@ -790,7 +935,7 @@ export class ControlPlane extends DurableObject<Env> {
    * Panel entries of all stored auth files, plus the config API keys whose provider reports quota with the key
    * (`CONFIG_QUOTA_PROVIDERS`, listed by their `auth_index`, `buildConfigCredentialEntry`). No secrets.
    */
-  listCredentialEntries(): WireJsonObject[] {
+  listCredentialEntries(viewer: Scope): WireJsonObject[] {
     const now = Date.now();
     const reports = this.#quota.all();
     const grants = this.#grants.statuses();
@@ -800,76 +945,127 @@ export class ControlPlane extends DurableObject<Env> {
       ? configKeyIds(this.#currentConfig().config)
       : undefined;
 
-    return entries.filter(listed).map(({ credential, state }) => {
-      if (credential.source === "config") {
-        const position = ids === undefined ? undefined : locateKey(ids, credential.id);
+    return entries.filter(listed).flatMap(({ credential, state }) => {
+      const access = accessTo(credential.owner, viewer);
 
-        return buildConfigCredentialEntry(
-          credential,
-          state,
-          now,
-          this.#authIndex,
-          position === undefined ? undefined : { family: position.family, index: position.group },
-          reports.get(credential.id),
-        );
+      if (access === "none") return [];
+
+      // An org admin sees that a private credential exists, nothing of its use or standing.
+      if (access === "limited") {
+        return [buildLimitedEntry(credential, this.#ownerEmail(credential), this.#authIndex)];
       }
 
-      return buildCredentialEntry(
+      const entry = this.#fullEntry(credential, state, now, ids, reports, grants);
+
+      return credential.owner === undefined
+        ? [entry]
+        : [{ ...entry, ...ownerFields(credential.owner, this.#ownerEmail(credential)) }];
+    });
+  }
+
+  #ownerEmail(credential: Credential): string | undefined {
+    return credential.owner === undefined
+      ? undefined
+      : this.#members.member(credential.owner)?.email;
+  }
+
+  #fullEntry(
+    credential: Credential,
+    state: CredentialState,
+    now: number,
+    ids: ReturnType<typeof configKeyIds> | undefined,
+    reports: ReadonlyMap<string, QuotaReport>,
+    grants: ReadonlyMap<string, ResetGrantStatus>,
+  ): WireJsonObject {
+    if (credential.source === "config") {
+      const position = ids === undefined ? undefined : locateKey(ids, credential.id);
+
+      return buildConfigCredentialEntry(
         credential,
         state,
         now,
         this.#authIndex,
+        position === undefined ? undefined : { family: position.family, index: position.group },
         reports.get(credential.id),
-        grants.get(credential.id),
       );
-    });
+    }
+
+    return buildCredentialEntry(
+      credential,
+      state,
+      now,
+      this.#authIndex,
+      reports.get(credential.id),
+      grants.get(credential.id),
+    );
   }
 
   /**
    * The listed config account (`CONFIG_QUOTA_PROVIDERS`) whose listed name, its keyed `auth_index`, is `name`. An index
    * reveals nothing about the key, so resolving one confirms no guess.
    */
-  #configAccount(name: string): RefreshTarget | undefined {
+  #configAccount(name: string, viewer: Scope): RefreshTarget | undefined {
     const index = name.trim().toLowerCase();
 
     if (!AUTH_INDEX_PATTERN.test(index)) return undefined;
 
-    return this.#pool
-      .entries()
-      .find(
-        ({ credential }) =>
-          credential.source === "config" &&
-          isConfigQuotaProvider(executorKey(credential)) &&
-          this.#authIndex(credential.id) === index,
-      );
+    return this.#scope(viewer, "full").find(
+      ({ credential }) =>
+        credential.source === "config" &&
+        isConfigQuotaProvider(executorKey(credential)) &&
+        this.#authIndex(credential.id) === index,
+    );
   }
 
   /**
    * Whether `name` is the `auth_index` of a config API key: the management routes answer a file-only operation on one
    * (delete, download, refresh, field edits) with a clear refusal instead of "not found".
    */
-  isConfigKey(name: string): boolean {
+  isConfigKey(name: string, viewer: Scope): boolean {
     const index = name.trim().toLowerCase();
 
     if (!AUTH_INDEX_PATTERN.test(index)) return false;
 
     return (
-      findCredential(this.#pool.entries(), { authIndex: index }, this.#authIndex)?.credential
-        .source === "config"
+      findCredential(this.#scope(viewer, "reach"), { authIndex: index }, this.#authIndex)
+        ?.credential.source === "config"
     );
   }
 
-  /** The stored auth file verbatim, for download. */
-  getCredentialFile(name: string): WireJsonObject | undefined {
-    return this.#pool.refreshTarget(name)?.credential.metadata;
+  /**
+   * What `viewer` may do with the credential `name` (an auth file id): `full`, `limited` (an org admin on a private
+   * one) or `none` (absent, or private to someone else); `private` tells the owner's case apart.
+   */
+  credentialAccess(
+    name: string,
+    viewer: Viewer,
+  ): { readonly access: Access; readonly private: boolean } {
+    const target = this.#pool.refreshTarget(name);
+
+    return target === undefined
+      ? { access: "none", private: false }
+      : {
+          access: accessTo(target.credential.owner, viewer),
+          private: target.credential.owner !== undefined,
+        };
+  }
+
+  /** The stored auth file verbatim, for download (only to a viewer with full access to it). */
+  getCredentialFile(name: string, viewer: Scope): WireJsonObject | undefined {
+    const target = this.#pool.refreshTarget(name);
+
+    return target !== undefined && reaches(viewer, target.credential.owner, "full")
+      ? target.credential.metadata
+      : undefined;
   }
 
   /** Edits fields of a stored auth file (`PATCH /credentials/fields`); see `field-patch.ts`. */
   async patchCredentialFields(
     ref: CredentialRef,
     fields: WireJsonObject,
+    viewer: Scope,
   ): Promise<CredentialMutation> {
-    const target = findCredential(this.#pool.entries(), ref, this.#authIndex);
+    const target = findCredential(this.#scope(viewer, "full"), ref, this.#authIndex);
 
     if (target === undefined || target.credential.source !== "file") {
       return { ok: false, error: "not_found", message: "auth file not found" };
@@ -901,21 +1097,30 @@ export class ControlPlane extends DurableObject<Env> {
     ref: CredentialRef,
     disabled: boolean,
     by: string,
+    viewer: Scope,
   ): Promise<SetDisabledResult> {
-    const target = findCredential(this.#pool.entries(), ref, this.#authIndex);
+    const target = findCredential(this.#scope(viewer, "reach"), ref, this.#authIndex);
 
     if (target === undefined) return { ok: false, error: "not_found" };
 
     if (target.credential.source === "config")
       return this.#setConfigKeyDisabled(target.credential, disabled, by);
 
-    return await this.setCredentialDisabled(target.credential.id, disabled);
+    return await this.setCredentialDisabled(target.credential.id, disabled, viewer);
   }
 
   #setConfigKeyDisabled(credential: Credential, disabled: boolean, by: string): SetDisabledResult {
     // Go has no compat loop in config_apikey_disable.go: an endpoint is disabled as a whole (`disabled` on its group).
     if (credential.attributes.compat_name !== undefined)
       return { ok: false, error: "compat_endpoint" };
+
+    // A private key is not in the org's config: its owner's sealed group holds it.
+    if (credential.owner !== undefined) {
+      return this.#privateKeys.setKeyExcludedAll(credential.id, disabled) === undefined
+        ? { ok: false, error: "not_found" }
+        : { ok: true, via: "config:excluded-models" };
+    }
+
     const stored = this.#config.setKeyExcludedAll(credential.id, disabled, by);
 
     if (stored.ok) return { ok: true, via: "config:excluded-models" };
@@ -928,34 +1133,157 @@ export class ControlPlane extends DurableObject<Env> {
   // --- API keys page (src/management/api-keys-*.ts) ------------------------------------------------------------
 
   /** The `api-keys` groups with runtime state: one snapshot of config version and credential pool (no secrets). */
-  apiKeysView(): WireJsonObject {
+  apiKeysView(viewer: Scope): WireJsonObject {
     const { version, config } = this.#currentConfig();
     const { groups } = this.#config.entries().revisions;
+    const entries = this.#pool.entries();
+    const now = Date.now();
 
-    return buildApiKeysList(
-      version,
-      groups,
-      config,
-      this.#pool.entries(),
-      Date.now(),
-      this.#authIndex,
-    );
+    // Shared groups are for org admins (and internal callers); everyone else sees none of them.
+    const view =
+      isFullAccess(viewer) || viewer.admin
+        ? buildApiKeysList(version, groups, config, entries, now, this.#authIndex)
+        : buildApiKeysList(
+            version,
+            {},
+            this.#privateKeys.configOf("").config,
+            entries,
+            now,
+            this.#authIndex,
+          );
+
+    if (isFullAccess(viewer)) return view;
+
+    // The viewer's own private groups in full; an org admin also sees that other members' exist (ADR 0023).
+    if (viewer.member !== undefined) {
+      const mine = this.#privateKeys.configOf(viewer.member);
+
+      view.own =
+        buildApiKeysList(version, mine.revisions, mine.config, entries, now, this.#authIndex)
+          .families ?? {};
+    }
+
+    if (viewer.admin) view.others = this.#limitedKeyGroups(viewer.member, entries);
+
+    return view;
+  }
+
+  /** What an org admin sees of the private key groups of other members: that each exists, nothing of its use. */
+  #limitedKeyGroups(
+    viewer: string | undefined,
+    entries: ReadonlyArray<RefreshTarget>,
+  ): WireJsonObject[] {
+    const credentials = new Map(entries.map(({ credential }) => [credential.id, credential]));
+
+    return this.#privateKeys.owners().configs.flatMap((owned) => {
+      if (owned.owner === viewer) return [];
+      const ids = configKeyIds(owned.config, { includeDisabledGroups: true });
+      const email = this.#members.member(owned.owner)?.email;
+
+      return API_KEY_FAMILIES.flatMap((family) =>
+        owned.config["api-keys"][family].flatMap((group, index): WireJsonObject[] => {
+          if (group.id === undefined) return [];
+
+          const first = ids[family][index]?.keys
+            .map((id) => (id === undefined ? undefined : credentials.get(id)))
+            .find((credential) => credential !== undefined);
+
+          return [
+            {
+              id: group.id,
+              revision: owned.revisions[group.id] ?? 0,
+              family,
+              provider: first?.provider ?? family,
+              label: first?.label ?? family,
+              limited: true,
+              ...ownerFields(owned.owner, email),
+            },
+          ];
+        }),
+      );
+    });
+  }
+
+  /**
+   * The private key groups of the viewer as a config document, for the Worker to check a write against (the same way
+   * it checks one against the org's config); refused unless the viewer is a member and the org allows private
+   * credentials.
+   */
+  privateKeyConfig(viewer: Viewer):
+    | {
+        readonly ok: true;
+        readonly version: number;
+        readonly document: string;
+        readonly revisions: Readonly<Record<string, number>>;
+      }
+    | { readonly ok: false; readonly error: "forbidden"; readonly message: string } {
+    const refused = this.#privateKeyRefusal(viewer);
+
+    if (refused !== undefined) return refused;
+    const mine = this.#privateKeys.configOf(viewer.member ?? "");
+
+    return {
+      ok: true,
+      version: mine.version,
+      document: JSON.stringify(mine.document),
+      revisions: mine.revisions,
+    };
+  }
+
+  #privateKeyRefusal(
+    viewer: Viewer,
+  ): { readonly ok: false; readonly error: "forbidden"; readonly message: string } | undefined {
+    if (viewer.member === undefined)
+      return { ok: false, error: "forbidden", message: "private credentials belong to members" };
+
+    return this.#members.privateCredentials()
+      ? undefined
+      : {
+          ok: false,
+          error: "forbidden",
+          message: "private credentials are turned off for this org",
+        };
+  }
+
+  /**
+   * Writes or deletes one private key group of the viewer at the revision it names. An org admin may also delete a
+   * member's private group (`group: null`), whatever the org setting says; nothing else of another member's.
+   */
+  writePrivateKeyGroup(
+    change: KeyGroupChange,
+    by: string,
+    viewer: Viewer,
+  ):
+    | WriteResult<{ readonly id: string; readonly revision: number }>
+    | { readonly ok: false; readonly error: "forbidden"; readonly message: string } {
+    const owner = change.id === undefined ? undefined : this.#privateKeys.ownerOf(change.id);
+
+    // Deleting a private group is for its owner at any time, and for org admins (ADR 0023).
+    if (change.group === null && owner !== undefined && (viewer.admin || owner === viewer.member))
+      return this.#privateKeys.write(owner, change, by);
+
+    const refused = this.#privateKeyRefusal(viewer);
+
+    if (refused !== undefined) return refused;
+
+    return this.#privateKeys.write(viewer.member ?? "", change, by);
   }
 
   /**
    * The id of the live credential (auth file or config key) whose `auth_index` is `authIndex`, for the usage filter
    * (`resolveAuthIds`): it narrows D1 to that id without scanning the distinct ids. Internal: never sent to a client.
    */
-  credentialIdOfAuthIndex(authIndex: string): string | undefined {
-    return findCredential(this.#pool.entries(), { authIndex }, this.#authIndex)?.credential.id;
+  credentialIdOfAuthIndex(authIndex: string, viewer: Scope): string | undefined {
+    return findCredential(this.#scope(viewer, "full"), { authIndex }, this.#authIndex)?.credential
+      .id;
   }
 
   /**
    * What the Worker needs to probe a config API key (`POST /api-keys/probe`): the family, base URL, headers and the
    * key itself. Carries the secret: the Worker uses it for the upstream call only and never returns it.
    */
-  apiKeyProbeTarget(authIndex: string): ApiKeyProbeTargetResult {
-    const target = findCredential(this.#pool.entries(), { authIndex }, this.#authIndex);
+  apiKeyProbeTarget(authIndex: string, viewer: Scope): ApiKeyProbeTargetResult {
+    const target = findCredential(this.#scope(viewer, "full"), { authIndex }, this.#authIndex);
 
     const probe =
       target?.credential.source === "config"
@@ -968,10 +1296,11 @@ export class ControlPlane extends DurableObject<Env> {
   /** Clears quota/cooldown state (`POST /routing/cooldown/reset`). */
   resetCredentialCooldown(
     ref: CredentialRef,
+    viewer: Scope,
   ):
     | { readonly ok: true; readonly authIndex: string; readonly models: ReadonlyArray<string> }
     | { readonly ok: false } {
-    const target = findCredential(this.#pool.entries(), ref, this.#authIndex);
+    const target = findCredential(this.#scope(viewer, "full"), ref, this.#authIndex);
     const reset = target === undefined ? undefined : this.#pool.resetCooldown(target.credential.id);
 
     return target === undefined || reset === undefined
@@ -980,8 +1309,8 @@ export class ControlPlane extends DurableObject<Env> {
   }
 
   /** Manual refresh of one auth file (`POST /credentials/refresh`). */
-  async refreshCredential(ref: CredentialRef): Promise<RefreshOneResult> {
-    const target = findCredential(this.#pool.entries(), ref, this.#authIndex);
+  async refreshCredential(ref: CredentialRef, viewer: Scope): Promise<RefreshOneResult> {
+    const target = findCredential(this.#scope(viewer, "full"), ref, this.#authIndex);
 
     if (target === undefined || target.credential.source !== "file")
       return { ok: false, error: "not_found" };
@@ -1011,12 +1340,15 @@ export class ControlPlane extends DurableObject<Env> {
   }
 
   /** Manual refresh of every refreshable auth file (`all=true`). */
-  async refreshAllCredentials(): Promise<RefreshAllItem[]> {
+  async refreshAllCredentials(viewer: Scope): Promise<RefreshAllItem[]> {
     const results = await Promise.all(
-      this.#pool.refreshTargets().map(async ({ credential }) => ({
-        id: credential.id,
-        result: await this.#refresh.refreshNow(credential.id, { force: true }),
-      })),
+      this.#pool
+        .refreshTargets()
+        .filter(({ credential }) => reaches(viewer, credential.owner, "full"))
+        .map(async ({ credential }) => ({
+          id: credential.id,
+          result: await this.#refresh.refreshNow(credential.id, { force: true }),
+        })),
     );
 
     const items: RefreshAllItem[] = [];
@@ -1049,11 +1381,22 @@ export class ControlPlane extends DurableObject<Env> {
   async batchCredentials(
     action: BatchAction,
     names: ReadonlyArray<string>,
+    viewer: Scope,
   ): Promise<AccountResult[]> {
-    const stored = new Set(this.#pool.refreshTargets().map(({ credential }) => credential.id));
+    // Refreshing needs full access; an org admin may also enable, disable and delete a private credential.
+    const need = action === "refresh" ? "full" : "reach";
+
+    const stored = new Set(
+      this.#pool
+        .refreshTargets()
+        .filter(({ credential }) => reaches(viewer, credential.owner, need))
+        .map(({ credential }) => credential.id),
+    );
 
     // Config API keys listed on the Accounts page by their `auth_index` (public, so a clear answer confirms nothing).
-    const configKeys = new Set(names.filter((name) => !stored.has(name) && this.isConfigKey(name)));
+    const configKeys = new Set(
+      names.filter((name) => !stored.has(name) && this.isConfigKey(name, viewer)),
+    );
 
     if (action === "refresh") {
       return await Effect.runPromise(
@@ -1128,15 +1471,16 @@ export class ControlPlane extends DurableObject<Env> {
    */
   async quotaProbeTarget(
     ref: CredentialRef,
-    options?: { readonly sweep?: boolean },
+    options: { readonly sweep?: boolean },
+    viewer: Scope,
   ): Promise<QuotaTargetResult> {
     const target =
-      findCredential(this.#pool.entries(), ref, this.#authIndex) ??
+      findCredential(this.#scope(viewer, "full"), ref, this.#authIndex) ??
       (ref.name === undefined ||
       (ref.authIndex !== undefined &&
         ref.authIndex.trim().toLowerCase() !== ref.name.trim().toLowerCase())
         ? undefined
-        : this.#configAccount(ref.name));
+        : this.#configAccount(ref.name, viewer));
 
     if (target === undefined || !listed(target)) return { ok: false, error: "not_found" };
     const provider = executorKey(target.credential);
@@ -1242,8 +1586,8 @@ export class ControlPlane extends DurableObject<Env> {
    * that can still be resent, the grant `mark` its status read is based on and whether the account is disabled.
    * Carries token material: the Worker uses it for the upstream calls only.
    */
-  async resetGrantTarget(ref: CredentialRef): Promise<ResetGrantTargetResult> {
-    const target = findCredential(this.#pool.entries(), ref, this.#authIndex);
+  async resetGrantTarget(ref: CredentialRef, viewer: Scope): Promise<ResetGrantTargetResult> {
+    const target = findCredential(this.#scope(viewer, "full"), ref, this.#authIndex);
 
     if (target === undefined || target.credential.source !== "file")
       return { ok: false, error: "not_found" };
@@ -1376,13 +1720,15 @@ export class ControlPlane extends DurableObject<Env> {
    * `excluded-models` ({@link quotaProbeTarget} resolves both). Reports of credentials that no longer exist (a config
    * key whose identity changed with an edit, its id being content-addressed) are dropped here.
    */
-  quotaCheckTargets(): string[] {
+  quotaCheckTargets(viewer: Scope): string[] {
     const entries = this.#pool.entries();
 
     this.#quota.retain(new Set(entries.map(({ credential }) => credential.id)));
 
     return entries
       .filter((entry) => {
+        if (!reaches(viewer, entry.credential.owner, "full")) return false;
+
         const { credential } = entry;
 
         if (!listed(entry) || !isQuotaProvider(executorKey(credential))) return false;
@@ -1417,22 +1763,41 @@ export class ControlPlane extends DurableObject<Env> {
   // --- provider OAuth logins (src/oauth) ------------------------------------------------------------------------
 
   /** Starts a provider login (`GET /oauth/auth-url`): returns the URL to open and the session `state`. */
-  oauthStart(input: StartInput): Promise<StartResult> {
-    return this.#runOAuth(this.#oauth.start(input));
+  oauthStart(input: StartInput, viewer: Scope, wantPrivate = false): Promise<StartResult> {
+    const owner = this.#importOwner(viewer, wantPrivate);
+
+    if (!owner.ok) return Promise.resolve({ ok: false, status: 403, error: owner.failure.message });
+
+    return this.#runOAuth(this.#oauth.start({ ...input, owner: owner.owner }));
+  }
+
+  /** Whether `viewer` may follow the login `state` (its starter, or an org admin for a shared login); unknown states pass. */
+  #sessionReachable(state: string, viewer: Scope): boolean {
+    const session = this.#sessions.get(state, Date.now());
+
+    return session === undefined || reaches(viewer, session.owner, "full");
   }
 
   /** `GET /oauth/status`: pending/ok/error; for device logins each call advances the upstream poll when due. */
-  oauthStatus(state: string): Promise<StatusResult> {
+  oauthStatus(state: string, viewer: Scope): Promise<StatusResult> {
+    if (!this.#sessionReachable(state, viewer))
+      return Promise.resolve({ status: "error", error: "unknown or expired state" });
+
     return this.#runOAuth(this.#oauth.status(state));
   }
 
   /** Completes a callback login from a pasted/redirected `code` + `state` (management and public browser routes). */
-  oauthCallback(input: CallbackInput): Promise<CallbackResult> {
+  oauthCallback(input: CallbackInput, viewer: Scope): Promise<CallbackResult> {
+    if (!this.#sessionReachable(input.state.trim(), viewer))
+      return Promise.resolve({ ok: false, status: 404, error: "unknown or expired state" });
+
     return this.#runOAuth(this.#oauth.callback(input));
   }
 
   /** `DELETE /oauth/session`: cancels a pending login. */
-  oauthCancel(state: string): Promise<{ readonly cancelled: boolean }> {
+  oauthCancel(state: string, viewer: Scope): Promise<{ readonly cancelled: boolean }> {
+    if (!this.#sessionReachable(state, viewer)) return Promise.resolve({ cancelled: false });
+
     return Effect.runPromise(this.#oauth.cancel(state));
   }
 
@@ -1444,8 +1809,16 @@ export class ControlPlane extends DurableObject<Env> {
    * Stores an auth file. Replacing the token material of an existing credential (a re-login, possibly into another
    * account) drops its quota report and reset grants, which described the previous tokens.
    */
-  #upsert(name: string, content: string | JsonObject, mergeExisting: boolean): UpsertResult {
-    const result = this.#pool.upsert(name, content, { mergeExisting });
+  #upsert(
+    name: string,
+    content: string | JsonObject,
+    mergeExisting: boolean,
+    owner?: string,
+  ): UpsertResult {
+    const result = this.#pool.upsert(name, content, {
+      mergeExisting,
+      ...(owner === undefined ? {} : { owner }),
+    });
 
     if (result.ok && result.credentialsChanged && !result.created) {
       this.#quota.delete(result.id);

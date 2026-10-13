@@ -24,6 +24,7 @@ interface CredentialRow {
   disabled: number;
   metadata: string;
   credential_version: number;
+  owner: string | null;
   created_at: number;
   updated_at: number;
   [column: string]: SqlStorageValue;
@@ -38,6 +39,11 @@ interface StateRow {
 export interface UpsertOptions {
   /** Carry user settings over from the existing file (re-login semantics, credentials.md §11). */
   readonly mergeExisting: boolean;
+  /**
+   * The member the credential is private to. A new credential takes it; an existing one keeps its owner (a write
+   * never moves a credential between the org and a member: the ControlPlane refuses that before it gets here).
+   */
+  readonly owner?: string | undefined;
 }
 
 export interface UpsertOutcome {
@@ -80,6 +86,16 @@ export class CredentialStore {
          updated_at INTEGER NOT NULL
        )`,
     );
+
+    // Credentials stored before ownership have no owner column: they all belong to the org (shared).
+    if (
+      !sql
+        .exec<{ name: string }>("PRAGMA table_info(credentials)")
+        .toArray()
+        .some((column) => column.name === "owner")
+    )
+      sql.exec("ALTER TABLE credentials ADD COLUMN owner TEXT");
+
     sql.exec("CREATE INDEX IF NOT EXISTS credentials_provider ON credentials (provider, disabled)");
     sql.exec(
       `CREATE TABLE IF NOT EXISTS credential_state (
@@ -93,7 +109,7 @@ export class CredentialStore {
   list(): StoredCredential[] {
     return this.#sql
       .exec<CredentialRow>(
-        "SELECT id, provider, disabled, metadata, credential_version, created_at, updated_at FROM credentials ORDER BY id",
+        "SELECT id, provider, disabled, metadata, credential_version, owner, created_at, updated_at FROM credentials ORDER BY id",
       )
       .toArray()
       .map((row) => this.#toRecord(row));
@@ -102,7 +118,7 @@ export class CredentialStore {
   get(id: string): StoredCredential | undefined {
     const row = this.#sql
       .exec<CredentialRow>(
-        "SELECT id, provider, disabled, metadata, credential_version, created_at, updated_at FROM credentials WHERE id = ?",
+        "SELECT id, provider, disabled, metadata, credential_version, owner, created_at, updated_at FROM credentials WHERE id = ?",
         id,
       )
       .toArray()[0];
@@ -138,6 +154,7 @@ export class CredentialStore {
       provider: row.provider,
       metadata: parseMetadata(this.#secrets.open(row.metadata, sealContext(row.id))),
       credentialVersion: row.credential_version,
+      ...(row.owner === null ? {} : { owner: row.owner }),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -166,6 +183,13 @@ export class CredentialStore {
       metadata,
       credentialVersion:
         existing === undefined ? 1 : existing.credentialVersion + (changed ? 1 : 0),
+      ...(existing === undefined
+        ? options.owner === undefined
+          ? {}
+          : { owner: options.owner }
+        : existing.owner === undefined
+          ? {}
+          : { owner: existing.owner }),
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };
@@ -205,8 +229,8 @@ export class CredentialStore {
 
   #write(record: StoredCredential): void {
     this.#sql.exec(
-      `INSERT INTO credentials (id, provider, disabled, metadata, credential_version, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO credentials (id, provider, disabled, metadata, credential_version, owner, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (id) DO UPDATE SET provider = excluded.provider, disabled = excluded.disabled,
          metadata = excluded.metadata, credential_version = excluded.credential_version,
          updated_at = excluded.updated_at`,
@@ -215,6 +239,7 @@ export class CredentialStore {
       record.metadata.disabled === true ? 1 : 0,
       this.#secrets.seal(JSON.stringify(record.metadata), sealContext(record.id)),
       record.credentialVersion,
+      record.owner ?? null,
       record.createdAt,
       record.updatedAt,
     );

@@ -21,8 +21,10 @@ Each holds a role in their org:
   who belongs (the Members page: members, teams, service tokens, auto-join). Owners also change roles. On a self-hosted
   deployment this is often one person, the owner of the deployment, who is also a **platform admin** (owner of every
   org, the only one who creates orgs).
-- **Plain members** use the proxy from their coding agents and open the panel only to see their own usage; every other
-  page is closed to them.
+- **Plain members** use the proxy from their coding agents and open the panel to see their own usage. Where the org lets
+  members connect private credentials, they also get their own Accounts and API keys pages: they connect their own
+  accounts and add their own keys, used only for their requests; org admins see that each exists (provider, owner,
+  label) and can disable or remove it, never how it is used. Every other page is closed to them.
 
 Day to day the proxy is consumed by coding agents (pi, Claude Code, Codex) on the members' machines; the panel is where
 they go to check on it or change it.
@@ -59,6 +61,9 @@ compatibility is not a goal.
   provider usage endpoints are asked by the server (the quota check), not from the browser.
 - Not available on Workers and must not appear: plugins, file logs, management key, server host/port/TLS, outbound proxy
   URLs, the deprecated `/v0/management`.
+- Every account and API key is **shared** (the org's, managed by org admins) or **private** (one member's, used only for
+  their requests; ADR 0023). The panel shows whose each is; org admins see another member's private credential as an
+  existence-only row, and private traffic never appears in org-wide usage.
 - Terminology: an **account** is an OAuth/auth-file credential; an **API key** belongs to a provider key group or an
   OpenAI-compatible endpoint; a **principal** is the Access identity that made a request.
 

@@ -227,6 +227,12 @@ export const CredentialModelAlias = Schema.Struct({
 
 export type CredentialModelAlias = typeof CredentialModelAlias.Type;
 
+/** The member a private credential belongs to. */
+export const CredentialOwner = Schema.Struct({
+  member_id: Schema.String,
+  email: optional(Schema.String),
+});
+
 /**
  * One account of the credential list. `source` is `"file"` for an auth file (`id` and `name` are the file name) or
  * `"config"` for a config API key whose provider reports quota with the key (OpenCode Go): `id` and `name` are then its
@@ -291,13 +297,42 @@ export const CredentialEntry = Schema.Struct({
    * panel's `/keys/<family>/<index>`).
    */
   key_group: optional(Schema.Struct({ family: Schema.String, index: Schema.Int })),
+  /** A private account (ADR 0023): used only for its owner's requests; `owner` says whose. Absent: a shared one. */
+  private: optional(Schema.Boolean),
+  owner: optional(CredentialOwner),
 });
 
 export type CredentialEntry = typeof CredentialEntry.Type;
 
+/**
+ * What an org admin sees of another member's private account (ADR 0023): that it exists, its provider, owner and
+ * label, and whether it is disabled (an org admin may disable or remove it). Nothing of its use, models, standing or
+ * quota, and it cannot be downloaded.
+ */
+export const LimitedCredentialEntry = Schema.Struct({
+  id: Schema.String,
+  auth_index: Schema.String,
+  name: Schema.String,
+  type: Schema.String,
+  provider: Schema.String,
+  label: Schema.String,
+  source: Schema.String,
+  disabled: Schema.Boolean,
+  limited: Schema.Literal(true),
+  private: Schema.Literal(true),
+  owner: CredentialOwner,
+});
+
+export type LimitedCredentialEntry = typeof LimitedCredentialEntry.Type;
+
+/**
+ * `GET /credentials`: `files` are the accounts the caller manages (shared ones for org admins, the caller's own
+ * private ones); `others` (org admins only) lists the other members' private accounts, existence only.
+ */
 export const CredentialList = Schema.Struct({
   observed_at: optional(Schema.String),
   files: Schema.Array(CredentialEntry),
+  others: optional(Schema.Array(LimitedCredentialEntry)),
 });
 
 const Ok = Schema.Struct({ status: Schema.Literal("ok") });
@@ -444,9 +479,12 @@ export class CredentialsGroup extends HttpApiGroup.make("credentials").add(
     success: Ok,
     error: managementErrors,
   }),
-  /** Add or replace one auth file (`name` ends in `.json`; the body is the file's JSON text). */
+  /**
+   * Add or replace one auth file (`name` ends in `.json`; the body is the file's JSON text). `private=true` makes it
+   * the caller's private account (ADR 0023); a plain member's upload is always private.
+   */
   HttpApiEndpoint.post("upload", "/credentials", {
-    query: { name: Schema.String },
+    query: { name: Schema.String, private: optional(Schema.Literal("true")) },
     payload: Schema.String.pipe(HttpApiSchema.asText({ contentType: "application/json" })),
     success: Ok,
     error: managementErrors,

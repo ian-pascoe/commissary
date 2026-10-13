@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import {
   MEMBERS,
   membershipAtom,
+  ORGS,
   membersAtom,
   serviceTokensAtom,
   teamsAtom,
@@ -111,6 +112,51 @@ const AutoJoin = ({ caller }: { readonly caller: Caller }) => {
   );
 };
 
+/** Whether plain members may connect private accounts and API keys (ADR 0023); org admins decide. */
+const PrivateCredentials = () => {
+  const result = useAtomValue(membershipAtom);
+  const retry = useAtomRefresh(membershipAtom);
+  const save = useAction(updateMembershipAtom);
+  const { note, settle, clear } = useNote();
+
+  return (
+    <Loaded result={result} retry={retry} what="the private credentials setting">
+      {({ private_credentials: on }) => (
+        <>
+          <label className={styles["toggle"]}>
+            <input
+              type="checkbox"
+              checked={on}
+              disabled={save.busy}
+              onChange={async (event) => {
+                clear();
+
+                settle(
+                  await save.run({
+                    payload: { private_credentials: event.target.checked },
+                    // The panel's pages for plain members follow the setting (`GET /me`).
+                    reactivityKeys: [...MEMBERS, ...ORGS],
+                  }),
+                  event.target.checked
+                    ? "Members can connect private accounts and API keys now."
+                    : "Private accounts and API keys are switched off, not deleted.",
+                );
+              }}
+            />
+            <span>Let members connect private accounts and API keys</span>
+          </label>
+          <p className={kit["muted"]}>
+            {on
+              ? "On: a member's private account or API key is used only for their own requests. Org admins see that it exists, its provider, owner and label, and can disable or remove it, but not how it is used."
+              : "Off: members cannot connect private credentials, and the ones they connected stay in place but are not used. Turning it on again brings them back."}
+          </p>
+          <NoteLine note={note} />
+        </>
+      )}
+    </Loaded>
+  );
+};
+
 const Lists = ({ caller }: { readonly caller: Caller }) => {
   const members = useAtomValue(membersAtom);
   const teams = useAtomValue(teamsAtom);
@@ -166,6 +212,9 @@ const Lists = ({ caller }: { readonly caller: Caller }) => {
       </Section>
       <Section title="Joining">
         <AutoJoin caller={caller} />
+      </Section>
+      <Section title="Private credentials">
+        <PrivateCredentials />
       </Section>
     </>
   );

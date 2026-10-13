@@ -37,6 +37,8 @@ export interface StartInput {
   readonly domain?: string;
   /** `?flow=device` selects the Codex device-code login instead of the pasted redirect URL. */
   readonly flow?: string;
+  /** The member the login connects a private credential for; absent: a shared credential (set by the ControlPlane). */
+  readonly owner?: string | undefined;
 }
 
 export type StartResult =
@@ -118,7 +120,11 @@ export const makeOAuthService = ({
   sink,
   metaMintUrl,
 }: OAuthServiceOptions): OAuthService => {
-  const startCallback = (flow: CallbackFlow, now: number): Effect.Effect<StartResult> =>
+  const startCallback = (
+    flow: CallbackFlow,
+    now: number,
+    owner: string | undefined,
+  ): Effect.Effect<StartResult> =>
     Effect.gen(function* () {
       const state = orgScopedName(org, generateState());
       const started = yield* flow.start({ state }).pipe(Effect.result);
@@ -135,6 +141,7 @@ export const makeOAuthService = ({
           provider: flow.provider,
           flow: "callback",
           deadlineAt: now + CALLBACK_WINDOW_MS,
+          owner,
           data: started.success.data,
         },
         now,
@@ -147,6 +154,7 @@ export const makeOAuthService = ({
     flow: DeviceFlow,
     state: string,
     now: number,
+    owner: string | undefined,
   ): Effect.Effect<StartResult, never, HttpClient.HttpClient> =>
     Effect.gen(function* () {
       const started = yield* flow.start().pipe(Effect.result);
@@ -168,6 +176,7 @@ export const makeOAuthService = ({
           deadlineAt: now + device.windowMs,
           nextPollAt: now + device.firstPollDelayMs,
           intervalMs: device.intervalMs,
+          owner,
           data: device.data,
         },
         now,
@@ -194,7 +203,9 @@ export const makeOAuthService = ({
 
       // A cancel (or timeout) that raced with the exchange wins: nothing is saved for a dead session.
       if (!sessions.isPending(state, now, flow.provider)) return { status: "wait" } as const;
-      const saved = yield* Effect.promise(() => saveCredentialRecord(record, sink));
+      // The login saves for whoever started it: a private credential stays its member's.
+      const owner = sessions.get(state, now)?.owner;
+      const saved = yield* Effect.promise(() => saveCredentialRecord(record, sink, owner));
       const done = yield* Clock.currentTimeMillis;
 
       if (!saved.ok) {
@@ -262,22 +273,28 @@ export const makeOAuthService = ({
         if (provider === "")
           return { ok: false, status: 400, error: "provider is required" } as const;
         const now = yield* Clock.currentTimeMillis;
+        const { owner } = input;
 
         switch (provider) {
           case "claude":
-            return yield* startCallback(claudeFlow(), now);
+            return yield* startCallback(claudeFlow(), now, owner);
           case "antigravity":
-            return yield* startCallback(antigravityFlow(), now);
+            return yield* startCallback(antigravityFlow(), now, owner);
           case "devin":
-            return yield* startCallback(devinFlow(), now);
+            return yield* startCallback(devinFlow(), now, owner);
           case "codex":
             return input.flow?.trim().toLowerCase() === "device"
-              ? yield* startDevice(codexDeviceFlow(), newDeviceState("codex", now), now)
-              : yield* startCallback(codexFlow(), now);
+              ? yield* startDevice(codexDeviceFlow(), newDeviceState("codex", now), now, owner)
+              : yield* startCallback(codexFlow(), now, owner);
           case "xai":
-            return yield* startDevice(xaiFlow(), newDeviceState("xai", now), now);
+            return yield* startDevice(xaiFlow(), newDeviceState("xai", now), now, owner);
           case "meta":
-            return yield* startDevice(metaFlow(metaMintUrl), newDeviceState("meta", now), now);
+            return yield* startDevice(
+              metaFlow(metaMintUrl),
+              newDeviceState("meta", now),
+              now,
+              owner,
+            );
           case "kimi":
           case "kimi-ai": {
             const target = kimiDomain(
@@ -288,6 +305,7 @@ export const makeOAuthService = ({
               kimiFlow(target),
               newDeviceState(kimiStatePrefix(target), now),
               now,
+              owner,
             );
           }
 

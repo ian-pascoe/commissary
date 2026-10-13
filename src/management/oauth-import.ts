@@ -11,6 +11,7 @@ import { HttpRouter, HttpServerRequest } from "effect/http";
 import { normalizePrivateKey } from "../credentials/refresh/vertex.ts";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { controlPlane, handled, jsonReply, queryParams, replyError } from "./http.ts";
+import { currentViewer } from "./viewer.ts";
 
 const BASE = "/v8/management/oauth";
 
@@ -133,9 +134,18 @@ const importVertex = Effect.gen(function* () {
     label,
   };
 
+  const viewer = yield* currentViewer;
+  const wantPrivate = (yield* queryParams).get("private") === "true";
+
   const result = yield* controlPlane("importAuthFile", (stub) =>
-    stub.importAuthFile(name, metadata, { mergeExisting: true }),
+    stub.importAuthFile(name, metadata, { mergeExisting: true, private: wantPrivate }, viewer),
   );
+
+  if (!result.ok && result.reason === "forbidden")
+    return yield* replyError(403, "forbidden", { message: result.message });
+
+  if (!result.ok && result.reason === "name_taken")
+    return yield* replyError(409, "name_taken", { message: result.message });
 
   if (!result.ok) return yield* replyError(500, "save_failed", { message: result.message });
 

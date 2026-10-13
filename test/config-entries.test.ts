@@ -1,5 +1,6 @@
 // Config entries (ADR 0025): per-entry revisions, the Go config import, the migration of a stored document, and the
 // entry routes (`/settings`, `/api-keys/groups`, `/model-rules/*`) through the router and the real ControlPlane.
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { runInDurableObject } from "cloudflare:test";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { Effect } from "effect";
@@ -195,7 +196,7 @@ describe("migration of a stored config document", () => {
       .filter((id) => id !== undefined)
       .toSorted((a, b) => a.localeCompare(b));
 
-    const live = (await stub.listCredentials())
+    const live = (await stub.listCredentials(FULL_ACCESS))
       .filter((entry) => entry.source === "config")
       .map((entry) => entry.id)
       .toSorted((a, b) => a.localeCompare(b));
@@ -419,7 +420,9 @@ describe("API key groups", () => {
     const authIndex = must(group.group.keys[0]?.auth_index);
 
     const credentials = async () =>
-      (await controlPlane().listCredentials()).filter((entry) => entry.source === "config");
+      (await controlPlane().listCredentials(FULL_ACCESS)).filter(
+        (entry) => entry.source === "config",
+      );
 
     const idBefore = (await credentials()).map((entry) => entry.id).toSorted();
 
