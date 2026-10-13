@@ -604,6 +604,11 @@ export class MemberStore {
       .map((row) => row.member_id);
   }
 
+  /** The ids of the teams a member belongs to (a member's grants, ADR 0021). */
+  teamIdsOf(memberId: string): ReadonlyArray<string> {
+    return this.#teamsOf(memberId);
+  }
+
   // --- service tokens -----------------------------------------------------------------------------------------
 
   serviceTokens(): ReadonlyArray<ServiceTokenRecord> {

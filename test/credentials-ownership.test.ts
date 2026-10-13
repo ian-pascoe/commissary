@@ -1,6 +1,7 @@
 // Shared and private credentials in selection: a private credential is a candidate only for its owner's requests.
 import { describe, expect, it } from "vitest";
 import { planRetry } from "../src/credentials/selection/retry.ts";
+import { ALLOW_ALL } from "../src/grants/allowance.ts";
 import { Harness, NOW, cred, defaultSettings, entry } from "./support/credentials.ts";
 
 const pool = () => [
@@ -64,6 +65,7 @@ describe("retry planning with private credentials", () => {
       credentials: [entry(cred("theirs", { owner: "member-2" }))],
       query: { ...query, ...(memberId === undefined ? {} : { memberId }) },
       routing: { ...defaultSettings, knownPrefixes: new Set() },
+      allowance: ALLOW_ALL,
       coolingDisabled: () => false,
       now: NOW,
     });

@@ -10,6 +10,7 @@ import {
 } from "effect/http";
 import type { Config } from "../../src/config/schema.ts";
 import { decodeStoredConfig } from "../../src/config/store.ts";
+import { ALLOW_ALL } from "../../src/grants/allowance.ts";
 import type { JsonObject, Json } from "../../src/json/index.ts";
 import type { StoredCredential } from "../../src/credentials/derive.ts";
 import { mergeExistingMetadata, credentialsChanged } from "../../src/credentials/merge.ts";
@@ -230,6 +231,7 @@ export const makeFixture = (
     config: () => ({ version: 1, config: EMPTY_CONFIG }),
     now: () => clock.now,
     decorate: (credential) => manager?.decorate(credential) ?? credential,
+    allowance: () => ALLOW_ALL,
   });
 
   manager = new RefreshManager({

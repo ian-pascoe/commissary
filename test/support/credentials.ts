@@ -6,6 +6,7 @@ import {
   emptyQuota,
   emptyState,
 } from "../../src/credentials/model.ts";
+import { ALLOW_ALL, type Allowance } from "../../src/grants/allowance.ts";
 import {
   type CredentialEntry,
   type SelectionSettings,
@@ -72,6 +73,8 @@ export class Harness {
   readonly rotation = new RotationState();
   readonly affinity = new SessionCache(60_000);
   now = NOW;
+  /** The caller's grants; everything is allowed unless a test says otherwise. */
+  allowance: Allowance = ALLOW_ALL;
 
   constructor(public settings: SelectionSettings = defaultSettings) {}
 
@@ -81,6 +84,7 @@ export class Harness {
       request: { providers: ["gemini"], model: "model", ...request },
       settings: this.settings,
       runtime: { rotation: this.rotation, affinity: this.affinity },
+      allowance: this.allowance,
       now: this.now,
     });
   }

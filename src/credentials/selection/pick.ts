@@ -13,11 +13,19 @@ import type { Json } from "../../json/index.ts";
 import type { RoutingStrategy } from "../../config/schema.ts";
 import { boundSessionIdentity } from "../../session-routing/identity.ts";
 import { lcpNamespace, type MerklePrefixMatcher } from "../../session-routing/matcher.ts";
+import type { Allowance } from "../../grants/allowance.ts";
 import { type Credential, type CredentialState, executorKey } from "../model.ts";
 import { affinityKey, isSubagentSession, type SessionCache } from "./affinity.ts";
 import { servesMember } from "../ownership.ts";
 import { isBlockedForModel } from "./availability.ts";
-import { authNotFound, authUnavailable, modelCooldown, providerNotFound } from "./failures.ts";
+import {
+  authNotFound,
+  authUnavailable,
+  modelCooldown,
+  modelNotFound,
+  providerNotFound,
+} from "./failures.ts";
+import { grantedRoute } from "./grants.ts";
 import { canonicalModelKey } from "./model-name.ts";
 import { effectiveRequestRetry } from "./retry.ts";
 import { resolveModelRoute, type ModelRoute, type RoutingContext } from "./routing.ts";
@@ -48,6 +56,11 @@ export interface SelectionInput {
   readonly request: PickRequest;
   readonly settings: SelectionSettings;
   readonly runtime: SelectionRuntime;
+  /**
+   * What the caller may use (their grants): shared credentials and upstream models outside it are no candidates. There
+   * is no default, so a caller of selection states it (`ALLOW_ALL` is a decision, not an omission).
+   */
+  readonly allowance: Allowance;
   readonly now: number;
 }
 
@@ -127,6 +140,7 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
   const pinned = request.pinnedAuthId?.trim() ?? "";
   const round = request.retryRound ?? 0;
   let poolCooldownUntil = 0;
+  let withheldByGrants = 0;
 
   // 1. Candidate set.
   const all: Candidate[] = [];
@@ -161,7 +175,17 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
 
     if (route === undefined) continue;
 
-    if (route.upstreamModels.length > 1) {
+    // Grants come before cooling, tiers, strategy and affinity: none of them may see a model the caller cannot use.
+    const granted = grantedRoute(credential, route, input.allowance);
+
+    if (granted === undefined) {
+      withheldByGrants += 1;
+      continue;
+    }
+
+    route = granted;
+
+    if (route.upstreamModels.length > 1 || route.pooled === true) {
       // Alias pools skip upstream models that are cooling (`filterExecutionModels`); a credential without any usable
       // upstream model is not a candidate.
       let poolNext = 0;
@@ -211,6 +235,9 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
         failure: modelCooldown(request.model, provider ?? "", poolCooldownUntil - now),
       };
     }
+
+    // Candidates that exist but are not the caller's to use answer like a model nobody serves.
+    if (withheldByGrants > 0) return { ok: false, failure: modelNotFound(request.model) };
 
     return { ok: false, failure: authNotFound() };
   }

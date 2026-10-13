@@ -7,6 +7,7 @@
  * answers this question because it owns the cooldown state of every credential.
  */
 import { Schema } from "effect";
+import type { Allowance } from "../../grants/allowance.ts";
 import type { Json } from "../../json/index.ts";
 import { isCredentialRetryRoundStatus } from "../cooldown/classify.ts";
 import { MIN_QUOTA_COOLDOWN_MS } from "../cooldown/mark-result.ts";
@@ -19,6 +20,7 @@ import {
 } from "../model.ts";
 import { servesMember } from "../ownership.ts";
 import { availabilityBlock, isBlockedForModel } from "./availability.ts";
+import { grantedRoute } from "./grants.ts";
 import { canonicalModelKey } from "./model-name.ts";
 import { type ModelRoute, resolveModelRoute, type RoutingContext } from "./routing.ts";
 import type { CredentialEntry } from "./pick.ts";
@@ -169,7 +171,7 @@ const routeAvailability = (
 ): { readonly eligible: boolean; readonly next: number } => {
   if (route === undefined) return retryRoundAvailability(state, credential, "", now);
 
-  if (route.upstreamModels.length <= 1)
+  if (route.upstreamModels.length <= 1 && route.pooled !== true)
     return retryRoundAvailability(state, credential, route.selectionModel, now);
   let best: { readonly eligible: boolean; readonly next: number } | undefined;
 
@@ -193,6 +195,8 @@ export interface RetryPlanInput {
   readonly credentials: ReadonlyArray<CredentialEntry>;
   readonly query: RetryQuery;
   readonly routing: RoutingContext;
+  /** What the caller may use (their grants), as in `SelectionInput`. */
+  readonly allowance: Allowance;
   /** `credential -> cooling disabled`. */
   readonly coolingDisabled: (credential: Credential) => boolean;
   readonly now: number;
@@ -235,10 +239,15 @@ export const planRetry = (input: RetryPlanInput): RetryPlan => {
 
     if (!providers.has(executorKey(credential))) continue;
 
-    const route =
+    const resolved =
       query.model === "" ? undefined : resolveModelRoute(credential, query.model, input.routing);
 
-    if (query.model !== "" && route === undefined) continue;
+    if (query.model !== "" && resolved === undefined) continue;
+
+    const route =
+      resolved === undefined ? undefined : grantedRoute(credential, resolved, input.allowance);
+
+    if (resolved !== undefined && route === undefined) continue;
 
     if (query.round >= effectiveRequestRetry(credential, query.requestRetry)) continue;
     const { eligible, next } = routeAvailability(state, credential, route, now);

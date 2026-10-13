@@ -135,6 +135,7 @@ export const PickFailureCode = Schema.Literals([
   "auth_not_found",
   "auth_unavailable",
   "model_cooldown",
+  "model_not_found",
 ]);
 
 export type PickFailureCode = typeof PickFailureCode.Type;
@@ -143,12 +144,12 @@ export type PickFailureCode = typeof PickFailureCode.Type;
 export const PickFailure = Schema.Struct({
   code: PickFailureCode,
   message: Schema.String,
-  /** 429 for `model_cooldown`, 503 for `auth_unavailable` with a known recovery; unset otherwise. */
+  /** 429 for `model_cooldown`, 400 for `model_not_found`, 503 for `auth_unavailable` with a known recovery; unset otherwise. */
   httpStatus: optional(Schema.Int),
   retryable: Schema.Boolean,
   /** Seconds until the earliest cooldown ends (also the `Retry-After` header value). */
   retryAfterSeconds: optional(Schema.Int),
-  /** JSON error body for `model_cooldown` (`{"error":{"code":"model_cooldown",...}}`). */
+  /** JSON error body for `model_cooldown` (`{"error":{"code":"model_cooldown",...}}`) and `model_not_found`. */
   body: optional(Schema.String),
 });
 

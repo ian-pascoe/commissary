@@ -42,6 +42,9 @@ import {
 import { CredentialStore } from "./store.ts";
 import type { CredentialSummary } from "./summary.ts";
 import type { ModelSource } from "../registry/source.ts";
+import { allowanceOf } from "../grants/allowance.ts";
+import type { GrantChange, GrantSubject, GrantTable, GrantsWire } from "../grants/grant.ts";
+import { GrantStore } from "../grants/store.ts";
 import { type AuthIndexer, orgAuthIndexer } from "../management/auth-index.ts";
 import {
   type ApiKeyProbeTargetResult,
@@ -298,6 +301,8 @@ export class ControlPlane extends DurableObject<Env> {
   /** The org's data key: seals and opens the stored secrets once the object started. */
   readonly #secrets = new OrgSecrets();
   readonly #members: MemberStore;
+  /** Which upstream models of which shared credentials each member may use (ADR 0021). */
+  readonly #modelGrants: GrantStore;
   /** The members' private API key groups (sealed rows of their own, never config entries). */
   readonly #privateKeys: PrivateKeyStore;
   readonly #proxyKeys: ProxyKeyStore;
@@ -324,6 +329,7 @@ export class ControlPlane extends DurableObject<Env> {
 
     this.#config = new ConfigStore(ctx.storage.sql, this.#org, transaction, this.#secrets);
     this.#members = new MemberStore(ctx.storage.sql, this.#org, transaction);
+    this.#modelGrants = new GrantStore(ctx.storage.sql, transaction);
     this.#privateKeys = new PrivateKeyStore(ctx.storage.sql, transaction, this.#secrets);
     this.#proxyKeys = new ProxyKeyStore(ctx.storage.sql, this.#org);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
@@ -335,6 +341,11 @@ export class ControlPlane extends DurableObject<Env> {
       config: () => this.#currentConfig(),
       privateCredentials: () => this.#members.privateCredentials(),
       privateKeys: () => this.#privateKeys.owners(),
+      allowance: (member) =>
+        allowanceOf(this.#modelGrants.entries(), {
+          member,
+          teams: member === undefined ? [] : this.#members.teamIdsOf(member),
+        }),
       decorate: (credential) => this.#refresh.decorate(credential),
     });
     this.#refresh = new RefreshManager({
@@ -546,6 +557,9 @@ export class ControlPlane extends DurableObject<Env> {
     // ADR 0027: a member who leaves takes their proxy keys with them (a key whose member is gone is refused anyway).
     if (removed.ok) this.#proxyKeys.removeMemberKeys(id);
 
+    // Grants that named the member go with them: whoever joins again under that email is a new member.
+    if (removed.ok) this.#modelGrants.forget({ kind: "member", id });
+
     return removed;
   }
 
@@ -659,19 +673,72 @@ export class ControlPlane extends DurableObject<Env> {
   deleteTeam(id: string): MemberResult<true> {
     this.#ensureMembership();
 
-    return this.#members.deleteTeam(id);
+    const deleted = this.#members.deleteTeam(id);
+
+    if (deleted.ok) this.#modelGrants.forget({ kind: "team", id });
+
+    return deleted;
   }
 
   addTeamMember(teamId: string, memberId: string): MemberResult<TeamRecord> {
     this.#ensureMembership();
 
-    return this.#members.addTeamMember(teamId, memberId);
+    const added = this.#members.addTeamMember(teamId, memberId);
+
+    if (added.ok) this.#modelGrants.membershipChanged();
+
+    return added;
   }
 
   removeTeamMember(teamId: string, memberId: string): MemberResult<TeamRecord> {
     this.#ensureMembership();
 
-    return this.#members.removeTeamMember(teamId, memberId);
+    const removed = this.#members.removeTeamMember(teamId, memberId);
+
+    if (removed.ok) this.#modelGrants.membershipChanged();
+
+    return removed;
+  }
+
+  // --- grants (ADR 0021, `grants/store.ts`) -----------------------------------------------------------------------
+
+  /** The org's grants with their revisions and the counter they were read at (what the management routes edit). */
+  grantEntries(): GrantsWire {
+    return this.#modelGrants.wire();
+  }
+
+  /**
+   * Creates, replaces or deletes (`value: null`) one grant at the revision it names. A grant for a member or team the org
+   * does not have is refused: it would name nobody.
+   */
+  writeGrant(
+    change: GrantChange,
+    by: string,
+  ): WriteResult<{ readonly id: string; readonly revision: number }> {
+    this.#ensureMembership();
+
+    return this.#modelGrants.write(change, by, (subject) => this.#missingSubject(subject));
+  }
+
+  #missingSubject(subject: GrantSubject): string | undefined {
+    if (subject.kind === "member")
+      return this.#members.member(subject.id) === undefined ? "no such member" : undefined;
+
+    if (subject.kind === "team")
+      return this.#members.team(subject.id) === undefined ? "no such team" : undefined;
+
+    return undefined;
+  }
+
+  /** Everything the Worker needs to compute any member's allowance: the grants and who is in each team. */
+  grantTable(): GrantTable {
+    this.#ensureMembership();
+
+    return {
+      revision: this.#modelGrants.version(),
+      grants: this.#modelGrants.entries(),
+      teams: this.#members.teams().map((team) => ({ id: team.id, members: team.members })),
+    };
   }
 
   /** The member ids of a team, `undefined` for an unknown team (usage filters). */
