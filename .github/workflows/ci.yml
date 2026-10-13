@@ -138,7 +138,7 @@ jobs:
           url="$(sed -nE "s/^ *url: '(https:[^']+)',?$/\1/p" "$RUNNER_TEMP/deploy.log" | tail -n 1)"
           if [ -z "$url" ]; then echo "::error::the deploy printed no url output" >&2; exit 1; fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
-      - name: Check through Access
+      - name: Check the deploy and Access
         env:
           URL: ${{ steps.deploy.outputs.url }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}

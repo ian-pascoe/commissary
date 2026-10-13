@@ -69,13 +69,14 @@ export const accessErrorResponse = (
 };
 
 /**
- * Global middleware: requests under the protected prefixes (see `routes.ts`) must carry a valid Access JWT and come
- * from a member of the request's org with the role the route needs (`policy.ts`, ADR 0022): a platform admin
+ * Global middleware: requests under the protected prefixes (see `routes.ts`) must carry a valid Access JWT, or on a
+ * proxy route a proxy key (`proxy-key.ts`), and come from a member of the request's org with the role the route needs
+ * (`policy.ts`, ADR 0022): a platform admin
  * (`PLATFORM_ADMIN_*`) is an owner of every org, anyone else has the role their membership gives them. Cross-site
  * requests and cross-origin WebSocket upgrades are refused first (`csrf.ts`). Everything else (`/healthz`, unknown
  * paths) is passed through untouched. On success the principal is available to handlers as `AccessPrincipal`, and
- * `CurrentOrg` is the org of the request: the org addressed by an org-scoped management URL (`org-address.ts`),
- * unchanged otherwise.
+ * `CurrentOrg` is the org of the request: the org addressed by an org-scoped management URL (`org-address.ts`), the
+ * org a proxy key names, unchanged otherwise.
  *
  * Register it after `CorsLayer` so that 401/403 responses still carry CORS headers and preflights are not gated.
  */

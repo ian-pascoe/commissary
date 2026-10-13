@@ -117,10 +117,17 @@ export const loadAccessConfig = (
 /** The platform admin allow-lists: lowercased emails and service token client ids. */
 export type AdminLists = Pick<AccessConfig, "adminEmails" | "adminServiceTokens">;
 
-export const isAdmin = (lists: AdminLists, principal: Principal) =>
-  principal.kind === "user"
-    ? lists.adminEmails.has(principal.email.toLowerCase())
-    : lists.adminServiceTokens.has(principal.commonName);
+/** Whether `principal` is a platform admin; a proxy key never is (its member's rights stay in the member's org). */
+export const isAdmin = (lists: AdminLists, principal: Principal): boolean => {
+  switch (principal.kind) {
+    case "user":
+      return lists.adminEmails.has(principal.email.toLowerCase());
+    case "service":
+      return lists.adminServiceTokens.has(principal.commonName);
+    case "key":
+      return false;
+  }
+};
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 

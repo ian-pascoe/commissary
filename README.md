@@ -1,25 +1,26 @@
 # cf-llm-proxy
 
 **Your own LLM gateway on Cloudflare Workers.** Pool your Claude, ChatGPT/Codex, Gemini/Vertex, Antigravity, xAI, Kimi
-and other accounts and API keys behind one endpoint that speaks the OpenAI, Anthropic and Gemini APIs, protected by
-Cloudflare Access and managed from a built-in control panel.
+and other accounts and API keys behind one endpoint that speaks the OpenAI, Anthropic and Gemini APIs, with clients on
+proxy keys and a built-in control panel behind Cloudflare Access.
 
 - **One endpoint, every client.** Claude Code, Codex CLI, the OpenAI/Anthropic/Gemini SDKs and anything else that
   speaks those APIs; requests are translated between protocols, so Claude Code can run on a GPT model and vice versa.
 - **Use the subscriptions you already pay for.** Log in with OAuth (Claude, Codex, Antigravity, xAI, Kimi, Devin, …) or
   add API keys; credentials rotate round-robin with cooldowns on rate limits and automatic token refresh.
 - **Nothing to run.** A single Worker with Durable Objects, KV and D1. No servers, no containers, and it scales to zero.
-- **Zero-trust by default.** Cloudflare Access is the only way in: people sign in with your identity provider, tools use
-  Access service tokens. The Worker stores no client passwords or proxy API keys.
+- **Zero-trust by default.** People sign in to the control panel and management API through Cloudflare Access with
+  your identity provider; tools send a proxy key each member creates in the panel, stored only as a hash and
+  revocable at once. The Worker stores no client passwords.
 - **Control panel.** Connect accounts, manage API keys, watch quotas and usage, shape model routing and edit the
   config at `/`.
 - **Infrastructure as code.** The Worker, storage, Access application, policies and service tokens are declared in
   [`alchemy.run.ts`](alchemy.run.ts) and deployed with one command.
 
 ```text
- Claude Code / Codex / SDKs ──► Cloudflare Access ──► cf-llm-proxy Worker ──► Claude, OpenAI, Gemini, xAI, …
-      (service token)          (your IdP + tokens)    (translate, pick an      (your OAuth logins and
-                                                       account, refresh)        API keys)
+ Claude Code / Codex / SDKs ─────(proxy key)─────► cf-llm-proxy Worker ──► Claude, OpenAI, Gemini, xAI, …
+ Browser (control panel) ──► Cloudflare Access ──►  (translate, pick an     (your OAuth logins and
+                            (your IdP + tokens)      account, refresh)       API keys)
 ```
 
 ## Contents
@@ -77,7 +78,7 @@ Fill in at least these (`.env` is git-ignored; shell variables override it):
 | `CF_LLM_PROXY_DOMAIN`                             | `llm.example.com` | Hostname of the proxy; its zone must be in the account                                                            |
 | `ACCESS_TEAM_DOMAIN`                              | `myteam`          | Your Zero Trust team name                                                                                         |
 | `ACCESS_ALLOW_EMAILS` / `_EMAIL_DOMAINS`          | `you@example.com` | Who may sign in through the browser                                                                               |
-| `ACCESS_SERVICE_TOKENS`                           | `laptop,ci`       | One Access service token is created per name, for your tools                                                      |
+| `ACCESS_SERVICE_TOKENS`                           | `laptop,ci`       | One Access service token is created per name, for scripts that use the management API                             |
 | `PLATFORM_ADMIN_EMAILS` / `_ADMIN_SERVICE_TOKENS` | `you@example.com` | Platform admins: who may open the control panel and management API, and create orgs (emails, service token names) |
 
 Every other setting is optional; see [Configuration](#configuration). The Worker needs **no provider secrets** in
@@ -113,17 +114,19 @@ curl https://llm.example.com/healthz \
 Open `https://llm.example.com/` and sign in through Access with an admin email. Then:
 
 - **Connect account** (top bar) logs in to Claude, Codex, Antigravity, xAI, Kimi, … or uploads existing auth files;
-- **API keys** adds provider keys (Claude, OpenAI-compatible upstreams, Gemini, Vertex, OpenCode Zen/Go, …).
+- **API keys** adds provider keys (Claude, OpenAI-compatible upstreams, Gemini, Vertex, OpenCode Zen/Go, …);
+- **Proxy keys** creates the key your clients send (shown once: copy it).
 
 Coming from the Go CLIProxyAPI server? [MIGRATION.md](docs/MIGRATION.md) imports your config and auth files.
 
 ## Connect a client
 
-Clients authenticate to Access with a service token. The proxy ignores the provider API key a client sends, but most
-clients require one, so pass any dummy value.
+Clients send a proxy key (control panel, **Proxy keys**) where they send a provider API key: `Authorization: Bearer`,
+`x-api-key` or `x-goog-api-key`/`?key=`. The proxy routes are not behind Access, so no Access headers are needed.
 
 ```bash
-H=(-H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
+export PROXY_KEY='cfp_…'
+H=(-H "Authorization: Bearer $PROXY_KEY")
 
 curl "${H[@]}" https://llm.example.com/v1/models
 curl "${H[@]}" https://llm.example.com/v1/chat/completions -H 'content-type: application/json' \
@@ -134,13 +137,12 @@ curl "${H[@]}" https://llm.example.com/v1/chat/completions -H 'content-type: app
 
 ```bash
 export ANTHROPIC_BASE_URL=https://llm.example.com
-export ANTHROPIC_AUTH_TOKEN=dummy
-export ANTHROPIC_CUSTOM_HEADERS=$'CF-Access-Client-Id: '"$CF_ACCESS_CLIENT_ID"$'\nCF-Access-Client-Secret: '"$CF_ACCESS_CLIENT_SECRET"
+export ANTHROPIC_AUTH_TOKEN="$PROXY_KEY"
 claude
 ```
 
-[CLIENTS.md](docs/CLIENTS.md) covers Codex CLI, the OpenAI, Anthropic and Gemini SDKs, single-header tokens for clients
-that cannot send custom headers, and browser use.
+[CLIENTS.md](docs/CLIENTS.md) covers Codex CLI, the OpenAI, Anthropic and Gemini SDKs and browser use. Clients that
+signed in through Access before proxy keys: [MIGRATION.md](docs/MIGRATION.md#5-move-clients-to-proxy-keys).
 
 **Endpoints.** `POST /v1/chat/completions`, `/v1/completions`, `/v1/messages`, `/v1/messages/count_tokens`,
 `/v1/responses` (+ `/compact`, and a `GET` WebSocket upgrade), `GET /v1/models`, `/v1beta/models/*`
@@ -161,12 +163,12 @@ model aliases, retries, …) are edited in the control panel and stored in the W
 | `ACCESS_TEAM_DOMAIN`             | (required) | Zero Trust team name or `<team>.cloudflareaccess.com`                                                                              |
 | `ACCESS_ALLOW_EMAILS`            |            | Emails allowed to sign in (comma separated)                                                                                        |
 | `ACCESS_ALLOW_EMAIL_DOMAINS`     |            | Email domains allowed to sign in                                                                                                   |
-| `ACCESS_SERVICE_TOKENS`          |            | Names of the service tokens to create, one per client or machine                                                                   |
+| `ACCESS_SERVICE_TOKENS`          |            | Names of the service tokens to create, one per script or machine using the management API                                          |
 | `ACCESS_ALLOW_SERVICE_TOKEN_IDS` |            | Service tokens managed elsewhere (by token ID) to admit as well, e.g. CI's                                                         |
 | `PLATFORM_ADMIN_EMAILS`          |            | Platform admins of the control panel and management API (replaces `ACCESS_ADMIN_EMAILS`, still read)                               |
 | `PLATFORM_ADMIN_SERVICE_TOKENS`  |            | Service token names (from `ACCESS_SERVICE_TOKENS`) or Client IDs that are platform admins (replaces `ACCESS_ADMIN_SERVICE_TOKENS`) |
 | `ACCESS_SESSION_DURATION`        | `24h`      | Access session length for browser sign-ins                                                                                         |
-| `ACCESS_SERVICE_TOKEN_HEADER`    |            | Accept service tokens as JSON in one header (e.g. `x-api-key`) for clients without custom headers                                  |
+| `ACCESS_SERVICE_TOKEN_HEADER`    |            | Accept service tokens as JSON in one header (e.g. `x-api-key`) for management scripts without custom headers                       |
 | `ACCESS_AUD`                     |            | Use an Access application you manage yourself instead of creating one                                                              |
 | `USAGE_RETENTION_DAYS`           | `30`       | How long usage records are kept in D1                                                                                              |
 | `CF_LLM_PROXY_CPU_MS`            | `300000`   | CPU limit per request in ms; lower it on plans with smaller limits                                                                 |
@@ -194,14 +196,16 @@ preview stage on `workers.dev`. The CI credentials are code too (`stacks/github.
 
 ## Troubleshooting
 
-| Symptom                                   | Fix                                                                                        |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Deploy fails on the custom domain         | `CF_LLM_PROXY_DOMAIN` must be a hostname on a zone in the same Cloudflare account          |
-| CLI gets a 302 to `cloudflareaccess.com`  | Service token headers are missing or wrong, or the token is not in `ACCESS_SERVICE_TOKENS` |
-| 500 `Authentication service error`        | `ACCESS_TEAM_DOMAIN` is wrong                                                              |
-| 403 `Forbidden` on the control panel      | Your email or token is not in `PLATFORM_ADMIN_EMAILS` / `PLATFORM_ADMIN_SERVICE_TOKENS`    |
-| A model is missing from `/v1/models`      | No connected account or API key serves it; check the Accounts and Models pages             |
-| Responses WebSocket closes with 1011/1012 | It hit the Worker CPU limit; clients reconnect, or use HTTP/SSE                            |
+| Symptom                                     | Fix                                                                                         |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Deploy fails on the custom domain           | `CF_LLM_PROXY_DOMAIN` must be a hostname on a zone in the same Cloudflare account           |
+| Client gets 401 `Missing API key`           | Send a proxy key (`Authorization: Bearer cfp_…`, `x-api-key` or `x-goog-api-key`)           |
+| Client gets 401 `Invalid API key`           | The proxy key is wrong, revoked or expired: create a new one on the Proxy keys page         |
+| Client gets a 302 to `cloudflareaccess.com` | Its path is not a proxy route, or the deploy's bypass application is missing (`ACCESS_AUD`) |
+| 500 `Authentication service error`          | `ACCESS_TEAM_DOMAIN` is wrong                                                               |
+| 403 `Forbidden` on the control panel        | Your email or token is not in `PLATFORM_ADMIN_EMAILS` / `PLATFORM_ADMIN_SERVICE_TOKENS`     |
+| A model is missing from `/v1/models`        | No connected account or API key serves it; check the Accounts and Models pages              |
+| Responses WebSocket closes with 1011/1012   | It hit the Worker CPU limit; clients reconnect, or use HTTP/SSE                             |
 
 More Access-specific answers: [ACCESS.md#troubleshooting](docs/ACCESS.md#troubleshooting).
 
@@ -232,8 +236,8 @@ The matrix is indicative: which (client protocol, provider) pairs work follows t
 - **WebSocket CPU limit.** A Responses WebSocket lives in the invocation that accepted it and is bounded by the CPU
   limit (`CF_LLM_PROXY_CPU_MS`). There are no ping keep-alives (`streaming.keepalive-seconds` is ignored).
 - **Not supported:** plugins, TUI, mDNS discovery, pprof, git/Postgres/object-store config backends, request-log files,
-  Codex live/realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, `/v0/management` and legacy proxy API keys (Access
-  replaces them). `/v1/responses/compact` answers 501 for Gemini/Vertex credentials.
+  Codex live/realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, `/v0/management` and the Go server's client API keys
+  (proxy keys replace them). `/v1/responses/compact` answers 501 for Gemini/Vertex credentials.
 
 Per-provider details: [ARCHITECTURE.md](docs/ARCHITECTURE.md); config keys without effect:
 [MIGRATION.md](docs/MIGRATION.md).

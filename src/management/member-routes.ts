@@ -11,20 +11,24 @@
 import { Effect, Schema } from "effect";
 import { HttpRouter, type HttpServerResponse } from "effect/http";
 import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
+import { forgetVerifiedProxyKeysOf } from "../access/proxy-key.ts";
 import { syncOrgIndex } from "../members/admission.ts";
 import { type Actor, holdsSensitivePowers, roleAtLeast } from "../members/roles.ts";
 import type {
   MemberErrorCode,
   MemberRecord,
   MemberResult,
+  MembershipSettingsWire,
   ServiceTokenRecord,
   TeamRecord,
 } from "../members/store.ts";
 import type { WorkerEnv } from "../platform/env.ts";
+import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 import {
   AddMember,
   AddTeamMember,
   type MemberView,
+  type MembershipSettings,
   UpdateMembershipSettings,
   RegisterServiceToken,
   type ServiceTokenView,
@@ -169,30 +173,50 @@ const removeMember = Effect.gen(function* () {
   const result = yield* controlPlane("removeMember", (stub) => stub.removeMember(id, actor));
 
   yield* orRefuse(result);
+  // Their proxy keys went with them (ADR 0027); this isolate stops trusting the keys it verified at once.
+  forgetVerifiedProxyKeysOf((yield* AccessPrincipal).org, id);
   yield* reindex;
 
   return jsonReply(200, { status: "ok" });
 });
 
+/** `access_clients` exists in `global` only: an Access sign-in on a proxy route names no org, so it reaches no other. */
+const settingsView = (settings: MembershipSettingsWire, org: OrgId): MembershipSettings => ({
+  auto_join: settings.autoJoin,
+  private_credentials: settings.privateCredentials,
+  ...(org === GLOBAL_ORG ? { access_clients: settings.accessClients } : {}),
+});
+
 const membershipSettings = Effect.gen(function* () {
+  const { org } = yield* AccessPrincipal;
   const settings = yield* controlPlane("membershipSettings", (stub) => stub.membershipSettings());
 
-  return jsonReply(200, {
-    auto_join: settings.autoJoin,
-    private_credentials: settings.privateCredentials,
-  });
+  return jsonReply(200, settingsView(settings, org));
 });
 
 const updateMembershipSettings = Effect.gen(function* () {
-  const { actor } = yield* caller;
+  const { identity, actor } = yield* caller;
   const input = yield* body(UpdateMembershipSettings);
 
-  if (input.auto_join === undefined && input.private_credentials === undefined)
+  if (
+    input.auto_join === undefined &&
+    input.private_credentials === undefined &&
+    input.access_clients === undefined
+  )
     return yield* replyError(400, "invalid body");
 
-  if (input.auto_join !== undefined && !roleAtLeast(actor.role, "owner"))
+  if (
+    (input.auto_join !== undefined || input.access_clients !== undefined) &&
+    !roleAtLeast(actor.role, "owner")
+  )
     return yield* replyError(403, "owner_required", {
-      message: "only an org owner can change who may join the org",
+      message: "only an org owner can change who may join the org and how clients sign in",
+    });
+
+  if (input.access_clients !== undefined && identity.org !== GLOBAL_ORG)
+    return yield* replyError(422, "access_clients_global_only", {
+      message:
+        "only the first org takes Access sign-ins on the proxy routes; this org takes proxy keys only",
     });
 
   const settings = yield* controlPlane("setMembershipSettings", (stub) =>
@@ -201,13 +225,11 @@ const updateMembershipSettings = Effect.gen(function* () {
       ...(input.private_credentials === undefined
         ? {}
         : { privateCredentials: input.private_credentials }),
+      ...(input.access_clients === undefined ? {} : { accessClients: input.access_clients }),
     }),
   );
 
-  return jsonReply(200, {
-    auto_join: settings.autoJoin,
-    private_credentials: settings.privateCredentials,
-  });
+  return jsonReply(200, settingsView(settings, identity.org));
 });
 
 // --- teams -----------------------------------------------------------------------------------------------------------

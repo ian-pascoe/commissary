@@ -126,6 +126,15 @@ import {
   type ServiceTokenRecord,
   type TeamRecord,
 } from "../members/store.ts";
+import {
+  type ClientsUseProxyKeys,
+  type MemberNotFound,
+  type ProxyKeyListing,
+  type ProxyKeyRecord,
+  type ProxyKeyResult,
+  ProxyKeyStore,
+  type ProxyKeyVerdict,
+} from "../proxy-keys/store.ts";
 
 const decodePickRequest = Schema.decodeUnknownSync(PickRequest);
 
@@ -291,6 +300,7 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #members: MemberStore;
   /** The members' private API key groups (sealed rows of their own, never config entries). */
   readonly #privateKeys: PrivateKeyStore;
+  readonly #proxyKeys: ProxyKeyStore;
   /** The org this object serves, from its name. */
   readonly #org: OrgId;
   /**
@@ -315,6 +325,7 @@ export class ControlPlane extends DurableObject<Env> {
     this.#config = new ConfigStore(ctx.storage.sql, this.#org, transaction, this.#secrets);
     this.#members = new MemberStore(ctx.storage.sql, this.#org, transaction);
     this.#privateKeys = new PrivateKeyStore(ctx.storage.sql, transaction, this.#secrets);
+    this.#proxyKeys = new ProxyKeyStore(ctx.storage.sql, this.#org);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
 
@@ -488,9 +499,19 @@ export class ControlPlane extends DurableObject<Env> {
     );
   }
 
-  /** The role of a principal in the org (`MemberStore.admit`); `autoJoin` lets a person join when the org allows it. */
-  admit(principal: PrincipalRef, autoJoin: boolean): Admission | undefined {
+  /**
+   * The role of a principal in the org (`MemberStore.admit`); `autoJoin` lets a person join when the org allows it.
+   * `client`: the request is for a proxy route, where an Access sign-in is accepted only while the org's
+   * `accessClients` setting is on; otherwise the answer is {@link ClientsUseProxyKeys} and nobody joins.
+   */
+  admit(
+    principal: PrincipalRef,
+    autoJoin: boolean,
+    client = false,
+  ): Admission | ClientsUseProxyKeys | undefined {
     this.#ensureMembership();
+
+    if (client && !this.#proxyKeys.accessClients()) return { proxyKeysOnly: true };
 
     return this.#members.admit(principal, autoJoin);
   }
@@ -520,7 +541,12 @@ export class ControlPlane extends DurableObject<Env> {
   removeMember(id: string, actor: Actor): MemberResult<{ readonly email: string }> {
     this.#ensureMembership();
 
-    return this.#members.removeMember(id, actor);
+    const removed = this.#members.removeMember(id, actor);
+
+    // ADR 0027: a member who leaves takes their proxy keys with them (a key whose member is gone is refused anyway).
+    if (removed.ok) this.#proxyKeys.removeMemberKeys(id);
+
+    return removed;
   }
 
   membershipSettings(): MembershipSettingsWire {
@@ -529,10 +555,14 @@ export class ControlPlane extends DurableObject<Env> {
     return {
       autoJoin: this.#members.autoJoin(),
       privateCredentials: this.#members.privateCredentials(),
+      accessClients: this.#proxyKeys.accessClients(),
     };
   }
 
-  /** Changes the settings named; `privateCredentials` turns every private credential off or on again at once. */
+  /**
+   * Changes the settings named; the others keep their value. `privateCredentials` turns every private credential off
+   * or on again at once.
+   */
   setMembershipSettings(settings: Partial<MembershipSettingsWire>): MembershipSettingsWire {
     this.#ensureMembership();
 
@@ -546,7 +576,66 @@ export class ControlPlane extends DurableObject<Env> {
       this.#pool.invalidate();
     }
 
+    if (settings.accessClients !== undefined)
+      this.#proxyKeys.setAccessClients(settings.accessClients);
+
     return this.membershipSettings();
+  }
+
+  // --- proxy keys (ADR 0022, `proxy-keys/store.ts`) -----------------------------------------------------------------
+
+  /** The org's proxy keys, or one member's, with the email of the member each belongs to. */
+  listProxyKeys(memberId?: string): ReadonlyArray<ProxyKeyListing> {
+    this.#ensureMembership();
+    const emails = new Map(this.#members.members().map((member) => [member.id, member.email]));
+
+    return this.#proxyKeys.list(memberId).map((key) => ({
+      ...key,
+      ...(emails.has(key.memberId) ? { memberEmail: emails.get(key.memberId) } : {}),
+    }));
+  }
+
+  /** Issues a key to a member of the org; the answer carries the whole key, shown this once. `now`: epoch ms. */
+  createProxyKey(
+    input: { readonly memberId: string; readonly name: string; readonly expiresAt?: number },
+    now: number,
+  ): ProxyKeyResult<{ readonly record: ProxyKeyRecord; readonly key: string }> | MemberNotFound {
+    this.#ensureMembership();
+
+    if (this.#members.member(input.memberId) === undefined)
+      return { ok: false, error: "member_not_found", message: "no member has this id" };
+
+    return this.#proxyKeys.create(input, now);
+  }
+
+  /** Revokes a key; `memberId` limits the call to that member's keys (`ProxyKeyStore.revoke`). */
+  revokeProxyKey(id: string, now: number, memberId?: string): ProxyKeyResult<ProxyKeyRecord> {
+    this.#ensureMembership();
+
+    return this.#proxyKeys.revoke(id, now, memberId);
+  }
+
+  /**
+   * Checks a presented proxy key (its id and the SHA-256 of the whole key) at `now`: the key must be live and its
+   * member still in the org, whose role the answer carries. Asked on every request the Worker has not verified
+   * within its cache's short lifetime.
+   */
+  verifyProxyKey(keyId: string, hash: string, now: number): ProxyKeyVerdict {
+    this.#ensureMembership();
+    const checked = this.#proxyKeys.check(keyId, hash, now);
+
+    if (!checked.ok) return checked;
+    const member = this.#members.member(checked.memberId);
+
+    if (member === undefined) return { ok: false, reason: "unknown" };
+
+    return {
+      ok: true,
+      memberId: member.id,
+      email: member.email,
+      role: member.role,
+      ...(checked.expiresAt === undefined ? {} : { expiresAt: checked.expiresAt }),
+    };
   }
 
   listTeams(): ReadonlyArray<TeamRecord> {

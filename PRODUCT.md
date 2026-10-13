@@ -21,10 +21,11 @@ Each holds a role in their org:
   who belongs (the Members page: members, teams, service tokens, auto-join). Owners also change roles. On a self-hosted
   deployment this is often one person, the owner of the deployment, who is also a **platform admin** (owner of every
   org, the only one who creates orgs).
-- **Plain members** use the proxy from their coding agents and open the panel to see their own usage. Where the org lets
-  members connect private credentials, they also get their own Accounts and API keys pages: they connect their own
-  accounts and add their own keys, used only for their requests; org admins see that each exists (provider, owner,
-  label) and can disable or remove it, never how it is used. Every other page is closed to them.
+- **Plain members** use the proxy from their coding agents and open the panel to see their own usage and to create and
+  revoke their own proxy keys (the Proxy keys page; org admins see every key of the org). Where the org lets members
+  connect private credentials, they also get their own Accounts and API keys pages: they connect their own accounts and
+  add their own keys, used only for their requests; org admins see that each exists (provider, owner, label) and can
+  disable or remove it, never how it is used. Every other page is closed to them.
 
 Day to day the proxy is consumed by coding agents (pi, Claude Code, Codex) on the members' machines; the panel is where
 they go to check on it or change it.

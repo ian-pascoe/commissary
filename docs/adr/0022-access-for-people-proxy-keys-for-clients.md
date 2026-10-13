@@ -1,5 +1,5 @@
 ---
-status: accepted, amended by ADR-0026 for hosted proxies
+status: accepted, amended by ADR-0026 for hosted proxies and below for Access sign-ins in `global`
 ---
 
 # Access authenticates people; the proxy authorizes them and issues proxy keys to clients
@@ -20,3 +20,16 @@ Access cannot carry clients for many orgs. An account holds at most 50 service t
 - Clients that send Access service token headers to the proxy routes must switch to proxy keys. Self-hosted deployments issue them from the control panel.
 - Browsers do not attach proxy keys on their own, so cross-site request forgery stops being a risk for the proxy routes. The defences stay for the Access-gated routes.
 - The Go server's client keys are still accepted on import and never enforced; proxy keys are a new kind of key, not a revival of them.
+- A key is the member who holds it: requests made with it carry that member, so the member's private credentials (ADR 0023) serve them and nobody else's.
+- The Worker remembers a verified key for 30 seconds, so a key revoked or a member removed in one isolate is refused there at once, and in other isolates within that window. Checking every request against the org's ControlPlane would cost a round trip per request; the window bounds the exposure instead.
+
+## Amendment: Access sign-ins in `global` during the move to proxy keys
+
+Clients of the first org, `global`, signed in through Access before proxy keys existed (`cloudflared access`, or service token headers). Breaking them on deploy would strand every existing client, so `global` keeps an owner-controlled setting, `access_clients`, that lets its proxy routes accept an Access JWT, from `Cf-Access-Jwt-Assertion` or the `cf-access-token` header `cloudflared` sends, in place of a proxy key. The Worker checks that JWT itself, as strictly as the Access edge would (signature, audience, issuer, expiry), since Access no longer sits in front of the proxy routes.
+
+The exception is transitional and narrow:
+
+- It exists in `global` only and is on there by default. An Access sign-in on a proxy route names no org, so it can only ever reach `global`; every other org takes proxy keys alone and has no such setting (`PATCH /membership` answers `422 access_clients_global_only`).
+- It covers Access JWTs only. Service token headers stop working on the proxy routes with the deploy that takes them out of Access, since nothing there turns them into a JWT any more; those clients move to proxy keys first.
+- A presented proxy key always wins: a bad key is refused even when the request also carries an Access sign-in.
+- Once every client sends a proxy key (`docs/MIGRATION.md`), an org owner turns the setting off, and the proxy key check is again the proxy routes' only gate.

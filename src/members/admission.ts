@@ -13,6 +13,7 @@ import type { Principal } from "../access/principal.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import { controlPlaneOf, type OrgId } from "../platform/org.ts";
 import { platformOf } from "../platform/registry.ts";
+import type { ClientsUseProxyKeys } from "../proxy-keys/store.ts";
 import type { Admission, PrincipalRef } from "./store.ts";
 
 /** The org's ControlPlane could not be asked; the message names the call. */
@@ -26,9 +27,9 @@ const failure = (label: string) => (cause: unknown) =>
   });
 
 export const principalRef = (principal: Principal): PrincipalRef =>
-  principal.kind === "user"
-    ? { kind: "user", email: principal.email }
-    : { kind: "service", clientId: principal.commonName };
+  principal.kind === "service"
+    ? { kind: "service", clientId: principal.commonName }
+    : { kind: "user", email: principal.email };
 
 /**
  * Pushes the org's members and service tokens to the Platform registry when its index is behind; never fails (a
@@ -79,22 +80,26 @@ export const syncOrgIndex = (org: OrgId): Effect.Effect<void, never, WorkerEnv> 
 
 /**
  * The role of `principal` in `org`, `undefined` when it has none. With `autoJoin`, a person joins an org that has
- * auto-join on (on for `global`) as a plain member on their first request.
+ * auto-join on (on for `global`) as a plain member on their first request. `client`: the request is for a proxy
+ * route, which takes an Access sign-in only while the org accepts them there (`ClientsUseProxyKeys` otherwise).
  */
 export const admitPrincipal = (
   org: OrgId,
   principal: Principal,
   autoJoin = true,
-): Effect.Effect<Admission | undefined, MembershipUnavailable, WorkerEnv> =>
+  client = false,
+): Effect.Effect<Admission | ClientsUseProxyKeys | undefined, MembershipUnavailable, WorkerEnv> =>
   Effect.gen(function* () {
     const env = yield* WorkerEnv;
 
     const admission = yield* Effect.tryPromise({
-      try: async () => await controlPlaneOf(env, org).admit(principalRef(principal), autoJoin),
+      try: async () =>
+        await controlPlaneOf(env, org).admit(principalRef(principal), autoJoin, client),
       catch: failure("admit"),
     });
 
-    if (admission?.indexStale === true) yield* syncOrgIndex(org);
+    if (admission !== undefined && "indexStale" in admission && admission.indexStale)
+      yield* syncOrgIndex(org);
 
     return admission;
   });

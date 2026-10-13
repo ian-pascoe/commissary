@@ -156,6 +156,33 @@ account afterwards (or log in again on the target, §3, which needs no export). 
 
 ## 4. Switch clients
 
-Point each tool at the Worker with Access headers ([CLIENTS.md](CLIENTS.md)); verify `GET /v1/models` lists the models you expect,
-then retire the Go server. Model aliases, prefixes, `excluded-models`, payload rules and routing settings from `config.yaml` carry over.
-Usage statistics are not migrated; new usage is recorded in D1 and shown in the panel.
+Create a proxy key in the panel (**Proxy keys**) and point each tool at the Worker with it ([CLIENTS.md](CLIENTS.md));
+verify `GET /v1/models` lists the models you expect, then retire the Go server. The Go server's client keys
+(`access.api-keys`) are not imported as proxy keys: they are a different kind of key, so every client gets a new one.
+Model aliases, prefixes, `excluded-models`, payload rules and routing settings from `config.yaml` carry over. Usage
+statistics are not migrated; new usage is recorded in D1 and shown in the panel.
+
+## 5. Move clients to proxy keys
+
+Before proxy keys (ADR 0022), clients of a Workers deployment authenticated through Cloudflare Access: with Access
+service token headers (`CF-Access-Client-Id`/`-Secret`), or with a `cloudflared access` token in the `cf-access-token`
+header. Since then the proxy routes (`/v1*`, `/openai/v1*`, `/backend-api/codex*`, `/chat/completions`, `/completions`,
+`/responses`) are outside the Access application: the deploy adds a bypass application for those paths, so Access no
+longer turns a service token into a sign-in there, and the Worker answers them itself.
+
+- **Service token headers stop working on the proxy routes** with the deploy that adds the bypass. Move those clients
+  first: as a member of the org, create a proxy key in the panel and replace the two Access headers with the key
+  ([CLIENTS.md](CLIENTS.md)). Service tokens keep working on the management API.
+- **`cloudflared access` tokens keep working in the first org** (`global`, the org of a deployment from before orgs)
+  while its **Access sign-ins for clients** setting is on, which is its default. The Worker verifies the token from the
+  `cf-access-token` header itself (and from `Cf-Access-Jwt-Assertion`); a dummy API key sent next to it is ignored. A
+  token is issued for the Access application of the whole domain, so renew it with
+  `cloudflared access login https://proxy.example.com` (the domain, not a proxy path, which Access no longer guards).
+- When every client uses a proxy key, an owner of `global` turns the setting off, on its Members page or with
+  `curl "${H[@]}" -X PATCH "$M/membership" -H 'content-type: application/json' -d '{"access_clients":false}'` (`M`
+  unscoped). From then on a request to a proxy route with only an Access sign-in answers `401`. Other orgs have no such
+  setting: they take proxy keys only.
+
+A deployment that brings its own Access application (`ACCESS_AUD`) gets no bypass from the deploy: add a self-hosted
+application for the proxy paths with a Bypass policy for everyone ([DEPLOY.md](DEPLOY.md)), or its clients keep needing
+Access in front of the key.

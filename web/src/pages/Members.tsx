@@ -1,10 +1,12 @@
 // Members (/members): who belongs to the org and with which role, the teams they are on, the service tokens that may
-// call the management API, and whether people join by themselves. Org org admins manage plain members and teams; org owners
-// also change roles, add org admins and org owners, and decide on auto-join. The server enforces every rule again: the page only
-// offers what the caller's role allows, and says why when a choice is missing.
+// call the management API, and whether people join by themselves. Org admins manage plain members and teams; org
+// owners also change roles, add org admins and org owners, and decide on auto-join and on whether the proxy routes
+// accept an Access sign-in. The server enforces every rule again: the page only offers what the caller's role allows,
+// and says why when a choice is missing.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import type { ReactNode } from "react";
+import type { MembershipSettings } from "#contract/members.ts";
 import {
   MEMBERS,
   membershipAtom,
@@ -65,7 +67,27 @@ const Loaded = <A, E>({
     <Waiting result={result} retry={retry} what={what} />
   );
 
-const AutoJoin = ({ caller }: { readonly caller: Caller }) => {
+/** One owner-only membership setting: a checkbox that saves just itself (the write is a partial patch), and what it does. */
+const MembershipToggle = ({
+  caller,
+  setting,
+  label,
+  what,
+  describe,
+  said,
+  ownerNote,
+}: {
+  readonly caller: Caller;
+  readonly setting: keyof MembershipSettings;
+  readonly label: string;
+  readonly what: string;
+  /** What the setting means in its current state. */
+  readonly describe: (on: boolean) => string;
+  /** What changed, said after a save. */
+  readonly said: (on: boolean) => string;
+  /** Said to an org owner after the description. */
+  readonly ownerNote?: string;
+}) => {
   const result = useAtomValue(membershipAtom);
   const retry = useAtomRefresh(membershipAtom);
   const save = useAction(updateMembershipAtom);
@@ -73,41 +95,44 @@ const AutoJoin = ({ caller }: { readonly caller: Caller }) => {
   const owner = canSetAutoJoin(caller);
 
   return (
-    <Loaded result={result} retry={retry} what="the joining setting">
-      {({ auto_join: on }) => (
-        <>
-          <label className={styles["toggle"]}>
-            <input
-              type="checkbox"
-              checked={on}
-              disabled={!owner || save.busy}
-              onChange={async (event) => {
-                clear();
+    <Loaded result={result} retry={retry} what={what}>
+      {(settings) => {
+        const on = settings[setting];
 
-                settle(
-                  await save.run({
-                    payload: { auto_join: event.target.checked },
-                    reactivityKeys: MEMBERS,
-                  }),
-                  event.target.checked
-                    ? "Everyone Access admits now joins as a member."
-                    : "Only people you add can join now.",
-                );
-              }}
-            />
-            <span>Let everyone Access admits join as a member</span>
-          </label>
-          <p className={kit["muted"]}>
-            {on
-              ? "On: anyone Cloudflare Access lets in joins this org as a plain member on their first request, and a service token Access admits is let in as a member without being registered."
-              : "Off: only people and service tokens listed here can use this org; anyone else Access admits is turned away."}{" "}
-            {owner
-              ? "Existing members and their roles do not change."
-              : `Only an org owner can change this; you are ${roleAs(caller.role)}.`}
-          </p>
-          <NoteLine note={note} />
-        </>
-      )}
+        // `access_clients` exists in the first org only (an Access sign-in reaches no other).
+        if (on === undefined) return null;
+
+        return (
+          <>
+            <label className={styles["toggle"]}>
+              <input
+                type="checkbox"
+                checked={on}
+                disabled={!owner || save.busy}
+                onChange={async (event) => {
+                  clear();
+
+                  settle(
+                    await save.run({
+                      payload: { [setting]: event.target.checked },
+                      reactivityKeys: MEMBERS,
+                    }),
+                    said(event.target.checked),
+                  );
+                }}
+              />
+              <span>{label}</span>
+            </label>
+            <p className={kit["muted"]}>
+              {describe(on)}{" "}
+              {owner
+                ? (ownerNote ?? "")
+                : `Only an org owner can change this; you are ${roleAs(caller.role)}.`}
+            </p>
+            <NoteLine note={note} />
+          </>
+        );
+      }}
     </Loaded>
   );
 };
@@ -154,6 +179,56 @@ const PrivateCredentials = () => {
         </>
       )}
     </Loaded>
+  );
+};
+
+const AutoJoin = ({ caller }: { readonly caller: Caller }) => (
+  <MembershipToggle
+    caller={caller}
+    setting="auto_join"
+    label="Let everyone Access admits join as a member"
+    what="the joining setting"
+    describe={(on) =>
+      on
+        ? "On: anyone Cloudflare Access lets in joins this org as a plain member on their first request, and a service token Access admits is let in as a member without being registered."
+        : "Off: only people and service tokens listed here can use this org; anyone else Access admits is turned away."
+    }
+    said={(on) =>
+      on ? "Everyone Access admits now joins as a member." : "Only people you add can join now."
+    }
+    ownerNote="Existing members and their roles do not change."
+  />
+);
+
+const AccessClients = ({ caller }: { readonly caller: Caller }) => (
+  <MembershipToggle
+    caller={caller}
+    setting="access_clients"
+    label="Accept an Access sign-in on the proxy routes"
+    what="the proxy sign-in setting"
+    describe={(on) =>
+      on
+        ? "On: the proxy routes still accept an Access sign-in (cloudflared's cf-access-token) instead of a proxy key, for clients set up before proxy keys. Turn it off once every client sends a proxy key, so only keys open the proxy."
+        : "Off: the proxy routes accept proxy keys only. A client that still signs in through Access is asked for a proxy key until its member creates one on the Proxy keys page."
+    }
+    said={(on) =>
+      on
+        ? "The proxy routes accept an Access sign-in again."
+        : "The proxy routes accept proxy keys only now."
+    }
+  />
+);
+
+/** The `access_clients` setting, shown in the org that has it (the first org). */
+const ProxySignIn = ({ caller }: { readonly caller: Caller }) => {
+  const result = useAtomValue(membershipAtom);
+
+  if (!AsyncResult.isSuccess(result) || result.value.access_clients === undefined) return null;
+
+  return (
+    <Section title="Proxy sign-in">
+      <AccessClients caller={caller} />
+    </Section>
   );
 };
 
@@ -216,6 +291,7 @@ const Lists = ({ caller }: { readonly caller: Caller }) => {
       <Section title="Private credentials">
         <PrivateCredentials />
       </Section>
+      <ProxySignIn caller={caller} />
     </>
   );
 };
@@ -238,8 +314,8 @@ export const MembersPage = () => {
             ? "a platform admin, an org owner of every org"
             : roleAs(role.caller.role)}
           . Org owners can do everything here. Org admins add and remove plain members and manage
-          teams; adding or promoting org admins and owners, changing roles and the joining setting
-          are for org owners.
+          teams; adding or promoting org admins and owners, changing roles and the joining and proxy
+          sign-in settings are for org owners.
         </p>
       </header>
       <Lists caller={role.caller} />
