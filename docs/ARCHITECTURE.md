@@ -1266,7 +1266,9 @@ result is stored.
 - **Differences from the upstream panel**:
   - xAI never makes its paid-account fallback (`/v1/me` plus a real chat completion). Its billing calls send the
     executor's Grok CLI version (KV `xai/client-version`, fallback `1.0.46`) instead of a pinned one: the chat proxy
-    answers 426 to versions below 1.0.13, billing included.
+    answers 426 to versions below 1.0.13, billing included. The billing payload is protobuf JSON, which omits zero
+    values: a weekly period without `creditUsagePercent` reads as 0% used, and a `monthlyLimit` of 0 (no included
+    allowance) gives no monthly window.
   - The Codex subscription and reset-credit calls and the Antigravity tier call are skipped.
   - Windows without a percentage are dropped (`used_percent` is required).
   - Labels are English and fixed.

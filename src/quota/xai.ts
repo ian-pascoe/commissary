@@ -51,13 +51,23 @@ const spanSeconds = (start: string | undefined, end: string | undefined): number
   return seconds > 0 ? seconds : undefined;
 };
 
-/** The weekly credits window of a billing payload (`config.creditUsagePercent`). */
+/** `resolveXaiPeriodType`: `USAGE_PERIOD_TYPE_WEEKLY` and the like. */
+const isWeeklyPeriod = (period: JsonObject): boolean =>
+  typeof period.type === "string" && period.type.toLowerCase().includes("weekly");
+
+/**
+ * The weekly credits window of a billing payload (`config.creditUsagePercent`). The payload is protobuf JSON, which
+ * omits zero values: a weekly period without the percentage is a week with nothing used yet.
+ */
 export const parseXaiWeekly = (payload: Json): QuotaWindow | undefined => {
   const config = record(record(payload).config);
-  const used = num(pick(config, "creditUsagePercent", "credit_usage_percent"));
+  const period = record(pick(config, "currentPeriod", "current_period"));
+
+  const used =
+    num(pick(config, "creditUsagePercent", "credit_usage_percent")) ??
+    (isWeeklyPeriod(period) ? 0 : undefined);
 
   if (used === undefined) return undefined;
-  const period = record(pick(config, "currentPeriod", "current_period"));
 
   const start =
     isoInstant(period.start) ??
