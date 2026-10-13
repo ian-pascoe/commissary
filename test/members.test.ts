@@ -106,6 +106,9 @@ const staffedOrg = async (prefix: string) => {
 
 const USAGE = "/observability/usage/records";
 
+/** A service token's Client ID of its own for a test. */
+const clientId = (slug: string, name: string) => `${name}-${slug}.access`;
+
 describe("the permission matrix", () => {
   it("lets a plain member read usage and use the panel's pages, and nothing an admin manages", async () => {
     const { slug, member } = await staffedOrg("matrix-member");
@@ -343,6 +346,41 @@ describe("a removed member", () => {
     expect((await send(slug, USAGE, member)).status).toBe(403);
     expect((await send(slug, "/me", member)).body).toMatchObject({ role: null });
   });
+
+  it("stays out where auto-join is on, until an org admin adds them back", async () => {
+    const { slug, member, owner } = await staffedOrg("removed-join");
+
+    await send(slug, "/membership", await asAdmin(), "PATCH", { auto_join: true });
+
+    expect((await send(slug, `/members/${member.id}`, owner, "DELETE")).status).toBe(200);
+    expect((await send(slug, USAGE, member)).status).toBe(403);
+    expect(await members(slug)).not.toContainEqual(
+      expect.objectContaining({ email: member.email }),
+    );
+
+    await addMember(slug, member.email, "member");
+
+    expect((await send(slug, USAGE, member)).status).toBe(200);
+  });
+
+  it("as a service token stays out where auto-join is on, until it is registered again", async () => {
+    const slug = await newOrg("removed-token");
+    const ci = clientId(slug, "ci");
+    const platform = await asAdmin();
+
+    await send(slug, "/membership", platform, "PATCH", { auto_join: true });
+
+    expect((await send(slug, "/service-tokens", platform, "POST", { client_id: ci })).status).toBe(
+      201,
+    );
+    expect((await send(slug, `/service-tokens/${ci}`, platform, "DELETE")).status).toBe(200);
+    expect((await send(slug, USAGE, await asToken(ci))).status).toBe(403);
+
+    expect((await send(slug, "/service-tokens", platform, "POST", { client_id: ci })).status).toBe(
+      201,
+    );
+    expect((await send(slug, USAGE, await asToken(ci))).status).toBe(200);
+  });
 });
 
 describe("teams", () => {
@@ -401,8 +439,6 @@ describe("teams", () => {
 });
 
 describe("service tokens", () => {
-  const clientId = (slug: string, name: string) => `${name}-${slug}.access`;
-
   it("get roles like people, and a role above member only from an owner token or a platform admin", async () => {
     const { slug, owner, admin } = await staffedOrg("tokens");
     const ownerToken = clientId(slug, "owner");

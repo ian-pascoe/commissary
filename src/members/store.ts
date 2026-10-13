@@ -144,7 +144,16 @@ const SCHEMA = [
      client_id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL, added_at INTEGER NOT NULL,
      added_by TEXT NOT NULL
    )`,
+  // People and tokens an org admin removed: auto-join does not let them back in until they are added again.
+  // `principal` is `user:<email>` or `service:<client id>`.
+  `CREATE TABLE IF NOT EXISTS removed_principals (
+     principal TEXT PRIMARY KEY, removed_at INTEGER NOT NULL
+   )`,
 ];
+
+const removedUser = (email: string) => `user:${email}`;
+
+const removedToken = (clientId: string) => `service:${clientId}`;
 
 interface StateRow {
   auto_join: number;
@@ -315,18 +324,20 @@ export class MemberStore {
   /**
    * The role of `principal` in the org, `undefined` when it has none. With `autoJoin` and the org's auto-join setting
    * on, a person who is not a member joins as a plain member, and an unregistered service token is admitted as a plain
-   * member without being stored (register it to give it a role).
+   * member without being stored (register it to give it a role). Someone an org admin removed does not join again
+   * until they are added back.
    */
   admit(principal: PrincipalRef, autoJoin: boolean): Admission | undefined {
     const state = this.#state();
     const indexStale = state.index_synced < state.counter;
 
     if (principal.kind === "service") {
-      const token = this.#token(principal.clientId.trim());
+      const clientId = principal.clientId.trim();
+      const token = this.#token(clientId);
 
       if (token !== undefined) return { role: role(token.role), joined: false, indexStale };
 
-      return autoJoin && state.auto_join === 1
+      return autoJoin && state.auto_join === 1 && !this.#removed(removedToken(clientId))
         ? { role: "member", joined: false, indexStale }
         : undefined;
     }
@@ -337,7 +348,13 @@ export class MemberStore {
     if (member !== undefined)
       return { role: role(member.role), memberId: member.id, joined: false, indexStale };
 
-    if (!autoJoin || state.auto_join !== 1 || !validEmail(email)) return undefined;
+    if (
+      !autoJoin ||
+      state.auto_join !== 1 ||
+      !validEmail(email) ||
+      this.#removed(removedUser(email))
+    )
+      return undefined;
 
     const id = this.#transaction(() => {
       const joined = this.#insertMember(email, "member", this.#now(), AUTO_JOIN_ACTOR);
@@ -396,6 +413,7 @@ export class MemberStore {
 
     const id = this.#transaction(() => {
       const added = this.#insertMember(email, granted, this.#now(), by);
+      this.#restore(removedUser(email));
       this.#changed();
 
       return added;
@@ -437,6 +455,7 @@ export class MemberStore {
     this.#transaction(() => {
       this.#sql.exec(`DELETE FROM team_members WHERE member_id = ?`, id);
       this.#sql.exec(`DELETE FROM members WHERE id = ?`, id);
+      this.#tombstone(removedUser(current.email));
       this.#changed();
     });
 
@@ -595,14 +614,16 @@ export class MemberStore {
         this.#now(),
         by,
       );
+      this.#restore(removedToken(clientId));
       this.#changed();
     });
 
     return this.#foundToken(clientId);
   }
 
-  setTokenRole(clientId: string, next: string, actor: Actor): MemberResult<ServiceTokenRecord> {
+  setTokenRole(id: string, next: string, actor: Actor): MemberResult<ServiceTokenRecord> {
     if (!isOrgRole(next)) return refuse("invalid_role", MESSAGES.invalidRole);
+    const clientId = id.trim();
     const token = this.#token(clientId);
 
     if (token === undefined) return refuse("service_token_not_found", MESSAGES.tokenNotFound);
@@ -617,7 +638,8 @@ export class MemberStore {
     return this.#foundToken(clientId);
   }
 
-  removeToken(clientId: string, actor: Actor): MemberResult<true> {
+  removeToken(id: string, actor: Actor): MemberResult<true> {
+    const clientId = id.trim();
     const token = this.#token(clientId);
 
     if (token === undefined) return refuse("service_token_not_found", MESSAGES.tokenNotFound);
@@ -627,6 +649,7 @@ export class MemberStore {
 
     this.#transaction(() => {
       this.#sql.exec(`DELETE FROM service_tokens WHERE client_id = ?`, clientId);
+      this.#tombstone(removedToken(clientId));
       this.#changed();
     });
 
@@ -677,6 +700,24 @@ export class MemberStore {
   }
 
   /** Bumps the counter of changes the registry's index has to catch up with. */
+  #removed(principal: string): boolean {
+    return (
+      this.#count(`SELECT COUNT(*) AS n FROM removed_principals WHERE principal = ?`, principal) > 0
+    );
+  }
+
+  #tombstone(principal: string): void {
+    this.#sql.exec(
+      `INSERT OR REPLACE INTO removed_principals (principal, removed_at) VALUES (?, ?)`,
+      principal,
+      this.#now(),
+    );
+  }
+
+  #restore(principal: string): void {
+    this.#sql.exec(`DELETE FROM removed_principals WHERE principal = ?`, principal);
+  }
+
   #changed(): void {
     this.#sql.exec(`UPDATE membership SET counter = counter + 1 WHERE id = 1`);
   }
