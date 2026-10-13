@@ -427,7 +427,9 @@ describe("POST /credentials/batch", () => {
       auth: await token("other@example.com"),
     });
 
-    expect(stranger.status).toBe(403);
+    // A plain member's batch reaches their own private accounts only: the shared file stays, and its name reads as
+    // already gone (a delete answers every unknown name `ok`).
+    expect(stranger.status).toBe(200);
     await stranger.body?.cancel();
     expect((await files()).map((file) => file.name)).toEqual(["a.json"]);
   });
@@ -581,13 +583,14 @@ describe("POST /credentials/quota/all", () => {
     expect(anonymous.status).toBe(401);
     await anonymous.body?.cancel();
 
+    // A plain member sweeps their own private accounts: none here, so nothing is checked.
     const stranger = await harness.call(QUOTA_ALL, {
       method: "POST",
       auth: await token("other@example.com"),
     });
 
-    expect(stranger.status).toBe(403);
-    await stranger.body?.cancel();
+    expect(stranger.status).toBe(200);
+    expect(await stranger.json()).toMatchObject({ checked: 0, failed: 0, results: [] });
 
     const forged = await harness.call(QUOTA_ALL, {
       method: "POST",

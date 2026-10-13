@@ -28,6 +28,7 @@
 import { Effect, Option, Schema } from "effect";
 import { BatchAction, batchLimit } from "./contract/credentials.ts";
 import { boundedBodyText, controlPlane, handled, jsonReply, replyError } from "./http.ts";
+import { currentViewer } from "./viewer.ts";
 
 /** A hundred file names fit many times over. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -58,8 +59,10 @@ const batchCredentials = Effect.gen(function* () {
     });
   }
 
+  const viewer = yield* currentViewer;
+
   const results = yield* controlPlane("batchCredentials", (stub) =>
-    stub.batchCredentials(action, names),
+    stub.batchCredentials(action, names, viewer),
   );
 
   const succeeded = results.filter((result) => result.ok).length;

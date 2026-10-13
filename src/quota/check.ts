@@ -13,6 +13,7 @@
  */
 import { Clock, Data, Duration, Effect } from "effect";
 import type { HttpClient } from "effect/http";
+import type { Viewer } from "../credentials/ownership.ts";
 import type { AccountResult, QuotaReport } from "../management/contract/credentials.ts";
 import { currentControlPlane, holdInvocation, type WorkerEnv } from "../platform/env.ts";
 import type { ControlPlaneStub, CurrentOrg } from "../platform/org.ts";
@@ -99,7 +100,12 @@ export const checkCredentialQuota = (
     readonly name?: string;
     readonly authIndex?: string;
   },
-  options: { readonly sweepLease?: string; readonly sweep?: boolean } = {},
+  options: {
+    readonly sweepLease?: string;
+    readonly sweep?: boolean;
+    /** Who asks: only an account they manage in full is checked (none: the cron sweep, every account). */
+    readonly viewer?: Viewer;
+  } = {},
 ): Effect.Effect<
   QuotaCheckResult,
   QuotaControlPlaneError,
@@ -107,7 +113,7 @@ export const checkCredentialQuota = (
 > =>
   Effect.gen(function* () {
     const target = yield* call("quotaProbeTarget", (stub) =>
-      stub.quotaProbeTarget(ref, { sweep: options.sweep === true }),
+      stub.quotaProbeTarget(ref, { sweep: options.sweep === true }, options.viewer),
     );
 
     if (target.ok) {
@@ -167,8 +173,11 @@ const renew = (token: string) =>
   call("renewQuotaSweepLease", (stub) => stub.renewQuotaSweepLease(token)).pipe(Effect.ignore);
 
 /** One account's outcome as a sweep reports it; a failed check is a result, never a failed sweep. */
-const checkForSweep = (token: string) => (id: string) =>
-  checkCredentialQuota({ name: id }, { sweepLease: token, sweep: true }).pipe(
+const checkForSweep = (token: string, viewer?: Viewer) => (id: string) =>
+  checkCredentialQuota(
+    { name: id },
+    { sweepLease: token, sweep: true, ...(viewer === undefined ? {} : { viewer }) },
+  ).pipe(
     Effect.flatMap((result) => {
       switch (result.kind) {
         case "checked": {
@@ -257,6 +266,7 @@ const keepLease = (token: string): Effect.Effect<void, never, WorkerEnv | Curren
  */
 export const sweepQuotas = (
   source: SweepSource,
+  viewer?: Viewer,
 ): Effect.Effect<
   QuotaSweep,
   QuotaControlPlaneError,
@@ -279,9 +289,9 @@ export const sweepQuotas = (
       const { token, startedAt } = taken.lease;
 
       const sweep = Effect.gen(function* () {
-        const ids = yield* call("quotaCheckTargets", (stub) => stub.quotaCheckTargets());
+        const ids = yield* call("quotaCheckTargets", (stub) => stub.quotaCheckTargets(viewer));
 
-        const results = yield* Effect.forEach(ids, checkForSweep(token), {
+        const results = yield* Effect.forEach(ids, checkForSweep(token, viewer), {
           concurrency: SWEEP_CONCURRENCY,
         });
 

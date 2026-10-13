@@ -18,6 +18,7 @@ import {
   type ResetGrantFailure,
 } from "../quota/reset-grant-flow.ts";
 import { bodyObject, handled, jsonReply, queryParams, type Reply, replyError } from "./http.ts";
+import { currentViewer } from "./viewer.ts";
 
 const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");
 
@@ -52,7 +53,8 @@ const read = Effect.gen(function* () {
   const authIndex = (yield* queryParams).get("auth_index")?.trim() ?? "";
 
   if (authIndex === "") return yield* replyError(400, "auth_index is required");
-  const result = yield* controlPlaneDown(readResetGrants({ authIndex }));
+  const viewer = yield* currentViewer;
+  const result = yield* controlPlaneDown(readResetGrants({ authIndex }, viewer));
 
   if (result.kind !== "read") return yield* failed(result);
 
@@ -67,7 +69,8 @@ const claim = Effect.gen(function* () {
   const authIndex = text((yield* bodyObject).auth_index);
 
   if (authIndex === "") return yield* replyError(400, "auth_index is required");
-  const result = yield* controlPlaneDown(claimResetGrant({ authIndex }));
+  const viewer = yield* currentViewer;
+  const result = yield* controlPlaneDown(claimResetGrant({ authIndex }, viewer));
 
   if (result.kind !== "claimed") return yield* failed(result);
 

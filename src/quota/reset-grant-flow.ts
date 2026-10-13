@@ -27,6 +27,7 @@ import type {
   ResetGrantOutcome,
   ResetGrantStatus,
 } from "../management/contract/credentials.ts";
+import type { Viewer } from "../credentials/ownership.ts";
 import type { WorkerEnv } from "../platform/env.ts";
 import type { CurrentOrg } from "../platform/org.ts";
 import { call, checkCredentialQuota, type QuotaControlPlaneError } from "./check.ts";
@@ -144,9 +145,9 @@ const CONFLICTS = {
 const SETTLE_FAILED =
   "Anthropic answered, but the proxy could not record the answer; check resets before trying again";
 
-const target = (ref: Ref) =>
+const target = (ref: Ref, viewer?: Viewer) =>
   Effect.map(
-    call("resetGrantTarget", (stub) => stub.resetGrantTarget(ref)),
+    call("resetGrantTarget", (stub) => stub.resetGrantTarget(ref, viewer)),
     (result) => {
       if (result.ok) return result;
 
@@ -178,9 +179,10 @@ const refreshStatus = (id: string, token: string, mark: ResetGrantMark) =>
 /** `GET /credentials/reset-grants`: the account's status read now (and stored). */
 export const readResetGrants = (
   ref: Ref,
+  viewer?: Viewer,
 ): Effect.Effect<ResetGrantReadResult, QuotaControlPlaneError, Requirements> =>
   Effect.gen(function* () {
-    const resolved = yield* target(ref);
+    const resolved = yield* target(ref, viewer);
 
     if (!("ok" in resolved)) return resolved;
     const { grants, stored } = yield* refreshStatus(resolved.id, resolved.token, resolved.mark);
@@ -201,9 +203,10 @@ export const readResetGrants = (
 /** `POST /credentials/reset-grants/claim`: spends one reset of the account (see the module header). */
 export const claimResetGrant = (
   ref: Ref,
+  viewer?: Viewer,
 ): Effect.Effect<ResetGrantClaimResult, QuotaControlPlaneError, Requirements> =>
   Effect.gen(function* () {
-    const resolved = yield* target(ref);
+    const resolved = yield* target(ref, viewer);
 
     if (!("ok" in resolved)) return resolved;
     const { id, token, mark, pending } = resolved;

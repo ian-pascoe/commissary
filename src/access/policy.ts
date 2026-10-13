@@ -32,6 +32,36 @@ const MEMBER_READS = [
   `${MANAGEMENT_PREFIX}/observability/usage/series`,
 ];
 
+/**
+ * Management API routes a plain member may use besides the reads above: connecting and managing their own private
+ * credentials (ADR 0023). Their handlers scope every operation to what the caller reaches, so a plain member never sees
+ * or changes a shared credential, nor another member's private one (`credentials/ownership.ts`).
+ */
+const CREDENTIAL = `${MANAGEMENT_PREFIX}/credentials`;
+
+const MEMBER_CREDENTIAL_ROUTES: ReadonlyArray<{
+  readonly methods: ReadonlyArray<string>;
+  readonly path: string;
+}> = [
+  { methods: ["GET", "POST", "DELETE"], path: CREDENTIAL },
+  { methods: ["GET"], path: `${CREDENTIAL}/download` },
+  { methods: ["GET"], path: `${CREDENTIAL}/models` },
+  { methods: ["PATCH"], path: `${CREDENTIAL}/status` },
+  { methods: ["PATCH"], path: `${CREDENTIAL}/fields` },
+  { methods: ["POST"], path: `${CREDENTIAL}/refresh` },
+  { methods: ["POST"], path: `${CREDENTIAL}/batch` },
+  { methods: ["POST"], path: `${CREDENTIAL}/quota` },
+  { methods: ["POST"], path: `${CREDENTIAL}/quota/all` },
+  { methods: ["GET"], path: `${CREDENTIAL}/reset-grants` },
+  { methods: ["POST"], path: `${CREDENTIAL}/reset-grants/claim` },
+  { methods: ["POST"], path: `${MANAGEMENT_PREFIX}/routing/cooldown/reset` },
+  { methods: ["GET"], path: `${MANAGEMENT_PREFIX}/oauth/auth-url` },
+  { methods: ["GET"], path: `${MANAGEMENT_PREFIX}/oauth/status` },
+  { methods: ["DELETE"], path: `${MANAGEMENT_PREFIX}/oauth/session` },
+  { methods: ["POST"], path: `${MANAGEMENT_PREFIX}/oauth/callback` },
+  { methods: ["POST"], path: `${MANAGEMENT_PREFIX}/oauth/import` },
+];
+
 const ME = `${MANAGEMENT_PREFIX}/me`;
 
 const ORGS = `${MANAGEMENT_PREFIX}/${ORGS_SEGMENT}`;
@@ -69,5 +99,11 @@ export const routeAccess = (
 
   const reading = method === "GET" || method === "HEAD";
 
-  return reading && MEMBER_READS.includes(route) ? "member" : "admin";
+  if (reading && MEMBER_READS.includes(route)) return "member";
+
+  return MEMBER_CREDENTIAL_ROUTES.some(
+    (entry) => entry.path === route && entry.methods.includes(method),
+  )
+    ? "member"
+    : "admin";
 };

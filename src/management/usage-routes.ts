@@ -44,6 +44,7 @@ import {
   unpricedModels,
 } from "../usage/d1.ts";
 import { controlPlane, handled, jsonReply, queryParams, replyError } from "./http.ts";
+import { viewerOf } from "./viewer.ts";
 
 const BASE = "/v8/management/observability/usage";
 
@@ -184,7 +185,7 @@ const parseFilter = (params: URLSearchParams) =>
 
       // A live credential narrows D1 to its id directly; only other indexes read the distinct ids (`resolveAuthIds`).
       const live = yield* controlPlane("credentialIdOfAuthIndex", (stub) =>
-        stub.credentialIdOfAuthIndex(authIndex.toLowerCase()),
+        stub.credentialIdOfAuthIndex(authIndex.toLowerCase(), viewerOf(identity)),
       );
 
       if (live !== undefined) filter.liveAuthId = live;

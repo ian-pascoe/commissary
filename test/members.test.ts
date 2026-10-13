@@ -122,7 +122,6 @@ describe("the permission matrix", () => {
       ["GET", "/members"],
       ["GET", "/teams"],
       ["GET", "/service-tokens"],
-      ["GET", "/credentials"],
       ["GET", "/api-keys"],
       ["DELETE", USAGE],
     ] as const)

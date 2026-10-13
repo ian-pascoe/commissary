@@ -14,18 +14,22 @@ import type { CredentialRecord } from "./flows/types.ts";
 
 /** The slice of the ControlPlane the login flows need (implemented over the credential pool). */
 export interface CredentialSink {
-  /** The stored auth file `name`, verbatim. */
-  readonly get: (name: string) => JsonObject | undefined;
-  /** Every stored auth file (id, `type`, content). */
-  readonly list: () => ReadonlyArray<{
+  /** The stored auth file `name` of `owner` (undefined: a shared one), verbatim; another owner's file is not seen. */
+  readonly get: (name: string, owner?: string) => JsonObject | undefined;
+  /** Every stored auth file of `owner` (undefined: the shared ones): id, `type`, content. */
+  readonly list: (owner?: string) => ReadonlyArray<{
     readonly id: string;
     readonly type: string;
     readonly metadata: JsonObject;
   }>;
-  /** Stores `metadata` verbatim as auth file `name` (replacing a file of that name). */
+  /**
+   * Stores `metadata` verbatim as auth file `name` of `owner` (replacing a file of that name); refused when another
+   * owner already holds the name.
+   */
   readonly save: (
     name: string,
     metadata: JsonObject,
+    owner?: string,
   ) => Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }>;
   readonly remove: (id: string) => Promise<void>;
 }
@@ -42,6 +46,7 @@ const baseName = (id: string): string => id.slice(id.lastIndexOf("/") + 1);
 const findClaudeLegacy = async (
   record: CredentialRecord,
   sink: CredentialSink,
+  owner: string | undefined,
 ): Promise<{ readonly id: string; readonly metadata: JsonObject } | undefined> => {
   const email = text(record.metadata, "email");
   const organization = text(record.metadata, "organization_uuid");
@@ -63,7 +68,7 @@ const findClaudeLegacy = async (
       ? (await claudeFileName(email, "", account)).toLowerCase()
       : "";
 
-  for (const candidate of sink.list()) {
+  for (const candidate of sink.list(owner)) {
     if (candidate.type.toLowerCase() !== "claude") continue;
     const name = baseName(candidate.id).toLowerCase();
     const isEmailLegacy = name === emailName;
@@ -102,13 +107,14 @@ const findClaudeLegacy = async (
 export const saveCredentialRecord = async (
   record: CredentialRecord,
   sink: CredentialSink,
+  owner?: string,
 ): Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }> => {
   const provider = text(record.metadata, "type");
   let metadata: JsonObject = { ...record.metadata };
-  const existing = sink.get(record.fileName);
+  const existing = sink.get(record.fileName, owner);
 
   if (existing !== undefined) metadata = mergeExistingMetadata(provider, metadata, existing);
-  const legacy = provider === "claude" ? await findClaudeLegacy(record, sink) : undefined;
+  const legacy = provider === "claude" ? await findClaudeLegacy(record, sink, owner) : undefined;
 
   if (legacy !== undefined && legacy.id !== record.fileName) {
     metadata = mergeExistingMetadata(provider, metadata, legacy.metadata);
@@ -117,7 +123,7 @@ export const saveCredentialRecord = async (
   // The Go file store always writes the `disabled` flag (a disabled credential stays disabled across a re-login).
   if (typeof metadata.disabled !== "boolean") metadata.disabled = false;
 
-  const saved = await sink.save(record.fileName, metadata);
+  const saved = await sink.save(record.fileName, metadata, owner);
 
   if (!saved.ok) return saved;
 

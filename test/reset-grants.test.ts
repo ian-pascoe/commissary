@@ -598,11 +598,12 @@ describe("GET /credentials/reset-grants", () => {
   it("is refused to non-admins", async () => {
     await seed();
 
+    // A plain member reaches only their own private accounts: a shared one is as good as absent.
     const response = await harness.call(`${GRANTS}?auth_index=${INDEX}`, {
       auth: await token("other@example.com"),
     });
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(404);
     await response.body?.cancel();
     expect(harness.requests).toHaveLength(0);
   });
@@ -774,7 +775,7 @@ describe("POST /credentials/reset-grants/claim", () => {
       auth: await token("other@example.com"),
     });
 
-    expect(denied.status).toBe(403);
+    expect(denied.status).toBe(404);
     await denied.body?.cancel();
 
     const forged = await exports.default.fetch(

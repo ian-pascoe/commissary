@@ -35,6 +35,8 @@ export interface OAuthSession {
   readonly nextPollAt: number;
   readonly intervalMs: number;
   readonly busyUntil: number;
+  /** The member whose private credential the login creates; absent for a login that creates a shared one. */
+  readonly owner?: string | undefined;
   readonly data: JsonObject;
 }
 
@@ -73,6 +75,7 @@ interface SessionRow {
   next_poll_at: number;
   interval_ms: number;
   busy_until: number;
+  owner: string | null;
   data: string;
   [column: string]: SqlStorageValue;
 }
@@ -97,6 +100,15 @@ export class SqliteSessionTable implements SessionTable {
          data TEXT NOT NULL
        )`,
     );
+
+    // Sessions stored before ownership have no owner column: their logins create shared credentials.
+    if (
+      !sql
+        .exec<{ name: string }>("PRAGMA table_info(oauth_sessions)")
+        .toArray()
+        .some((column) => column.name === "owner")
+    )
+      sql.exec("ALTER TABLE oauth_sessions ADD COLUMN owner TEXT");
   }
 
   get(state: string): OAuthSession | undefined {
@@ -121,6 +133,7 @@ export class SqliteSessionTable implements SessionTable {
           nextPollAt: row.next_poll_at,
           intervalMs: row.interval_ms,
           busyUntil: row.busy_until,
+          ...(row.owner === null ? {} : { owner: row.owner }),
           // SAFETY: the data column is only written by this store as a serialized JsonObject.
           data: JSON.parse(row.data) as JsonObject,
         };
@@ -129,8 +142,8 @@ export class SqliteSessionTable implements SessionTable {
   put(session: OAuthSession): void {
     this.#sql.exec(
       `INSERT OR REPLACE INTO oauth_sessions
-         (state, provider, flow, status, completed, expires_at, deadline_at, next_poll_at, interval_ms, busy_until, data)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (state, provider, flow, status, completed, expires_at, deadline_at, next_poll_at, interval_ms, busy_until, owner, data)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       session.state,
       session.provider,
       session.flow,
@@ -141,6 +154,7 @@ export class SqliteSessionTable implements SessionTable {
       session.nextPollAt,
       session.intervalMs,
       session.busyUntil,
+      session.owner ?? null,
       JSON.stringify(session.data),
     );
   }
@@ -161,6 +175,7 @@ export interface NewSession {
   readonly deadlineAt: number;
   readonly nextPollAt?: number;
   readonly intervalMs?: number;
+  readonly owner?: string | undefined;
   readonly data: JsonObject;
 }
 
@@ -186,6 +201,7 @@ export class OAuthSessions {
       nextPollAt: session.nextPollAt ?? 0,
       intervalMs: session.intervalMs ?? 0,
       busyUntil: 0,
+      ...(session.owner === undefined ? {} : { owner: session.owner }),
       data: session.data,
     });
   }

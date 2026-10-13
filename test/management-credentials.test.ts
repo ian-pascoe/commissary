@@ -274,12 +274,15 @@ describe("management credentials: download, delete, models", () => {
     expect(JSON.stringify(body)).not.toContain("secret");
   });
 
-  it("leaves a plain member at the gate's 403", async () => {
+  it("refuses a plain member the download of a shared file", async () => {
     await upload("x.json", claudeFile());
 
     for (const auth of [await token("stranger@example.com"), await serviceToken("other.access")]) {
       const reply = await json("/v8/management/credentials/download?name=x.json", { auth });
-      expect(reply).toMatchObject({ status: 403, body: { error: "Forbidden" } });
+      expect(reply).toMatchObject({
+        status: 403,
+        body: { error: "download_requires_service_token" },
+      });
     }
   });
 
