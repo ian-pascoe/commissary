@@ -658,18 +658,26 @@ export const planRuleChange = (
   }
 };
 
-/** How `saveRuleChange` reads the latest rules and sends one write (`version`: the `If-Match` value). */
+/** The revision of the channel entry a write replaces or removes (0: the channel has none): its `If-Match` value. */
+export const ruleRevision = (view: Pick<RoutingModels, "revisions">, write: RuleWrite): number => {
+  const aliases = write.kind === "put-aliases" || write.kind === "delete-aliases";
+
+  return (aliases ? view.revisions.aliases : view.revisions.exclusions)[write.channel] ?? 0;
+};
+
+/** How `saveRuleChange` reads the latest rules and sends one write (`revision`: the `If-Match` value). */
 export interface RuleIo<E, R> {
   readonly read: Effect.Effect<RoutingModels, E, R>;
-  readonly write: (write: RuleWrite, version: number) => Effect.Effect<unknown, E, R>;
+  readonly write: (write: RuleWrite, revision: number) => Effect.Effect<unknown, E, R>;
 }
 
 const conflict = () => new ManagementError({ error: "conflict" });
 
 /**
- * Saves `change` against the view the page shows. When the config changed since (409 `conflict`), re-reads it,
- * re-applies the same change to the latest list and tries once more; a second refusal, or the touched entry having
- * changed meanwhile, fails with `conflict` for the operator to reload. `unchanged` when the list already held it.
+ * Saves `change` against the view the page shows, naming the revision of the channel entry it replaces. When that
+ * entry changed since (409 `conflict`; other channels never conflict), re-reads the view, re-applies the same change
+ * to the latest list and tries once more; a second refusal, or the touched entry having changed meanwhile, fails with
+ * `conflict` for the operator to reload. `unchanged` when the list already held it.
  */
 export const saveRuleChange = <E, R>(
   change: RuleChange,
@@ -687,7 +695,7 @@ export const saveRuleChange = <E, R>(
 
     const deleting = plan.write.kind === "delete-aliases" || plan.write.kind === "delete-excluded";
 
-    return io.write(plan.write, view.config_version).pipe(
+    return io.write(plan.write, ruleRevision(view, plan.write)).pipe(
       Effect.as("saved" as const),
       // Deleting a list another edit already removed leaves what this one wanted.
       Effect.catchIf(

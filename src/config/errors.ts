@@ -30,12 +30,3 @@ export class ConfigStoreError extends Schema.TaggedError<ConfigStoreError>()("Co
   message: Schema.String,
   cause: Schema.optional(Schema.Defect()),
 }) {}
-
-/** `putConfig` was called with a stale `expectedVersion`. */
-export class ConfigVersionConflict extends Schema.TaggedError<ConfigVersionConflict>()(
-  "ConfigVersionConflict",
-  {
-    message: Schema.String,
-    currentVersion: Schema.Number,
-  },
-) {}

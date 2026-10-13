@@ -65,6 +65,7 @@ const model = (
 const view = (overrides: Partial<RoutingModels> = {}): RoutingModels => ({
   observed_at: new Date(NOW).toISOString(),
   config_version: 5,
+  revisions: { aliases: { claude: 5 }, exclusions: { claude: 2 } },
   force_model_prefix: false,
   channels: [{ channel: "claude", accounts: 2 }],
   aliases: {},
@@ -485,7 +486,14 @@ describe("saveRuleChange", () => {
   const sonnet = { name: "claude-sonnet-4-5", alias: "sonnet" };
   const change = { rule: "aliases", channel: "claude", op: "add", entry: sonnet } as const;
 
-  /** A fake server: refuses writes whose version is not `version`, answers reads with `latest`. */
+  /** The revision of the entry a write touches in `latest` (what the server compares `If-Match` with). */
+  const current = (latest: RoutingModels, write: RuleWrite): number => {
+    const aliases = write.kind === "put-aliases" || write.kind === "delete-aliases";
+
+    return (aliases ? latest.revisions.aliases : latest.revisions.exclusions)[write.channel] ?? 0;
+  };
+
+  /** A fake server: refuses writes whose revision is not the entry's in `latest`, answers reads with `latest`. */
   const server = (latest: RoutingModels, refuseAll = false) => {
     const writes: Array<readonly [RuleWrite, number]> = [];
 
@@ -493,18 +501,18 @@ describe("saveRuleChange", () => {
       writes,
       io: {
         read: Effect.succeed(latest),
-        write: (write: RuleWrite, version: number) => {
-          writes.push([write, version]);
+        write: (write: RuleWrite, revision: number) => {
+          writes.push([write, revision]);
 
-          return refuseAll || version !== latest.config_version
+          return refuseAll || revision !== current(latest, write)
             ? Effect.fail(new ManagementError({ error: "conflict" }))
-            : Effect.succeed({ status: "ok" as const, version: version + 1 });
+            : Effect.succeed({ status: "ok" as const, version: 100, revision: revision + 1 });
         },
       },
     };
   };
 
-  it.effect("saves against the page's view with its version", () =>
+  it.effect("saves against the page's view with the channel's alias revision", () =>
     Effect.gen(function* () {
       const base = view({ aliases: { claude: [opus] } });
       const fake = server(base);
@@ -516,18 +524,59 @@ describe("saveRuleChange", () => {
     }),
   );
 
-  it.effect("re-reads after a 409 and applies the same change to the latest list", () =>
-    Effect.gen(function* () {
-      const base = view({ aliases: { claude: [opus] } });
-      const other = { name: "claude-haiku-4-5", alias: "haiku" };
-      const fake = server(view({ config_version: 9, aliases: { claude: [opus, other] } }));
+  it.effect(
+    "sends the exclusion revision for an exclusion edit, and 0 for a channel without rules",
+    () =>
+      Effect.gen(function* () {
+        const base = view({ excluded: { claude: ["claude-3*"] } });
+        const fake = server(base);
 
-      expect(yield* saveRuleChange(change, base, fake.io)).toBe("saved");
-      expect(fake.writes.map(([write, version]) => [write, version])).toEqual([
-        [{ kind: "put-aliases", channel: "claude", body: [opus, sonnet] }, 5],
-        [{ kind: "put-aliases", channel: "claude", body: [opus, other, sonnet] }, 9],
-      ]);
-    }),
+        yield* saveRuleChange(
+          { rule: "excluded", channel: "claude", op: "add", pattern: "claude-2*" },
+          base,
+          fake.io,
+        );
+
+        yield* saveRuleChange(
+          { rule: "excluded", channel: "codex", op: "add", pattern: "gpt-3*" },
+          base,
+          fake.io,
+        );
+
+        yield* saveRuleChange(
+          { rule: "aliases", channel: "codex", op: "add", entry: opus },
+          base,
+          fake.io,
+        );
+
+        expect(fake.writes).toEqual([
+          [{ kind: "put-excluded", channel: "claude", body: ["claude-3*", "claude-2*"] }, 2],
+          [{ kind: "put-excluded", channel: "codex", body: ["gpt-3*"] }, 0],
+          [{ kind: "put-aliases", channel: "codex", body: [opus] }, 0],
+        ]);
+      }),
+  );
+
+  it.effect(
+    "re-reads after a 409 and applies the same change to the latest list and revision",
+    () =>
+      Effect.gen(function* () {
+        const base = view({ aliases: { claude: [opus] } });
+        const other = { name: "claude-haiku-4-5", alias: "haiku" };
+
+        const fake = server(
+          view({
+            revisions: { aliases: { claude: 9 }, exclusions: {} },
+            aliases: { claude: [opus, other] },
+          }),
+        );
+
+        expect(yield* saveRuleChange(change, base, fake.io)).toBe("saved");
+        expect(fake.writes.map(([write, revision]) => [write, revision])).toEqual([
+          [{ kind: "put-aliases", channel: "claude", body: [opus, sonnet] }, 5],
+          [{ kind: "put-aliases", channel: "claude", body: [opus, other, sonnet] }, 9],
+        ]);
+      }),
   );
 
   it.effect(
@@ -537,7 +586,10 @@ describe("saveRuleChange", () => {
         const base = view({ aliases: { claude: [opus] } });
 
         const fake = server(
-          view({ config_version: 9, aliases: { claude: [{ ...sonnet, fork: true }] } }),
+          view({
+            revisions: { aliases: { claude: 9 }, exclusions: {} },
+            aliases: { claude: [{ ...sonnet, fork: true }] },
+          }),
         );
 
         const exit = yield* Effect.exit(saveRuleChange(change, base, fake.io));
@@ -550,7 +602,15 @@ describe("saveRuleChange", () => {
   it.effect("retries only once", () =>
     Effect.gen(function* () {
       const base = view({ aliases: { claude: [opus] } });
-      const fake = server(view({ config_version: 9, aliases: { claude: [opus] } }), true);
+
+      const fake = server(
+        view({
+          revisions: { aliases: { claude: 9 }, exclusions: {} },
+          aliases: { claude: [opus] },
+        }),
+        true,
+      );
+
       const exit = yield* Effect.exit(saveRuleChange(change, base, fake.io));
 
       expect(Exit.isFailure(exit)).toBe(true);
@@ -598,6 +658,8 @@ describe("who serves a route", () => {
       codex: [],
       claude: [
         {
+          id: "grp-team",
+          revision: 4,
           index: 1,
           group: {
             name: "team",
@@ -616,6 +678,8 @@ describe("who serves a route", () => {
       "opencode-go": [],
       "openai-compatibility": [
         {
+          id: "grp-openrouter",
+          revision: 1,
           index: 0,
           group: {
             name: "openrouter",

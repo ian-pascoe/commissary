@@ -143,9 +143,11 @@ describe("cross-site rules for scoped spellings", () => {
 
     expect(check("POST", "/v8/management/orgs/acme/credentials", form)).toBeUndefined();
     expect(check("POST", "/v8/management/orgs/acme/oauth/import", form)).toBeUndefined();
-    expect(check("PUT", "/v8/management/orgs/acme/config.yaml", yaml)).toBeUndefined();
-    expect(check("POST", "/v8/management/orgs/acme/config", form)).toMatchObject({ status: 415 });
-    expect(check("PUT", "/v8/management/orgs/acme/config", yaml)).toMatchObject({ status: 415 });
+    expect(check("POST", "/v8/management/orgs/acme/settings/import", yaml)).toBeUndefined();
+    expect(check("POST", "/v8/management/orgs/acme/settings", form)).toMatchObject({ status: 415 });
+    expect(check("PATCH", "/v8/management/orgs/acme/settings", yaml)).toMatchObject({
+      status: 415,
+    });
     // The org list takes JSON only.
     expect(check("POST", "/v8/management/orgs", form)).toMatchObject({ status: 415 });
     expect(

@@ -31,6 +31,7 @@ import {
   groupTitle,
   hasErrors,
   isFamily,
+  isStaleWrite,
   keptSettings,
   keyTail,
   newKeyDraft,
@@ -212,12 +213,10 @@ const Discover = ({
 const GroupForm = ({
   family,
   view,
-  version,
   onReload,
 }: {
   readonly family: ApiKeyFamily;
   readonly view: AnyGroupView | undefined;
-  readonly version: number;
   readonly onReload: () => void;
 }) => {
   const ids = useId();
@@ -254,7 +253,7 @@ const GroupForm = ({
       return;
     }
 
-    const request = putGroupRequest(version, family, view, draft);
+    const request = putGroupRequest(family, view, draft);
 
     // One branch per request shape: the mutation takes a union of argument objects, not a union payload.
     const outcome = await save.run(
@@ -271,7 +270,7 @@ const GroupForm = ({
 
     setProblem({
       text: writeProblem(outcome.error, outcome.message),
-      stale: outcome.error === "conflict" || outcome.error === "unknown_auth_index",
+      stale: isStaleWrite(outcome.error),
     });
   };
 
@@ -629,12 +628,8 @@ const GroupForm = ({
       <div className={styles["save"]}>
         {kept.length === 0 ? null : (
           <p className={styles["kept"]}>
-            Kept as they are: {kept.join(", ")}.{" "}
-            {view === undefined ? null : (
-              <Link to="/settings/config" hash={`api-keys.${family}.${String(view.index)}`}>
-                Edit them in the raw configuration
-              </Link>
-            )}
+            Kept as they are: {kept.join(", ")}. Importing a Go config document (POST
+            /settings/import) sets them.
           </p>
         )}
         {changesIdentity(family, view, draft) ? (
@@ -669,17 +664,17 @@ const GroupForm = ({
 const DeleteGroup = ({
   family,
   view,
-  version,
+  onReload,
 }: {
   readonly family: ApiKeyFamily;
   readonly view: AnyGroupView;
-  readonly version: number;
+  readonly onReload: () => void;
 }) => {
   const remove = useAction(deleteKeyGroupAtom);
   const dialog = useRef<HTMLDialogElement>(null);
   const navigate = useNavigate();
   const titleId = useId();
-  const [problem, setProblem] = useState<string | undefined>(undefined);
+  const [problem, setProblem] = useState<{ text: string; stale: boolean } | undefined>(undefined);
   const title = groupTitle(family, view);
   const count = view.group.keys.length;
 
@@ -689,7 +684,11 @@ const DeleteGroup = ({
         The proxy stops using {count === 1 ? "this key" : `these ${formatCount(count)} keys`} and
         forgets {count === 1 ? "it" : "them"}. Their usage history stays.
       </p>
-      {problem === undefined ? null : <Problem>Could not delete the group. {problem}</Problem>}
+      {problem === undefined ? null : (
+        <Problem {...(problem.stale ? { onRetry: onReload, retryLabel: "Reload" } : {})}>
+          Could not delete the group. {problem.text}
+        </Problem>
+      )}
       <button type="button" className={kit["danger"]} onClick={() => dialog.current?.showModal()}>
         <Trash2 aria-hidden="true" size={16} strokeWidth={2.25} />
         Delete group
@@ -702,14 +701,18 @@ const DeleteGroup = ({
             event.preventDefault();
 
             const outcome = await remove.run({
-              payload: { version, family, index: view.index },
+              payload: { family, id: view.id, revision: view.revision },
               reactivityKeys: API_KEYS,
             });
 
             dialog.current?.close();
 
             if (outcome.ok) await navigate({ to: "/keys" });
-            else setProblem(writeProblem(outcome.error, outcome.message));
+            else
+              setProblem({
+                text: writeProblem(outcome.error, outcome.message),
+                stale: isStaleWrite(outcome.error),
+              });
           }}
         >
           <h2 id={titleId} className={kit["dialogTitle"]}>
@@ -783,8 +786,7 @@ export const KeyGroupPage = () => {
             family={known}
             view={view}
             // A reload remounts the form with what is stored now.
-            key={list.version}
-            version={list.version}
+            key={`${view.id}:${view.revision}`}
             onReload={retry}
           />
         );
@@ -796,12 +798,10 @@ export const KeyGroupPage = () => {
 const GroupPage = ({
   family,
   view,
-  version,
   onReload,
 }: {
   readonly family: ApiKeyFamily;
   readonly view: AnyGroupView;
-  readonly version: number;
   readonly onReload: () => void;
 }) => {
   const title = groupTitle(family, view);
@@ -816,8 +816,8 @@ const GroupPage = ({
           <h1 className={styles["name"]}>{title}</h1>
         </div>
       </header>
-      <GroupForm family={family} view={view} version={version} onReload={onReload} />
-      <DeleteGroup family={family} view={view} version={version} />
+      <GroupForm family={family} view={view} onReload={onReload} />
+      <DeleteGroup family={family} view={view} onReload={onReload} />
     </div>
   );
 };
@@ -875,7 +875,6 @@ export const NewKeyGroupPage = () => {
               key={`${family}:${list.version}`}
               family={family}
               view={undefined}
-              version={list.version}
               onReload={retry}
             />
           )}

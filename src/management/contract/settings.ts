@@ -1,41 +1,32 @@
 /**
  * `GET|PATCH /v8/management/settings` (`../settings-routes.ts`, `../settings.ts`): the Settings page's typed view of
- * the config settings that apply on Workers, and its writes; `GET|PUT /settings/config` and
- * `POST /settings/config/check` (`../settings-raw-routes.ts`, `../config-secrets.ts`): the raw configuration editor.
+ * the config settings that apply on Workers, and its writes; `POST /settings/import`: the Go config import.
  * Shared with the browser: imports `effect` and sibling contract modules only.
  *
- * Values keep the config's kebab-case spelling and nesting, so a patch maps 1:1 to document paths. The view never
- * carries a secret (PRODUCT.md): API keys have their own page, and the keys that do nothing on Workers are listed by
- * name and reason only (`not_applied`; proxy URLs and client keys may be credentials).
+ * Values keep the config's kebab-case spelling and nesting, so a patch maps 1:1 to config paths. The view never
+ * carries a secret (PRODUCT.md): API keys have their own page.
  *
- * A save is `{version, patch}`: `patch` is a deep partial of {@link SettingsValues} where `null` resets a leaf to its
- * default (removes it from the document); the not-applied keys accept `null` only (remove them). Answers: the new
- * `version`; `409 conflict` when `version` is stale (no retry: re-read and re-apply); `400 not_a_setting` for a path
- * that is not a setting; `422 invalid_setting` with `message` and `path` for a value the config would not keep as sent
- * (invalid duration, unknown catalog source, a value the normaliser rewrites, ...); `422
- * would_remove_your_admin_access` when a caller who is not a platform admin removes themselves from the config's
- * admin lists.
+ * Every setting is a config entry of its own (ADR 0025), named by its dotted path (`routing.strategy`). The view's
+ * `revisions` holds the revision of every stored setting; a setting at its default is not stored (revision 0). A save
+ * is `{revisions, patch}`: `patch` is a deep partial of {@link SettingsValues} where `null` resets a leaf to its
+ * default, and `revisions` names the revision of every setting the patch changes (absent = 0). Answers: the new
+ * `version` and the new revision of each changed setting; `409 conflict` when one of them changed since (re-read the
+ * setting and re-apply; a save of other settings never conflicts); `400 not_a_setting` for a path that is not a
+ * setting; `422 invalid_setting` with `message` and `path` for a value the config would not keep as sent (invalid
+ * duration, unknown catalog source, a value the normaliser rewrites, ...); `422 would_remove_your_admin_access` when a
+ * caller who is not a platform admin removes themselves from the config's admin lists.
  *
- * The raw configuration is the whole document as YAML without defaults, every secret masked as `[redacted#n]…abcd`
- * (`secrets` counts them). `GET /config*` serve the same masking with the same numbers per version, but their writes
- * restore nothing (a placeholder there is `422 masked_value`): this editor is the one lossless round trip.
- * Comments and key order are not kept, anchors are expanded and custom tags refused: only the canonical document is
- * stored. `checkRaw` and `saveRaw` take `{version, yaml}`; a placeholder left as it was keeps its stored secret, plain
- * text at a secret position is a new secret. Both answer `409 conflict` for a stale `version` (placeholders are bound
- * to it); `422 invalid_yaml` with `message`, `line`, `column`; `422 invalid_config` with `message` and `path` when
- * known; `422 masked_value_outside_secret_field` / `unknown_secret_reference` / `invalid_secret_placeholder` with
- * the `path` of a placeholder that cannot be restored; `422 would_remove_your_admin_access`; `413` above 512 KiB.
- * `checkRaw` stores nothing and returns the masked canonical result (new secrets as `[new secret]…abcd`, told apart
- * from kept ones by origin, never by value) and `moved_secrets`, each kept secret now sent to another provider family
- * or upstream address with its placeholder, path and the family and host before and after (host only: user info,
- * path and query can carry secrets; also in the `saveRaw` reply). `saveRaw` of a document whose canonical form equals
- * the stored one and in which no secret was typed writes nothing and returns the same `version`; with a typed secret
- * it always writes (a version that stayed put would tell a right guess of a stored secret from a wrong one).
+ * The import takes a Go config document as the request body (YAML or JSON, v8 or legacy layout, at most 512 KiB) and
+ * replaces every config entry of the org with it in one transaction. It answers the new `version` and `not_applied`:
+ * the keys that have no effect on Workers, which are not stored (MIGRATION.md). `422 invalid_config` with `message`
+ * (and `path`, `line`, `column` when known) for a document the config refuses; the admin rules of a save apply;
+ * `409 conflict` when another write landed while the import was checked (send it again). A key whose secret a stored
+ * key of its family has keeps that key's id, and so its `auth_index`.
  */
 import { Schema } from "effect";
-import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api";
 import { RequestScopedErrorRule } from "./api-keys.ts";
-import { ConfigVersion, Saved } from "./config.ts";
+import { ConfigVersion, Revisions } from "./config.ts";
 import { managementErrors } from "./errors.ts";
 
 const optional = Schema.optionalKey;
@@ -73,8 +64,8 @@ interface SettingsTree {
 /**
  * Every Settings-owned config key. Sections are plain objects, leaves are schemas. Not here: `api-keys` (Keys page),
  * `oauth.model-alias` / `excluded-models` (Models › Rules), `oauth.settings`, `requests.payload` and
- * `oauth.request-scoped-errors` (raw configuration; the view summarises the last two), and the keys that do nothing
- * on Workers.
+ * `oauth.request-scoped-errors` (set by the config import; the view summarises the last two), and the keys that do
+ * nothing on Workers.
  */
 export const SETTINGS_TREE = {
   routing: {
@@ -224,54 +215,10 @@ export const SettingsValues = Schema.Struct(valuesFields(SETTINGS_TREE));
 
 export type SettingsValues = typeof SettingsValues.Type;
 
-/** A not-applied key: the patch may only remove it. */
-const removeOnly = optional(Schema.Null);
-
-/**
- * Deep partial of {@link SettingsValues}; `null` resets a leaf to its default. The keys listed in the view's
- * `not_applied` that have a mapping path accept `null` only (remove them).
- */
-export const SettingsPatch = Schema.Struct({
-  ...patchFields(SETTINGS_TREE),
-  routing: optional(
-    Schema.Struct({
-      ...patchFields(SETTINGS_TREE.routing),
-      cooldown: optional(
-        Schema.Struct({
-          ...patchFields(SETTINGS_TREE.routing.cooldown),
-          "save-cooldown-status": removeOnly,
-        }),
-      ),
-    }),
-  ),
-  requests: optional(
-    Schema.Struct({ ...patchFields(SETTINGS_TREE.requests), "proxy-url": removeOnly }),
-  ),
-  access: optional(Schema.Struct({ ...patchFields(SETTINGS_TREE.access), "api-keys": removeOnly })),
-  models: optional(
-    Schema.Struct({
-      ...patchFields(SETTINGS_TREE.models),
-      "codex-catalog": removeOnly,
-      "devin-catalog": removeOnly,
-    }),
-  ),
-  observability: optional(
-    Schema.Struct({
-      logs: optional(Schema.Struct({ debug: removeOnly, "request-log": removeOnly })),
-      usage: optional(
-        Schema.Struct({
-          "usage-statistics-enabled": removeOnly,
-          "redis-usage-queue-retention-seconds": removeOnly,
-        }),
-      ),
-    }),
-  ),
-});
+/** Deep partial of {@link SettingsValues}; `null` resets a leaf to its default. */
+export const SettingsPatch = Schema.Struct(patchFields(SETTINGS_TREE));
 
 export type SettingsPatch = typeof SettingsPatch.Type;
-
-/** A config key that has no effect on Workers and is set: its name and why (never its value). */
-export const NotApplied = Schema.Struct({ key: Schema.String, reason: Schema.String });
 
 export const PayloadCounts = Schema.Struct({
   default: Schema.Int,
@@ -282,104 +229,65 @@ export const PayloadCounts = Schema.Struct({
 });
 
 export const SettingsView = Schema.Struct({
+  /** The org's change counter. */
   version: ConfigVersion,
+  /** The revision of every stored setting by dotted path; a setting not listed is at its default (revision 0). */
+  revisions: Revisions,
   /** ISO time of the last config write; absent when nothing was ever stored. */
   updated_at: optional(Schema.String),
   values: SettingsValues,
   /** The values of an empty config: "default" captions and Reset. */
   defaults: SettingsValues,
-  not_applied: Schema.Array(NotApplied),
   /** `PLATFORM_ADMIN_EMAILS` / `PLATFORM_ADMIN_SERVICE_TOKENS`: always admins, not editable here. */
   env_admins: Schema.Struct({ emails: Strings, service_tokens: Strings }),
-  /** `requests.payload` rule counts per kind (edited in the raw configuration). */
+  /** `requests.payload` rule counts per kind (set by the config import). */
   payload: PayloadCounts,
   /** Accounts and API keys with a model prefix (what `routing.force-model-prefix` acts on). */
   prefixed_credentials: Schema.Int,
-  /** `oauth.request-scoped-errors`: per account provider, read-only here (edited in the raw configuration). */
+  /** `oauth.request-scoped-errors`: per account provider, read-only here (set by the config import). */
   request_scoped_errors: Schema.Record(Schema.String, Schema.Array(RequestScopedErrorRule)),
 });
 
 export type SettingsView = typeof SettingsView.Type;
 
-export const SaveSettings = Schema.Struct({ version: ConfigVersion, patch: SettingsPatch });
+export const SaveSettings = Schema.Struct({ revisions: Revisions, patch: SettingsPatch });
 
 export type SaveSettings = typeof SaveSettings.Type;
 
-/** `GET /settings/config`: the stored document as sparse YAML with every secret masked. */
-export const RawConfig = Schema.Struct({
-  version: ConfigVersion,
-  yaml: Schema.String,
-  /** How many `[redacted#n]` placeholders `yaml` carries (n = 1..secrets). */
-  secrets: Schema.Int,
-});
-
-export type RawConfig = typeof RawConfig.Type;
-
-/** An edited raw configuration and the `version` it was read at. */
-export const RawConfigInput = Schema.Struct({ version: ConfigVersion, yaml: Schema.String });
-
-export type RawConfigInput = typeof RawConfigInput.Type;
-
-/** Where a secret is sent: provider family (or config section) and upstream host, never the rest of the URL. */
-export const SecretPlace = Schema.Struct({ family: Schema.String, host: optional(Schema.String) });
-
-export type SecretPlace = typeof SecretPlace.Type;
-
-/** A kept secret now sent to another provider family or upstream host than where it was stored. */
-export const MovedSecret = Schema.Struct({
-  path: Schema.String,
-  /** `[redacted#n]…abcd`, as the review's `yaml` shows it. */
-  placeholder: Schema.String,
-  from: SecretPlace,
-  to: SecretPlace,
-});
-
-export type MovedSecret = typeof MovedSecret.Type;
-
-/** What a save would store, for the review (nothing is stored). */
-export const RawConfigCheck = Schema.Struct({
-  /** The canonical result as sparse YAML, masked: kept secrets `[redacted#n]…`, new ones `[new secret]…`. */
-  yaml: Schema.String,
-  /** Paths of the input that would not be stored as written (unknown or Workers-only keys, entries the normaliser
-   * removes or rewrites). */
-  dropped: Strings,
-  /** Keys set in the result that have no effect on Workers. */
-  not_applied: Strings,
-  kept_secrets: Schema.Int,
-  new_secrets: Schema.Int,
-  /** Kept secrets now sent to another provider family or upstream address than where they were stored. */
-  moved_secrets: Schema.Array(MovedSecret),
-});
-
-export type RawConfigCheck = typeof RawConfigCheck.Type;
-
-/** A stored raw configuration; `version` is unchanged when the document was already stored as is. */
-export const RawConfigSaved = Schema.Struct({
+/** A saved patch: the new change counter and the new revision of every setting it changed (0: back to default). */
+export const SettingsSaved = Schema.Struct({
   status: Schema.Literal("ok"),
   version: Schema.Int,
-  dropped: Strings,
-  not_applied: Strings,
-  moved_secrets: Schema.Array(MovedSecret),
+  revisions: Revisions,
 });
 
-export type RawConfigSaved = typeof RawConfigSaved.Type;
+export type SettingsSaved = typeof SettingsSaved.Type;
+
+/** A Go config document (YAML or JSON) as the import's request body. */
+export const ConfigDocument = Schema.String.pipe(
+  HttpApiSchema.asText({ contentType: "application/yaml" }),
+);
+
+/** An imported config document: the new change counter and the keys that were not stored. */
+export const ConfigImported = Schema.Struct({
+  status: Schema.Literal("ok"),
+  version: Schema.Int,
+  /** Keys of the document that have no effect on Workers; they were not stored (MIGRATION.md). */
+  not_applied: Strings,
+});
+
+export type ConfigImported = typeof ConfigImported.Type;
 
 export class SettingsGroup extends HttpApiGroup.make("settings").add(
   HttpApiEndpoint.get("get", "/settings", { success: SettingsView, error: managementErrors }),
   HttpApiEndpoint.patch("save", "/settings", {
     payload: SaveSettings,
-    success: Saved,
+    success: SettingsSaved,
     error: managementErrors,
   }),
-  HttpApiEndpoint.get("raw", "/settings/config", { success: RawConfig, error: managementErrors }),
-  HttpApiEndpoint.post("checkRaw", "/settings/config/check", {
-    payload: RawConfigInput,
-    success: RawConfigCheck,
-    error: managementErrors,
-  }),
-  HttpApiEndpoint.put("saveRaw", "/settings/config", {
-    payload: RawConfigInput,
-    success: RawConfigSaved,
+  HttpApiEndpoint.post("importConfig", "/settings/import", {
+    payload: ConfigDocument,
+    success: ConfigImported,
     error: managementErrors,
   }),
 ) {}

@@ -101,7 +101,7 @@ the two variables. The variables always apply and never need the config, so an e
 config admins; config admins are only looked up for principals that are not env admins, and an unreadable config denies them.
 Anyone who can edit the config can add admins this way, which is already admin-only, with one exception: only a **service-token**
 administrator or an env admin (`PLATFORM_ADMIN_EMAILS`, `PLATFORM_ADMIN_SERVICE_TOKENS`, the local dev bypass) may change
-`access.admin-service-tokens`, through `PATCH /settings`, `PUT /settings/config` (and its `check`) or `/config*`. An email admin who is
+`access.admin-service-tokens`, through `PATCH /settings` or `POST /settings/import`. An email admin who is
 one only through `access.admin-emails` gets `403 {"error":"service_tokens_require_service_admin","message":…}` and nothing is
 stored (writing the same list again is fine). Without it such an admin could grant a service token the credential download below.
 
@@ -149,7 +149,7 @@ admin's session. Before authentication the gate (`src/access/csrf.ts`) refuses, 
   (403 `Cross-origin WebSocket rejected`).
 
 Management writes must also carry `Content-Type: application/json` (`multipart/form-data` for `POST /credentials`,
-`application/yaml`/`text/yaml` for `PUT /config.yaml`) or have no body; other types answer 415. The management zone never sends
+`application/yaml`/`text/yaml` for `POST /settings/import`) or have no body; other types answer 415. The management zone never sends
 CORS headers, so other origins cannot pass a preflight or read a management response. Proxy routes keep
 `Access-Control-Allow-Origin: *` for reads.
 
@@ -162,19 +162,16 @@ put a server-side client in between.
 - Go's `POST /requests/api-call` (substitutes `$TOKEN$` into a request to any host the caller names, the upstream
   panel's quota probe) is not ported. Quota checks (`POST /credentials/quota`) call the auth file's own provider usage
   endpoint. Key tests (`POST /api-keys/probe`) send a config key to the `base-url` stored with it, and an admin can
-  change that `base-url` while keeping the key (`PUT /api-keys/groups`, or the raw editor, whose review lists such a
-  move under `moved_secrets`): an admin can still direct a stored key to a host of their choice. The replies carry no
+  change that `base-url` while keeping the key (`PUT /api-keys/groups`, or a config import): an admin can still direct a stored key to a host of their choice. The replies carry no
   token.
-- The configuration is read back masked: `GET /config`, `/config/<path>`, `/config.yaml` and `/settings/config` show
-  the secret positions as `[redacted#n]…abcd`: API keys and client keys, header values other than an allow-list of
-  protocol headers and pure client copies, URL user info and query or fragment values whose names look secret,
-  payload parameters whose names (or, for `*-raw` JSON text, keys inside) look secret. Detection is by position and
-  name: a secret typed into another field (a model alias, a `prefix`) is shown. Writes to `/config*` refuse
-  placeholders (`422 masked_value`, or `masked_value_outside_secret_field`); edit secrets in the panel's raw editor
-  (`/settings/config`), which restores them. Config error messages never quote a written value (YAML errors are a
-  fixed sentence per error code with line and column; schema errors an expectation and a path) and are not
-  scrubbed: they name at most keys the caller wrote, so a refused write reads the same whether a typed value, key
-  or alias name equals a stored secret or not.
+- No route reads a secret back. Provider API keys, client keys, header values and URL credentials are stored as config
+  entries (ADR 0025) and never leave the Worker: `GET /api-keys` shows a `[redacted]…abcd` preview, `GET /settings` carries
+  no secret, and the routes that returned the whole document (`/config*`, `/config.yaml`, `/settings/config`) and the raw
+  editor are gone. So there are no masked placeholders to restore and nothing to refuse on write. A secret is replaced by
+  typing a new one into its key group, or by importing a Go config document (`POST /settings/import`). Config error messages
+  never quote a written value (YAML errors are a fixed sentence per error code with line and column; schema errors an
+  expectation and a path) and are not scrubbed: they name at most keys the caller wrote, so a refused write reads the same
+  whether a typed value, key or alias name equals a stored secret or not.
 - Credential downloads (`GET /v8/management/credentials/download?name=<file>`) are the one way to read a stored token:
   the auth file verbatim, refresh token included, for moving an account to another deployment. Only a **service
   token** administrator (`PLATFORM_ADMIN_SERVICE_TOKENS`, or `access.admin-service-tokens` in the config, §3) may call
@@ -193,13 +190,13 @@ put a server-side client in between.
   not confirmed either; address a config key by its `auth_index`.
 - Writes never confirm a guessed secret: the reply does not confirm a guess, the next read does. A typed API key
   equal to a key stored in another group of its family (gemini, interactions, vertex: the families whose keys are unique
-  across groups) is answered like any other new key: `PUT /api-keys/groups` and the path writes of `/config/*path` drop the
-  typed copy silently and the raw editor's save drops it before storing and advances the version whenever a secret was
-  typed. The same goes for header values, a `proxy-url` or a `base-url` written for a key kept by `auth_index`: they are typed
-  too, so trying them never produces a different reply. (A whole-document `PUT /config` or `PUT /config.yaml` replaces everything and
-  keeps Go's first-wins.) The stored key always
-  wins, so a typed copy never deletes a stored key (or its group); a group left with no key is dropped like any
-  empty group. Configuration error messages never quote a value.
+  across groups) is answered like any other new key: `PUT /api-keys/groups` drops the typed copy silently and still
+  advances the version. The same goes for header values, a `proxy-url` or a `base-url` written for a key kept by
+  `auth_index`: they are typed too, so trying them never produces a different reply. The stored key always wins, so a typed
+  copy never deletes a stored key (or its group); a group left with no key is stored but not shown. The config import
+  replaces every entry, so its reply confirms nothing and Go's first-wins deduplication applies inside the imported
+  document. A key whose secret a stored key of its family has keeps that key's credential id, so the next read shows the
+  same `auth_index` (the next read confirms, as above); a wrong guess has replaced every stored key with the document's. Configuration error messages never quote a value.
 
 ### Logs and personal data
 

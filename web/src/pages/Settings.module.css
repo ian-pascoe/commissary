@@ -33,11 +33,6 @@
   gap: var(--space-2) var(--space-5);
 }
 
-.rawLink {
-  font-size: var(--text-sm);
-  font-weight: 650;
-}
-
 .title {
   font-size: 2rem;
   font-weight: 750;
@@ -56,11 +51,6 @@
 .facts > span:not(:first-child)::before {
   margin-right: var(--space-3);
   content: "·";
-}
-
-.attention {
-  font-size: var(--text-sm);
-  font-weight: 650;
 }
 
 .jumps {
@@ -530,51 +520,6 @@
 }
 
 /* Keys that do nothing on Workers. */
-.inert {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-bottom: 1px solid var(--hairline);
-}
-
-.inertRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-1) var(--space-4);
-  padding: var(--space-3) 0;
-  border-top: 1px solid var(--hairline);
-}
-
-.inertKey {
-  font-family: inherit;
-  font-size: var(--text-sm);
-  font-weight: 750;
-  overflow-wrap: anywhere;
-}
-
-.inertReason {
-  grid-column: 1;
-  font-size: var(--text-sm);
-  color: var(--quiet);
-}
-
-.inertRow > button,
-.inertLink {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-}
-
-.inertLink {
-  font-size: var(--text-sm);
-  font-weight: 650;
-}
-
-.inertProblem {
-  grid-column: 1 / -1;
-}
-
 @media (width < 40rem) {
   .field {
     grid-template-columns: minmax(0, 1fr);

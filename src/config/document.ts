@@ -279,7 +279,14 @@ const validateApiKeys = (apiKeys: Json | undefined): void => {
       delete group["auth-index"];
 
       if (family !== "openai-compatibility") {
-        const groupFields = new Set<string>(["name", "base-url", "keys", ...SHARED_KEY_FIELDS]);
+        // `id`: the group's config entry id (ADR 0025), set on the documents the ControlPlane assembles.
+        const groupFields = new Set<string>([
+          "id",
+          "name",
+          "base-url",
+          "keys",
+          ...SHARED_KEY_FIELDS,
+        ]);
 
         for (const field of Object.keys(group)) {
           if (!groupFields.has(field)) {

@@ -1,7 +1,7 @@
 // One Settings section as its own form: a draft of the inputs the operator touched, Save / Discard while it differs
 // from the view ("2 changes"), and the outcome. The draft is a delta (`lib/settings.ts`): when the view refreshes
 // (this or another section saved, or a reload) it rebases, keeping changes whose field did not move on the server and
-// listing the ones that did. A save sends only the changed leaves with the view's version; on 409 it is re-applied
+// listing the ones that did. A save sends only the changed leaves with their revisions; on 409 it is re-applied
 // once to a fresh read (`saveDraft`), and a 422 lands under the field the server names, which takes the focus. Every
 // other outcome (a field changed elsewhere, a failed save, nothing to save) shows in the sticky actions bar, above the
 // buttons that caused it. The section reports its change count up (`onChanges`) for the jump list and leave guard.

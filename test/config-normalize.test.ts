@@ -2,8 +2,11 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 import { parseConfigYaml } from "../src/config/codec.ts";
+import { assertImportKeeps } from "./support/config-entries.ts";
 
-const parse = (yaml: string) => parseConfigYaml(yaml);
+// Every document these tests decode is also imported as config entries: the import must give the same config
+// (modulo entry ids and the not-applied keys it drops).
+const parse = (yaml: string) => parseConfigYaml(yaml).pipe(Effect.tap(assertImportKeeps));
 
 describe("duplicate API keys are removed across the whole flattened list", () => {
   it.effect("gemini: same key/base-url/proxy/prefix/headers in different groups", () =>

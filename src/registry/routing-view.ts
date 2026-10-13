@@ -265,7 +265,7 @@ export const routingView = (
   snapshot: RegistrySnapshot,
   now: number,
   authIndex: AuthIndexer,
-): RoutingModels => {
+): Omit<RoutingModels, "revisions"> => {
   const { config } = snapshot;
 
   const context: Context = {

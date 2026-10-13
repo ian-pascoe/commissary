@@ -14,9 +14,9 @@ describe("legacyHashTarget", () => {
       ["#/ai-providers", "/keys"],
       ["#/ai-providers/claude/edit", "/keys"],
       ["#/quick-start", "/keys"],
-      ["#/config", "/settings/config"],
-      ["#/settings", "/settings/config"],
-      ["#/api-keys", "/settings/config"],
+      ["#/config", "/settings"],
+      ["#/settings", "/settings"],
+      ["#/api-keys", "/settings"],
       ["#/system", "/settings"],
     ];
 
@@ -30,7 +30,7 @@ describe("legacyHashTarget", () => {
 
   it("ignores case, trailing slashes, queries and nested fragments", () => {
     expect(legacyHashTarget("#/Auth-Files/")).toBe("/accounts");
-    expect(legacyHashTarget("#/config?tab=source")).toBe("/settings/config");
+    expect(legacyHashTarget("#/config?tab=source")).toBe("/settings");
     expect(legacyHashTarget("#/quota#top")).toBe("/accounts");
   });
 

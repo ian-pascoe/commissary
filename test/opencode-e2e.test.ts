@@ -94,7 +94,7 @@ beforeAll(async () => {
     return await upstream(request);
   };
 
-  const stored = await controlPlane().putConfig(YAML);
+  const stored = await controlPlane().importConfig(YAML, "test");
   expect(stored.ok).toBe(true);
 });
 

@@ -1,9 +1,9 @@
 // Settings (/settings): the config settings that apply on Workers, one form per section (research
-// .scratch/p5-settings-research.md (c)). A status line says the config version, when it was saved, and whether keys
-// that do nothing on Workers are set; a jump list leads to each section (a sticky rail beside the column on wide
-// screens) and counts each one's unsaved changes. Each section saves on its own (`SettingsForm.tsx`); leaving the page
-// with unsaved changes asks first. Payload and account error rules are read-only here, edited in the raw configuration
-// (/settings/config, linked from the head). The view carries no secret, and nothing here shows one.
+// .scratch/p5-settings-research.md (c)). A status line says the config version and when it was saved; a jump list
+// leads to each section (a sticky rail beside the column on wide screens) and counts each one's unsaved changes. Each
+// section saves on its own (`SettingsForm.tsx`); leaving the page with unsaved changes asks first. Payload and account
+// error rules are read-only here, set by importing a Go config document. The view carries no secret, and nothing here
+// shows one.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link, useBlocker } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
@@ -17,7 +17,7 @@ import type { SectionId } from "../lib/settings.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
 import { CATALOG_OPTIONS } from "./SettingsCopy.ts";
 import { SettingsSection } from "./SettingsForm.tsx";
-import { DeploymentAdmins, ErrorRules, NotApplied, PayloadRules } from "./SettingsFacts.tsx";
+import { DeploymentAdmins, ErrorRules, PayloadRules } from "./SettingsFacts.tsx";
 import styles from "./Settings.module.css";
 
 const JUMPS: ReadonlyArray<readonly [SectionId | "payload", string]> = [
@@ -38,24 +38,18 @@ type Dirty = Readonly<Partial<Record<SectionId, number>>>;
 const totalOf = (dirty: Dirty): number =>
   Object.values(dirty).reduce((sum, count) => sum + (count ?? 0), 0);
 
-const settingsCount = (count: number): string =>
-  `${formatCount(count)} ${count === 1 ? "setting" : "settings"}`;
-
-/** The page title, and once the view is in: the version, when it was saved, what needs attention. */
+/** The page title, and once the view is in: the version and when it was saved. */
 const Head = ({ view }: { readonly view: SettingsView | undefined }) => (
   <header className={styles["head"]}>
     <div className={styles["titleRow"]}>
       <h1 className={styles["title"]}>Settings</h1>
-      <Link to="/settings/config" className={styles["rawLink"]}>
-        Raw configuration
-      </Link>
     </div>
     {view === undefined ? null : <Status view={view} />}
   </header>
 );
 
 /** The sections, each marked with its unsaved changes ("Routing · 2"). */
-const Jumps = ({ view, dirty }: { readonly view: SettingsView; readonly dirty: Dirty }) => (
+const Jumps = ({ dirty }: { readonly dirty: Dirty }) => (
   <nav className={styles["jumps"]} aria-label="Sections">
     {JUMPS.map(([id, title]) => {
       const count = id === "payload" ? 0 : (dirty[id] ?? 0);
@@ -73,7 +67,6 @@ const Jumps = ({ view, dirty }: { readonly view: SettingsView; readonly dirty: D
         </a>
       );
     })}
-    {view.not_applied.length === 0 ? null : <a href="#not-applied">Not applied</a>}
   </nav>
 );
 
@@ -130,25 +123,12 @@ const LeaveGuard = ({ dirty }: { readonly dirty: Dirty }) => {
 
 const Status = ({ view }: { readonly view: SettingsView }) => {
   const saved = view.updated_at === undefined ? Number.NaN : Date.parse(view.updated_at);
-  const inert = view.not_applied.length;
 
   return (
-    <>
-      <p className={styles["facts"]}>
-        <span>Configuration version {formatCount(view.version)}</span>
-        {Number.isNaN(saved) ? null : (
-          <span>Saved {formatAgo(Math.max(0, Date.now() - saved))}</span>
-        )}
-      </p>
-      {inert === 0 ? null : (
-        <p className={styles["attention"]}>
-          <a href="#not-applied">
-            {settingsCount(inert)} in the configuration {inert === 1 ? "has" : "have"} no effect on
-            Workers
-          </a>
-        </p>
-      )}
-    </>
+    <p className={styles["facts"]}>
+      <span>Configuration version {formatCount(view.version)}</span>
+      {Number.isNaN(saved) ? null : <span>Saved {formatAgo(Math.max(0, Date.now() - saved))}</span>}
+    </p>
   );
 };
 
@@ -346,8 +326,6 @@ const Body = ({
       <SettingsSection id="refresh" title="Account refresh" {...common}>
         {({ field }) => field("oauth.auth-auto-refresh-workers")}
       </SettingsSection>
-
-      {view.not_applied.length === 0 ? null : <NotApplied view={view} />}
     </>
   );
 };
@@ -385,7 +363,7 @@ export const SettingsPage = () => {
       <Head view={view} />
       <LeaveGuard dirty={dirty} />
       <div className={styles["layout"]}>
-        {view === undefined ? null : <Jumps view={view} dirty={dirty} />}
+        {view === undefined ? null : <Jumps dirty={dirty} />}
         <div className={styles["body"]}>
           {AsyncResult.match(result, {
             onInitial: () => (

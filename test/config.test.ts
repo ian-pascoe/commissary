@@ -14,8 +14,11 @@ import { yamlMessage } from "../src/config/yaml-message.ts";
 import { Config } from "../src/config/schema.ts";
 import { applyPayloadRules } from "../src/config/payload/index.ts";
 import { get } from "../src/json/index.ts";
+import { assertImportKeeps } from "./support/config-entries.ts";
 
-const parse = (yaml: string) => parseConfigYaml(yaml);
+// Every document these tests decode is also imported as config entries: the import must give the same config
+// (modulo entry ids and the not-applied keys it drops).
+const parse = (yaml: string) => parseConfigYaml(yaml).pipe(Effect.tap(assertImportKeeps));
 
 const failure = <A>(effect: Effect.Effect<A, ConfigValidationError>) =>
   effect.pipe(

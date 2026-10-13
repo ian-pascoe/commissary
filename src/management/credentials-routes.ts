@@ -416,9 +416,11 @@ const patchStatus = Effect.gen(function* () {
 
   if (typeof body.disabled !== "boolean") return yield* replyError(400, "disabled is required");
 
+  const { principalId } = yield* AccessPrincipal;
+
   const result = yield* controlPlane("setCredentialDisabledByRef", (stub) =>
     // SAFETY: typeof body.disabled === "boolean" was checked above; the narrowing is lost inside the callback.
-    stub.setCredentialDisabledByRef(refOf(body), body.disabled as boolean),
+    stub.setCredentialDisabledByRef(refOf(body), body.disabled as boolean, principalId),
   );
 
   // A config API key is disabled through its excluded-models (`*`), like Go answers.

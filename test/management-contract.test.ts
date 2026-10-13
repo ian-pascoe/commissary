@@ -550,7 +550,9 @@ describe("management contract", () => {
         assert.strictEqual((yield* api.catalog.refresh()).status, "unchanged");
 
         yield* Effect.promise(async () => {
-          assert.isTrue((await controlPlane().putConfig("models:\n  catalog: embed\n")).ok);
+          assert.isTrue(
+            (await controlPlane().importConfig("models:\n  catalog: embed\n", "test")).ok,
+          );
         });
         const refused = yield* Effect.flip(api.catalog.refresh());
 
@@ -567,7 +569,7 @@ describe("management contract", () => {
       Effect.gen(function* () {
         yield* seed("claude-a.json");
         yield* Effect.promise(async () => {
-          const result = await controlPlane().putConfig(
+          const result = await controlPlane().importConfig(
             JSON.stringify({
               "api-keys": {
                 claude: [
@@ -579,6 +581,7 @@ describe("management contract", () => {
                 ],
               },
             }),
+            "test",
           );
 
           assert.isTrue(result.ok);
@@ -617,16 +620,18 @@ describe("management contract", () => {
       }).pipe(through(harness)),
     );
 
-    it.effect("a rule edit with the view's version shows in the next read", () =>
+    it.effect("a rule edit at the channel's revision shows in the next read", () =>
       Effect.gen(function* () {
         yield* seed("claude-a.json");
         const api = yield* client;
         const before = yield* api.routing.models();
         assert.isUndefined(before.models.find((model) => model.id === "s46"));
 
+        assert.deepStrictEqual(before.revisions, { aliases: {}, exclusions: {} });
+
         const saved = yield* api.routing.putAliases({
           params: { channel: "claude" },
-          headers: { "if-match": String(before.config_version) },
+          headers: { "if-match": "0" },
           payload: aliases,
         });
 
@@ -636,6 +641,7 @@ describe("management contract", () => {
         const after = yield* api.routing.models();
         assert.strictEqual(after.config_version, saved.version);
         assert.deepStrictEqual(after.aliases, { claude: aliases });
+        assert.deepStrictEqual(after.revisions.aliases, { claude: saved.revision });
 
         const aliased = after.models.find((model) => model.id === "s46");
         assert.strictEqual(aliased?.routes[0]?.via, "alias");
@@ -643,9 +649,10 @@ describe("management contract", () => {
         assert.strictEqual(aliased?.routes[0]?.rule_scope, "channel");
         assert.isUndefined(after.models.find((model) => model.id === "claude-sonnet-4-6"));
 
+        // The channel's exclusions are an entry of their own: no rules yet, revision 0.
         const excluded = yield* api.routing.putExclusions({
           params: { channel: "claude" },
-          headers: { "if-match": String(saved.version) },
+          headers: { "if-match": "0" },
           payload: ["claude-opus-*"],
         });
 
@@ -660,29 +667,29 @@ describe("management contract", () => {
 
         const removed = yield* api.routing.deleteExclusions({
           params: { channel: "claude" },
-          headers: { "if-match": String(excluded.version) },
+          headers: { "if-match": `W/"${excluded.revision}"` },
         });
 
         assert.strictEqual(removed.version, excluded.version + 1);
+        assert.strictEqual(removed.revision, 0);
         assert.deepStrictEqual((yield* api.routing.models()).excluded, {});
       }).pipe(through(harness)),
     );
 
-    it.effect("a stale version is a 409 ManagementError and stores nothing", () =>
+    it.effect("a stale revision is a 409 ManagementError and stores nothing", () =>
       Effect.gen(function* () {
         const api = yield* client;
-        const first = yield* api.routing.models();
 
         yield* api.routing.putAliases({
           params: { channel: "claude" },
-          headers: { "if-match": String(first.config_version) },
+          headers: { "if-match": "0" },
           payload: aliases,
         });
 
         const error = yield* Effect.flip(
           api.routing.putAliases({
             params: { channel: "claude" },
-            headers: { "if-match": String(first.config_version) },
+            headers: { "if-match": "0" },
             payload: [{ name: "claude-opus-4-6", alias: "lost" }],
           }),
         );
@@ -694,7 +701,7 @@ describe("management contract", () => {
         const staleDelete = yield* Effect.flip(
           api.routing.deleteAliases({
             params: { channel: "claude" },
-            headers: { "if-match": String(first.config_version) },
+            headers: { "if-match": "0" },
           }),
         );
 
@@ -706,8 +713,7 @@ describe("management contract", () => {
     it.effect("deleting a channel without rules is a 404 not_found", () =>
       Effect.gen(function* () {
         const api = yield* client;
-        const view = yield* api.routing.models();
-        const headers = { "if-match": String(view.config_version) };
+        const headers = { "if-match": "0" };
 
         for (const remove of [api.routing.deleteAliases, api.routing.deleteExclusions]) {
           const error = yield* Effect.flip(remove({ params: { channel: "claude" }, headers }));
@@ -833,7 +839,7 @@ describe("management contract", () => {
 
     const seedKeys = (extra: Record<string, unknown> = {}) =>
       Effect.promise(async () => {
-        await controlPlane().putConfig(
+        await controlPlane().importConfig(
           JSON.stringify({
             "api-keys": {
               claude: [
@@ -866,6 +872,7 @@ describe("management contract", () => {
               ...extra,
             },
           }),
+          "test",
         );
       });
 
@@ -943,9 +950,9 @@ describe("management contract", () => {
 
         const written = yield* api.apiKeys.putGroup({
           payload: {
-            version: before.version,
             family: "claude",
-            index: 0,
+            id: view.id,
+            revision: view.revision,
             group: {
               ...claudeInput(view),
               keys: [
@@ -957,11 +964,14 @@ describe("management contract", () => {
         });
 
         assert.isAbove(written.version, before.version);
+        assert.strictEqual(written.id, view.id);
+        assert.isAbove(written.revision, view.revision);
 
         const after = yield* api.apiKeys.list();
         const keys = claudeGroup(after).group.keys;
 
         assert.strictEqual(after.version, written.version);
+        assert.strictEqual(claudeGroup(after).revision, written.revision);
         assert.strictEqual(keys[0]?.auth_index, kept?.auth_index);
         assert.strictEqual(keys[0]?.runtime?.auth_index, kept?.runtime?.auth_index);
         assert.strictEqual(keys[0]?.priority, 5);
@@ -979,7 +989,7 @@ describe("management contract", () => {
     );
 
     it.effect(
-      "refuses a stale version, an unknown auth_index and a group the config would drop",
+      "refuses a stale revision, an unknown auth_index and a group the config would drop",
       () =>
         Effect.gen(function* () {
           yield* seedKeys();
@@ -987,11 +997,11 @@ describe("management contract", () => {
           const before = yield* api.apiKeys.list();
           const view = claudeGroup(before);
 
-          yield* api.apiKeys.putGroup({
+          const first = yield* api.apiKeys.putGroup({
             payload: {
-              version: before.version,
               family: "claude",
-              index: 0,
+              id: view.id,
+              revision: view.revision,
               group: claudeInput(view),
             },
           });
@@ -999,9 +1009,9 @@ describe("management contract", () => {
           const stale = yield* Effect.flip(
             api.apiKeys.putGroup({
               payload: {
-                version: before.version,
                 family: "claude",
-                index: 0,
+                id: view.id,
+                revision: view.revision,
                 group: claudeInput(view),
               },
             }),
@@ -1015,9 +1025,9 @@ describe("management contract", () => {
           const unknown = yield* Effect.flip(
             api.apiKeys.putGroup({
               payload: {
-                version: current,
                 family: "claude",
-                index: 0,
+                id: view.id,
+                revision: first.revision,
                 group: { ...claudeInput(view), keys: [{ auth_index: "0000000000000000" }] },
               },
             }),
@@ -1029,8 +1039,8 @@ describe("management contract", () => {
           const noBase = yield* Effect.flip(
             api.apiKeys.putGroup({
               payload: {
-                version: current,
                 family: "codex",
+                revision: 0,
                 group: { keys: [{ "api-key": "sk-codex-X" }] },
               },
             }),
@@ -1039,12 +1049,15 @@ describe("management contract", () => {
           assert.instanceOf(noBase, ManagementError);
           assert.isAbove(noBase.error.length, 0);
 
+          // A group that is gone (or never was) is a conflict: the caller's view is out of date.
           const missing = yield* Effect.flip(
-            api.apiKeys.deleteGroup({ payload: { version: current, family: "claude", index: 4 } }),
+            api.apiKeys.deleteGroup({
+              payload: { family: "claude", id: "group:missing", revision: 1 },
+            }),
           );
 
           assert.instanceOf(missing, ManagementError);
-          assert.strictEqual(missing.error, "group not found");
+          assert.strictEqual(missing.error, "conflict");
 
           // Nothing was stored by the refused writes.
           assert.strictEqual((yield* api.apiKeys.list()).version, current);
@@ -1060,17 +1073,25 @@ describe("management contract", () => {
         // Silent: a duplicate of a stored key is accepted (and dropped), so the reply never confirms a guess.
         const duplicate = yield* api.apiKeys.putGroup({
           payload: {
-            version: list.version,
             family: "gemini",
+            revision: 0,
             group: { keys: [{ "api-key": "gm-one" }] },
           },
         });
 
-        assert.deepStrictEqual(duplicate, { status: "ok", version: list.version + 1 });
-        assert.strictEqual((yield* api.apiKeys.list()).families.gemini.length, 1);
+        assert.deepStrictEqual(duplicate, {
+          status: "ok",
+          version: list.version + 1,
+          id: duplicate.id,
+          revision: list.version + 1,
+        });
+        const groups = (yield* api.apiKeys.list()).families.gemini;
+
+        assert.strictEqual(groups.length, 1);
+        const [only] = groups;
 
         const deleted = yield* api.apiKeys.deleteGroup({
-          payload: { version: duplicate.version, family: "gemini", index: 0 },
+          payload: { family: "gemini", id: only!.id, revision: only!.revision },
         });
 
         const after = yield* api.apiKeys.list();
@@ -1349,7 +1370,7 @@ describe("management contract", () => {
     it.effect("get decodes the view and save stores a patch", () =>
       Effect.gen(function* () {
         yield* Effect.promise(async () => {
-          await controlPlane().putConfig(
+          await controlPlane().importConfig(
             JSON.stringify({
               access: { "api-keys": ["client-secret-key"] },
               "api-keys": {
@@ -1362,31 +1383,38 @@ describe("management contract", () => {
                 ],
               },
             }),
+            "test",
           );
         });
         const api = yield* client;
         const view = yield* api.settings.get();
 
         assert.deepStrictEqual(view.values, view.defaults);
-        assert.deepStrictEqual(
-          view.not_applied.map((entry) => entry.key),
-          ["access.api-keys"],
-        );
+        assert.deepStrictEqual(view.revisions, {});
         assert.strictEqual(view.prefixed_credentials, 1);
         assert.notInclude(JSON.stringify(view), "secret");
 
         const saved = yield* api.settings.save({
           payload: {
-            version: view.version,
+            revisions: view.revisions,
             patch: {
               routing: { strategy: "fill-first", retry: { "request-retry": 2 } },
-              access: { "api-keys": null },
               oauth: { providers: { antigravity: { "signature-bypass-strict": true } } },
             },
           },
         });
 
-        assert.deepStrictEqual(saved, { status: "ok", version: view.version + 1 });
+        const revision = view.version + 1;
+
+        assert.deepStrictEqual(saved, {
+          status: "ok",
+          version: revision,
+          revisions: {
+            "routing.strategy": revision,
+            "routing.retry.request-retry": revision,
+            "oauth.providers.antigravity.signature-bypass-strict": revision,
+          },
+        });
         const after = yield* api.settings.get();
 
         assert.strictEqual(after.values.routing.strategy, "fill-first");
@@ -1395,7 +1423,7 @@ describe("management contract", () => {
           after.values.oauth.providers.antigravity["signature-bypass-strict"],
           true,
         );
-        assert.deepStrictEqual(after.not_applied, []);
+        assert.deepStrictEqual(after.revisions, saved.revisions);
       }).pipe(through(harness)),
     );
 
@@ -1406,7 +1434,10 @@ describe("management contract", () => {
 
         const invalid = yield* Effect.flip(
           api.settings.save({
-            payload: { version: view.version, patch: { routing: { "session-affinity-ttl": "x" } } },
+            payload: {
+              revisions: view.revisions,
+              patch: { routing: { "session-affinity-ttl": "x" } },
+            },
           }),
         );
 
@@ -1416,12 +1447,15 @@ describe("management contract", () => {
         assert.isString(invalid.message);
 
         yield* api.settings.save({
-          payload: { version: view.version, patch: { routing: { "session-affinity": true } } },
+          payload: { revisions: view.revisions, patch: { routing: { "session-affinity": true } } },
         });
 
         const stale = yield* Effect.flip(
           api.settings.save({
-            payload: { version: view.version, patch: { routing: { "session-affinity": false } } },
+            payload: {
+              revisions: view.revisions,
+              patch: { routing: { "session-affinity": false } },
+            },
           }),
         );
 
@@ -1431,109 +1465,54 @@ describe("management contract", () => {
       }).pipe(through(harness)),
     );
 
-    it.effect("raw decodes the masked document, checkRaw reviews it and saveRaw stores it", () =>
-      Effect.gen(function* () {
-        yield* Effect.promise(async () => {
-          await controlPlane().putConfig(
-            JSON.stringify({
-              routing: { strategy: "fill-first" },
-              "api-keys": { claude: [{ keys: [{ "api-key": "sk-ant-contract-secret-4242" }] }] },
-            }),
-          );
-        });
-        const api = yield* client;
-        const raw = yield* api.settings.raw();
-
-        assert.strictEqual(raw.secrets, 1);
-        assert.include(raw.yaml, '"[redacted#1]…4242"');
-        assert.notInclude(JSON.stringify(raw), "contract-secret");
-
-        const yaml = raw.yaml.replace("fill-first", "round-robin");
-        const checked = yield* api.settings.checkRaw({ payload: { version: raw.version, yaml } });
-
-        assert.deepStrictEqual(
-          { ...checked, yaml: undefined },
-          {
-            yaml: undefined,
-            dropped: [],
-            not_applied: [],
-            kept_secrets: 1,
-            new_secrets: 0,
-            moved_secrets: [],
-          },
-        );
-        // round-robin is the default: the sparse result omits it.
-        assert.notInclude(checked.yaml, "strategy");
-
-        // A kept key sent to another family and host decodes with its placeholder and both places.
-        const elsewhere = yield* api.settings.checkRaw({
-          payload: {
-            version: raw.version,
-            yaml: `${yaml}  codex:\n    - base-url: https://gateway.test/v1\n      keys:\n        - api-key: "[redacted#1]"\n`,
-          },
-        });
-
-        assert.deepStrictEqual(elsewhere.moved_secrets, [
-          {
-            path: "api-keys.codex[0].keys[0].api-key",
-            placeholder: "[redacted#1]…4242",
-            from: { family: "claude" },
-            to: { family: "codex", host: "gateway.test" },
-          },
-        ]);
-        assert.notInclude(JSON.stringify(elsewhere), "contract-secret");
-        assert.strictEqual((yield* api.settings.raw()).version, raw.version);
-
-        const saved = yield* api.settings.saveRaw({ payload: { version: raw.version, yaml } });
-
-        assert.deepStrictEqual(saved, {
-          status: "ok",
-          version: raw.version + 1,
-          dropped: [],
-          not_applied: [],
-          moved_secrets: [],
-        });
-        assert.strictEqual((yield* api.settings.get()).values.routing.strategy, "round-robin");
-
-        const again = yield* api.settings.saveRaw({ payload: { version: saved.version, yaml } });
-
-        assert.strictEqual(again.version, saved.version);
-      }).pipe(through(harness)),
-    );
-
-    it.effect("raw refusals carry line/column or path in ManagementError", () =>
+    it.effect("importConfig stores a Go config document and names the keys it did not store", () =>
       Effect.gen(function* () {
         const api = yield* client;
-        const { version } = yield* api.settings.raw();
+
+        const imported = yield* api.settings.importConfig({
+          payload:
+            "routing:\n  strategy: fill-first\naccess:\n  api-keys: [client-key]\n" +
+            "claude-api-key:\n  - api-key: sk-ant-contract-secret-4242\n",
+        });
+
+        assert.deepStrictEqual(imported.not_applied, ["access.api-keys"]);
+        const view = yield* api.settings.get();
+
+        assert.strictEqual(view.version, imported.version);
+        assert.strictEqual(view.values.routing.strategy, "fill-first");
+        assert.strictEqual((yield* api.apiKeys.list()).families.claude.length, 1);
 
         const syntax = yield* Effect.flip(
-          api.settings.checkRaw({ payload: { version, yaml: "routing:\n  strategy: [a\n" } }),
+          api.settings.importConfig({ payload: "routing:\n  strategy: [a\n" }),
         );
 
         assert.instanceOf(syntax, ManagementError);
-        assert.strictEqual(syntax.error, "invalid_yaml");
-        assert.isString(syntax.message);
+        assert.strictEqual(syntax.error, "invalid_config");
         assert.isNumber(syntax.line);
-        assert.isNumber(syntax.column);
 
         const invalid = yield* Effect.flip(
-          api.settings.saveRaw({
-            payload: { version, yaml: "routing:\n  retry:\n    request-retry: lots\n" },
-          }),
+          api.settings.importConfig({ payload: "routing:\n  retry:\n    request-retry: lots\n" }),
         );
 
         assert.instanceOf(invalid, ManagementError);
         assert.strictEqual(invalid.error, "invalid_config");
-        assert.strictEqual(invalid.path, "routing.retry.request-retry");
-
-        const stale = yield* Effect.flip(
-          api.settings.saveRaw({ payload: { version: version + 1, yaml: "" } }),
-        );
-
-        assert.instanceOf(stale, ManagementError);
-        assert.strictEqual(stale.error, "conflict");
+        // Nothing was stored by the refused imports.
+        assert.strictEqual((yield* api.settings.get()).version, imported.version);
       }).pipe(through(harness)),
     );
+
+    it("has no endpoint that writes the whole configuration but the import", () => {
+      const writes = Object.values(ManagementApi.groups).flatMap((group) =>
+        Object.values(group.endpoints)
+          .filter((endpoint) => endpoint.method !== "GET")
+          .map((endpoint) => endpoint.path),
+      );
+
+      assert.deepStrictEqual(
+        writes.filter((path) => /^\/(config|settings\/config)($|[./])/.test(path)),
+        [],
+      );
+    });
 
     it("has no endpoint for the token-disclosing routes (api-call, credential download)", () => {
       const paths = Object.values(ManagementApi.groups).flatMap((group) =>

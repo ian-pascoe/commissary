@@ -1,25 +1,16 @@
-// Pure helpers of the management API: config document edits, credential entries, field patches, cooldown reset.
+// Pure helpers of the management API: config key ids, typed duplicate keys, credential entries, field patches, cooldown reset.
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { decodeConfig } from "../src/config/codec.ts";
-import type { Json, JsonObject } from "../src/json/index.ts";
+import type { JsonObject } from "../src/json/index.ts";
 import { resetCooldownState } from "../src/credentials/cooldown-reset.ts";
 import { synthesizeConfigCredentials } from "../src/credentials/synthesize.ts";
 import { applyFieldPatch } from "../src/credentials/field-patch.ts";
 import { emptyQuota, emptyState, type CredentialState } from "../src/credentials/model.ts";
 import { classifyPath, isPanelPagePath, LEGACY_PANEL_PATH } from "../src/access/routes.ts";
-import {
-  configKeyIds,
-  configPathOfUrl,
-  deleteAtPath,
-  getAtPath,
-  mergePatch,
-  parseConfigPath,
-  stripAuthIndexes,
-  writeAtPath,
-} from "../src/management/config-document.ts";
+import { configKeyIds } from "../src/credentials/key-ids.ts";
 import { buildCredentialEntry, cooldownSnapshot } from "../src/management/credential-entry.ts";
-import { keepStoredKeys, typedKeysAt } from "../src/management/key-duplicates.ts";
+import { typedDuplicates, withoutKeys } from "../src/management/key-duplicates.ts";
 import { authIndexOf } from "./support/auth-index.ts";
 import { cred, cooling, state } from "./support/credentials.ts";
 
@@ -27,100 +18,6 @@ const NOW = 1_800_000_000_000;
 
 const unsignedJwt = (claims: JsonObject) =>
   `x.${btoa(JSON.stringify(claims)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_")}.y`;
-
-describe("config document paths", () => {
-  it("parses paths", () => {
-    expect(parseConfigPath("")).toEqual([]);
-    expect(parseConfigPath("/")).toEqual([]);
-    expect(parseConfigPath("/a/b%20c/")).toEqual(["a", "b c"]);
-    expect(parseConfigPath("/a//b")).toBeUndefined();
-
-    // Reserved segments would reach Object.prototype through a plain object.
-    for (const reserved of ["__proto__", "constructor", "prototype", "%5F%5Fproto%5F%5F"])
-      expect(parseConfigPath(`/a/${reserved}/b`), reserved).toBeUndefined();
-    expect(parseConfigPath("/a/Constructor")).toEqual(["a", "Constructor"]);
-  });
-
-  it("reads the config path of a URL like the router matches it", () => {
-    expect(configPathOfUrl("https://x.test/v8/management/config/a/b?x=1")).toBe("/a/b");
-    expect(configPathOfUrl("https://x.test//v8//management/%63onfig/a")).toBe("/a");
-    expect(configPathOfUrl("https://x.test/V8/MANAGEMENT/Config")).toBe("/");
-    expect(configPathOfUrl("/v8/management/config/a%2Fb/c")).toBe("/a%2Fb/c");
-    expect(parseConfigPath(configPathOfUrl("/v8/management/config/a%2Fb/c") ?? "")).toEqual([
-      "a/b",
-      "c",
-    ]);
-    expect(configPathOfUrl("https://x.test/v8/management/config/a//b")).toBe("/a//b");
-    expect(configPathOfUrl("https://x.test/v8/management/settings/config")).toBeUndefined();
-    expect(configPathOfUrl("https://x.test/v8/management")).toBeUndefined();
-  });
-
-  it("never writes to a prototype", () => {
-    const patch = JSON.parse(
-      '{"__proto__": {"polluted": 1}, "a": {"__proto__": {"x": 1}, "b": 2}}',
-    ) as Json;
-
-    const merged = mergePatch({ a: { c: 3 } }, patch);
-
-    expect(merged).toEqual({ a: { c: 3, b: 2 } });
-    expect(Object.getPrototypeOf(merged)).toBe(Object.prototype);
-    expect("polluted" in {}).toBe(false);
-
-    // Keys that only exist on the prototype are not traversed.
-    expect(writeAtPath({}, ["toString", "x"], 1, "put")).toEqual({ toString: { x: 1 } });
-    expect(Object.prototype).not.toHaveProperty("toString.x");
-  });
-
-  it("reads, writes and deletes without mutating the input", () => {
-    const doc = { a: { b: 1, list: [1, 2] }, c: null };
-    expect(getAtPath(doc, ["a", "list"])).toEqual([1, 2]);
-    expect(getAtPath(doc, ["c"])).toBeNull();
-    expect(getAtPath(doc, ["a", "b", "x"])).toBeUndefined();
-    expect(getAtPath(doc, [])).toBe(doc);
-
-    expect(writeAtPath(doc, ["a", "new", "deep"], 5, "put")).toEqual({
-      a: { b: 1, list: [1, 2], new: { deep: 5 } },
-      c: null,
-    });
-    expect(writeAtPath(doc, ["a", "b", "x"], 5, "put")).toBe("invalid_path");
-    expect(writeAtPath(doc, ["a", "list"], [9], "patch")).toEqual({
-      a: { b: 1, list: [9] },
-      c: null,
-    });
-    expect(doc).toEqual({ a: { b: 1, list: [1, 2] }, c: null });
-
-    expect(deleteAtPath(doc, ["a", "b"])).toEqual({ a: { list: [1, 2] }, c: null });
-    expect(deleteAtPath({ a: { b: { c: 1 } }, d: 2 }, ["a", "b", "c"])).toEqual({ d: 2 });
-    expect(deleteAtPath(doc, ["a", "zzz"])).toBeUndefined();
-    expect(deleteAtPath(doc, ["a", "b", "c"])).toBeUndefined();
-    expect(deleteAtPath(doc, [])).toBeUndefined();
-  });
-
-  it("merges patches like mergeConfigV8Patch (null kept, lists and scalars replaced)", () => {
-    expect(mergePatch({ a: { x: 1, y: 2 }, l: [1] }, { a: { y: null, z: 3 }, l: [2, 3] })).toEqual({
-      a: { x: 1, y: null, z: 3 },
-      l: [2, 3],
-    });
-    expect(mergePatch(1, { a: 1 })).toEqual({ a: 1 });
-    expect(mergePatch({ a: 1 }, 5)).toBe(5);
-  });
-
-  it("strips auth_index from api-key groups and keys only", () => {
-    const doc = {
-      "api-keys": {
-        claude: [
-          { auth_index: "g", "auth-index": "g", keys: [{ auth_index: "k", "api-key": "x" }] },
-        ],
-      },
-      other: { auth_index: "keep" },
-    };
-
-    expect(stripAuthIndexes(doc)).toEqual({
-      "api-keys": { claude: [{ keys: [{ "api-key": "x" }] }] },
-      other: { auth_index: "keep" },
-    });
-  });
-});
 
 describe("config key ids", () => {
   const document: JsonObject = {
@@ -716,13 +613,7 @@ describe("access classification of the panel page", () => {
   });
 
   it("names the pages a cross-site navigation may open (not the API, not the bundle)", () => {
-    for (const path of [
-      "/",
-      "/accounts",
-      "/accounts/connect",
-      "/settings/config",
-      LEGACY_PANEL_PATH,
-    ])
+    for (const path of ["/", "/accounts", "/accounts/connect", "/settings", LEGACY_PANEL_PATH])
       expect(isPanelPagePath(path), path).toBe(true);
 
     for (const path of [
@@ -736,75 +627,40 @@ describe("access classification of the panel page", () => {
   });
 });
 
-describe("stored keys win over typed ones (path writes)", () => {
-  const document = (first: ReadonlyArray<string>): JsonObject => ({
-    "api-keys": {
-      gemini: [
-        { "excluded-models": ["m0"], keys: first.map((key) => ({ "api-key": key })) },
-        { "excluded-models": ["m1"], keys: [{ "api-key": "stored-key" }] },
-      ],
-    },
-  });
+describe("stored keys win over typed ones (group writes)", () => {
+  it("drops a typed copy of a stored key in any group, and a later typed copy of a typed key", () => {
+    const identities = [["a", "b", "c"], ["a"], ["d", "d"]];
+    const typed = [[true, false, true], [false], [true, true]];
 
-  it("types the keys at, under or containing the written path, and no other", () => {
-    const two = document(["a", "b"]);
-
-    expect(typedKeysAt(two, "gemini", ["api-keys", "gemini", "0"])).toEqual([
-      [true, true],
+    expect(typedDuplicates(identities, typed)).toEqual([
+      [true, false, false],
       [false],
-    ]);
-    expect(typedKeysAt(two, "gemini", ["api-keys", "gemini", "0", "keys", "1"])).toEqual([
       [false, true],
-      [false],
     ]);
-    expect(typedKeysAt(two, "gemini", ["api-keys", "gemini", "1", "keys", "0", "api-key"])).toEqual(
-      [[false, false], [true]],
-    );
-    // A path that cannot reach into a list (the only ones the routes accept) types the whole family or none of it.
-    expect(typedKeysAt(two, "gemini", ["api-keys", "gemini"])).toEqual([[true, true], [true]]);
-    expect(typedKeysAt(two, "gemini", ["api-keys"])).toEqual([[true, true], [true]]);
-    expect(typedKeysAt(two, "gemini", [])).toEqual([[true, true], [true]]);
-    expect(typedKeysAt(two, "gemini", ["api-keys", "vertex"])).toEqual([[false, false], [false]]);
-    expect(typedKeysAt(two, "gemini", ["routing", "strategy"])).toEqual([[false, false], [false]]);
   });
 
-  it("drops a typed copy of a later group's key, never the stored one", async () => {
-    const written = document(["stored-key"]);
-
-    const settled = await Effect.runPromise(
-      keepStoredKeys(written, (family) =>
-        family === "gemini" ? typedKeysAt(written, "gemini", ["api-keys", "gemini", "0"]) : [],
-      ),
-    );
-
-    expect(settled).toEqual({
-      "api-keys": {
-        gemini: [
-          { "excluded-models": ["m0"], keys: [] },
-          { "excluded-models": ["m1"], keys: [{ "api-key": "stored-key" }] },
-        ],
-      },
-    });
+  it("never drops a key that is not typed, even a duplicate", () => {
+    expect(typedDuplicates([["a"], ["a"]], [[false], [false]])).toEqual([[false], [false]]);
   });
 
-  it("is the normaliser's first-wins when every key is typed, and leaves an undecodable document alone", async () => {
-    const written = document(["stored-key"]);
-
-    const all = await Effect.runPromise(
-      keepStoredKeys(written, (family) => typedKeysAt(written, family, ["api-keys"])),
-    );
-
-    expect(all).toEqual({
+  it("removes the marked keys from a copy and leaves the document alone when nothing is marked", () => {
+    const document: JsonObject = {
       "api-keys": {
         gemini: [
-          { "excluded-models": ["m0"], keys: [{ "api-key": "stored-key" }] },
-          { "excluded-models": ["m1"], keys: [] },
+          { keys: [{ "api-key": "x" }, { "api-key": "y" }] },
+          { keys: [{ "api-key": "z" }] },
         ],
       },
+    };
+
+    expect(withoutKeys(document, "gemini", [[false, false], [false]])).toBe(document);
+    const out = withoutKeys(document, "gemini", [[true, false], [true]]);
+
+    expect(out).toEqual({
+      "api-keys": { gemini: [{ keys: [{ "api-key": "y" }] }, { keys: [] }] },
     });
-
-    const broken: JsonObject = { "api-keys": { gemini: "nope" } };
-
-    expect(await Effect.runPromise(keepStoredKeys(broken, () => []))).toEqual(broken);
+    expect(document["api-keys"]).toEqual({
+      gemini: [{ keys: [{ "api-key": "x" }, { "api-key": "y" }] }, { keys: [{ "api-key": "z" }] }],
+    });
   });
 });

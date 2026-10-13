@@ -1,6 +1,6 @@
 // A stored secret must not be confirmable by typing a guess, and a typed key must never delete a stored one: a write
-// answers the same whether the typed key equals a stored one or not (api-keys writes and the raw configuration
-// editor), and stored keys win over typed ones. The state after the write is asserted, not only the reply, through
+// answers the same whether the typed key equals a stored one or not (api-keys group writes), and stored keys win
+// over typed ones. The state after the write is asserted, not only the reply, through
 // the router and the real ControlPlane.
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { JsonObject } from "../src/json/index.ts";
@@ -22,16 +22,26 @@ const KEY_B = "AIzaSy-ORACLE-KEY-TWO-7373";
 const wrongGuess = (secret: string): string => `X${secret.slice(1)}`;
 
 const seed = async (document: Record<string, unknown>): Promise<number> => {
-  const result = await controlPlane().putConfig(JSON.stringify(document));
+  const result = await controlPlane().importConfig(JSON.stringify(document), "test");
 
   if (!result.ok) throw new Error(result.message);
 
   return result.version;
 };
 
-/** The version of a reply with the number replaced, so replies of different runs compare as text. */
-const withoutVersion = (text: string, version: number): string =>
-  text.replace(`"version":${version}`, '"version":"<next>"');
+/**
+ * A write reply with its change counter, group id and revision replaced, so replies of different runs compare as
+ * text (a new group gets a fresh id either way).
+ */
+const comparableReply = (response: Awaited<ReturnType<typeof json>>): string => {
+  // SAFETY: a 200 reply of a group write is a JSON object.
+  const reply = { ...(response.body as Record<string, unknown>) };
+
+  for (const field of ["version", "id", "revision"])
+    if (field in reply) reply[field] = `<${field}>`;
+
+  return JSON.stringify(reply);
+};
 
 /**
  * What is really stored of a family's groups (not what a reply says): per group its first `excluded-models` entry, a
@@ -63,6 +73,8 @@ interface Listed {
   readonly families: Record<
     string,
     ReadonlyArray<{
+      readonly id: string;
+      readonly revision: number;
       readonly group: { readonly keys: ReadonlyArray<{ readonly auth_index?: string }> };
     }>
   >;
@@ -88,15 +100,21 @@ describe("api-keys writes: a typed key equal to a stored one", () => {
     const version = await seed(document);
     const listed = (await json("/v8/management/api-keys")).body as Listed;
 
-    const indexes = (listed.families[family] ?? []).map((entry) =>
-      entry.group.keys.map((key) => key.auth_index ?? ""),
-    );
+    const groups = listed.families[family] ?? [];
+    const indexes = groups.map((entry) => entry.group.keys.map((key) => key.auth_index ?? ""));
 
     expect(listed.version).toBe(version);
 
+    // `index` names a listed group: the write sends its id and revision (a new group: revision 0).
+    const { index, ...body } = build(indexes);
+    const target = typeof index === "number" ? groups[index] : undefined;
+
     const reply = await json(
       "/v8/management/api-keys/groups",
-      jsonInit("PUT", { version, ...build(indexes) }),
+      jsonInit("PUT", {
+        ...body,
+        ...(target === undefined ? { revision: 0 } : { id: target.id, revision: target.revision }),
+      }),
     );
 
     return { version, reply, after: await storedSecrets(family) };
@@ -210,18 +228,19 @@ describe("api-keys writes: a typed key equal to a stored one", () => {
       const guess = wrongGuess(scenario.secret);
       const wrong = await put(stored, (indexes) => scenario.body(guess, indexes));
 
-      // `{status, version}` with the version one ahead, whatever the typed key was.
+      // `{status, version, id, revision}` with the version one ahead, whatever the typed key was.
       expect(right.reply.status).toBe(200);
       expect(wrong.reply.status).toBe(200);
       expect(right.reply.headers.get("content-type")).toBe(wrong.reply.headers.get("content-type"));
 
-      expect(JSON.stringify(right.reply.body)).toBe(
-        JSON.stringify({ status: "ok", version: right.version + 1 }),
-      );
+      expect(right.reply.body).toEqual({
+        status: "ok",
+        version: right.version + 1,
+        id: expect.any(String),
+        revision: right.version + 1,
+      });
 
-      expect(withoutVersion(JSON.stringify(right.reply.body), right.version + 1)).toBe(
-        withoutVersion(JSON.stringify(wrong.reply.body), wrong.version + 1),
-      );
+      expect(comparableReply(right.reply)).toBe(comparableReply(wrong.reply));
 
       // The state is what tells them apart (the next read), and no stored key is ever lost.
       expect(right.after).toEqual(scenario.right);
@@ -276,9 +295,7 @@ describe("api-keys writes: a typed key equal to a stored one", () => {
     expect(right.reply.status).toBe(200);
     expect(wrong.reply.status).toBe(200);
 
-    expect(withoutVersion(JSON.stringify(right.reply.body), right.version + 1)).toBe(
-      withoutVersion(JSON.stringify(wrong.reply.body), wrong.version + 1),
-    );
+    expect(comparableReply(right.reply)).toBe(comparableReply(wrong.reply));
 
     // The copy goes (group 1 is left empty and removed); group 0 keeps its key.
     expect(right.after).toEqual([["m0", KEY_A]]);
@@ -395,192 +412,16 @@ describe("api-keys writes: a typed key equal to a stored one", () => {
   });
 
   it("still refuses a group the normaliser drops for its own shape", async () => {
-    const version = await seed(stored);
+    await seed(stored);
 
     const reply = await json(
       "/v8/management/api-keys/groups",
-      jsonInit("PUT", { version, family: "codex", group: { keys: [{ "api-key": KEY_A }] } }),
+      jsonInit("PUT", { revision: 0, family: "codex", group: { keys: [{ "api-key": KEY_A }] } }),
     );
 
     expect(reply.status).toBe(422);
     expect(JSON.stringify(reply.body)).toContain("base-url");
     expect(JSON.stringify(reply.body)).not.toContain("duplicate");
     expect(JSON.stringify(reply.body)).not.toContain(KEY_A);
-  });
-});
-
-describe("raw configuration editor: a typed secret equal to a stored one", () => {
-  const RAW = "/v8/management/settings/config";
-
-  const stored = {
-    "api-keys": {
-      gemini: [
-        { "excluded-models": ["m0"], keys: [{ "api-key": KEY_A }] },
-        { "excluded-models": ["m1"], keys: [{ "api-key": KEY_B }] },
-      ],
-    },
-  };
-
-  const KEY_LINES = /^(\s*)- api-key: .*$/gm;
-
-  /** `yaml` with the key line number `index` (in document order) rewritten by `rewrite(line, indent)`. */
-  const atKey =
-    (index: number, rewrite: (line: string, indent: string) => string) =>
-    (yaml: string): string => {
-      let seen = -1;
-
-      return yaml.replace(KEY_LINES, (line, indent: string) => {
-        seen += 1;
-
-        return seen === index ? rewrite(line, indent) : line;
-      });
-    };
-
-  const typed = (secret: string): string => JSON.stringify(secret);
-
-  /** The editor text with key `index` replaced by a typed key. */
-  const replaced = (index: number, secret: string) =>
-    atKey(index, (_line, indent) => `${indent}- api-key: ${typed(secret)}`);
-
-  /** The editor text with a typed key added after key `index`. */
-  const added = (index: number, secret: string) =>
-    atKey(index, (line, indent) => `${line}\n${indent}- api-key: ${typed(secret)}`);
-
-  const edit = async (
-    document: Record<string, unknown>,
-    yamlOf: (yaml: string) => string,
-    method: "PUT" | "POST" = "PUT",
-  ) => {
-    const version = await seed(document);
-    const view = (await json(RAW)).body as { yaml: string; version: number };
-
-    expect(view.version).toBe(version);
-    expect(KEY_LINES.test(view.yaml)).toBe(true);
-    KEY_LINES.lastIndex = 0;
-    const yaml = yamlOf(view.yaml);
-
-    expect(yaml).not.toBe(view.yaml);
-
-    const reply = await harness.call(
-      method === "PUT" ? RAW : `${RAW}/check`,
-      jsonInit(method, { version, yaml }),
-    );
-
-    const text = await reply.text();
-    const after = await controlPlane().getConfig();
-
-    return {
-      version,
-      status: reply.status,
-      text,
-      stored: after.version,
-      keys: await storedSecrets(),
-    };
-  };
-
-  const compare = (
-    right: Awaited<ReturnType<typeof edit>>,
-    wrong: Awaited<ReturnType<typeof edit>>,
-  ) => {
-    expect(right.status).toBe(200);
-    expect(wrong.status).toBe(200);
-    expect(right.stored).toBe(right.version + 1);
-    expect(wrong.stored).toBe(wrong.version + 1);
-
-    expect(withoutVersion(right.text, right.version + 1)).toBe(
-      withoutVersion(wrong.text, wrong.version + 1),
-    );
-  };
-
-  it("drops a typed copy of a LATER group's key, never the stored one: same reply, version advances", async () => {
-    const right = await edit(stored, replaced(0, KEY_B));
-    await resetControlPlane();
-    const guess = wrongGuess(KEY_B);
-    const wrong = await edit(stored, replaced(0, guess));
-
-    compare(right, wrong);
-    // Group 0 held only the copy: it is gone, and group 1 still holds its stored key.
-    expect(right.keys).toEqual([["m1", KEY_B]]);
-
-    expect(wrong.keys).toEqual([
-      ["m0", guess],
-      ["m1", KEY_B],
-    ]);
-    expect(right.text).not.toContain(KEY_B);
-  });
-
-  it("drops a typed copy of a stored key added beside a kept one", async () => {
-    const right = await edit(stored, added(0, KEY_B));
-    await resetControlPlane();
-    const guess = wrongGuess(KEY_B);
-    const wrong = await edit(stored, added(0, guess));
-
-    compare(right, wrong);
-    expect(right.keys).toEqual([
-      ["m0", KEY_A],
-      ["m1", KEY_B],
-    ]);
-
-    expect(wrong.keys).toEqual([
-      ["m0", KEY_A, guess],
-      ["m1", KEY_B],
-    ]);
-  });
-
-  it("drops a typed copy of an EARLIER group's key", async () => {
-    const right = await edit(stored, added(1, KEY_A));
-    await resetControlPlane();
-    const guess = wrongGuess(KEY_A);
-    const wrong = await edit(stored, added(1, guess));
-
-    compare(right, wrong);
-    expect(right.keys).toEqual([
-      ["m0", KEY_A],
-      ["m1", KEY_B],
-    ]);
-
-    expect(wrong.keys).toEqual([
-      ["m0", KEY_A],
-      ["m1", KEY_B, guess],
-    ]);
-  });
-
-  it("saves a stored key typed in place of its placeholder like a changed one", async () => {
-    const one = { "api-keys": { gemini: [{ keys: [{ "api-key": KEY_A }] }] } };
-    const right = await edit(one, replaced(0, KEY_A));
-    await resetControlPlane();
-    const wrong = await edit(one, replaced(0, wrongGuess(KEY_A)));
-
-    compare(right, wrong);
-    expect(right.keys).toEqual([["-", KEY_A]]);
-  });
-
-  it("checks without storing: the same check reply for a right and a wrong guess", async () => {
-    const right = await edit(stored, added(0, KEY_B), "POST");
-    await resetControlPlane();
-    const wrong = await edit(stored, added(0, wrongGuess(KEY_B)), "POST");
-
-    expect(right.status).toBe(200);
-    expect(right.stored).toBe(right.version);
-    expect(right.text).toBe(wrong.text);
-    expect(right.keys).toEqual([
-      ["m0", KEY_A],
-      ["m1", KEY_B],
-    ]);
-  });
-
-  it("still writes nothing when the editor text is saved as it was read", async () => {
-    const version = await seed(stored);
-    const view = (await json(RAW)).body as { yaml: string };
-    const reply = await harness.call(RAW, jsonInit("PUT", { version, yaml: view.yaml }));
-    const text = await reply.text();
-
-    expect(reply.status).toBe(200);
-    expect((await controlPlane().getConfig()).version).toBe(version);
-    expect(text).toContain(`"version":${version}`);
-    expect(await storedSecrets()).toEqual([
-      ["m0", KEY_A],
-      ["m1", KEY_B],
-    ]);
   });
 });

@@ -15,38 +15,49 @@ M=https://proxy.example.com/v8/management
 H=(-H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
 ```
 
-Alternatively use the control panel (`/`) as an admin user: the raw configuration editor (_Settings → Raw
-configuration_, `/settings/config`) takes a pasted `config.yaml`, and _Connect account_ uploads auth files.
+The unscoped address is the `global` org's. To migrate into another org (ADR 0021), use
+`M=https://proxy.example.com/v8/management/orgs/<slug>`; every command below works the same there.
+
+Alternatively use the control panel (`/`) as an admin user: _Connect account_ uploads auth files, and Settings and the API keys
+page edit what the import stored. The panel has no UI for the config import yet, so that step is `curl`.
 
 ## 1. Config
 
-Remove what the Workers port ignores, then upload the file as-is:
+Import your Go `config.yaml` as-is (the keys the Workers port ignores are named in the answer and not stored):
 
 ```bash
-curl "${H[@]}" -X PUT "$M/config.yaml" -H 'content-type: application/yaml' --data-binary @config.yaml
-# {"status":"ok","config-version":8}
-curl "${H[@]}" "$M/config.yaml"                                       # sparse export of what was stored, secrets masked
+curl "${H[@]}" -X POST "$M/settings/import" -H 'content-type: application/yaml' --data-binary @config.yaml
+# {"status":"ok","version":1,"not_applied":["requests.proxy-url","access.api-keys"]}
 ```
 
+- The import **replaces every config entry of the org** with the document (settings, API key groups and keys, model
+  aliases and exclusions, payload rules): what the document does not set goes back to its default. It is the only
+  whole-configuration write, and the body is at most 512 KiB. Run it once for the first deployment; afterwards edit single
+  settings, key groups and model rules in the panel, or script `PATCH /settings`.
+- There is no export route and no route that reads secrets back. Keep your `config.yaml` as the source of truth (or as the
+  file copy) and import it again to reset everything to it.
 - Legacy top-level keys (`claude-api-key`, `codex-api-key`, `gemini-api-key`, `openai-compatibility`, `request-retry`, …) are
   migrated to the v8 layout on import; unknown or inapplicable keys are dropped. A malformed document answers 422
-  `invalid_config` with a message; nothing is stored.
-- **Secrets in `config.yaml`** (provider API keys) are stored in the `ControlPlane` Durable Object, not in your repo.
-  They are never read back: every `GET /config*` shows them as `[redacted#n]…abcd` (numbered like the raw editor), and a
-  write that contains such a placeholder answers 422 `masked_value` (`masked_value_outside_secret_field` outside a
-  secret field) with its `path` (nothing stored). The path is that of the v8 layout: a placeholder in a legacy file
-  (`claude-api-key: [{api-key: …}]`) is reported where the import moves it (`api-keys.claude[0].keys[0].api-key`). So
-  import the original file, not an export; edit secrets afterwards in the raw editor (`PUT /settings/config`), which
-  restores them.
-- Management writes need a `content-type` (`application/json`; `application/yaml` for `config.yaml`; multipart for uploads):
+  `invalid_config` with a message (`line` and `column` for invalid YAML, `path` for a value that does not fit the schema);
+  nothing is stored.
+- **Secrets in `config.yaml`** (provider API keys) are stored in the `ControlPlane` Durable Object, not in your repo. Every
+  setting, API key group, API key, model alias or exclusion list and payload rule is stored as an entry of its own with a
+  revision, so later edits to different entries never conflict.
+- **Existing deployments** that stored a config document before entries (ADR 0025) need no step: the first time the
+  `ControlPlane` starts it turns the stored document into entries in one transaction (same configuration, same credential
+  ids and so the same `auth_index` values, so panel links and usage history keep working). The old document row is kept.
+- `PATCH $M/settings` takes `{"revisions": {…}, "patch": {…}}` for scripted edits of single settings: `revisions` names the
+  revision of each setting you change (read it from `GET $M/settings`; absent means not stored, 0), and a stale one answers
+  409 `conflict`. API key groups and model rules have their own routes (see [ARCHITECTURE.md](ARCHITECTURE.md) "Management API").
+- Management writes need a `content-type` (`application/json`; `application/yaml` for the import; multipart for uploads):
   curl's default `application/x-www-form-urlencoded` answers 415 (cross-site request forgery protection, see ACCESS.md).
 - Dropped on import (no effect on Workers): `host`/`port`/`tls`, `remote-management.*` (Access replaces it), `auth-dir`, `pprof`,
   logging to files, `wire-policy`/TLS fingerprint, plugins, Home, Postgres/git/object store settings.
 
 ### Not applied on Workers
 
-These keys are accepted and kept in the stored document (so a round trip through the panel does not lose them) but have no
-effect. Storing a config that sets any of them logs a warning naming the keys (`config keys not applied on Workers`):
+These keys are accepted by the import but have no effect on Workers, so they are **not stored**: the import answer lists them
+under `not_applied`, and nothing else shows them:
 
 | Key                                                          | Why                                                                                                            |
 | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
@@ -63,8 +74,6 @@ effect. Storing a config that sets any of them logs a warning naming the keys (`
 
 - The client `api-keys:` list is **not enforced**: every client must now present an Access identity ([CLIENTS.md](CLIENTS.md)).
   Give each client its own service token instead of a shared key.
-- `PATCH $M/config` and `/config/<path>` allow incremental edits for scripts (plain new secrets are stored, placeholders
-  refused as above). The panel's raw configuration editor is `/settings/config`.
 
 ### OpenCode Zen / OpenCode Go
 

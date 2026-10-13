@@ -14,8 +14,9 @@
  * `X-CPA-Support-Plugin` response headers are not sent. OAuth
  * login (`/oauth/*`) is in `oauth-routes.ts`; the batch account actions (`/credentials/batch`) in
  * `credentials-batch.ts`; usage (`/observability/usage/*`) is in `usage-routes.ts`; the
- * per-model routing view (`/routing/models`) in `routing-models.ts`; the Settings page (`/settings`) in
- * `settings-routes.ts` and its raw configuration editor (`/settings/config`) in `settings-raw-routes.ts`; Claude reset
+ * per-model routing view (`/routing/models`) in `routing-models.ts` and its channel rule edits (`/model-rules/*`) in
+ * `model-rules-routes.ts`; the Settings page (`/settings`) and the config import (`/settings/import`) in
+ * `settings-routes.ts`; Claude reset
  * grants (`/credentials/reset-grants`) in `reset-grant-routes.ts`; the model catalog's status and on-demand refresh (`/models/catalog`) in
  * `catalog-routes.ts`.
  */
@@ -36,15 +37,14 @@ import { ModelRegistryLive } from "../registry/live.ts";
 import type { ModelRegistry } from "../registry/service.ts";
 import { apiKeyProbeHandler, apiKeysRoutes } from "./api-keys-routes.ts";
 import { catalogRefreshHandler, catalogStatusHandler } from "./catalog-routes.ts";
-import { configRoutes } from "./config-routes.ts";
 import { credentialsBatchHandler } from "./credentials-batch.ts";
 import { credentialModelsHandler, credentialRoutes } from "./credentials-routes.ts";
 import { oauthRoutes } from "./oauth-routes.ts";
 import { orgRoutes } from "./org-routes.ts";
 import { quotaCheckHandler, quotaSweepHandler } from "./quota-routes.ts";
 import { claimResetGrantHandler, resetGrantsHandler } from "./reset-grant-routes.ts";
+import { modelRuleRoutes } from "./model-rules-routes.ts";
 import { routingModelsHandler } from "./routing-models.ts";
-import { settingsRawRoutes } from "./settings-raw-routes.ts";
 import { settingsRoutes } from "./settings-routes.ts";
 import {
   LEGACY_PANEL_REDIRECT,
@@ -75,10 +75,9 @@ export const ManagementRoutes = HttpRouter.addAll(
     ) => Effect.provide(handler, services);
 
     return [
-      ...configRoutes,
+      ...modelRuleRoutes,
       ...apiKeysRoutes,
       ...settingsRoutes,
-      ...settingsRawRoutes,
       ...credentialRoutes,
       ...usageRoutes,
       ...oauthRoutes,

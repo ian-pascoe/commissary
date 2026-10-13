@@ -52,7 +52,7 @@ describe("control panel in the application", () => {
     expect(list.status).toBe(200);
     const body = (await list.json()) as { files: Array<{ name: string; type: string }> };
     expect(body.files).toMatchObject([{ name: "claude-a.json", type: "claude" }]);
-    expect((await get("/v8/management/config")).status).toBe(200);
+    expect((await get("/v8/management/settings")).status).toBe(200);
   });
 
   it("does not apply the dev bypass to non-loopback hosts", async () => {

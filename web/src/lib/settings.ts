@@ -3,13 +3,15 @@
 // and the rebase of a draft onto a newer view. Pure: no DOM, tested in test/web-settings.test.ts.
 //
 // A section's draft is a delta: the inputs the operator touched, by dotted config path. Everything else shows the
-// view. A save sends only the leaves that differ from the view, `null` for a value equal to the default (the key is
-// removed and the default applies). When the config changed meanwhile (409), the same delta is re-applied to a fresh
-// read once, unless a field it changes moved on the server; then the page lists those fields.
+// view. A save sends only the leaves that differ from the view, `null` for a value equal to the default (the entry is
+// removed and the default applies), with the revision of each of those settings (every setting is a config entry of
+// its own, ADR 0025). When one of them changed meanwhile (409), the same delta is re-applied to a fresh read once,
+// unless a field it changes moved on the server; then the page lists those fields.
 import { Effect, Predicate, Schema } from "effect";
 import { ManagementError } from "#contract/errors.ts";
 import {
   type DisableImageGeneration,
+  type SaveSettings,
   type SettingsPatch as SettingsPatchType,
   SettingsPatch,
   type SettingsValues,
@@ -602,14 +604,11 @@ export const patchOf = (
   return decodePatch(tree);
 };
 
-/**
- * The patch a draft becomes against `view`: each changed leaf, `null` when it goes back to the default. `undefined`
- * when nothing changed or an input is invalid (`draftErrors` says what).
- */
-export const draftPatch = (
+/** Each changed leaf of a draft, `null` when it goes back to the default; `undefined` when an input is invalid. */
+const draftWrites = (
   edits: Edits,
   view: Pick<SettingsView, "values" | "defaults">,
-): SettingsPatchType | undefined => {
+): ReadonlyArray<readonly [string, SettingValue]> | undefined => {
   const writes: Array<readonly [string, SettingValue]> = [];
 
   for (const spec of changedFields(edits, view.values)) {
@@ -624,7 +623,35 @@ export const draftPatch = (
     writes.push([spec.path, sameValue(spec, parsed.value, fallback) ? null : parsed.value]);
   }
 
-  return writes.length === 0 ? undefined : patchOf(writes);
+  return writes;
+};
+
+/**
+ * The patch a draft becomes against `view`: each changed leaf, `null` when it goes back to the default. `undefined`
+ * when nothing changed or an input is invalid (`draftErrors` says what).
+ */
+export const draftPatch = (
+  edits: Edits,
+  view: Pick<SettingsView, "values" | "defaults">,
+): SettingsPatchType | undefined => {
+  const writes = draftWrites(edits, view);
+
+  return writes === undefined || writes.length === 0 ? undefined : patchOf(writes);
+};
+
+/**
+ * The save a draft becomes against `view`: its patch and, for every setting the patch changes, the revision `view`
+ * holds (0 for a setting that is not stored). `undefined` when nothing changed or an input is invalid.
+ */
+export const draftSave = (edits: Edits, view: SettingsView): SaveSettings | undefined => {
+  const writes = draftWrites(edits, view);
+
+  if (writes === undefined || writes.length === 0) return undefined;
+
+  return {
+    revisions: Object.fromEntries(writes.map(([path]) => [path, view.revisions[path] ?? 0])),
+    patch: patchOf(writes),
+  };
 };
 
 export interface Rebased {
@@ -670,16 +697,13 @@ export const rebaseDraft = (
 /** How a section save reads the latest view and sends one write. */
 export interface SettingsIo<E, R> {
   readonly read: Effect.Effect<SettingsView, E, R>;
-  readonly write: (
-    patch: SettingsPatchType,
-    version: number,
-  ) => Effect.Effect<{ readonly version: number }, E, R>;
+  readonly write: (save: SaveSettings) => Effect.Effect<{ readonly version: number }, E, R>;
 }
 
 export type SaveOutcome =
   | { readonly kind: "saved"; readonly version: number }
   | { readonly kind: "unchanged" }
-  /** The config changed meanwhile, and so did fields this draft changes: nothing was written. */
+  /** Settings this draft changes changed meanwhile, to other values: nothing was written. */
   | {
       readonly kind: "moved";
       readonly fields: ReadonlyArray<FieldSpec>;
@@ -690,9 +714,9 @@ const isConflict = <E>(error: E | ManagementError): boolean =>
   error instanceof ManagementError && error.error === "conflict";
 
 /**
- * Saves a section's draft against the view it was made on. On 409 (another write landed first) it re-reads the view
- * and, when none of the draft's fields moved there, re-applies the same delta once; a second 409 fails with
- * `conflict`.
+ * Saves a section's draft against the view it was made on, naming the revision of each setting it changes. On 409
+ * (one of those settings changed first) it re-reads the view and, when none of the draft's fields moved there,
+ * re-applies the same delta once with the fresh revisions; a second 409 fails with `conflict`.
  */
 export const saveDraft = <E, R>(
   edits: Edits,
@@ -700,12 +724,12 @@ export const saveDraft = <E, R>(
   io: SettingsIo<E, R>,
 ): Effect.Effect<SaveOutcome, E | ManagementError, R> => {
   const attempt = (draft: Edits, view: SettingsView) => {
-    const patch = draftPatch(draft, view);
+    const save = draftSave(draft, view);
 
-    if (patch === undefined) return Effect.succeed<SaveOutcome>({ kind: "unchanged" });
+    if (save === undefined) return Effect.succeed<SaveOutcome>({ kind: "unchanged" });
 
     return io
-      .write(patch, view.version)
+      .write(save)
       .pipe(Effect.map((saved): SaveOutcome => ({ kind: "saved", version: saved.version })));
   };
 
@@ -727,40 +751,11 @@ export const saveDraft = <E, R>(
   );
 };
 
-/**
- * The patch removing a not-applied key (`observability.logs.debug`), or `undefined` for a key inside a list
- * (`api-keys.claude[].keys[]....`), which is edited where the list lives.
- */
-export const removalPatch = (key: string): SettingsPatchType | undefined =>
-  key.includes("[") ? undefined : patchOf([[key, null]]);
-
-/** Removes a not-applied key; on 409 retried once on a fresh read, unless the key is gone there already. */
-export const removeNotApplied = <E, R>(
-  key: string,
-  base: SettingsView,
-  io: SettingsIo<E, R>,
-): Effect.Effect<"removed" | "gone", E | ManagementError, R> => {
-  const patch = removalPatch(key);
-
-  if (patch === undefined) return Effect.fail(new ManagementError({ error: "not_a_setting" }));
-
-  return io.write(patch, base.version).pipe(
-    Effect.as("removed" as const),
-    Effect.catchIf(isConflict, () =>
-      Effect.flatMap(io.read, (latest) =>
-        latest.not_applied.some((entry) => entry.key === key)
-          ? io.write(patch, latest.version).pipe(Effect.as("removed" as const))
-          : Effect.succeed("gone" as const),
-      ),
-    ),
-  );
-};
-
 /** What a failed save tells the operator, for the problems that are not about one field. */
 export const saveProblem = (error: string | undefined, message: string): string => {
   switch (error) {
     case "conflict":
-      return "The configuration changed again while saving. Reload to see the current settings; your edits stay in the form until you do.";
+      return "These settings changed elsewhere while saving. Reload to see the current settings; your edits stay in the form until you do.";
     case "would_remove_your_admin_access":
       return "This would remove your own admin access. Keep your address in the list, or ask a platform admin to make the change.";
     default:

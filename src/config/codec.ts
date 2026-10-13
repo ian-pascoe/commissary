@@ -1,9 +1,9 @@
 /**
- * Config documents <-> `Config`: YAML/JSON import, validation, normalisation and the canonical/sparse JSON documents
- * the management API exports (`config-routes.ts`, `settings-raw.ts` render the YAML).
+ * Config documents <-> `Config`: YAML/JSON import, validation, normalisation and the canonical/sparse JSON documents.
  *
  * Go source: internal/config/config_load.go (LoadConfig) and config_v8.go (YAML boundary). Unlike Go, no file is
- * ever rewritten: the canonical form is the JSON document stored in the ControlPlane Durable Object.
+ * ever rewritten: the config is stored as config entries in the ControlPlane Durable Object (`store.ts`), which
+ * assemble a canonical JSON document.
  *
  * Error messages never quote a value of the document (Workers addition): a YAML error is a fixed sentence per error
  * code (`yaml-message.ts`) with its line and column, a schema issue its expectation and path, never the offending

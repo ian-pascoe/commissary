@@ -3,7 +3,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Exit, Predicate, Schema } from "effect";
 import { ManagementError } from "#contract/errors.ts";
-import { type SettingsPatch, SettingsValues, type SettingsView } from "#contract/settings.ts";
+import { type SaveSettings, SettingsValues, type SettingsView } from "#contract/settings.ts";
 import {
   changedFields,
   draftErrors,
@@ -19,8 +19,7 @@ import {
   parseGoDuration,
   parseInput,
   rebaseDraft,
-  removalPatch,
-  removeNotApplied,
+  draftSave,
   saveDraft,
   sectionFields,
   type FieldSpec,
@@ -116,10 +115,10 @@ const values = (...writes: ReadonlyArray<readonly [string, unknown]>): SettingsV
 
 const view = (overrides: Partial<SettingsView> = {}): SettingsView => ({
   version: 7,
+  revisions: {},
   updated_at: "2026-10-11T11:00:00Z",
   values: DEFAULTS,
   defaults: DEFAULTS,
-  not_applied: [],
   env_admins: { emails: ["owner@example.com"], service_tokens: [] },
   payload: { default: 0, "default-raw": 0, override: 0, "override-raw": 0, filter: 0 },
   prefixed_credentials: 0,
@@ -369,12 +368,39 @@ describe("drafts", () => {
     expect(isDefault(ttl, { [ttl.path]: "x" }, DEFAULTS, DEFAULTS)).toBe(false);
   });
 
-  it("builds a not-applied removal, except for keys inside lists", () => {
-    expect(removalPatch("observability.logs.debug")).toEqual({
-      observability: { logs: { debug: null } },
+  it("sends the revision of each changed setting, 0 for one that is not stored", () => {
+    const stored = view({
+      values: values(["routing.session-affinity-ttl", "2h"]),
+      revisions: { "routing.session-affinity-ttl": 4, "routing.strategy": 9 },
     });
-    expect(removalPatch("requests.proxy-url")).toEqual({ requests: { "proxy-url": null } });
-    expect(removalPatch("api-keys.claude[].keys[].experimental-cch-signing")).toBeUndefined();
+
+    expect(
+      draftSave(
+        {
+          "routing.session-affinity-ttl": "30m",
+          "routing.session-affinity": true,
+          // Not a change: its revision is not sent.
+          "routing.strategy": "round-robin",
+        },
+        stored,
+      ),
+    ).toEqual({
+      revisions: { "routing.session-affinity-ttl": 4, "routing.session-affinity": 0 },
+      patch: { routing: { "session-affinity-ttl": "30m", "session-affinity": true } },
+    });
+  });
+
+  it("names a setting that goes back to its default with null and its stored revision", () => {
+    const stored = view({
+      values: values(["routing.strategy", "fill-first"]),
+      revisions: { "routing.strategy": 3 },
+    });
+
+    expect(draftSave({ "routing.strategy": "round-robin" }, stored)).toEqual({
+      revisions: { "routing.strategy": 3 },
+      patch: { routing: { strategy: null } },
+    });
+    expect(draftSave({}, stored)).toBeUndefined();
   });
 });
 
@@ -416,38 +442,36 @@ describe("rebase", () => {
 });
 
 describe("saving", () => {
-  interface Call {
-    readonly patch: SettingsPatch;
-    readonly version: number;
-  }
-
   const io = (latest: SettingsView, answers: ReadonlyArray<"ok" | "conflict">) => {
-    const calls: Call[] = [];
+    const calls: SaveSettings[] = [];
     let turn = 0;
 
     return {
       calls,
       io: {
         read: Effect.succeed(latest),
-        write: (patch: SettingsPatch, version: number) => {
-          calls.push({ patch, version });
+        write: (save: SaveSettings) => {
+          calls.push(save);
           const answer = answers[turn++] ?? "ok";
 
           return answer === "ok"
-            ? Effect.succeed({ version: version + 1 })
+            ? Effect.succeed({ version: 7 + calls.length })
             : Effect.fail(new ManagementError({ error: "conflict" }));
         },
       },
     };
   };
 
-  it.effect("writes the delta with the view's version", () =>
+  it.effect("writes the delta with the revision of each setting it changes", () =>
     Effect.gen(function* () {
-      const { calls, io: fake } = io(view(), ["ok"]);
-      const outcome = yield* saveDraft({ "routing.strategy": "fill-first" }, view(), fake);
+      const base = view({ revisions: { "routing.strategy": 2, "routing.session-affinity": 5 } });
+      const { calls, io: fake } = io(base, ["ok"]);
+      const outcome = yield* saveDraft({ "routing.strategy": "fill-first" }, base, fake);
 
       expect(outcome).toEqual({ kind: "saved", version: 8 });
-      expect(calls).toEqual([{ patch: { routing: { strategy: "fill-first" } }, version: 7 }]);
+      expect(calls).toEqual([
+        { revisions: { "routing.strategy": 2 }, patch: { routing: { strategy: "fill-first" } } },
+      ]);
     }),
   );
 
@@ -462,18 +486,27 @@ describe("saving", () => {
     }),
   );
 
-  it.effect("re-applies the delta once to a fresh read after a 409", () =>
+  it.effect("re-reads after a 409 and re-applies the delta once with the fresh revisions", () =>
     Effect.gen(function* () {
       const latest = view({
         version: 9,
+        revisions: { "routing.strategy": 6, "routing.session-affinity": 1 },
         values: values(["routing.session-affinity", true]),
       });
 
       const { calls, io: fake } = io(latest, ["conflict", "ok"]);
-      const outcome = yield* saveDraft({ "routing.strategy": "fill-first" }, view(), fake);
 
-      expect(outcome).toEqual({ kind: "saved", version: 10 });
-      expect(calls.map((call) => call.version)).toEqual([7, 9]);
+      const outcome = yield* saveDraft(
+        { "routing.strategy": "fill-first" },
+        view({ revisions: { "routing.strategy": 2 } }),
+        fake,
+      );
+
+      expect(outcome).toEqual({ kind: "saved", version: 9 });
+      expect(calls.map((call) => call.revisions)).toEqual([
+        { "routing.strategy": 2 },
+        { "routing.strategy": 6 },
+      ]);
       expect(calls[1]?.patch).toEqual({ routing: { strategy: "fill-first" } });
     }),
   );
@@ -492,6 +525,8 @@ describe("saving", () => {
       expect(outcome.kind === "moved" ? outcome.fields.map((entry) => entry.path) : []).toEqual([
         "routing.strategy",
       ]);
+      // The fresh view comes back with the outcome.
+      expect(outcome.kind === "moved" ? outcome.view : undefined).toBe(latest);
       expect(moved.calls).toHaveLength(1);
 
       const twice = io(view({ version: 9 }), ["conflict", "conflict"]);
@@ -502,23 +537,6 @@ describe("saving", () => {
 
       expect(Exit.isFailure(exit)).toBe(true);
       expect(twice.calls).toHaveLength(2);
-    }),
-  );
-
-  it.effect("removes a not-applied key, retrying once unless it is gone", () =>
-    Effect.gen(function* () {
-      const notApplied = [{ key: "observability.logs.debug", reason: "No debug log files." }];
-      const stillSet = io(view({ version: 9, not_applied: notApplied }), ["conflict", "ok"]);
-
-      expect(yield* removeNotApplied("observability.logs.debug", view(), stillSet.io)).toBe(
-        "removed",
-      );
-      expect(stillSet.calls.map((call) => call.version)).toEqual([7, 9]);
-
-      const gone = io(view({ version: 9 }), ["conflict"]);
-
-      expect(yield* removeNotApplied("observability.logs.debug", view(), gone.io)).toBe("gone");
-      expect(gone.calls).toHaveLength(1);
     }),
   );
 });

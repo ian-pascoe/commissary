@@ -2,7 +2,7 @@ export * from "./accessors.ts";
 
 export { decodeConfig, encodeConfig, parseConfigYaml } from "./codec.ts";
 
-export { ConfigStoreError, ConfigValidationError, ConfigVersionConflict } from "./errors.ts";
+export { ConfigStoreError, ConfigValidationError } from "./errors.ts";
 
 export { normalizeConfig } from "./normalize.ts";
 

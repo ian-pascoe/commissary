@@ -2,6 +2,9 @@
 // `/v8/management/orgs/<slug>/...`, and everyone else keeps to `global`. Through the router with the real ControlPlanes
 // and a Platform registry of its own (`isolatedPlatform`).
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import type { ApiKeysList } from "../src/management/contract/api-keys.ts";
+import type { RoutingModels } from "../src/management/contract/routing.ts";
+import type { SettingsView } from "../src/management/contract/settings.ts";
 import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 import {
   claudeFile,
@@ -47,8 +50,9 @@ const patch = (slug: string, body: Payload) =>
   harness.json(`/v8/management/orgs/${slug}`, jsonInit("PATCH", body));
 
 const seedCarol = async () => {
-  const stored = await controlPlane().putConfig(
+  const stored = await controlPlane().importConfig(
     JSON.stringify({ access: { "admin-emails": [CAROL] } }),
+    "test",
   );
 
   expect(stored.ok).toBe(true);
@@ -161,8 +165,8 @@ describe("renaming an org", () => {
     expect(renamed.body).toMatchObject({ id: made.id, slug: "after", name: "After" });
 
     // The old address is gone, the new one reaches the same org.
-    expect((await harness.json("/v8/management/orgs/before/config")).status).toBe(404);
-    expect((await harness.json("/v8/management/orgs/after/config")).status).toBe(200);
+    expect((await harness.json("/v8/management/orgs/before/settings")).status).toBe(404);
+    expect((await harness.json("/v8/management/orgs/after/settings")).status).toBe(200);
     expect((await patch("after", { name: "Only the name" })).body).toMatchObject({
       id: made.id,
       slug: "after",
@@ -172,8 +176,8 @@ describe("renaming an org", () => {
 
   it("can rename the org global's slug, which only changes its address", async () => {
     expect((await patch("default", { slug: "home" })).status).toBe(200);
-    expect((await harness.json("/v8/management/orgs/default/config")).status).toBe(404);
-    expect((await harness.json("/v8/management/orgs/home/config")).status).toBe(200);
+    expect((await harness.json("/v8/management/orgs/default/settings")).status).toBe(404);
+    expect((await harness.json("/v8/management/orgs/home/settings")).status).toBe(200);
     expect((await patch("home", { slug: "default" })).status).toBe(200);
   });
 
@@ -209,7 +213,7 @@ describe("who may manage the list of orgs", () => {
     const carol = await asCarol();
 
     // She is an admin of global ...
-    expect((await harness.json("/v8/management/config", carol)).status).toBe(200);
+    expect((await harness.json("/v8/management/settings", carol)).status).toBe(200);
 
     // ... but not of the platform.
     const forbidden = { status: 403, body: { error: "platform_admin_required" } };
@@ -304,10 +308,7 @@ describe("GET /me", () => {
 
 describe("org-scoped management routes", () => {
   const upload = (name: string) =>
-    harness.json(
-      `/v8/management/credentials?name=${name}`,
-      jsonInit("POST", claudeFile() as never),
-    );
+    harness.json(`/v8/management/credentials?name=${name}`, jsonInit("POST", claudeFile()));
 
   const credentialNames = async (prefix: string): Promise<ReadonlyArray<string>> => {
     const reply = await harness.json(`${prefix}/credentials`);
@@ -346,25 +347,83 @@ describe("org-scoped management routes", () => {
     expect(await credentialNames("/v8/management/orgs/scoped-acme")).toEqual(["claude-acme.json"]);
   });
 
-  it("keep each org's config apart, including path-addressed reads", async () => {
+  it("keep each org's config entries apart on every config route", async () => {
     await create({ slug: "scoped-cfg", name: "Cfg" });
+    const ORG = "/v8/management/orgs/scoped-cfg";
 
+    const strategy = async (base: string) =>
+      ((await harness.json(`${base}/settings`)).body as SettingsView).values.routing.strategy;
+
+    // Settings, at the org's own revisions.
+    const saved = await harness.json(
+      `${ORG}/settings`,
+      jsonInit("PATCH", { revisions: {}, patch: { routing: { strategy: "fill-first" } } }),
+    );
+
+    expect(saved.status).toBe(200);
+    expect(await strategy(ORG)).toBe("fill-first");
+    expect(await strategy("/v8/management")).toBe("round-robin");
+    // Duplicate slashes and case in the fixed prefix reach the same org and the same path.
+    expect(await strategy("//V8/Management//Orgs/scoped-cfg/")).toBe("fill-first");
+
+    // A key group, by id and revision.
+    const written = await harness.json(
+      `${ORG}/api-keys/groups`,
+      jsonInit("PUT", {
+        family: "claude",
+        revision: 0,
+        group: { keys: [{ "api-key": "sk-org" }] },
+      }),
+    );
+
+    expect(written.status).toBe(200);
+
+    const groups = async (base: string) =>
+      ((await harness.json(`${base}/api-keys`)).body as ApiKeysList).families.claude;
+
+    expect(await groups("/v8/management")).toEqual([]);
+    const [group] = await groups(ORG);
+
+    expect(group?.id).toBe((written.body as { id: string }).id);
     expect(
       (
-        await harness.json("/v8/management/orgs/scoped-cfg/config/routing/strategy", {
-          ...jsonInit("PUT", "fill-first"),
-        })
+        await harness.json(
+          `${ORG}/api-keys/groups`,
+          jsonInit("DELETE", {
+            family: "claude",
+            id: group?.id ?? "",
+            revision: group?.revision ?? 0,
+          }),
+        )
       ).status,
     ).toBe(200);
 
-    expect(
-      (await harness.json("/v8/management/orgs/scoped-cfg/config/routing/strategy")).body,
-    ).toBe("fill-first");
-    expect((await harness.json("/v8/management/config/routing/strategy")).body).toBe("round-robin");
-    // Duplicate slashes and case in the fixed prefix reach the same org and the same path.
-    expect(
-      (await harness.json("//V8/Management//Orgs/scoped-cfg//config/routing/strategy")).body,
-    ).toBe("fill-first");
+    // A channel's model rules, at the revision in If-Match.
+    const rule = await harness.json(`${ORG}/model-rules/exclusions/claude`, {
+      method: "PUT",
+      headers: { "content-type": "application/json", "if-match": "0" },
+      body: JSON.stringify(["claude-opus-*"]),
+    });
+
+    expect(rule.status).toBe(200);
+
+    const excluded = async (base: string) =>
+      ((await harness.json(`${base}/routing/models`)).body as RoutingModels).excluded;
+
+    expect(await excluded(ORG)).toEqual({ claude: ["claude-opus-*"] });
+    expect(await excluded("/v8/management")).toEqual({});
+
+    // The import replaces the org's entries only.
+    const imported = await harness.json(`${ORG}/settings/import`, {
+      method: "POST",
+      headers: { "content-type": "application/yaml" },
+      body: "routing:\n  strategy: weighted-round-robin\n",
+    });
+
+    expect(imported.status).toBe(200);
+    expect(await strategy(ORG)).toBe("weighted-round-robin");
+    expect(await excluded(ORG)).toEqual({});
+    expect(await strategy("/v8/management")).toBe("round-robin");
   });
 
   it("keep the query of the request", async () => {
@@ -387,30 +446,31 @@ describe("org-scoped management routes", () => {
     await create({ slug: "scoped-closed", name: "Closed" });
     const carol = await asCarol();
 
-    expect((await harness.json("/v8/management/orgs/default/config", carol)).status).toBe(200);
-    expect((await harness.json("/v8/management/orgs/scoped-closed/config", carol)).status).toBe(
+    expect((await harness.json("/v8/management/orgs/default/settings", carol)).status).toBe(200);
+    expect((await harness.json("/v8/management/orgs/scoped-closed/settings", carol)).status).toBe(
       403,
     );
     // An org that does not exist answers like one she may not manage.
-    expect((await harness.json("/v8/management/orgs/ghost/config", carol)).status).toBe(403);
+    expect((await harness.json("/v8/management/orgs/ghost/settings", carol)).status).toBe(403);
   });
 
   it("keep the guards of the cross-site rules", async () => {
     await create({ slug: "scoped-csrf", name: "Csrf" });
 
-    const forged = await harness.json("/v8/management/orgs/scoped-csrf/config.yaml", {
-      method: "PUT",
+    const forged = await harness.json("/v8/management/orgs/scoped-csrf/settings/import", {
+      method: "POST",
       headers: { origin: "https://evil.test", "content-type": "application/yaml" },
       body: "routing:\n  strategy: fill-first\n",
     });
 
     expect(forged.status).toBe(403);
     expect(
-      (await harness.json("/v8/management/orgs/scoped-csrf/config/routing/strategy")).body,
+      ((await harness.json("/v8/management/orgs/scoped-csrf/settings")).body as SettingsView).values
+        .routing.strategy,
     ).toBe("round-robin");
 
-    const wrongType = await harness.json("/v8/management/orgs/scoped-csrf/config.yaml", {
-      method: "PUT",
+    const wrongType = await harness.json("/v8/management/orgs/scoped-csrf/settings/import", {
+      method: "POST",
       headers: { "content-type": "text/plain" },
       body: "routing:\n  strategy: fill-first\n",
     });

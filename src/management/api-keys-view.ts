@@ -8,7 +8,8 @@
  * previews, header values whose names look secret are masked, `proxy-url` and `experimental-cch-signing` are left
  * out (a warning says they exist), and error messages are scrubbed of the key and of token-shaped text. Keys and their
  * runtime are identified by the keyed `auth_index` only: the credential id (`claude:apikey:<sha256 prefix>`) is an
- * unsalted hash of the key and its settings, so it is never sent.
+ * unsalted hash of the key and its settings, so it is never sent (nor the key's entry id, which is the credential id).
+ * A group is identified by its entry id and carries its revision, which a write of the group names (ADR 0025).
  */
 import type { ApiKeyGroup, Config, OpenAICompatGroup } from "../config/schema.ts";
 import { maskHeaders, maskSecret } from "../credentials/summary.ts";
@@ -22,7 +23,7 @@ import { XAI_DEFAULT_API_BASE_URL } from "../executor/xai/credentials.ts";
 import { OPENCODE_SPECS } from "../executor/opencode/providers.ts";
 import type { JsonObject } from "../json/index.ts";
 import type { AuthIndexer } from "./auth-index.ts";
-import { configKeyIds } from "./config-document.ts";
+import { configKeyIds } from "../credentials/key-ids.ts";
 import { cooldownSnapshot, recentRequestBuckets } from "./credential-entry.ts";
 import type { ApiKeyFamily } from "./contract/api-keys.ts";
 
@@ -101,6 +102,8 @@ const signingWarning = (count: number): string =>
 
 interface Lookup {
   readonly ids: ReturnType<typeof configKeyIds>;
+  /** Key group revisions by entry id. */
+  readonly revisions: Readonly<Record<string, number>>;
   readonly runtime: ReadonlyMap<string, RefreshTarget>;
   readonly now: number;
   readonly authIndex: AuthIndexer;
@@ -112,6 +115,13 @@ const runtimeFor = (lookup: Lookup, id: string | undefined): JsonObject | null =
   return target === undefined ? null : runtimeOf(target, lookup.now, lookup.authIndex);
 };
 
+/** A group's entry id and revision (every stored group has an id; the revision of one not stored is 0). */
+const entryOf = (id: string | undefined, lookup: Lookup): JsonObject => ({
+  id: id ?? "",
+  revision:
+    id !== undefined && Object.hasOwn(lookup.revisions, id) ? (lookup.revisions[id] ?? 0) : 0,
+});
+
 const groupView = (
   family: Exclude<ApiKeyFamily, "openai-compatibility">,
   group: ApiKeyGroup,
@@ -119,12 +129,13 @@ const groupView = (
   lookup: Lookup,
 ): JsonObject => {
   const ids = lookup.ids[family][index]?.keys ?? [];
-  const { keys, headers, "proxy-url": groupProxy, ...rest } = group;
+  const { id: groupId, keys, headers, "proxy-url": groupProxy, ...rest } = group;
   let signing = 0;
   let proxy = hasText(groupProxy);
 
   const keyViews = keys.map((entry, keyIndex): JsonObject => {
     const {
+      id: _entryId,
       "api-key": apiKey,
       "proxy-url": keyProxy,
       "experimental-cch-signing": cch,
@@ -149,6 +160,7 @@ const groupView = (
   });
 
   return {
+    ...entryOf(groupId, lookup),
     index,
     group: {
       ...plainObject(rest),
@@ -162,7 +174,7 @@ const groupView = (
 
 const compatGroupView = (group: OpenAICompatGroup, index: number, lookup: Lookup): JsonObject => {
   const ids = lookup.ids["openai-compatibility"][index]?.keys ?? [];
-  const { keys, headers, ...rest } = group;
+  const { id: groupId, keys, headers, ...rest } = group;
   const disabled = group.disabled === true;
   const proxy = keys.some((entry) => hasText(entry["proxy-url"]));
 
@@ -175,6 +187,7 @@ const compatGroupView = (group: OpenAICompatGroup, index: number, lookup: Lookup
   }));
 
   return {
+    ...entryOf(groupId, lookup),
     index,
     group: {
       ...plainObject(rest),
@@ -187,11 +200,13 @@ const compatGroupView = (group: OpenAICompatGroup, index: number, lookup: Lookup
 };
 
 /**
- * The `ApiKeysList` of `config` (stored at `version`); `entries` are the pool's credentials, of which only the
- * config ones are used. `now` is epoch milliseconds; `authIndex` is the deployment's indexer.
+ * The `ApiKeysList` of `config` (assembled at `version`, key group revisions `revisions`); `entries` are the pool's
+ * credentials, of which only the config ones are used. `now` is epoch milliseconds; `authIndex` is the deployment's
+ * indexer.
  */
 export const buildApiKeysList = (
   version: number,
+  revisions: Readonly<Record<string, number>>,
   config: Pick<Config, "api-keys">,
   entries: ReadonlyArray<RefreshTarget>,
   now: number,
@@ -204,6 +219,7 @@ export const buildApiKeysList = (
 
   const lookup: Lookup = {
     ids: configKeyIds(config, { includeDisabledGroups: true }),
+    revisions,
     runtime,
     now,
     authIndex,
