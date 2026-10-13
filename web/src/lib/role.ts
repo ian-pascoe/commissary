@@ -2,10 +2,11 @@
 // functions keep the panel from offering a control that would be refused. Pure: no DOM, tested in
 // test/web-role.test.ts.
 //
-// Roles: org owner > org admin > member. A plain member may only read their own usage, and, where the org lets members
-// connect private credentials (ADR 0023), manage their own private accounts and API keys; org admins manage the org's configuration,
-// plain members and teams; org owners also change roles, add org admins and org owners, and decide who may join by themselves. A
-// platform admin is an org owner of every org.
+// Roles: org owner > org admin > member. A plain member may only read their own usage, manage their own proxy keys
+// and, where the org lets members connect private credentials (ADR 0023), manage their own private accounts and API
+// keys; org admins manage the org's configuration, plain members and teams, and see every proxy key; org owners also
+// change roles, add org admins and org owners, and decide who may join by themselves. A platform admin is an org owner
+// of every org.
 import type { Me } from "#contract/orgs.ts";
 import type { OrgRole } from "#contract/members.ts";
 
@@ -42,7 +43,7 @@ export const roleSummary = (role: OrgRole): string => {
     case "admin":
       return "Manages accounts, keys, models, settings, plain members and teams.";
     case "member":
-      return "Sees their own usage and nothing else.";
+      return "Sees their own usage and manages their own proxy keys.";
   }
 };
 
@@ -72,6 +73,7 @@ export const PAGES: ReadonlyArray<PanelPage> = [
   { to: "/keys", label: "API keys", role: "admin", privateMembers: true },
   { to: "/models", label: "Models", role: "admin" },
   { to: "/usage", label: "Usage", role: "member" },
+  { to: "/proxy-keys", label: "Proxy keys", role: "member" },
   { to: "/members", label: "Members", role: "admin" },
   { to: "/settings", label: "Settings", role: "admin" },
 ];
@@ -93,12 +95,14 @@ const within = (pathname: string, page: string): boolean =>
 
 /**
  * Whether a role may open a page of the panel (`pathname` is relative to the org's base path). Sub-pages of a page
- * need an org admin, like `/usage/prices`, except the page itself. A plain member opens the pages of their own
- * private accounts and API keys, with their sub-pages, where the org lets members connect private credentials.
+ * need an org admin, like `/usage/prices`, except the page itself. A plain member opens Usage and Proxy keys, and the
+ * pages of their own private accounts and API keys, with their sub-pages, where the org lets members connect private
+ * credentials.
  */
 export const pageAllowed = (role: OrgRole, pathname: string, privateCredentials = false): boolean =>
   atLeast(role, "admin") ||
   trimmed(pathname) === "/usage" ||
+  trimmed(pathname) === "/proxy-keys" ||
   (privateCredentials && (within(pathname, "/accounts") || within(pathname, "/keys")));
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -139,6 +143,12 @@ export const canRemove = (caller: Caller, target: OrgRole): boolean =>
 
 /** Whether people Access admits may join by themselves is decided by org owners. */
 export const canSetAutoJoin = (caller: Caller): boolean => atLeast(caller.role, "owner");
+
+/** Whether the proxy routes still accept an Access sign-in instead of a proxy key is decided by org owners too. */
+export const canSetAccessClients = canSetAutoJoin;
+
+/** Org admins list and revoke every proxy key of the org; every member their own. */
+export const seesEveryProxyKey = (caller: Caller): boolean => atLeast(caller.role, "admin");
 
 export const canManageTeams = (caller: Caller): boolean => atLeast(caller.role, "admin");
 

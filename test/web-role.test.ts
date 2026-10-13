@@ -33,13 +33,16 @@ describe("the caller's role", () => {
 });
 
 describe("pages", () => {
-  it("opens only Usage to a plain member and everything to an admin", () => {
-    expect(pagesFor("member").map((page) => page.to)).toEqual(["/usage"]);
+  it("opens only Usage and Proxy keys to a plain member and everything to an admin", () => {
+    expect(pagesFor("member").map((page) => page.to)).toEqual(["/usage", "/proxy-keys"]);
+    expect(pagesFor("admin").map((page) => page.to)).toContain("/proxy-keys");
     expect(pagesFor("admin").map((page) => page.to)).toContain("/members");
     expect(homeFor("member")).toBe("/usage");
     expect(homeFor("admin")).toBe("/");
     expect(pageAllowed("member", "/usage")).toBe(true);
     expect(pageAllowed("member", "/usage/")).toBe(true);
+    expect(pageAllowed("member", "/proxy-keys")).toBe(true);
+    expect(pageAllowed("member", "/proxy-keys/")).toBe(true);
     expect(pageAllowed("member", "/usage/prices")).toBe(false);
     expect(pageAllowed("member", "/members")).toBe(false);
     expect(pageAllowed("admin", "/usage/prices")).toBe(true);

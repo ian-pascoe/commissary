@@ -13,6 +13,7 @@ import { ModelsPage } from "./pages/Models.tsx";
 import { OverviewPage } from "./pages/Overview.tsx";
 import { NotFound } from "./pages/NotFound.tsx";
 import { PricesPage } from "./pages/Prices.tsx";
+import { ProxyKeysPage } from "./pages/ProxyKeys.tsx";
 import { SettingsPage } from "./pages/Settings.tsx";
 import { UsagePage } from "./pages/Usage.tsx";
 import { readNewKeySearch } from "./lib/keys.ts";
@@ -72,6 +73,7 @@ const routeTree = rootRoute.addChildren([
     component: PricesPage,
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/members", component: MembersPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/proxy-keys", component: ProxyKeysPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: SettingsPage }),
 ]);
 

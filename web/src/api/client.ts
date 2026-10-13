@@ -115,6 +115,21 @@ export const updateServiceTokenAtom = ManagementClient.mutation("members", "upda
 
 export const removeServiceTokenAtom = ManagementClient.mutation("members", "removeServiceToken");
 
+/** The Proxy keys page refetches after a mutation tagged with this key. */
+export const PROXY_KEYS = ["proxy-keys"] as const;
+
+/** The caller's proxy keys, or every key of the org for an org admin. Short-lived: "last used" moves while they work. */
+export const proxyKeysAtom = ManagementClient.query("proxyKeys", "list", {
+  reactivityKeys: PROXY_KEYS,
+  timeToLive: Duration.seconds(30),
+});
+
+// Proxy key writes: call with `reactivityKeys: PROXY_KEYS` so the list refetches afterwards. A creation answers the
+// whole key, once.
+export const createProxyKeyAtom = ManagementClient.mutation("proxyKeys", "create");
+
+export const revokeProxyKeyAtom = ManagementClient.mutation("proxyKeys", "revoke");
+
 /** Every credential with its state (`GET /credentials`). */
 export const credentialsAtom = ManagementClient.query("credentials", "list", {
   reactivityKeys: CREDENTIALS,
