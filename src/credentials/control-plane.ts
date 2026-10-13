@@ -80,6 +80,8 @@ import {
   type QuotaOutcome,
 } from "../quota/report.ts";
 import { orgOfControlPlane, type OrgId } from "../platform/org.ts";
+import { OrgSecrets } from "../secrets/data-key.ts";
+import { deploymentSecretsKeys } from "../secrets/deployment-keys.ts";
 import { QuotaReportStore } from "../quota/store.ts";
 import { type SweepSource, SweepLeaseStore, type TakeLease } from "../quota/sweep-lease.ts";
 import {
@@ -223,6 +225,11 @@ export type SetDisabledResult =
  * One Durable Object per org (`controlPlaneOf(env, org)`, named by the org id; ADR 0021): the single writer for the
  * org's config, credentials, cooldown state and refresh scheduling (see docs/ARCHITECTURE.md).
  *
+ * Its stored secrets (auth files, config entries) are sealed with the org's data key (`secrets/`), which it opens when it
+ * starts, in `blockConcurrencyWhile`: on the first start it creates the key and seals what was stored in plain text,
+ * after a rotation it wraps the key under the new `SECRETS_KEY`, and when the stage's secrets key is missing, refused or
+ * opens no data key it does not start at all (every call fails with the reason).
+ *
  * Implements the config store, the credential store/selection (`pick`, `report`, credential management) and OAuth
  * token refresh (`alarm`, `refreshNow`, `ensureFresh`, `sweepRefresh`; see `refresh/manager.ts`). Methods are exposed to the Worker through JS RPC and exchange plain data only.
  */
@@ -234,8 +241,15 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #quota: QuotaReportStore;
   readonly #sweepLease: SweepLeaseStore;
   readonly #grants: ResetGrantStore;
+  /** The org's data key: seals and opens the stored secrets once the object started. */
+  readonly #secrets = new OrgSecrets();
   /** The org this object serves, from its name. */
   readonly #org: OrgId;
+  /**
+   * Settles once the org's data key is open, or failed to open (the stores then throw the reason). Only callers that
+   * construct the object themselves (tests) wait on it; RPC calls wait on the input gate.
+   */
+  readonly started: Promise<void>;
   /**
    * The org's keyed `auth_index` (`orgAuthIndexer`, cached per isolate). Resolved per call so a refused key fails the
    * calls that need an index, not the Durable Object's constructor.
@@ -247,15 +261,16 @@ export class ControlPlane extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.#org = orgOfControlPlane(ctx.id);
-    this.#config = new ConfigStore(ctx.storage.sql, this.#org, (body) =>
-      ctx.storage.transactionSync(body),
-    );
+    const transaction = <T>(body: () => T): T => ctx.storage.transactionSync(body);
+    const credentials = new CredentialStore(ctx.storage.sql, this.#secrets);
+
+    this.#config = new ConfigStore(ctx.storage.sql, this.#org, transaction, this.#secrets);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
 
     this.#grants = new ResetGrantStore(ctx.storage.sql);
     this.#pool = new CredentialPool({
-      store: new CredentialStore(ctx.storage.sql),
+      store: credentials,
       config: () => this.#currentConfig(),
       decorate: (credential) => this.#refresh.decorate(credential),
     });
@@ -294,6 +309,19 @@ export class ControlPlane extends DurableObject<Env> {
         },
       },
     });
+
+    // No call reaches a store before the data key is open; a failure fails every call with the reason until the
+    // object restarts (a deploy with a working SECRETS_KEY restarts it).
+    this.started = ctx.blockConcurrencyWhile(() =>
+      this.#secrets.start({
+        sql: ctx.storage.sql,
+        transaction,
+        org: this.#org,
+        keys: () => deploymentSecretsKeys(env),
+        sealStored: (cipher) =>
+          credentials.sealPlaintext(cipher) + this.#config.sealPlaintext(cipher),
+      }),
+    );
   }
 
   /** The config the entries make up, re-assembled only when the change counter moved. */

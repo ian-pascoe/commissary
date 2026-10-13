@@ -183,6 +183,26 @@ client -> Cloudflare Access -> Worker
   content hash of each key, so auth indexes do not change), the counter continues after the document's version (every
   cached view rebuilds), the old row is kept, and the entries it writes have `updated_by = "migration"`. Not-applied keys
   are dropped, as on import.
+- **Stored secrets** (`src/secrets/`): every value the ControlPlane stores that can hold a secret is a _sealed value_:
+  the JSON of each auth file (`credentials.metadata`) and the value of every config entry (settings, key groups with
+  their headers, API keys, model rules, payload rules; and the legacy `config` document). Ids, positions, revisions,
+  writers, `credential_state` and the usage tables stay readable. A sealed value is `enc:v1:` + base64url of a 96-bit
+  random nonce, the AES-256-GCM ciphertext and its 128-bit tag, with `enc:v1\0<table>/<row id>` as additional data, so
+  a value copied to another row or another org does not open (`SecretCipher`, `cipher.ts`). Each org has its own random
+  256-bit _data key_, stored only wrapped in the ControlPlane's `org_data_key` table (`wk:v1:`, AES-GCM, the org id as
+  additional data); the wrapping key is derived with HKDF-SHA-256 from the stage's _secrets key_ `SECRETS_KEY`
+  (`deployment-keys.ts`, minted by the deploy, see DEPLOY.md). The ControlPlane opens the data key once per start, in
+  `blockConcurrencyWhile` (`OrgSecrets`, `data-key.ts`), so no call reaches a store before; sealing and opening are then
+  synchronous (`node:crypto`, since the stores' read-modify-write sequences must stay synchronous under the input gate;
+  the wrapping key stays a non-extractable WebCrypto key). On the first start it creates the data key and seals every
+  value still in plain text in the same transaction as the key row, so a stored key means every value is sealed (a
+  Durable Object SQLite migration; there is no D1 migration). After a rotation it unwraps with `SECRETS_KEY_PREVIOUS`
+  and wraps the same data key under the new key; the data is not encrypted again. When the secrets key is missing,
+  refused (a deployed stage refuses the development key and keys under 64 characters) or opens no data key, the object
+  logs why and every call fails with the reason: no store reads garbage or writes under another key. A value that does
+  not open (changed, copied, plain text after the migration) fails that read with `SealedValueError`, naming the row,
+  never the value. Removing an auth file does not open it. Not sealed: provider OAuth login sessions (PKCE verifiers,
+  short-lived), `SessionState`, KV caches.
 - **Payload rules (`src/config/payload/`)**: `applyPayloadRules(config, request, payload)` is the single final barrier;
   it mutates `payload` in place (callers pass a freshly built body and a distinct `original`). The Codex tool-schema
   integer normalisation that Go performs inside the same function lives in `executor/helps/payload.ts` (`finalizePayload`: normalise
@@ -219,8 +239,8 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
   Worker-side picker (`ControlPlanePickerLayer`) and refresher (`CredentialRefresher.controlPlane`) resolve the stub
   from `WorkerEnv` and `CurrentOrg` on every call, so the same credential name in two orgs is two credentials with
   separate cooldowns, and its `auth_index` differs between them (`orgAuthIndexer`).
-- **Sources** (`src/credentials/`): auth JSON files imported through `importAuthFile`/`upsertCredential` (stored verbatim in
-  the DO's SQLite `credentials` table, the file _is_ the metadata) and API keys synthesised from `api-keys` config with
+- **Sources** (`src/credentials/`): auth JSON files imported through `importAuthFile`/`upsertCredential` (stored verbatim, sealed
+  with the org's data key (_Stored secrets_ above), in the DO's SQLite `credentials` table; the file _is_ the metadata) and API keys synthesised from `api-keys` config with
   the Go content-hash ids (`synthesize.ts`, verified against the Go synthesizer via `tools/fixturegen/credentials`).
   `derive.ts` turns a stored file into the immutable `Credential` (priority, weight, prefix, headers, exclusions,
   aliases, plan/domain attributes); global exclusions and aliases are applied at selection time, so config edits take

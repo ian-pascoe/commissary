@@ -25,6 +25,11 @@
  * and moves the version readers rebuild on, but an import of a Go config document leaves them alone (Go's config has
  * no prices). The table is created when missing, so a ControlPlane that predates it gains it on its next start.
  *
+ * Every entry's value is a sealed value (`secrets/cipher.ts`): encrypted with the org's data key before it is written and
+ * opened on read, so API keys, headers and any other secret an entry holds are never stored in plain text. Ids,
+ * positions, revisions and writers stay readable. `sealPlaintext` seals what was written before encryption (the legacy
+ * document included). Price overrides hold no secret and stay readable.
+ *
  * Deployment settings (`DEPLOYMENT_SETTINGS`) decide something every org shares; only the `global` org stores them.
  * Another org's store refuses a write or an import that sets one (`invalid`), so a setting never looks applied when it
  * is not: readers take `global`'s value (`config/reader.ts`).
@@ -39,6 +44,7 @@ import {
 } from "../credentials/key-ids.ts";
 import { type Json, type JsonObject, jsonEquals } from "../json/index.ts";
 import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
+import { isSealed, type Sealer } from "../secrets/cipher.ts";
 import { decodeConfig, decodeRawConfig, encodeConfig, parseConfigYaml } from "./codec.ts";
 import {
   atPath,
@@ -208,6 +214,12 @@ type Table = (typeof TABLES)[keyof typeof TABLES];
 /** One override per provider and model, however they are cased. */
 const PRICE_OVERRIDES = "config_price_overrides";
 
+/** Where a sealed value is stored (`<table>/<row id>`): it opens only there. */
+const sealContext = (table: Table | typeof LEGACY_TABLE, id: string): string => `${table}/${id}`;
+
+/** The single-row config document of a ControlPlane from before config entries. */
+const LEGACY_TABLE = "config";
+
 const ENTRY_COLUMNS = `revision INTEGER NOT NULL, updated_at INTEGER NOT NULL, updated_by TEXT NOT NULL`;
 
 const SCHEMA = [
@@ -300,14 +312,11 @@ const refuse = (error: WriteRefused["error"], message: string): WriteRefused => 
   message,
 });
 
-// SAFETY: every value column holds the JSON text this store wrote.
+// SAFETY: every value column opens to the JSON text this store wrote (the legacy document to the one it stored).
 const parse = (text: string): Json => JSON.parse(text) as Json;
 
-const parseObject = (text: string): JsonObject => {
-  const value = parse(text);
-
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value : {};
-};
+const objectOf = (value: Json): JsonObject =>
+  typeof value === "object" && value !== null && !Array.isArray(value) ? value : {};
 
 /** Why a price override's value is refused, if it is (names, then each price a finite number in range). */
 const priceRefusal = (value: PriceOverrideValue): string | undefined => {
@@ -333,6 +342,7 @@ export class ConfigStore {
   readonly #sql: SqlStorage;
   readonly #org: OrgId;
   readonly #transaction: <T>(body: () => T) => T;
+  readonly #secrets: Sealer;
   readonly #now: () => number;
   #ready = false;
   #cached:
@@ -341,17 +351,20 @@ export class ConfigStore {
 
   /**
    * `org`: the org whose config this is (only `global`'s stores the deployment settings); `transaction` runs a body in
-   * one storage transaction (`ctx.storage.transactionSync`).
+   * one storage transaction (`ctx.storage.transactionSync`); `secrets`: the org's data key (`OrgSecrets`), which seals
+   * and opens every entry's value.
    */
   constructor(
     sql: SqlStorage,
     org: OrgId,
     transaction: <T>(body: () => T) => T,
+    secrets: Sealer,
     now: () => number = Date.now,
   ) {
     this.#sql = sql;
     this.#org = org;
     this.#transaction = transaction;
+    this.#secrets = secrets;
     this.#now = now;
 
     for (const statement of SCHEMA) sql.exec(statement);
@@ -718,7 +731,7 @@ export class ConfigStore {
         id,
         change.family,
         position,
-        JSON.stringify(value),
+        this.#seal(TABLES.groups, id, value),
         revision,
         this.#now(),
         by,
@@ -774,8 +787,12 @@ export class ConfigStore {
 
       if (key === undefined || group === undefined)
         throw new Refusal(refuse("not_found", "API key not found"));
-      const value = parseObject(key.value);
-      const inherited = patterns(parseObject(group.value)["excluded-models"]);
+      const value = objectOf(this.#open(TABLES.keys, key.id, key.value));
+
+      const inherited = patterns(
+        objectOf(this.#open(TABLES.groups, group.id, group.value))["excluded-models"],
+      );
+
       const own = value["excluded-models"];
       const effective = Array.isArray(own) ? patterns(own) : inherited;
       const disabling = (pattern: string) => pattern.trim() === "*";
@@ -925,7 +942,7 @@ export class ConfigStore {
        ON CONFLICT (id) DO UPDATE SET value = excluded.value, revision = excluded.revision,
          updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
       id,
-      JSON.stringify(value),
+      this.#seal(table, id, value),
       revision,
       this.#now(),
       by,
@@ -934,8 +951,6 @@ export class ConfigStore {
 
   /** Writes a key row; an unchanged key (same group, position and value) keeps its revision. */
   #upsertKey(row: KeyRow, revision: number, by: string): void {
-    const value = JSON.stringify(row.value);
-
     const current = this.#sql
       .exec<KeySqlRow>(
         `SELECT id, group_id, position, value, revision FROM ${TABLES.keys} WHERE id = ?`,
@@ -947,7 +962,7 @@ export class ConfigStore {
       current !== undefined &&
       current.group_id === row.groupId &&
       current.position === row.position &&
-      jsonEquals(parse(current.value), row.value)
+      jsonEquals(this.#open(TABLES.keys, current.id, current.value), row.value)
     )
       return;
 
@@ -960,7 +975,7 @@ export class ConfigStore {
       row.id,
       row.groupId,
       row.position,
-      value,
+      this.#seal(TABLES.keys, row.id, row.value),
       revision,
       this.#now(),
       by,
@@ -1060,7 +1075,10 @@ export class ConfigStore {
     const settings = this.#sql
       .exec<ValueRow>(`SELECT id, value FROM ${TABLES.settings}`)
       .toArray()
-      .map((row): SettingRow => ({ id: row.id, value: parse(row.value) }));
+      .map((row): SettingRow => ({
+        id: row.id,
+        value: this.#open(TABLES.settings, row.id, row.value),
+      }));
 
     const groups = this.#sql
       .exec<GroupSqlRow>(`SELECT id, family, position, value FROM ${TABLES.groups}`)
@@ -1070,7 +1088,7 @@ export class ConfigStore {
         // SAFETY: only `writeKeyGroup` and `#replace` write this column, with an `ApiKeyFamily`.
         family: row.family as ApiKeyFamily,
         position: row.position,
-        value: parseObject(row.value),
+        value: objectOf(this.#open(TABLES.groups, row.id, row.value)),
       }));
 
     const keys = this.#sql
@@ -1080,14 +1098,14 @@ export class ConfigStore {
         id: row.id,
         groupId: row.group_id,
         position: row.position,
-        value: parseObject(row.value),
+        value: objectOf(this.#open(TABLES.keys, row.id, row.value)),
       }));
 
     const channels = (table: Table): ChannelRow[] =>
       this.#sql
         .exec<ValueRow>(`SELECT id, value FROM ${table}`)
         .toArray()
-        .map((row) => ({ id: row.id, value: parse(row.value) }));
+        .map((row) => ({ id: row.id, value: this.#open(table, row.id, row.value) }));
 
     const payload = this.#sql
       .exec<PayloadSqlRow>(`SELECT id, kind, position, value FROM ${TABLES.payload}`)
@@ -1097,7 +1115,7 @@ export class ConfigStore {
         // SAFETY: only `#replace` writes this column, with a `PayloadKind`.
         kind: row.kind as PayloadKind,
         position: row.position,
-        value: parse(row.value),
+        value: this.#open(TABLES.payload, row.id, row.value),
       }));
 
     return {
@@ -1131,7 +1149,7 @@ export class ConfigStore {
         group.id,
         group.family,
         group.position,
-        JSON.stringify(group.value),
+        this.#seal(TABLES.groups, group.id, group.value),
         revision,
         now,
         by,
@@ -1152,7 +1170,7 @@ export class ConfigStore {
         rule.id,
         rule.kind,
         rule.position,
-        JSON.stringify(rule.value),
+        this.#seal(TABLES.payload, rule.id, rule.value),
         revision,
         now,
         by,
@@ -1207,17 +1225,70 @@ export class ConfigStore {
     this.#ready = true;
   }
 
-  /** The single-row document of a ControlPlane from before config entries, if any. */
+  /** The single-row document of a ControlPlane from before config entries, if any (opened). */
   #legacyDocument(): LegacyRow | undefined {
-    const table = this.#sql
-      .exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'config'")
+    if (!this.#hasLegacyTable()) return undefined;
+
+    const row = this.#sql
+      .exec<LegacyRow>(`SELECT version, document FROM ${LEGACY_TABLE} WHERE id = 1`)
       .toArray()[0];
 
-    if (table === undefined) return undefined;
+    return row === undefined
+      ? undefined
+      : { ...row, document: this.#secrets.open(row.document, sealContext(LEGACY_TABLE, "1")) };
+  }
 
-    return this.#sql
-      .exec<LegacyRow>("SELECT version, document FROM config WHERE id = 1")
-      .toArray()[0];
+  #hasLegacyTable(): boolean {
+    return (
+      this.#sql
+        .exec(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = '${LEGACY_TABLE}'`)
+        .toArray()[0] !== undefined
+    );
+  }
+
+  /** `value` sealed for its entry. */
+  #seal(table: Table, id: string, value: Json): string {
+    return this.#secrets.seal(JSON.stringify(value), sealContext(table, id));
+  }
+
+  /** The value of an entry, opened. */
+  #open(table: Table, id: string, sealed: string): Json {
+    return parse(this.#secrets.open(sealed, sealContext(table, id)));
+  }
+
+  /**
+   * Seals every value stored in plain text (written before encryption: entries and the legacy document) with
+   * `secrets`, inside the caller's transaction; answers how many it sealed.
+   */
+  sealPlaintext(secrets: Sealer): number {
+    let sealed = 0;
+
+    for (const table of Object.values(TABLES)) {
+      for (const row of this.#sql.exec<ValueRow>(`SELECT id, value FROM ${table}`).toArray()) {
+        if (isSealed(row.value)) continue;
+        this.#sql.exec(
+          `UPDATE ${table} SET value = ? WHERE id = ?`,
+          secrets.seal(row.value, sealContext(table, row.id)),
+          row.id,
+        );
+        sealed += 1;
+      }
+    }
+
+    if (this.#hasLegacyTable()) {
+      for (const row of this.#sql
+        .exec<LegacyRow>(`SELECT version, document FROM ${LEGACY_TABLE} WHERE id = 1`)
+        .toArray()) {
+        if (isSealed(row.document)) continue;
+        this.#sql.exec(
+          `UPDATE ${LEGACY_TABLE} SET document = ? WHERE id = 1`,
+          secrets.seal(row.document, sealContext(LEGACY_TABLE, "1")),
+        );
+        sealed += 1;
+      }
+    }
+
+    return sealed;
   }
 }
 

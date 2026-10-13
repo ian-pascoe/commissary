@@ -99,6 +99,27 @@ the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --pro
   `alchemy dev` uses a fixed key (`DEV_AUTH_INDEX_KEY`), the tests the one in `vitest.config.ts`. A Worker with Access
   configured refuses that dev key and any key shorter than 64 characters, and logs the refusal: management calls that
   need an index fail (500), while proxying keeps working (its request log lines then carry no `authIndex`).
+- **Secrets key.** Every org's stored secrets (auth files and config entries, see ARCHITECTURE.md _Stored secrets_) are
+  encrypted with the org's data key, which is stored wrapped by the stage's `SECRETS_KEY`. Like the `auth_index` key it
+  is an Alchemy `Random` in `alchemy.run.ts` (resource `SecretsKey`, one per generation), minted on the stage's first
+  deploy and bound as a Worker secret; no GitHub secret or manual step is needed. `alchemy dev` uses
+  `DEV_SECRETS_KEY`, the tests the keys in `vitest.config.ts`; a Worker with Access configured refuses that dev key and
+  any key shorter than 64 characters. Without a working key no ControlPlane starts: proxying and management calls of
+  every org fail (500) and the Worker logs `the ControlPlane cannot open the org's data key` with the reason, until a
+  deploy binds the right key. **Losing the key loses every stored secret**: do not destroy the stage's state or its
+  `SecretsKey` resource while the stage is in use.
+- **First deploy with encryption.** Each org's ControlPlane encrypts what it stored in plain text on its first start
+  after the deploy (a Durable Object SQLite migration, in one transaction; there is no D1 migration) and logs
+  `created the org's data key and sealed its stored secrets`. **There is no rollback after that start**: an earlier
+  version reads the sealed values as broken JSON. To go back, deploy a fix forward.
+- **Rotating the secrets key.** Set `SECRETS_KEY_GENERATION` to the next number (it starts at 1) and
+  `SECRETS_KEY_PREVIOUS_GENERATION` to the current one, in `.env` and as GitHub variables for CI, then deploy: the
+  deploy mints the new key and binds the old one as `SECRETS_KEY_PREVIOUS`. Each ControlPlane, on its next start, wraps
+  its data key under the new key (`wrapped the org's data key under the new SECRETS_KEY`); nothing else is encrypted
+  again. Keep the previous generation set until every org has started (the cron trigger, every 3 hours, runs
+  per-org tasks on every org's ControlPlane, so one full cron run after the deploy is enough), then unset
+  `SECRETS_KEY_PREVIOUS_GENERATION` and deploy again. An org that had not started by then fails until the previous
+  generation is set again. The old `SecretsKey` resource stays in the state; it is harmless.
 - **`auth_index` values change once.** Indexes are computed on read, never stored, so the first deploy with the keyed
   index (or a new key: destroying a stage, replacing its `AuthIndexKey` resource, or a state entry that fails to
   decrypt, after which the next deploy mints a new key) changes every `auth_index` at once. With

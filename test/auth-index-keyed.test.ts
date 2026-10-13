@@ -187,13 +187,14 @@ api-keys:
 
       // Management reads that index in the Worker fail, and `GET /api-keys`, which indexes inside the ControlPlane:
       // the test's object keeps the valid key, so an instance over the same storage gets the refused bindings.
-      await runInDurableObject(env.CONTROL_PLANE.getByName("global"), (_instance, state) => {
+      await runInDurableObject(env.CONTROL_PLANE.getByName("global"), async (_instance, state) => {
         const refused = new ControlPlane(state, {
           ...env,
           ACCESS_TEAM_DOMAIN: "team",
           ...bindings,
         });
 
+        await refused.started;
         expect(() => refused.apiKeysView()).toThrow(AuthIndexKeyError);
       });
 

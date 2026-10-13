@@ -30,6 +30,14 @@ interface __BaseEnv_Env {
    * tests and `alchemy dev` use their own. Empty fails closed.
    */
   AUTH_INDEX_KEY: string;
+  /**
+   * Secrets key of the stage (src/secrets/): wraps every org's data key, which seals the stored secrets. Deployed: an
+   * Alchemy `Random` per key generation (alchemy.run.ts); tests and `alchemy dev` use their own. Missing: no
+   * ControlPlane starts.
+   */
+  SECRETS_KEY: string;
+  /** During a rotation, the secrets key `SECRETS_KEY` replaces: data keys still wrapped by it are wrapped again. */
+  SECRETS_KEY_PREVIOUS?: string;
   CONTROL_PLANE: DurableObjectNamespace<import("./index").ControlPlane>;
   SESSION_STATE: DurableObjectNamespace<import("./index").SessionState>;
   /** The Platform registry: one object per deployment (`platformOf`, src/platform/registry.ts). */

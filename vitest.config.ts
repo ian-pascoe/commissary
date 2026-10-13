@@ -38,6 +38,10 @@ export default defineConfig({
           // Fixed test key of the keyed `auth_index` (deployed: an Alchemy `Random`, alchemy.run.ts); 64 characters, so
           // tests that configure Access (where shorter keys are refused, src/management/auth-index.ts) can use it too.
           AUTH_INDEX_KEY: "cf-llm-proxy-test-auth-index-key-0123456789abcdef0123456789abcdef012",
+          // Fixed test secrets keys (deployed: an Alchemy `Random`, alchemy.run.ts), 64 characters like the minted ones. The
+          // previous key lets tests start a ControlPlane whose data key is still wrapped by it (a rotation, src/secrets/).
+          SECRETS_KEY: "cf-llm-proxy-test-secrets-key-0123456789abcdef0123456789abcdef0123",
+          SECRETS_KEY_PREVIOUS: "cf-llm-proxy-test-previous-secrets-key-0123456789abcdef0123456789",
         },
       },
     }),

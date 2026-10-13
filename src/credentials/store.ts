@@ -6,6 +6,9 @@
  * Runtime state (`credential_state`) is persisted only when it matters across restarts (failures and cooldowns);
  * round-robin cursors and session bindings stay in memory (credentials.md §10).
  *
+ * The file JSON is a sealed value (`secrets/cipher.ts`): encrypted with the org's data key before it is written and
+ * opened on read, so the table holds no token in plain text. `sealPlaintext` seals the rows written before encryption.
+ *
  * All methods are synchronous so read-modify-write sequences are atomic under the Durable Object input gate.
  */
 import { Effect, Result, Schema } from "effect";
@@ -13,6 +16,7 @@ import type { JsonObject } from "../json/index.ts";
 import type { StoredCredential } from "./derive.ts";
 import { credentialsChanged, mergeExistingMetadata } from "./merge.ts";
 import { CredentialState } from "./model.ts";
+import { isSealed, type Sealer } from "../secrets/cipher.ts";
 
 interface CredentialRow {
   id: string;
@@ -52,21 +56,18 @@ const parseMetadata = (text: string): JsonObject => {
   return parsed;
 };
 
-const toRecord = (row: CredentialRow): StoredCredential => ({
-  id: row.id,
-  provider: row.provider,
-  metadata: parseMetadata(row.metadata),
-  credentialVersion: row.credential_version,
-  createdAt: row.created_at,
-  updatedAt: row.updated_at,
-});
+/** Where an auth file's sealed JSON is stored: it opens only there. */
+const sealContext = (id: string): string => `credentials/${id}`;
 
 export class CredentialStore {
   readonly #sql: SqlStorage;
+  readonly #secrets: Sealer;
   readonly #now: () => number;
 
-  constructor(sql: SqlStorage, now: () => number = Date.now) {
+  /** `secrets`: the org's data key (`OrgSecrets`), which seals and opens the file JSON. */
+  constructor(sql: SqlStorage, secrets: Sealer, now: () => number = Date.now) {
     this.#sql = sql;
+    this.#secrets = secrets;
     this.#now = now;
     sql.exec(
       `CREATE TABLE IF NOT EXISTS credentials (
@@ -95,7 +96,7 @@ export class CredentialStore {
         "SELECT id, provider, disabled, metadata, credential_version, created_at, updated_at FROM credentials ORDER BY id",
       )
       .toArray()
-      .map(toRecord);
+      .map((row) => this.#toRecord(row));
   }
 
   get(id: string): StoredCredential | undefined {
@@ -106,7 +107,40 @@ export class CredentialStore {
       )
       .toArray()[0];
 
-    return row === undefined ? undefined : toRecord(row);
+    return row === undefined ? undefined : this.#toRecord(row);
+  }
+
+  /**
+   * Seals every file JSON stored in plain text (written before encryption) with `secrets`, inside the caller's
+   * transaction; answers how many it sealed.
+   */
+  sealPlaintext(secrets: Sealer): number {
+    let sealed = 0;
+
+    for (const row of this.#sql
+      .exec<CredentialRow>("SELECT id, metadata FROM credentials")
+      .toArray()) {
+      if (isSealed(row.metadata)) continue;
+      this.#sql.exec(
+        "UPDATE credentials SET metadata = ? WHERE id = ?",
+        secrets.seal(row.metadata, sealContext(row.id)),
+        row.id,
+      );
+      sealed += 1;
+    }
+
+    return sealed;
+  }
+
+  #toRecord(row: CredentialRow): StoredCredential {
+    return {
+      id: row.id,
+      provider: row.provider,
+      metadata: parseMetadata(this.#secrets.open(row.metadata, sealContext(row.id))),
+      credentialVersion: row.credential_version,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
   }
 
   /** Inserts or replaces one auth file. `incoming` is the complete new file content. */
@@ -158,8 +192,9 @@ export class CredentialStore {
     return record;
   }
 
+  /** Removes an auth file without opening it, so a row that no longer opens can still be deleted. */
   remove(id: string): boolean {
-    const existing = this.get(id);
+    const existing = this.#sql.exec("SELECT id FROM credentials WHERE id = ?", id).toArray()[0];
 
     if (existing === undefined) return false;
     this.#sql.exec("DELETE FROM credentials WHERE id = ?", id);
@@ -178,7 +213,7 @@ export class CredentialStore {
       record.id,
       record.provider,
       record.metadata.disabled === true ? 1 : 0,
-      JSON.stringify(record.metadata),
+      this.#secrets.seal(JSON.stringify(record.metadata), sealContext(record.id)),
       record.credentialVersion,
       record.createdAt,
       record.updatedAt,

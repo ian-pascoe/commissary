@@ -13,6 +13,7 @@ import type { SettingsView } from "../src/management/contract/settings.ts";
 import { OrgId } from "../src/platform/org.ts";
 import { authIndexOf } from "./support/auth-index.ts";
 import { comparable } from "./support/config-entries.ts";
+import { asBeforeEncryption } from "./support/secrets.ts";
 import { controlPlane, jsonInit, makeHarness, resetControlPlane } from "./support/management.ts";
 
 const harness = makeHarness();
@@ -162,14 +163,15 @@ describe("migration of a stored config document", () => {
     // What the ControlPlane stored before config entries: the canonical document of the decoded config.
     const document = JSON.stringify(encodeConfig(before));
 
-    await runInDurableObject(stub, (_instance, state) => {
-      state.storage.sql.exec(
+    // A ControlPlane from before config entries (and before stored secrets were sealed): the document, no data key.
+    await asBeforeEncryption(stub, org, (sql) => {
+      sql.exec(
         `CREATE TABLE IF NOT EXISTS config (
            id INTEGER PRIMARY KEY CHECK (id = 1), version INTEGER NOT NULL, document TEXT NOT NULL,
            updated_at INTEGER NOT NULL
          )`,
       );
-      state.storage.sql.exec(
+      sql.exec(
         "INSERT INTO config (id, version, document, updated_at) VALUES (1, 41, ?, 1000)",
         document,
       );
