@@ -24,7 +24,10 @@ export interface Settings {
   readonly serviceTokens: ReadonlyArray<string>;
   /** IDs of service tokens managed outside the stack (e.g. CI's) that the Service Auth policy also admits. */
   readonly allowServiceTokenIds: ReadonlyArray<string>;
-  /** Management admins: emails, and service token names (from `serviceTokens`) or Client IDs. */
+  /**
+   * Platform admins (ADR 0022): emails, and service token names (from `serviceTokens`) or Client IDs. They manage every
+   * org. `PLATFORM_ADMIN_*`, plus the deprecated `ACCESS_ADMIN_*` they replace, which a deployment may still set.
+   */
   readonly adminEmails: ReadonlyArray<string>;
   readonly adminServiceTokens: ReadonlyArray<string>;
   /** Access session duration, e.g. `24h`. */
@@ -49,6 +52,22 @@ const list = (name: string) =>
       .filter((item) => item !== ""),
   );
 
+/**
+ * `current` and its deprecated alias `old`, merged (no duplicates). A deployment that still sets the old name keeps its
+ * admins and is told to rename it.
+ */
+const renamedList = (current: string, old: string) =>
+  Effect.gen(function* () {
+    const legacy = yield* list(old);
+
+    if (legacy.length > 0)
+      yield* Effect.logWarning(
+        `${old} is deprecated: rename it to ${current} (read as an alias for now)`,
+      );
+
+    return [...new Set([...(yield* list(current)), ...legacy])];
+  });
+
 const TOKEN_NAME = /^[a-z0-9][a-z0-9-]{0,40}$/;
 
 /** Stage names of pull-request previews (`pr-<number>`, as deployed by .github/workflows/ci.yml). */
@@ -67,8 +86,11 @@ export const readSettings = (dev: boolean, stage: string) =>
       allowEmailDomains: yield* list("ACCESS_ALLOW_EMAIL_DOMAINS"),
       serviceTokens: preview ? [] : yield* list("ACCESS_SERVICE_TOKENS"),
       allowServiceTokenIds: yield* list("ACCESS_ALLOW_SERVICE_TOKEN_IDS"),
-      adminEmails: yield* list("ACCESS_ADMIN_EMAILS"),
-      adminServiceTokens: yield* list("ACCESS_ADMIN_SERVICE_TOKENS"),
+      adminEmails: yield* renamedList("PLATFORM_ADMIN_EMAILS", "ACCESS_ADMIN_EMAILS"),
+      adminServiceTokens: yield* renamedList(
+        "PLATFORM_ADMIN_SERVICE_TOKENS",
+        "ACCESS_ADMIN_SERVICE_TOKENS",
+      ),
       sessionDuration: (yield* text("ACCESS_SESSION_DURATION", "24h")).trim(),
       serviceTokenHeader: (yield* text("ACCESS_SERVICE_TOKEN_HEADER")).trim(),
       usageRetentionDays: (yield* text("USAGE_RETENTION_DAYS", "30")).trim(),

@@ -1,5 +1,5 @@
-// `access.admin-service-tokens` can only be changed by a service-token administrator or a deployment admin
-// (`ACCESS_ADMIN_*`): an email admin that is one only through the config gets `403 service_tokens_require_service_admin`
+// `access.admin-service-tokens` can only be changed by a service-token administrator or a platform admin
+// (`PLATFORM_ADMIN_*`): an email admin that is one only through the config gets `403 service_tokens_require_service_admin`
 // on every write path (`PATCH /settings`, `PUT /settings/config`, `/config*`), and nothing is stored.
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -180,7 +180,7 @@ describe("admin service tokens: who may change them", () => {
       expect(await storedTokens()).toEqual(grown);
     });
 
-    it(`${write.name}: a deployment admin (ACCESS_ADMIN_EMAILS) may change them`, async () => {
+    it(`${write.name}: a platform admin (PLATFORM_ADMIN_EMAILS) may change them`, async () => {
       const version = await seed();
       const [, path, init] = write.request(grown, version);
       const reply = await harness.json(path, { ...init, auth: await token(ADMIN) });
@@ -189,7 +189,7 @@ describe("admin service tokens: who may change them", () => {
       expect(await storedTokens()).toEqual(grown);
     });
 
-    it(`${write.name}: a deployment service admin (ACCESS_ADMIN_SERVICE_TOKENS) may change them`, async () => {
+    it(`${write.name}: a platform service admin (PLATFORM_ADMIN_SERVICE_TOKENS) may change them`, async () => {
       const version = await seed();
       const [, path, init] = write.request(grown, version);
 

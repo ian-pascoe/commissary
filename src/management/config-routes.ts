@@ -31,8 +31,8 @@
  *   with `line` and `column`, a schema error its expectation and `path`); they name at most keys of the written
  *   document, and are passed on unscrubbed, so a refused write reads the same whether a typed value or key equals a
  *   stored secret or not.
- * - `access.admin-service-tokens` can only be changed by a service-token administrator or a deployment admin
- *   (`ACCESS_ADMIN_*`): an email admin who changes it, by any write, gets `403 service_tokens_require_service_admin`
+ * - `access.admin-service-tokens` can only be changed by a service-token administrator or a platform admin
+ *   (`PLATFORM_ADMIN_*`): an email admin who changes it, by any write, gets `403 service_tokens_require_service_admin`
  *   and nothing is stored (`settings.ts` `checkServiceTokenAdmins`, the same rule as `PATCH /settings` and
  *   `PUT /settings/config`).
  * - Path segments `__proto__`, `constructor` and `prototype` are `400 invalid_path` (Go treats them as map keys). The
@@ -66,10 +66,13 @@ const PREFIX = "/v8/management/config";
 
 const MAX_ATTEMPTS = 4;
 
-/** The path after `/config`, read like the router matched the URL (`//v8/…`, `%63onfig` and case included). */
+/**
+ * The path after `/config`, read like the router matched the URL (`//v8/…`, `%63onfig` and case included): from `url`,
+ * which has the org of an org-scoped request taken out (`access/org-address.ts`), not from `originalUrl`.
+ */
 const pathRemainder = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
-  const rest = configPathOfUrl(request.originalUrl);
+  const rest = configPathOfUrl(request.url);
 
   return rest === undefined ? yield* replyError(400, "invalid_path") : rest;
 });

@@ -40,18 +40,54 @@ const normalizeTeamHost = (raw: string): string | undefined => {
   return host.includes(".") ? host : `${host}.cloudflareaccess.com`;
 };
 
-/** The `ACCESS_ADMIN_EMAILS` / `ACCESS_ADMIN_SERVICE_TOKENS` allow-lists (emails lowercased). */
-export const envAdminLists = (
-  env: Pick<Env, "ACCESS_ADMIN_EMAILS" | "ACCESS_ADMIN_SERVICE_TOKENS">,
-): AdminLists => ({
-  adminEmails: new Set(splitList(env.ACCESS_ADMIN_EMAILS).map((email) => email.toLowerCase())),
-  adminServiceTokens: new Set(splitList(env.ACCESS_ADMIN_SERVICE_TOKENS)),
+/**
+ * The variables that name the platform admins: `PLATFORM_ADMIN_EMAILS` / `PLATFORM_ADMIN_SERVICE_TOKENS`, and the
+ * deprecated `ACCESS_ADMIN_EMAILS` / `ACCESS_ADMIN_SERVICE_TOKENS` they replace (ADR 0022), still read as aliases so a
+ * deployment upgrades without changing its settings.
+ */
+export type PlatformAdminEnv = Partial<
+  Pick<
+    Env,
+    | "PLATFORM_ADMIN_EMAILS"
+    | "PLATFORM_ADMIN_SERVICE_TOKENS"
+    | "ACCESS_ADMIN_EMAILS"
+    | "ACCESS_ADMIN_SERVICE_TOKENS"
+  >
+>;
+
+/**
+ * The platform admins named by the deployment (emails lowercased): the union of the `PLATFORM_ADMIN_*` variables and
+ * their deprecated `ACCESS_ADMIN_*` aliases. They need no stored state, so they can always repair the Platform registry
+ * or any org.
+ */
+export const platformAdminLists = (env: PlatformAdminEnv): AdminLists => ({
+  adminEmails: new Set(
+    [...splitList(env.PLATFORM_ADMIN_EMAILS), ...splitList(env.ACCESS_ADMIN_EMAILS)].map((email) =>
+      email.toLowerCase(),
+    ),
+  ),
+  adminServiceTokens: new Set([
+    ...splitList(env.PLATFORM_ADMIN_SERVICE_TOKENS),
+    ...splitList(env.ACCESS_ADMIN_SERVICE_TOKENS),
+  ]),
 });
 
-type AccessEnv = Pick<
-  Env,
-  "ACCESS_TEAM_DOMAIN" | "ACCESS_AUD" | "ACCESS_ADMIN_EMAILS" | "ACCESS_ADMIN_SERVICE_TOKENS"
->;
+/** The deprecated variables (`ACCESS_ADMIN_*`) a deployment still sets, to be renamed to `PLATFORM_ADMIN_*`. */
+export const deprecatedAdminVariables = (env: PlatformAdminEnv): ReadonlyArray<string> =>
+  (
+    [
+      ["ACCESS_ADMIN_EMAILS", "PLATFORM_ADMIN_EMAILS", env.ACCESS_ADMIN_EMAILS],
+      [
+        "ACCESS_ADMIN_SERVICE_TOKENS",
+        "PLATFORM_ADMIN_SERVICE_TOKENS",
+        env.ACCESS_ADMIN_SERVICE_TOKENS,
+      ],
+    ] as const
+  ).flatMap(([old, current, value]) =>
+    splitList(value).length > 0 ? [`${old} (now ${current})`] : [],
+  );
+
+type AccessEnv = Pick<Env, "ACCESS_TEAM_DOMAIN" | "ACCESS_AUD"> & PlatformAdminEnv;
 
 /** Parses and validates the Access settings. Fails closed when the team domain or AUD is missing. */
 export const loadAccessConfig = (
@@ -75,11 +111,11 @@ export const loadAccessConfig = (
     issuer: `https://${host}`,
     jwksUrl: `https://${host}/cdn-cgi/access/certs`,
     audiences,
-    ...envAdminLists(env),
+    ...platformAdminLists(env),
   });
 };
 
-/** Admin allow-lists: lowercased emails and service token client ids. */
+/** Admin allow-lists (platform admins, or an org's config admins): lowercased emails and service token client ids. */
 export type AdminLists = Pick<AccessConfig, "adminEmails" | "adminServiceTokens">;
 
 export const isAdmin = (lists: AdminLists, principal: Principal) =>
@@ -88,8 +124,9 @@ export const isAdmin = (lists: AdminLists, principal: Principal) =>
     : lists.adminServiceTokens.has(principal.commonName);
 
 /**
- * The `access.admin-emails` / `access.admin-service-tokens` keys of the config document. They extend the env
- * allow-lists (`ACCESS_ADMIN_*`), which always apply so an env admin can repair a broken config.
+ * The `access.admin-emails` / `access.admin-service-tokens` keys of the config document. They extend the platform
+ * admins for the org `global` only, until orgs have members of their own; the platform admins always apply, so one of
+ * them can repair a broken config.
  */
 export const configAdminLists = (config: Pick<Config, "access">): AdminLists => ({
   adminEmails: new Set(

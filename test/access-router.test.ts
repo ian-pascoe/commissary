@@ -40,8 +40,8 @@ const accessEnv = {
   ...env,
   ACCESS_TEAM_DOMAIN: "team",
   ACCESS_AUD: AUD,
-  ACCESS_ADMIN_EMAILS: "admin@example.com",
-  ACCESS_ADMIN_SERVICE_TOKENS: "admin.access",
+  PLATFORM_ADMIN_EMAILS: "admin@example.com",
+  PLATFORM_ADMIN_SERVICE_TOKENS: "admin.access",
   ACCESS_DEV_BYPASS: "",
 };
 

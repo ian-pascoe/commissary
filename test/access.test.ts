@@ -1,8 +1,12 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Effect } from "effect";
+import { Effect, Logger } from "effect";
 import { TestClock } from "effect/testing";
 import { expect } from "vitest";
-import { authenticateRequest } from "../src/access/authenticate.ts";
+import {
+  authenticateRequest,
+  resetAccessWarnings,
+  warnDeprecatedAdminVariables,
+} from "../src/access/authenticate.ts";
 import {
   configAdminLists,
   devBypass,
@@ -30,6 +34,7 @@ import {
 import type { FakeJwks, TestKey } from "./support/access.ts";
 import { env } from "cloudflare:workers";
 import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
+import { platformOf } from "../src/platform/registry.ts";
 
 const NOW_MS = 1_700_000_000_000;
 
@@ -249,8 +254,8 @@ describe("authenticateRequest", () => {
     ...env,
     ACCESS_TEAM_DOMAIN: "team",
     ACCESS_AUD: AUD,
-    ACCESS_ADMIN_EMAILS: "Admin@Example.com",
-    ACCESS_ADMIN_SERVICE_TOKENS: "admin.access",
+    PLATFORM_ADMIN_EMAILS: "Admin@Example.com",
+    PLATFORM_ADMIN_SERVICE_TOKENS: "admin.access",
   };
 
   const context = requestContext(testEnv, {} as unknown as ExecutionContext);
@@ -415,6 +420,278 @@ describe("authenticateRequest", () => {
   );
 });
 
+describe("authenticateRequest and orgs", () => {
+  const testEnv = {
+    ...env,
+    ACCESS_TEAM_DOMAIN: "team",
+    ACCESS_AUD: AUD,
+    PLATFORM_ADMIN_EMAILS: "admin@example.com",
+    PLATFORM_ADMIN_SERVICE_TOKENS: "",
+  };
+
+  const context = requestContext(testEnv, {} as unknown as ExecutionContext);
+
+  const run = <A, E>(
+    body: Effect.Effect<
+      A,
+      E,
+      | import("../src/platform/env.ts").WorkerEnv
+      | import("../src/access/jwks.ts").AccessJwks
+      | import("../src/platform/org.ts").CurrentOrg
+    >,
+  ) => withJwks(makeFakeJwks([keyA]), body.pipe(Effect.provideContext(context)));
+
+  const as = (email: string) =>
+    Effect.promise(async () => ({
+      "cf-access-jwt-assertion": await signToken({
+        key: keyA,
+        now: NOW,
+        claims: userClaims(email),
+      }),
+    }));
+
+  const configAdmin = Effect.succeed(
+    configAdminLists({
+      access: { "api-keys": [], "admin-emails": ["carol@example.com"], "admin-service-tokens": [] },
+    }),
+  );
+
+  const registered = (slug: string) =>
+    Effect.promise(async () => {
+      const created = await platformOf(env).createOrg({ slug, name: slug }, NOW_MS);
+
+      if (!created.ok) throw new Error(created.message);
+
+      return created.org;
+    });
+
+  it.effect("gives a platform admin any org the registry lists, by its slug", () =>
+    run(
+      Effect.gen(function* () {
+        const org = yield* registered("acme-access");
+        const admin = yield* as("admin@example.com");
+
+        const scoped = yield* authenticateRequest(
+          admin,
+          "https://proxy.test/v8/management/orgs/acme-access/config",
+          "management",
+        );
+
+        assert.strictEqual(scoped.org, org.id);
+        assert.isTrue(scoped.platformAdmin);
+        // Its caller scope is the one of that org, not of `global`.
+        assert.strictEqual(
+          scoped.callerScope,
+          yield* callerScope("user:admin@example.com", org.id),
+        );
+
+        const panel = yield* authenticateRequest(
+          admin,
+          "https://proxy.test/o/acme-access/accounts",
+          "management",
+        );
+
+        assert.strictEqual(panel.org, org.id);
+
+        const unscoped = yield* authenticateRequest(
+          admin,
+          "https://proxy.test/v8/management/config",
+          "management",
+        );
+
+        assert.strictEqual(unscoped.org, GLOBAL_ORG);
+        assert.isTrue(unscoped.platformAdmin);
+
+        // Platform-level routes address no org.
+        const platformLevel = yield* authenticateRequest(
+          admin,
+          "https://proxy.test/v8/management/orgs/acme-access",
+          "management",
+        );
+
+        assert.strictEqual(platformLevel.org, GLOBAL_ORG);
+      }),
+    ),
+  );
+
+  it.effect("answers an unknown slug with 404 to a platform admin and 403 to anyone else", () =>
+    run(
+      Effect.gen(function* () {
+        const url = "https://proxy.test/v8/management/orgs/nobody-here/config";
+
+        assert.strictEqual(
+          (yield* Effect.flip(
+            authenticateRequest(yield* as("admin@example.com"), url, "management"),
+          ))._tag,
+          "NotFoundError",
+        );
+        assert.strictEqual(
+          (yield* Effect.flip(
+            authenticateRequest(yield* as("carol@example.com"), url, "management", configAdmin),
+          ))._tag,
+          "ForbiddenError",
+        );
+        assert.strictEqual(
+          (yield* Effect.flip(
+            authenticateRequest(yield* as("dave@example.com"), url, "management"),
+          ))._tag,
+          "ForbiddenError",
+        );
+        // Not signed in: 401 before anything is looked up.
+        assert.strictEqual(
+          (yield* Effect.flip(authenticateRequest({}, url, "management")))._tag,
+          "UnauthorizedError",
+        );
+      }),
+    ),
+  );
+
+  it.effect("limits an admin named by the config document to the org global", () =>
+    run(
+      Effect.gen(function* () {
+        yield* registered("acme-limits");
+        const carol = yield* as("carol@example.com");
+
+        const own = yield* authenticateRequest(
+          carol,
+          "https://proxy.test/v8/management/orgs/default/config",
+          "management",
+          configAdmin,
+        );
+
+        assert.strictEqual(own.org, GLOBAL_ORG);
+        assert.isFalse(own.platformAdmin);
+
+        assert.strictEqual(
+          (yield* authenticateRequest(
+            carol,
+            "https://proxy.test/v8/management/config",
+            "management",
+            configAdmin,
+          )).org,
+          GLOBAL_ORG,
+        );
+
+        for (const url of [
+          "https://proxy.test/v8/management/orgs/acme-limits/config",
+          "https://proxy.test/o/acme-limits/accounts",
+        ]) {
+          assert.strictEqual(
+            (yield* Effect.flip(authenticateRequest(carol, url, "management", configAdmin)))._tag,
+            "ForbiddenError",
+          );
+        }
+      }),
+    ),
+  );
+
+  it.effect("marks the platform admins of a protected route without scoping it", () =>
+    run(
+      Effect.gen(function* () {
+        const alice = yield* authenticateRequest(
+          yield* as("alice@example.com"),
+          "https://proxy.test/v1/models",
+          "protected",
+        );
+
+        const admin = yield* authenticateRequest(
+          yield* as("admin@example.com"),
+          "https://proxy.test/v1/models",
+          "protected",
+        );
+
+        assert.isFalse(alice.platformAdmin);
+        assert.isTrue(admin.platformAdmin);
+        assert.strictEqual(alice.org, GLOBAL_ORG);
+      }),
+    ),
+  );
+});
+
+describe("ACCESS_ADMIN_* aliases", () => {
+  const legacyEnv = {
+    ...env,
+    ACCESS_TEAM_DOMAIN: "team",
+    ACCESS_AUD: AUD,
+    PLATFORM_ADMIN_EMAILS: "",
+    PLATFORM_ADMIN_SERVICE_TOKENS: "",
+    ACCESS_ADMIN_EMAILS: "Old@Example.com",
+    ACCESS_ADMIN_SERVICE_TOKENS: "old.access",
+  };
+
+  it.effect("still make admins, together with PLATFORM_ADMIN_*", () =>
+    Effect.gen(function* () {
+      const loaded = yield* loadAccessConfig({
+        ...legacyEnv,
+        PLATFORM_ADMIN_EMAILS: "new@example.com",
+        PLATFORM_ADMIN_SERVICE_TOKENS: "new.access",
+      });
+
+      for (const email of ["old@example.com", "NEW@example.com"])
+        assert.isTrue(isAdmin(loaded, { kind: "user", email, sub: "" }), email);
+
+      for (const commonName of ["old.access", "new.access"])
+        assert.isTrue(isAdmin(loaded, { kind: "service", commonName }), commonName);
+
+      assert.isFalse(isAdmin(loaded, { kind: "user", email: "other@example.com", sub: "" }));
+    }),
+  );
+
+  it.effect("make a platform admin of a request", () =>
+    withJwks(
+      makeFakeJwks([keyA]),
+      Effect.gen(function* () {
+        const headers = {
+          "cf-access-jwt-assertion": yield* token(keyA, { claims: userClaims("old@example.com") }),
+        };
+
+        const identity = yield* authenticateRequest(
+          headers,
+          "https://proxy.test/v8/management/config",
+          "management",
+        );
+
+        assert.isTrue(identity.platformAdmin);
+      }).pipe(Effect.provideContext(requestContext(legacyEnv, {} as unknown as ExecutionContext))),
+    ),
+  );
+
+  it.effect("are reported once, with the names to use", () =>
+    Effect.gen(function* () {
+      const lines: Array<string> = [];
+
+      const capture = Logger.layer([
+        Logger.make(({ logLevel, message }) => {
+          lines.push(`${logLevel}: ${[message].flat().map(String).join(" ")}`);
+        }),
+      ]);
+
+      resetAccessWarnings();
+
+      yield* Effect.gen(function* () {
+        yield* warnDeprecatedAdminVariables(legacyEnv);
+        yield* warnDeprecatedAdminVariables(legacyEnv);
+      }).pipe(Effect.provide(capture));
+
+      assert.strictEqual(lines.length, 1);
+      assert.include(lines[0], "Warn");
+      assert.include(lines[0], "ACCESS_ADMIN_EMAILS (now PLATFORM_ADMIN_EMAILS)");
+      assert.include(lines[0], "ACCESS_ADMIN_SERVICE_TOKENS (now PLATFORM_ADMIN_SERVICE_TOKENS)");
+
+      // A deployment that renamed them is not told anything.
+      resetAccessWarnings();
+      lines.length = 0;
+
+      yield* warnDeprecatedAdminVariables({
+        PLATFORM_ADMIN_EMAILS: "new@example.com",
+        ACCESS_ADMIN_EMAILS: "",
+      }).pipe(Effect.provide(capture));
+
+      assert.deepStrictEqual(lines, []);
+    }),
+  );
+});
+
 describe("principal", () => {
   it.effect("callerScope mirrors the Go derivation", () =>
     Effect.gen(function* () {
@@ -462,8 +739,8 @@ describe("config", () => {
   const base = {
     ACCESS_TEAM_DOMAIN: "",
     ACCESS_AUD: "",
-    ACCESS_ADMIN_EMAILS: "",
-    ACCESS_ADMIN_SERVICE_TOKENS: "",
+    PLATFORM_ADMIN_EMAILS: "",
+    PLATFORM_ADMIN_SERVICE_TOKENS: "",
   };
 
   it.effect("normalises the team domain and splits the lists", () =>
@@ -471,8 +748,8 @@ describe("config", () => {
       const loaded = yield* loadAccessConfig({
         ACCESS_TEAM_DOMAIN: "https://Team.cloudflareaccess.com/",
         ACCESS_AUD: "a1, a2\nb3",
-        ACCESS_ADMIN_EMAILS: "One@x.com,two@x.com",
-        ACCESS_ADMIN_SERVICE_TOKENS: "t1.access",
+        PLATFORM_ADMIN_EMAILS: "One@x.com,two@x.com",
+        PLATFORM_ADMIN_SERVICE_TOKENS: "t1.access",
       });
 
       assert.strictEqual(loaded.issuer, "https://team.cloudflareaccess.com");

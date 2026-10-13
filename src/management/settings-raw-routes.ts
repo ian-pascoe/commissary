@@ -11,7 +11,7 @@
  * - the text is read by `settings-raw.ts` `readRawEdit` (YAML `422 invalid_yaml` with `line`/`column`, config
  *   `422 invalid_config` with `path` when known, placeholders that cannot be restored `422` with their `path`);
  * - the guards of `PATCH /settings` apply to the whole document: changing `access.admin-service-tokens` needs a
- *   service-token administrator or a deployment admin (`403 service_tokens_require_service_admin`), and a caller
+ *   service-token administrator or a platform admin (`403 service_tokens_require_service_admin`), and a caller
  *   cannot remove their own admin access (`422 would_remove_your_admin_access`);
  * - `check` stores nothing and answers the masked canonical result (new secrets as `[new secret]…`), what is dropped,
  *   what has no effect on Workers and `moved_secrets` (kept secrets now sent to another family or host, also in the

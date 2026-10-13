@@ -6,7 +6,7 @@
 // Non-browser clients (curl, SDKs, Claude Code, Codex) send neither `Origin` nor `Sec-Fetch-*` headers and are not
 // affected. Browsers always send `Origin` on cross-origin fetches, form posts and WebSocket handshakes, and
 // `Sec-Fetch-Site` on every request; the control panel is served by the Worker itself (same origin).
-import { isPanelPagePath, MANAGEMENT_PREFIX, normalizedPath } from "./routes.ts";
+import { isPanelPagePath, MANAGEMENT_PREFIX, normalizedPath, unscopedPath } from "./routes.ts";
 import type { AccessZone } from "./routes.ts";
 
 export interface CrossSiteRejection {
@@ -71,7 +71,8 @@ const header = (headers: Headers, name: string): string =>
  * A top-level navigation (link, bookmark, typed URL) to a panel page, which may legitimately come from another site:
  * `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document` (not a frame: `iframe`/`frame`/`embed`/`object` are
  * refused, against clickjacking), to a panel page or the legacy panel address. The management API
- * (`/v8/management*`) has no such page: OAuth provider redirects land on the public callback paths.
+ * (`/v8/management*`) has no such page: OAuth provider redirects land on the public callback paths. The pages of an
+ * org (`/o/<slug>/accounts`) are panel pages like the unscoped ones.
  */
 const isPanelNavigation = (method: string, headers: Headers, requestUrl: string): boolean =>
   (method === "GET" || method === "HEAD") &&
@@ -89,7 +90,8 @@ const YAML_TYPES = new Set(["application/yaml", "application/x-yaml", "text/yaml
 /**
  * Content types accepted by management writes: JSON everywhere, multipart for credential uploads, YAML for
  * `PUT /config.yaml`. The CORS-safelisted types (`text/plain`, form encoding, a bare body without type) are refused,
- * so a write can never be a "simple" cross-site request.
+ * so a write can never be a "simple" cross-site request. `path` is the path without the org of an org-scoped request
+ * (`/v8/management/orgs/<slug>/config.yaml` is `/v8/management/config.yaml`).
  */
 const managementTypeAllowed = (method: string, path: string, type: string): boolean => {
   if (isJsonType(type)) return true;
@@ -149,7 +151,7 @@ export const crossSiteRejection = (
 
   if (type === "") return hasBody(headers) ? UNSUPPORTED_CONTENT_TYPE : undefined;
 
-  return managementTypeAllowed(verb, normalizedPath(requestUrl) ?? "", type)
+  return managementTypeAllowed(verb, unscopedPath(normalizedPath(requestUrl) ?? ""), type)
     ? undefined
     : UNSUPPORTED_CONTENT_TYPE;
 };
