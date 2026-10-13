@@ -1,3 +1,7 @@
+---
+status: partly superseded by ADR-0025
+---
+
 # What the port leaves out, and how it treats the Go server's keys
 
 The proxy does not port these features:

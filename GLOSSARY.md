@@ -1,39 +1,65 @@
 # cf-llm-proxy
 
-A personal LLM proxy: it pools one operator's provider accounts and API keys and serves them through OpenAI-, Claude-
-and Gemini-compatible APIs, behind Cloudflare Access. It began as a port of the Go server CLIProxyAPI, which it now
-consults as a reference rather than follows.
+An LLM proxy for orgs: it pools each org's provider accounts and API keys and serves them to the org's members through
+OpenAI-, Claude- and Gemini-compatible APIs. An org can host it for itself, or one deployment can serve many orgs. It
+began as a port of the Go server CLIProxyAPI, which it now consults as a reference rather than follows.
 
 ## Language
 
-### The proxy and its users
+### The proxy, orgs and members
 
 **Proxy**:
-This deployment as a whole: one personal service that answers clients' model requests using the operator's
+This deployment as a whole: one service that answers model requests for one or more orgs, each with its own
 credentials.
 _Avoid_: gateway, server
 
-**Operator**:
-The one person who owns and administers the proxy, and the only user of the control panel.
-_Avoid_: user, customer
+**Org**:
+A company or group that uses the proxy as one unit, with its own members, teams, credentials, config entries and spend
+limits. Nothing in one org is visible to another. A self-hosted proxy usually serves a single org.
+_Avoid_: tenant, workspace, organisation (kept for a provider's own organisation, such as an Anthropic organisation)
+
+**Platform admin**:
+A person named by the deployment who can create orgs and repair any of them.
+_Avoid_: operator, superuser, admin (on its own)
+
+**Member**:
+A person who belongs to an org, with one role there. A person can be a member of several orgs.
+_Avoid_: user, seat, operator
+
+**Role**:
+What a member may do in their org: org owner, org admin or plain member.
+_Avoid_: permission
+
+**Org admin**:
+A member who manages the org's credentials, grants, spend limits and settings. Org owners are org admins too.
+_Avoid_: admin (on its own), operator, administrator
+
+**Org owner**:
+An org admin who can also change roles and, through a service token, hold the sensitive powers such as downloading a
+stored credential.
+_Avoid_: owner (on its own), which also says whom a credential belongs to
+
+**Team**:
+A named group of members within one org. Grants and spend limits can name a team.
+_Avoid_: group
 
 **Client**:
 An application that sends model requests to the proxy, such as pi, Claude Code, Codex or an SDK.
 _Avoid_: caller, consumer, user
 
 **Principal**:
-The Cloudflare Access identity behind a request: a person's email or a service token. Usage and session state are
-attributed to it.
+The identity behind a request: a person signed in through Cloudflare Access, a service token or a proxy key. Usage and
+session state are attributed to it.
 _Avoid_: user, API key, caller
 
-**Service token**:
-An Access identity for a machine, which a client presents instead of an interactive login. Each client gets its own.
-_Avoid_: API key, client key
+**Proxy key**:
+A secret the proxy issues to a member for their clients. It names its org and member, and it can have a spend limit of
+its own.
+_Avoid_: API key, client key, access key, token
 
-**Admin**:
-A principal allowed into the control panel and the management API. An admin is named either by the deployment or by the
-config document.
-_Avoid_: management key holder, administrator
+**Service token**:
+An Access identity for a machine, registered to one org with a role, which scripts present to the management API.
+_Avoid_: API key, client key, proxy key
 
 **Caller scope**:
 The namespace that keeps one principal's sessions and cached conversation state apart from every other principal's.
@@ -58,6 +84,19 @@ _Avoid_: channel as a general word for a provider
 Anything the proxy can authenticate to a provider with: an account or an API key.
 _Avoid_: auth
 
+**Shared credential**:
+A credential that belongs to the org. Members use it through grants.
+_Avoid_: org account, team account
+
+**Private credential**:
+A credential that belongs to one member, who alone can use it. Other members, org admins included, see only that it
+exists.
+_Avoid_: personal account, own key
+
+**Grant**:
+Permission for a member, a team or everyone in an org to use certain shared credentials for certain upstream models.
+_Avoid_: entitlement, ACL, access rule
+
 **Account**:
 A credential that is a provider login: an OAuth sign-in, a device-code login, an imported service account or an
 uploaded auth file. API keys whose provider reports allowances, such as OpenCode Go keys, are listed beside the accounts
@@ -65,11 +104,11 @@ but are still API keys.
 _Avoid_: auth, auth file, login
 
 **API key**:
-A credential that is a provider secret stored in the config document, as part of a key group.
+A credential that is a provider secret, entered by an org admin or a member as part of a key group.
 _Avoid_: config key, config credential, provider key
 
 **Key group**:
-One endpoint of a provider in the config document, together with its API keys and the rules they share.
+One endpoint of a provider, together with its API keys and the rules they share.
 _Avoid_: section, compat group
 
 **OpenAI-compatible endpoint**:
@@ -85,7 +124,8 @@ The opaque public handle that names a credential in the control panel, the manag
 _Avoid_: credential id, auth id
 
 **Disabled**:
-Said of an account or API key that the operator has taken out of selection without deleting it.
+Said of an account or API key that an org admin, or the member a private credential belongs to, has taken out of
+selection without deleting it.
 _Avoid_: paused, excluded
 
 **Connect**:
@@ -116,11 +156,11 @@ The model name the provider receives for an attempt.
 _Avoid_: provider's name, route model
 
 **Model rule**:
-An operator-defined alias, exclusion or prefix that shapes which model ids a credential serves.
+An org-defined alias, exclusion or prefix that shapes which model ids a credential serves.
 _Avoid_: mapping, routing rule
 
 **Model alias**:
-A model id that the operator defines to stand for an upstream model.
+A model id that an org defines to stand for an upstream model.
 _Avoid_: mapping, rename
 
 **Alias pool**:
@@ -140,7 +180,7 @@ A pattern that removes models from what a credential, or every account of a chan
 _Avoid_: blacklist, disabled model
 
 **Model prefix**:
-A per-credential name segment (`team/gpt-5`) through which clients reach that credential alone.
+A per-credential name segment (`work/gpt-5`) through which clients reach that credential alone.
 _Avoid_: namespace, prefix (on its own)
 
 **Model catalog**:
@@ -205,8 +245,8 @@ credential.
 _Avoid_: peek, first byte
 
 **Selection**:
-Choosing the credential for an attempt. The proxy keeps the available credentials, takes the highest priority tier,
-applies the routing strategy and then honours session affinity.
+Choosing the credential for an attempt. The proxy keeps the available credentials that the principal's grants allow,
+takes the highest priority tier, applies the routing strategy and then honours session affinity.
 _Avoid_: scheduling, rotation
 
 **Priority tier**:
@@ -228,7 +268,7 @@ Sending a session's later requests to the credential that served it before.
 _Avoid_: sticky routing, binding
 
 **Payload rule**:
-An operator-defined change to the body sent upstream. Payload rules are applied after every other change the proxy makes.
+An org-defined change to the body sent upstream. Payload rules are applied after every other change the proxy makes.
 _Avoid_: payload (on its own), payload config
 
 **Reasoning signature**:
@@ -260,7 +300,7 @@ What a failed attempt is blamed on. The model is cooled down by default. The who
 provider limits the account. Nothing is cooled down when the request itself was at fault.
 
 **Cooldown reset**:
-The operator clearing a credential's cooldowns.
+An org admin clearing a credential's cooldowns.
 _Avoid_: quota reset, reset (on its own)
 
 **Allowance**:
@@ -297,36 +337,33 @@ _using a reset_.
 
 ### Configuration and the control panel
 
-**Config document**:
-The single, versioned document that holds every operator setting, key group and model rule.
-_Avoid_: config file, config.yaml, settings
+**Config entry**:
+One stored part of an org's configuration, such as a setting, key group, API key, model rule or payload rule. Each is
+created, changed and deleted on its own.
+_Avoid_: config document, config row, record
 
-**Config version**:
-The counter that each write to the config document must name. A write based on an older version is refused.
-_Avoid_: version (on its own), layout
-
-**Layout**:
-The shape of the config document: the current v8 layout, or the legacy flat layout, which is accepted on import.
-_Avoid_: config version
+**Revision**:
+The counter of one config entry that each write to it must name. A write based on an older revision is refused.
+_Avoid_: version (on its own), config version
 
 **Settings**:
-The typed part of the config document, edited on the Settings page.
-_Avoid_: settings as a name for the whole document
+An org's typed options, edited on the Settings page.
+_Avoid_: config, configuration (for settings alone)
 
-**Raw configuration**:
-The whole config document edited as text, with secrets shown as placeholders.
-_Avoid_: config.yaml editor
+**Go config document**:
+The Go server's configuration file, which an org can import into config entries.
+_Avoid_: config file, config.yaml, config document
 
-**Secret placeholder**:
-The stand-in shown for a stored secret. Saving it back keeps the secret unchanged.
-_Avoid_: mask, redacted value
+**Layout**:
+The shape of a Go config document: the v8 layout or the legacy flat layout. Both can be imported.
+_Avoid_: revision
 
 **Not-applied key**:
-A config key that the proxy accepts, so documents from the Go server import unchanged, but that has no effect.
+A key of a Go config document that the import names but does not store, because it would have no effect here.
 _Avoid_: unsupported, deprecated, ignored
 
 **Control panel**:
-The proxy's own web interface for the operator.
+The proxy's own web interface for members and org admins.
 _Avoid_: management panel, dashboard, web UI
 
 **Upstream panel**:
@@ -334,7 +371,7 @@ The Go server's management web interface. The proxy does not serve it.
 _Avoid_: panel (on its own), Management Center
 
 **Management API**:
-The admin-only HTTP API that the control panel and operator scripts use.
+The HTTP API that the control panel and scripts use. What a principal may do through it depends on its role.
 _Avoid_: admin API
 
 **Key test**:
@@ -352,8 +389,8 @@ The proxy's own record of the traffic it served.
 _Avoid_: usage as a word for allowances
 
 **Usage record**:
-The stored account of one attempt: its tokens, latency, principal, credential and outcome. A request that fails over
-leaves one record per attempt.
+The stored account of one attempt: its org, principal, credential, tokens, cost, latency and outcome. A request that
+fails over leaves one record per attempt.
 _Avoid_: request, log entry
 
 **Token breakdown**:
@@ -363,6 +400,34 @@ _Avoid_: usage (on its own)
 **Usage export**:
 The feed of usage records for external collectors, in the Go server's shape.
 _Avoid_: usage queue
+
+### Spend
+
+**Price**:
+What a model charges per token of one kind (uncached input, cache read, cache write, output), from the model catalog or
+a price override.
+_Avoid_: cost (for a rate), pricing
+
+**Price override**:
+A price an org sets for a model, replacing the model catalog's or filling a gap in it.
+_Avoid_: custom pricing, rate card
+
+**Cost**:
+The API-equivalent price of an attempt: its token breakdown at the model's prices. Attempts on subscription accounts
+are costed the same way as attempts on API keys.
+_Avoid_: charge, bill, spend (for one attempt)
+
+**Unpriced**:
+Said of an attempt on a model that has no price. It costs nothing toward spend limits.
+_Avoid_: free
+
+**Spend**:
+The cost added up over a period for whatever a spend limit covers.
+_Avoid_: usage (on its own), consumption
+
+**Spend limit**:
+A cap on spend over a calendar day, week or month, set on a member, a team, an org, a shared credential or a proxy key.
+_Avoid_: budget, quota, allowance (a provider's limit)
 
 ### The reference
 
