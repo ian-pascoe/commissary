@@ -96,36 +96,43 @@ const MembershipToggle = ({
 
   return (
     <Loaded result={result} retry={retry} what={what}>
-      {(settings) => (
-        <>
-          <label className={styles["toggle"]}>
-            <input
-              type="checkbox"
-              checked={settings[setting]}
-              disabled={!owner || save.busy}
-              onChange={async (event) => {
-                clear();
+      {(settings) => {
+        const on = settings[setting];
 
-                settle(
-                  await save.run({
-                    payload: { [setting]: event.target.checked },
-                    reactivityKeys: MEMBERS,
-                  }),
-                  said(event.target.checked),
-                );
-              }}
-            />
-            <span>{label}</span>
-          </label>
-          <p className={kit["muted"]}>
-            {describe(settings[setting])}{" "}
-            {owner
-              ? (ownerNote ?? "")
-              : `Only an org owner can change this; you are ${roleAs(caller.role)}.`}
-          </p>
-          <NoteLine note={note} />
-        </>
-      )}
+        // `access_clients` exists in the first org only (an Access sign-in reaches no other).
+        if (on === undefined) return null;
+
+        return (
+          <>
+            <label className={styles["toggle"]}>
+              <input
+                type="checkbox"
+                checked={on}
+                disabled={!owner || save.busy}
+                onChange={async (event) => {
+                  clear();
+
+                  settle(
+                    await save.run({
+                      payload: { [setting]: event.target.checked },
+                      reactivityKeys: MEMBERS,
+                    }),
+                    said(event.target.checked),
+                  );
+                }}
+              />
+              <span>{label}</span>
+            </label>
+            <p className={kit["muted"]}>
+              {describe(on)}{" "}
+              {owner
+                ? (ownerNote ?? "")
+                : `Only an org owner can change this; you are ${roleAs(caller.role)}.`}
+            </p>
+            <NoteLine note={note} />
+          </>
+        );
+      }}
     </Loaded>
   );
 };
@@ -212,6 +219,19 @@ const AccessClients = ({ caller }: { readonly caller: Caller }) => (
   />
 );
 
+/** The `access_clients` setting, shown in the org that has it (the first org). */
+const ProxySignIn = ({ caller }: { readonly caller: Caller }) => {
+  const result = useAtomValue(membershipAtom);
+
+  if (!AsyncResult.isSuccess(result) || result.value.access_clients === undefined) return null;
+
+  return (
+    <Section title="Proxy sign-in">
+      <AccessClients caller={caller} />
+    </Section>
+  );
+};
+
 const Lists = ({ caller }: { readonly caller: Caller }) => {
   const members = useAtomValue(membersAtom);
   const teams = useAtomValue(teamsAtom);
@@ -271,9 +291,7 @@ const Lists = ({ caller }: { readonly caller: Caller }) => {
       <Section title="Private credentials">
         <PrivateCredentials />
       </Section>
-      <Section title="Proxy sign-in">
-        <AccessClients caller={caller} />
-      </Section>
+      <ProxySignIn caller={caller} />
     </>
   );
 };

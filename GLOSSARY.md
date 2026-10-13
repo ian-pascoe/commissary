@@ -73,9 +73,9 @@ first org of a self-hosted proxy, off for every org created later.
 _Avoid_: open signup, self-service
 
 **Access sign-ins for clients**:
-An org's setting that lets clients on the proxy routes still sign in through Cloudflare Access instead of sending a
-proxy key. On for the first org of a self-hosted proxy, so its existing clients keep working, off for every org created
-later.
+A setting of the first org of a self-hosted proxy that lets clients on the proxy routes still sign in through
+Cloudflare Access instead of sending a proxy key, so its existing clients keep working. On until an owner turns it off;
+no other org has it.
 _Avoid_: legacy auth, Access fallback
 
 **Client**:

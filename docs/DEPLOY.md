@@ -15,8 +15,10 @@ Fork and Dependabot pull requests get the checks but no preview (they receive no
 After each deploy, `tools/check-deploy.sh` checks where Access sits (ADR 0022): `/healthz` and `/v8/management/me`
 answer 200 through Access with the CI service token (the second proves that the Worker accepts the Access JWT: team
 domain and AUD wired); `/v1/models` and `/v1beta/models` without credentials reach the Worker, which answers
-`401 Missing API key` itself (the proxy routes are outside Access, behind proxy keys); and `/` without credentials is
-stopped by Access. The deploy job then shows
+`401 Missing API key` itself (the proxy routes are outside Access, behind proxy keys); `/v1/models` with an Access JWT
+in `cf-access-token` and a dummy `Authorization` key, the way `cloudflared access` clients call it, answers 200 (the
+JWT is the `CF_Authorization` cookie Access set for the service token); and `/` without credentials is stopped by
+Access. The deploy job then shows
 the URL on the run, and previews get a pull request comment (`tools/preview-comment.sh`) that is updated on every push.
 
 ## Preview stages
@@ -83,7 +85,8 @@ the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --pro
 
 - **Control panel.** CI builds the control panel from `web/` (`pnpm web:build`) before each deploy; nothing else is
   installed into `public/`.
-- **Proxy keys.** The deploy adds an Access application with a Bypass policy on the proxy paths (`/v1*`,
+- **Proxy keys.** The deploy adds, after the Worker (the bypass depends on the Worker's output, so the old Worker
+  never serves the proxy routes without Access in front), an Access application with a Bypass policy on the proxy paths (`/v1*`,
   `/openai/v1*`, `/backend-api/codex*`, `/chat/completions`, `/completions`, `/responses`), so clients reach the
   Worker with a proxy key and no Access sign-in ([ACCESS.md](ACCESS.md#proxy-keys)). From that deploy on, clients that
   send Access service token headers to those paths are refused: move them to proxy keys first

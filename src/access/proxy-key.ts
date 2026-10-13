@@ -4,8 +4,8 @@
  * `Authenticate`): `Authorization` (`Bearer` stripped), `x-goog-api-key`, `x-api-key`, `?key=` and `?auth_token=`.
  *
  * A key names its org (`proxy-keys/key.ts`), so verification asks that org's ControlPlane only, never another org's.
- * Before that, the Platform registry confirms that the org exists (once per org and isolate), so a made-up org id
- * never instantiates a ControlPlane. Verified keys are cached per isolate for {@link VERIFIED_KEY_TTL_MS} (never past
+ * Before that, the Platform registry confirms that the org exists (at most every {@link VERIFIED_KEY_TTL_MS} per org
+ * and isolate), so a made-up org id never instantiates a ControlPlane. Verified keys are cached per isolate for {@link VERIFIED_KEY_TTL_MS} (never past
  * the key's expiry), so a revocation applies within that time everywhere, and at once in the isolate that revoked it.
  */
 import { Clock, Effect } from "effect";
@@ -77,12 +77,13 @@ interface CachedKey {
 /** Verified keys by the SHA-256 of the whole key. */
 const verified = new Map<string, CachedKey>();
 
-/** Orgs the Platform registry confirmed; orgs are never deleted, so the answer stays true. */
-const knownOrgs = new Set<OrgId>();
+/** Orgs the Platform registry confirmed, with the epoch ms until which the answer is trusted. */
+const knownOrgs = new Map<OrgId, number>();
 
-/** Forgets a revoked key in this isolate, so it is refused here at once. */
-export const forgetVerifiedProxyKey = (keyId: string): void => {
-  for (const [hash, cached] of verified) if (cached.key.keyId === keyId) verified.delete(hash);
+/** Forgets a revoked key of `org` in this isolate, so it is refused here at once. */
+export const forgetVerifiedProxyKey = (org: OrgId, keyId: string): void => {
+  for (const [hash, cached] of verified)
+    if (cached.key.org === org && cached.key.keyId === keyId) verified.delete(hash);
 };
 
 /** Forgets the keys of a member who left the org, so this isolate refuses them at once. */
@@ -104,28 +105,32 @@ const unavailable = (cause: unknown) =>
     message: `proxy key verification: ${cause instanceof Error ? cause.message : "unknown error"}`,
   });
 
-const orgExists = (org: OrgId) =>
-  Effect.gen(function* () {
-    if (knownOrgs.has(org)) return true;
+const orgExists = Effect.fnUntraced(function* (org: OrgId, now: number) {
+  if (now < (knownOrgs.get(org) ?? 0)) return true;
 
-    const found = yield* platform("getOrgById", (stub) => stub.getOrgById(org)).pipe(
-      Effect.mapError((error) => new InternalError({ message: error.message })),
-    );
+  const found = yield* platform("getOrgById", (stub) => stub.getOrgById(org)).pipe(
+    Effect.mapError((error) => new InternalError({ message: error.message })),
+  );
 
-    if (found === undefined) return false;
-    knownOrgs.add(org);
+  if (found === undefined) {
+    knownOrgs.delete(org);
 
-    return true;
-  });
+    return false;
+  }
+
+  knownOrgs.set(org, now + VERIFIED_KEY_TTL_MS);
+
+  return true;
+});
 
 /**
  * The live key behind `text`, or `Invalid API key` (401) for a malformed key, a key of an org that does not exist, an
  * unknown id, a wrong secret, a revoked or expired key and a key whose member left; the client cannot tell which.
  */
-export const verifyProxyKey = (
+export const verifyProxyKey: (
   text: string,
-): Effect.Effect<VerifiedProxyKey, UnauthorizedError | InternalError, WorkerEnv> =>
-  Effect.gen(function* () {
+) => Effect.Effect<VerifiedProxyKey, UnauthorizedError | InternalError, WorkerEnv> =
+  Effect.fnUntraced(function* (text: string) {
     const parsed = parseProxyKey(text);
 
     if (parsed === undefined) return yield* invalid;
@@ -135,7 +140,7 @@ export const verifyProxyKey = (
     if (cached !== undefined && now < cached.until) return cached.key;
     verified.delete(parsed.hash);
 
-    if (!(yield* orgExists(parsed.org))) return yield* invalid;
+    if (!(yield* orgExists(parsed.org, now))) return yield* invalid;
     const env = yield* WorkerEnv;
 
     const verdict = yield* Effect.tryPromise({

@@ -135,17 +135,16 @@ const admitted = (
   });
 
 /** The identity of a live proxy key: its member, in the org the key names (ADR 0022). Never a platform admin. */
-const keyIdentity = (text: string) =>
-  Effect.gen(function* () {
-    const key = yield* verifyProxyKey(text);
+const keyIdentity = Effect.fnUntraced(function* (text: string) {
+  const key = yield* verifyProxyKey(text);
 
-    return yield* makeIdentity(
-      { kind: "key", keyId: key.keyId, memberId: key.memberId, email: key.email },
-      key.org,
-      false,
-      { role: key.role, memberId: key.memberId },
-    );
-  });
+  return yield* makeIdentity(
+    { kind: "key", keyId: key.keyId, memberId: key.memberId, email: key.email },
+    key.org,
+    false,
+    { role: key.role, memberId: key.memberId },
+  );
+});
 
 /**
  * Authenticates a request for the given zone.

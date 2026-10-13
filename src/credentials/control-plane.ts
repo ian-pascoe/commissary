@@ -599,18 +599,19 @@ export class ControlPlane extends DurableObject<Env> {
   createProxyKey(
     input: { readonly memberId: string; readonly name: string; readonly expiresAt?: number },
     now: number,
-    by: string,
   ): ProxyKeyResult<{ readonly record: ProxyKeyRecord; readonly key: string }> | MemberNotFound {
     this.#ensureMembership();
 
     if (this.#members.member(input.memberId) === undefined)
       return { ok: false, error: "member_not_found", message: "no member has this id" };
 
-    return this.#proxyKeys.create(input, now, by);
+    return this.#proxyKeys.create(input, now);
   }
 
   /** Revokes a key; `memberId` limits the call to that member's keys (`ProxyKeyStore.revoke`). */
   revokeProxyKey(id: string, now: number, memberId?: string): ProxyKeyResult<ProxyKeyRecord> {
+    this.#ensureMembership();
+
     return this.#proxyKeys.revoke(id, now, memberId);
   }
 

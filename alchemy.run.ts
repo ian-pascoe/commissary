@@ -105,19 +105,22 @@ export default Alchemy.Stack(
       },
     });
 
+    // The bypass is derived from the Worker's output on every stage, so it is applied only after the Worker: the first
+    // deploy must not take the proxy routes out of Access while the old Worker, which only reads the Access edge's
+    // `Cf-Access-Jwt-Assertion`, still serves them (clients sending `cf-access-token` would get 401 in between).
     if (!dev)
       yield* provisionProxyBypass(
         settings,
-        settings.preview
-          ? Output.asOutput(worker.url).pipe(
-              Output.map((url) => {
-                // A preview always serves its workers.dev URL (`workersDev` above).
-                if (url === undefined) throw new Error("the preview Worker has no workers.dev URL");
+        Output.asOutput(worker.url).pipe(
+          Output.map((url) => {
+            if (!settings.preview) return settings.domain;
 
-                return new URL(url).host;
-              }),
-            )
-          : settings.domain,
+            // A preview always serves its workers.dev URL (`workersDev` above).
+            if (url === undefined) throw new Error("the preview Worker has no workers.dev URL");
+
+            return new URL(url).host;
+          }),
+        ),
       );
 
     return {

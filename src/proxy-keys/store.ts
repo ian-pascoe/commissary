@@ -90,7 +90,7 @@ export const LAST_USED_RESOLUTION_MS = 60_000;
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS proxy_keys (
      id TEXT PRIMARY KEY, member_id TEXT NOT NULL, name TEXT NOT NULL, hash TEXT NOT NULL, prefix TEXT NOT NULL,
-     created_at INTEGER NOT NULL, created_by TEXT NOT NULL, last_used_at INTEGER, expires_at INTEGER,
+     created_at INTEGER NOT NULL, last_used_at INTEGER, expires_at INTEGER,
      revoked_at INTEGER
    )`,
   `CREATE INDEX IF NOT EXISTS proxy_keys_by_member ON proxy_keys (member_id)`,
@@ -220,7 +220,6 @@ export class ProxyKeyStore {
   create(
     input: { readonly memberId: string; readonly name: string; readonly expiresAt?: number },
     now: number,
-    by: string,
   ): ProxyKeyResult<{ readonly record: ProxyKeyRecord; readonly key: string }> {
     const name = cleanName(input.name);
 
@@ -233,25 +232,47 @@ export class ProxyKeyStore {
       return refuse("invalid_expiry", MESSAGES.invalidExpiry);
 
     if (
-      this.#count(`SELECT COUNT(*) AS n FROM proxy_keys WHERE member_id = ?`, input.memberId) >=
-      MAX_KEYS_PER_MEMBER
+      this.#count(
+        `SELECT COUNT(*) AS n FROM proxy_keys
+         WHERE member_id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)`,
+        input.memberId,
+        now,
+      ) >= MAX_KEYS_PER_MEMBER
     )
       return refuse("too_many_keys", MESSAGES.tooManyKeys);
+
+    // A member keeps at most MAX_KEYS_PER_MEMBER rows (ADR 0027): revoked and expired keys stay listed only until a
+    // new key needs their place, the longest dead first.
+    const surplus =
+      this.#count(`SELECT COUNT(*) AS n FROM proxy_keys WHERE member_id = ?`, input.memberId) -
+      (MAX_KEYS_PER_MEMBER - 1);
+
+    if (surplus > 0)
+      this.#sql.exec(
+        `DELETE FROM proxy_keys WHERE id IN (
+           SELECT id FROM proxy_keys
+           WHERE member_id = ? AND (revoked_at IS NOT NULL OR expires_at <= ?)
+           ORDER BY COALESCE(revoked_at, expires_at), id
+           LIMIT ?
+         )`,
+        input.memberId,
+        now,
+        surplus,
+      );
 
     let minted = mintProxyKey(this.#org);
 
     while (this.#row(minted.keyId) !== undefined) minted = mintProxyKey(this.#org);
 
     this.#sql.exec(
-      `INSERT INTO proxy_keys (id, member_id, name, hash, prefix, created_at, created_by, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO proxy_keys (id, member_id, name, hash, prefix, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       minted.keyId,
       input.memberId,
       name,
       minted.hash,
       minted.prefix,
       now,
-      by,
       input.expiresAt ?? null,
     );
 

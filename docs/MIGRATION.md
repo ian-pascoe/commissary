@@ -178,9 +178,10 @@ longer turns a service token into a sign-in there, and the Worker answers them i
   `cf-access-token` header itself (and from `Cf-Access-Jwt-Assertion`); a dummy API key sent next to it is ignored. A
   token is issued for the Access application of the whole domain, so renew it with
   `cloudflared access login https://proxy.example.com` (the domain, not a proxy path, which Access no longer guards).
-- When every client uses a proxy key, an org owner turns the setting off, on the Members page or with
-  `curl "${H[@]}" -X PATCH "$M/membership" -H 'content-type: application/json' -d '{"access_clients":false}'`. From then
-  on a request to a proxy route with only an Access sign-in answers `401`. New orgs start with it off.
+- When every client uses a proxy key, an owner of `global` turns the setting off, on its Members page or with
+  `curl "${H[@]}" -X PATCH "$M/membership" -H 'content-type: application/json' -d '{"access_clients":false}'` (`M`
+  unscoped). From then on a request to a proxy route with only an Access sign-in answers `401`. Other orgs have no such
+  setting: they take proxy keys only.
 
 A deployment that brings its own Access application (`ACCESS_AUD`) gets no bypass from the deploy: add a self-hosted
 application for the proxy paths with a Bypass policy for everyone ([DEPLOY.md](DEPLOY.md)), or its clients keep needing

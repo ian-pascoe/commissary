@@ -25,7 +25,7 @@ import {
 import { type MockHandler, mockHttp } from "./refresh.ts";
 import type { Json } from "../../src/json/index.ts";
 
-const key = await makeKey("management-kid");
+export const key = await makeKey("management-kid");
 
 export const ADMIN = "admin@example.com";
 

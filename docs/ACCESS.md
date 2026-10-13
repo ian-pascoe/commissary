@@ -174,7 +174,7 @@ key once (`key`), and the org's ControlPlane stores only its SHA-256, a visible 
 characters>`), its member, its name and when it was created, last used (to the minute), expires and was revoked.
 
 - A key names its org by the org's permanent id, so the Worker asks that org's ControlPlane and no other (after the Platform
-  registry confirms, once per isolate, that the org exists). The presented key's hash is compared with the stored one in
+  registry confirms that the org exists). The presented key's hash is compared with the stored one in
   constant time.
 - A request with a key acts as the key's member in the key's org, with their role there: usage records store the key
   (`principal` `key:<key id>`) and the member (`member_id`), and the caller scope of session state is the member's, so one
@@ -183,15 +183,17 @@ characters>`), its member, its name and when it was created, last used (to the m
   /proxy-keys/<id>` revokes one (`404 proxy_key_not_found` for another member's key unless an org admin asks). A revoked
   key stays listed and is refused from the next request on in the isolate that revoked it and within 30 seconds
   everywhere (each isolate trusts a verified key for at most 30 seconds, and never past its expiry). Removing a member
-  deletes their keys (ADR 0027). A member holds at most 100 keys.
+  deletes their keys (ADR 0027). A member holds at most 100 live keys; a revoked or expired key stays listed until a
+  new key needs its place (a member keeps at most 100 keys in all).
 - Proxy keys are never accepted on the management API or the panel: those stay behind Access.
 
 **Access sign-ins for clients** (`GET`/`PATCH /membership`, `{"access_clients": true}`): clients set up before proxy keys
 signed in through Access on the proxy routes. While this org setting is on, a proxy route still takes an Access JWT,
 which the Worker verifies itself from `Cf-Access-Jwt-Assertion` or from the `cf-access-token` header `cloudflared access`
-sends (Access no longer adds the former there); the sign-in is admitted like on the management API. It is on for `global`,
-so an upgraded deployment's `cloudflared` clients keep working, and off for new orgs, where a request with only an Access
-sign-in answers `401`. A proxy key always wins: a request with a key is judged by the key alone. Moving clients:
+sends (Access no longer adds the former there); the sign-in is admitted like on the management API. An Access sign-in
+names no org, so on a proxy route it always reaches `global`: the setting exists there only (on by default, so an
+upgraded deployment's `cloudflared` clients keep working), `GET /membership` of another org has no `access_clients`, and
+setting it there answers `422 access_clients_global_only`. Every other org takes proxy keys only. A proxy key always wins: a request with a key is judged by the key alone. Moving clients:
 [MIGRATION.md](MIGRATION.md#5-move-clients-to-proxy-keys).
 
 **Upgrading from config admin lists.** Before members, `global` was also managed by the config document's
@@ -352,7 +354,7 @@ affected. Check the Cloudflare WARP/Access docs for the current options.
 | 500 `Authentication service error`     | `ACCESS_TEAM_DOMAIN` wrong (check the team name) or `ACCESS_AUD` empty                                 |
 | 401 `Missing API key`                  | No proxy key (proxy routes), or the request reached the Worker without Access (management)             |
 | 401 `Invalid API key`                  | Wrong, revoked or expired proxy key; AUD/issuer mismatch, expired JWT                                  |
-| 401 with a working `cloudflared` token | The org takes proxy keys only (`access_clients` off): create a proxy key                               |
+| 401 with a working `cloudflared` token | `global` takes proxy keys only (`access_clients` off): create a proxy key                              |
 | 403 `member_required`                  | Proxy keys are issued to members of the org: add yourself as a member                                  |
 | 403 `Forbidden`                        | No role in the org (add the member, or turn auto-join on), or a plain member on a route for org admins |
 | 403 `owner_required`                   | Adding or removing an org admin or owner, or changing a role, needs an org owner                       |

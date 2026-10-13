@@ -1944,12 +1944,15 @@ Workers addition replacing the Go client API keys (`access.api-keys`, imported b
   base64url. The org id is the permanent id, not the slug, so renaming an org keeps its keys working. Only the SHA-256 of
   the whole key is stored, with a display prefix (`cfp_<org>_<key id>_` and 4 characters of the secret).
 - **Store**: table `proxy_keys` in each org's ControlPlane (`CREATE IF NOT EXISTS`, next to the members tables): member id,
-  name, hash, prefix, created, last used (written at most once a minute per key), expiry, revocation. Creating, listing and
-  revoking check the actor in the same Durable Object call, like member writes. Revoking keeps the row (shown as revoked);
-  removing a member deletes their keys in the same Durable Object call. A member holds at most 100 keys (`409 too_many_keys`).
+  name, hash, prefix, created, last used (written at most once a minute per key), expiry, revocation. Listing and revoking
+  are narrowed to the caller's own keys unless the gate admitted an org admin; creating checks in the ControlPlane that
+  the member exists. Revoking keeps the row (shown as revoked, as the issue asks) but a member keeps at most 100 rows:
+  at most 100 live keys (`409 too_many_keys`), and a new key replaces the longest-dead revoked or expired one when the
+  member is at 100 (ADR 0027 keeps as little as it can). Removing a member deletes their keys in the same Durable Object
+  call.
 - **Gate** (`access/proxy-key.ts`): on a proxy route the first `cfp_…` credential in the Go config access provider's order
-  wins over everything else, including an Access JWT. Verification asks the Platform registry once per org and isolate
-  whether the org exists (so a made-up org id never creates a ControlPlane), then the org's ControlPlane, which compares
+  wins over everything else, including an Access JWT. Verification asks the Platform registry whether the org exists (the
+  answer is trusted for 30 s per isolate) (so a made-up org id never creates a ControlPlane), then the org's ControlPlane, which compares
   hashes in constant time and answers the member's id, email and role. The answer is cached per isolate for 30 s (never
   past the key's expiry, at most 1024 keys): revocation applies at once in the isolate that served it and within 30 s
   elsewhere, a deliberate trade against a ControlPlane round trip on every request (ADR 0027 asks for "at once"; the
@@ -1958,15 +1961,18 @@ Workers addition replacing the Go client API keys (`access.api-keys`, imported b
   caller scope of session state is the member's (`user:<email>`), so a member's keys and their Access-era sessions share
   state. A key is never a platform admin, and the management zone never reads keys.
 - **Access sign-ins for clients** (`membership.access_clients`, `PATCH /membership`, owner only): ADR 0022 says proxy routes
-  stop accepting Access sign-ins. The port keeps them per org behind this setting, on for `global` and off for new orgs, so
-  a deployment's existing `cloudflared access` clients survive the move of the proxy routes out of Access. Without the
+  stop accepting Access sign-ins. The port keeps them in `global` behind this setting (on by default), so a deployment's
+  existing `cloudflared access` clients survive the move of the proxy routes out of Access; an owner turns it off once
+  every client has a key. A sign-in names no org, so it never reaches another org, where the setting does not exist
+  (`422 access_clients_global_only`). Without the
   Access edge the Worker reads the JWT from `cf-access-token` too (Access only sets `Cf-Access-Jwt-Assertion` on paths
   it guards). Service token headers cannot be honoured there: only Access turns them into a JWT, and the bypass
   application skips it.
 - **Infra** (`infra/access.ts` `provisionProxyBypass`): a second self-hosted Access application on the proxy paths of the
   Worker's hostname (custom domain, or the preview's `workers.dev` URL) with a Bypass/everyone policy; Access matches the
-  most specific application, so the main application keeps every other path. `tools/check-deploy.sh` verifies both sides
-  after each CI deploy.
+  most specific application, so the main application keeps every other path. It is derived from the Worker's output, so
+  a deploy applies it only after the new Worker, which reads `cf-access-token`, is live. `tools/check-deploy.sh` verifies
+  both sides after each CI deploy, and that a `cloudflared`-style request (`cf-access-token` plus a dummy key) is served.
 
 ## Authentication (Cloudflare Access)
 

@@ -96,7 +96,6 @@ const createProxyKey = Effect.gen(function* () {
     stub.createProxyKey(
       { memberId, name: input.name, ...(expiresAt === undefined ? {} : { expiresAt }) },
       now,
-      identity.principalId,
     ),
   );
 
@@ -120,7 +119,7 @@ const revokeProxyKey = Effect.gen(function* () {
   );
 
   const revoked = yield* orRefuse(result);
-  forgetVerifiedProxyKey(revoked.id);
+  forgetVerifiedProxyKey(identity.org, revoked.id);
 
   return jsonReply(200, view(revoked, identity));
 });

@@ -16,11 +16,13 @@ import { VERIFIED_KEY_TTL_MS } from "../src/access/proxy-key.ts";
 import { requestContext, type WorkerEnv } from "../src/platform/env.ts";
 import { controlPlaneOf, type CurrentOrg, GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 import { mintProxyKey, parseProxyKey } from "../src/proxy-keys/key.ts";
-import { fakeJwksLayer, makeFakeJwks, makeKey } from "./support/access.ts";
+import { MAX_KEYS_PER_MEMBER } from "../src/proxy-keys/store.ts";
+import { fakeJwksLayer, makeFakeJwks, makeKey, signToken, userClaims } from "./support/access.ts";
 import {
   ADMIN,
   isolatedPlatform,
   jsonInit,
+  key as managementKey,
   makeHarness,
   serviceToken,
   token,
@@ -249,6 +251,40 @@ describe("issuing keys", () => {
     const after = (await send(slug, "/proxy-keys", alice)).body as { keys: Array<KeyBody> };
     expect(after.keys[0]?.revoked_at).toBeDefined();
   });
+
+  it("holds a member to 100 live keys and drops their longest-dead key to make room", async () => {
+    const { org, alice } = await staffedOrg("issue-limit");
+    const stub = controlPlaneOf(env, org);
+    const now = Date.now();
+
+    const issue = async (name: string, at: number) => {
+      const issued = await stub.createProxyKey({ memberId: alice.id, name }, at);
+
+      if (!issued.ok) throw new Error(issued.message);
+
+      return issued.value.record.id;
+    };
+
+    const ids: Array<string> = [];
+
+    for (let index = 0; index < MAX_KEYS_PER_MEMBER; index++)
+      ids.push(await issue(`key ${index}`, now + index));
+
+    const full = await stub.createProxyKey({ memberId: alice.id, name: "one more" }, now + 200);
+    expect(full).toMatchObject({ ok: false, error: "too_many_keys" });
+
+    // Two revoked keys: the one revoked first gives up its row; the other stays listed.
+    const [first, second] = [ids[7] ?? "", ids[3] ?? ""];
+    await stub.revokeProxyKey(first, now + 300);
+    await stub.revokeProxyKey(second, now + 301);
+    const added = await issue("replacement", now + 400);
+
+    const listed = (await stub.listProxyKeys(alice.id)).map((key) => key.id);
+    expect(listed).toHaveLength(MAX_KEYS_PER_MEMBER);
+    expect(listed).toContain(added);
+    expect(listed).toContain(second);
+    expect(listed).not.toContain(first);
+  });
 });
 
 describe("the gate on the proxy routes", () => {
@@ -320,7 +356,6 @@ describe("the gate on the proxy routes", () => {
     const expired = await controlPlaneOf(env, org).createProxyKey(
       { memberId: alice.id, name: "expired", expiresAt: now - 1000 },
       now - 2000,
-      "test",
     );
 
     if (!expired.ok) throw new Error(expired.message);
@@ -422,17 +457,15 @@ describe("Access sign-ins on the proxy routes", () => {
     return reply.body;
   };
 
-  it("stay accepted in global, where clients signed in through Access before, and off in new orgs", async () => {
+  it("stay accepted in global, where clients signed in through Access before, and nowhere else", async () => {
     expect((await harness.json("/v8/management/membership", await owner())).body).toEqual({
       auto_join: true,
       access_clients: true,
     });
 
     const { slug } = await staffedOrg("access-default");
-    expect((await send(slug, "/membership", await owner())).body).toEqual({
-      auto_join: false,
-      access_clients: false,
-    });
+    // An Access sign-in on a proxy route names no org, so it only ever reaches global: other orgs lack the setting.
+    expect((await send(slug, "/membership", await owner())).body).toEqual({ auto_join: false });
   });
 
   it("take the cloudflared header while global accepts them, and 401 once it does not", async () => {
@@ -481,18 +514,67 @@ describe("Access sign-ins on the proxy routes", () => {
     }
   });
 
+  it("are checked as strictly as the Access edge checks them: signature, audience, issuer and expiry", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const claims = userClaims("client@example.com");
+    const impostor = await makeKey(managementKey.kid);
+
+    const refused = {
+      "bad signature": await signToken({ key: impostor, now, claims }),
+      "unknown key id": await signToken({ key: impostor, kid: "nobody", now, claims }),
+      "another application's audience": await signToken({
+        key: managementKey,
+        audience: "another-app",
+        now,
+        claims,
+      }),
+      "another team": await signToken({
+        key: managementKey,
+        issuer: "https://other.cloudflareaccess.com",
+        now,
+        claims,
+      }),
+      expired: await signToken({ key: managementKey, now: now - 7200, expiresIn: 3600, claims }),
+      "not yet valid": await signToken({ key: managementKey, now, notBefore: now + 600, claims }),
+    };
+
+    for (const [why, jwt] of Object.entries(refused))
+      for (const headers of [
+        { "cf-access-token": jwt, authorization: "Bearer sk-dummy" },
+        { "cf-access-jwt-assertion": jwt },
+      ]) {
+        const reply = await proxy("/v1/models", headers);
+
+        expect([reply.status, reply.body], why).toEqual([401, { error: "Invalid API key" }]);
+      }
+
+    // The same claims, signed properly for this application, pass.
+    const valid = await signToken({ key: managementKey, now, claims });
+
+    expect(
+      (await proxy("/v1/models", { "cf-access-token": valid, authorization: "Bearer sk-dummy" }))
+        .status,
+    ).toBe(200);
+  });
+
   it("are changed by org owners only", async () => {
     const { slug, admin } = await staffedOrg("access-owner");
     const reply = await send(slug, "/membership", admin, "PATCH", { access_clients: true });
 
     expect([reply.status, errorOf(reply)]).toEqual([403, "owner_required"]);
 
-    const byOwner = await send(slug, "/membership", await owner(), "PATCH", {
+    const elsewhere = await send(slug, "/membership", await owner(), "PATCH", {
       access_clients: true,
     });
 
-    // Changing one setting keeps the other.
-    expect(byOwner.body).toEqual({ auto_join: false, access_clients: true });
+    expect([elsewhere.status, errorOf(elsewhere)]).toEqual([422, "access_clients_global_only"]);
+
+    try {
+      // Changing one setting keeps the other.
+      expect(await setAccessClients(false)).toEqual({ auto_join: true, access_clients: false });
+    } finally {
+      await setAccessClients(true);
+    }
   });
 });
 
@@ -541,7 +623,6 @@ describe("the verified-key cache", () => {
           const issued = await stub.createProxyKey(
             { memberId: member.value.id, name: "cli" },
             NOW_MS,
-            "test",
           );
 
           if (!issued.ok) throw new Error(issued.message);

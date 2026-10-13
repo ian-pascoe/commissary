@@ -18,8 +18,8 @@ expired key `401 {"error":"Invalid API key"}`. Revoking a key in the panel takes
 model ids you can use with `GET /v1/models`.
 
 Clients set up before proxy keys that sign in through Access (a `cloudflared access` token in the `cf-access-token`
-header) keep working in an org whose owner left **Access sign-ins for clients** on (the `access_clients` setting; on
-for the first org of an upgraded deployment, off for new orgs). See [MIGRATION.md](MIGRATION.md#5-move-clients-to-proxy-keys).
+header) keep working in the first org (`global`) while its owner leaves **Access sign-ins for clients** on (the
+`access_clients` setting, on by default); they never reach another org. See [MIGRATION.md](MIGRATION.md#5-move-clients-to-proxy-keys).
 Access service token headers (`CF-Access-Client-Id`/`-Secret`) are not accepted on the proxy routes any more.
 
 ## curl
