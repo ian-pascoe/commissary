@@ -656,6 +656,19 @@ export class MemberStore {
     return ok(true);
   }
 
+  /**
+   * Undoes a registration: the token is dropped as if it had never been registered (no tombstone, no role check).
+   * For a registration that lost a race to another org, which the registry indexes the token for.
+   */
+  withdrawToken(id: string): void {
+    const clientId = id.trim();
+
+    this.#transaction(() => {
+      this.#sql.exec(`DELETE FROM service_tokens WHERE client_id = ?`, clientId);
+      this.#changed();
+    });
+  }
+
   // --- the registry's index -----------------------------------------------------------------------------------
 
   index(): MembershipIndex {

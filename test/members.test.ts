@@ -530,6 +530,33 @@ describe("service tokens", () => {
     expect(errorOf(taken)).toBe("service_token_taken");
     expect((await send(second, USAGE, await asToken(shared))).status).toBe(403);
   });
+
+  it("belong to one org when two orgs register the same token at once", async () => {
+    const orgs = [await newOrg("tokens-race-a"), await newOrg("tokens-race-b")];
+    const shared = clientId(orgs[0] ?? "", "raced");
+    const platform = await asAdmin();
+
+    const replies = await Promise.all(
+      orgs.map(
+        async (slug) =>
+          await send(slug, "/service-tokens", platform, "POST", { client_id: shared }),
+      ),
+    );
+
+    expect(replies.map((reply) => reply.status).toSorted((a, b) => a - b)).toEqual([201, 409]);
+
+    const holders = await Promise.all(
+      orgs.map(async (slug) => {
+        const listed = (await send(slug, "/service-tokens", platform)).body as {
+          service_tokens: ReadonlyArray<{ client_id: string }>;
+        };
+
+        return listed.service_tokens.some((token) => token.client_id === shared);
+      }),
+    );
+
+    expect(holders.filter(Boolean)).toHaveLength(1);
+  });
 });
 
 describe("usage by member", () => {

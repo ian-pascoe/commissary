@@ -564,6 +564,12 @@ export class ControlPlane extends DurableObject<Env> {
     return this.#members.removeToken(clientId, actor);
   }
 
+  /** Undoes a registration another org won (`MemberStore.withdrawToken`). */
+  withdrawServiceToken(clientId: string): void {
+    this.#ensureMembership();
+    this.#members.withdrawToken(clientId);
+  }
+
   /** Who the Platform registry should index for the org, and whether it has caught up (`members/admission.ts`). */
   membershipIndex(): MembershipIndex {
     this.#ensureMembership();

@@ -55,7 +55,10 @@ export const syncOrgIndex = (org: OrgId): Effect.Effect<void, never, WorkerEnv> 
       catch: failure("replaceOrgIndex"),
     });
 
-    if (!repaired.ok) return;
+    if (!repaired.ok)
+      return yield* Effect.logWarning("membership index not synced: the registry refused it").pipe(
+        Effect.annotateLogs({ org }),
+      );
 
     if (repaired.conflicts.length > 0)
       yield* Effect.logWarning("service tokens registered to another org were not indexed").pipe(

@@ -258,10 +258,15 @@ const listServiceTokens = Effect.gen(function* () {
   return jsonReply(200, { service_tokens: tokens.map(tokenView) });
 });
 
-/** A service token belongs to one org: `409 service_token_taken` when the registry indexes it for another. */
-const refuseTakenToken = (
+const tokenTaken = () =>
+  replyError(409, "service_token_taken", {
+    message: "this service token is registered to another org; a token belongs to one org",
+  });
+
+/** Whether the registry indexes the service token for an org other than the caller's. */
+const takenElsewhere = (
   clientId: string,
-): Effect.Effect<void, Reply, WorkerEnv | AccessPrincipal> =>
+): Effect.Effect<boolean, Reply, WorkerEnv | AccessPrincipal> =>
   Effect.gen(function* () {
     const identity = yield* AccessPrincipal;
 
@@ -269,17 +274,19 @@ const refuseTakenToken = (
       stub.orgOfServiceToken(clientId.trim()),
     );
 
-    if (holder !== undefined && holder.id !== identity.org)
-      return yield* replyError(409, "service_token_taken", {
-        message: "this service token is registered to another org; a token belongs to one org",
-      });
+    return holder !== undefined && holder.id !== identity.org;
   });
 
+/**
+ * A service token belongs to one org: `409 service_token_taken` when the registry indexes it for another. The check
+ * runs again once the registration is indexed, because two orgs may register the same token at once: the registry
+ * indexes it for the first, and the other org's registration is withdrawn.
+ */
 const registerServiceToken = Effect.gen(function* () {
   const { identity, actor } = yield* caller;
   const input = yield* body(RegisterServiceToken);
 
-  yield* refuseTakenToken(input.client_id);
+  if (yield* takenElsewhere(input.client_id)) return yield* tokenTaken();
 
   const result = yield* controlPlane("registerServiceToken", (stub) =>
     stub.registerServiceToken(
@@ -291,6 +298,15 @@ const registerServiceToken = Effect.gen(function* () {
 
   const token = yield* orRefuse(result);
   yield* reindex;
+
+  if (yield* takenElsewhere(token.clientId)) {
+    yield* controlPlane("withdrawServiceToken", (stub) =>
+      stub.withdrawServiceToken(token.clientId),
+    );
+    yield* reindex;
+
+    return yield* tokenTaken();
+  }
 
   return jsonReply(201, tokenView(token));
 });
