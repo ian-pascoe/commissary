@@ -165,8 +165,8 @@ describe("renaming an org", () => {
     expect(renamed.body).toMatchObject({ id: made.id, slug: "after", name: "After" });
 
     // The old address is gone, the new one reaches the same org.
-    expect((await harness.json("/v8/management/orgs/before/config")).status).toBe(404);
-    expect((await harness.json("/v8/management/orgs/after/config")).status).toBe(200);
+    expect((await harness.json("/v8/management/orgs/before/settings")).status).toBe(404);
+    expect((await harness.json("/v8/management/orgs/after/settings")).status).toBe(200);
     expect((await patch("after", { name: "Only the name" })).body).toMatchObject({
       id: made.id,
       slug: "after",
@@ -176,8 +176,8 @@ describe("renaming an org", () => {
 
   it("can rename the org global's slug, which only changes its address", async () => {
     expect((await patch("default", { slug: "home" })).status).toBe(200);
-    expect((await harness.json("/v8/management/orgs/default/config")).status).toBe(404);
-    expect((await harness.json("/v8/management/orgs/home/config")).status).toBe(200);
+    expect((await harness.json("/v8/management/orgs/default/settings")).status).toBe(404);
+    expect((await harness.json("/v8/management/orgs/home/settings")).status).toBe(200);
     expect((await patch("home", { slug: "default" })).status).toBe(200);
   });
 
@@ -308,10 +308,7 @@ describe("GET /me", () => {
 
 describe("org-scoped management routes", () => {
   const upload = (name: string) =>
-    harness.json(
-      `/v8/management/credentials?name=${name}`,
-      jsonInit("POST", claudeFile()),
-    );
+    harness.json(`/v8/management/credentials?name=${name}`, jsonInit("POST", claudeFile()));
 
   const credentialNames = async (prefix: string): Promise<ReadonlyArray<string>> => {
     const reply = await harness.json(`${prefix}/credentials`);
