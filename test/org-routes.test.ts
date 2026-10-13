@@ -248,6 +248,7 @@ describe("who may manage the list of orgs", () => {
       platform_admin: false,
       role: "member",
       orgs: [{ slug: "default", name: "Default" }],
+      private_credentials: true,
     });
     expect((await harness.json("/v8/management/orgs", { auth: false })).status).toBe(401);
   });
@@ -298,6 +299,7 @@ describe("GET /me", () => {
       platform_admin: false,
       role: "admin",
       orgs: [{ slug: "default", name: "Default" }],
+      private_credentials: true,
     });
 
     await patch("default", { slug: "renamed-home" });

@@ -13,11 +13,12 @@ import { Clock, Effect, Match } from "effect";
 import { HttpRouter } from "effect/http";
 import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
 import type { JsonObject } from "../json/index.ts";
-import type { WorkerEnv } from "../platform/env.ts";
+import { WorkerEnv } from "../platform/env.ts";
+import { controlPlaneOf } from "../platform/org.ts";
 import { platform, type PlatformStub } from "../platform/registry.ts";
 import type { OrgRecord, OrgWriteResult } from "../platform/registry-store.ts";
 import type { OrgView } from "./contract/orgs.ts";
-import { bodyObject, handled, jsonReply, replyError, type Reply } from "./http.ts";
+import { bodyObject, controlPlane, handled, jsonReply, replyError, type Reply } from "./http.ts";
 
 const BASE = "/v8/management";
 
@@ -79,10 +80,16 @@ const me = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
   const orgs = yield* openableOrgs(identity);
 
+  const settings =
+    identity.role === undefined
+      ? undefined
+      : yield* controlPlane("membershipSettings", (stub) => stub.membershipSettings());
+
   return jsonReply(200, {
     platform_admin: identity.platformAdmin,
     role: identity.role ?? null,
     orgs: orgs.map((org) => ({ slug: org.slug, name: org.name })),
+    ...(settings === undefined ? {} : { private_credentials: settings.privateCredentials }),
   });
 });
 
@@ -131,13 +138,30 @@ const refused = (result: Extract<OrgWriteResult, { ok: false }>): Reply =>
 const create = Effect.gen(function* () {
   yield* requirePlatformAdmin;
   const body = yield* bodyObject;
-  const { slug, name } = yield* stringFields(body, ["slug", "name"]);
+  const { private_credentials: privateCredentials, ...named } = body;
+
+  if (privateCredentials !== undefined && typeof privateCredentials !== "boolean")
+    return yield* replyError(400, "invalid body");
+  const { slug, name } = yield* stringFields(named, ["slug", "name"]);
 
   if (slug === undefined || name === undefined) return yield* replyError(400, "invalid body");
   const now = yield* Clock.currentTimeMillis;
   const result = yield* registry("createOrg", (stub) => stub.createOrg({ slug, name }, now));
 
   if (!result.ok) return yield* refused(result);
+
+  // The creator chooses whether members of the new org may connect private credentials (off unless asked).
+  if (privateCredentials === true) {
+    const env = yield* WorkerEnv;
+
+    yield* Effect.tryPromise({
+      try: async () =>
+        await controlPlaneOf(env, result.org.id).setMembershipSettings({
+          privateCredentials: true,
+        }),
+      catch: () => replyError(502, "control plane unavailable"),
+    });
+  }
 
   return jsonReply(201, view(result.org));
 });

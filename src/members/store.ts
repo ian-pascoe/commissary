@@ -264,18 +264,24 @@ export class MemberStore {
 
     for (const statement of SCHEMA) sql.exec(statement);
 
-    // An org from before private credentials lets its members connect them, as `global` does.
+    // An org from before private credentials: `global` lets its members connect them (its Access traffic keeps
+    // working as it is), any other org leaves the choice to its admins.
     if (
       !sql
         .exec<{ name: string }>("PRAGMA table_info(membership)")
         .toArray()
         .some((column) => column.name === "private_credentials")
-    )
-      sql.exec("ALTER TABLE membership ADD COLUMN private_credentials INTEGER NOT NULL DEFAULT 1");
+    ) {
+      sql.exec("ALTER TABLE membership ADD COLUMN private_credentials INTEGER NOT NULL DEFAULT 0");
+
+      if (org === GLOBAL_ORG) sql.exec("UPDATE membership SET private_credentials = 1");
+    }
 
     sql.exec(
-      `INSERT OR IGNORE INTO membership (id, auto_join, admins_migrated, counter, index_synced)
-       VALUES (1, ?, 0, 0, 0)`,
+      `INSERT OR IGNORE INTO membership
+         (id, auto_join, private_credentials, admins_migrated, counter, index_synced)
+       VALUES (1, ?, ?, 0, 0, 0)`,
+      org === GLOBAL_ORG ? 1 : 0,
       org === GLOBAL_ORG ? 1 : 0,
     );
   }
