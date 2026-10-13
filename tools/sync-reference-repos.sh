@@ -10,8 +10,7 @@ REPOS_DIR="$PROJECT_ROOT/.repos"
 # Linked worktrees symlink each reference to the main checkout's clone instead
 # of cloning their own copy. Bare repositories have no main checkout to share.
 BASE_REPOS_DIR="$REPOS_DIR"
-if [[ "$(git -C "$PROJECT_ROOT" rev-parse --path-format=absolute --git-dir)" != \
-  "$(git -C "$PROJECT_ROOT" rev-parse --path-format=absolute --git-common-dir)" ]]; then
+if [[ "$(git -C "$PROJECT_ROOT" rev-parse --path-format=absolute --git-dir)" != "$(git -C "$PROJECT_ROOT" rev-parse --path-format=absolute --git-common-dir)" ]]; then
   main_root="$(git -C "$PROJECT_ROOT" worktree list --porcelain | awk '
     NR == 1 { root = substr($0, 10) }
     NR == 2 && $0 == "bare" { bare = 1 }
@@ -90,3 +89,4 @@ sync_repo() {
 }
 
 sync_repo "CLIProxyAPI" "https://github.com/router-for-me/CLIProxyAPI.git"
+sync_repo "Cli-Proxy-API-Management-Center" "https://github.com/router-for-me/Cli-Proxy-API-Management-Center.git"
