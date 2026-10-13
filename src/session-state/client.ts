@@ -4,11 +4,14 @@
  * Stores (the replay modules under `executor/`) talk to a {@link SessionStateBackend}: the Durable Object one in production
  * (resolved per request from `WorkerEnv`, never captured in a layer), a per-isolate in-memory one when the binding is
  * absent (unit tests, local runs without the binding) and explicit in-memory ones in tests. Both run the same
- * {@link StateEngine}, so the semantics (TTL, compare-and-swap, bounds) are identical.
+ * {@link StateEngine}, so the semantics (TTL, compare-and-swap, bounds) are identical. {@link resolveBackend} scopes
+ * every address to the request's org (`orgScopedName` on the store name: unchanged for `global`), so two orgs never
+ * share an instance even when their session keys match.
  */
 import { createHash } from "node:crypto";
 import { Clock, Data, Effect, Option, Schema } from "effect";
-import { WorkerEnv } from "../platform/env.ts";
+import { optionalRequestOrg, WorkerEnv } from "../platform/env.ts";
+import { GLOBAL_ORG, type OrgId, orgScopedName } from "../platform/org.ts";
 import type { SessionState } from "./durable-object.ts";
 import { MemoryStateTable, StateEngine } from "./engine.ts";
 import type { SessionAddress, StateOp, StateResult } from "./protocol.ts";
@@ -91,17 +94,34 @@ export const makeMemoryBackend = (now?: () => number): SessionStateBackend => {
 /** Per-isolate fallback shared by every store without a Durable Object binding. */
 export const isolateMemoryBackend: SessionStateBackend = makeMemoryBackend();
 
-/** The backend of the current request: the Durable Object when `WorkerEnv` binds it, else `fallback`. */
+/** `backend` with every address moved into `org` (the store name scoped with `orgScopedName`). */
+export const orgBackend = (backend: SessionStateBackend, org: OrgId): SessionStateBackend =>
+  org === GLOBAL_ORG
+    ? backend
+    : {
+        run: (address, ops) =>
+          backend.run({ ...address, store: orgScopedName(org, address.store) }, ops),
+      };
+
+/**
+ * The backend of the current request's org: the Durable Object when `WorkerEnv` binds it, else `fallback`. Both
+ * services are optional so stores also run outside a request (unit tests); a request without its org is a defect
+ * (`optionalRequestOrg`).
+ */
 export const resolveBackend = (
   fallback: SessionStateBackend = isolateMemoryBackend,
 ): Effect.Effect<SessionStateBackend> =>
-  Effect.serviceOption(WorkerEnv).pipe(
-    Effect.map((env) =>
+  Effect.gen(function* () {
+    const env = yield* Effect.serviceOption(WorkerEnv);
+    const org = yield* optionalRequestOrg;
+
+    const backend =
       Option.isSome(env) && env.value.SESSION_STATE !== undefined
         ? durableObjectBackend(env.value.SESSION_STATE)
-        : fallback,
-    ),
-  );
+        : fallback;
+
+    return orgBackend(backend, org);
+  });
 
 /** How a store obtains its backend for one call. */
 export type BackendResolver = Effect.Effect<SessionStateBackend>;

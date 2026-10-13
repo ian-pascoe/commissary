@@ -6,12 +6,14 @@
  * URIs, so a browser reaches these routes only when the user rewrites the host of the redirected URL to the Worker.
  * They sit outside `/v8/management` and therefore outside the Access admin gate: a request is honoured only for the
  * `state` of a pending login of the route's provider (an unguessable 128-bit value held in the ControlPlane), and the
- * answer is a static page that never contains tokens, codes, states or error details.
+ * answer is a static page that never contains tokens, codes, states or error details. The state names the org whose
+ * ControlPlane started the login (`orgScopedName`; a bare state is `global`'s), and only that ControlPlane is asked.
  */
 import { Effect } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { controlPlane } from "../management/http.ts";
 import { isValidOAuthState, type OAuthProvider } from "./names.ts";
+import { CurrentOrg, orgOfScopedName } from "../platform/org.ts";
 
 const HEADERS = {
   "cache-control": "no-store",
@@ -53,10 +55,16 @@ const callbackHandler = (provider: OAuthProvider) =>
 
     // Cheap filter before touching the ControlPlane.
     if (!isValidOAuthState(state) || (code === "" && error === "")) return rejected;
+    const org = orgOfScopedName(state);
+
+    if (org === undefined) return rejected;
 
     const result = yield* controlPlane("oauthCallback", (stub) =>
       stub.oauthCallback({ provider, state, code, error }),
-    ).pipe(Effect.catch(() => Effect.succeed(undefined)));
+    ).pipe(
+      Effect.provideService(CurrentOrg, org),
+      Effect.catch(() => Effect.succeed(undefined)),
+    );
 
     if (result === undefined) return unavailable;
 

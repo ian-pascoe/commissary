@@ -1,29 +1,38 @@
 /**
- * Worker-side cached reader for the config stored in the ControlPlane Durable Object.
+ * Worker-side cached reader for the config stored in each org's ControlPlane Durable Object.
  *
- * Each isolate keeps the last snapshot. After `ttl` it asks the Durable Object for the document with the cached
- * version, so an unchanged config costs one small RPC and no decoding. When the Durable Object is unreachable the
- * last snapshot keeps being served (stale-if-error). Per-request bindings are never captured: the DO stub is
- * resolved from `WorkerEnv` at call time.
+ * Each isolate keeps the last snapshot of every org it served. After `ttl` it asks the org's Durable Object for the
+ * document with the cached version, so an unchanged config costs one small RPC and no decoding. When the Durable
+ * Object is unreachable the last snapshot keeps being served (stale-if-error). Per-request bindings are never
+ * captured: the DO stub is resolved from `WorkerEnv` and `CurrentOrg` at call time.
+ *
+ * Deployment settings: the model catalog is shared by every org, so its source (`models.catalog`) is the `global`
+ * org's setting. Another org's snapshot carries `global`'s value (its own ControlPlane refuses to store one,
+ * `ConfigStore`), so every reader of `models.catalog` sees the one setting that decides the shared catalog. The
+ * settings are listed in `DEPLOYMENT_SETTINGS` (`config/store.ts`), which both the store and this reader apply.
  */
 import { Clock, Context, Duration, Effect, Layer, Ref } from "effect";
-import { WorkerEnv } from "../platform/env.ts";
+import { currentControlPlane, type WorkerEnv } from "../platform/env.ts";
+import { CurrentOrg, GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 import { ConfigStoreError } from "./errors.ts";
 import type { Config } from "./schema.ts";
-import { decodeStoredConfig, type ConfigSnapshotWire } from "./store.ts";
+import { decodeStoredConfig, withDeploymentSettings, type ConfigSnapshotWire } from "./store.ts";
 
 export interface ConfigSnapshot {
   readonly version: number;
   readonly config: Config;
 }
 
-/** Where config snapshots come from; the default implementation talks to the ControlPlane Durable Object. */
+/**
+ * Where the current org's config snapshots come from; the default implementation talks to the org's ControlPlane
+ * Durable Object.
+ */
 export class ConfigSource extends Context.Service<
   ConfigSource,
   {
     readonly fetch: (
       sinceVersion: number | undefined,
-    ) => Effect.Effect<ConfigSnapshotWire, ConfigStoreError, WorkerEnv>;
+    ) => Effect.Effect<ConfigSnapshotWire, ConfigStoreError, WorkerEnv | CurrentOrg>;
   }
 >()("cf-llm-proxy/config/ConfigSource") {
   static readonly controlPlane = Layer.succeed(
@@ -31,10 +40,10 @@ export class ConfigSource extends Context.Service<
     ConfigSource.of({
       fetch: (sinceVersion) =>
         Effect.gen(function* () {
-          const env = yield* WorkerEnv;
+          const stub = yield* currentControlPlane;
 
           return yield* Effect.tryPromise({
-            try: async () => await env.CONTROL_PLANE.getByName("global").getConfig(sinceVersion),
+            try: async () => await stub.getConfig(sinceVersion),
             catch: (cause) =>
               new ConfigStoreError({ message: "failed to read config from ControlPlane", cause }),
           });
@@ -56,10 +65,10 @@ export interface ConfigReaderOptions {
 export class ConfigReader extends Context.Service<
   ConfigReader,
   {
-    /** The current config snapshot (cached). */
-    readonly get: Effect.Effect<ConfigSnapshot, ConfigStoreError, WorkerEnv>;
-    /** Drops the cached snapshot so the next `get` re-reads (use after a local write). */
-    readonly invalidate: Effect.Effect<void>;
+    /** The current org's config snapshot (cached per org). */
+    readonly get: Effect.Effect<ConfigSnapshot, ConfigStoreError, WorkerEnv | CurrentOrg>;
+    /** Drops the current org's cached snapshot so the next `get` re-reads (use after a local write). */
+    readonly invalidate: Effect.Effect<void, never, CurrentOrg>;
   }
 >()("cf-llm-proxy/config/ConfigReader") {
   /** Requires a {@link ConfigSource}. */
@@ -74,15 +83,29 @@ export class ConfigReader extends Context.Service<
 export const makeConfigReader = Effect.fnUntraced(function* (options: ConfigReaderOptions) {
   const source = yield* ConfigSource;
   const ttlMillis = Duration.toMillis(options.ttl ?? Duration.seconds(5));
-  const cache = yield* Ref.make<Cached | undefined>(undefined);
+  // Snapshots per org; the orgs one isolate serves are a small set.
+  const cache = yield* Ref.make<ReadonlyMap<OrgId, Cached>>(new Map());
 
-  const refresh = (cached: Cached | undefined) =>
+  const store = (org: OrgId, cached: Cached | undefined) =>
+    Ref.update(cache, (all) => {
+      const next = new Map(all);
+
+      if (cached === undefined) next.delete(org);
+      else next.set(org, cached);
+
+      return next;
+    });
+
+  const refresh = (org: OrgId, cached: Cached | undefined) =>
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
-      const wire = yield* source.fetch(cached?.snapshot.version);
+
+      const wire = yield* source
+        .fetch(cached?.snapshot.version)
+        .pipe(Effect.provideService(CurrentOrg, org));
 
       if (wire.unchanged && cached !== undefined) {
-        yield* Ref.set(cache, { snapshot: cached.snapshot, checkedAt: now });
+        yield* store(org, { snapshot: cached.snapshot, checkedAt: now });
 
         return cached.snapshot;
       }
@@ -98,27 +121,47 @@ export const makeConfigReader = Effect.fnUntraced(function* (options: ConfigRead
       );
 
       const snapshot: ConfigSnapshot = { version: wire.version, config };
-      yield* Ref.set(cache, { snapshot, checkedAt: now });
+      yield* store(org, { snapshot, checkedAt: now });
 
       return snapshot;
     });
 
+  const own = (org: OrgId) =>
+    Effect.gen(function* () {
+      const cached = (yield* Ref.get(cache)).get(org);
+      const now = yield* Clock.currentTimeMillis;
+
+      if (cached !== undefined && now - cached.checkedAt < ttlMillis) return cached.snapshot;
+
+      return yield* refresh(org, cached).pipe(
+        Effect.catch((error) =>
+          cached === undefined
+            ? Effect.fail(error)
+            : Effect.logWarning(
+                `config refresh failed, serving stale snapshot v${cached.snapshot.version}: ${error.message}`,
+              ).pipe(Effect.as(cached.snapshot)),
+        ),
+      );
+    });
+
   const get = Effect.gen(function* () {
-    const cached = yield* Ref.get(cache);
-    const now = yield* Clock.currentTimeMillis;
+    const org = yield* CurrentOrg;
+    const snapshot = yield* own(org);
 
-    if (cached !== undefined && now - cached.checkedAt < ttlMillis) return cached.snapshot;
+    if (org === GLOBAL_ORG) return snapshot;
 
-    return yield* refresh(cached).pipe(
-      Effect.catch((error) =>
-        cached === undefined
-          ? Effect.fail(error)
-          : Effect.logWarning(
-              `config refresh failed, serving stale snapshot v${cached.snapshot.version}: ${error.message}`,
-            ).pipe(Effect.as(cached.snapshot)),
-      ),
-    );
+    // The deployment settings come from `global` only: without its config (never read, unreachable) the read fails
+    // like any config read, rather than serve the org's own default for a setting `global` decides.
+    const deployment = yield* own(GLOBAL_ORG);
+    const config = withDeploymentSettings(snapshot.config, deployment.config);
+
+    return config === snapshot.config ? snapshot : { version: snapshot.version, config };
   });
 
-  return ConfigReader.of({ get, invalidate: Ref.set(cache, undefined) });
+  return ConfigReader.of({
+    get,
+    invalidate: Effect.gen(function* () {
+      yield* store(yield* CurrentOrg, undefined);
+    }),
+  });
 });

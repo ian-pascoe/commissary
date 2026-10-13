@@ -19,6 +19,7 @@ import {
   serviceToken,
 } from "./support/management.ts";
 import { type MockReply, mockHttp, routes } from "./support/refresh.ts";
+import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 
 const GO_KEY = "sk-go-routes-0001";
 
@@ -252,6 +253,7 @@ describe("an edited OpenCode Go key", () => {
           mockHttp(routes({ [`GET ${USAGE_URL}`]: { status: 200, body: USAGE } })).layer,
         ),
         Effect.provideService(WorkerEnv, env),
+        Effect.provideService(CurrentOrg, GLOBAL_ORG),
       ),
     );
 
@@ -331,6 +333,7 @@ describe("quota-check cron task with OpenCode Go keys", () => {
       const summary = yield* runQuotaSweep.pipe(
         Effect.provide(outbound.layer),
         Effect.provideService(WorkerEnv, env),
+        Effect.provideService(CurrentOrg, GLOBAL_ORG),
       );
 
       assert.deepStrictEqual(summary, { checked: 1, failed: 0 });

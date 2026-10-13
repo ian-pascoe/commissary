@@ -1,6 +1,7 @@
 // Mirrors CallerScope in sdk/cliproxy/session/identity.go (sha256 of a versioned prefix + caller credential).
 // The Go `userApiKey` is replaced by the Cloudflare Access principal.
 import { Context, Effect } from "effect";
+import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 
 /** The authenticated caller: an Access user (email) or an Access service token (client id). */
 export type Principal =
@@ -12,7 +13,7 @@ export interface AccessIdentity {
   readonly principal: Principal;
   /** Stable text identity for usage records: `user:<lowercased email>` or `service:<common_name>`. */
   readonly principalId: string;
-  /** Irreversible namespace used to isolate session state between callers (`callerScope(principalId)`). */
+  /** Irreversible namespace used to isolate session state between callers (`callerScope(principalId, org)`). */
   readonly callerScope: string;
 }
 
@@ -36,25 +37,28 @@ const CALLER_SCOPE_PREFIX = "cli-proxy-api:caller-scope:v1\u0000";
 const toHex = (bytes: ArrayBuffer): string =>
   Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
 
-/** `sha256("cli-proxy-api:caller-scope:v1\x00" + value)` as lowercase hex; empty for a blank value (like Go). */
-export const callerScope = (value: string): Effect.Effect<string> => {
+/**
+ * `sha256("cli-proxy-api:caller-scope:v1\x00" + value)` as lowercase hex in the org `global` (like Go, so the sessions
+ * from before orgs existed keep their scope), `sha256("cli-proxy-api:caller-scope:v1\x00org:<org>\x00" + value)` in
+ * any other org (ADR 0021). Empty for a blank value (like Go).
+ */
+export const callerScope = (value: string, org: OrgId): Effect.Effect<string> => {
   const trimmed = value.trim();
 
   if (trimmed === "") return Effect.succeed("");
+  const scoped = org === GLOBAL_ORG ? trimmed : `org:${org}\u0000${trimmed}`;
 
   return Effect.promise(async () =>
     toHex(
-      await crypto.subtle.digest(
-        "SHA-256",
-        new TextEncoder().encode(CALLER_SCOPE_PREFIX + trimmed),
-      ),
+      await crypto.subtle.digest("SHA-256", new TextEncoder().encode(CALLER_SCOPE_PREFIX + scoped)),
     ),
   );
 };
 
-export const makeIdentity = (principal: Principal): Effect.Effect<AccessIdentity> =>
+/** The identity of `principal` in `org`. */
+export const makeIdentity = (principal: Principal, org: OrgId): Effect.Effect<AccessIdentity> =>
   Effect.gen(function* () {
     const id = principalId(principal);
 
-    return { principal, principalId: id, callerScope: yield* callerScope(id) };
+    return { principal, principalId: id, callerScope: yield* callerScope(id, org) };
   });

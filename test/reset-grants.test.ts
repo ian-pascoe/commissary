@@ -44,6 +44,7 @@ import {
   token,
 } from "./support/management.ts";
 import { type MockReply, mockHttp, routes } from "./support/refresh.ts";
+import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 
 const NOW = Date.parse("2026-10-11T12:00:00Z");
 
@@ -1172,7 +1173,7 @@ describe("claim races and failures", () => {
         grant_id: "g1",
         in_flight: false,
       });
-    }),
+    }).pipe(Effect.provideService(CurrentOrg, GLOBAL_ORG)),
   );
 });
 
@@ -1283,7 +1284,7 @@ describe("quota check", () => {
           ),
         );
         assert.strictEqual(sent(RESET_GRANT_STATUS_URL).length, 1);
-      }),
+      }).pipe(Effect.provideService(CurrentOrg, GLOBAL_ORG)),
   );
 });
 

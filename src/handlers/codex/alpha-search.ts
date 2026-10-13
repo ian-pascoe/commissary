@@ -28,6 +28,7 @@ import { UsageReporter } from "../../usage/reporter.ts";
 import { allowsCodexAlphaSearch, withCredentialPolicy } from "../../executor/policy-picker.ts";
 import { asString, get, isJsonObject, type Json, tryParseJson } from "../../json/index.ts";
 import { currentConfig, type ProxyServices, readRequestBody } from "../request.ts";
+import { CurrentOrg } from "../../platform/org.ts";
 
 const MAX_BODY_BYTES = 16 << 20;
 
@@ -85,6 +86,7 @@ const upstreamHeaders = (
 const handle = Effect.gen(function* () {
   const request = yield* HttpServerRequest.HttpServerRequest;
   const identity = yield* AccessPrincipal;
+  const org = yield* CurrentOrg;
   const configResult = yield* Effect.result(currentConfig);
 
   if (Result.isFailure(configResult))
@@ -138,6 +140,7 @@ const handle = Effect.gen(function* () {
     alias: model,
     endpoint: "POST /v1/alpha/search",
     principalId: identity.principalId,
+    orgId: org,
     authId: credential.id,
     authType: credential.kind,
     source: credential.label ?? credential.id,

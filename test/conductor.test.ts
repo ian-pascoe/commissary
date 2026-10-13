@@ -35,6 +35,7 @@ import {
   poolPickerLayer,
   type PoolHarness,
 } from "./support/pool.ts";
+import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 
 const identity = {
   principal: { kind: "user", email: "dev@example.com", sub: "sub" },
@@ -136,6 +137,7 @@ const setup = (
         Effect.provide(layer),
         Effect.provideService(AccessPrincipal, identity),
         Effect.provideService(WorkerEnv, {} as Env),
+        Effect.provideService(CurrentOrg, GLOBAL_ORG),
       ) as unknown as Effect.Effect<A, E>;
 
     return { harness, calls, records, exec };

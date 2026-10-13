@@ -14,8 +14,9 @@
  */
 import { Clock, Context, Effect, Exit } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { AuthIndexKeyError, deploymentAuthIndexer } from "../management/auth-index.ts";
+import { AuthIndexKeyError, orgAuthIndexer } from "../management/auth-index.ts";
 import { WorkerEnv } from "../platform/env.ts";
+import { CurrentOrg } from "../platform/org.ts";
 
 export const CPA_TRACE_ID_HEADER = "X-CPA-TRACE-ID";
 
@@ -51,13 +52,17 @@ export const newTraceState = (): RequestTraceState => ({
 });
 
 /**
- * The keyed index of `credentialId` for the log line, or undefined when `AUTH_INDEX_KEY` is refused
+ * The keyed index of `credentialId` in the request's org for the log line (the index the org's management API
+ * answers), or undefined when `AUTH_INDEX_KEY` is refused
  * (`AuthIndexKeyError`, logged once by the indexer): the log annotation must never fail the request it describes.
  */
 const loggedAuthIndex = (credentialId: string) =>
-  WorkerEnv.useSync((env) => {
+  Effect.gen(function* () {
+    const env = yield* WorkerEnv;
+    const org = yield* CurrentOrg;
+
     try {
-      return deploymentAuthIndexer(env)(credentialId);
+      return orgAuthIndexer(env, org)(credentialId);
     } catch (error) {
       if (error instanceof AuthIndexKeyError) return undefined;
       throw error;

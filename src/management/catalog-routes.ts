@@ -4,7 +4,9 @@
  *
  * Workers addition, no Go counterpart. The refresh is the cron task's operation (`refreshModelsDev`,
  * src/registry/refresh.ts) with the stored `models.catalog` setting, read from the ControlPlane so a setting just
- * saved applies. It is refused (`409 catalog_not_fetched`) when that setting means the catalog is not fetched (`embed`,
+ * saved applies. The catalog is shared by every org, so the setting is always the `global` org's (only its config can
+ * set it, `config/store.ts`) and so is the refresh lease: a refresh from another org's panel refreshes the same shared
+ * catalog from the same source. It is refused (`409 catalog_not_fetched`) when that setting means the catalog is not fetched (`embed`,
  * `disabled`), and while another refresh holds the refresh lease (`409 catalog_refresh_running`, the scheduled task's
  * included; nothing is downloaded). Anything else that goes wrong (download, size, validation, storage) is a `200` with
  * `status: "failed"` and a fixed message: the stored catalog stays. Admin-only and CSRF-protected like every management
@@ -15,8 +17,12 @@ import { catalogMode, catalogStatus } from "../registry/catalog-status.ts";
 import { refreshModelsDev } from "../registry/refresh.ts";
 import { handled, jsonReply, replyError } from "./http.ts";
 import { storedConfig } from "./settings-routes.ts";
+import { CurrentOrg, GLOBAL_ORG } from "../platform/org.ts";
 
-const configured = storedConfig.pipe(Effect.map((current) => current.config.models.catalog));
+const configured = storedConfig.pipe(
+  Effect.map((current) => current.config.models.catalog),
+  Effect.provideService(CurrentOrg, GLOBAL_ORG),
+);
 
 const status = Effect.gen(function* () {
   return jsonReply(200, yield* catalogStatus(yield* configured));

@@ -10,6 +10,7 @@ import { type CredentialSink } from "../../src/oauth/record.ts";
 import { makeOAuthService, type OAuthService, type StatusResult } from "../../src/oauth/service.ts";
 import { MemorySessionTable, OAuthSessions } from "../../src/oauth/session-store.ts";
 import { type MockHandler, mockHttp, T0 } from "./refresh.ts";
+import { GLOBAL_ORG } from "../../src/platform/org.ts";
 
 export { jwt, routes, T0 } from "./refresh.ts";
 
@@ -43,6 +44,7 @@ export const makeOAuth = (
   };
 
   const service: OAuthService = makeOAuthService({
+    org: GLOBAL_ORG,
     sessions: new OAuthSessions(table),
     sink,
     metaMintUrl: options.metaMintUrl,

@@ -12,10 +12,12 @@
  * export's `auth_index`, the `auth_index` filter); the stored credential id is never answered, and the old `auth_id`
  * filter is refused (400) rather than ignored. Go's `GET /observability/usage/api-keys` (`GetAPIKeyUsage`, api_key_usage.go,
  * per-key counters for the upstream panel) is not ported: the Keys page's `GET /api-keys` carries the same counters.
+ * Every route reads the records of the request's org only (ADR 0021).
  */
 import { Clock, Effect } from "effect";
 import { HttpRouter } from "effect/http";
 import { WorkerEnv } from "../platform/env.ts";
+import { CurrentOrg } from "../platform/org.ts";
 import { currentAuthIndexer } from "./auth-index.ts";
 import {
   BUCKET_MS,
@@ -82,10 +84,11 @@ const usageQueue = Effect.gen(function* () {
 
   if (count === undefined) return yield* replyError(400, "count must be a positive integer");
   const db = yield* usageDb;
+  const org = yield* CurrentOrg;
   const now = yield* Clock.currentTimeMillis;
 
   const rows = yield* query("queue", () =>
-    popUsageQueue(db, Math.min(count, MAX_QUEUE_COUNT), now),
+    popUsageQueue(db, org, Math.min(count, MAX_QUEUE_COUNT), now),
   );
 
   const authIndexOf = yield* currentAuthIndexer;
@@ -191,11 +194,13 @@ const usageRecords = Effect.gen(function* () {
   const limit = yield* parseLimit(params);
   const before = optional(params, "before");
   const db = yield* usageDb;
+  const org = yield* CurrentOrg;
   const authIndexOf = yield* currentAuthIndexer;
 
   const page = yield* query("records", () =>
     listUsageRecords(
       db,
+      org,
       {
         ...filter,
         ...(limit === undefined ? {} : { limit }),
@@ -224,11 +229,13 @@ const usageSummary = Effect.gen(function* () {
   }
 
   const db = yield* usageDb;
+  const org = yield* CurrentOrg;
   const authIndexOf = yield* currentAuthIndexer;
 
   const summary = yield* query("summary", () =>
     summarizeUsage(
       db,
+      org,
       {
         ...filter,
         // SAFETY: groupBy was checked against GROUP_BY above.
@@ -285,11 +292,13 @@ const usageSeries = Effect.gen(function* () {
   }
 
   const db = yield* usageDb;
+  const org = yield* CurrentOrg;
   const authIndexOf = yield* currentAuthIndexer;
 
   const series = yield* query("series", () =>
     summarizeUsageSeries(
       db,
+      org,
       {
         since,
         until,

@@ -30,6 +30,7 @@ import {
 import { LEGACY_PANEL_PATH } from "../access/routes.ts";
 import { routeServices } from "../http/route-services.ts";
 import type { WorkerEnv } from "../platform/env.ts";
+import type { CurrentOrg } from "../platform/org.ts";
 import { CatalogStore } from "../registry/catalog-store.ts";
 import { ModelRegistryLive } from "../registry/live.ts";
 import type { ModelRegistry } from "../registry/service.ts";
@@ -66,6 +67,7 @@ export const ManagementRoutes = HttpRouter.addAll(
         | HttpClient.HttpClient
         | CatalogStore
         | WorkerEnv
+        | CurrentOrg
         | HttpServerRequest.HttpServerRequest,
     >(
       handler: Effect.Effect<HttpServerResponse.HttpServerResponse, never, R>,

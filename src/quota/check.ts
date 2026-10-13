@@ -14,7 +14,8 @@
 import { Clock, Data, Duration, Effect } from "effect";
 import type { HttpClient } from "effect/http";
 import type { AccountResult, QuotaReport } from "../management/contract/credentials.ts";
-import { holdInvocation, WorkerEnv } from "../platform/env.ts";
+import { currentControlPlane, holdInvocation, type WorkerEnv } from "../platform/env.ts";
+import type { ControlPlaneStub, CurrentOrg } from "../platform/org.ts";
 import { probeQuota } from "./probe.ts";
 import type { QuotaOutcome } from "./report.ts";
 import type { SweepLease, SweepSource } from "./sweep-lease.ts";
@@ -34,19 +35,17 @@ export type QuotaCheckResult =
   /** The account's tokens changed during the check (a re-login or a token refresh): nothing was stored. */
   | { readonly kind: "stale" };
 
-type Stub = ReturnType<Env["CONTROL_PLANE"]["getByName"]>;
-
-/** One ControlPlane RPC (also used by `reset-grant-flow.ts`). */
+/** One RPC to the current org's ControlPlane (also used by `reset-grant-flow.ts`). */
 export const call = <R>(
   operation: string,
-  run: (stub: Stub) => R,
-): Effect.Effect<Awaited<R>, QuotaControlPlaneError, WorkerEnv> =>
+  run: (stub: ControlPlaneStub) => R,
+): Effect.Effect<Awaited<R>, QuotaControlPlaneError, WorkerEnv | CurrentOrg> =>
   Effect.gen(function* () {
-    const env = yield* WorkerEnv;
+    const stub = yield* currentControlPlane;
 
     return yield* Effect.tryPromise({
       // RPC results are promise-pipelining stubs; `await` yields the plain data.
-      try: async (): Promise<Awaited<R>> => await run(env.CONTROL_PLANE.getByName("global")),
+      try: async (): Promise<Awaited<R>> => await run(stub),
       catch: (cause) =>
         new QuotaControlPlaneError({
           operation,
@@ -101,7 +100,11 @@ export const checkCredentialQuota = (
     readonly authIndex?: string;
   },
   options: { readonly sweepLease?: string; readonly sweep?: boolean } = {},
-): Effect.Effect<QuotaCheckResult, QuotaControlPlaneError, WorkerEnv | HttpClient.HttpClient> =>
+): Effect.Effect<
+  QuotaCheckResult,
+  QuotaControlPlaneError,
+  WorkerEnv | CurrentOrg | HttpClient.HttpClient
+> =>
   Effect.gen(function* () {
     const target = yield* call("quotaProbeTarget", (stub) =>
       stub.quotaProbeTarget(ref, { sweep: options.sweep === true }),
@@ -230,7 +233,7 @@ const checkForSweep = (token: string) => (id: string) =>
  * longer holds the lease; a renewal that fails to reach the ControlPlane is retried at the next tick (the lease
  * lifetime covers a few misses).
  */
-const keepLease = (token: string): Effect.Effect<void, never, WorkerEnv> =>
+const keepLease = (token: string): Effect.Effect<void, never, WorkerEnv | CurrentOrg> =>
   Effect.gen(function* () {
     for (;;) {
       yield* Effect.sleep(Duration.millis(LEASE_RENEW_INTERVAL_MS));
@@ -254,7 +257,11 @@ const keepLease = (token: string): Effect.Effect<void, never, WorkerEnv> =>
  */
 export const sweepQuotas = (
   source: SweepSource,
-): Effect.Effect<QuotaSweep, QuotaControlPlaneError, WorkerEnv | HttpClient.HttpClient> =>
+): Effect.Effect<
+  QuotaSweep,
+  QuotaControlPlaneError,
+  WorkerEnv | CurrentOrg | HttpClient.HttpClient
+> =>
   Effect.acquireUseRelease(
     // Uninterruptible: the hold and the lease are both registered or neither.
     Effect.gen(function* () {
@@ -308,7 +315,7 @@ export interface QuotaSweepSummary {
 export const runQuotaSweep: Effect.Effect<
   QuotaSweepSummary,
   QuotaControlPlaneError,
-  WorkerEnv | HttpClient.HttpClient
+  WorkerEnv | CurrentOrg | HttpClient.HttpClient
 > = Effect.gen(function* () {
   const sweep = yield* sweepQuotas("cron");
 

@@ -4,12 +4,45 @@
  * The document is the canonical v8 JSON produced by `encodeConfig`. The version starts at 0 (nothing stored: defaults)
  * and increases by one on every write. All methods are synchronous so a read-check-write sequence is atomic under the
  * Durable Object input gate.
+ *
+ * Deployment settings (`DEPLOYMENT_SETTINGS`) decide something every org shares; only the `global` org's store accepts
+ * them. Another org's store refuses a document that sets one (`invalid`), so a setting never looks applied when it is
+ * not: readers take `global`'s value (`config/reader.ts`).
  */
 import { Effect, Result, Schema } from "effect";
 import type { Json } from "../json/index.ts";
 import { decodeConfig, encodeConfig, parseConfigYaml } from "./codec.ts";
 import { notAppliedSettings } from "./not-applied.ts";
 import { Config } from "./schema.ts";
+import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
+
+/**
+ * Settings that only the `global` org's config may set, with the value read from it: `models.catalog`, the source of
+ * the model catalog every org shares (ADR 0021).
+ */
+export const DEPLOYMENT_SETTINGS: ReadonlyArray<DeploymentSetting> = [
+  {
+    key: "models.catalog",
+    isSet: (config) => config.models.catalog.trim() !== "",
+    copy: (config, deployment) =>
+      config.models.catalog === deployment.models.catalog
+        ? config
+        : { ...config, models: { ...config.models, catalog: deployment.models.catalog } },
+  },
+];
+
+export interface DeploymentSetting {
+  /** The setting's key as the config document spells it. */
+  readonly key: string;
+  /** Whether `config` sets it (a value other than the default). */
+  readonly isSet: (config: Config) => boolean;
+  /** `config` with the setting's value taken from `deployment`, the `global` org's config (`config` when equal). */
+  readonly copy: (config: Config, deployment: Config) => Config;
+}
+
+/** `config` with every deployment setting taken from `deployment`, the `global` org's config. */
+export const withDeploymentSettings = (config: Config, deployment: Config): Config =>
+  DEPLOYMENT_SETTINGS.reduce((current, setting) => setting.copy(current, deployment), config);
 
 /** What `getConfig` returns over RPC (plain data only). */
 export interface ConfigSnapshotWire {
@@ -48,10 +81,13 @@ interface Row {
 export class ConfigStore {
   readonly #sql: SqlStorage;
   readonly #now: () => number;
+  readonly #org: OrgId;
 
-  constructor(sql: SqlStorage, now: () => number = Date.now) {
+  /** `org`: the org whose config this is; only `global`'s accepts the deployment settings. */
+  constructor(sql: SqlStorage, org: OrgId, now: () => number = Date.now) {
     this.#sql = sql;
     this.#now = now;
+    this.#org = org;
     sql.exec(
       `CREATE TABLE IF NOT EXISTS config (
          id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -108,6 +144,18 @@ export class ConfigStore {
 
     if (Result.isFailure(parsed))
       return { ok: false, error: "invalid", message: parsed.failure.message };
+
+    if (this.#org !== GLOBAL_ORG) {
+      const set = DEPLOYMENT_SETTINGS.filter((setting) => setting.isSet(parsed.success));
+
+      if (set.length > 0)
+        return {
+          ok: false,
+          error: "invalid",
+          message: `${set.map((setting) => setting.key).join(", ")}: a deployment setting, set in the global org's config only`,
+        };
+    }
+
     // Round-trip through the schema so the stored document is exactly what readers will decode.
     const document = JSON.stringify(encodeConfig(parsed.success));
     const version = current + 1;

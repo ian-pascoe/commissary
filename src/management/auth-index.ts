@@ -20,6 +20,10 @@
  * (`deploymentAuthIndexer`): every index then fails (management calls answer 500; the proxy's request log, which
  * only annotates with the index, leaves it out, `observability/trace.ts`), and the refusal is logged once per isolate.
  *
+ * Each org has its own key (ADR 0021): `global` uses `AUTH_INDEX_KEY` itself, so the indexes from before orgs existed
+ * stay valid, and any other org `hex(HMAC-SHA256(AUTH_INDEX_KEY, "auth-index-org:" + org))`, so the same credential
+ * gets unrelated indexes in two orgs ({@link orgAuthIndexer}).
+ *
  * The key is imported once per isolate and the indexes are memoised. It is a node:crypto `KeyObject` rather than a
  * WebCrypto `CryptoKey`: `crypto.subtle.sign` is async only, while lookups inside the ControlPlane Durable Object and
  * the pure management views are synchronous; workerd implements both over the same BoringSSL HMAC.
@@ -27,6 +31,7 @@
 import { createHmac, createSecretKey, type KeyObject } from "node:crypto";
 import { Effect } from "effect";
 import { WorkerEnv } from "../platform/env.ts";
+import { CurrentOrg, GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 import {
   DEV_AUTH_INDEX_KEY,
   MIN_AUTH_INDEX_KEY_LENGTH,
@@ -131,7 +136,38 @@ export const deploymentAuthIndexer = (env: AuthIndexKeyEnv): AuthIndexer => {
   return authIndexer(secret);
 };
 
-/** The indexer of the current Worker invocation's `AUTH_INDEX_KEY` ({@link deploymentAuthIndexer}). */
-export const currentAuthIndexer: Effect.Effect<AuthIndexer, never, WorkerEnv> = WorkerEnv.useSync(
-  (env) => deploymentAuthIndexer(env),
-);
+/** The key of `org` under the deployment key `secret` (any org but `global`). */
+const orgKey = (secret: string, org: OrgId): string =>
+  createHmac("sha256", createSecretKey(new TextEncoder().encode(secret)))
+    .update(`auth-index-org:${org}`, "utf8")
+    .digest("hex");
+
+const orgIndexers = new Map<string, AuthIndexer>();
+
+/**
+ * The indexer of `org`: {@link deploymentAuthIndexer} for `global`, and for any other org an indexer under a key
+ * derived from the deployment key, which goes through the same checks first.
+ */
+export const orgAuthIndexer = (env: AuthIndexKeyEnv, org: OrgId): AuthIndexer => {
+  const deployment = deploymentAuthIndexer(env);
+
+  if (org === GLOBAL_ORG) return deployment;
+  // SAFETY: deploymentAuthIndexer only returns when AUTH_INDEX_KEY is a string of an accepted length.
+  const secret = env.AUTH_INDEX_KEY as string;
+  const cacheKey = `${org}\u0000${secret}`;
+  const cached = orgIndexers.get(cacheKey);
+
+  if (cached !== undefined) return cached;
+  const indexer = makeIndexer(orgKey(secret, org));
+
+  if (orgIndexers.size >= MAX_MEMOISED) orgIndexers.clear();
+  orgIndexers.set(cacheKey, indexer);
+
+  return indexer;
+};
+
+/** The indexer of the current Worker invocation's org ({@link orgAuthIndexer}). */
+export const currentAuthIndexer: Effect.Effect<AuthIndexer, never, WorkerEnv | CurrentOrg> =
+  Effect.gen(function* () {
+    return orgAuthIndexer(yield* WorkerEnv, yield* CurrentOrg);
+  });

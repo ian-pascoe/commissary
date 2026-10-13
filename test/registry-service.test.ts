@@ -12,6 +12,7 @@ import { catalogs, canonOf } from "./support/registry.ts";
 import { FakeKv, fakeConfig } from "./support/registry-refresh.ts";
 import { source } from "./support/registry-sources.ts";
 import { fixture as thinkingFixture } from "./support/thinking.ts";
+import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 
 /** An env whose ControlPlane stub serves `sources()`; counts the RPCs. */
 const fakeControlPlane = (sources: () => ReadonlyArray<ModelSource>, calls: { count: number }) =>
@@ -57,6 +58,7 @@ describe("ModelRegistry service", () => {
       assert.deepStrictEqual(second.providersForModel("claude-sonnet-4-5-20250929"), []);
       assert.strictEqual(second.firstAvailableModel() !== undefined, true);
     }).pipe(
+      Effect.provideService(CurrentOrg, GLOBAL_ORG),
       Effect.provide(serviceLayer()),
       Effect.provide(fakeControlPlane(() => credentials, calls)),
     );
@@ -92,6 +94,7 @@ describe("ModelRegistry service", () => {
         assert.strictEqual(yield* registry.snapshot, fresh);
         assert.strictEqual(calls.count, 2);
       }).pipe(
+        Effect.provideService(CurrentOrg, GLOBAL_ORG),
         Effect.provide(serviceLayer()),
         Effect.provide(fakeControlPlane(() => credentials, calls)),
       );
@@ -115,7 +118,11 @@ describe("ModelRegistry service", () => {
       const error = yield* registry.fresh.pipe(Effect.flip);
       assert.instanceOf(error, ModelRegistryError);
       assert.strictEqual(yield* registry.snapshot, first);
-    }).pipe(Effect.provide(serviceLayer()), Effect.provide(fakeControlPlane(sources, calls)));
+    }).pipe(
+      Effect.provideService(CurrentOrg, GLOBAL_ORG),
+      Effect.provide(serviceLayer()),
+      Effect.provide(fakeControlPlane(sources, calls)),
+    );
   });
 
   it.effect(
@@ -141,7 +148,11 @@ describe("ModelRegistry service", () => {
         failing = true;
         yield* TestClock.adjust(SNAPSHOT_TTL_MS + 1);
         assert.strictEqual(yield* registry.snapshot, first);
-      }).pipe(Effect.provide(serviceLayer()), Effect.provide(fakeControlPlane(sources, calls)));
+      }).pipe(
+        Effect.provideService(CurrentOrg, GLOBAL_ORG),
+        Effect.provide(serviceLayer()),
+        Effect.provide(fakeControlPlane(sources, calls)),
+      );
     },
   );
 
@@ -183,6 +194,7 @@ describe("ModelRegistry service", () => {
       expect(snapshot.modelOverrideHeaders("claude-sonnet-4-5-20250929", "claude")).toBeUndefined();
       expect(snapshot.responsesWebSearchCapability("claude-sonnet-4-5-20250929")).toBeUndefined();
     }).pipe(
+      Effect.provideService(CurrentOrg, GLOBAL_ORG),
       Effect.provide(serviceLayer()),
       Effect.provide(fakeControlPlane(() => [source("claude-a.json", "claude")], calls)),
     );

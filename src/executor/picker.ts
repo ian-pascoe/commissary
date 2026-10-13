@@ -23,6 +23,7 @@ import type { RetryPlan, RetryQuery } from "../credentials/selection/retry.ts";
 import type { Lease, ReportResult, ResolvedSession } from "../credentials/selection/types.ts";
 import type { LcpPrepared } from "../session-routing/canonical.ts";
 import type { WorkerEnv } from "../platform/env.ts";
+import type { CurrentOrg } from "../platform/org.ts";
 import type { ExecutionError } from "./errors.ts";
 
 /** Read-only view of one credential (Go `cliproxyauth.Auth`). */
@@ -119,8 +120,15 @@ export type AttemptResult = ReportResult;
 export class CredentialPicker extends Context.Service<
   CredentialPicker,
   {
-    readonly pick: (request: PickRequest) => Effect.Effect<PickResult, ExecutionError, WorkerEnv>;
-    readonly report: (lease: Lease, result: AttemptResult) => Effect.Effect<void, never, WorkerEnv>;
-    readonly planRetry: (query: RetryQuery) => Effect.Effect<RetryPlan, never, WorkerEnv>;
+    readonly pick: (
+      request: PickRequest,
+    ) => Effect.Effect<PickResult, ExecutionError, WorkerEnv | CurrentOrg>;
+    readonly report: (
+      lease: Lease,
+      result: AttemptResult,
+    ) => Effect.Effect<void, never, WorkerEnv | CurrentOrg>;
+    readonly planRetry: (
+      query: RetryQuery,
+    ) => Effect.Effect<RetryPlan, never, WorkerEnv | CurrentOrg>;
   }
 >()("cf-llm-proxy/executor/CredentialPicker") {}

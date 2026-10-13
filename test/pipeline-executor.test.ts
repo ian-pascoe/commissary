@@ -24,6 +24,7 @@ import { builtinTranslators } from "../src/translator/builtin.ts";
 import { Formats } from "../src/translator/formats.ts";
 import { makeTranslationState, TranslatorRegistry } from "../src/translator/registry.ts";
 import { loadConfig, staticConfigReader } from "./support/pipeline.ts";
+import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 
 describe("LineSplitter", () => {
   it("splits on \\n only, drops trailing \\r and flushes the last line", () => {
@@ -370,7 +371,7 @@ api-keys:
         assert.strictEqual(empty.code, "provider_not_found");
         const lease = (yield* picker.pick({ providers, model: "m", callerScope: "s" })).lease;
         yield* picker.report(lease, { success: false, httpStatus: 500 });
-      }),
+      }).pipe(Effect.provideService(CurrentOrg, GLOBAL_ORG)),
     ),
   );
 });

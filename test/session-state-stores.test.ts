@@ -16,6 +16,7 @@ import { makeRequestReplayCache } from "../src/executor/gemini/replay.ts";
 import { makeSessionStateKimiReplayStore } from "../src/executor/kimi/replay.ts";
 import { makeSessionStateXaiReplayStore } from "../src/executor/xai/replay.ts";
 import { WorkerEnv } from "../src/platform/env.ts";
+import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 import {
   addressName,
   durableObjectBackend,
@@ -30,7 +31,10 @@ const workerEnv = env;
 
 /** One Worker invocation: the effect runs with its own request context (the bindings of `env`). */
 const invocation = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<A, E> =>
-  effect.pipe(Effect.provideService(WorkerEnv, workerEnv));
+  effect.pipe(
+    Effect.provideService(WorkerEnv, workerEnv),
+    Effect.provideService(CurrentOrg, GLOBAL_ORG),
+  );
 
 // The Durable Object arms alarms at absolute expiry times: start the test clock at the real time so they stay in the
 // future, then move it with TestClock.

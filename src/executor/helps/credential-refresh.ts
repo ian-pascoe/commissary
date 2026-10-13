@@ -17,6 +17,7 @@ import { metaNeedsMint } from "../../credentials/refresh/meta.ts";
 import { ANTIGRAVITY_REQUEST_SAFETY_MS } from "../../credentials/refresh/schedule.ts";
 import type { JsonObject } from "../../json/index.ts";
 import { WorkerEnv } from "../../platform/env.ts";
+import { controlPlaneOf, CurrentOrg, type OrgId } from "../../platform/org.ts";
 import { toExecutorSnapshot } from "../control-plane-picker.ts";
 import { ExecutionError, withErrorFields } from "../errors.ts";
 import type { CredentialSnapshot } from "../picker.ts";
@@ -37,18 +38,23 @@ export class CredentialRefresher extends Context.Service<
     readonly refreshNow: (
       credentialId: string,
       rejectedAccessToken?: string,
-    ) => Effect.Effect<RefreshResult, never, WorkerEnv>;
-    readonly ensureFresh: (credentialId: string) => Effect.Effect<RefreshResult, never, WorkerEnv>;
+    ) => Effect.Effect<RefreshResult, never, WorkerEnv | CurrentOrg>;
+    readonly ensureFresh: (
+      credentialId: string,
+    ) => Effect.Effect<RefreshResult, never, WorkerEnv | CurrentOrg>;
   }
 >()("cf-llm-proxy/executor/CredentialRefresher") {
-  /** Calls the ControlPlane through `api(env)`; transport failures become structured `refresh_failed` results. */
-  static readonly layerFor = (api: (env: Env) => RefreshApi) => {
+  /**
+   * Calls the ControlPlane through `api(env, org)`; transport failures become structured `refresh_failed` results.
+   */
+  static readonly layerFor = (api: (env: Env, org: OrgId) => RefreshApi) => {
     const call = (run: (api: RefreshApi) => PromiseLike<RefreshResult>) =>
       Effect.gen(function* () {
         const env = yield* WorkerEnv;
+        const org = yield* CurrentOrg;
 
         return yield* Effect.tryPromise({
-          try: async () => await run(api(env)),
+          try: async () => await run(api(env, org)),
           catch: () => "unavailable" as const,
         }).pipe(
           Effect.orElseSucceed((): RefreshResult => ({
@@ -68,10 +74,8 @@ export class CredentialRefresher extends Context.Service<
     );
   };
 
-  /** Production: the global ControlPlane Durable Object. */
-  static readonly controlPlane = CredentialRefresher.layerFor((env) =>
-    env.CONTROL_PLANE.getByName("global"),
-  );
+  /** Production: the ControlPlane Durable Object of the request's org. */
+  static readonly controlPlane = CredentialRefresher.layerFor(controlPlaneOf);
 
   /** No refresh support (tests with API keys only). */
   static readonly none = Layer.succeed(

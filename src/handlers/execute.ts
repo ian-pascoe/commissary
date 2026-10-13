@@ -21,6 +21,7 @@ import { filterUpstreamHeaders } from "../http/headers.ts";
 import { get, type Json } from "../json/index.ts";
 import type { Format } from "../translator/formats.ts";
 import type { WorkerEnv } from "../platform/env.ts";
+import { CurrentOrg } from "../platform/org.ts";
 import {
   type Attempt,
   attemptOptions,
@@ -138,6 +139,7 @@ const toExecutionError = (cause: Cause.Cause<ExecutionError>): ExecutionError | 
 
 const prepare = Effect.fnUntraced(function* (input: ExecutionInput, stream: boolean) {
   const identity = yield* AccessPrincipal;
+  const org = yield* CurrentOrg;
 
   const { config } = yield* (yield* ConfigReader).get.pipe(
     Effect.mapError(
@@ -199,6 +201,7 @@ const prepare = Effect.fnUntraced(function* (input: ExecutionInput, stream: bool
     options,
     stream,
     principalId: identity.principalId,
+    orgId: org,
     callerScope: identity.callerScope,
     endpoint: `${input.request.method} ${url.pathname}`,
     session:
@@ -318,7 +321,7 @@ const runStreamAttempt = (prepared: Prepared, attempt: Attempt) =>
       });
     }
 
-    const services = yield* Effect.context<WorkerEnv>();
+    const services = yield* Effect.context<WorkerEnv | CurrentOrg>();
     const target = attempt.rewriteTo;
     const rest = boot.closed ? Stream.empty : Stream.fromPull(Effect.succeed(pull));
 

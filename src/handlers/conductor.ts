@@ -54,6 +54,7 @@ import type {
 } from "../executor/types.ts";
 import type { Json } from "../json/index.ts";
 import { holdInvocation, WorkerEnv } from "../platform/env.ts";
+import { CurrentOrg, type OrgId } from "../platform/org.ts";
 import { noteSelection, notePrincipal, RequestTrace } from "../observability/trace.ts";
 import type { SessionRouting } from "../session-routing/routing.ts";
 import { UsageReporter } from "../usage/reporter.ts";
@@ -133,6 +134,8 @@ export interface Prepared {
   readonly options: ExecutorOptions;
   readonly stream: boolean;
   readonly principalId: string;
+  /** The request's org (usage `org_id`). */
+  readonly orgId: OrgId;
   readonly callerScope: string;
   readonly endpoint: string;
   readonly session: PickSession | undefined;
@@ -186,7 +189,7 @@ export interface Attempt {
   readonly finish: (
     error: ExecutionError | undefined,
     headers?: Headers,
-  ) => Effect.Effect<RequestScopedAction | undefined, never, WorkerEnv>;
+  ) => Effect.Effect<RequestScopedAction | undefined, never, WorkerEnv | CurrentOrg>;
 }
 
 export type ConductResult<T> =
@@ -275,6 +278,7 @@ export const conduct = <T, R>(
             alias: prepared.clientModel,
             endpoint: prepared.endpoint,
             principalId: prepared.principalId,
+            orgId: prepared.orgId,
             authId: credential.id,
             authType: credential.kind,
             source: credential.label ?? credential.id,
@@ -397,7 +401,11 @@ export const conduct = <T, R>(
     const creditsBalance = (credentialId: string) =>
       Effect.gen(function* () {
         const env = yield* WorkerEnv;
-        const record = yield* Effect.promise(() => antigravityStateFor(env).credits(credentialId));
+        const org = yield* CurrentOrg;
+
+        const record = yield* Effect.promise(() =>
+          antigravityStateFor(env, org).credits(credentialId),
+        );
 
         return record === undefined ? undefined : creditsAvailable(record);
       });

@@ -28,6 +28,7 @@ import type {
   ResetGrantStatus,
 } from "../management/contract/credentials.ts";
 import type { WorkerEnv } from "../platform/env.ts";
+import type { CurrentOrg } from "../platform/org.ts";
 import { call, checkCredentialQuota, type QuotaControlPlaneError } from "./check.ts";
 import type { ResetGrantMark } from "./reset-grant-store.ts";
 import { CLAUDE_HEADERS, CLAUDE_PROFILE_URL } from "./claude.ts";
@@ -124,7 +125,7 @@ export type ResetGrantClaimResult =
 
 type Ref = { readonly authIndex: string };
 
-type Requirements = WorkerEnv | HttpClient.HttpClient;
+type Requirements = WorkerEnv | CurrentOrg | HttpClient.HttpClient;
 
 const STATUS_FAILED = "could not read the reset grants from Anthropic";
 

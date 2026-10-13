@@ -3,7 +3,7 @@
  *
  * Selection, cooldowns, quota and session affinity live in the DO (credentials.md §6, §8); this adapter only maps
  * between the DO wire types and the executor-facing contract. The DO stub is resolved from the per-request
- * `WorkerEnv` on every call, never captured in a layer.
+ * `WorkerEnv` and `CurrentOrg` on every call, never captured in a layer.
  */
 import { Effect, Layer } from "effect";
 import type {
@@ -16,6 +16,7 @@ import type {
 } from "../credentials/selection/types.ts";
 import type { RetryPlan, RetryQuery } from "../credentials/selection/retry.ts";
 import { WorkerEnv } from "../platform/env.ts";
+import { controlPlaneOf, CurrentOrg, type OrgId } from "../platform/org.ts";
 import { ExecutionError } from "./errors.ts";
 import {
   CredentialPicker,
@@ -85,11 +86,12 @@ const unavailable = (cause: unknown) =>
     cause,
   });
 
-export const makeControlPlanePicker = (api: (env: Env) => ControlPlaneApi) =>
+export const makeControlPlanePicker = (api: (env: Env, org: OrgId) => ControlPlaneApi) =>
   CredentialPicker.of({
     pick: (request: PickRequest) =>
       Effect.gen(function* () {
         const env = yield* WorkerEnv;
+        const org = yield* CurrentOrg;
 
         const wire: WirePickRequest = {
           providers: request.providers,
@@ -140,7 +142,7 @@ export const makeControlPlanePicker = (api: (env: Env) => ControlPlaneApi) =>
         };
 
         const result = yield* Effect.tryPromise({
-          try: async () => await api(env).pick(wire),
+          try: async () => await api(env, org).pick(wire),
           catch: unavailable,
         });
 
@@ -172,8 +174,9 @@ export const makeControlPlanePicker = (api: (env: Env) => ControlPlaneApi) =>
     report: (lease, result) =>
       Effect.gen(function* () {
         const env = yield* WorkerEnv;
+        const org = yield* CurrentOrg;
         yield* Effect.tryPromise({
-          try: async () => await api(env).report(lease, result),
+          try: async () => await api(env, org).report(lease, result),
           catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
         }).pipe(
           Effect.catch(() => Effect.logWarning(`control plane report failed (lease ${lease.id})`)),
@@ -182,9 +185,10 @@ export const makeControlPlanePicker = (api: (env: Env) => ControlPlaneApi) =>
     planRetry: (query) =>
       Effect.gen(function* () {
         const env = yield* WorkerEnv;
+        const org = yield* CurrentOrg;
 
         return yield* Effect.tryPromise({
-          try: async () => await api(env).planRetry(query),
+          try: async () => await api(env, org).planRetry(query),
           catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
         }).pipe(
           // Without cooldown knowledge a retry would be a guess: stop retrying.
@@ -199,8 +203,8 @@ const stripPrefix = (model: string, prefix: string | undefined): string => {
   return needle !== "" && model.startsWith(needle) ? model.slice(needle.length) : model;
 };
 
-/** Production picker: the global ControlPlane Durable Object. */
+/** Production picker: the ControlPlane Durable Object of the request's org. */
 export const ControlPlanePickerLayer = Layer.succeed(
   CredentialPicker,
-  makeControlPlanePicker((env) => env.CONTROL_PLANE.getByName("global")),
+  makeControlPlanePicker(controlPlaneOf),
 );

@@ -33,6 +33,7 @@ import { makeTranslationState } from "../src/translator/registry.ts";
 import { UsageReporter } from "../src/usage/reporter.ts";
 import { oauthCredential } from "./support/codex.ts";
 import { loadConfig } from "./support/pipeline.ts";
+import { GLOBAL_ORG } from "../src/platform/org.ts";
 
 describe("Responses frame assembler", () => {
   const created = 'event: response.created\ndata: {"type":"response.created","sequence_number":0}';
@@ -486,6 +487,7 @@ describe("Codex executor replay round trip (Claude source)", () => {
       alias: "gpt-5.4",
       endpoint: "POST /v1/messages",
       principalId: "user:x",
+      orgId: GLOBAL_ORG,
       authId: "a",
       authType: "oauth",
       source: "s",
@@ -603,6 +605,7 @@ describe("Codex executor replay round trip (Claude source)", () => {
       alias: "m",
       endpoint: "e",
       principalId: "p",
+      orgId: GLOBAL_ORG,
       authId: "a",
       authType: "oauth",
       source: "s",

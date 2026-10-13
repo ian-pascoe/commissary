@@ -8,6 +8,9 @@
  * Workers addition (not in Go): `summarizeUsageSeries` (one aggregate query: requests, failures and v2
  * `acct_total_tokens` per key × UTC hour/day bucket) for the control panel's per-account quota-window bars.
  *
+ * Every row belongs to one org (`org_id`, `migrations/0003_usage_org.sql`; ADR 0021) and every read takes the org and
+ * filters on it, so one org never sees another org's records.
+ *
  * Rows keep the credential id (`auth_id`); every read answers with the keyed `auth_index` instead
  * (`management/auth-index.ts`), computed on read under the deployment's key. A config credential id is an unsalted
  * hash of its API key, so it never leaves the database: the `auth` grouping keys are indexes, and the credential filter
@@ -15,6 +18,7 @@
  * against the distinct ids of the filtered rows (`resolveAuthIds`).
  */
 import type { AuthIndexer } from "../management/auth-index.ts";
+import type { OrgId } from "../platform/org.ts";
 import { normalizeToCanonicalUuid } from "../session-routing/identity.ts";
 import {
   ensureTokenBreakdown,
@@ -40,6 +44,7 @@ export interface UsageRow {
   response_model: string | null;
   endpoint: string;
   principal_id: string;
+  org_id: string;
   auth_id: string;
   auth_type: string;
   source: string;
@@ -91,6 +96,7 @@ const INSERT_COLUMNS = [
   "response_model",
   "endpoint",
   "principal_id",
+  "org_id",
   "auth_id",
   "auth_type",
   "source",
@@ -154,6 +160,7 @@ export const recordToRow = (record: UsageRecord): Omit<UsageRow, "exported_at"> 
     response_model: trimmedOrNull(record.responseModel),
     endpoint: record.endpoint,
     principal_id: record.principalId,
+    org_id: record.orgId,
     auth_id: record.authId,
     auth_type: record.authType.trim() === "" ? "unknown" : record.authType.trim(),
     source: record.source,
@@ -293,11 +300,12 @@ export const rowToPayload = (row: UsageRow, authIndexOf: AuthIndexer) => {
 export const MAX_QUEUE_COUNT = 1000;
 
 /**
- * `PopOldest`: atomically marks the oldest `count` unexported records as exported and returns them oldest first. An
- * exported record stays in D1 (for the listing and summary endpoints) until retention removes it.
+ * `PopOldest`: atomically marks the oldest `count` unexported records of `org` as exported and returns them oldest
+ * first. An exported record stays in D1 (for the listing and summary endpoints) until retention removes it.
  */
 export const popUsageQueue = async (
   db: D1Database,
+  org: OrgId,
   count: number,
   now: number,
 ): Promise<ReadonlyArray<UsageRow>> => {
@@ -306,10 +314,11 @@ export const popUsageQueue = async (
   const result = await db
     .prepare(
       `UPDATE usage_records SET exported_at = ?1 WHERE request_id IN (
-         SELECT request_id FROM usage_records WHERE exported_at IS NULL ORDER BY requested_at ASC, request_id ASC LIMIT ?2
+         SELECT request_id FROM usage_records WHERE org_id = ?3 AND exported_at IS NULL
+         ORDER BY requested_at ASC, request_id ASC LIMIT ?2
        ) RETURNING *`,
     )
-    .bind(now, limit)
+    .bind(now, limit, org)
     .run<UsageRow>();
 
   return result.results.toSorted(
@@ -343,8 +352,12 @@ interface FilterClauses {
   readonly params: Array<string | number>;
 }
 
-/** `filter` as SQL; `authIds` are the credential ids `filter.authIndex` resolved to (`resolveAuthIds`). */
+/**
+ * `filter` within `org` as SQL (the org clause is always there); `authIds` are the credential ids `filter.authIndex`
+ * resolved to (`resolveAuthIds`).
+ */
 const filterClauses = (
+  org: OrgId,
   filter: UsageFilter,
   authIds: ReadonlyArray<string> | undefined,
 ): FilterClauses => {
@@ -355,6 +368,8 @@ const filterClauses = (
     params.push(value);
     clauses.push(clause.replace("?", `?${params.length}`));
   };
+
+  add("org_id = ?", org);
 
   if (filter.since !== undefined) add("requested_at >= ?", filter.since);
 
@@ -380,11 +395,11 @@ const filterClauses = (
 
   if (filter.failed !== undefined) add("failed = ?", filter.failed ? 1 : 0);
 
-  return { where: clauses.length === 0 ? "" : ` WHERE ${clauses.join(" AND ")}`, params };
+  return { where: ` WHERE ${clauses.join(" AND ")}`, params };
 };
 
 /**
- * The credential ids `filter.authIndex` stands for (undefined without an index). A live credential
+ * The credential ids `filter.authIndex` stands for in `org` (undefined without an index). A live credential
  * (`filter.liveAuthId`, resolved by the ControlPlane) is used directly, with no D1 read. Otherwise (a deleted
  * credential, or an index that matches nothing) the distinct `auth_id`s of the rows the other filters select are read
  * and indexed: a scan of the `usage_records_auth` index over the filtered range, bounded by the records kept
@@ -392,6 +407,7 @@ const filterClauses = (
  */
 export const resolveAuthIds = async (
   db: D1Database,
+  org: OrgId,
   filter: UsageFilter,
   authIndexOf: AuthIndexer,
 ): Promise<ReadonlyArray<string> | undefined> => {
@@ -400,7 +416,7 @@ export const resolveAuthIds = async (
   if (authIndex === undefined) return undefined;
 
   if (liveAuthId !== undefined && authIndexOf(liveAuthId) === authIndex) return [liveAuthId];
-  const { where, params } = filterClauses(rest, undefined);
+  const { where, params } = filterClauses(org, rest, undefined);
 
   const result = await db
     .prepare(`SELECT DISTINCT auth_id FROM usage_records${where}`)
@@ -410,12 +426,14 @@ export const resolveAuthIds = async (
   return result.results.map((row) => row.auth_id).filter((id) => authIndexOf(id) === authIndex);
 };
 
-/** `filter` as SQL, its `authIndex` resolved first. */
+/** `filter` within `org` as SQL, its `authIndex` resolved first. */
 const resolvedClauses = async (
   db: D1Database,
+  org: OrgId,
   filter: UsageFilter,
   authIndexOf: AuthIndexer,
-): Promise<FilterClauses> => filterClauses(filter, await resolveAuthIds(db, filter, authIndexOf));
+): Promise<FilterClauses> =>
+  filterClauses(org, filter, await resolveAuthIds(db, org, filter, authIndexOf));
 
 export const MAX_LIST_LIMIT = 1000;
 
@@ -443,9 +461,10 @@ export const parseCursor = (
   return Number.isSafeInteger(at) ? { at, id: cursor.slice(separator + 1) } : undefined;
 };
 
-/** Newest records first, keyset-paginated. */
+/** Newest records of `org` first, keyset-paginated. */
 export const listUsageRecords = async (
   db: D1Database,
+  org: OrgId,
   query: UsageListQuery,
   authIndexOf: AuthIndexer,
 ): Promise<UsageListPage> => {
@@ -454,14 +473,13 @@ export const listUsageRecords = async (
     Math.min(MAX_LIST_LIMIT, Math.trunc(query.limit ?? DEFAULT_LIST_LIMIT)),
   );
 
-  const { where, params } = await resolvedClauses(db, query, authIndexOf);
+  const { where, params } = await resolvedClauses(db, org, query, authIndexOf);
   const cursor = query.before === undefined ? undefined : parseCursor(query.before);
   let sql = `SELECT * FROM usage_records${where}`;
 
   if (cursor !== undefined) {
     params.push(cursor.at, cursor.id);
-    const cursorClause = `(requested_at < ?${params.length - 1} OR (requested_at = ?${params.length - 1} AND request_id < ?${params.length}))`;
-    sql += where === "" ? ` WHERE ${cursorClause}` : ` AND ${cursorClause}`;
+    sql += ` AND (requested_at < ?${params.length - 1} OR (requested_at = ?${params.length - 1} AND request_id < ?${params.length}))`;
   }
 
   params.push(limit + 1);
@@ -535,15 +553,16 @@ export interface UsageSummaryQuery extends UsageFilter {
 }
 
 /**
- * Token totals (v2 breakdown buckets) overall and per `groupBy` key, largest total first (`day`: chronological). The
- * `auth` keys are keyed `auth_index` values.
+ * Token totals (v2 breakdown buckets) of `org` overall and per `groupBy` key, largest total first (`day`:
+ * chronological). The `auth` keys are keyed `auth_index` values.
  */
 export const summarizeUsage = async (
   db: D1Database,
+  org: OrgId,
   query: UsageSummaryQuery,
   authIndexOf: AuthIndexer,
 ): Promise<UsageSummary> => {
-  const { where, params } = await resolvedClauses(db, query, authIndexOf);
+  const { where, params } = await resolvedClauses(db, org, query, authIndexOf);
 
   const limit = Math.max(
     1,
@@ -651,17 +670,19 @@ interface SeriesRow {
 }
 
 /**
- * Requests, failures and `acct_total_tokens` per `groupBy` key and UTC hour/day bucket (only buckets with requests),
+ * Requests, failures and `acct_total_tokens` of `org` per `groupBy` key and UTC hour/day bucket (only buckets with requests),
  * series sorted by key, points by time. The first bucket may start before `since` (it holds the records from `since`).
  * The `auth` keys are keyed `auth_index` values.
  */
 export const summarizeUsageSeries = async (
   db: D1Database,
+  org: OrgId,
   query: UsageSeriesQuery,
   authIndexOf: AuthIndexer,
 ): Promise<ReadonlyArray<UsageSeriesGroup>> => {
   const { where, params } = await resolvedClauses(
     db,
+    org,
     {
       since: query.since,
       until: query.until,
@@ -717,7 +738,10 @@ export const PRUNE_BATCH = 5000;
 
 const MAX_PRUNE_BATCHES = 40;
 
-/** Deletes records older than `cutoff` (epoch ms) in bounded batches; returns the number removed. */
+/**
+ * Deletes records older than `cutoff` (epoch ms) of every org in bounded batches (retention is deployment-wide);
+ * returns the number removed.
+ */
 export const pruneUsageRecords = async (db: D1Database, cutoff: number): Promise<number> => {
   let removed = 0;
 

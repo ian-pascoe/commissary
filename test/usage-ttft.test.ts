@@ -9,6 +9,7 @@ import {
   isTokenEvent,
   tokenEventProtocolOf,
 } from "../src/usage/ttft.ts";
+import { GLOBAL_ORG } from "../src/platform/org.ts";
 
 describe("token events", () => {
   it("chat completions", () => {
@@ -123,6 +124,7 @@ describe("UsageReporter TTFT", () => {
       alias: "m",
       endpoint: "POST /v1/responses",
       principalId: "p",
+      orgId: GLOBAL_ORG,
       authId: "a",
       authType: "oauth",
       source: "s",

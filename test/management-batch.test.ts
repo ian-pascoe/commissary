@@ -36,6 +36,7 @@ import {
 import { emptyState } from "../src/credentials/model.ts";
 import { makePool, MemoryPoolStore } from "./support/pool.ts";
 import { type MockReply, mockHttp, routes } from "./support/refresh.ts";
+import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 
 const BATCH = "/v8/management/credentials/batch";
 
@@ -618,7 +619,7 @@ describe("POST /credentials/quota/all", () => {
 
       if (held.ok)
         yield* Effect.promise(() => controlPlane().releaseQuotaSweepLease(held.lease.token));
-    }),
+    }).pipe(Effect.provideService(CurrentOrg, GLOBAL_ORG)),
   );
 });
 
@@ -875,7 +876,7 @@ describe("sweepQuotas gives the lease back", () => {
       assert.lengthOf(held, 1);
       // Settled: the hold ended once the lease was given back.
       yield* Effect.promise(() => held[0] ?? Promise.resolve());
-    }),
+    }).pipe(Effect.provideService(CurrentOrg, GLOBAL_ORG)),
   );
 
   it.effect("when the request is cancelled while a provider is being asked", () =>
@@ -903,7 +904,7 @@ describe("sweepQuotas gives the lease back", () => {
       assert.deepStrictEqual(plane.calls, ["take:panel", "targets", "target", "release:tok"]);
       assert.lengthOf(held, 1);
       yield* Effect.promise(() => held[0] ?? Promise.resolve());
-    }),
+    }).pipe(Effect.provideService(CurrentOrg, GLOBAL_ORG)),
   );
 
   it.effect(
@@ -933,7 +934,7 @@ describe("sweepQuotas gives the lease back", () => {
         assert.deepStrictEqual(plane.calls, ["take:panel", "release:tok"]);
         assert.lengthOf(held, 1);
         yield* Effect.promise(() => held[0] ?? Promise.resolve());
-      }),
+      }).pipe(Effect.provideService(CurrentOrg, GLOBAL_ORG)),
   );
 });
 
@@ -983,7 +984,7 @@ describe("sweepQuotas keeps its lease", () => {
 
         assert.deepStrictEqual(result, { kind: "lost", startedAt: 1 });
         expect(plane.calls.slice(-2)).toEqual(["renew", "release:tok"]);
-      }),
+      }).pipe(Effect.provideService(CurrentOrg, GLOBAL_ORG)),
   );
 });
 

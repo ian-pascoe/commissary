@@ -15,6 +15,7 @@
  * settings (cache mode on, basic bypass validation).
  */
 import { createHash } from "node:crypto";
+import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 
 /** `SignatureCacheTTL` (3 h), sliding. */
 export const SIGNATURE_CACHE_TTL_MS = 3 * 60 * 60 * 1000;
@@ -190,8 +191,31 @@ const isolateCache = new MemorySignatureCache();
 
 let current: SignatureContext = { cache: isolateCache, settings: defaultSignatureSettings };
 
-/** The isolate-wide cache (the default of {@link currentSignatureCache}). */
-export const isolateSignatureCache = (): MemorySignatureCache => isolateCache;
+const orgCaches = new Map<OrgId, MemorySignatureCache>([[GLOBAL_ORG, isolateCache]]);
+
+/** Most orgs whose caches one isolate keeps besides `global`'s; the oldest other org's cache goes first. */
+const MAX_ORG_CACHES = 64;
+
+/**
+ * The isolate-wide cache of `org` (`global`'s is the default of {@link currentSignatureCache}): signatures are org data,
+ * so one org's thinking never meets another org's cached signature.
+ */
+export const isolateSignatureCache = (org: OrgId): MemorySignatureCache => {
+  const existing = orgCaches.get(org);
+
+  if (existing !== undefined) return existing;
+
+  if (orgCaches.size > MAX_ORG_CACHES) {
+    const oldest = [...orgCaches.keys()].find((cached) => cached !== GLOBAL_ORG);
+
+    if (oldest !== undefined) orgCaches.delete(oldest);
+  }
+
+  const created = new MemorySignatureCache();
+  orgCaches.set(org, created);
+
+  return created;
+};
 
 export const currentSignatureCache = (): SignatureCache => current.cache;
 

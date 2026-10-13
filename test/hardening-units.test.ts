@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { notAppliedSettings } from "../src/config/not-applied.ts";
 import { ConfigStore } from "../src/config/store.ts";
 import { sha256Hex } from "../src/hash.ts";
+import { GLOBAL_ORG } from "../src/platform/org.ts";
 import { causeSummary, redactUrls } from "../src/observability/cause.ts";
 import { sha256Hex as oauthSha256Hex } from "../src/oauth/encoding.ts";
 import { loadConfig } from "./support/pipeline.ts";
@@ -70,7 +71,7 @@ describe("notAppliedSettings", () => {
       },
     } as unknown as SqlStorage;
 
-    const result = new ConfigStore(sql, () => 1).put(GO_CONFIG);
+    const result = new ConfigStore(sql, GLOBAL_ORG, () => 1).put(GO_CONFIG);
     expect(result.ok && result.notApplied).toContain("access.api-keys");
     // Response steering is ported: an effective key, not reported.
     expect(result.ok && result.notApplied).not.toContain("upstream.codex.response-steering");
