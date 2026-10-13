@@ -18,8 +18,16 @@ A company or group that uses the proxy as one unit, with its own members, teams,
 limits. Nothing in one org is visible to another. A self-hosted proxy usually serves a single org.
 _Avoid_: tenant, workspace, organisation (kept for a provider's own organisation, such as an Anthropic organisation)
 
+**Self-hosted proxy**:
+A proxy run by an org for its own people, who sign in through Cloudflare Access.
+
+**Hosted proxy**:
+A proxy run as a service for anyone: people sign up and sign in through the proxy itself, and signing up gives them an
+org of their own.
+_Avoid_: SaaS, cloud, multi-tenant mode
+
 **Platform admin**:
-A person named by the deployment who can create orgs and repair any of them.
+A person named by the deployment who can repair any org, and the only one who can create orgs on a self-hosted proxy.
 _Avoid_: operator, superuser, admin (on its own)
 
 **Member**:
@@ -48,8 +56,8 @@ An application that sends model requests to the proxy, such as pi, Claude Code, 
 _Avoid_: caller, consumer, user
 
 **Principal**:
-The identity behind a request: a person signed in through Cloudflare Access, a service token or a proxy key. Usage and
-session state are attributed to it.
+The identity behind a request: a signed-in person, a service token, a management key or a proxy key. Usage and session
+state are attributed to it.
 _Avoid_: user, API key, caller
 
 **Proxy key**:
@@ -58,8 +66,18 @@ its own.
 _Avoid_: API key, client key, access key, token
 
 **Service token**:
-An Access identity for a machine, registered to one org with a role, which scripts present to the management API.
+An Access identity for a machine, registered to one org with a role, which scripts present to the management API of a
+self-hosted proxy.
 _Avoid_: API key, client key, proxy key
+
+**Management key**:
+A secret an org admin issues for scripts that use the management API, carrying a role in that org. Unlike a service
+token it never grants the sensitive powers, such as downloading a stored credential.
+_Avoid_: API key, admin key, proxy key
+
+**Suspended**:
+Said of an org or person a platform admin has stopped: signed out and refused everywhere, with nothing deleted.
+_Avoid_: disabled, banned, locked
 
 **Caller scope**:
 The namespace that keeps one principal's sessions and cached conversation state apart from every other principal's.
