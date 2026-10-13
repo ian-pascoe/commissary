@@ -125,21 +125,37 @@ describe("the org setting for private credentials", () => {
   it("is on for global, whose members keep what they could do", async () => {
     const stub = await before(GLOBAL_ORG);
 
-    expect(await stub.membershipSettings()).toEqual({ autoJoin: true, privateCredentials: true });
+    expect(await stub.membershipSettings()).toEqual({
+      autoJoin: true,
+      privateCredentials: true,
+      accessClients: true,
+    });
 
     await restart(stub);
 
-    expect(await stub.membershipSettings()).toEqual({ autoJoin: true, privateCredentials: true });
+    expect(await stub.membershipSettings()).toEqual({
+      autoJoin: true,
+      privateCredentials: true,
+      accessClients: true,
+    });
   });
 
   it("is off for every other org until an org admin turns it on", async () => {
     const stub = await before(freshOrg());
 
-    expect(await stub.membershipSettings()).toEqual({ autoJoin: false, privateCredentials: false });
+    expect(await stub.membershipSettings()).toEqual({
+      autoJoin: false,
+      privateCredentials: false,
+      accessClients: false,
+    });
 
     await restart(stub);
 
-    expect(await stub.membershipSettings()).toEqual({ autoJoin: false, privateCredentials: false });
+    expect(await stub.membershipSettings()).toEqual({
+      autoJoin: false,
+      privateCredentials: false,
+      accessClients: false,
+    });
   });
 });
 

@@ -1,7 +1,7 @@
 // Proxy keys (ADR 0022, issue #67): the key text, the management routes that issue and revoke keys, and the gate on
 // the proxy routes: each header form a client sends keys in, the refusals (all `Invalid API key`), that a key only ever
-// reaches its own org's ControlPlane, revocation within the cache window, and the Access sign-ins a proxy route still
-// takes while the org's `access_clients` setting is on. Through the router with the real ControlPlanes and a Platform
+// reaches its own org's ControlPlane and serves its member's private credentials, revocation within the cache window,
+// and the Access sign-ins a proxy route still takes while the org's `access_clients` setting is on. Through the router with the real ControlPlanes and a Platform
 // registry of its own; the cache window through `authenticateRequest` with `TestClock`.
 import { env } from "cloudflare:workers";
 import { assert, it as effectIt } from "@effect/vitest";
@@ -20,6 +20,7 @@ import { MAX_KEYS_PER_MEMBER } from "../src/proxy-keys/store.ts";
 import { fakeJwksLayer, makeFakeJwks, makeKey, signToken, userClaims } from "./support/access.ts";
 import {
   ADMIN,
+  claudeFile,
   isolatedPlatform,
   jsonInit,
   key as managementKey,
@@ -52,7 +53,28 @@ const whoami = Effect.gen(function* () {
   );
 });
 
+/**
+ * Picks a Claude credential for the caller the way the proxy handlers do (`handlers/execute.ts`: the identity's org and
+ * member), and answers which one, or the refusal.
+ */
+const pickForCaller = Effect.gen(function* () {
+  const identity = yield* AccessPrincipal;
+
+  const picked = yield* Effect.promise(async () => {
+    const answer = await controlPlaneOf(env, identity.org).pick({
+      providers: ["claude"],
+      model: "claude-sonnet-4-5",
+      ...(identity.memberId === undefined ? {} : { memberId: identity.memberId }),
+    });
+
+    return answer.ok ? { credential: answer.credential.id } : { refused: true };
+  });
+
+  return HttpServerResponse.text(JSON.stringify(picked), { contentType: "application/json" });
+});
+
 const ProxyRoutes = Layer.mergeAll(
+  HttpRouter.add("POST", "/v1/chat/completions", pickForCaller),
   HttpRouter.add("GET", "/v1/models", whoami),
   HttpRouter.add("POST", "/v1/messages", whoami),
   HttpRouter.add("GET", "/v1beta/models", whoami),
@@ -104,10 +126,14 @@ const send = async (
 const errorOf = (reply: { body: unknown }) => (reply.body as { error?: string }).error;
 
 /** An org of its own with an admin and two plain members; answers its id and slug and how to act as each. */
-const staffedOrg = async (prefix: string) => {
+const staffedOrg = async (prefix: string, privateCredentials = false) => {
   const slug = `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
   const admin = await as(ADMIN);
-  const created = await harness.json("/v8/management/orgs", jsonInit("POST", { slug, name: slug }));
+
+  const created = await harness.json(
+    "/v8/management/orgs",
+    jsonInit("POST", { slug, name: slug, private_credentials: privateCredentials }),
+  );
 
   expect(created.status).toBe(201);
   const org = OrgId.make((created.body as { id: string }).id);
@@ -337,6 +363,21 @@ describe("the gate on the proxy routes", () => {
     expect(bobs).not.toBe(laptop);
   });
 
+  it("makes the key's member the owner a private credential is picked for (ADR 0023)", async () => {
+    const { slug, alice, bob } = await staffedOrg("gate-private", true);
+
+    const uploaded = await send(slug, "/credentials?name=alice.json", alice, "POST", claudeFile());
+
+    expect(uploaded.status).toBe(200);
+
+    const pickedWith = async (key: KeyBody) =>
+      (await proxy("/v1/chat/completions", { authorization: `Bearer ${wholeKey(key)}` }, "POST"))
+        .body;
+
+    expect(await pickedWith(await createKey(slug, alice))).toEqual({ credential: "alice.json" });
+    expect(await pickedWith(await createKey(slug, bob))).toEqual({ refused: true });
+  });
+
   it("answers wrong, unknown, revoked and expired keys with Invalid API key", async () => {
     const { org, slug, alice } = await staffedOrg("gate-refusals");
     const other = await staffedOrg("gate-refusals-other");
@@ -460,12 +501,16 @@ describe("Access sign-ins on the proxy routes", () => {
   it("stay accepted in global, where clients signed in through Access before, and nowhere else", async () => {
     expect((await harness.json("/v8/management/membership", await owner())).body).toEqual({
       auto_join: true,
+      private_credentials: true,
       access_clients: true,
     });
 
     const { slug } = await staffedOrg("access-default");
     // An Access sign-in on a proxy route names no org, so it only ever reaches global: other orgs lack the setting.
-    expect((await send(slug, "/membership", await owner())).body).toEqual({ auto_join: false });
+    expect((await send(slug, "/membership", await owner())).body).toEqual({
+      auto_join: false,
+      private_credentials: false,
+    });
   });
 
   it("take the cloudflared header while global accepts them, and 401 once it does not", async () => {
@@ -571,7 +616,11 @@ describe("Access sign-ins on the proxy routes", () => {
 
     try {
       // Changing one setting keeps the other.
-      expect(await setAccessClients(false)).toEqual({ auto_join: true, access_clients: false });
+      expect(await setAccessClients(false)).toEqual({
+        auto_join: true,
+        private_credentials: true,
+        access_clients: false,
+      });
     } finally {
       await setAccessClients(true);
     }

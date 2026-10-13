@@ -55,8 +55,9 @@ describe("private credentials in the panel (ADR 0023)", () => {
       "/accounts",
       "/keys",
       "/usage",
+      "/proxy-keys",
     ]);
-    expect(pagesFor("member", false).map((page) => page.to)).toEqual(["/usage"]);
+    expect(pagesFor("member", false).map((page) => page.to)).toEqual(["/usage", "/proxy-keys"]);
     expect(pageAllowed("member", "/accounts", true)).toBe(true);
     expect(pageAllowed("member", "/accounts/connect", true)).toBe(true);
     expect(pageAllowed("member", "/keys/new", true)).toBe(true);
