@@ -2,13 +2,14 @@
  * Infrastructure of the Workers port, deployed with Alchemy (`pnpm deploy`, `pnpm dev`, `pnpm destroy`): the Worker
  * with its Durable Objects, static assets and cron trigger, the KV namespace, the D1 usage database (migrations
  * applied on every deploy), the `auth_index` HMAC key and the Cloudflare Access application, policies and service tokens
- * in front of it.
+ * in front of it (except the proxy routes, where clients send proxy keys).
  * Deploy-time settings are read from the environment / `.env` (see `.env.example` and infra/settings.ts).
  */
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
 import * as Effect from "effect/Effect";
-import { type AccessWiring, provisionAccess } from "./infra/access.ts";
+import * as Output from "alchemy/Output";
+import { type AccessWiring, provisionAccess, provisionProxyBypass } from "./infra/access.ts";
 import { readSettings } from "./infra/settings.ts";
 import { DEV_AUTH_INDEX_KEY } from "./src/management/auth-index-key.ts";
 import { DEV_SECRETS_KEY, secretsKeyResourceId } from "./src/secrets/key.ts";
@@ -63,7 +64,8 @@ export default Alchemy.Stack(
         : secretsKeys.get(settings.secretsKeyPreviousGeneration);
 
     // `alchemy dev` serves the Worker on localhost without Access: the dev bypass (src/access/config.ts) makes every
-    // loopback request an admin. Deployed Workers never get it and require the Access JWT.
+    // loopback request an admin. Deployed Workers never get it and require the Access JWT (or a proxy key on the proxy
+    // routes).
     const access: AccessWiring = dev
       ? { aud: "", adminServiceTokens: "", serviceTokenClientIds: {} }
       : yield* provisionAccess(settings);
@@ -71,8 +73,9 @@ export default Alchemy.Stack(
     const worker = yield* Cloudflare.Worker("Proxy", {
       main: "./src/index.ts",
       compatibility: COMPATIBILITY,
-      // Access is the only client authentication. Production serves only its Access-protected domain; pull-request
-      // previews serve their workers.dev URL, protected by enrolling the Worker into the preview's Access application.
+      // Production serves only its Access-protected domain; pull-request previews serve their workers.dev URL,
+      // protected by enrolling the Worker into the preview's Access application. The proxy routes leave Access on both
+      // (`provisionProxyBypass` below): clients authenticate there with proxy keys (ADR 0022).
       workersDev: settings.preview,
       ...(dev || settings.preview ? {} : { domain: settings.domain }),
       ...(access.application === undefined ? {} : { access: access.application }),
@@ -101,6 +104,21 @@ export default Alchemy.Stack(
         ...(previousSecretsKey === undefined ? {} : { SECRETS_KEY_PREVIOUS: previousSecretsKey }),
       },
     });
+
+    if (!dev)
+      yield* provisionProxyBypass(
+        settings,
+        settings.preview
+          ? Output.asOutput(worker.url).pipe(
+              Output.map((url) => {
+                // A preview always serves its workers.dev URL (`workersDev` above).
+                if (url === undefined) throw new Error("the preview Worker has no workers.dev URL");
+
+                return new URL(url).host;
+              }),
+            )
+          : settings.domain,
+      );
 
     return {
       url: worker.url,

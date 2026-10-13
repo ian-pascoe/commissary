@@ -94,6 +94,44 @@ const ApplicationSettings = Alchemy.Action(
   }),
 );
 
+/**
+ * The proxy routes (`src/access/routes.ts` `PROTECTED_PREFIXES` without `/v8/management`): clients authenticate there
+ * with proxy keys the Worker checks itself (ADR 0022), so Access lets every request through. Access matches a path and
+ * its sub-paths (`/v1` covers `/v1/models`), not other paths that start with the same letters, so `/v1beta` and
+ * `/v1internal` are listed on their own.
+ */
+export const PROXY_PATHS = [
+  "/v1",
+  "/v1beta",
+  "/v1internal",
+  "/openai/v1",
+  "/backend-api/codex",
+  "/chat/completions",
+  "/completions",
+  "/responses",
+] as const;
+
+/**
+ * A bypass application for the proxy routes of `host` (the production domain, or a preview's `workers.dev` host): a
+ * hostname-and-path application takes precedence over the application of the whole domain and over a Worker-level
+ * one (a preview's), so the proxy routes leave Access while the panel and the management API stay behind it. Only
+ * with a stack-managed Access application: a deployment that brings its own (`ACCESS_AUD`) adds the bypass itself
+ * (docs/DEPLOY.md).
+ */
+export const provisionProxyBypass = (settings: Settings, host: string | Output.Output<string>) =>
+  Effect.gen(function* () {
+    if (settings.existingAud !== "") return;
+
+    yield* Cloudflare.Access.Application("ProxyRoutes", {
+      type: "self_hosted",
+      destinations: PROXY_PATHS.map((path) => ({
+        type: "public" as const,
+        uri: Output.asOutput(host).pipe(Output.map((name) => `${name}${path}`)),
+      })),
+      policies: [{ decision: "bypass", include: ["everyone"] }],
+    });
+  });
+
 /** Writes the client credentials of the stack's service tokens to {@link SERVICE_TOKENS_FILE} on the deploying machine. */
 const WriteServiceTokens = Alchemy.Action(
   "CfLlmProxyWriteServiceTokens",
@@ -128,7 +166,8 @@ const WriteServiceTokens = Alchemy.Action(
 );
 
 /**
- * Cloudflare Access for the Worker's custom domain: one self-hosted application covering the whole hostname, an Allow
+ * Cloudflare Access for the Worker's custom domain: one self-hosted application covering the whole hostname (the proxy
+ * routes leave it through {@link provisionProxyBypass}), an Allow
  * policy for people, a Service Auth policy for the stack's service tokens (and `ACCESS_ALLOW_SERVICE_TOKEN_IDS`), and
  * the tokens themselves. With `ACCESS_AUD` set, an application managed elsewhere is used instead and nothing is
  * created. Preview stages get an application without a domain that the Worker enrolls into (see `application`).
