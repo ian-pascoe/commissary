@@ -186,7 +186,8 @@ client -> Cloudflare Access -> Worker
 - **Stored secrets** (`src/secrets/`): every value the ControlPlane stores that can hold a secret is a _sealed value_:
   the JSON of each auth file (`credentials.metadata`) and the value of every config entry (settings, key groups with
   their headers, API keys, model rules, payload rules; and the legacy `config` document). Ids, positions, revisions,
-  writers, `credential_state` and the usage tables stay readable. A sealed value is `enc:v1:` + base64url of a 96-bit
+  writers, `credential_state`, price overrides (`config_price_overrides`, prices only) and the usage tables stay
+  readable. A sealed value is `enc:v1:` + base64url of a 96-bit
   random nonce, the AES-256-GCM ciphertext and its 128-bit tag, with `enc:v1\0<table>/<row id>` as additional data, so
   a value copied to another row or another org does not open (`SecretCipher`, `cipher.ts`). Each org has its own random
   256-bit _data key_, stored only wrapped in the ControlPlane's `org_data_key` table (`wk:v1:`, AES-GCM, the org id as

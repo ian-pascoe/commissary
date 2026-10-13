@@ -36,6 +36,10 @@ const openStored = (state: DurableObjectState, org: OrgId, keys: SecretsKeys) =>
     },
   });
 
+/** The data key of `org`'s ControlPlane under the test secrets key, for a store a test constructs over its storage. */
+export const orgDataKey = (state: DurableObjectState, org: OrgId) =>
+  openStored(state, org, deploymentSecretsKeys(env));
+
 /** Restarts the ControlPlane: the next call constructs it again from its storage. */
 export const restart = async (stub: Stub): Promise<void> => {
   await evictDurableObject(stub);

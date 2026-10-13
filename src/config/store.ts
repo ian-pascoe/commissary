@@ -415,7 +415,7 @@ export class ConfigStore {
       )
       .toArray()
       .map((row) => {
-        const rates = parseObject(row.value);
+        const rates = objectOf(parse(row.value));
         const cacheRead = rates["cache_read"];
         const cacheWrite = rates["cache_write"];
 
