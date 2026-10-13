@@ -30,6 +30,7 @@
  */
 import { createHmac, createSecretKey, type KeyObject } from "node:crypto";
 import { Effect } from "effect";
+import { isDeployedStage } from "../access/config.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import { CurrentOrg, GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 import {
@@ -113,8 +114,7 @@ let deployedKeyRefusalLogged = false;
 export const deploymentAuthIndexer = (env: AuthIndexKeyEnv): AuthIndexer => {
   const secret = env.AUTH_INDEX_KEY;
 
-  const deployed =
-    (env.ACCESS_TEAM_DOMAIN ?? "").trim() !== "" || (env.ACCESS_AUD ?? "").trim() !== "";
+  const deployed = isDeployedStage(env);
 
   if (
     deployed &&

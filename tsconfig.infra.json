@@ -27,6 +27,7 @@
     "web/vite.config.ts",
     "tools/sync-models-dev-catalog.ts",
     "src/registry/models-dev.ts",
-    "src/management/auth-index-key.ts"
+    "src/management/auth-index-key.ts",
+    "src/secrets/key.ts"
   ]
 }

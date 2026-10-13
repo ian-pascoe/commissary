@@ -11,6 +11,7 @@ import * as Effect from "effect/Effect";
 import { type AccessWiring, provisionAccess } from "./infra/access.ts";
 import { readSettings } from "./infra/settings.ts";
 import { DEV_AUTH_INDEX_KEY } from "./src/management/auth-index-key.ts";
+import { DEV_SECRETS_KEY, secretsKeyResourceId } from "./src/secrets/key.ts";
 
 /** Runtime compatibility of the Worker; keep in sync with vitest.config.ts and worker-configuration.d.ts. */
 export const COMPATIBILITY = { date: "2026-08-01", flags: ["nodejs_compat"] };
@@ -38,6 +39,28 @@ export default Alchemy.Stack(
     const authIndexKey = dev
       ? DEV_AUTH_INDEX_KEY
       : yield* Alchemy.makeRandom("AuthIndexKey", { bytes: 32 });
+
+    // Secrets key (src/secrets/): wraps every org's data key, which seals the stored auth files and config entries. Minted
+    // like the auth index key, one `Random` per generation: raising SECRETS_KEY_GENERATION mints a new one, and during
+    // the rotation the previous generation is bound as SECRETS_KEY_PREVIOUS (docs/DEPLOY.md). Every generation up to the
+    // current one stays declared: Alchemy deletes an undeclared resource with its state, and a `Random` exists only
+    // there, so an old key must never drop out of the stack. Losing a key loses every secret it still protects.
+    const secretsKeys = new Map<number, Effect.Success<ReturnType<typeof Alchemy.makeRandom>>>();
+
+    if (!dev) {
+      for (let generation = 1; generation <= settings.secretsKeyGeneration; generation += 1)
+        secretsKeys.set(
+          generation,
+          yield* Alchemy.makeRandom(secretsKeyResourceId(generation), { bytes: 32 }),
+        );
+    }
+
+    const secretsKey = dev ? DEV_SECRETS_KEY : secretsKeys.get(settings.secretsKeyGeneration);
+
+    const previousSecretsKey =
+      settings.secretsKeyPreviousGeneration === undefined
+        ? undefined
+        : secretsKeys.get(settings.secretsKeyPreviousGeneration);
 
     // `alchemy dev` serves the Worker on localhost without Access: the dev bypass (src/access/config.ts) makes every
     // loopback request an admin. Deployed Workers never get it and require the Access JWT.
@@ -74,6 +97,8 @@ export default Alchemy.Stack(
         META_MINT_URL: settings.metaMintUrl,
         // Redacted: bound as a secret (`secret_text`), never as a plain variable.
         AUTH_INDEX_KEY: authIndexKey,
+        ...(secretsKey === undefined ? {} : { SECRETS_KEY: secretsKey }),
+        ...(previousSecretsKey === undefined ? {} : { SECRETS_KEY_PREVIOUS: previousSecretsKey }),
       },
     });
 

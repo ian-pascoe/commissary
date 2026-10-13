@@ -117,6 +117,9 @@ jobs:
       ACCESS_ADMIN_EMAILS: ${{ vars.ACCESS_ADMIN_EMAILS }}
       ACCESS_ALLOW_SERVICE_TOKEN_IDS: ${{ vars.ACCESS_ALLOW_SERVICE_TOKEN_IDS }}
       ACCESS_SESSION_DURATION: ${{ vars.ACCESS_SESSION_DURATION }}
+      # Rotation of the secrets key (docs/DEPLOY.md); unset means generation 1 and no rotation.
+      SECRETS_KEY_GENERATION: ${{ vars.SECRETS_KEY_GENERATION }}
+      SECRETS_KEY_PREVIOUS_GENERATION: ${{ vars.SECRETS_KEY_PREVIOUS_GENERATION }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

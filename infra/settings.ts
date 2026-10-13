@@ -39,6 +39,16 @@ export interface Settings {
   readonly cpuMs: number;
   /** Local development identity (`alchemy dev` only). */
   readonly devBypass: string;
+  /**
+   * Generation of the stage's secrets key (`SECRETS_KEY`, src/secrets/): raising it mints a new key on the next deploy
+   * (a rotation, docs/DEPLOY.md). Starts at 1.
+   */
+  readonly secretsKeyGeneration: number;
+  /**
+   * During a rotation, the generation the new key replaces: bound as `SECRETS_KEY_PREVIOUS` so ControlPlanes wrap their
+   * data keys again. Unset once every org started under the new key.
+   */
+  readonly secretsKeyPreviousGeneration: number | undefined;
 }
 
 const text = (name: string, fallback = "") =>
@@ -68,6 +78,36 @@ const renamedList = (current: string, old: string) =>
     return [...new Set([...(yield* list(current)), ...legacy])];
   });
 
+/** A key generation: a positive integer, or `fallback` when the variable is unset or empty (CI passes unset as ""). */
+const generation = (name: string, fallback: number | undefined) =>
+  Effect.gen(function* () {
+    const value = (yield* text(name)).trim();
+
+    if (value === "") return fallback;
+
+    if (!/^[1-9]\d*$/.test(value))
+      return yield* Effect.die(
+        new Error(`Invalid deploy settings:\n- ${name} must be a positive integer, not "${value}"`),
+      );
+
+    return Number(value);
+  });
+
+/** `SECRETS_KEY_GENERATION` and, during a rotation, `SECRETS_KEY_PREVIOUS_GENERATION` (an older one). */
+const secretsKeyGenerations = Effect.gen(function* () {
+  const current = (yield* generation("SECRETS_KEY_GENERATION", 1)) ?? 1;
+  const previous = yield* generation("SECRETS_KEY_PREVIOUS_GENERATION", undefined);
+
+  if (previous !== undefined && previous >= current)
+    return yield* Effect.die(
+      new Error(
+        `Invalid deploy settings:\n- SECRETS_KEY_PREVIOUS_GENERATION (${previous}) must be lower than SECRETS_KEY_GENERATION (${current})`,
+      ),
+    );
+
+  return { current, previous };
+});
+
 const TOKEN_NAME = /^[a-z0-9][a-z0-9-]{0,40}$/;
 
 /** Stage names of pull-request previews (`pr-<number>`, as deployed by .github/workflows/ci.yml). */
@@ -76,6 +116,7 @@ export const PREVIEW_STAGE = /^pr-\d+$/;
 export const readSettings = (dev: boolean, stage: string) =>
   Effect.gen(function* () {
     const preview = !dev && PREVIEW_STAGE.test(stage);
+    const secretsKey = yield* secretsKeyGenerations;
 
     const settings: Settings = {
       preview,
@@ -97,6 +138,8 @@ export const readSettings = (dev: boolean, stage: string) =>
       metaMintUrl: (yield* text("META_MINT_URL")).trim(),
       cpuMs: yield* Config.Number("CF_LLM_PROXY_CPU_MS").pipe(Config.withDefault(300_000)),
       devBypass: (yield* text("ACCESS_DEV_BYPASS", "dev@example.com")).trim(),
+      secretsKeyGeneration: secretsKey.current,
+      secretsKeyPreviousGeneration: secretsKey.previous,
     };
 
     if (dev) return settings;

@@ -5,6 +5,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { ConfigStore, type PriceOverrideValue } from "../src/config/store.ts";
 import { OrgId } from "../src/platform/org.ts";
 import { controlPlane, makeHarness, resetControlPlane } from "./support/management.ts";
+import { orgDataKey } from "./support/secrets.ts";
 
 const harness = makeHarness();
 
@@ -208,16 +209,16 @@ describe("price override entries", () => {
 
     expect(made.ok).toBe(true);
 
-    await runInDurableObject(stub, (_instance, state) => {
+    await runInDurableObject(stub, async (_instance, state) => {
       // The state before the change: no table for overrides (nor its index).
       state.storage.sql.exec("DROP TABLE config_price_overrides");
 
       // The next start creates it, empty, next to the entries that were there; running the schema again is harmless.
-      const store = new ConfigStore(state.storage.sql, org, (body) =>
-        state.storage.transactionSync(body),
-      );
+      const secrets = await orgDataKey(state, org);
+      const transaction = <T>(body: () => T): T => state.storage.transactionSync(body);
+      const store = new ConfigStore(state.storage.sql, org, transaction, secrets);
 
-      new ConfigStore(state.storage.sql, org, (body) => state.storage.transactionSync(body));
+      new ConfigStore(state.storage.sql, org, transaction, secrets);
 
       expect(store.priceOverrides()).toEqual([]);
       expect(store.current().config.routing.strategy).toBe("fill-first");
