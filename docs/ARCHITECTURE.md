@@ -1264,7 +1264,9 @@ result is stored.
 | `opencode-go`     | `GET {base}/usage` (default `opencode.ai/zen/go/v1/usage`, `Authorization: Bearer <config key>`, no redirects)      | `rolling` → `five_hour` ("5-hour"), `weekly`, `monthly` (`percent` used; a status other than `ok` reads as used up)                                                |
 
 - **Differences from the upstream panel**:
-  - xAI never makes its paid-account fallback (`/v1/me` plus a real chat completion).
+  - xAI never makes its paid-account fallback (`/v1/me` plus a real chat completion). Its billing calls send the
+    executor's Grok CLI version (KV `xai/client-version`, fallback `1.0.46`) instead of a pinned one: the chat proxy
+    answers 426 to versions below 1.0.13, billing included.
   - The Codex subscription and reset-credit calls and the Antigravity tier call are skipped.
   - Windows without a percentage are dropped (`used_percent` is required).
   - Labels are English and fixed.
