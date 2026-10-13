@@ -202,6 +202,7 @@ const prepare = Effect.fnUntraced(function* (input: ExecutionInput, stream: bool
     stream,
     principalId: identity.principalId,
     orgId: org,
+    ...(identity.memberId === undefined ? {} : { memberId: identity.memberId }),
     callerScope: identity.callerScope,
     endpoint: `${input.request.method} ${url.pathname}`,
     session:

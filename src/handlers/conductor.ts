@@ -136,6 +136,8 @@ export interface Prepared {
   readonly principalId: string;
   /** The request's org (usage `org_id`). */
   readonly orgId: OrgId;
+  /** The caller's member id in the org (usage `member_id`), when they have one. */
+  readonly memberId?: string;
   readonly callerScope: string;
   readonly endpoint: string;
   readonly session: PickSession | undefined;
@@ -279,6 +281,7 @@ export const conduct = <T, R>(
             endpoint: prepared.endpoint,
             principalId: prepared.principalId,
             orgId: prepared.orgId,
+            ...(prepared.memberId === undefined ? {} : { memberId: prepared.memberId }),
             authId: credential.id,
             authType: credential.kind,
             source: credential.label ?? credential.id,

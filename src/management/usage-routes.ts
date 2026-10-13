@@ -14,9 +14,14 @@
  * per-key counters for the upstream panel) is not ported: the Keys page's `GET /api-keys` carries the same counters.
  * `summary`, `series` and `records` carry the cost stored on each record (`cost_micros`, ADR 0024) and `unpriced`
  * lists the provider and model pairs that had no price. Every route reads the records of the request's org only (ADR 0021).
+ *
+ * Members (ADR 0022): `member` and `team` filter by member id or by a team's members, `group_by=member` groups the
+ * summary by member id. A plain member may read `records`, `summary` and `series` (`access/policy.ts`), and only their
+ * own records: by their member id, or their Access principal for records from before members existed.
  */
 import { Clock, Effect } from "effect";
 import { HttpRouter } from "effect/http";
+import { AccessPrincipal } from "../access/principal.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import { CurrentOrg } from "../platform/org.ts";
 import { currentAuthIndexer } from "./auth-index.ts";
@@ -153,6 +158,27 @@ const parseFilter = (params: URLSearchParams) =>
 
     if (principal !== undefined) filter.principal = principal;
 
+    const member = optional(params, "member");
+    const team = optional(params, "team");
+
+    if (member !== undefined) filter.memberIds = [member];
+
+    if (team !== undefined) {
+      const ids = yield* controlPlane("teamMemberIds", (stub) => stub.teamMemberIds(team));
+
+      if (ids === undefined) return yield* replyError(404, "team_not_found");
+      const members = [...ids];
+
+      // Both: the member, if they are in the team.
+      filter.memberIds = member === undefined ? members : members.filter((id) => id === member);
+    }
+
+    // A plain member reads only their own records, whatever they asked for.
+    const identity = yield* AccessPrincipal;
+
+    if (!identity.platformAdmin && identity.role === "member")
+      filter.own = { memberId: identity.memberId, principalId: identity.principalId };
+
     if (authIndex !== undefined) {
       filter.authIndex = authIndex.toLowerCase();
 
@@ -256,7 +282,16 @@ const usageUnpriced = Effect.gen(function* () {
   const params = yield* queryParams;
   const scoped = new URLSearchParams();
 
-  for (const name of ["since", "until", "provider", "model", "principal", "auth_index"]) {
+  for (const name of [
+    "since",
+    "until",
+    "provider",
+    "model",
+    "principal",
+    "member",
+    "team",
+    "auth_index",
+  ]) {
     const value = params.get(name);
 
     if (value !== null) scoped.set(name, value);
@@ -277,7 +312,16 @@ const usageSeries = Effect.gen(function* () {
   // Only the series filters: summary-only params (principal, failed) are ignored, not validated.
   const scoped = new URLSearchParams();
 
-  for (const name of ["since", "until", "provider", "model", "auth_index", "auth_id"]) {
+  for (const name of [
+    "since",
+    "until",
+    "provider",
+    "model",
+    "member",
+    "team",
+    "auth_index",
+    "auth_id",
+  ]) {
     const value = params.get(name);
 
     if (value !== null) scoped.set(name, value);
@@ -331,6 +375,8 @@ const usageSeries = Effect.gen(function* () {
         ...(filter.model === undefined ? {} : { model: filter.model }),
         ...(filter.authIndex === undefined ? {} : { authIndex: filter.authIndex }),
         ...(filter.liveAuthId === undefined ? {} : { liveAuthId: filter.liveAuthId }),
+        ...(filter.memberIds === undefined ? {} : { memberIds: filter.memberIds }),
+        ...(filter.own === undefined ? {} : { own: filter.own }),
       },
       authIndexOf,
     ),

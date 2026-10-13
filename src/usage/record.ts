@@ -68,6 +68,8 @@ export interface UsageRecord {
   readonly principalId: string;
   /** The org the request belongs to (ADR 0021); usage queries only ever read one org's records. */
   readonly orgId: OrgId;
+  /** The caller's member id in the org (ADR 0022), when they have a member record there. */
+  readonly memberId?: string;
   readonly authId: string;
   readonly authType: string;
   readonly source: string;

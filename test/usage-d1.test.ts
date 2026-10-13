@@ -29,6 +29,7 @@ import initialMigration from "../migrations/0001_usage_records.sql?raw";
 import sessionsMigration from "../migrations/0002_usage_sessions.sql?raw";
 import orgMigration from "../migrations/0003_usage_org.sql?raw";
 import costMigration from "../migrations/0004_usage_cost.sql?raw";
+import memberMigration from "../migrations/0005_usage_member.sql?raw";
 import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 
 /** The D1 sink without pricing: records are stored as they are published. */
@@ -83,7 +84,8 @@ describe("migration 0003 (usage org)", () => {
     for (const statement of statementsOf(orgMigration).filter((sql) => sql.startsWith("CREATE")))
       await db.prepare(statement).run();
 
-    for (const statement of statementsOf(costMigration)) await db.prepare(statement).run();
+    for (const statement of [...statementsOf(costMigration), ...statementsOf(memberMigration)])
+      await db.prepare(statement).run();
     await insertUsageRecord(db, sampleRecord({ requestId: "new", orgId: OrgId.make("acme") }));
     expect((await listUsageRecords(db, OrgId.make("acme"), {}, authIndexOf)).rows).toHaveLength(1);
   });
@@ -112,6 +114,8 @@ describe("migration 0004 (usage cost)", () => {
 
     const [row] = await rows();
     expect(row).toMatchObject({ request_id: "old", cost_micros: null, unpriced: 0 });
+
+    for (const statement of statementsOf(memberMigration)) await db.prepare(statement).run();
 
     // A new record carries its cost; the old one sums as nothing and is not listed as unpriced.
     await insertUsageRecord(
@@ -166,6 +170,86 @@ describe("migration 0004 (usage cost)", () => {
       ["codex", "other", 1],
     ]);
     expect(await unpricedModels(db, GLOBAL_ORG, { model: "other" }, authIndexOf)).toHaveLength(1);
+  });
+});
+
+describe("migration 0005 (usage member)", () => {
+  it("leaves the records written before members without a member, and filters new ones by member", async () => {
+    await db.prepare("DROP TABLE usage_records").run();
+
+    for (const statement of [
+      ...statementsOf(initialMigration),
+      ...statementsOf(sessionsMigration),
+      ...statementsOf(orgMigration),
+      ...statementsOf(costMigration),
+    ])
+      await db.prepare(statement).run();
+
+    await db
+      .prepare(
+        `INSERT INTO usage_records (request_id, requested_at, provider, executor_type, model, alias, endpoint,
+           principal_id, auth_id, auth_type, source, org_id) VALUES ('old', 1, 'codex', 'codex', 'gpt-5', 'gpt-5',
+           'POST /v1/responses', 'user:a@example.com', 'codex-a.json', 'oauth', 'a', 'global')`,
+      )
+      .run();
+
+    for (const statement of statementsOf(memberMigration)) await db.prepare(statement).run();
+
+    const [row] = await rows();
+    expect(row).toMatchObject({ request_id: "old", member_id: null });
+
+    await insertUsageRecord(
+      db,
+      sampleRecord({
+        requestId: "mine",
+        requestedAt: 2,
+        principalId: "user:a@example.com",
+        memberId: "mem-a",
+      }),
+    );
+    await insertUsageRecord(
+      db,
+      sampleRecord({
+        requestId: "theirs",
+        requestedAt: 3,
+        principalId: "user:b@example.com",
+        memberId: "mem-b",
+      }),
+    );
+
+    const ids = async (filter: Parameters<typeof listUsageRecords>[2]) =>
+      (await listUsageRecords(db, GLOBAL_ORG, filter, authIndexOf)).rows.map(
+        (record) => record.request_id,
+      );
+
+    expect(await ids({ memberIds: ["mem-a"] })).toEqual(["mine"]);
+    expect(await ids({ memberIds: [] })).toEqual([]);
+    // A member's own records: by member id, and by their Access principal from before members.
+    expect(await ids({ own: { memberId: "mem-a", principalId: "user:a@example.com" } })).toEqual([
+      "mine",
+      "old",
+    ]);
+    expect(await ids({ own: { memberId: undefined, principalId: "user:b@example.com" } })).toEqual([
+      "theirs",
+    ]);
+
+    const summary = await summarizeUsage(db, GLOBAL_ORG, { groupBy: "member" }, authIndexOf);
+    expect(summary.groups).toEqual(
+      expect.arrayContaining(
+        ["", "mem-a", "mem-b"].map((key) => expect.objectContaining({ key, requests: 1 })),
+      ),
+    );
+    expect(summary.groups).toHaveLength(3);
+
+    // The index exists, and the migration's index statement is idempotent.
+    const indexes = await db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'usage_records'")
+      .all<{ readonly name: string }>();
+
+    expect(indexes.results.map((index) => index.name)).toContain("usage_records_org_member");
+
+    for (const statement of statementsOf(memberMigration).filter((sql) => sql.startsWith("CREATE")))
+      await db.prepare(statement).run();
   });
 });
 

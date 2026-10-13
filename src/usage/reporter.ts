@@ -23,6 +23,8 @@ export interface UsageReporterInit {
   readonly endpoint: string;
   readonly principalId: string;
   readonly orgId: OrgId;
+  /** The caller's member id in the org (usage `member_id`), when they have one. */
+  readonly memberId?: string;
   readonly authId: string;
   readonly authType: string;
   readonly source: string;
@@ -128,6 +130,7 @@ export class UsageReporter {
       endpoint: init.endpoint,
       principalId: init.principalId,
       orgId: init.orgId,
+      ...(init.memberId === undefined ? {} : { memberId: init.memberId }),
       authId: init.authId,
       authType: init.authType,
       source: init.source,

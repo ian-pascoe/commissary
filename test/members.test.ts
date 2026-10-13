@@ -2,6 +2,7 @@
 // docs/ACCESS.md): who may reach which route, who may grant which role, auto-join, membership in several orgs, ADR
 // 0006's rule per org, and that a removed member is refused on the next request. Through the router with the real
 // ControlPlanes and a Platform registry of its own; every test works in an org of its own.
+import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   ADMIN,
@@ -12,7 +13,9 @@ import {
   serviceToken,
   token,
 } from "./support/management.ts";
-import { resetUsageDb } from "./support/usage.ts";
+import { insertUsageRecord } from "../src/usage/d1.ts";
+import { OrgId } from "../src/platform/org.ts";
+import { resetUsageDb, sampleRecord } from "./support/usage.ts";
 
 const registry = isolatedPlatform();
 
@@ -490,6 +493,76 @@ describe("service tokens", () => {
     expect(taken.status).toBe(409);
     expect(errorOf(taken)).toBe("service_token_taken");
     expect((await send(second, USAGE, await asToken(shared))).status).toBe(403);
+  });
+});
+
+describe("usage by member", () => {
+  /** The id of the org with `slug` (usage records name the org by id). */
+  const orgIdOf = async (slug: string): Promise<OrgId> => {
+    const { orgs } = (await harness.json("/v8/management/orgs")).body as {
+      orgs: ReadonlyArray<{ id: string; slug: string }>;
+    };
+
+    return OrgId.make(orgs.find((org) => org.slug === slug)?.id ?? slug);
+  };
+
+  const requestIds = (reply: { body: unknown }) =>
+    (reply.body as { records: ReadonlyArray<{ request_id: string }> }).records
+      .map((record) => record.request_id)
+      .toSorted();
+
+  it("shows a plain member only their own requests, and lets an admin filter by member and team", async () => {
+    const { slug, admin, member } = await staffedOrg("usage-member");
+    const orgId = await orgIdOf(slug);
+
+    for (const [requestId, who] of [
+      ["member-1", member],
+      ["admin-1", admin],
+    ] as const)
+      await insertUsageRecord(
+        env.USAGE,
+        sampleRecord({ requestId, orgId, principalId: `user:${who.email}`, memberId: who.id }),
+      );
+
+    // From before members: the member's Access principal, no member id.
+    await insertUsageRecord(
+      env.USAGE,
+      sampleRecord({ requestId: "member-old", orgId, principalId: `user:${member.email}` }),
+    );
+
+    expect(requestIds(await send(slug, USAGE, member))).toEqual(["member-1", "member-old"]);
+    // Whatever a member asks for, they see only their own.
+    expect(requestIds(await send(slug, `${USAGE}?member=${admin.id}`, member))).toEqual([]);
+
+    const summary = await send(slug, "/observability/usage/summary?group_by=member", member);
+
+    expect(summary.body).toMatchObject({ totals: { requests: 2 } });
+
+    expect(requestIds(await send(slug, USAGE, admin))).toEqual([
+      "admin-1",
+      "member-1",
+      "member-old",
+    ]);
+    expect(requestIds(await send(slug, `${USAGE}?member=${member.id}`, admin))).toEqual([
+      "member-1",
+    ]);
+
+    const team = (await send(slug, "/teams", admin, "POST", { name: "Admins" })).body as {
+      id: string;
+    };
+
+    await send(slug, `/teams/${team.id}/members`, admin, "POST", { member_id: admin.id });
+
+    expect(requestIds(await send(slug, `${USAGE}?team=${team.id}`, admin))).toEqual(["admin-1"]);
+    expect(errorOf(await send(slug, `${USAGE}?team=team-unknown`, admin))).toBe("team_not_found");
+
+    const grouped = await send(slug, "/observability/usage/summary?group_by=member", admin);
+
+    const keys = (grouped.body as { groups: ReadonlyArray<{ key: string }> }).groups
+      .map((group) => group.key)
+      .toSorted();
+
+    expect(keys).toEqual(["", admin.id, member.id].toSorted());
   });
 });
 
