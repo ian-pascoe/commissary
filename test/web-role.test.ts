@@ -66,11 +66,6 @@ describe("private credentials in the panel (ADR 0023)", () => {
       "/usage",
       "/my-models",
       "/proxy-keys",
-    ]);
-    expect(pagesFor("member", false).map((page) => page.to)).toEqual([
-      "/usage",
-      "/my-models",
-      "/proxy-keys",
       "/limits",
     ]);
     expect(pagesFor("member", false).map((page) => page.to)).toEqual([

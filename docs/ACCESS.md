@@ -115,23 +115,25 @@ Everyone else reaches an org as one of its **members** (ADR 0022). A member hold
 owner of every org without being stored as a member. Members, teams and service tokens live in the org's ControlPlane, which
 the Worker asks on every request: a removed member, or a member whose role was lowered, is refused on their next request.
 
-| Who may                                                                                      |   Plain member    | Org admin |          Org owner           | Platform admin |
-| -------------------------------------------------------------------------------------------- | :---------------: | :-------: | :--------------------------: | :------------: |
-| Use the proxy endpoints of the org                                                           |         ✓         |     ✓     |              ✓               |       ✓        |
-| Open the org's panel; read usage (`GET /observability/usage/records`, `/summary`, `/series`) | own requests only |     ✓     |              ✓               |       ✓        |
-| Connect, list, disable and remove their **own private** accounts and API keys (see below)    |  ✓ where allowed  |     ✓     |              ✓               |       ✓        |
-| Every other management route of the org (credentials, keys, models, settings, prices, ...)   |                   |     ✓     |              ✓               |       ✓        |
-| List members, teams and service tokens; manage teams                                         |                   |     ✓     |              ✓               |       ✓        |
-| Add or remove plain members; register or remove member service tokens                        |                   |     ✓     |              ✓               |       ✓        |
-| Add or remove org admins and owners; change any role                                         |                   |           |              ✓               |       ✓        |
-| Read the models they may use (`GET /models/mine`, the panel's My models)                     |         ✓         |     ✓     |              ✓               |       ✓        |
-| Read, add, edit and remove grants (`/grants`, the panel's Grants page)                       |                   |     ✓     |              ✓               |       ✓        |
-| Create proxy keys for themselves; list and revoke their own (`/proxy-keys`)                  |         ✓         |     ✓     |              ✓               | if a member ¹  |
-| List and revoke every proxy key of the org                                                   |                   |     ✓     |              ✓               |       ✓        |
-| Turn auto-join, or Access sign-ins for clients in `global`, on or off (`PATCH /membership`)  |                   |           |              ✓               |       ✓        |
-| Allow or stop private credentials (`PATCH /membership`, `private_credentials`)               |                   |     ✓     |              ✓               |       ✓        |
-| Give a service token a role above plain member; download a credential                        |                   |           | owner **service token** only |       ✓        |
-| List, create and rename orgs                                                                 |                   |           |                              |       ✓        |
+| Who may                                                                                         |   Plain member    | Org admin |          Org owner           | Platform admin |
+| ----------------------------------------------------------------------------------------------- | :---------------: | :-------: | :--------------------------: | :------------: |
+| Use the proxy endpoints of the org                                                              |         ✓         |     ✓     |              ✓               |       ✓        |
+| Open the org's panel; read usage (`GET /observability/usage/records`, `/summary`, `/series`)    | own requests only |     ✓     |              ✓               |       ✓        |
+| Connect, list, disable and remove their **own private** accounts and API keys (see below)       |  ✓ where allowed  |     ✓     |              ✓               |       ✓        |
+| Every other management route of the org (credentials, keys, models, settings, prices, ...)      |                   |     ✓     |              ✓               |       ✓        |
+| List members, teams and service tokens; manage teams                                            |                   |     ✓     |              ✓               |       ✓        |
+| Add or remove plain members; register or remove member service tokens                           |                   |     ✓     |              ✓               |       ✓        |
+| Add or remove org admins and owners; change any role                                            |                   |           |              ✓               |       ✓        |
+| Read the models they may use (`GET /models/mine`, the panel's My models)                        |         ✓         |     ✓     |              ✓               |       ✓        |
+| Read, add, edit and remove grants (`/grants`, the panel's Grants page)                          |                   |     ✓     |              ✓               |       ✓        |
+| Read the Spend limits that bind them and limit their own proxy keys (`/spend`, `/spend/limits`) |         ✓         |     ✓     |              ✓               |       ✓        |
+| Set any Spend limit and the org's calendar (`/spend/limits`, `/spend/settings`)                 |                   |     ✓     |              ✓               |       ✓        |
+| Create proxy keys for themselves; list and revoke their own (`/proxy-keys`)                     |         ✓         |     ✓     |              ✓               | if a member ¹  |
+| List and revoke every proxy key of the org                                                      |                   |     ✓     |              ✓               |       ✓        |
+| Turn auto-join, or Access sign-ins for clients in `global`, on or off (`PATCH /membership`)     |                   |           |              ✓               |       ✓        |
+| Allow or stop private credentials (`PATCH /membership`, `private_credentials`)                  |                   |     ✓     |              ✓               |       ✓        |
+| Give a service token a role above plain member; download a credential                           |                   |           | owner **service token** only |       ✓        |
+| List, create and rename orgs                                                                    |                   |           |                              |       ✓        |
 
 ¹ Proxy keys are issued to members: a platform admin who is not a member of the org, or a service token, gets
 `403 member_required` when creating one.
@@ -142,6 +144,13 @@ the Worker asks on every request: a removed member, or a member whose role was l
   shared credentials, every model": delete it and add narrower ones to restrict. A model a member has no grant for answers
   `400 model_not_found`, like an unknown model, and is left out of their model lists; a request without a member (a service
   token) is served by the grants for everyone only. Private credentials are never granted: they are their owner's alone.
+- **Spend limits** (ADR 0024): an org admin caps what a member, a team, the org, a shared account or a proxy key may spend
+  (API-equivalent Cost) in a day, week or month of the org's time zone (the Limits page). A plain member sees the limits that
+  bind them and may cap their own proxy keys, never above a limit an org admin set on that key (`422
+  exceeds_admin_limit`); `PATCH /spend/settings` is for org admins. A request that meets a limit with no room is refused
+  with `429 spend_limit_reached` and `Retry-After` until the period ends; no account is put in cooldown. A member,
+  team or org limit does not count what a member's **private** accounts serve (and does not stop them), a proxy key's limit
+  counts everything the key does. An org starts with no limits, `global` included.
 - **Adding a member** (`POST /members` with an email and a role) takes effect the next time the person signs in through Access;
   no email is sent, and Access must still admit them (§2). Removing a member takes them off every team, and they are refused
   from their next request on, even where auto-join is on: a person or service token an org admin removed does not join by
@@ -225,7 +234,7 @@ characters; a missing key is refused everywhere.
 
 1. The path is classified (`src/access/routes.ts`): `/v1*` (incl. `/v1beta`, `/v1internal`), `/openai/v1*`, `/backend-api/codex*` and the unprefixed
    aliases `/chat/completions`, `/completions`, `/responses` are the proxy routes and need a
-   principal; `/v8/management*` (also `/v8/management/orgs/<slug>/...`), the control panel (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/members`, `/proxy-keys`, `/settings` with their
+   principal; `/v8/management*` (also `/v8/management/orgs/<slug>/...`), the control panel (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/members`, `/proxy-keys`, `/limits`, `/settings` with their
    sub-paths, the same pages under `/o/<slug>/`, `/assets/*`) and `/management.html` (the upstream panel's old address, a redirect to `/`) form the management zone;
    everything else (`/healthz`, the OAuth browser callbacks `/anthropic/callback`, `/codex/callback`,
    `/antigravity/callback`, `/callback`, `/devin/callback`) is public to the Worker.
@@ -263,7 +272,7 @@ admin's session. Before authentication the gate (`src/access/csrf.ts`) refuses, 
   management zone when `Sec-Fetch-Site` is `cross-site`/`same-site` or `Origin` names another host;
 - any management request (`/v8/management*`, the panel paths) with a foreign `Origin` or a cross-site `Sec-Fetch-Site`,
   except a top-level document navigation (`GET`/`HEAD` with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document`)
-  to a panel page (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/members`, `/proxy-keys`, `/settings` and their sub-paths) or
+  to a panel page (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/members`, `/proxy-keys`, `/limits`, `/settings` and their sub-paths) or
   `/management.html`: a link to a panel page still opens it, while frames (clickjacking), `/assets/*` and every
   `/v8/management*` request are refused (OAuth providers redirect to the public callback paths, never there);
 - WebSocket upgrades (`GET /v1/responses`, `/backend-api/codex/responses`) whose `Origin` is not the Worker's own host
