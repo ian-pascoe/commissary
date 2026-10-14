@@ -98,6 +98,15 @@ import { orgOfControlPlane, type OrgId } from "../platform/org.ts";
 import { OrgSecrets } from "../secrets/data-key.ts";
 import { deploymentSecretsKeys } from "../secrets/deployment-keys.ts";
 import { QuotaReportStore } from "../quota/store.ts";
+import type { SpendSettings } from "../spend/model.ts";
+import {
+  type NewSpendLimit,
+  type SpendEntry,
+  type SpendOverview,
+  SpendService,
+  type SpendServiceResult,
+} from "../spend/service.ts";
+import { type SpendResult, SpendStore } from "../spend/store.ts";
 import { type SweepSource, SweepLeaseStore, type TakeLease } from "../quota/sweep-lease.ts";
 import {
   type PutStatusResult,
@@ -306,6 +315,8 @@ export class ControlPlane extends DurableObject<Env> {
   /** The members' private API key groups (sealed rows of their own, never config entries). */
   readonly #privateKeys: PrivateKeyStore;
   readonly #proxyKeys: ProxyKeyStore;
+  /** The org's Spend limits (issue #71): what the management API does with them and the ledger the pool checks. */
+  readonly #spend: SpendService;
   /** The org this object serves, from its name. */
   readonly #org: OrgId;
   /**
@@ -335,6 +346,26 @@ export class ControlPlane extends DurableObject<Env> {
     this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
 
+    this.#spend = new SpendService(new SpendStore(ctx.storage.sql), {
+      members: () => this.#members.members(),
+      teams: () => this.#members.teams(),
+      teamsOf: (memberId) => this.#members.member(memberId)?.teams ?? [],
+      keys: () => this.#proxyKeys.list(),
+      credentials: () =>
+        this.#pool.entries().flatMap(({ credential }) =>
+          credential.owner === undefined
+            ? [
+                {
+                  id: credential.id,
+                  authIndex: this.#authIndex(credential.id),
+                  provider: credential.provider,
+                  label: credential.label,
+                },
+              ]
+            : [],
+        ),
+    });
+
     this.#grants = new ResetGrantStore(ctx.storage.sql);
     this.#pool = new CredentialPool({
       store: credentials,
@@ -347,6 +378,7 @@ export class ControlPlane extends DurableObject<Env> {
           teams: member === undefined ? [] : this.#members.teamIdsOf(member),
         }),
       decorate: (credential) => this.#refresh.decorate(credential),
+      spend: this.#spend.ledger(),
     });
     this.#refresh = new RefreshManager({
       host: this.#pool,
@@ -555,7 +587,11 @@ export class ControlPlane extends DurableObject<Env> {
     const removed = this.#members.removeMember(id, actor);
 
     // ADR 0027: a member who leaves takes their proxy keys with them (a key whose member is gone is refused anyway).
-    if (removed.ok) this.#proxyKeys.removeMemberKeys(id);
+    if (removed.ok) {
+      for (const key of this.#proxyKeys.list(id)) this.#spend.forget("key", key.id);
+      this.#spend.forget("member", id);
+      this.#proxyKeys.removeMemberKeys(id);
+    }
 
     // Grants that named the member go with them: whoever joins again under that email is a new member.
     if (removed.ok) this.#modelGrants.forget({ kind: "member", id });
@@ -652,6 +688,50 @@ export class ControlPlane extends DurableObject<Env> {
     };
   }
 
+  // --- Spend limits (issue #71, `spend/service.ts`) -------------------------------------------------------------------
+
+  /** The limits `viewer` sees with their Spend so far, and the org's calendar. */
+  spendOverview(viewer: Viewer): SpendOverview {
+    this.#ensureMembership();
+
+    return this.#spend.overview(viewer);
+  }
+
+  createSpendLimit(
+    viewer: Viewer,
+    input: NewSpendLimit,
+    by: string,
+  ): SpendServiceResult<SpendEntry> {
+    this.#ensureMembership();
+
+    return this.#spend.create(viewer, input, by);
+  }
+
+  updateSpendLimit(
+    viewer: Viewer,
+    id: string,
+    revision: number,
+    amountMicros: number,
+    by: string,
+  ): SpendServiceResult<SpendEntry> {
+    this.#ensureMembership();
+
+    return this.#spend.update(viewer, id, revision, amountMicros, by);
+  }
+
+  removeSpendLimit(viewer: Viewer, id: string, revision: number): SpendServiceResult<SpendEntry> {
+    this.#ensureMembership();
+
+    return this.#spend.remove(viewer, id, revision);
+  }
+
+  /** Sets the org's time zone and first day of the week; counters of periods that begin differently start over. */
+  setSpendSettings(settings: Partial<SpendSettings>): SpendResult<SpendSettings> {
+    this.#ensureMembership();
+
+    return this.#spend.setSettings(settings);
+  }
+
   listTeams(): ReadonlyArray<TeamRecord> {
     this.#ensureMembership();
 
@@ -675,7 +755,10 @@ export class ControlPlane extends DurableObject<Env> {
 
     const deleted = this.#members.deleteTeam(id);
 
-    if (deleted.ok) this.#modelGrants.forget({ kind: "team", id });
+    if (deleted.ok) {
+      this.#modelGrants.forget({ kind: "team", id });
+      this.#spend.forget("team", id);
+    }
 
     return deleted;
   }
@@ -980,6 +1063,7 @@ export class ControlPlane extends DurableObject<Env> {
         for (const id of gone) {
           this.#quota.delete(id);
           this.#grants.forget(id);
+          this.#spend.forget("credential", id);
         }
 
         return gone;
