@@ -300,4 +300,9 @@ td > .chips + .pick {
   .wide {
     min-width: 0;
   }
+
+  /* A percentage width lets a table cell's picker shrink below its longest option, so a phone's page holds the row. */
+  .pick {
+    width: 100%;
+  }
 }

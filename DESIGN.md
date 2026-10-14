@@ -69,6 +69,10 @@ components:
     backgroundColor: "{colors.yellow}"
     textColor: "{colors.ink}"
     height: "64px"
+  sidebar:
+    backgroundColor: "{colors.white}"
+    textColor: "{colors.ink}"
+    width: "240px"
   button-connect:
     backgroundColor: "{colors.ink}"
     textColor: "{colors.white}"
@@ -191,7 +195,7 @@ A signage palette: white, sign ink, one route yellow, one danger red, and a fixe
 
 Each token is a `light-dark()` pair (day / night); contrast of text on its ground in `tokens.css`.
 
-- **ground** (white / #131412): the page, secondary and danger button fills, sticky bars. **field** (white / #0e0f0c): text inputs, a well at night. **raised** (white / #1a1b18): dialogs, the theme menu, the night shell. **sunk** (stone-1 / #242422): hover fills and set-apart blocks.
+- **ground** (white / #131412): the page, secondary and danger button fills, sticky bars. **field** (white / #0e0f0c): text inputs, a well at night. **raised** (white / #1a1b18): dialogs, the bar's menus, the sidebar drawer, the night shell. **sunk** (stone-1 / #242422): hover fills and set-apart blocks.
 - **hairline** (stone-2 / #30312e): row hairlines, meter tracks, tab hover. **rule** (stone-3 / stone-4; at night 3.5:1 on the ground, so field frames and chart bars clear WCAG's 3:1 for controls): strong rules, field frames, link underlines, scrollbar, past history bars, the Settings save bar's top edge.
 - **text** (ink / #e1e2de, 17.1 / 14.2): text, figures, meter fills, heading rules, the current bar; **focus** is the same colour. **quiet** (stone-4 / #959692, 5.3 / 6.2): secondary text and captions.
 - **inverse** / **on-inverse** (text on ground, swapped): the ink blocks: primary and Connect buttons, filter chips, the skip link, selection. **inverse-hover** (darker by day, stone-1 at night, so a hovered block brightens rather than greys), **inverse-quiet**, **inverse-muted**, **inverse-muted-quiet**: their hover and secondary text.
@@ -205,7 +209,7 @@ Each token is a `light-dark()` pair (day / night); contrast of text on its groun
 
 The night version of the trail sign, for the same operator checking in after dark. The stone ramp keeps its roles on a dark ground, in the same warm grey (oklch hue 118, chroma 0.005): sunk and raised surfaces sit a step above the ground, hairlines step up from it, rules are stone-4 (3.5:1, so field frames and chart bars stay visible), secondary text is a mid stone (6.2:1) and sign ink becomes a light stone (14.2:1), never pure white. Elevation is still flat: a dialog or menu is one step lighter with a 2px text-colour frame, no shadow. Ink blocks (primary buttons) brighten to stone-1 on hover instead of greying.
 
-- **Yellow stays the route.** The blades keep Wanderweg yellow with ink lettering (10.4:1). The shell becomes a dark board (raised) with a 4px yellow band along its foot, the current page's rule sitting on the band: a full yellow bar is the loudest thing on a dark screen and would outshout the blades, while the band keeps "yellow = route" and reads calmly at night.
+- **Yellow stays the route.** The blades keep Wanderweg yellow with ink lettering (10.4:1). The shell becomes a dark board (raised) with a 4px yellow band along its foot: a full yellow bar is the loudest thing on a dark screen and would outshout the blades, while the band keeps "yellow = route" and reads calmly at night.
 - **Red stays danger.** At night it is a lighter Swiss red, #f45c4a, so red text passes on the dark ground (5.7:1, 4.8 on sunk); red fills take ink lettering (5.3:1), since white on that red would not pass.
 - **The near-limit tip** keeps its white-red-white band in a light stone paint; it needs no edge against a dark page.
 - **Body text** gains a little weight (430) and tracking (0.005em): light text on a dark ground reads thinner.
@@ -241,9 +245,9 @@ The night version of the trail sign, for the same operator checking in after dar
 
 ## Layout
 
-Single column, max width 80rem, gutter 2.5rem (1rem under 40rem). Page sections stack on a 4rem gap. Spacing scale: 4, 8, 12, 16, 24, 40, 64 px. The accounts table runs in urgency order: marker, provider and address, quota meters (max 26rem), reset blade, requests right-aligned. Below, the last day: a 13rem column of totals beside the by-model table with a thin ink share bar.
+The shell bar spans the window; under it a 15rem sidebar (`--sidebar-width`) sits beside a single page column, max width 80rem, gutter 2.5rem (1rem under 40rem); bar and frame share one centred max width (95rem), so the wordmark stands over the sidebar's links. Below 64rem the sidebar is a drawer and the page takes the full width. Page sections stack on a 4rem gap. Spacing scale: 4, 8, 12, 16, 24, 40, 64 px. The accounts table runs in urgency order: marker, provider and address, quota meters (max 26rem), reset blade, requests right-aligned. Below, the last day: a 13rem column of totals beside the by-model table with a thin ink share bar.
 
-Under 48rem each account row becomes a grid: account, quota, then reset blade left and request count right. Under 64rem the shell wraps its page links into a second row that scrolls sideways, with edge fades.
+Pages size themselves by the page column, not the window (`@container` queries on `main`), since the sidebar takes part of a wide window: the breakpoints below are page widths. Under 48rem each account row becomes a grid: account, quota, then reset blade left and request count right.
 
 ## Elevation & Depth
 
@@ -261,8 +265,16 @@ Square signage. Buttons take a 3px radius; meters 1px. Blades have a square tail
 
 ### Shell Bar
 
-- Yellow, min-height 4rem, ink text. Wordmark (800, 1.25rem) over the host in 0.8125rem; page links 0.9375rem; the active link has a 4px ink underline inset, hover a pale one. Connect account is an ink button; refresh is a 2px ink outline square that turns Pressed Yellow on hover and spins while loading. At night the bar is a dark board with a 4px yellow route band along its foot (see Dark Theme).
+- Yellow, min-height 4rem, ink text, holding only what is global to the page: the wordmark (800, 1.25rem; 1.125rem on phones) over the host in 0.8125rem, then on the right Connect account, Refresh, the theme menu and the account menu. Connect account is an ink button; refresh is a 2px ink outline square that turns Pressed Yellow on hover and spins while loading. At night the bar is a dark board with a 4px yellow route band along its foot (see Dark Theme). The page links live in the sidebar.
+- **Account menu:** the theme menu's twin (a framed square with the account icon, an "Account" caption): Sign out on a hosted proxy, and Delete my account in red (the danger colour, since it deletes), which asks in the typed confirmation dialog. Focus returns to the square when the menu or the dialog closes.
 - **Theme menu:** the last square on the bar, framed like Refresh so the two read as a pair, showing the choice's icon (sun-and-moon for System, sun, moon) with a "Theme: <choice>" tooltip; it opens a menu framed like the dialog with a "Theme" caption and System, Light and Dark as radio items (the chosen one 750 with a check). Arrows, Home and End move; Enter picks and closes; Escape closes. Under 30rem (phones) Connect account becomes an icon square so the name and host stay in view. Hover fills on the bar's squares apply only where the pointer can hover, so a tap leaves no stuck fill.
+
+### Sidebar
+
+- The org switcher (a form field: "Org" label above a 40px select) over the page links of the caller's role, on the page's own ground, set off from the page by one 1px hairline down its right edge: no fill, no box. It stays in view while the page scrolls (sticky, scrolling itself on a short window).
+- Links in groups (`pageGroupsFor` in `web/src/lib/role.ts`, the only source of the links): Overview and Usage first without a heading, then Providers, People and access, and Org, each under a caption heading (0.8125rem, 600, stone-4); a group the role has no page in is left out. Links are 0.9375rem (500), 2.25rem rows (2.75rem on touch screens), spaced 1.5rem between groups.
+- The current page (`aria-current="page"`) is set in 750 with a 4px ink underline under its label, hover a 4px hairline one: the filter tabs' underline language turned into a column. Never a coloured side stripe or a fill.
+- **Drawer (below 64rem):** a framed menu square at the bar's left opens the same content in a native modal `<dialog>` along the left edge (raised, 2px text-colour right edge, no shadow, the dialog backdrop; at most 20rem, always leaving a strip of page in view). Its close square lands where the menu square was. Tab wraps inside it, Escape, the close square, the backdrop and following any link close it, and focus returns to the menu square. No slide: the unfold stays the only authored motion.
 
 ### Buttons
 

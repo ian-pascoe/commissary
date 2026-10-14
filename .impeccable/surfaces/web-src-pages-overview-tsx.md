@@ -42,7 +42,8 @@ Factory catalog).
 STORY: The operator sees which accounts are closed or nearly spent, reads at the row's end how long until each is back,
 checks the last day by model, and follows a name to act.
 
-FIRST VIEWPORT: Yellow shell bar: wordmark and host, page links, Connect account (black) and refresh. One sentence
+FIRST VIEWPORT: Yellow shell bar: wordmark and host, Connect account (black), refresh and the theme and account menus;
+the sidebar beside the page: org switcher and grouped page links (a drawer on narrow screens). One sentence
 status line. Then the accounts table in urgency order: marker, provider and address, quota meters, reset blade,
 recent requests. Below, last 24 hours: totals beside a by-model table.
 

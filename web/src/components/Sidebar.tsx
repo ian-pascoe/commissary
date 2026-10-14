@@ -125,6 +125,7 @@ const keepFocusIn = (event: KeyboardEvent<HTMLDialogElement>) => {
   const controls = [
     ...event.currentTarget.querySelectorAll<HTMLElement>("a[href], button, select"),
   ];
+
   const first = controls.at(0);
   const last = controls.at(-1);
 
