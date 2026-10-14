@@ -2253,6 +2253,9 @@ Access one, unchanged. User docs: `docs/ACCESS.md` "Hosted proxy", `docs/DEPLOY.
   sessions of everyone at it. Refusals redirect to `/sign-in?error=<code>`. Differences from Better Auth's own
   organization SSO: providers are not stored by the plugin, domain proof uses our own TXT record, and membership is the
   proxy's, not the plugin's.
+  The plugin's dependencies (samlify, xmldom, xpath) are imported lazily, but every module of the bundle is still
+  compiled at Worker startup, which has a CPU time limit: `infra/bundle.ts` aliases `tldts` to a host-name stand-in
+  (`sso/tldts.ts`) and `pnpm-workspace.yaml` keeps one copy of xpath.
 - **Platform-level routes**: `POST /orgs` for everyone signed in, up to the owned-org limit; `PATCH /orgs/<slug>
   {suspended}` and `GET|PATCH /people/<email>` (`people-routes.ts`) for platform admins.
 - **Downloads**: only platform admins download a stored credential (`download_requires_platform_admin`), since no
