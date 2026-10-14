@@ -4,8 +4,9 @@
  *
  * A **Spend limit** caps the Cost (micro-USD) that one subject may spend in one period. The subject is a member, a team,
  * the org, a shared credential or a proxy key; the periods are a day, a week and a month in the org's time zone
- * (`period.ts`). Spend is counted per **scope** (a subject) and period, not per limit, so deleting and writing a limit
- * again does not forget what was spent.
+ * (`period.ts`). Spend is counted per **scope** (a subject) and period, not per limit: an admin's and a member's limit
+ * on one proxy key share a counter. A counter starts when the first limit of its scope and period is written, and goes
+ * when the last one is deleted.
  */
 import { Schema } from "effect";
 import type { Period, WeekStart } from "./period.ts";
