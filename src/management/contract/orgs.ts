@@ -22,6 +22,8 @@ export const OrgView = Schema.Struct({
   name: Schema.String,
   /** ISO time the org was created. */
   created_at: Schema.String,
+  /** How many days the org's usage records are kept; `null`: forever (ADR 0027). */
+  usage_retention_days: Schema.NullOr(Schema.Int),
 });
 
 export type OrgView = typeof OrgView.Type;
@@ -49,6 +51,16 @@ export const UpdateOrg = Schema.Struct({
 });
 
 export type UpdateOrg = typeof UpdateOrg.Type;
+
+/**
+ * `PATCH /org`: the settings of the addressed org. `usage_retention_days`: whole days from 1 to 3650 that usage records
+ * are kept, or `null` to keep them forever.
+ */
+export const UpdateOrgSettings = Schema.Struct({
+  usage_retention_days: Schema.optionalKey(Schema.NullOr(Schema.Int)),
+});
+
+export type UpdateOrgSettings = typeof UpdateOrgSettings.Type;
 
 /** An org the caller belongs to, as the panel's org switcher lists it. */
 export const MyOrg = Schema.Struct({ slug: Schema.String, name: Schema.String });
@@ -88,6 +100,16 @@ export class OrgsGroup extends HttpApiGroup.make("orgs").add(
   HttpApiEndpoint.post("create", "/orgs", {
     payload: CreateOrg,
     success: OrgView.pipe(HttpApiSchema.status(201)),
+    error: managementErrors,
+  }),
+  /** The org the request addresses (`global` for the unscoped route), with its settings. Org admins. */
+  HttpApiEndpoint.get("org", "/org", { success: OrgView, error: managementErrors }),
+  /**
+   * Changes the settings of the addressed org: its usage retention period. Org admins. `422 invalid_retention`.
+   */
+  HttpApiEndpoint.patch("updateSettings", "/org", {
+    payload: UpdateOrgSettings,
+    success: OrgView,
     error: managementErrors,
   }),
   /** Renames an org's name and/or slug. Platform admins only. `404 org_not_found`, plus the errors of `create`. */

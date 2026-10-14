@@ -40,6 +40,7 @@ const view = (org: OrgRecord): OrgView => ({
   slug: org.slug,
   name: org.name,
   created_at: new Date(org.createdAt).toISOString(),
+  usage_retention_days: org.usageRetentionDays,
 });
 
 /**
@@ -184,7 +185,39 @@ const update = Effect.gen(function* () {
   return jsonReply(200, view(result.org));
 });
 
+/** The org the request addresses, from the registry (`404 org_not_found` when it is no longer listed). */
+const addressedOrg = Effect.gen(function* () {
+  const identity = yield* AccessPrincipal;
+  const org = yield* registry("getOrgById", (stub) => stub.getOrgById(identity.org));
+
+  return org ?? (yield* replyError(404, "org_not_found", { message: "no org has this id" }));
+});
+
+const own = addressedOrg.pipe(Effect.map((org) => jsonReply(200, view(org))));
+
+const updateSettings = Effect.gen(function* () {
+  const identity = yield* AccessPrincipal;
+  const body = yield* bodyObject;
+  const days = body["usage_retention_days"];
+
+  if (
+    Object.keys(body).some((key) => key !== "usage_retention_days") ||
+    (days !== null && typeof days !== "number")
+  )
+    return yield* replyError(400, "invalid body");
+
+  const result = yield* registry("setUsageRetention", (stub) =>
+    stub.setUsageRetention(identity.org, days),
+  );
+
+  if (!result.ok) return yield* refused(result);
+
+  return jsonReply(200, view(result.org));
+});
+
 export const orgRoutes = [
+  HttpRouter.route("GET", `${BASE}/org`, handled(own)),
+  HttpRouter.route("PATCH", `${BASE}/org`, handled(updateSettings)),
   HttpRouter.route("GET", `${BASE}/me`, handled(me)),
   HttpRouter.route("GET", `${BASE}/orgs`, handled(list)),
   HttpRouter.route("POST", `${BASE}/orgs`, handled(create)),

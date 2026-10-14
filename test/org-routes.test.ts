@@ -38,6 +38,7 @@ interface OrgBody {
   readonly slug: string;
   readonly name: string;
   readonly created_at: string;
+  readonly usage_retention_days: number | null;
 }
 
 const orgs = async (): Promise<ReadonlyArray<OrgBody>> =>
@@ -72,6 +73,8 @@ describe("the org list", () => {
           slug: "default",
           name: "Default",
           created_at: expect.stringMatching(/^\d{4}-\d\d-\d\dT/),
+          // The deployment that existed before the setting keeps its history.
+          usage_retention_days: null,
         },
       ],
     });
@@ -100,6 +103,7 @@ describe("creating an org", () => {
       slug: "created",
       name: "Created Inc",
       created_at: expect.stringMatching(/^\d{4}-\d\d-\d\dT/),
+      usage_retention_days: 90,
     });
 
     expect((await orgs()).find((org) => org.slug === "created")?.id).toBe(
@@ -246,6 +250,94 @@ describe("renaming an org", () => {
     expect((await patch("rename-a", {})).status).toBe(400);
     expect((await patch("rename-a", { slug: 5 })).status).toBe(400);
     expect((await patch("rename-a", { id: "org-x" })).status).toBe(400);
+  });
+});
+
+describe("the org's own record and its retention period", () => {
+  const retention = (prefix: string, body: Payload, auth?: string) =>
+    harness.json(`${prefix}/org`, { ...jsonInit("PATCH", body), ...(auth ? { auth } : {}) });
+
+  it("answers the org of the address, global for the unscoped route", async () => {
+    await create({ slug: "own-record", name: "Own Record" });
+
+    expect((await harness.json("/v8/management/org")).body).toMatchObject({
+      id: GLOBAL_ORG,
+      slug: "default",
+      usage_retention_days: null,
+    });
+    expect((await harness.json("/v8/management/orgs/own-record/org")).body).toMatchObject({
+      slug: "own-record",
+      name: "Own Record",
+      usage_retention_days: 90,
+    });
+    expect((await harness.json("/v8/management/orgs/own-nobody/org")).status).toBe(404);
+  });
+
+  it("sets and clears the usage retention period of one org only", async () => {
+    await create({ slug: "ret-a", name: "A" });
+    await create({ slug: "ret-b", name: "B" });
+    const prefix = "/v8/management/orgs/ret-a";
+
+    expect(await retention(prefix, { usage_retention_days: 30 })).toMatchObject({
+      status: 200,
+      body: { slug: "ret-a", usage_retention_days: 30 },
+    });
+    expect((await orgs()).find((org) => org.slug === "ret-a")?.usage_retention_days).toBe(30);
+    expect((await orgs()).find((org) => org.slug === "ret-b")?.usage_retention_days).toBe(90);
+
+    expect(await retention(prefix, { usage_retention_days: null })).toMatchObject({
+      status: 200,
+      body: { usage_retention_days: null },
+    });
+    expect((await harness.json(`${prefix}/org`)).body).toMatchObject({
+      usage_retention_days: null,
+    });
+  });
+
+  it.each([0, -3, 1.5, 3651, "30", true])("refuses the period %j", async (days) => {
+    await create({ slug: "ret-bad", name: "Bad" });
+
+    const reply = await retention("/v8/management/orgs/ret-bad", {
+      usage_retention_days: days as number,
+    });
+
+    expect([400, 422]).toContain(reply.status);
+    expect((await harness.json("/v8/management/orgs/ret-bad/org")).body).toMatchObject({
+      usage_retention_days: 90,
+    });
+  });
+
+  it("refuses a body that names nothing to change or something else", async () => {
+    expect((await retention("/v8/management", {})).status).toBe(400);
+    expect((await retention("/v8/management", { name: "X" })).status).toBe(400);
+  });
+
+  it("is for an org admin: a plain member is refused, an admin of another org too", async () => {
+    await seedCarol();
+    await create({ slug: "ret-guard", name: "Guard" });
+    const dave = await token("dave@example.com");
+
+    // Dave is a plain member of global.
+    expect((await harness.json("/v8/management/org", { auth: dave })).status).toBe(403);
+    expect((await retention("/v8/management", { usage_retention_days: 5 }, dave)).status).toBe(403);
+
+    // Carol administers global, not ret-guard.
+    const carol = await token(CAROL);
+
+    expect(
+      (await retention("/v8/management/orgs/ret-guard", { usage_retention_days: 5 }, carol)).status,
+    ).toBe(403);
+    expect((await harness.json("/v8/management/orgs/ret-guard/org")).body).toMatchObject({
+      usage_retention_days: 90,
+    });
+
+    // An admin of global may change global's.
+    expect((await retention("/v8/management", { usage_retention_days: 365 }, carol)).status).toBe(
+      200,
+    );
+    expect((await retention("/v8/management", { usage_retention_days: null }, carol)).status).toBe(
+      200,
+    );
   });
 });
 
