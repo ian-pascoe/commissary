@@ -201,3 +201,52 @@ describe("hosted proxy settings", () => {
     }),
   );
 });
+
+describe("API host settings", () => {
+  const selfHosted = {
+    CF_LLM_PROXY_DOMAIN: "proxy.example.com",
+    ACCESS_TEAM_DOMAIN: "team",
+    ACCESS_ALLOW_EMAILS: "a@x.com",
+  };
+
+  const refusal = (variables: Record<string, string>, stage = "prod") =>
+    read(variables, { stage }).pipe(
+      Effect.as("accepted"),
+      Effect.catchDefect((defect) => Effect.succeed(String(defect))),
+    );
+
+  it.effect("default to one host serving everything", () =>
+    Effect.gen(function* () {
+      assert.strictEqual((yield* read(selfHosted, { stage: "prod" })).settings.apiDomain, "");
+    }),
+  );
+
+  it.effect("read CF_LLM_PROXY_API_DOMAIN, except on a preview and in `alchemy dev`", () =>
+    Effect.gen(function* () {
+      const split = { ...selfHosted, CF_LLM_PROXY_API_DOMAIN: " api.example.com " };
+
+      assert.strictEqual(
+        (yield* read(split, { stage: "prod" })).settings.apiDomain,
+        "api.example.com",
+      );
+      assert.strictEqual((yield* read(split, { stage: "pr-12" })).settings.apiDomain, "");
+      assert.strictEqual((yield* read(split)).settings.apiDomain, "");
+    }),
+  );
+
+  it.effect("refuse an API host that is the app host or no hostname", () =>
+    Effect.gen(function* () {
+      for (const [apiDomain, message] of [
+        ["proxy.example.com", "CF_LLM_PROXY_API_DOMAIN must differ from CF_LLM_PROXY_DOMAIN"],
+        ["https://api.example.com", "CF_LLM_PROXY_API_DOMAIN must be a lowercase hostname"],
+        ["api.example.com/v1", "CF_LLM_PROXY_API_DOMAIN must be a lowercase hostname"],
+        ["API.example.com", "CF_LLM_PROXY_API_DOMAIN must be a lowercase hostname"],
+        ["localhost", "CF_LLM_PROXY_API_DOMAIN must be a lowercase hostname"],
+      ] as const)
+        assert.include(
+          yield* refusal({ ...selfHosted, CF_LLM_PROXY_API_DOMAIN: apiDomain }),
+          message,
+        );
+    }),
+  );
+});

@@ -1,5 +1,6 @@
 import { ControlPlane } from "./credentials/control-plane.ts";
 import { makeWebHandler } from "./http/app.ts";
+import { misdirected } from "./http/hosts.ts";
 import { requestContext } from "./platform/env.ts";
 import { Platform } from "./platform/platform.ts";
 import { dispatchScheduled } from "./scheduled.ts";
@@ -13,7 +14,9 @@ const { handler } = makeWebHandler();
 export { ControlPlane, Platform, SessionState };
 
 export default {
-  fetch: (request, env, ctx) => handler(request, requestContext(env, ctx)),
+  // A deployment with an API host serves the proxy routes there and the rest on its app host (src/http/hosts.ts).
+  fetch: (request, env, ctx) =>
+    misdirected(request.url, env) ?? handler(request, requestContext(env, ctx)),
   // Cron jobs (model catalog refresh, ...) are registered in `scheduledTasks` (src/scheduled.ts).
   scheduled: (controller, env, ctx) => dispatchScheduled(controller, env, ctx),
 } satisfies ExportedHandler<Env>;

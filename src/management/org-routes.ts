@@ -21,6 +21,7 @@ import type { JsonObject } from "../json/index.ts";
 import { deleteSignInAccount, endSessions } from "../hosted/session.ts";
 import { forgetStanding, ownedOrgLimit } from "../hosted/standing.ts";
 import { isHosted } from "../hosted/mode.ts";
+import { apiOrigin } from "../http/hosts.ts";
 import { syncOrgIndex } from "../members/admission.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import { controlPlaneOf, GLOBAL_ORG, newOrgId } from "../platform/org.ts";
@@ -116,6 +117,7 @@ const ownedOrgs = (identity: AccessIdentity) =>
 const me = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
   const orgs = yield* openableOrgs(identity);
+  const api = apiOrigin(yield* WorkerEnv);
 
   const settings =
     identity.role === undefined
@@ -128,6 +130,7 @@ const me = Effect.gen(function* () {
     orgs: orgs.map((org) => ({ slug: org.slug, name: org.name })),
     ...(settings === undefined ? {} : { private_credentials: settings.privateCredentials }),
     ...(yield* ownedOrgs(identity)),
+    ...(api === undefined ? {} : { api_url: api }),
   });
 });
 

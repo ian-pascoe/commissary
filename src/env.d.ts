@@ -21,6 +21,13 @@ interface __BaseEnv_Env {
   ACCESS_ADMIN_SERVICE_TOKENS?: string;
   /** Local development only: treats loopback requests as this admin. Never set when deployed. */
   ACCESS_DEV_BYPASS: string;
+  /**
+   * The app host (`CF_LLM_PROXY_DOMAIN`): panel, sign-in and management API. Set together with `API_DOMAIN`; unset,
+   * like `API_DOMAIN`, on a deployment that serves everything on one host (src/http/hosts.ts, ADR 0028).
+   */
+  APP_DOMAIN?: string;
+  /** The API host (`CF_LLM_PROXY_API_DOMAIN`): the only host of the proxy routes. Unset: one host serves everything. */
+  API_DOMAIN?: string;
   /** Overrides the Meta key-mint endpoint (empty: default). */
   META_MINT_URL: string;
   /**

@@ -104,14 +104,22 @@ export default Alchemy.Stack(
             }),
           };
 
+    // With an API host (ADR 0028) the Worker answers on both hostnames and serves the proxy routes on the API host only
+    // (src/http/hosts.ts). The API host has no Access application: clients authenticate there with proxy keys.
+    const split = settings.apiDomain !== "";
+
+    const domain = split
+      ? { name: settings.domain, aliases: [settings.apiDomain] }
+      : settings.domain;
+
     const worker = yield* Cloudflare.Worker("Proxy", {
       main: "./src/index.ts",
       compatibility: COMPATIBILITY,
       // Production serves only its Access-protected domain; pull-request previews serve their workers.dev URL,
       // protected by enrolling the Worker into the preview's Access application. The proxy routes leave Access on both
-      // (`provisionProxyBypass` below): clients authenticate there with proxy keys (ADR 0022).
+      // (`provisionProxyBypass` below, or the API host): clients authenticate there with proxy keys (ADR 0022).
       workersDev: settings.preview,
-      ...(dev || settings.preview ? {} : { domain: settings.domain }),
+      ...(dev || settings.preview ? {} : { domain }),
       ...(access.application === undefined ? {} : { access: access.application }),
       limits: { cpuMs: settings.cpuMs },
       build: { input: { resolve: { alias: { ...BUNDLE_ALIASES } } } },
@@ -132,6 +140,7 @@ export default Alchemy.Stack(
         PLATFORM_ADMIN_SERVICE_TOKENS: access.adminServiceTokens,
         ACCESS_DEV_BYPASS: dev ? settings.devBypass : "",
         META_MINT_URL: settings.metaMintUrl,
+        ...(split ? { APP_DOMAIN: settings.domain, API_DOMAIN: settings.apiDomain } : {}),
         // Redacted: bound as a secret (`secret_text`), never as a plain variable.
         AUTH_INDEX_KEY: authIndexKey,
         ...(secretsKey === undefined ? {} : { SECRETS_KEY: secretsKey }),
@@ -143,7 +152,8 @@ export default Alchemy.Stack(
     // The bypass is derived from the Worker's output on every stage, so it is applied only after the Worker: the first
     // deploy must not take the proxy routes out of Access while the old Worker, which only reads the Access edge's
     // `Cf-Access-Jwt-Assertion`, still serves them (clients sending `cf-access-token` would get 401 in between).
-    if (!dev && hosted === undefined)
+    // An API host needs none: Access covers the app host only.
+    if (!dev && hosted === undefined && !split)
       yield* provisionProxyBypass(
         settings,
         Output.asOutput(worker.url).pipe(
@@ -160,6 +170,8 @@ export default Alchemy.Stack(
 
     return {
       url: worker.url,
+      // Where clients send proxy keys: the API host, or the Worker's one URL (tools/deploy-stage.sh).
+      apiUrl: split ? `https://${settings.apiDomain}` : worker.url,
       accessAud: access.aud,
       serviceTokens: access.serviceTokenClientIds,
     };

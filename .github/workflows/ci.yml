@@ -123,6 +123,8 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       CF_LLM_PROXY_DOMAIN: ${{ vars.CF_LLM_PROXY_DOMAIN }}
+      # The API host (ADR 0028); unset serves everything on CF_LLM_PROXY_DOMAIN. Previews ignore it.
+      CF_LLM_PROXY_API_DOMAIN: ${{ vars.CF_LLM_PROXY_API_DOMAIN }}
       ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN }}
       ACCESS_ALLOW_EMAILS: ${{ vars.ACCESS_ALLOW_EMAILS }}
       ACCESS_ALLOW_EMAIL_DOMAINS: ${{ vars.ACCESS_ALLOW_EMAIL_DOMAINS }}
@@ -166,14 +168,16 @@ jobs:
         if: env.PROXY_MODE != 'hosted'
         env:
           URL: ${{ steps.deploy.outputs.url }}
+          API_URL: ${{ steps.deploy.outputs.api_url }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-        run: tools/check-deploy.sh "$URL"
+        run: tools/check-deploy.sh "$URL" "$API_URL"
       - name: Check the hosted deploy
         if: env.PROXY_MODE == 'hosted'
         env:
           URL: ${{ steps.deploy.outputs.url }}
-        run: tools/check-hosted-deploy.sh "$URL"
+          API_URL: ${{ steps.deploy.outputs.api_url }}
+        run: tools/check-hosted-deploy.sh "$URL" "$API_URL"
       - name: Comment the preview URL
         if: github.event_name == 'pull_request'
         env:
@@ -207,6 +211,8 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       CF_LLM_PROXY_DOMAIN: ${{ vars.CF_LLM_PROXY_DOMAIN }}
+      # The API host (ADR 0028); unset serves everything on CF_LLM_PROXY_DOMAIN. Previews ignore it.
+      CF_LLM_PROXY_API_DOMAIN: ${{ vars.CF_LLM_PROXY_API_DOMAIN }}
       PLATFORM_ADMIN_EMAILS: ${{ vars.PLATFORM_ADMIN_EMAILS }}
       SECRETS_KEY_GENERATION: ${{ vars.SECRETS_KEY_GENERATION }}
       SECRETS_KEY_PREVIOUS_GENERATION: ${{ vars.SECRETS_KEY_PREVIOUS_GENERATION }}
@@ -245,7 +251,8 @@ jobs:
         if: env.CONFIGURED == 'true'
         env:
           URL: ${{ steps.deploy.outputs.url }}
-        run: tools/check-hosted-deploy.sh "$URL"
+          API_URL: ${{ steps.deploy.outputs.api_url }}
+        run: tools/check-hosted-deploy.sh "$URL" "$API_URL"
 
   destroy-preview:
     name: destroy preview

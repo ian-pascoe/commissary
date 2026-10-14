@@ -429,10 +429,10 @@ const Keys = ({ caller }: { readonly caller: Caller }) => {
   );
 };
 
-const Usage = () => (
+const Usage = ({ apiUrl }: { readonly apiUrl: string }) => (
   <>
     <p className={styles["lead"]}>
-      Send the key to {window.location.origin} the way the client&rsquo;s own API does:
+      Send the key to {apiUrl} the way the client&rsquo;s own API does:
     </p>
     <dl className={styles["headers"]}>
       {KEY_HEADERS.map((row) => (
@@ -455,6 +455,10 @@ export const ProxyKeysPage = () => {
   const { caller } = role;
   const every = seesEveryProxyKey(caller);
   const closedBecause = AsyncResult.isSuccess(me) ? notMemberNote(me.value) : undefined;
+
+  // A deployment with an API host (ADR 0028) serves the proxy routes there, not on the panel's origin.
+  const apiUrl =
+    (AsyncResult.isSuccess(me) ? me.value.api_url : undefined) ?? window.location.origin;
 
   return (
     <div className={kit["page"]}>
@@ -479,7 +483,7 @@ export const ProxyKeysPage = () => {
         <Keys caller={caller} />
       </Section>
       <Section title="Using a key">
-        <Usage />
+        <Usage apiUrl={apiUrl} />
       </Section>
     </div>
   );
