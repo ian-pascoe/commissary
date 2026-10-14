@@ -9,8 +9,9 @@ log="${RUNNER_TEMP:-/tmp}/deploy-$stage.log"
 
 pnpm run deploy --stage "$stage" --no-input --yes | tee "$log"
 
-# The deploy ends by printing the stack outputs (`url: 'https://…',`).
-url="$(sed -nE "s/^ *url: '(https:[^']+)',?$/\1/p" "$log" | tail -n 1)"
+# The deploy ends by printing the stack outputs: `url: 'https://…'` on a line of its own, or inline when the outputs are
+# short (`{ url: 'https://…', accessAud: '', … }`).
+url="$(sed -nE "s/^.*[{ ]url: '(https:[^']+)'.*$/\1/p" "$log" | tail -n 1)"
 
 if [ -z "$url" ]; then
   echo "::error::the deploy printed no url output" >&2
