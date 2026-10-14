@@ -1,0 +1,143 @@
+/**
+ * Management keys on the management API (ADR 0026), on every proxy: `Authorization: Bearer cfm_…`. New in the Workers
+ * port, no Go counterpart.
+ *
+ * A key names its org (`management-keys/key.ts`), so verification asks that org's ControlPlane only, after the Platform
+ * registry confirmed the org exists (`orgExists`, shared with proxy keys). A request with a key is for the key's org:
+ * an unscoped management URL means it, an org-scoped one must name it (403 otherwise). The key holds a role in its org
+ * and is never a platform admin. Verified keys are cached per isolate for {@link VERIFIED_KEY_TTL_MS}, so a revocation
+ * applies within that time everywhere, and at once in the isolate that revoked it.
+ */
+import { Clock, Effect } from "effect";
+import { ForbiddenError, InternalError, NotFoundError, UnauthorizedError } from "../errors.ts";
+import { looksLikeManagementKey, parseManagementKey } from "../management-keys/key.ts";
+import { roleAtLeast, type OrgRole } from "../members/roles.ts";
+import { WorkerEnv } from "../platform/env.ts";
+import { controlPlaneOf, type OrgId } from "../platform/org.ts";
+import { platform } from "../platform/registry.ts";
+import type { RouteAccess } from "./policy.ts";
+import { type AccessIdentity, makeIdentity } from "./principal.ts";
+import { orgExists, VERIFIED_KEY_TTL_MS } from "./proxy-key.ts";
+
+export interface VerifiedManagementKey {
+  readonly org: OrgId;
+  readonly keyId: string;
+  readonly name: string;
+  readonly role: OrgRole;
+  readonly ownerEmail?: string;
+}
+
+/** The most verified keys one isolate keeps; the oldest is dropped first. */
+const MAX_CACHED_KEYS = 1024;
+
+/** Verified keys by the SHA-256 of the whole key, with the epoch ms until which they are trusted. */
+const verified = new Map<string, { readonly key: VerifiedManagementKey; readonly until: number }>();
+
+/** Forgets a revoked key of `org` in this isolate, so it is refused here at once. */
+export const forgetVerifiedManagementKey = (org: OrgId, keyId: string): void => {
+  for (const [hash, cached] of verified)
+    if (cached.key.org === org && cached.key.keyId === keyId) verified.delete(hash);
+};
+
+/** Empties the cache, for tests. */
+export const resetManagementKeyCache = (): void => {
+  verified.clear();
+};
+
+/** The management key of a request: `Authorization: Bearer cfm_…`, well formed or not. */
+export const presentedManagementKey = (
+  headers: Readonly<Record<string, string | undefined>>,
+): string | undefined => {
+  const [scheme, ...rest] = (headers["authorization"] ?? "").trim().split(" ");
+  const value = rest.join(" ").trim();
+
+  return scheme?.toLowerCase() === "bearer" && looksLikeManagementKey(value) ? value : undefined;
+};
+
+const invalid = new UnauthorizedError({ message: "Invalid API key" });
+
+/** The live key behind `text`, or `Invalid API key` (401) for a malformed, unknown or revoked key. */
+export const verifyManagementKey = Effect.fnUntraced(function* (text: string) {
+  const parsed = parseManagementKey(text);
+
+  if (parsed === undefined) return yield* invalid;
+  const now = yield* Clock.currentTimeMillis;
+  const cached = verified.get(parsed.hash);
+
+  if (cached !== undefined && now < cached.until) return cached.key;
+  verified.delete(parsed.hash);
+
+  if (!(yield* orgExists(parsed.org, now))) return yield* invalid;
+  const env = yield* WorkerEnv;
+
+  const verdict = yield* Effect.tryPromise({
+    try: async () =>
+      await controlPlaneOf(env, parsed.org).verifyManagementKey(parsed.keyId, parsed.hash, now),
+    catch: (cause) =>
+      new InternalError({
+        message: `management key verification: ${cause instanceof Error ? cause.message : "unknown error"}`,
+      }),
+  });
+
+  if (!verdict.ok) return yield* invalid;
+
+  const key: VerifiedManagementKey = {
+    org: parsed.org,
+    keyId: parsed.keyId,
+    name: verdict.name,
+    role: verdict.role,
+    ...(verdict.ownerEmail === undefined ? {} : { ownerEmail: verdict.ownerEmail }),
+  };
+
+  if (verified.size >= MAX_CACHED_KEYS) {
+    const oldest = verified.keys().next();
+
+    if (oldest.done !== true) verified.delete(oldest.value);
+  }
+
+  verified.set(parsed.hash, { key, until: now + VERIFIED_KEY_TTL_MS });
+
+  return key;
+});
+
+/**
+ * The identity of a live management key for a management request addressed to `slug` (unscoped: the key's org) that
+ * needs `needs`: 403 when the URL names another org or the key's role is below what the route needs.
+ */
+export const managementKeyIdentity = (
+  text: string,
+  slug: string | undefined,
+  needs: RouteAccess,
+): Effect.Effect<
+  { readonly identity: AccessIdentity; readonly key: VerifiedManagementKey },
+  UnauthorizedError | ForbiddenError | NotFoundError | InternalError,
+  WorkerEnv
+> =>
+  Effect.gen(function* () {
+    const key = yield* verifyManagementKey(text);
+
+    if (slug !== undefined) {
+      const addressed = yield* platform("getOrgBySlug", (stub) => stub.getOrgBySlug(slug)).pipe(
+        Effect.mapError((error) => new InternalError({ message: error.message })),
+      );
+
+      if (addressed?.id !== key.org) return yield* new ForbiddenError({ message: "Forbidden" });
+    }
+
+    if (needs !== "platform" && !roleAtLeast(key.role, needs))
+      return yield* new ForbiddenError({ message: "Forbidden" });
+
+    const identity = yield* makeIdentity(
+      {
+        kind: "mkey",
+        keyId: key.keyId,
+        name: key.name,
+        ...(key.ownerEmail === undefined ? {} : { ownerEmail: key.ownerEmail }),
+      },
+      key.org,
+      false,
+      { role: key.role },
+    );
+
+    return { identity, key };
+  });

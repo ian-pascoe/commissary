@@ -8,6 +8,7 @@
  * (ADR 0006's rule per org). Changing auto-join is for org owners. After a change of who belongs to the org, the
  * Platform registry's index is brought up to date (`members/admission.ts`).
  */
+import { managementKeyForbidden } from "./management-key-routes.ts";
 import { Effect, Schema } from "effect";
 import { HttpRouter, type HttpServerResponse } from "effect/http";
 import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
@@ -320,6 +321,8 @@ const takenElsewhere = (
  */
 const registerServiceToken = Effect.gen(function* () {
   const { identity, actor } = yield* caller;
+
+  if (identity.principal.kind === "mkey") return yield* managementKeyForbidden();
   const input = yield* body(RegisterServiceToken);
 
   if (yield* takenElsewhere(input.client_id)) return yield* tokenTaken();
@@ -348,7 +351,9 @@ const registerServiceToken = Effect.gen(function* () {
 });
 
 const updateServiceToken = Effect.gen(function* () {
-  const { actor } = yield* caller;
+  const { identity, actor } = yield* caller;
+
+  if (identity.principal.kind === "mkey") return yield* managementKeyForbidden();
   const clientId = yield* param("clientId");
   const input = yield* body(UpdateServiceToken);
 

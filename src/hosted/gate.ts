@@ -4,6 +4,8 @@
  *
  * - Proxy routes take proxy keys only. A key of a suspended org or person is refused, and each org's requests are
  *   rate-limited (`rate-limit.ts`).
+ * - The management API takes management keys (`access/management-key.ts`, refused for a suspended org or issuer), like
+ *   a self-hosted proxy.
  * - The management API and the panel take the session cookie of a person signed in with Better Auth (`session.ts`):
  *   the same verified email Access yields on a self-hosted proxy, so roles, the person-to-orgs index and caller scopes
  *   work unchanged. A first sign-in signs the person up (`standing.ts`). Platform admins are the people in
@@ -12,6 +14,7 @@
 import { Effect } from "effect";
 import { admitted, keyIdentity, targetOrg, type AccessError } from "../access/authenticate.ts";
 import { platformAdminLists } from "../access/config.ts";
+import { managementKeyIdentity, presentedManagementKey } from "../access/management-key.ts";
 import { routeAccess } from "../access/policy.ts";
 import type { AccessIdentity, Principal } from "../access/principal.ts";
 import { presentedCredentials } from "../access/proxy-key.ts";
@@ -58,6 +61,20 @@ export const authenticateHosted = (
         identity.principal.kind === "key" ? identity.principal.email : undefined,
       );
       yield* limitOrgRate(identity.org);
+
+      return identity;
+    }
+
+    const managementKey = presentedManagementKey(headers);
+
+    if (managementKey !== undefined) {
+      const { identity, key } = yield* managementKeyIdentity(
+        managementKey,
+        scopedUrl(requestUrl)?.slug,
+        routeAccess(method, requestUrl, zone),
+      );
+
+      yield* requireStanding(key.org, key.ownerEmail);
 
       return identity;
     }

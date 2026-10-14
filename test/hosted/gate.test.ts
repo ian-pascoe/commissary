@@ -144,9 +144,9 @@ describe("authentication", () => {
   });
 
   it("serves the sign-in page and the panel's bundle files to anyone", async () => {
-    // The test Worker has no built panel: reaching the assets binding answers 404, not 401 or a redirect.
+    // Answered by the assets binding (404 while the panel is not built), never refused or redirected.
     for (const path of ["/sign-in", "/assets/missing.js"])
-      expect((await call(path)).status).toBe(404);
+      expect([200, 404]).toContain((await call(path)).status);
   });
 
   it("accepts no Access JWT and no Access service token", async () => {
@@ -345,5 +345,90 @@ describe("suspension", () => {
     );
 
     expect(response.status).toBe(403);
+  });
+});
+
+describe("management keys and downloads", () => {
+  it("takes management keys on the management API, refuses them while their org is suspended, and never takes a proxy key there", async () => {
+    const owner = await signIn({ email: "dora@example.com" });
+
+    expect((await createOrg(owner, "keyed")).status).toBe(201);
+
+    const issued = await call(
+      "/v8/management/orgs/keyed/management-keys",
+      json(owner, "POST", { name: "ci", role: "admin" }),
+    );
+
+    expect(issued.status).toBe(201);
+    const { key } = await issued.json<{ key: string }>();
+
+    const members = () =>
+      call("/v8/management/orgs/keyed/members", { headers: { authorization: `Bearer ${key}` } });
+
+    expect((await members()).status).toBe(200);
+
+    const proxyKeyThere = await call("/v8/management/orgs/keyed/members", {
+      headers: { authorization: `Bearer ${await proxyKey(owner, "keyed")}` },
+    });
+
+    expect(proxyKeyThere.status).toBe(401);
+
+    const root = await signIn({ email: ROOT });
+
+    expect(
+      (await call("/v8/management/orgs/keyed", json(root, "PATCH", { suspended: true }))).status,
+    ).toBe(200);
+    expect((await members()).status).toBe(403);
+    expect(
+      (await call("/v8/management/orgs/keyed", json(root, "PATCH", { suspended: false }))).status,
+    ).toBe(200);
+    expect((await members()).status).toBe(200);
+  });
+
+  it("refuses a management key of a suspended person", async () => {
+    const owner = await signIn({ email: "erin@example.com" });
+    const org = (await me(owner)).orgs[0]?.slug ?? "";
+
+    const issued = await call(
+      `/v8/management/orgs/${org}/management-keys`,
+      json(owner, "POST", { name: "ci", role: "admin" }),
+    );
+
+    const { key } = await issued.json<{ key: string }>();
+    const root = await signIn({ email: ROOT });
+
+    await call("/v8/management/people/erin@example.com", json(root, "PATCH", { suspended: true }));
+
+    const refused = await call(`/v8/management/orgs/${org}/members`, {
+      headers: { authorization: `Bearer ${key}` },
+    });
+
+    expect(refused.status).toBe(403);
+    await call("/v8/management/people/erin@example.com", json(root, "PATCH", { suspended: false }));
+  });
+
+  it("lets only platform admins download stored credentials", async () => {
+    const owner = await signIn({ email: "fay@example.com" });
+
+    expect((await createOrg(owner, "files")).status).toBe(201);
+
+    const uploaded = await call(
+      "/v8/management/orgs/files/credentials?name=claude-fay.json",
+      json(owner, "POST", {
+        type: "claude",
+        access_token: "sk-ant-oat-test",
+        email: "fay@example.com",
+      }),
+    );
+
+    expect(uploaded.status).toBe(200);
+    const path = "/v8/management/orgs/files/credentials/download?name=claude-fay.json";
+    const refused = await call(path, { headers: panelHeaders(owner) });
+
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ error: "download_requires_platform_admin" });
+    expect(
+      (await call(path, { headers: panelHeaders(await signIn({ email: ROOT })) })).status,
+    ).toBe(200);
   });
 });

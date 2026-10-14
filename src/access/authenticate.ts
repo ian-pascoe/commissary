@@ -15,7 +15,8 @@ import { roleAtLeast } from "../members/roles.ts";
 import { CurrentOrg, type OrgId, type OrgSlug } from "../platform/org.ts";
 import { platform } from "../platform/registry.ts";
 import { deprecatedAdminVariables, devBypass, isAdmin, loadAccessConfig } from "./config.ts";
-import type { AccessIdentity, Principal } from "./principal.ts";
+import { managementKeyIdentity, presentedManagementKey } from "./management-key.ts";
+import type { AccessIdentity, AdmissiblePrincipal } from "./principal.ts";
 import { makeIdentity } from "./principal.ts";
 import { presentedCredentials, verifyProxyKey } from "./proxy-key.ts";
 import type { AccessJwks } from "./jwks.ts";
@@ -103,7 +104,7 @@ export const targetOrg = (slug: OrgSlug | undefined, platformAdmin: boolean) =>
  * `Invalid API key` when it sent another credential (`credentialSent`).
  */
 export const admitted = (
-  principal: Principal,
+  principal: AdmissiblePrincipal,
   org: OrgId,
   platformAdmin: boolean,
   needs: RouteAccess,
@@ -164,7 +165,8 @@ export const keyIdentity = Effect.fnUntraced(function* (text: string) {
  * as its member; a bad key is refused even when the request also carries an Access sign-in. Without a key, the Access
  * JWT comes from `Cf-Access-Jwt-Assertion` or, since Access no longer sits in front of the proxy routes, from the
  * `cf-access-token` header `cloudflared` sends; it is accepted only while the org's `access_clients` setting is on.
- * Management routes never take proxy keys: they stay behind Access, which sets `Cf-Access-Jwt-Assertion`.
+ * Management routes never take proxy keys: they stay behind Access, which sets `Cf-Access-Jwt-Assertion`. A management
+ * key (`Authorization: Bearer cfm_…`, `management-key.ts`) wins there the way a proxy key wins on a proxy route.
  */
 export const authenticateRequest = (
   headers: Readonly<Record<string, string | undefined>>,
@@ -180,6 +182,18 @@ export const authenticateRequest = (
       zone === "protected" ? presentedCredentials(headers, requestUrl) : undefined;
 
     if (credentials?.proxyKey !== undefined) return yield* keyIdentity(credentials.proxyKey);
+    const managementKey = zone === "management" ? presentedManagementKey(headers) : undefined;
+
+    if (managementKey !== undefined) {
+      const { identity } = yield* managementKeyIdentity(
+        managementKey,
+        slug,
+        routeAccess(method, requestUrl, zone),
+      );
+
+      return identity;
+    }
+
     const bypass = devBypass(env, requestUrl);
 
     if (bypass?._tag === "Active") {
@@ -205,7 +219,7 @@ export const authenticateRequest = (
 
     if (token === "") return yield* new UnauthorizedError({ message: "Missing API key" });
 
-    const principal: Principal = yield* verifyAccessJwt(token, config);
+    const principal: AdmissiblePrincipal = yield* verifyAccessJwt(token, config);
     const platformAdmin = isAdmin(config, principal);
     const org = zone === "management" ? yield* targetOrg(slug, platformAdmin) : yield* CurrentOrg;
 

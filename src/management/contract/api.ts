@@ -13,6 +13,7 @@ import { CredentialsGroup } from "./credentials.ts";
 import { GrantsGroup } from "./grants.ts";
 import { MembersGroup } from "./members.ts";
 import { OAuthGroup } from "./oauth.ts";
+import { ManagementKeysGroup } from "./management-keys.ts";
 import { OrgsGroup } from "./orgs.ts";
 import { PeopleGroup } from "./people.ts";
 import { PricesGroup } from "./prices.ts";
@@ -39,4 +40,5 @@ export class ManagementApi extends HttpApi.make("management")
   .add(GrantsGroup)
   .add(SpendGroup)
   .add(PeopleGroup)
+  .add(ManagementKeysGroup)
   .prefix(MANAGEMENT_API_PREFIX) {}

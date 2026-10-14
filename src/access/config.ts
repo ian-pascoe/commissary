@@ -118,7 +118,9 @@ export const loadAccessConfig = (
 /** The platform admin allow-lists: lowercased emails and service token client ids. */
 export type AdminLists = Pick<AccessConfig, "adminEmails" | "adminServiceTokens">;
 
-/** Whether `principal` is a platform admin; a proxy key never is (its member's rights stay in the member's org). */
+/**
+ * Whether `principal` is a platform admin; a proxy key or a management key never is (their rights stay in their org).
+ */
 export const isAdmin = (lists: AdminLists, principal: Principal): boolean => {
   switch (principal.kind) {
     case "user":
@@ -126,6 +128,7 @@ export const isAdmin = (lists: AdminLists, principal: Principal): boolean => {
     case "service":
       return lists.adminServiceTokens.has(principal.commonName);
     case "key":
+    case "mkey":
       return false;
   }
 };

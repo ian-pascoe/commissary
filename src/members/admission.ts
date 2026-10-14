@@ -9,7 +9,7 @@
  * ControlPlane which change the registry holds. A failed push is logged and retried with the next change or admission.
  */
 import { Data, Effect } from "effect";
-import type { Principal } from "../access/principal.ts";
+import type { AdmissiblePrincipal } from "../access/principal.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import { controlPlaneOf, type OrgId } from "../platform/org.ts";
 import { platformOf } from "../platform/registry.ts";
@@ -26,7 +26,7 @@ const failure = (label: string) => (cause: unknown) =>
     message: `${label}: ${cause instanceof Error ? cause.message : "unknown error"}`,
   });
 
-export const principalRef = (principal: Principal): PrincipalRef =>
+export const principalRef = (principal: AdmissiblePrincipal): PrincipalRef =>
   principal.kind === "service"
     ? { kind: "service", clientId: principal.commonName }
     : { kind: "user", email: principal.email };
@@ -85,7 +85,7 @@ export const syncOrgIndex = (org: OrgId): Effect.Effect<void, never, WorkerEnv> 
  */
 export const admitPrincipal = (
   org: OrgId,
-  principal: Principal,
+  principal: AdmissiblePrincipal,
   autoJoin = true,
   client = false,
 ): Effect.Effect<Admission | ClientsUseProxyKeys | undefined, MembershipUnavailable, WorkerEnv> =>

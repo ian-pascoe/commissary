@@ -70,12 +70,18 @@ export const openableOrgs = (
     if (identity.platformAdmin) return yield* registry("listOrgs", (stub) => stub.listOrgs());
     const { principal } = identity;
 
-    const indexed =
-      principal.kind === "service"
-        ? yield* registry("orgOfServiceToken", (stub) =>
-            stub.orgOfServiceToken(principal.commonName),
-          ).pipe(Effect.map((org) => (org === undefined ? [] : [org])))
-        : yield* registry("orgsOfEmail", (stub) => stub.orgsOfEmail(principal.email));
+    // A management key belongs to its org alone: the org of the request, added below.
+    const indexed: ReadonlyArray<OrgRecord> = yield* Match.value(principal).pipe(
+      Match.discriminatorsExhaustive("kind")({
+        mkey: () => Effect.succeed([]),
+        service: (service) =>
+          registry("orgOfServiceToken", (stub) => stub.orgOfServiceToken(service.commonName)).pipe(
+            Effect.map((org) => (org === undefined ? [] : [org])),
+          ),
+        user: (person) => registry("orgsOfEmail", (stub) => stub.orgsOfEmail(person.email)),
+        key: (key) => registry("orgsOfEmail", (stub) => stub.orgsOfEmail(key.email)),
+      }),
+    );
 
     if (identity.role === undefined || indexed.some((org) => org.id === identity.org))
       return indexed;
