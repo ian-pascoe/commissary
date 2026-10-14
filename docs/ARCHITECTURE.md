@@ -1958,7 +1958,7 @@ Routes of the addressed org (`/org`, `/export`) and the account route (`DELETE /
 
 | Route         | Who                       | Does                                                                                                                        |
 | ------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `GET /org`    | member                    | the org (`OrgView`: id, slug, name, `usage_retention_days`)                                                                 |
+| `GET /org`    | org admin                 | the org (`OrgView`: id, slug, name, `usage_retention_days`)                                                                 |
 | `PATCH /org`  | org admin                 | `{usage_retention_days: <1..3650> \| null}`; `422` for any other number                                                     |
 | `GET /export` | org admin                 | the org's settings, masked shared config, price overrides, credential summaries, members, teams, tokens                     |
 | `DELETE /org` | org owner, platform admin | `{name}` retyped; deletes the org and everything it holds; `409 global_org`, `422 name_mismatch`, `503 deletion_incomplete` |

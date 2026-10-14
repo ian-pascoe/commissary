@@ -136,7 +136,7 @@ the Worker asks on every request: a removed member, or a member whose role was l
 | Allow or stop private credentials (`PATCH /membership`, `private_credentials`)                  |                   |     ✓     |              ✓               |       ✓        |
 | Give a service token a role above plain member; download a credential                           |                   |           | owner **service token** only |       ✓        |
 | List, create and rename orgs                                                                    |                   |           |                              |       ✓        |
-| Read the org (`GET /org`)                                                                       |         ✓         |     ✓     |              ✓               |       ✓        |
+| Read the org and its retention period (`GET /org`)                                              |                   |     ✓     |              ✓               |       ✓        |
 | Set the usage retention period (`PATCH /org`); download the org's export (`GET /export`)        |                   |     ✓     |              ✓               |       ✓        |
 | Delete the org (`DELETE /org`, retyping its name)                                               |                   |           |              ✓               |       ✓        |
 | Delete their own account (`DELETE /me`)                                                         |  ✓ (people only)  |     ✓     |              ✓               |       ✓        |
