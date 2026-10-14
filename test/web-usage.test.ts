@@ -95,13 +95,20 @@ describe("filters", () => {
     expect(breakdownOf("member").filter).toBe("member");
   });
 
-  it("offers a plain member the breakdowns that need no account or member names", () => {
+  it("offers a plain member the breakdowns that need no account, member or team names", () => {
     expect(breakdownsFor(false).map((breakdown) => breakdown.id)).toEqual([
       "model",
       "provider",
+      "key",
       "endpoint",
     ]);
-    expect(breakdownsFor(true).map((breakdown) => breakdown.id)).toContain("member");
+    expect(breakdownsFor(true).map((breakdown) => breakdown.id)).toEqual(
+      expect.arrayContaining(["member", "team", "key"]),
+    );
+    expect(breakdownOf("team").filter).toBe("team");
+    expect(breakdownOf("key").filter).toBeUndefined();
+    expect(readUsageSearch({ by: "key" }).by).toBe("key");
+    expect(readUsageSearch({ by: "team" }).by).toBe("team");
     expect(breakdownOf("auth", breakdownsFor(false)).id).toBe("model");
   });
 
