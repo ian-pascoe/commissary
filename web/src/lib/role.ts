@@ -76,6 +76,7 @@ export const PAGES: ReadonlyArray<PanelPage> = [
   { to: "/my-models", label: "My models", role: "member" },
   { to: "/proxy-keys", label: "Proxy keys", role: "member" },
   { to: "/limits", label: "Limits", role: "member" },
+  { to: "/management-keys", label: "Management keys", role: "admin" },
   { to: "/members", label: "Members", role: "admin" },
   { to: "/grants", label: "Grants", role: "admin" },
   { to: "/settings", label: "Settings", role: "admin" },

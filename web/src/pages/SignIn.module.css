@@ -1,0 +1,27 @@
+/* Sign in: one narrow column, like the org chooser. No shell bar: nobody is signed in yet. */
+.page {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: var(--space-8) var(--page-gutter);
+}
+
+.title {
+  font-size: var(--text-xl);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.providers {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.providers > button {
+  width: 100%;
+}
+
+.check {
+  min-height: 4.0625rem;
+}

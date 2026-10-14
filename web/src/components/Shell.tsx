@@ -15,9 +15,11 @@ import { AsyncResult } from "effect/reactivity";
 import { NotAllowed } from "../pages/NotAllowed.tsx";
 import { canManageMembers, homeFor, pageAllowed, pagesFor } from "../lib/role.ts";
 import { type RoleState, useRole } from "../lib/use-role.ts";
+import { canCreateOrg } from "../lib/hosted.ts";
 import { DeleteAccount } from "./DeleteAccount.tsx";
 import { Problem } from "./Kit.tsx";
 import styles from "./Shell.module.css";
+import { SignOut } from "./SignOut.tsx";
 import { ThemeMenu } from "./ThemeMenu.tsx";
 
 const RefreshIcon = ({
@@ -81,8 +83,10 @@ const OrgSwitcher = () => {
 
   if (!AsyncResult.isSuccess(me)) return null;
   const { orgs, platform_admin: platformAdmin } = me.value;
+  // Where the caller may create orgs (everyone on a hosted proxy) the chooser is worth a way in.
+  const creates = canCreateOrg(me.value);
 
-  if (orgs.length < 2 && !platformAdmin) return null;
+  if (orgs.length < 2 && !creates) return null;
   const current = orgs.find((org) => org.slug === panelOrgSlug);
 
   return (
@@ -106,10 +110,21 @@ const OrgSwitcher = () => {
             {org.name}
           </option>
         ))}
-        {platformAdmin ? <option value={CHOOSER}>All orgs…</option> : null}
+        {creates ? (
+          <option value={CHOOSER}>{platformAdmin ? "All orgs…" : "Your orgs…"}</option>
+        ) : null}
       </select>
     </label>
   );
+};
+
+/** Sign out, on a hosted proxy only: a self-hosted panel has no session of its own (Cloudflare Access holds it). */
+const AccountSignOut = () => {
+  const me = useAtomValue(meAtom);
+
+  return AsyncResult.isSuccess(me) && me.value.hosted === true ? (
+    <SignOut className={styles["signOut"]} />
+  ) : null;
 };
 
 /**
@@ -234,6 +249,7 @@ export const Shell = () => {
             ) : null}
             {role.kind === "ready" ? admin ? <OrgAdminRefresh /> : <UsageRefresh /> : null}
             <ThemeMenu />
+            <AccountSignOut />
           </div>
         </div>
       </header>

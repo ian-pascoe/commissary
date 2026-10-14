@@ -62,12 +62,15 @@ const NoteLine = ({ note, what }: { readonly note: Note | undefined; readonly wh
 );
 
 /** The new key, whole, with the warning that this is the only time it is shown. */
-const Reveal = ({
+export const Reveal = ({
   created,
   onDismiss,
+  label = "Proxy key",
 }: {
-  readonly created: CreatedProxyKey;
+  readonly created: { readonly id: string; readonly name: string; readonly key: string };
   readonly onDismiss: () => void;
+  /** What the key is called for assistive technology. */
+  readonly label?: string;
 }) => {
   const headingId = useId();
   const field = useRef<HTMLInputElement>(null);
@@ -90,7 +93,7 @@ const Reveal = ({
       </p>
       <div className={styles["secret"]}>
         <label className={kit["visuallyHidden"]} htmlFor={`${headingId}-key`}>
-          Proxy key
+          {label}
         </label>
         <input
           id={`${headingId}-key`}
