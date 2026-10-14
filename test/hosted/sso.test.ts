@@ -455,6 +455,22 @@ describe("signing in with an org's identity provider", () => {
     );
   });
 
+  it("takes a work email only with a solved bot check", async () => {
+    await oidcOrg("bot-org", "bot-corp.com");
+
+    const start = await call("/api/auth/sign-in/sso", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: ORIGIN,
+        "sec-fetch-site": "same-origin",
+      },
+      body: JSON.stringify({ email: "bea@bot-corp.com" }),
+    });
+
+    expect(start.status).toBe(403);
+  });
+
   it("does not redirect for a domain no org verified", async () => {
     const owner = await orgOwnedBy("pending-org");
     expect(
