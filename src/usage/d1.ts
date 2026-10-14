@@ -1,5 +1,5 @@
 /**
- * D1 persistence of usage records: schema mapping, the queue/record JSON shape, queries and retention.
+ * D1 persistence of usage records: schema mapping, the queue/record JSON shape, queries, retention and org deletion.
  *
  * Go source: internal/redisqueue/plugin.go (queuedUsageDetail: the export JSON, pipeline.md §8.4) and
  * internal/redisqueue/queue.go (PopOldest). Go keeps records in an in-process queue for 60 s; here they live in D1
@@ -473,7 +473,7 @@ const filterClauses = (
  * (`filter.liveAuthId`, resolved by the ControlPlane) is used directly, with no D1 read. Otherwise (a deleted
  * credential, or an index that matches nothing) the distinct `auth_id`s of the rows the other filters select are read
  * and indexed: a scan of the `usage_records_auth` index over the filtered range, bounded by the records kept
- * (`USAGE_RETENTION_DAYS`).
+ * (the org's usage retention period).
  */
 export const resolveAuthIds = async (
   db: D1Database,
@@ -931,20 +931,25 @@ export const PRUNE_BATCH = 5000;
 const MAX_PRUNE_BATCHES = 40;
 
 /**
- * Deletes records older than `cutoff` (epoch ms) of every org in bounded batches (retention is deployment-wide);
+ * Deletes the records of `org` older than `cutoff` (epoch ms) in bounded batches (an org's retention period, ADR 0027);
  * returns the number removed.
  */
-export const pruneUsageRecords = async (db: D1Database, cutoff: number): Promise<number> => {
+export const pruneUsageRecords = async (
+  db: D1Database,
+  org: OrgId,
+  cutoff: number,
+): Promise<number> => {
   let removed = 0;
 
   for (let batch = 0; batch < MAX_PRUNE_BATCHES; batch += 1) {
     const result = await db
       .prepare(
         `DELETE FROM usage_records WHERE request_id IN (
-           SELECT request_id FROM usage_records WHERE requested_at < ?1 ORDER BY requested_at ASC LIMIT ?2
+           SELECT request_id FROM usage_records WHERE org_id = ?3 AND requested_at < ?1
+           ORDER BY requested_at ASC LIMIT ?2
          )`,
       )
-      .bind(cutoff, PRUNE_BATCH)
+      .bind(cutoff, PRUNE_BATCH, org)
       .run();
 
     const changes = result.meta.changes ?? 0;
@@ -954,4 +959,33 @@ export const pruneUsageRecords = async (db: D1Database, cutoff: number): Promise
   }
 
   return removed;
+};
+
+/**
+ * Deletes every record of `org` (the org was deleted, ADR 0027) in bounded batches; answers how many were removed and
+ * whether any remain, so the caller can run it again.
+ */
+export const deleteOrgUsage = async (
+  db: D1Database,
+  org: OrgId,
+): Promise<{ readonly removed: number; readonly complete: boolean }> => {
+  let removed = 0;
+
+  for (let batch = 0; batch < MAX_PRUNE_BATCHES; batch += 1) {
+    const result = await db
+      .prepare(
+        `DELETE FROM usage_records WHERE request_id IN (
+           SELECT request_id FROM usage_records WHERE org_id = ?1 LIMIT ?2
+         )`,
+      )
+      .bind(org, PRUNE_BATCH)
+      .run();
+
+    const changes = result.meta.changes ?? 0;
+    removed += changes;
+
+    if (changes < PRUNE_BATCH) return { removed, complete: true };
+  }
+
+  return { removed, complete: false };
 };

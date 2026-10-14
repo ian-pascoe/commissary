@@ -93,7 +93,7 @@ export const NOT_APPLIED_RULES: ReadonlyArray<NotAppliedRule> = [
   },
   {
     key: "observability.usage.redis-usage-queue-retention-seconds",
-    reason: "The usage queue lives in D1; retention is USAGE_RETENTION_DAYS.",
+    reason: "The usage queue lives in D1; retention is the org's usage retention period.",
     path: ["observability", "usage", "redis-usage-queue-retention-seconds"],
     isSet: (config) => config.observability.usage["redis-usage-queue-retention-seconds"] !== 60,
   },

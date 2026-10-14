@@ -7,6 +7,11 @@
  * membership, and the registry only keeps a copy for routing, so {@link PlatformStore.replaceOrgIndex} rebuilds one org's
  * rows from what its ControlPlane says. The first start creates the org `global` (slug `default`), the deployment that
  * existed before orgs, so upgrading needs no settings and moves no data.
+ *
+ * An org also has its usage retention period here (`usage_retention_days`, ADR 0027), the one org setting the scheduled
+ * usage job reads for every org at once: a number of days, or NULL for none (keep records forever). The column is added
+ * on start when it is missing, so every org that existed before it starts with none and an upgrade deletes no history;
+ * an org created afterwards gets {@link DEFAULT_USAGE_RETENTION_DAYS}. Removing an org or a person deletes their rows.
  */
 import { Schema } from "effect";
 import { DEFAULT_ORG_SLUG, GLOBAL_ORG, newOrgId, OrgId, OrgSlug } from "./org.ts";
@@ -20,7 +25,15 @@ export interface OrgRecord {
   readonly name: string;
   /** Epoch milliseconds. */
   readonly createdAt: number;
+  /** How many days the org's usage records are kept; `null`: forever (ADR 0027). */
+  readonly usageRetentionDays: number | null;
 }
+
+/** New orgs keep their usage records this long unless an admin chooses otherwise (ADR 0027). */
+export const DEFAULT_USAGE_RETENTION_DAYS = 90;
+
+/** The longest retention period an org can choose (ten years); longer is "none". */
+export const MAX_USAGE_RETENTION_DAYS = 3650;
 
 /** `id`: the permanent id to create the org under (a caller that prepared the org's ControlPlane first); default: a fresh one. */
 export type OrgInput = {
@@ -36,7 +49,21 @@ export type OrgWriteResult =
   | { readonly ok: true; readonly org: OrgRecord }
   | {
       readonly ok: false;
-      readonly error: "invalid_slug" | "invalid_name" | "slug_taken" | "not_found";
+      readonly error:
+        | "invalid_slug"
+        | "invalid_name"
+        | "invalid_retention"
+        | "slug_taken"
+        | "not_found";
+      readonly message: string;
+    };
+
+/** What removing an org did: it can never remove `global`. */
+export type OrgRemoval =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly error: "global" | "not_found";
       readonly message: string;
     };
 
@@ -86,11 +113,14 @@ interface OrgRow {
   slug: string;
   name: string;
   created_at: number;
+  usage_retention_days: number | null;
   [column: string]: SqlStorageValue;
 }
 
 const SLUG_PROBLEM =
   "an org slug is 1 to 63 lowercase letters, digits and inner hyphens (it appears in URLs)";
+
+const RETENTION_PROBLEM = `a usage retention period is a whole number of days from 1 to ${MAX_USAGE_RETENTION_DAYS}, or none`;
 
 const NAME_PROBLEM = `an org name is 1 to ${MAX_NAME_LENGTH} characters without control characters`;
 
@@ -116,6 +146,15 @@ export class PlatformStore {
     );
     sql.exec(`CREATE INDEX IF NOT EXISTS org_members_by_org ON org_members (org_id)`);
 
+    // The retention period came after the table: an org stored without it keeps its records (NULL), as before.
+    if (
+      !sql
+        .exec<{ name: string }>(`PRAGMA table_info(orgs)`)
+        .toArray()
+        .some((column) => column.name === "usage_retention_days")
+    )
+      sql.exec(`ALTER TABLE orgs ADD COLUMN usage_retention_days INTEGER`);
+
     sql.exec(
       `CREATE TABLE IF NOT EXISTS org_service_tokens (
          client_id TEXT PRIMARY KEY,
@@ -125,7 +164,7 @@ export class PlatformStore {
     sql.exec(`CREATE INDEX IF NOT EXISTS org_service_tokens_by_org ON org_service_tokens (org_id)`);
     // The deployment that existed before orgs. Left alone when it exists (a platform admin may have renamed it).
     sql.exec(
-      `INSERT OR IGNORE INTO orgs (id, slug, name, created_at) VALUES (?, ?, ?, ?)`,
+      `INSERT OR IGNORE INTO orgs (id, slug, name, created_at, usage_retention_days) VALUES (?, ?, ?, ?, NULL)`,
       GLOBAL_ORG,
       DEFAULT_ORG_SLUG,
       "Default",
@@ -141,6 +180,7 @@ export class PlatformStore {
       slug: row.slug as OrgSlug,
       name: row.name,
       createdAt: row.created_at,
+      usageRetentionDays: row.usage_retention_days,
     };
   }
 
@@ -148,7 +188,7 @@ export class PlatformStore {
   listOrgs(): ReadonlyArray<OrgRecord> {
     return this.#sql
       .exec<OrgRow>(
-        `SELECT id, slug, name, created_at FROM orgs ORDER BY id <> '${GLOBAL_ORG}', created_at, id`,
+        `SELECT id, slug, name, created_at, usage_retention_days FROM orgs ORDER BY id <> '${GLOBAL_ORG}', created_at, id`,
       )
       .toArray()
       .map((row) => this.#record(row));
@@ -156,7 +196,10 @@ export class PlatformStore {
 
   orgBySlug(slug: string): OrgRecord | undefined {
     const row = this.#sql
-      .exec<OrgRow>(`SELECT id, slug, name, created_at FROM orgs WHERE slug = ?`, slug)
+      .exec<OrgRow>(
+        `SELECT id, slug, name, created_at, usage_retention_days FROM orgs WHERE slug = ?`,
+        slug,
+      )
       .toArray()[0];
 
     return row === undefined ? undefined : this.#record(row);
@@ -164,7 +207,10 @@ export class PlatformStore {
 
   orgById(id: string): OrgRecord | undefined {
     const row = this.#sql
-      .exec<OrgRow>(`SELECT id, slug, name, created_at FROM orgs WHERE id = ?`, id)
+      .exec<OrgRow>(
+        `SELECT id, slug, name, created_at, usage_retention_days FROM orgs WHERE id = ?`,
+        id,
+      )
       .toArray()[0];
 
     return row === undefined ? undefined : this.#record(row);
@@ -185,11 +231,12 @@ export class PlatformStore {
     const id = input.id ?? newOrgId();
 
     this.#sql.exec(
-      `INSERT INTO orgs (id, slug, name, created_at) VALUES (?, ?, ?, ?)`,
+      `INSERT INTO orgs (id, slug, name, created_at, usage_retention_days) VALUES (?, ?, ?, ?, ?)`,
       id,
       input.slug,
       name,
       now,
+      DEFAULT_USAGE_RETENTION_DAYS,
     );
 
     const org = this.orgById(id);
@@ -227,11 +274,60 @@ export class PlatformStore {
     return { ok: true, org: { ...current, slug: nextSlug, name: nextName } };
   }
 
+  /**
+   * Sets how long the usage records of org `id` are kept: whole days from 1 to {@link MAX_USAGE_RETENTION_DAYS}, or
+   * `null` for forever.
+   */
+  setUsageRetention(id: string, days: number | null): OrgWriteResult {
+    const current = this.orgById(id);
+
+    if (current === undefined)
+      return { ok: false, error: "not_found", message: "no org has this id" };
+
+    if (days !== null && (!Number.isInteger(days) || days < 1 || days > MAX_USAGE_RETENTION_DAYS))
+      return { ok: false, error: "invalid_retention", message: RETENTION_PROBLEM };
+
+    this.#sql.exec(`UPDATE orgs SET usage_retention_days = ? WHERE id = ?`, days, id);
+
+    return { ok: true, org: { ...current, usageRetentionDays: days } };
+  }
+
+  /**
+   * Deletes org `id` and its index rows at once (ADR 0027): the org leaves the list, its slug is free to take again,
+   * and nobody is indexed in it. The caller has already wiped the org's data. `global` is never removed.
+   */
+  deleteOrg(id: string): OrgRemoval {
+    if (id === GLOBAL_ORG)
+      return { ok: false, error: "global", message: "the first org cannot be deleted" };
+
+    if (this.orgById(id) === undefined)
+      return { ok: false, error: "not_found", message: "no org has this id" };
+
+    this.#sql.exec(`DELETE FROM org_members WHERE org_id = ?`, id);
+    this.#sql.exec(`DELETE FROM org_service_tokens WHERE org_id = ?`, id);
+    this.#sql.exec(`DELETE FROM orgs WHERE id = ?`, id);
+
+    return { ok: true };
+  }
+
+  /** Deletes the index rows of a person in every org (their account was deleted); answers how many orgs listed them. */
+  removePerson(email: string): number {
+    const normalized = normalizeEmail(email);
+
+    const listed = this.#sql
+      .exec<{ n: number }>(`SELECT COUNT(*) AS n FROM org_members WHERE email = ?`, normalized)
+      .one().n;
+
+    this.#sql.exec(`DELETE FROM org_members WHERE email = ?`, normalized);
+
+    return listed;
+  }
+
   /** The orgs `email` belongs to, in listing order. */
   orgsOfEmail(email: string): ReadonlyArray<OrgRecord> {
     return this.#sql
       .exec<OrgRow>(
-        `SELECT o.id, o.slug, o.name, o.created_at FROM orgs o
+        `SELECT o.id, o.slug, o.name, o.created_at, o.usage_retention_days FROM orgs o
          JOIN org_members m ON m.org_id = o.id WHERE m.email = ? ORDER BY o.id <> '${GLOBAL_ORG}', o.created_at, o.id`,
         normalizeEmail(email),
       )
@@ -243,7 +339,7 @@ export class PlatformStore {
   orgOfServiceToken(clientId: string): OrgRecord | undefined {
     const row = this.#sql
       .exec<OrgRow>(
-        `SELECT o.id, o.slug, o.name, o.created_at FROM orgs o
+        `SELECT o.id, o.slug, o.name, o.created_at, o.usage_retention_days FROM orgs o
          JOIN org_service_tokens t ON t.org_id = o.id WHERE t.client_id = ?`,
         clientId.trim(),
       )

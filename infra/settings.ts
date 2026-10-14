@@ -34,7 +34,6 @@ export interface Settings {
   readonly sessionDuration: string;
   /** Optional header Access reads a JSON service token from (single-header mode), e.g. `x-api-key`. */
   readonly serviceTokenHeader: string;
-  readonly usageRetentionDays: string;
   readonly metaMintUrl: string;
   readonly cpuMs: number;
   /** Local development identity (`alchemy dev` only). */
@@ -134,7 +133,6 @@ export const readSettings = (dev: boolean, stage: string) =>
       ),
       sessionDuration: (yield* text("ACCESS_SESSION_DURATION", "24h")).trim(),
       serviceTokenHeader: (yield* text("ACCESS_SERVICE_TOKEN_HEADER")).trim(),
-      usageRetentionDays: (yield* text("USAGE_RETENTION_DAYS", "30")).trim(),
       metaMintUrl: (yield* text("META_MINT_URL")).trim(),
       cpuMs: yield* Config.Number("CF_LLM_PROXY_CPU_MS").pipe(Config.withDefault(300_000)),
       devBypass: (yield* text("ACCESS_DEV_BYPASS", "dev@example.com")).trim(),
