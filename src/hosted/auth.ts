@@ -1,15 +1,22 @@
 /**
  * Sign-in on a hosted proxy (ADR 0026): Better Auth's core with GitHub and Google as social providers, its people and
- * sessions in D1 (`USAGE`, tables `auth_*` from `migrations/0008_hosted_auth.sql`). No plugins: orgs, members and teams
- * stay in the org's ControlPlane, and a session only says which verified email signed in. New in the Workers port.
+ * sessions in D1 (`USAGE`, tables `auth_*` from `migrations/0008_hosted_auth.sql`). Orgs, members and teams stay in the
+ * org's ControlPlane, and a session only says which verified email signed in. New in the Workers port.
  *
  * Only an email the provider reports as verified becomes an identity (`validateUserInfo`); the provider's tokens are
  * not kept (the proxy never calls GitHub or Google on the person's behalf), nor the browser's address or user agent.
+ *
+ * An org can add its own identity provider (issue #76, `src/sso/`) through Better Auth's SSO plugin, whose providers
+ * come from the orgs' ControlPlanes (`sso-adapter.ts`), never from D1. Such a sign-in is accepted only for an email of
+ * a domain the org verified, makes the person a member of the org (unless an org admin removed them), and its email
+ * counts as verified: the org proved it controls the domain. GitHub and Google are refused for an email of a domain
+ * whose org requires single sign-on.
  *
  * Better Auth is imported on first use: a self-hosted proxy never loads it.
  */
 import type { betterAuth, BetterAuthOptions } from "better-auth";
 import { SIGN_IN_PAGE_PATH } from "../management/contract/sign-in.ts";
+import { type ProviderLookup, ssoAwareAdapter } from "./sso-adapter.ts";
 
 /** Where Better Auth's routes live; `routes.ts` lets through only {@link AUTH_PATHS}. */
 export const AUTH_BASE_PATH = "/api/auth";
@@ -78,11 +85,35 @@ export const authConfigurationProblem = (env: AuthEnv): string | undefined => {
   return undefined;
 };
 
-/** Hooks the hosted gate adds to the sign-in (suspension, `suspension.ts`). */
+/** The refusal of a GitHub or Google sign-in for an email whose domain's org requires single sign-on. */
+export const SSO_REQUIRED = "sso_required";
+
+/** A refusal of a sign-in through an org's identity provider (`AuthHooks.admitThroughSso`). */
+export interface SignInRefusal {
+  readonly error: string;
+  readonly errorDescription: string;
+}
+
+/** Hooks the hosted gate adds to the sign-in (suspension, `suspension.ts`; single sign-on, `session.ts`). */
 export interface AuthHooks {
   /** Whether a session may start for the person with this (verified, lowercased) email. */
   readonly maySignIn?: (email: string) => Promise<boolean>;
+  /** The identity provider with this Better Auth provider id (`sso/provider.ts`). */
+  readonly ssoProvider?: ProviderLookup;
+  /**
+   * Admits the person the identity provider `providerId` signed in with this (lowercased) email to its org, or says
+   * why not. Without the hook, single sign-on is refused.
+   */
+  readonly admitThroughSso?: (
+    providerId: string,
+    email: string,
+  ) => Promise<SignInRefusal | undefined>;
+  /** Whether the org that verified this (lowercased) email's domain requires single sign-on for it. */
+  readonly ssoRequired?: (email: string) => Promise<boolean>;
 }
+
+/** Better Auth's methods of a sign-in through an org's identity provider. */
+const SSO_METHODS = new Set(["sso-oidc", "sso-saml"]);
 
 /** Better Auth's options for the deployment at `origin` (`https://<host>`). */
 export const authOptions = (env: AuthEnv, origin: string, hooks: AuthHooks = {}) =>
@@ -103,13 +134,29 @@ export const authOptions = (env: AuthEnv, origin: string, hooks: AuthHooks = {})
     ),
     user: {
       modelName: AUTH_TABLES.user,
-      validateUserInfo: ({ user }) =>
-        user.emailVerified === true
-          ? undefined
-          : {
-              error: EMAIL_NOT_VERIFIED,
-              errorDescription: "Sign in with an account whose email the provider has verified.",
-            },
+      validateUserInfo: async ({ user, source }) => {
+        const email = typeof user.email === "string" ? user.email.toLowerCase() : "";
+
+        // The org verified the email's domain, which is what makes it verified (`admitThroughSso`).
+        if (SSO_METHODS.has(source.method))
+          return source.sso === undefined || hooks.admitThroughSso === undefined
+            ? { error: "sso_unavailable", errorDescription: "Single sign-on is not available." }
+            : await hooks.admitThroughSso(source.sso.providerId, email);
+
+        if (user.emailVerified !== true)
+          return {
+            error: EMAIL_NOT_VERIFIED,
+            errorDescription: "Sign in with an account whose email the provider has verified.",
+          };
+
+        if (hooks.ssoRequired !== undefined && (await hooks.ssoRequired(email)))
+          return {
+            error: SSO_REQUIRED,
+            errorDescription: "Your organization requires you to sign in with your work email.",
+          };
+
+        return undefined;
+      },
     },
     session: { modelName: AUTH_TABLES.session },
     account: {
@@ -119,6 +166,15 @@ export const authOptions = (env: AuthEnv, origin: string, hooks: AuthHooks = {})
     },
     verification: { modelName: AUTH_TABLES.verification },
     databaseHooks: {
+      user: {
+        create: {
+          // Only after `validateUserInfo` admitted the person through their org's identity provider.
+          before: async (user, context) =>
+            context?.path?.startsWith(SSO_PATH_PREFIX) === true
+              ? { data: { ...user, emailVerified: true } }
+              : { data: user },
+        },
+      },
       account: {
         create: { before: async (account) => ({ data: withoutProviderTokens(account) }) },
         update: { before: async (account) => ({ data: withoutProviderTokens(account) }) },
@@ -156,6 +212,9 @@ const withoutProviderTokens = <A extends Record<string, unknown>>(account: A): A
   refreshTokenExpiresAt: null,
 });
 
+/** Where Better Auth's SSO plugin has its routes, relative to {@link AUTH_BASE_PATH}. */
+const SSO_PATH_PREFIX = "/sso/";
+
 /** The lowercased email of the person a session is about to start for. */
 const sessionEmail = async (
   context: { readonly context: { readonly internalAdapter: unknown } } | null,
@@ -173,7 +232,49 @@ const sessionEmail = async (
   return user?.email.toLowerCase();
 };
 
-export type HostedAuth = ReturnType<typeof betterAuth<ReturnType<typeof authOptions>>>;
+/** What the Worker uses of its Better Auth instance. */
+export interface HostedAuth {
+  readonly handler: (request: Request) => Promise<Response>;
+  readonly api: {
+    readonly getSession: (input: {
+      readonly headers: Headers;
+    }) => ReturnType<
+      ReturnType<typeof betterAuth<ReturnType<typeof authOptions>>>["api"]["getSession"]
+    >;
+  };
+}
+
+/**
+ * Better Auth with the SSO plugin: identity providers from `hooks.ssoProvider` (none without it), domains the orgs
+ * verified themselves (`sso-routes.ts`), SAML only signed, timed and in answer to the proxy's own request.
+ */
+const buildAuth = async (env: AuthEnv, origin: string, hooks: AuthHooks): Promise<HostedAuth> => {
+  const [{ betterAuth: make }, { sso }, { getAdapter }] = await Promise.all([
+    import("better-auth"),
+    import("@better-auth/sso"),
+    import("better-auth/db/adapter"),
+  ]);
+
+  const options = authOptions(env, origin, hooks);
+
+  const plugins = [
+    sso({
+      domainVerification: { enabled: true },
+      organizationProvisioning: { disabled: true },
+      saml: {
+        enableInResponseToValidation: true,
+        allowIdpInitiated: false,
+        requireTimestamps: true,
+        algorithms: { onDeprecated: "reject" },
+      },
+    }),
+  ];
+
+  const base = await getAdapter({ ...options, plugins });
+  const lookup = hooks.ssoProvider ?? (async () => undefined);
+
+  return make({ ...options, plugins, database: () => ssoAwareAdapter(base, lookup) });
+};
 
 const instances = new WeakMap<AuthEnv, Map<string, Promise<HostedAuth>>>();
 
@@ -197,9 +298,7 @@ export const hostedAuth = (
 
   if (existing !== undefined) return existing;
 
-  const auth = import("better-auth").then(({ betterAuth: make }) =>
-    make(authOptions(env, origin, hooks)),
-  );
+  const auth = buildAuth(env, origin, hooks);
 
   byOrigin.set(origin, auth);
 

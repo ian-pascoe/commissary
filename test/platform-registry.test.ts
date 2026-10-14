@@ -351,6 +351,84 @@ describe("removal", () => {
   });
 });
 
+describe("single sign-on domains", () => {
+  const setup = async () => {
+    const platform = fresh();
+    const acme = await platform.createOrg({ slug: "acme", name: "Acme" }, NOW);
+    const beta = await platform.createOrg({ slug: "beta", name: "Beta" }, NOW + 1);
+
+    if (!acme.ok || !beta.ok) throw new Error("setup");
+
+    return { platform, acme: acme.org, beta: beta.org };
+  };
+
+  it("gives a verified domain to one org only, until that org releases it", async () => {
+    const { platform, acme, beta } = await setup();
+
+    expect(await platform.ssoDomain("acme.com")).toBeUndefined();
+    expect(await platform.claimSsoDomain("acme.com", acme.id)).toEqual({ ok: true });
+    // Claiming again is harmless for the holder, refused for anyone else.
+    expect(await platform.claimSsoDomain("acme.com", acme.id)).toEqual({ ok: true });
+    expect(await platform.claimSsoDomain("acme.com", beta.id)).toMatchObject({
+      ok: false,
+      error: "domain_taken",
+    });
+    expect(await platform.ssoDomain("acme.com")).toEqual({ org: acme.id, requireSso: false });
+
+    // Only the holder releases it.
+    await platform.releaseSsoDomain("acme.com", beta.id);
+    expect((await platform.ssoDomain("acme.com"))?.org).toBe(acme.id);
+    await platform.releaseSsoDomain("acme.com", acme.id);
+    expect(await platform.ssoDomain("acme.com")).toBeUndefined();
+    expect(await platform.claimSsoDomain("acme.com", beta.id)).toEqual({ ok: true });
+  });
+
+  it("refuses a claim for an org it does not list", async () => {
+    const { platform } = await setup();
+
+    expect(await platform.claimSsoDomain("ghost.com", "org-ghost")).toMatchObject({
+      ok: false,
+      error: "not_found",
+    });
+  });
+
+  it("records whether the holder requires single sign-on for the domain", async () => {
+    const { platform, acme, beta } = await setup();
+
+    await platform.claimSsoDomain("acme.com", acme.id);
+    expect(await platform.setSsoDomainRequired("acme.com", beta.id, true)).toBe(false);
+    expect(await platform.setSsoDomainRequired("acme.com", acme.id, true)).toBe(true);
+    expect(await platform.ssoDomain("acme.com")).toEqual({ org: acme.id, requireSso: true });
+    expect(await platform.setSsoDomainRequired("acme.com", acme.id, false)).toBe(true);
+    expect((await platform.ssoDomain("acme.com"))?.requireSso).toBe(false);
+    expect(await platform.setSsoDomainRequired("other.com", acme.id, true)).toBe(false);
+  });
+
+  it("frees the domains of a deleted org", async () => {
+    const { platform, acme, beta } = await setup();
+
+    await platform.claimSsoDomain("acme.com", acme.id);
+    await platform.claimSsoDomain("beta.com", beta.id);
+    expect(await platform.deleteOrg(acme.id)).toEqual({ ok: true });
+
+    expect(await platform.ssoDomain("acme.com")).toBeUndefined();
+    expect((await platform.ssoDomain("beta.com"))?.org).toBe(beta.id);
+  });
+
+  it("adds its table to a registry stored before single sign-on", async () => {
+    const platform = fresh();
+
+    await platform.listOrgs();
+    await runInDurableObject(platform, (_instance, state) => {
+      state.storage.sql.exec("DROP TABLE sso_domains");
+    });
+    await evictDurableObject(platform);
+
+    expect(await platform.claimSsoDomain("acme.com", GLOBAL_ORG)).toEqual({ ok: true });
+    expect((await platform.ssoDomain("acme.com"))?.org).toBe(GLOBAL_ORG);
+  });
+});
+
 describe("catalog refresh lease", () => {
   it("is held by one refresh at a time and given back with its token", async () => {
     const platform = fresh();

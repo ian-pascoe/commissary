@@ -21,6 +21,7 @@ import { ProxyKeysGroup } from "./proxy-keys.ts";
 import { RoutingGroup } from "./routing.ts";
 import { SettingsGroup } from "./settings.ts";
 import { SpendGroup } from "./spend.ts";
+import { SsoGroup } from "./sso.ts";
 import { UsageGroupApi } from "./usage.ts";
 
 export const MANAGEMENT_API_PREFIX = "/v8/management";
@@ -41,4 +42,5 @@ export class ManagementApi extends HttpApi.make("management")
   .add(SpendGroup)
   .add(PeopleGroup)
   .add(ManagementKeysGroup)
+  .add(SsoGroup)
   .prefix(MANAGEMENT_API_PREFIX) {}

@@ -22,6 +22,8 @@ import {
   type PersonRecord,
   PlatformStore,
   type SignInState,
+  type SsoDomainClaim,
+  type SsoDomainRecord,
   type Standing,
 } from "./registry-store.ts";
 
@@ -123,6 +125,29 @@ export class Platform extends DurableObject<Env> {
 
   emailsOfOrg(org: string): ReadonlyArray<string> {
     return this.#store.emailsOfOrg(org);
+  }
+
+  // --- single sign-on domains of a hosted proxy (issue #76, `src/sso/`) -------------------------------------------
+
+  /** Gives a verified email domain (lowercased) to `org`; refused while another org holds it. */
+  claimSsoDomain(domain: string, org: string): SsoDomainClaim {
+    return this.#store.claimSsoDomain(domain, org);
+  }
+
+  releaseSsoDomain(domain: string, org: string): void {
+    this.#store.releaseSsoDomain(domain, org);
+  }
+
+  setSsoDomainRequired(domain: string, org: string, required: boolean): boolean {
+    return this.#store.setSsoDomainRequired(domain, org, required);
+  }
+
+  ssoDomainsOf(org: string): ReadonlyArray<string> {
+    return this.#store.ssoDomainsOf(org);
+  }
+
+  ssoDomain(domain: string): SsoDomainRecord | undefined {
+    return this.#store.ssoDomain(domain);
   }
 
   /** The shared model catalog's refresh lease (`SweepLeaseStore`): taken at the start of a download. */

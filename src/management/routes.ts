@@ -19,7 +19,7 @@
  * `settings-routes.ts`; Claude reset
  * grants (`/credentials/reset-grants`) in `reset-grant-routes.ts`; the model catalog's status and on-demand refresh (`/models/catalog`) in
  * `catalog-routes.ts`; the org's members, teams and service tokens (`/members`, `/membership`, `/teams`,
- * `/service-tokens`) in `member-routes.ts`.
+ * `/service-tokens`) in `member-routes.ts`; a hosted proxy's per-org single sign-on (`/sso*`) in `sso-routes.ts`.
  */
 import { Effect, Layer } from "effect";
 import {
@@ -47,6 +47,7 @@ import { orgRoutes } from "./org-routes.ts";
 import { grantRoutes, myModelsHandler } from "./grant-routes.ts";
 import { peopleRoutes } from "./people-routes.ts";
 import { managementKeyRoutes } from "./management-key-routes.ts";
+import { ssoRoutes } from "./sso-routes.ts";
 import { priceRoutes } from "./price-routes.ts";
 import { proxyKeyRoutes } from "./proxy-key-routes.ts";
 import { spendRoutes } from "./spend-routes.ts";
@@ -99,6 +100,7 @@ export const ManagementRoutes = HttpRouter.addAll(
       ...proxyKeyRoutes,
       ...spendRoutes,
       ...managementKeyRoutes,
+      ...ssoRoutes,
       HttpRouter.route("GET", `${BASE}/credentials/models`, bound(credentialModelsHandler)),
       HttpRouter.route("POST", `${BASE}/credentials/batch`, credentialsBatchHandler),
       HttpRouter.route("POST", `${BASE}/credentials/quota`, bound(quotaCheckHandler)),

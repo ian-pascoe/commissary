@@ -15,6 +15,11 @@
  *
  * A hosted proxy (ADR 0026) also keeps its people here: who signed up (and the Personal org they got), how many orgs
  * each may own, and who a platform admin suspended; orgs record who created them and whether they are suspended.
+ *
+ * Its per-org single sign-on (issue #76) keeps the domain-to-org index here (`sso_domains`): which org verified each
+ * email domain, so a sign-in finds the org's identity provider from an email, one verified domain belongs to at most
+ * one org, and GitHub and Google sign-in can be refused for a domain whose org requires single sign-on. The org's
+ * ControlPlane stays authoritative for its identity provider and its domains (`sso/store.ts`).
  */
 import { Schema } from "effect";
 import { DEFAULT_ORG_SLUG, GLOBAL_ORG, newOrgId, OrgId, OrgSlug } from "./org.ts";
@@ -133,6 +138,17 @@ export interface Standing {
   readonly org: "active" | "suspended" | "missing";
   readonly person: "active" | "suspended";
 }
+
+/** A verified single sign-on domain: the org that verified it and whether that org requires single sign-on for it. */
+export interface SsoDomainRecord {
+  readonly org: OrgId;
+  readonly requireSso: boolean;
+}
+
+/** What claiming a verified domain for an org did. */
+export type SsoDomainClaim =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly error: "domain_taken" | "not_found"; readonly message: string };
 
 /** The most orgs a platform admin may let one person own. */
 export const MAX_ORG_LIMIT = 1000;
@@ -255,6 +271,15 @@ export class PlatformStore {
          suspended_at INTEGER
        )`,
     );
+    // Single sign-on (issue #76): which org verified each email domain.
+    sql.exec(
+      `CREATE TABLE IF NOT EXISTS sso_domains (
+         domain TEXT PRIMARY KEY,
+         org_id TEXT NOT NULL,
+         require_sso INTEGER NOT NULL DEFAULT 0
+       )`,
+    );
+    sql.exec(`CREATE INDEX IF NOT EXISTS sso_domains_by_org ON sso_domains (org_id)`);
     // The deployment that existed before orgs. Left alone when it exists (a platform admin may have renamed it).
     sql.exec(
       `INSERT OR IGNORE INTO orgs (id, slug, name, created_at, usage_retention_days) VALUES (?, ?, ?, ?, NULL)`,
@@ -411,6 +436,7 @@ export class PlatformStore {
     this.#sql.exec(`DELETE FROM org_members WHERE org_id = ?`, id);
     this.#sql.exec(`DELETE FROM org_service_tokens WHERE org_id = ?`, id);
     this.#sql.exec(`UPDATE people SET personal_org = NULL WHERE personal_org = ?`, id);
+    this.#sql.exec(`DELETE FROM sso_domains WHERE org_id = ?`, id);
     this.#sql.exec(`DELETE FROM orgs WHERE id = ?`, id);
 
     return { ok: true };
@@ -652,6 +678,71 @@ export class PlatformStore {
         found === undefined ? "missing" : found.suspendedAt === undefined ? "active" : "suspended",
       person: person?.suspended_at == null ? "active" : "suspended",
     };
+  }
+
+  /**
+   * Gives the verified email domain `domain` (lowercased by the caller) to `org`: refused (`domain_taken`) while another
+   * org holds it. Claiming a domain the org holds already changes nothing.
+   */
+  claimSsoDomain(domain: string, org: string): SsoDomainClaim {
+    if (this.orgById(org) === undefined)
+      return { ok: false, error: "not_found", message: "no org has this id" };
+    const holder = this.ssoDomain(domain);
+
+    if (holder !== undefined && holder.org !== org)
+      return {
+        ok: false,
+        error: "domain_taken",
+        message: `another org has verified the domain ${domain}`,
+      };
+
+    if (holder === undefined)
+      this.#sql.exec(`INSERT INTO sso_domains (domain, org_id) VALUES (?, ?)`, domain, org);
+
+    return { ok: true };
+  }
+
+  /** Frees `domain` when `org` holds it (the org removed it); anyone else's domain is left alone. */
+  releaseSsoDomain(domain: string, org: string): void {
+    this.#sql.exec(`DELETE FROM sso_domains WHERE domain = ? AND org_id = ?`, domain, org);
+  }
+
+  /** Whether `org` requires single sign-on for `domain`; `false` when the org does not hold the domain. */
+  setSsoDomainRequired(domain: string, org: string, required: boolean): boolean {
+    return (
+      this.#sql.exec(
+        `UPDATE sso_domains SET require_sso = ? WHERE domain = ? AND org_id = ?`,
+        required ? 1 : 0,
+        domain,
+        org,
+      ).rowsWritten > 0
+    );
+  }
+
+  /** The domains `org` verified, sorted. */
+  ssoDomainsOf(org: string): ReadonlyArray<string> {
+    return this.#sql
+      .exec<{ domain: string }>(
+        `SELECT domain FROM sso_domains WHERE org_id = ? ORDER BY domain`,
+        org,
+      )
+      .toArray()
+      .map((row) => row.domain);
+  }
+
+  /** The org that verified `domain`, if any. */
+  ssoDomain(domain: string): SsoDomainRecord | undefined {
+    const row = this.#sql
+      .exec<{ org_id: string; require_sso: number }>(
+        `SELECT org_id, require_sso FROM sso_domains WHERE domain = ?`,
+        domain,
+      )
+      .toArray()[0];
+
+    // SAFETY: only ids of orgs the registry lists are inserted (`claimSsoDomain` checks it).
+    return row === undefined
+      ? undefined
+      : { org: row.org_id as OrgId, requireSso: row.require_sso === 1 };
   }
 
   /** The emails the index lists in `org` (whom a suspension signs out). */
