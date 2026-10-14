@@ -11,6 +11,7 @@
     "catalog:sync": "node tools/sync-models-dev-catalog.ts",
     "ci:setup": "alchemy deploy --config stacks/github.ts --stage ci --profile admin --adopt && alchemy state read cf-llm-proxy-github/ci/output --profile admin",
     "deploy": "alchemy deploy",
+    "deploy:hosted": "alchemy deploy --stage hosted --env-file .env.hosted",
     "destroy": "alchemy destroy",
     "dev": "alchemy dev",
     "format": "oxfmt",

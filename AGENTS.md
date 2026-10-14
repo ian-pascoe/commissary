@@ -5,7 +5,7 @@ TypeScript + Effect v4 (`effect@4.0.2`) port of [CLIProxyAPI](https://github.com
 ## Commands
 
 - Run before finishing: `pnpm typecheck && pnpm lint && pnpm test && pnpm smoke`; `pnpm format` formats.
-- Never run `pnpm run deploy`/`pnpm destroy` (Alchemy) against a real account unless asked. CI deploys previews (`pr-<number>`) and production (`main`): `docs/DEPLOY.md`.
+- Never run `pnpm run deploy`/`pnpm destroy` (Alchemy) against a real account unless asked. CI deploys previews (`pr-<number>`) and, from `main`, production (`prod`, self-hosted) and the hosted proxy (`hosted`): `docs/DEPLOY.md`.
 - Commits follow Conventional Commits (`feat:`, `fix:`, `chore:`, …); Husky hooks format/lint staged files, check commit messages and run `pnpm typecheck && pnpm lint` before push. Fix hook failures instead of bypassing them.
 
 ## Go reference

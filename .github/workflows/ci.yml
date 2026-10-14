@@ -1,7 +1,8 @@
 # Checks every pull request and push to main, then deploys:
 # - pull requests from this repository: a preview stage `pr-<number>` on its workers.dev URL (destroyed on close); with
 #   the label `hosted-preview` the preview is a hosted proxy (PROXY_MODE=hosted, ADR 0026), without it a self-hosted one;
-# - main: the `prod` stage (PROXY_MODE from the production environment, self-hosted when unset).
+# - main: the `prod` stage (PROXY_MODE from the production environment, self-hosted when unset) and, once the `hosted`
+#   environment is set up (`.env.hosted`, `pnpm ci:setup`), the `hosted` stage: a hosted proxy on its own domain.
 # Deploy setup (environments, secrets, variables): docs/DEPLOY.md.
 name: ci
 
@@ -160,12 +161,7 @@ jobs:
         run: pnpm web:build
       - name: Deploy
         id: deploy
-        run: |
-          pnpm run deploy --stage "$STAGE" --no-input --yes | tee "$RUNNER_TEMP/deploy.log"
-          # The deploy ends by printing the stack outputs (`url: 'https://…',`).
-          url="$(sed -nE "s/^ *url: '(https:[^']+)',?$/\1/p" "$RUNNER_TEMP/deploy.log" | tail -n 1)"
-          if [ -z "$url" ]; then echo "::error::the deploy printed no url output" >&2; exit 1; fi
-          echo "url=$url" >> "$GITHUB_OUTPUT"
+        run: tools/deploy-stage.sh "$STAGE"
       - name: Check the deploy and Access
         if: env.PROXY_MODE != 'hosted'
         env:
@@ -188,6 +184,68 @@ jobs:
         run: |
           if [ "$PROXY_MODE" = hosted ]; then how="a hosted proxy: sign in with GitHub or Google"; else how="sign in with Access"; fi
           tools/preview-comment.sh "$PR" "Preview \`$STAGE\` deployed at $URL (commit ${SHA:0:8}), $how; storage starts empty and is destroyed when the pull request closes."
+
+  # The hosted proxy (ADR 0026) deployed from main next to production: stage `hosted`, settings in the `hosted`
+  # environment (docs/DEPLOY.md "Hosted production"). Skipped until that environment names a domain.
+  deploy-hosted:
+    name: deploy hosted
+    needs: [static, test, smoke]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    environment:
+      name: hosted
+      url: ${{ steps.deploy.outputs.url }}
+    concurrency:
+      group: deploy-hosted
+      cancel-in-progress: false
+    env:
+      STAGE: hosted
+      CONFIGURED: ${{ vars.CF_LLM_PROXY_DOMAIN != '' }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CF_LLM_PROXY_DOMAIN: ${{ vars.CF_LLM_PROXY_DOMAIN }}
+      PLATFORM_ADMIN_EMAILS: ${{ vars.PLATFORM_ADMIN_EMAILS }}
+      SECRETS_KEY_GENERATION: ${{ vars.SECRETS_KEY_GENERATION }}
+      SECRETS_KEY_PREVIOUS_GENERATION: ${{ vars.SECRETS_KEY_PREVIOUS_GENERATION }}
+      # Always hosted: infra/settings.ts refuses the stage otherwise.
+      PROXY_MODE: hosted
+      SIGN_IN_GITHUB_CLIENT_ID: ${{ vars.SIGN_IN_GITHUB_CLIENT_ID }}
+      SIGN_IN_GITHUB_CLIENT_SECRET: ${{ secrets.SIGN_IN_GITHUB_CLIENT_SECRET }}
+      SIGN_IN_GOOGLE_CLIENT_ID: ${{ vars.SIGN_IN_GOOGLE_CLIENT_ID }}
+      SIGN_IN_GOOGLE_CLIENT_SECRET: ${{ secrets.SIGN_IN_GOOGLE_CLIENT_SECRET }}
+      TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+      TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+      OWNED_ORG_LIMIT: ${{ vars.OWNED_ORG_LIMIT }}
+      ORG_RATE_LIMIT: ${{ vars.ORG_RATE_LIMIT }}
+      ORG_RATE_LIMIT_NAMESPACE_ID: ${{ vars.ORG_RATE_LIMIT_NAMESPACE_ID }}
+    steps:
+      - name: Not set up
+        if: env.CONFIGURED != 'true'
+        run: echo "::notice::the hosted environment sets no CF_LLM_PROXY_DOMAIN; skipping the hosted deploy (docs/DEPLOY.md)"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.CONFIGURED == 'true'
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        if: env.CONFIGURED == 'true'
+        with:
+          # No dependency cache in jobs holding deploy credentials (cache poisoning).
+          cache: "false"
+      - name: Build the control panel
+        if: env.CONFIGURED == 'true'
+        run: pnpm web:build
+      - name: Deploy
+        id: deploy
+        if: env.CONFIGURED == 'true'
+        run: tools/deploy-stage.sh "$STAGE"
+      - name: Check the hosted deploy
+        if: env.CONFIGURED == 'true'
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: tools/check-hosted-deploy.sh "$URL"
 
   destroy-preview:
     name: destroy preview
