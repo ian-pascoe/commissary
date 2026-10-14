@@ -74,7 +74,7 @@ set. Replacing it signs everyone out.
    ones `.env` sets into both GitHub environments (the ids and limits as variables, the client secrets and the
    Turnstile secret as secrets), and `PROXY_MODE=hosted` into `production` when `.env` sets it. Set them by hand in
    the GitHub environments otherwise.
-4. **Deploy.** The D1 migration `0007_hosted_auth.sql` adds Better Auth's tables (`auth_user`, `auth_session`,
+4. **Deploy.** The D1 migration `0008_hosted_auth.sql` adds Better Auth's tables (`auth_user`, `auth_session`,
    `auth_account`, `auth_verification`); every deploy applies it, also on a self-hosted proxy, where they stay empty.
    The Platform registry and each ControlPlane add their new tables and columns on first use.
 

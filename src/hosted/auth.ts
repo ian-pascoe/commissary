@@ -1,6 +1,6 @@
 /**
  * Sign-in on a hosted proxy (ADR 0026): Better Auth's core with GitHub and Google as social providers, its people and
- * sessions in D1 (`USAGE`, tables `auth_*` from `migrations/0007_hosted_auth.sql`). No plugins: orgs, members and teams
+ * sessions in D1 (`USAGE`, tables `auth_*` from `migrations/0008_hosted_auth.sql`). No plugins: orgs, members and teams
  * stay in the org's ControlPlane, and a session only says which verified email signed in. New in the Workers port.
  *
  * Only an email the provider reports as verified becomes an identity (`validateUserInfo`); the provider's tokens are

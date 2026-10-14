@@ -1,4 +1,4 @@
-// Migration 0007 (Better Auth's tables, src/hosted/auth.ts): applied to a database in the state before it, it creates
+// Migration 0008 (Better Auth's tables, src/hosted/auth.ts): applied to a database in the state before it, it creates
 // exactly what Better Auth expects, keeps the usage records, and a second run changes nothing.
 import { env } from "cloudflare:workers";
 import { getMigrations } from "better-auth/db/migration";
@@ -9,7 +9,7 @@ import orgs from "../../migrations/0003_usage_org.sql?raw";
 import costs from "../../migrations/0004_usage_cost.sql?raw";
 import members from "../../migrations/0005_usage_member.sql?raw";
 import privates from "../../migrations/0006_usage_private.sql?raw";
-import hostedAuth from "../../migrations/0007_hosted_auth.sql?raw";
+import hostedAuth from "../../migrations/0008_hosted_auth.sql?raw";
 import { authOptions } from "../../src/hosted/auth.ts";
 import { statementsOf } from "../support/usage.ts";
 
@@ -24,7 +24,7 @@ const tables = async (): Promise<ReadonlyArray<string>> =>
     .map((row) => row.name)
     .filter((name) => !name.startsWith("_cf_") && !name.startsWith("sqlite_"));
 
-describe("migration 0007 (hosted auth)", () => {
+describe("migration 0008 (hosted auth)", () => {
   it("adds Better Auth's tables to a database at 0006, keeps the usage records, and is idempotent", async () => {
     for (const statement of [initial, sessions, orgs, costs, members, privates].flatMap(
       statementsOf,

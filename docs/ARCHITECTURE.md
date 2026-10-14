@@ -2218,7 +2218,7 @@ the Worker's own sign-in; unset, every hosted route answers like an unknown path
 Access one, unchanged. User docs: `docs/ACCESS.md` "Hosted proxy", `docs/DEPLOY.md` "Hosted proxy".
 
 - **Sign-in** (`auth.ts`, `routes.ts`, `session.ts`, `turnstile.ts`): Better Auth (core only, social providers GitHub and
-  Google, account linking by verified email) over D1 (`auth_*` tables, migration `0007_hosted_auth.sql`), mounted at
+  Google, account linking by verified email) over D1 (`auth_*` tables, migration `0008_hosted_auth.sql`), mounted at
   `/api/auth/*`, of which the Worker passes only social sign-in, the providers' callbacks, `get-session` and
   `sign-out` (the rest answers 404). An unverified email is refused; provider tokens, IP and user agent are never stored
   (database hooks blank them). `POST /api/auth/sign-in/social` needs a Turnstile token (`x-captcha-response`) solved on the proxy's hostname, verified
