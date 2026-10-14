@@ -71,7 +71,9 @@ compatibility is not a goal.
 - Zero data retention (ADR 0027): deleting an org, a member, a credential, a proxy key or an account deletes it at once, with
   no grace period and no restore. The panel therefore offers an export (secrets as previews) before an org is deleted and
   asks for the org's name (an account: the person's email) to confirm; it shows an org's usage retention period and
-  suggests one while none is set.
+  suggests one while none is set. Usage records are kept for the org's retention period (90 days for a new org, none
+  set for older ones); replay state that continuity depends on expires after at most seven days; usage records
+  store no request or response body.
 - Terminology: an **account** is an OAuth/auth-file credential; an **API key** belongs to a provider key group or an
   OpenAI-compatible endpoint; a **principal** is the Access identity that made a request.
 

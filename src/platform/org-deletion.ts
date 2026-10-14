@@ -56,7 +56,7 @@ export const deleteOrg = async (
 
   // 1. Usage: each batch is one D1 call; the helper bounds its own loop.
   const usage = await deleteOrgUsage(env.USAGE, org);
-  budget -= 1;
+  budget -= usage.calls;
 
   if (!usage.complete) return { state: "incomplete", step: "usage" };
 

@@ -169,6 +169,12 @@ What a member's grants add up to: the upstream models they may use on each share
 lists are computed under it; a model outside it answers like an unknown one.
 _Avoid_: allowance (a provider's limit), permissions
 
+**Sign-in account**:
+A person's own identity with the proxy, which a hosted proxy keeps outside every org (#72). Deleting it removes the
+person from every org with their data there. On a self-hosted proxy Access is the sign-in, so deleting the account only
+leaves the orgs until Access signs the person in again.
+_Avoid_: account (that is a provider login, below), user
+
 **Account**:
 A credential that is a provider login: an OAuth sign-in, a device-code login, an imported service account or an
 uploaded auth file. API keys whose provider reports allowances, such as OpenCode Go keys, are listed beside the accounts

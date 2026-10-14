@@ -274,7 +274,7 @@ const exportOrg = Effect.gen(function* () {
       email: member.email,
       role: member.role,
       added_at: iso(member.addedAt),
-      teams: member.teams.flatMap((id) => teams.find((team) => team.id === id)?.name ?? []),
+      teams: member.teams.flatMap((id) => teamNames.get(id) ?? []),
     })),
     teams: teams.map((team) => ({
       name: team.name,
@@ -292,6 +292,15 @@ const exportOrg = Effect.gen(function* () {
 
 /** A deletion that threw: the cause is logged (never with payloads) and the caller is told to try again. */
 class DeletionThrew extends Data.TaggedError("DeletionThrew")<{ readonly cause: unknown }> {}
+
+const planeFailed = (label: string, org: string) => (error: DeletionThrew) =>
+  Effect.logError(`management ${label} failed`).pipe(
+    Effect.annotateLogs({
+      org,
+      cause: error.cause instanceof Error ? error.cause.message : "unknown error",
+    }),
+    Effect.andThen(Effect.fail(replyError(502, "control plane unavailable"))),
+  );
 
 const deletionFailed = (org: string) => (error: DeletionThrew) =>
   Effect.logError("org deletion failed").pipe(
@@ -391,8 +400,11 @@ const deleteAccount = Effect.gen(function* () {
   const standings = yield* Effect.forEach(orgs, (org) =>
     Effect.tryPromise({
       try: async () => await controlPlaneOf(env, org.id).accountStanding(email),
-      catch: () => replyError(502, "control plane unavailable"),
-    }).pipe(Effect.map((standing) => ({ org, standing }))),
+      catch: (cause) => new DeletionThrew({ cause }),
+    }).pipe(
+      Effect.catch(planeFailed("accountStanding", org.id)),
+      Effect.map((standing) => ({ org, standing })),
+    ),
   );
 
   const blocking = standings.filter(({ standing }) => standing.soleOwner);
@@ -424,8 +436,8 @@ const deleteAccount = Effect.gen(function* () {
     } else if (standing.member) {
       yield* Effect.tryPromise({
         try: async () => await controlPlaneOf(env, org.id).leaveOrg(email),
-        catch: () => replyError(502, "control plane unavailable"),
-      });
+        catch: (cause) => new DeletionThrew({ cause }),
+      }).pipe(Effect.catch(planeFailed("leaveOrg", org.id)));
       yield* syncOrgIndex(org.id);
       left.push(org.slug);
     }

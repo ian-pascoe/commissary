@@ -963,12 +963,17 @@ export const pruneUsageRecords = async (
 
 /**
  * Deletes every record of `org` (the org was deleted, ADR 0027) in bounded batches; answers how many were removed and
- * whether any remain, so the caller can run it again.
+ * whether any remain, so the caller can run it again; `calls` is how many D1 statements it ran (a Worker invocation
+ * has a subrequest limit, `platform/org-deletion.ts`).
  */
 export const deleteOrgUsage = async (
   db: D1Database,
   org: OrgId,
-): Promise<{ readonly removed: number; readonly complete: boolean }> => {
+): Promise<{
+  readonly removed: number;
+  readonly complete: boolean;
+  readonly calls: number;
+}> => {
   let removed = 0;
 
   for (let batch = 0; batch < MAX_PRUNE_BATCHES; batch += 1) {
@@ -984,8 +989,8 @@ export const deleteOrgUsage = async (
     const changes = result.meta.changes ?? 0;
     removed += changes;
 
-    if (changes < PRUNE_BATCH) return { removed, complete: true };
+    if (changes < PRUNE_BATCH) return { removed, complete: true, calls: batch + 1 };
   }
 
-  return { removed, complete: false };
+  return { removed, complete: false, calls: MAX_PRUNE_BATCHES };
 };

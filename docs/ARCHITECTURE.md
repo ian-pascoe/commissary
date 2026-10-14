@@ -1775,6 +1775,9 @@ two orgs never share an instance.
   sequential replay application of Go is ported (its batched splice path is an optimisation that "retains the exact legacy
   behavior"), and context fingerprints are self-consistent hashes (not byte-identical with Go's); the Gemini cache is per caller
   instead of global; a miss no longer reserves a tombstone (the generation of the absent entry fences concurrent writers).
+- **Retention and deletion** (ADR 0027): an instance keeps its entries for at most seven days (`session-state` TTLs are
+  unchanged). It registers itself with its org's ControlPlane on its first write so that deleting the org can wipe it
+  (`session-state/instances.ts`, `SessionState.wipe`); see "Zero data retention".
 
 ## Local token counting (`src/tokenizer/`, `src/executor/helps/token-count.ts`)
 
