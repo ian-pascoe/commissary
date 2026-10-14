@@ -8,6 +8,10 @@
 | Pull request from a branch of this repo  | `pr-<number>` | the Worker's `workers.dev` URL, GitHub environment `preview` |
 | That pull request closed (merged or not) | `pr-<number>` | destroyed                                                    |
 
+A preview is a hosted proxy while its pull request has the label `hosted-preview` (adding or removing the label
+redeploys it in the other mode); production is one when the `production` environment sets `PROXY_MODE=hosted`
+([Hosted proxy](#hosted-proxy)). Everything else in this file describes a self-hosted proxy, the default.
+
 Deploys run only after typecheck, lint, workflow lint (actionlint, zizmor), the test shards and the smoke test pass.
 Fork and Dependabot pull requests get the checks but no preview (they receive no deploy secrets). A manual run
 (`workflow_dispatch`) on `main` redeploys production.
@@ -18,7 +22,9 @@ domain and AUD wired); `/v1/models` and `/v1beta/models` without credentials rea
 `401 Missing API key` itself (the proxy routes are outside Access, behind proxy keys); `/v1/models` with an Access JWT
 in `cf-access-token` and a dummy `Authorization` key, the way `cloudflared access` clients call it, answers 200 (the
 JWT is the `CF_Authorization` cookie Access set for the service token); and `/` without credentials is stopped by
-Access. The deploy job then shows
+Access. A hosted deploy is checked by `tools/check-hosted-deploy.sh` instead: `/healthz` answers 200,
+`/api/sign-in-options` offers a provider, `/v8/management/me` answers `401 Not signed in` from the Worker, `/` redirects
+to `/sign-in`, and the proxy routes answer `401 Missing API key`. The deploy job then shows
 the URL on the run, and previews get a pull request comment (`tools/preview-comment.sh`) that is updated on every push.
 
 ## Preview stages
@@ -37,6 +43,51 @@ A stage named `pr-<number>` is a preview (`infra/settings.ts`):
 Any machine with the deploy settings can deploy a preview by hand: `pnpm run deploy --stage pr-123`, and remove it with
 `pnpm run destroy --stage pr-123`.
 
+## Hosted proxy
+
+A hosted proxy (ADR 0026, `PROXY_MODE=hosted`) has no Access application: the Worker signs people in with GitHub and/or
+Google (Better Auth), anyone may sign up, and each new person gets a Personal org they own. Platform admins are the
+people in `PLATFORM_ADMIN_EMAILS` signed in with that email verified by the provider; `PLATFORM_ADMIN_SERVICE_TOKENS`
+and every `ACCESS_*` setting are ignored, and scripts use management keys ([ACCESS.md](ACCESS.md#hosted-proxy)).
+
+| Setting                                                    | Kind        | Meaning                                                                 |
+| ---------------------------------------------------------- | ----------- | ----------------------------------------------------------------------- |
+| `PROXY_MODE`                                               | variable    | `hosted`; unset or `self-hosted` for a self-hosted proxy                |
+| `SIGN_IN_GITHUB_CLIENT_ID`, `SIGN_IN_GITHUB_CLIENT_SECRET` | var, secret | a GitHub OAuth app (or GitHub App); offered when both are set           |
+| `SIGN_IN_GOOGLE_CLIENT_ID`, `SIGN_IN_GOOGLE_CLIENT_SECRET` | var, secret | a Google OAuth client (web application); offered when both are set      |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`               | var, secret | a Cloudflare Turnstile widget for the proxy's hostname (required)       |
+| `OWNED_ORG_LIMIT`                                          | variable    | orgs a person may own unless a platform admin raises it (default 3)     |
+| `ORG_RATE_LIMIT`                                           | variable    | requests per minute each org may send on the proxy routes (default 600) |
+| `ORG_RATE_LIMIT_NAMESPACE_ID`                              | variable    | the Workers rate-limit namespace, a positive integer (default 7201)     |
+
+At least one provider and the Turnstile keys are required: the deploy refuses a hosted stage without them.
+`BETTER_AUTH_SECRET` is minted like the `auth_index` key (an Alchemy `Random`, resource `BetterAuthSecret`); nothing to
+set. Replacing it signs everyone out.
+
+1. **OAuth apps.** Register the callback `https://<host>/api/auth/callback/github` (GitHub) and
+   `https://<host>/api/auth/callback/google` (Google, "Authorized redirect URIs"), where `<host>` is
+   `CF_LLM_PROXY_DOMAIN`. The Worker reads the verified email and stores no provider token. A
+   GitHub OAuth app takes a single callback host, so use one app per hostname; a GitHub App takes up to ten callback
+   URLs and Google any number.
+2. **Turnstile.** Create a widget (Cloudflare dashboard, Turnstile) for the hostname, managed mode.
+3. **Settings.** Put them in `.env` (`.env.example` lists them) for local deploys. For CI, `pnpm ci:setup` writes the
+   ones `.env` sets into both GitHub environments (the ids and limits as variables, the client secrets and the
+   Turnstile secret as secrets), and `PROXY_MODE=hosted` into `production` when `.env` sets it. Set them by hand in
+   the GitHub environments otherwise.
+4. **Deploy.** The D1 migration `0007_hosted_auth.sql` adds Better Auth's tables (`auth_user`, `auth_session`,
+   `auth_account`, `auth_verification`); every deploy applies it, also on a self-hosted proxy, where they stay empty.
+   The Platform registry and each ControlPlane add their new tables and columns on first use.
+
+**Hosted previews.** A preview with the `hosted-preview` label uses the `preview` environment's sign-in settings and
+serves its `workers.dev` URL, so a sign-in completes only after that URL's callback is registered with the provider
+(and its hostname added to the Turnstile widget). Previews share the rate-limit namespace with each other, and with
+production when the environments set the same `ORG_RATE_LIMIT_NAMESPACE_ID`: the org `global` exists on every stage
+under the same id, so give `preview` its own namespace.
+
+**Switching a stage.** Turning a self-hosted stage into a hosted one deletes its Access applications, policies and
+service tokens on the next deploy, and scripts with Access service tokens stop working: issue management keys first.
+Members keep their orgs and roles, and sign in with a provider account whose verified email is their membership email.
+
 ## Setup
 
 CI's credentials are code: `stacks/github.ts` is a second Alchemy stack that creates them and writes them into GitHub.
@@ -50,7 +101,8 @@ It manages:
 - `cf-llm-proxy-ci-check`, the Access service token of the post-deploy check;
 - in both environments, the secrets `CLOUDFLARE_API_TOKEN`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` and the
   variables `CLOUDFLARE_ACCOUNT_ID`, `ACCESS_*` (from `.env`) and `ACCESS_ALLOW_SERVICE_TOKEN_IDS` (the check token's
-  ID); in `production` also `CF_LLM_PROXY_DOMAIN`.
+  ID); in `production` also `CF_LLM_PROXY_DOMAIN`; and a hosted proxy's settings where `.env` sets them
+  ([Hosted proxy](#hosted-proxy)).
 
 Raw secrets never leave Alchemy: Cloudflare returns them once, they go to the encrypted state store and are encrypted
 again for GitHub.

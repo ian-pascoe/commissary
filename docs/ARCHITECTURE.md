@@ -993,7 +993,8 @@ control panel at `/` (`web/`, through `contract/`) and may change incompatibly: 
 that is cheap, but scripts written for the Go server are not guaranteed to keep working. The upstream panel (`Cli-Proxy-API-Management-Center`) is not served:
 its address redirects to `/` (_Legacy panel address_ below), and the routes only it needed are gone (`requests/api-call`,
 the operational and log routes listed under _Also not ported_) or replaced by the config entry routes (_Config entries_). Auth is the Access admin gate only (`access/routes.ts` classifies `/v8/management*`, the
-panel paths and `/management.html` as `management`); there is no management key.
+panel paths and `/management.html` as `management`), or a hosted proxy's sign-in (_Hosted proxy_ below); Go's single
+management key is not ported, and the port's per-org management keys (_Management keys_ below) are its own design.
 
 - **Config entries** (`settings-routes.ts`, `api-keys-routes.ts`, `model-rules-routes.ts`, contract `config.ts`): Go's
   management API reads and edits the whole configuration as one document (`GET|PUT|PATCH /config`, `GET|PUT /config.yaml`,
@@ -1948,14 +1949,14 @@ management API and the panel (the proxy endpoints still name it with the caller'
 
 Platform-level routes (`org-routes.ts`, contract group `orgs`, `src/management/contract/orgs.ts`):
 
-| Route                              | Who            | Does                                                                                                                                                                       |
-| ---------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /v8/management/me`            | anyone         | `{platform_admin, role, orgs: [{slug, name}]}`: `role` in the addressed org (`null` without one); every org for a platform admin, the orgs the caller belongs to otherwise |
-| `GET /v8/management/orgs`          | platform admin | every org, `global` first                                                                                                                                                  |
-| `POST /v8/management/orgs`         | platform admin | creates `{slug, name}`; `201`, `409 slug_taken`, `422 invalid_slug`/`invalid_name`                                                                                         |
-| `PATCH /v8/management/orgs/<slug>` | platform admin | changes `slug` and/or `name`; the id never changes, so stored data stays where it is                                                                                       |
+| Route                              | Who            | Does                                                                                                                                                                                                                                      |
+| ---------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /v8/management/me`            | anyone         | `{platform_admin, role, orgs: [{slug, name}]}`: `role` in the addressed org (`null` without one); every org for a platform admin, the orgs the caller belongs to otherwise; on a hosted proxy also `hosted`, `org_limit` and `owned_orgs` |
+| `GET /v8/management/orgs`          | platform admin | every org, `global` first (`suspended` on a suspended one)                                                                                                                                                                                |
+| `POST /v8/management/orgs`         | platform admin | creates `{slug, name}`; `201`, `409 slug_taken`, `422 invalid_slug`/`invalid_name`; on a hosted proxy anyone signed in, up to their owned-org limit (`409 org_limit_reached`), becoming its owner                                         |
+| `PATCH /v8/management/orgs/<slug>` | platform admin | changes `slug` and/or `name`; the id never changes, so stored data stays where it is; on a hosted proxy also `suspended`                                                                                                                  |
 
-Anyone else gets `403 platform_admin_required` on the three org routes. The panel reads `/me` for its org switcher.
+Anyone else gets `403 platform_admin_required` on the org routes it may not use. The panel reads `/me` for its org switcher.
 
 Routes of the addressed org (`/org`, `/export`) and the account route (`DELETE /me`), all in `org-routes.ts` (ADR 0027,
 "Zero data retention" below):
@@ -2190,6 +2191,59 @@ prices each attempt, the ControlPlane counts and decides.
   the Access application with `read_service_tokens_from_header`; the Worker only sees the resulting JWT, so no Worker
   code is involved). User docs: `README.md` and `ACCESS.md`, `CLIENTS.md`, `MIGRATION.md`,
   `DEVELOPMENT.md` in this directory.
+
+## Management keys (`src/management-keys/`, `src/access/management-key.ts`, `src/management/management-key-routes.ts`)
+
+Workers addition, no Go counterpart (Go's single `remote-management.secret-key` is not ported); ADR 0026. User docs:
+`docs/ACCESS.md` "Management keys".
+
+- **Format** (`management-keys/key.ts`): `cfm_<org id>_<key id>_<secret>`, minted and parsed by the proxy keys' code
+  (`proxy-keys/key.ts` `mintOrgKey`/`parseOrgKey`) with its own prefix, so neither kind is ever taken for the other.
+- **Store** (`management-keys/store.ts`): table `management_keys` in each org's ControlPlane (`CREATE IF NOT EXISTS`):
+  name, role, issuer, hash, prefix, created and last used (no expiry; revoking deletes the row); at most 100 rows per org
+  (`409 too_many_keys`).
+- **Gate**: `Authorization: Bearer cfm_…` on the management zone of either mode, before the session or Access JWT. The
+  key is checked like a proxy key (registry `orgExists`, then the org's ControlPlane, cached 30 s per isolate, forgotten
+  at once in the isolate that revokes it) and becomes the principal `{kind: "mkey"}` (`mkey:<key id>` in logs), with the
+  key's role in its org and never platform admin. `AdmissiblePrincipal` excludes it: a key is never admitted by the
+  member tables, and an org-scoped address of another org answers 403. On a self-hosted proxy the Access application
+  still stands in front of the management zone, so the request must pass Access as well.
+- **Limits**: the role is at most the issuer's; a key never downloads a credential, registers or re-roles a service
+  token, or issues a key (`management_key_forbidden`); on a hosted proxy a key of a suspended org or issuer is refused.
+
+## Hosted proxy (`src/hosted/`)
+
+Workers addition, no Go counterpart; ADR 0026. `PROXY_MODE=hosted` (`hosted/mode.ts` `isHosted`) replaces Access with
+the Worker's own sign-in; unset, every hosted route answers like an unknown path (`hosted/only.ts`) and the gate is the
+Access one, unchanged. User docs: `docs/ACCESS.md` "Hosted proxy", `docs/DEPLOY.md` "Hosted proxy".
+
+- **Sign-in** (`auth.ts`, `routes.ts`, `session.ts`, `turnstile.ts`): Better Auth (core only, social providers GitHub and
+  Google, account linking by verified email) over D1 (`auth_*` tables, migration `0007_hosted_auth.sql`), mounted at
+  `/api/auth/*`, of which the Worker passes only social sign-in, the providers' callbacks, `get-session` and
+  `sign-out` (the rest answers 404). An unverified email is refused; provider tokens, IP and user agent are never stored
+  (database hooks blank them). `POST /api/auth/sign-in/social` needs a Turnstile token (`x-captcha-response`), verified
+  against `TURNSTILE_SECRET_KEY`. `/api/sign-in-options` tells the panel's `/sign-in` page the enabled providers and the
+  Turnstile site key. The session cookie is read on every request, so a session ended by sign-out or suspension stops
+  working at once.
+- **Gate** (`gate.ts` `authenticateHosted`, called by the access middleware when hosted): proxy routes take proxy keys
+  only (rate-limited per org, `rate-limit.ts`, `429` with `Retry-After`); the management zone takes a management key,
+  else the Better Auth session cookie, whose verified email becomes a `user` principal admitted like an Access email
+  (platform admin when in `PLATFORM_ADMIN_EMAILS`). Access JWTs and service tokens are ignored. A panel page without a
+  session redirects to `/sign-in?next=…`; the management API answers `401 Not signed in`. The cross-site checks
+  (`access/csrf.ts`) run first, as on a self-hosted proxy.
+- **Standing** (`standing.ts`, Platform registry `signIn`/`standing`): the first request of a new person signs them up,
+  creating a Personal org they own unless the person-to-orgs index already lists them (invited). The registry records
+  `people` (owned-org limit, suspension) and each org's `created_by` (owned orgs are counted by it) and `suspended_at`.
+  Every request checks that neither the person nor the org is suspended, cached 30 s per isolate and forgotten at once
+  where a suspension is made; suspending also deletes the person's (or the org members') sessions.
+- **Platform-level routes**: `POST /orgs` for everyone signed in, up to the owned-org limit; `PATCH /orgs/<slug>
+  {suspended}` and `GET|PATCH /people/<email>` (`people-routes.ts`) for platform admins.
+- **Downloads**: only platform admins download a stored credential (`download_requires_platform_admin`), since no
+  service token exists to carry ADR 0006's rule.
+- **Infra**: `alchemy.run.ts` creates no Access application or bypass when hosted, mints `BETTER_AUTH_SECRET` as an
+  Alchemy `Random`, and binds the sign-in settings and the `ORG_RATE_LIMIT` rate-limit binding (`infra/settings.ts`
+  validates them). CI deploys a preview as hosted while its pull request has the `hosted-preview` label and checks it with
+  `tools/check-hosted-deploy.sh`.
 
 ## Provider OAuth logins (`src/oauth/`, `src/management/oauth-routes.ts`)
 

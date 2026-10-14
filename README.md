@@ -11,7 +11,10 @@ proxy keys and a built-in control panel behind Cloudflare Access.
 - **Nothing to run.** A single Worker with Durable Objects, KV and D1. No servers, no containers, and it scales to zero.
 - **Zero-trust by default.** People sign in to the control panel and management API through Cloudflare Access with
   your identity provider; tools send a proxy key each member creates in the panel, stored only as a hash and
-  revocable at once. The Worker stores no client passwords.
+  revocable at once; scripts use management keys or Access service tokens. The Worker stores no client passwords.
+- **Or host it for others.** With `PROXY_MODE=hosted` the Worker signs people in itself with GitHub or Google, anyone
+  may sign up and gets a Personal org, and platform admins limit and suspend people and orgs
+  ([DEPLOY.md](docs/DEPLOY.md#hosted-proxy)).
 - **Control panel.** Connect accounts, manage API keys, watch quotas and usage, shape model routing and edit the
   config at `/`.
 - **Infrastructure as code.** The Worker, storage, Access application, policies and service tokens are declared in
@@ -171,6 +174,7 @@ model aliases, retries, …) are edited in the control panel and stored in the W
 | `ACCESS_SERVICE_TOKEN_HEADER`    |            | Accept service tokens as JSON in one header (e.g. `x-api-key`) for management scripts without custom headers                       |
 | `ACCESS_AUD`                     |            | Use an Access application you manage yourself instead of creating one                                                              |
 | `CF_LLM_PROXY_CPU_MS`            | `300000`   | CPU limit per request in ms; lower it on plans with smaller limits                                                                 |
+| `PROXY_MODE`                     |            | `hosted` for a hosted proxy (own sign-in, no Access; its settings: [DEPLOY.md](docs/DEPLOY.md#hosted-proxy))                       |
 
 [ACCESS.md](docs/ACCESS.md) explains what each Access setting creates, how the Worker validates requests, and how to
 extend the policies (IdP groups, device posture).
@@ -266,15 +270,15 @@ conventions are in [DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Documentation
 
-| Guide                                   | Contents                                                     |
-| --------------------------------------- | ------------------------------------------------------------ |
-| [ACCESS.md](docs/ACCESS.md)             | Access application, policies, service tokens, security model |
-| [CLIENTS.md](docs/CLIENTS.md)           | Claude Code, Codex CLI, SDKs, curl                           |
-| [DEPLOY.md](docs/DEPLOY.md)             | CI deploys, preview stages, operations                       |
-| [MIGRATION.md](docs/MIGRATION.md)       | Moving from the Go CLIProxyAPI server                        |
-| [DEVELOPMENT.md](docs/DEVELOPMENT.md)   | Scripts, module layout, conventions                          |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Design decisions and per-subsystem behaviour                 |
-| [GLOSSARY.md](GLOSSARY.md)              | Domain terms                                                 |
+| Guide                                   | Contents                                                                                      |
+| --------------------------------------- | --------------------------------------------------------------------------------------------- |
+| [ACCESS.md](docs/ACCESS.md)             | Access application, policies, service tokens, management keys, hosted sign-in, security model |
+| [CLIENTS.md](docs/CLIENTS.md)           | Claude Code, Codex CLI, SDKs, curl                                                            |
+| [DEPLOY.md](docs/DEPLOY.md)             | CI deploys, preview stages, hosted proxy, operations                                          |
+| [MIGRATION.md](docs/MIGRATION.md)       | Moving from the Go CLIProxyAPI server                                                         |
+| [DEVELOPMENT.md](docs/DEVELOPMENT.md)   | Scripts, module layout, conventions                                                           |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Design decisions and per-subsystem behaviour                                                  |
+| [GLOSSARY.md](GLOSSARY.md)              | Domain terms                                                                                  |
 
 ## Acknowledgements
 

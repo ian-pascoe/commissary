@@ -4,7 +4,11 @@ Cloudflare Access signs people in for the control panel and the management API (
 (identity provider login or a service token), then forwards the request with a signed `Cf-Access-Jwt-Assertion` header
 that the Worker verifies. The Worker never sees their passwords. Clients of the proxy routes (`/v1*`, `/openai/v1*`,
 `/backend-api/codex*` and the unprefixed aliases) are not behind Access: they send a **proxy key** the proxy issued to a
-member, which the Worker checks itself (§4, "Proxy keys" below, [CLIENTS.md](CLIENTS.md)).
+member, which the Worker checks itself (§4, "Proxy keys" below, [CLIENTS.md](CLIENTS.md)). Scripts on the management API
+may send a **management key** instead of an Access service token ("Management keys" below).
+
+This is a self-hosted proxy, the default. A **hosted proxy** (`PROXY_MODE=hosted`, ADR 0026) has no Access application
+and signs people in itself: see [Hosted proxy](#hosted-proxy) at the end.
 
 ## 1. What the deploy creates
 
@@ -212,6 +216,24 @@ characters>`), its member, its name and when it was created, last used (to the m
   waiting out one frees its place.
 - Proxy keys are never accepted on the management API or the panel: those stay behind Access.
 
+### Management keys
+
+A **management key** (ADR 0026) is how a script calls the management API without a person's session:
+`cfm_<org id>_<key id>_<secret>`, sent as `Authorization: Bearer cfm_…`. Org admins issue them in the panel (**Management
+keys**) or with `POST /v8/management/orgs/<slug>/management-keys {"name": "ci", "role": "admin"}`;
+the answer carries the whole key once, and the org's ControlPlane stores only its SHA-256 and a visible prefix. `GET`
+lists the org's keys and `DELETE /management-keys/<id>` revokes one.
+
+- A key acts in its own org only, with its role there (no higher than its issuer's), and is never a platform admin. An
+  unscoped management URL means the key's org; another org's URL answers 403.
+- It never holds the sensitive powers: it cannot download a credential (`403 download_requires_service_token`), register
+  or re-role a service token, or issue a management key (`403 management_key_forbidden`).
+- It is accepted on the management API only; proxy routes take proxy keys, and a `cfp_` key is never accepted on the
+  management API. Revocation applies at once in the isolate that revoked it and within 30 seconds everywhere.
+- On a self-hosted proxy the request must still pass Access, whose application covers the management API: send the
+  key together with a service token, or put the management paths a script calls behind your own Access policy. On a
+  hosted proxy nothing sits in front of the Worker.
+
 **Access sign-ins for clients** (`GET`/`PATCH /membership`, `{"access_clients": true}`): clients set up before proxy keys
 signed in through Access on the proxy routes. While this org setting is on, a proxy route still takes an Access JWT,
 which the Worker verifies itself from `Cf-Access-Jwt-Assertion` or from the `cf-access-token` header `cloudflared access`
@@ -314,8 +336,9 @@ put a server-side client in between.
 - Credential downloads (`GET /v8/management/credentials/download?name=<file>`) are the one way to read a stored token:
   the auth file verbatim, refresh token included, for moving an account to another deployment. Only a **service
   token** that is an owner of the org (§3 "Members, roles and teams") or a platform admin may call it; any other org admin or
-  owner gets `403 {"error":"download_requires_service_token","message":…}` before the file is looked up, and a plain
-  member the gate's `403 Forbidden`. A person's browser session is the credential most
+  owner, and every management key, gets `403 {"error":"download_requires_service_token","message":…}` before the file is
+  looked up, and a plain member the gate's `403 Forbidden`. A hosted proxy has no service tokens: there only platform
+  admins download (`403 download_requires_platform_admin` for everyone else, a private credential's owner included). A person's browser session is the credential most
   exposed to theft, so the tokens are handed only to a client that was set up for automation (curl with
   `CF-Access-Client-Id`/`-Secret`, [MIGRATION.md](MIGRATION.md) §2). The panel never calls it. A private credential is downloaded
   by its owner alone (their own session may, it is their own token); any other caller gets `403 private_credential`. This narrows who can read a
@@ -367,7 +390,8 @@ The proxy keeps as little as it can and deletes at once; there is no grace perio
 ### Logs and personal data
 
 Every proxied request produces one structured log line (Workers Logs) whose `principal` field is the caller:
-`key:<key id>` for a proxy key, `user:<email>` for people, `service:<client id>` for service tokens. Usage records in D1 store the same id. Emails are
+`key:<key id>` for a proxy key, `mkey:<key id>` for a management key, `user:<email>` for people, `service:<client id>` for
+service tokens. Usage records in D1 store the same id. Emails are
 personal data: restrict who can read Workers Logs and the D1 database, and set the retention you need (each org's usage
 retention period, `PATCH /org` with `usage_retention_days`, and Workers Logs retention). Tokens, API keys, JWTs, request bodies, headers and query strings are never
 logged; scheduled-job failures are logged as a one-line summary with URL queries removed.
@@ -395,6 +419,35 @@ The panel and the management API need the Access JWT regardless of how the clien
 device still passes through Access; satisfy it with an Allow policy that matches the user's identity (or device posture)
 or, for scripts, use a service token, which does not depend on the device. Proxy clients send a proxy key and are not
 affected. Check the Cloudflare WARP/Access docs for the current options.
+
+## Hosted proxy
+
+A hosted proxy (`PROXY_MODE=hosted`, ADR 0026; deploy settings in [DEPLOY.md](DEPLOY.md#hosted-proxy)) has no Access
+application. Everything in §1-§2 and the service tokens of §3 do not apply; members, roles, teams, grants, proxy keys and
+management keys work as above. What changes:
+
+- **Sign-in.** People sign in at `/sign-in` with GitHub or Google (Better Auth, `src/hosted/`), behind a Cloudflare
+  Turnstile challenge. The Worker keeps the verified email and a session in D1 (`auth_*` tables), never the provider's
+  tokens; Better Auth's session cookie is `HttpOnly` and `SameSite=Lax` (and `Secure` over HTTPS). The panel signs out with **Sign out**. Without a
+  session the management API answers `401 Not signed in` and a panel page redirects to `/sign-in?next=<page>`.
+- **Who is who.** The signed-in email is the principal, like Access's `email` claim, so a member invited by email signs
+  in with a provider account whose verified email matches. Access JWTs and Access service tokens are accepted nowhere.
+  Platform admins are the emails in `PLATFORM_ADMIN_EMAILS`; `PLATFORM_ADMIN_SERVICE_TOKENS` means nothing.
+- **Sign-up.** Anyone may sign up. A person signing in for the first time who is not a member anywhere gets a Personal
+  org they own; an invited person gets none. Nobody joins `global` by signing in.
+- **Owning orgs.** Everyone signed in may create orgs and owns the ones they create, up to `OWNED_ORG_LIMIT` (default
+  3; platform admins have no limit). A platform admin raises one person's limit with `PATCH /v8/management/people/<email>
+  {"org_limit": 10}` (`null` restores the default), or on the panel's **People** page.
+- **Suspension.** A platform admin suspends a person (`PATCH /people/<email> {"suspended": true}`) or an org (`PATCH
+  /v8/management/orgs/<slug> {"suspended": true}`, or the org chooser). A suspended person is signed out and their
+  sessions, proxy keys and management keys are refused; in a suspended org every member, proxy key and management key
+  is, except platform admins, who lift it. A suspension applies at once in the isolate that made it and within 30
+  seconds everywhere.
+- **Rate limit.** Each org's requests on the proxy routes are counted by a Workers rate limit (`ORG_RATE_LIMIT` per
+  minute, keyed by org); past it they answer `429` with `Retry-After: 60`.
+- **Scripts** use management keys; credential downloads are for platform admins only (§4 "Management API security").
+- **Browser protections.** The cross-site checks of §4 apply unchanged, Better Auth checks the origin of its own
+  requests, and the sign-in routes (`/api/auth/*`, `/api/sign-in-options`, `/sign-in`) exist only on a hosted proxy.
 
 ## Troubleshooting
 
