@@ -263,7 +263,10 @@ export class SpendService {
   }
 
   /** Only an org admin sets the calendar; the caller checked. */
-  setSettings(settings: Partial<SpendSettings>): SpendResult<SpendSettings> {
+  setSettings(settings: {
+    readonly timeZone?: string | undefined;
+    readonly weekStart?: string | undefined;
+  }): SpendResult<SpendSettings> {
     return this.#store.setSettings(settings);
   }
 

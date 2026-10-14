@@ -726,7 +726,10 @@ export class ControlPlane extends DurableObject<Env> {
   }
 
   /** Sets the org's time zone and first day of the week; counters of periods that begin differently start over. */
-  setSpendSettings(settings: Partial<SpendSettings>): SpendResult<SpendSettings> {
+  setSpendSettings(settings: {
+    readonly timeZone?: string | undefined;
+    readonly weekStart?: string | undefined;
+  }): SpendResult<SpendSettings> {
     this.#ensureMembership();
 
     return this.#spend.setSettings(settings);

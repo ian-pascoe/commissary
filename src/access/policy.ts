@@ -73,6 +73,14 @@ const MEMBER_CREDENTIAL_ROUTES: ReadonlyArray<{
 /** A member's own proxy keys (`management/proxy-key-routes.ts`, which limits a plain member to their keys). */
 const PROXY_KEYS = `${MANAGEMENT_PREFIX}/proxy-keys`;
 
+/**
+ * Spend limits (`management/spend-routes.ts`): a plain member reads the limits that bind them and limits their own proxy
+ * keys, so those routes are for members; the calendar (`/spend/settings`) stays for org admins.
+ */
+const SPEND = `${MANAGEMENT_PREFIX}/spend`;
+
+const SPEND_SETTINGS = `${SPEND}/settings`;
+
 const ME = `${MANAGEMENT_PREFIX}/me`;
 
 const ORGS = `${MANAGEMENT_PREFIX}/${ORGS_SEGMENT}`;
@@ -109,6 +117,9 @@ export const routeAccess = (
   } else if (isPanelPagePath(route)) return "member";
 
   if (route === PROXY_KEYS || route.startsWith(`${PROXY_KEYS}/`)) return "member";
+
+  if ((route === SPEND || route.startsWith(`${SPEND}/`)) && route !== SPEND_SETTINGS)
+    return "member";
   const reading = method === "GET" || method === "HEAD";
 
   if (reading && MEMBER_READS.includes(route)) return "member";

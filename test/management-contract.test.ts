@@ -103,6 +103,66 @@ const seed = (name: string, extra: Record<string, unknown> = {}) =>
   });
 
 describe("management contract", () => {
+  it.effect("decodes Spend limits and the calendar, and refuses a stale revision", () =>
+    Effect.gen(function* () {
+      const api = yield* client;
+
+      const empty = yield* api.spend.overview();
+
+      assert.deepStrictEqual(
+        [empty.time_zone, empty.week_start, empty.limits.length],
+        ["UTC", "monday", 0],
+      );
+
+      const created = yield* api.spend.create({
+        payload: { kind: "org", subject: "", period: "month", amount_micros: 50_000_000 },
+      });
+
+      assert.deepStrictEqual(
+        [created.kind, created.label, created.source, created.revision, created.spent_micros],
+        ["org", "Whole org", "admin", 1, 0],
+      );
+      assert.strictEqual(created.remaining_micros, 50_000_000);
+
+      const updated = yield* api.spend.update({
+        params: { id: created.id },
+        headers: { "if-match": "1" },
+        payload: { amount_micros: 75_000_000 },
+      });
+
+      assert.deepStrictEqual([updated.amount_micros, updated.revision], [75_000_000, 2]);
+
+      const stale = yield* Effect.flip(
+        api.spend.update({
+          params: { id: created.id },
+          headers: { "if-match": "1" },
+          payload: { amount_micros: 1 },
+        }),
+      );
+
+      assert.instanceOf(stale, ManagementError);
+      assert.strictEqual(stale.error, "conflict");
+
+      const settings = yield* api.spend.settings({
+        payload: { time_zone: "Europe/Berlin", week_start: "sunday" },
+      });
+
+      assert.deepStrictEqual(
+        [settings.time_zone, settings.week_start],
+        ["Europe/Berlin", "sunday"],
+      );
+
+      const removed = yield* api.spend.remove({
+        params: { id: created.id },
+        headers: { "if-match": "2" },
+      });
+
+      assert.strictEqual(removed.id, created.id);
+      assert.strictEqual((yield* api.spend.overview()).limits.length, 0);
+      yield* api.spend.settings({ payload: { time_zone: "UTC", week_start: "monday" } });
+    }).pipe(through(harness)),
+  );
+
   it.effect("decodes the credential list", () =>
     Effect.gen(function* () {
       yield* Effect.promise(async () => {

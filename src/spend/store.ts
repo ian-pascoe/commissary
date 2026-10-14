@@ -180,23 +180,28 @@ export class SpendStore implements SpendBook {
    * Sets the org's time zone and first day of the week. Periods that begin differently start new counters, so spend
    * counted under the old calendar no longer counts.
    */
-  setSettings(settings: Partial<SpendSettings>): SpendResult<SpendSettings> {
-    const next = { ...this.settings(), ...settings };
+  setSettings(settings: {
+    readonly timeZone?: string | undefined;
+    readonly weekStart?: string | undefined;
+  }): SpendResult<SpendSettings> {
+    const current = this.settings();
+    const timeZone = settings.timeZone ?? current.timeZone;
+    const weekStart = settings.weekStart ?? current.weekStart;
 
-    if (!isTimeZone(next.timeZone))
+    if (!isTimeZone(timeZone))
       return refuse("invalid", "time_zone is not an IANA time zone name such as Europe/Berlin");
 
-    if (!isWeekStart(next.weekStart))
+    if (!isWeekStart(weekStart))
       return refuse("invalid", `week_start is one of ${WEEK_STARTS.join(", ")}`);
 
     this.#sql.exec(
       `UPDATE spend_settings SET time_zone = ?, week_start = ? WHERE id = 1`,
-      next.timeZone,
-      next.weekStart,
+      timeZone,
+      weekStart,
     );
-    this.#settings = next;
+    this.#settings = { timeZone, weekStart };
 
-    return { ok: true, value: next };
+    return { ok: true, value: this.#settings };
   }
 
   // --- limits -------------------------------------------------------------------------------------------------
