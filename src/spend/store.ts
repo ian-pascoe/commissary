@@ -199,6 +199,11 @@ export class SpendStore implements SpendBook {
       timeZone,
       weekStart,
     );
+
+    // Counters belong to the periods of the calendar that wrote them: a new calendar starts them afresh. (Dropping only
+    // earlier periods would keep a counter whose period now begins earlier, and bring it back if the calendar returned.)
+    if (timeZone !== current.timeZone || weekStart !== current.weekStart)
+      this.#sql.exec(`DELETE FROM spend_counters`);
     this.#settings = { timeZone, weekStart };
 
     return { ok: true, value: this.#settings };

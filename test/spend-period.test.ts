@@ -135,6 +135,52 @@ describe("periodBounds", () => {
   });
 });
 
+describe("periods in zones whose clocks change at midnight", () => {
+  // Havana and Cairo spring forward at 00:00 (no local midnight that day), Santiago and Beirut change around it.
+  const zones = [
+    "America/Havana",
+    "Africa/Cairo",
+    "America/Santiago",
+    "Asia/Beirut",
+    "Asia/Kolkata",
+  ];
+
+  // The spring and autumn changes of 2025 for these zones fall in these two windows.
+  const windows = [
+    [at("2025-03-01T00:00:00Z"), at("2025-05-01T00:00:00Z")],
+    [at("2025-08-25T00:00:00Z"), at("2025-11-10T00:00:00Z")],
+  ] as const;
+
+  const HOUR = 3_600_000;
+
+  it("the day Havana's clocks skip midnight starts at 01:00 and ends at the next day's start", () => {
+    // Havana, 2025-03-09: 00:00 CST jumps to 01:00 CDT, so the day begins at 01:00 (05:00Z).
+    const bounds = periodBounds("day", at("2025-03-09T12:00:00Z"), "America/Havana", "monday");
+
+    expect(bounds).toEqual({ start: at("2025-03-09T05:00:00Z"), end: at("2025-03-10T04:00:00Z") });
+    expect(periodBounds("day", bounds.end, "America/Havana", "monday").start).toBe(bounds.end);
+  });
+
+  it("always contains the time it was asked about, and each period begins where the last one ended", () => {
+    for (const zone of zones)
+      for (const period of ["day", "week", "month"] as const)
+        for (const [from, until] of windows)
+          for (let now = from; now < until; now += period === "day" ? HOUR : 6 * HOUR) {
+            const bounds = periodBounds(period, now, zone, "monday");
+
+            if (!(bounds.start <= now && now < bounds.end))
+              throw new Error(
+                `${zone} ${period} ${new Date(now).toISOString()} is outside its period`,
+              );
+
+            if (periodBounds(period, bounds.end, zone, "monday").start !== bounds.end)
+              throw new Error(
+                `${zone} ${period} ${new Date(bounds.end).toISOString()} does not begin the next`,
+              );
+          }
+  });
+});
+
 describe("isTimeZone", () => {
   it("accepts IANA names and refuses anything else", () => {
     expect(isTimeZone("UTC")).toBe(true);

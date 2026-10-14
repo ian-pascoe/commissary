@@ -268,6 +268,30 @@ describe("SpendStore settings", () => {
   });
 });
 
+describe("SpendStore calendar change", () => {
+  it("starts the counters afresh, so a calendar that returns does not bring old spend back", async () => {
+    await withStore((store) => {
+      const key = { kind: "key", subject: "key-1" } as const;
+
+      value(store.create({ ...KEY, amountMicros: 10 * USD, source: "admin" }, "a"));
+      store.charge(key, "day", 1_000, 7);
+      expect(store.spent(key, "day", 1_000)).toBe(7);
+
+      // The same calendar written again keeps the counter.
+      value(store.setSettings({ timeZone: "UTC", weekStart: "monday" }));
+      expect(store.spent(key, "day", 1_000)).toBe(7);
+
+      value(store.setSettings({ timeZone: "Asia/Tokyo" }));
+      expect(store.spent(key, "day", 1_000)).toBe(0);
+
+      store.charge(key, "day", 500, 3);
+      value(store.setSettings({ timeZone: "UTC" }));
+      expect(store.spent(key, "day", 500)).toBe(0);
+      expect(store.spent(key, "day", 1_000)).toBe(0);
+    });
+  });
+});
+
 describe("SpendStore upgrade", () => {
   it("is created for a Durable Object that predates Spend limits, and running the schema again keeps what it holds", async () => {
     await withStore((store, sql) => {

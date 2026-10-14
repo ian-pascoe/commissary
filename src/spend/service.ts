@@ -183,6 +183,15 @@ export class SpendService {
     const keys = new Map(this.#directory.keys().map((key) => [key.id, key]));
     let subject = input.subject;
 
+    // Who may write comes before whether the subject exists, so a member cannot tell other ids apart by the answer:
+    // their own proxy keys are the only thing they may limit.
+    if (!viewer.admin) {
+      const key = input.kind === "key" ? keys.get(subject) : undefined;
+
+      if (key === undefined || key.memberId !== viewer.member)
+        return refuse("forbidden", "members may limit their own proxy keys only");
+    }
+
     if (input.kind === "credential") {
       const credential = this.#directory
         .credentials()
@@ -207,14 +216,6 @@ export class SpendService {
     }
 
     const source: LimitSource = viewer.admin ? "admin" : "member";
-
-    if (!viewer.admin) {
-      const key = input.kind === "key" ? keys.get(subject) : undefined;
-
-      // A member's own key is the only thing they may limit; any other key looks like it does not exist.
-      if (input.kind !== "key" || key === undefined || key.memberId !== viewer.member)
-        return refuse("forbidden", "members may limit their own proxy keys only");
-    }
 
     return this.#entryOf(
       viewer,
@@ -253,9 +254,23 @@ export class SpendService {
 
     if (!removed.ok) return removed;
 
-    return before === undefined
-      ? refuse("not_found", "limit not found")
-      : { ok: true, value: before };
+    if (before !== undefined) return { ok: true, value: before };
+
+    // A limit whose subject is gone is not listed (so it has no label), but it is removed all the same.
+    const gone = removed.value;
+    const now = this.#now();
+
+    return {
+      ok: true,
+      value: {
+        ...gone,
+        label: "",
+        spentMicros: 0,
+        periodStart: now,
+        resetsAt: now,
+        editable: true,
+      },
+    };
   }
 
   settings(): SpendSettings {

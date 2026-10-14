@@ -104,7 +104,7 @@ const ADJECTIVE = { day: "daily", week: "weekly", month: "monthly" } as const;
 
 const SUBJECT: Readonly<Record<SubjectKind, string>> = {
   key: "this proxy key",
-  member: "your member account",
+  member: "your membership",
   team: "your team",
   org: "your org",
   credential: "this credential",

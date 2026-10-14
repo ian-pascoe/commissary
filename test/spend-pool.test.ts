@@ -77,7 +77,7 @@ describe("pick with a Spend limit", () => {
     if (refused.ok) return;
     // 16:00Z is noon in New York (EDT); midnight is 12 hours away.
     expect(refused.failure.retryAfterSeconds).toBe(12 * 3600);
-    expect(refused.failure.message).toContain("daily Spend limit of your member account");
+    expect(refused.failure.message).toContain("daily Spend limit of your membership");
     expect(JSON.parse(refused.failure.body ?? "{}")).toMatchObject({
       error: { code: "spend_limit_reached", period: "day", limit: "member" },
     });

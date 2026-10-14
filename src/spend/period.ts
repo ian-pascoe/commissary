@@ -61,12 +61,12 @@ export const periodBounds = (
 ): PeriodBounds => {
   const local = DateTime.makeZonedUnsafe(now, { timeZone });
 
-  const start = DateTime.startOf(local, UNIT[period], {
-    weekStartsOn: weekStartsOn(weekStart),
-  });
+  const options = { weekStartsOn: weekStartsOn(weekStart) };
+  const start = DateTime.startOf(local, UNIT[period], options);
 
-  return {
-    start: DateTime.toEpochMillis(start),
-    end: DateTime.toEpochMillis(DateTime.add(start, STEP[period])),
-  };
+  // The next start is found by its own `startOf`: where the clocks change at midnight (Havana, Cairo) a period begins
+  // later than 00:00, and adding a whole step to that start would overshoot the next local midnight.
+  const next = DateTime.startOf(DateTime.add(start, STEP[period]), UNIT[period], options);
+
+  return { start: DateTime.toEpochMillis(start), end: DateTime.toEpochMillis(next) };
 };
