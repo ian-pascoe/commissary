@@ -328,7 +328,7 @@ export const NewLimit = ({ admin }: { readonly admin: boolean }) => {
           {amountIssue ??
             subjectIssue ??
             (admin
-              ? "Spend is what the proxy has charged at its prices. A request that would start over the limit is refused with a 429 until the period ends; one already running finishes."
+              ? "Spend is what the proxy has counted at its prices. A request that would start over the limit is refused with a 429 until the period ends; one already running finishes."
               : "Limit one of your own proxy keys. It counts everything the key does, and may not exceed a limit an org admin set on it.")}
         </p>
       </form>

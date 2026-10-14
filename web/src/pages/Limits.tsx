@@ -1,4 +1,4 @@
-// Limits (/limits): what a member, team, the org, a shared account or a proxy key may spend in a day, week or month of
+// Limits (/limits): what a member, team, the org, a shared credential or a proxy key may spend in a day, week or month of
 // the org's time zone, with the Spend so far. Org admins set any limit and the calendar; a plain member sees the limits
 // that bind them, how much is left, and limits their own proxy keys.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
@@ -23,6 +23,7 @@ import {
   resetsText,
   sortLimits,
   spentShare,
+  spentText,
 } from "../lib/spend.ts";
 import { useAction } from "../lib/use-action.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
@@ -125,7 +126,7 @@ const LimitRow = ({
         <EditAmount limit={limit} onDone={onEdited} />
       ) : (
         <>
-          {formatCost(limit.spent_micros)} of {formatCost(limit.amount_micros)}
+          {spentText(limit)}
           <span
             className={styles["meter"]}
             role="img"
@@ -311,9 +312,9 @@ export const LimitsPage = () => {
       <header className={styles["head"]}>
         <h1 className={styles["title"]}>Limits</h1>
         <p className={styles["intro"]}>
-          A Spend limit caps what a member, a team, the whole org, a shared account or a proxy key
-          may spend in a day, week or month. When a limit is reached the proxy refuses what it
-          covers with a 429 until the period starts over; other limits and accounts keep working.{" "}
+          A Spend limit caps what a member, a team, the whole org, a shared credential or a proxy
+          key may spend in a day, week or month. When a limit is reached the proxy refuses what it
+          covers with a 429 until the period starts over; other limits and credentials keep working.{" "}
           {admin
             ? "You are an org admin, so you set any limit and the calendar."
             : "You see the limits that bind you, and set limits on your own proxy keys."}

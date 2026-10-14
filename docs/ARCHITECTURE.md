@@ -2061,7 +2061,8 @@ prices each attempt, the ControlPlane counts and decides.
 - **Calendar** (`spend_settings`, `PATCH /spend/settings`, org admins): an IANA time zone and the first day of the week;
   `UTC` and Monday until set. A day runs from local midnight to the next local midnight (`spend/period.ts`, through
   `Intl`, so a DST day has 23 or 25 hours), a week from the first day of the week, a month from the 1st. A counter is
-  keyed by the start of its period, so changing the calendar starts the periods that begin differently afresh.
+  keyed by the start of its period, and changing the time zone or the first day of the week deletes the counters, so every
+  period starts afresh under the new calendar (an old counter cannot come back when the calendar returns).
 - **Counters**: only a subject with a limit has one, and only for the current period of each limit's period; an org
   without limits stores nothing and its check returns at once. A new limit counts from its creation (it does not look back
   at earlier usage), and the last limit of a subject and period drops its counter.
@@ -2069,8 +2070,8 @@ prices each attempt, the ControlPlane counts and decides.
   is chosen the pool asks the ledger for the `SpendGate` of the caller (member, teams, proxy key): a **key** limit with no
   room refuses the request; a **member, team or org** limit with no room keeps the shared credentials away, so only the
   member's own private credentials may serve it, and when none can the request is refused; a **credential** limit with no
-  room skips that credential like an unavailable one (the next credential serves, and with none left the refusal names the
-  limit). A refusal is the pick failure `spend_limit_reached`: `429` with the OpenAI-shaped body, a message naming the
+  room skips that credential like an unavailable one (the next credential serves, and with none left the answer is the usual
+  `503 auth_unavailable`: the limit is the credential's, not the request's). A refusal is the pick failure `spend_limit_reached`: `429` with the OpenAI-shaped body, a message naming the
   period ("the daily Spend limit ... is reached") and `Retry-After` until the period ends. It is request-level: no
   cooldown is set on any credential and the conductor does not fail over (`spendLimitReached` stops the attempt loop).
 - **Charge** (`conductor.ts` `finish`, `usage/sink.ts` `priceForSpend`): when the lease carries limits the Worker builds the
@@ -2078,7 +2079,8 @@ prices each attempt, the ControlPlane counts and decides.
   stored record and the counter agree), reports `costMicros` with `report`, and the ControlPlane adds it to every
   counter the attempt belongs to (`SpendLedger.scopes`): the key's, and, for traffic served by a **shared** credential,
   the member's, the member's teams', the org's and the credential's. Traffic served by a **private** credential is the
-  member's own account with the provider, so only the key's counters see it. An unpriced attempt costs 0 and is never
+  member's own account with the provider, so only the key's counters see it. An org admin who reads a key limit's `spent_micros` therefore sees a total that includes
+  that key's private-credential Cost, but only the total: which credential or model it went to stays with the owner. An unpriced attempt costs 0 and is never
   capped. The attempt in flight when a limit is reached finishes, so Spend can pass a limit by the Cost of the requests
   already running (ADR 0024). Alpha search publishes no usage record, so it is not charged; a key limit still refuses it.
 - **`global`**: an org starts with no limits and an upgrade adds none, so nothing is limited until an org admin sets one;

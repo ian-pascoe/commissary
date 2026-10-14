@@ -16,9 +16,6 @@ export const PERIODS: ReadonlyArray<{ readonly id: SpendPeriod; readonly label: 
   { id: "month", label: "Month" },
 ];
 
-export const periodLabel = (period: SpendPeriod): string =>
-  PERIODS.find((candidate) => candidate.id === period)?.label ?? period;
-
 /** "per day": how a limit's period reads in a sentence. */
 export const perPeriod = (period: SpendPeriod): string => `per ${period}`;
 
@@ -29,7 +26,7 @@ export const SUBJECT_KINDS: ReadonlyArray<{
   { id: "org", label: "Whole org" },
   { id: "team", label: "Team" },
   { id: "member", label: "Member" },
-  { id: "credential", label: "Shared account" },
+  { id: "credential", label: "Shared credential" },
   { id: "key", label: "Proxy key" },
 ];
 
@@ -50,13 +47,13 @@ const KIND_RANK: Readonly<Record<SpendSubjectKind, number>> = {
   org: 0,
   team: 1,
   member: 2,
-  credential: 3,
-  key: 4,
+  key: 3,
+  credential: 4,
 };
 
 const PERIOD_RANK: Readonly<Record<SpendPeriod, number>> = { day: 0, week: 1, month: 2 };
 
-/** The org's limits first, then teams, members, accounts and keys; by name, then the shorter period first. */
+/** The org's limits first, then teams, members, keys and shared credentials; by name, then the shorter period first. */
 export const sortLimits = (limits: ReadonlyArray<SpendLimitView>): ReadonlyArray<SpendLimitView> =>
   limits.toSorted(
     (a, b) =>
@@ -180,14 +177,8 @@ export const limitProblem = (
     case "not_found":
       return "That limit no longer exists. Reload to see the current list.";
     case "subject_not_found":
-      return "That member, team, account or key no longer exists.";
-    case "invalid_limit":
-    case "invalid_settings":
-      return detail === undefined ? message : asSentence(detail);
+      return "That member, team, shared credential or proxy key no longer exists.";
     default:
       return detail === undefined ? message : asSentence(detail);
   }
 };
-
-/** Whether a limit can be edited by the caller (the server says) and is worth the controls. */
-export const canEdit = (limit: Pick<SpendLimitView, "editable">): boolean => limit.editable;

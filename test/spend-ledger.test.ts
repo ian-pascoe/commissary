@@ -247,7 +247,7 @@ describe("SpendLedger.scopes", () => {
     expect(gate?.sharedBlocked).toBeUndefined();
   });
 
-  it("charges nothing for a free request and ignores negative amounts", () => {
+  it("charges nothing for an unpriced request and ignores negative amounts", () => {
     const b = book();
     const ledger = ledgerOf(b);
     const now = at("2026-03-10T12:00:00Z");

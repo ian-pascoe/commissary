@@ -144,7 +144,7 @@ the Worker asks on every request: a removed member, or a member whose role was l
   shared credentials, every model": delete it and add narrower ones to restrict. A model a member has no grant for answers
   `400 model_not_found`, like an unknown model, and is left out of their model lists; a request without a member (a service
   token) is served by the grants for everyone only. Private credentials are never granted: they are their owner's alone.
-- **Spend limits** (ADR 0024): an org admin caps what a member, a team, the org, a shared account or a proxy key may spend
+- **Spend limits** (ADR 0024): an org admin caps what a member, a team, the org, a shared credential or a proxy key may spend
   (API-equivalent Cost) in a day, week or month of the org's time zone (the Limits page). A plain member sees the limits that
   bind them and may cap their own proxy keys, never above a limit an org admin set on that key (`422
   exceeds_admin_limit`); `PATCH /spend/settings` is for org admins. A request that meets a limit with no room is refused

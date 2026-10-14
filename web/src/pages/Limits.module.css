@@ -124,7 +124,7 @@
   height: 0.25rem;
   margin-top: var(--space-2);
   background: var(--hairline);
-  border-radius: 999px;
+  border-radius: 1px;
   overflow: hidden;
 }
 
@@ -132,6 +132,11 @@
   display: block;
   height: 100%;
   background: var(--text);
+}
+
+/* A limit that is reached fills its meter in red, as Meter does at 100%. */
+tr[data-reached="true"] .meter > span {
+  background: var(--danger);
 }
 
 .left {

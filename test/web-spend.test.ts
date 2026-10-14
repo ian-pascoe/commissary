@@ -81,7 +81,7 @@ describe("a limit's figures", () => {
 });
 
 describe("the list", () => {
-  it("puts the org first, then teams, members, accounts and keys, the shorter period first", () => {
+  it("puts the org first, then teams, members, keys and shared credentials, the shorter period first", () => {
     const sorted = sortLimits([
       limit({ id: "k", kind: "key", label: "laptop" }),
       limit({ id: "m-week", kind: "member", label: "bob@example.com", period: "week" }),
@@ -91,7 +91,7 @@ describe("the list", () => {
       limit({ id: "c", kind: "credential", label: "me@example.com" }),
     ]);
 
-    expect(sorted.map((entry) => entry.id)).toEqual(["o", "t", "m-day", "m-week", "c", "k"]);
+    expect(sorted.map((entry) => entry.id)).toEqual(["o", "t", "m-day", "m-week", "k", "c"]);
   });
 });
 

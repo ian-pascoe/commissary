@@ -18,6 +18,6 @@ A spend limit caps cost over a calendar day, week or month in the org's time zon
 - Attempts already running when a limit is reached still finish, so spend can pass a limit by the cost of the attempts in flight.
 - Each usage record stores its cost, computed with the prices at the time of the attempt, so a later price change does not rewrite past spend.
 - An attempt on a model without a price costs nothing and its record is marked unpriced. The control panel shows unpriced traffic so an org admin can add a price override.
-- Traffic on private credentials does not count against member, team or org limits, because it is not the org's spend and org admins may not see it. A limit on a proxy key counts everything that key spends.
+- Traffic on private credentials does not count against member, team or org limits, because it is not the org's spend and org admins may not see it. A limit on a proxy key counts everything that key spends, so the spent figure an org admin sees on a key limit includes that key's private-credential cost (a total only, never what it was spent on).
 - A refusal belongs to the request, not to a credential: no cooldown is set and no other credential is tried. A shared credential's own limit is the exception, skipped like an unavailable credential.
 - A limit counts from the moment it is created, and a change of the org's time zone or first day of the week starts the periods that begin differently afresh. An org starts with no limits, so nothing changes for an org until an org admin sets one.

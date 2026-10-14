@@ -33,7 +33,7 @@ const send = async (
 
   return await harness.json(api(slug, path), {
     ...init,
-    headers: { ...(init.headers as Record<string, string> | undefined), ...headers },
+    headers: { ...Object.fromEntries(new Headers(init.headers)), ...headers },
     ...who,
   });
 };
