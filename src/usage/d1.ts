@@ -572,11 +572,19 @@ export const GROUP_BY = [
   "auth",
   "endpoint",
   "day",
+  "key",
+  "team",
 ] as const;
 
 export type GroupBy = (typeof GROUP_BY)[number];
 
-const GROUP_EXPRESSIONS: Readonly<Record<GroupBy, string>> = {
+/**
+ * `team` is no column: a member may be in several teams, so `summarizeUsage` sums each team's members' records
+ * separately (`UsageSummaryQuery.teams`) and the groups can overlap.
+ */
+const GROUP_EXPRESSIONS: Readonly<Record<Exclude<GroupBy, "team">, string>> = {
+  /** The proxy key's id: its `key:<id>` principal; records of any other sign-in have the empty key. */
+  key: "CASE WHEN principal_id LIKE 'key:%' THEN substr(principal_id, 5) END",
   model: "model",
   provider: "provider",
   principal: "principal_id",
@@ -620,6 +628,23 @@ export interface UsageTotals {
   readonly avg_ttft_ms: number | null;
 }
 
+const EMPTY_TOTALS: UsageTotals = {
+  requests: 0,
+  failed: 0,
+  input_tokens: 0,
+  uncached_input_tokens: 0,
+  cache_read_tokens: 0,
+  cache_write_tokens: 0,
+  output_tokens: 0,
+  reasoning_tokens: 0,
+  unclassified_tokens: 0,
+  total_tokens: 0,
+  cost_micros: 0,
+  unpriced_requests: 0,
+  avg_latency_ms: 0,
+  avg_ttft_ms: null,
+};
+
 export interface UsageGroup extends UsageTotals {
   readonly key: string;
 }
@@ -629,8 +654,15 @@ export interface UsageSummary {
   readonly groups: ReadonlyArray<UsageGroup>;
 }
 
+export interface TeamMembers {
+  readonly id: string;
+  readonly memberIds: ReadonlyArray<string>;
+}
+
 export interface UsageSummaryQuery extends UsageFilter {
   readonly groupBy: GroupBy;
+  /** The teams `groupBy: "team"` groups by, with their members. */
+  readonly teams?: ReadonlyArray<TeamMembers>;
   readonly limit?: number;
 }
 
@@ -651,8 +683,49 @@ export const summarizeUsage = async (
     Math.min(MAX_LIST_LIMIT, Math.trunc(query.limit ?? DEFAULT_LIST_LIMIT)),
   );
 
-  const expression = GROUP_EXPRESSIONS[query.groupBy];
   const order = query.groupBy === "day" ? "key DESC" : "total_tokens DESC, requests DESC, key ASC";
+
+  if (query.groupBy === "team") {
+    const teams = query.teams ?? [];
+
+    const statements = await Promise.all(
+      teams.map(async (team) => {
+        // The team's members within the member filter, if any.
+        const memberIds =
+          query.memberIds === undefined
+            ? team.memberIds
+            : team.memberIds.filter((id) => query.memberIds?.includes(id) === true);
+
+        const scoped = await resolvedClauses(db, org, { ...query, memberIds }, authIndexOf);
+
+        return db
+          .prepare(`SELECT ${AGGREGATES} FROM usage_records${scoped.where}`)
+          .bind(...scoped.params);
+      }),
+    );
+
+    const overall = db.prepare(`SELECT ${AGGREGATES} FROM usage_records${where}`).bind(...params);
+    const [total, ...perTeam] = await db.batch<UsageTotals>([overall, ...statements]);
+
+    return {
+      totals: total?.results[0] ?? EMPTY_TOTALS,
+      groups: teams
+        .flatMap((team, index) => {
+          const row = perTeam[index]?.results[0];
+
+          return row === undefined || row.requests === 0 ? [] : [{ ...row, key: team.id }];
+        })
+        .toSorted(
+          (a, b) =>
+            b.total_tokens - a.total_tokens ||
+            b.requests - a.requests ||
+            a.key.localeCompare(b.key),
+        )
+        .slice(0, limit),
+    };
+  }
+
+  const expression = GROUP_EXPRESSIONS[query.groupBy];
 
   const [totals, groups] = await db.batch<UsageTotals & { key?: string }>([
     db.prepare(`SELECT ${AGGREGATES} FROM usage_records${where}`).bind(...params),
@@ -664,22 +737,7 @@ export const summarizeUsage = async (
   ]);
 
   return {
-    totals: totals?.results[0] ?? {
-      requests: 0,
-      failed: 0,
-      input_tokens: 0,
-      uncached_input_tokens: 0,
-      cache_read_tokens: 0,
-      cache_write_tokens: 0,
-      output_tokens: 0,
-      reasoning_tokens: 0,
-      unclassified_tokens: 0,
-      total_tokens: 0,
-      cost_micros: 0,
-      unpriced_requests: 0,
-      avg_latency_ms: 0,
-      avg_ttft_ms: null,
-    },
+    totals: totals?.results[0] ?? EMPTY_TOTALS,
     groups: (groups?.results ?? []).map((group) => {
       const key = String(group.key ?? "");
 

@@ -19,6 +19,8 @@ export const UsageGroupBy = Schema.Literals([
   "auth",
   "endpoint",
   "day",
+  "key",
+  "team",
 ]);
 
 export type UsageGroupBy = typeof UsageGroupBy.Type;
