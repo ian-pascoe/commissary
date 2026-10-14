@@ -1719,7 +1719,9 @@ ADR 0027: deleting something deletes it at once, and the proxy keeps no content 
   only owner of an org that has other members), then deletes the orgs the person is alone in (never `global`), leaves the
   others (`ControlPlane.leaveOrg`: removes the member and their data and clears the removal note that blocks a removed
   member from auto-joining again, which only an admin removal keeps), re-syncs the registry index and drops the person's
-  index rows. The seam for #72: a hosted sign-in account is deleted after the last org step.
+  index rows. On a hosted proxy the sign-in account is deleted after the last org step and before the registry forgets the
+  person (`hosted/session.ts` `deleteSignInAccount`: Better Auth's user with its sessions and linked accounts, in one D1
+  batch; the registry's `people` row goes with `removePerson`, so a later sign-in is a new sign-up).
 
 ## SessionState Durable Object (`src/session-state/`)
 

@@ -383,8 +383,9 @@ The proxy keeps as little as it can and deletes at once; there is no grace perio
 - **Deleting an account** (`DELETE /me` with the caller's own email; people only) removes the person from every org with
   their data there, deletes the orgs they were the only member of, and keeps no removal note, so the address can start
   over. It is refused with `409 sole_owner` (and the org slugs) while they are the only owner of an org with other members:
-  hand it over first. Access signs the person in again on their next request, which creates a new, empty membership; a
-  hosted sign-in (#72) will also delete the sign-in account itself here.
+  hand it over first. On a self-hosted proxy Access signs the person in again on their next request, which creates a new,
+  empty membership. On a hosted proxy the sign-in account goes too (Better Auth's user, its sessions and its linked
+  GitHub/Google accounts): the person is signed out at once, and signing in again is a new sign-up with a new Personal org.
 - **Replay state** that thinking and continuity depend on stays, bounded by its expiry of at most seven days; stale state of
   a deleted org that was not registered expires on its own within that time.
 

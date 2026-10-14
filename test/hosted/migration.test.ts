@@ -9,6 +9,7 @@ import orgs from "../../migrations/0003_usage_org.sql?raw";
 import costs from "../../migrations/0004_usage_cost.sql?raw";
 import members from "../../migrations/0005_usage_member.sql?raw";
 import privates from "../../migrations/0006_usage_private.sql?raw";
+import failures from "../../migrations/0007_usage_failure.sql?raw";
 import hostedAuth from "../../migrations/0008_hosted_auth.sql?raw";
 import { authOptions } from "../../src/hosted/auth.ts";
 import { statementsOf } from "../support/usage.ts";
@@ -25,8 +26,8 @@ const tables = async (): Promise<ReadonlyArray<string>> =>
     .filter((name) => !name.startsWith("_cf_") && !name.startsWith("sqlite_"));
 
 describe("migration 0008 (hosted auth)", () => {
-  it("adds Better Auth's tables to a database at 0006, keeps the usage records, and is idempotent", async () => {
-    for (const statement of [initial, sessions, orgs, costs, members, privates].flatMap(
+  it("adds Better Auth's tables to a database at 0007, keeps the usage records, and is idempotent", async () => {
+    for (const statement of [initial, sessions, orgs, costs, members, privates, failures].flatMap(
       statementsOf,
     ))
       await db.prepare(statement).run();

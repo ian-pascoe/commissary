@@ -53,6 +53,28 @@ export const endSessions = (
   );
 };
 
+/**
+ * Deletes the sign-in account of `email` (a person deleting their account, ADR 0027): Better Auth's user with its
+ * sessions and linked GitHub/Google accounts, so their cookie stops working at once. Answers how many users it deleted
+ * (0 once it is gone, so a repeated deletion succeeds); a D1 failure rejects.
+ */
+export const deleteSignInAccount = async (
+  env: Pick<Env, "USAGE">,
+  email: string,
+): Promise<number> => {
+  const address = email.toLowerCase();
+  const ofUser = `"userId" IN (SELECT id FROM ${AUTH_TABLES.user} WHERE lower(email) = ?)`;
+
+  // One batch is one transaction: the sessions and accounts go with the user, whether or not D1 enforces the cascade.
+  const [, , users] = await env.USAGE.batch([
+    env.USAGE.prepare(`DELETE FROM ${AUTH_TABLES.session} WHERE ${ofUser}`).bind(address),
+    env.USAGE.prepare(`DELETE FROM ${AUTH_TABLES.account} WHERE ${ofUser}`).bind(address),
+    env.USAGE.prepare(`DELETE FROM ${AUTH_TABLES.user} WHERE lower(email) = ?`).bind(address),
+  ]);
+
+  return users?.meta.changes ?? 0;
+};
+
 /** A signed-in person: Better Auth's user id and their email, which the provider verified. */
 export interface SignedInPerson {
   readonly userId: string;

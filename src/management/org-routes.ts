@@ -16,10 +16,9 @@ import { Clock, Data, Effect, Match } from "effect";
 import { HttpRouter } from "effect/http";
 import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
 import { forgetOrgProxyKeys } from "../access/proxy-key.ts";
-import { syncOrgIndex } from "../members/admission.ts";
 import { roleAtLeast } from "../members/roles.ts";
 import type { JsonObject } from "../json/index.ts";
-import { endSessions } from "../hosted/session.ts";
+import { deleteSignInAccount, endSessions } from "../hosted/session.ts";
 import { forgetStanding, ownedOrgLimit } from "../hosted/standing.ts";
 import { isHosted } from "../hosted/mode.ts";
 import { syncOrgIndex } from "../members/admission.ts";
@@ -426,6 +425,14 @@ const deletionFailed = (org: string) => (error: DeletionThrew) =>
     Effect.andThen(Effect.fail(replyError(502, "org deletion failed"))),
   );
 
+const signInDeletionFailed = (error: DeletionThrew) =>
+  Effect.logError("sign-in account deletion failed").pipe(
+    Effect.annotateLogs({
+      cause: error.cause instanceof Error ? error.cause.message : "unknown error",
+    }),
+    Effect.andThen(Effect.fail(replyError(502, "account deletion failed"))),
+  );
+
 const deleteOrgRoute = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
 
@@ -491,8 +498,9 @@ const deleteOrgRoute = Effect.gen(function* () {
  * others belong is not left ownerless: `409 sole_owner` names such orgs and nothing changes. The first org holds the
  * deployment's own settings and is never deleted: a person alone in it only leaves it.
  *
- * Seam for hosted sign-in (#72): the account of a hosted sign-in (its password, sessions and identity) is kept outside
- * the orgs, and its deletion belongs here after the last org step and before the registry index is dropped.
+ * On a hosted proxy (ADR 0026) the sign-in account goes too, after the last org step and before the registry forgets the
+ * person: Better Auth's user, its sessions and linked accounts (`hosted/session.ts`). Signing in again later is a new
+ * sign-up, with a new Personal org. A failed step answers an error and a repeated request picks up where it stopped.
  */
 const deleteAccount = Effect.gen(function* () {
   const { principal } = yield* AccessPrincipal;
@@ -565,7 +573,14 @@ const deleteAccount = Effect.gen(function* () {
     }
   }
 
+  if (isHosted(env))
+    yield* Effect.tryPromise({
+      try: async () => await deleteSignInAccount(env, email),
+      catch: (cause) => new DeletionThrew({ cause }),
+    }).pipe(Effect.catch(signInDeletionFailed));
+
   yield* registry("removePerson", (stub) => stub.removePerson(email));
+  forgetStanding({ email });
 
   return jsonReply(200, { deleted: true, orgs_left: left, orgs_deleted: deleted });
 });

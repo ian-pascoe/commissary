@@ -1,6 +1,7 @@
 // The gate of a hosted proxy (ADR 0026, src/hosted/gate.ts): session cookies for the panel and the management API,
 // proxy keys for the proxy routes, no Access credentials anywhere, sign-up with a Personal org, the owned-org limit, and
 // suspension of people and orgs by platform admins.
+import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { resetStandingCaches } from "../../src/hosted/standing.ts";
 import {
@@ -446,5 +447,46 @@ describe("management keys and downloads", () => {
     expect(
       (await call(path, { headers: panelHeaders(await signIn({ email: ROOT })) })).status,
     ).toBe(200);
+  });
+});
+
+describe("deleting an account", () => {
+  const authRows = async (email: string) => {
+    const count = async (sql: string) =>
+      (await env.USAGE.prepare(sql).bind(email).first<{ n: number }>())?.n;
+
+    const ofUser = `"userId" IN (SELECT id FROM auth_user WHERE email = ?)`;
+
+    return {
+      users: await count(`SELECT count(*) AS n FROM auth_user WHERE email = ?`),
+      sessions: await count(`SELECT count(*) AS n FROM auth_session WHERE ${ofUser}`),
+      accounts: await count(`SELECT count(*) AS n FROM auth_account WHERE ${ofUser}`),
+    };
+  };
+
+  it("deletes the sign-in account with its sessions, and a later sign-in is a new sign-up", async () => {
+    const cookie = await signIn({ email: "gus@example.com" });
+    const personal = (await me(cookie)).orgs[0]?.slug;
+
+    expect(await authRows("gus@example.com")).toEqual({ users: 1, sessions: 1, accounts: 1 });
+
+    const deleted = await call(
+      "/v8/management/me",
+      json(cookie, "DELETE", { email: "gus@example.com" }),
+    );
+
+    expect(deleted.status).toBe(200);
+    expect(await deleted.json()).toEqual({
+      deleted: true,
+      orgs_left: [],
+      orgs_deleted: [personal],
+    });
+    expect(await authRows("gus@example.com")).toEqual({ users: 0, sessions: 0, accounts: 0 });
+    expect((await call("/v8/management/me", { headers: panelHeaders(cookie) })).status).toBe(401);
+
+    const again = await me(await signIn({ email: "gus@example.com" }));
+    expect(again.owned_orgs).toBe(1);
+    expect(again.orgs).toHaveLength(1);
+    expect(again.orgs[0]?.slug).not.toBe(personal);
   });
 });
