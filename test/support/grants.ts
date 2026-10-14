@@ -1,5 +1,5 @@
-// Test helpers for grants: grant builders and the allowance of a holder.
-import { type GrantHolder, allowanceOf } from "../../src/grants/allowance.ts";
+// Test helpers for grants: grant builders and the reach of a holder.
+import { type GrantHolder, reachOf } from "../../src/grants/reach.ts";
 import type { GrantEntry, GrantScope, GrantSubject } from "../../src/grants/grant.ts";
 
 export const everyone: GrantSubject = { kind: "everyone" };
@@ -34,8 +34,6 @@ export const grant = (
   };
 };
 
-/** The allowance of a member (with the teams they belong to) under `grants`. */
-export const allowanceFor = (
-  grants: ReadonlyArray<GrantEntry>,
-  holder: GrantHolder = { teams: [] },
-) => allowanceOf(grants, holder);
+/** The reach of a member (with the teams they belong to) under `grants`. */
+export const reachFor = (grants: ReadonlyArray<GrantEntry>, holder: GrantHolder = { teams: [] }) =>
+  reachOf(grants, holder);

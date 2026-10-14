@@ -153,10 +153,10 @@ member's access is the union of the grants that name them; there is no deny. A n
 everyone every model on every shared credential.
 _Avoid_: entitlement, ACL, access rule
 
-**Allowance**:
+**Reach**:
 What a member's grants add up to: the upstream models they may use on each shared credential. Selection and the model
 lists are computed under it; a model outside it answers like an unknown one.
-_Avoid_: permissions, quota
+_Avoid_: allowance (a provider's limit), permissions
 
 **Account**:
 A credential that is a provider login: an OAuth sign-in, a device-code login, an imported service account or an

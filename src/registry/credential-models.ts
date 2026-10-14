@@ -49,7 +49,7 @@ export interface AssemblyOptions {
   readonly catalogs: ModelCatalogs;
   /** Unix seconds used as `created` of config-defined models (Go uses `time.Now().Unix()`). */
   readonly nowSeconds: number;
-  /** A member's restricted allowance (ADR 0021): models of a shared credential outside it are not registered. */
+  /** A member's restricted reach (ADR 0023): models of a shared credential outside it are not registered. */
   readonly grants?: GrantFilter | undefined;
 }
 

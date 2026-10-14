@@ -1,5 +1,5 @@
 /**
- * The allowance of one caller: the union of the grants that name them (ADR 0021). Pure; selection and the model
+ * The reach of one caller: the union of the grants that name them (ADR 0023). Pure; selection and the model
  * registry both ask it the same question, "may this caller use this upstream model on this shared credential?".
  *
  * Patterns match the UPSTREAM model a credential would call (after prefix stripping and alias resolution), so an alias
@@ -15,7 +15,7 @@ export interface GrantTarget {
   readonly executor: string;
 }
 
-export interface Allowance {
+export interface Reach {
   /** Every model of every shared credential is allowed (the default grant): nothing needs filtering. */
   readonly unrestricted: boolean;
   /** Whether `model` (an upstream model name, thinking suffix ignored) may be used on the shared credential `target`. */
@@ -25,7 +25,7 @@ export interface Allowance {
 }
 
 /** Allows everything. For callers that are not a request of a member (tests, the system); selection needs one stated. */
-export const ALLOW_ALL: Allowance = {
+export const ALLOW_ALL: Reach = {
   unrestricted: true,
   permits: () => true,
   coversAll: () => true,
@@ -59,8 +59,8 @@ const covers = (grant: GrantEntry, target: GrantTarget): boolean => {
   }
 };
 
-/** The allowance of `holder` under `grants`. */
-export const allowanceOf = (grants: ReadonlyArray<GrantEntry>, holder: GrantHolder): Allowance => {
+/** The reach of `holder` under `grants`. */
+export const reachOf = (grants: ReadonlyArray<GrantEntry>, holder: GrantHolder): Reach => {
   const applicable = grants.filter((grant) => names(grant, holder));
 
   const unrestricted = applicable.some(
@@ -79,9 +79,9 @@ export const allowanceOf = (grants: ReadonlyArray<GrantEntry>, holder: GrantHold
   };
 };
 
-/** The allowance of `member` (none: a request without a member) under a registry's grant table. */
-export const allowanceFromTable = (table: GrantTable, member: string | undefined): Allowance =>
-  allowanceOf(table.grants, {
+/** The reach of `member` (none: a request without a member) under a registry's grant table. */
+export const reachFromTable = (table: GrantTable, member: string | undefined): Reach =>
+  reachOf(table.grants, {
     member,
     teams:
       member === undefined

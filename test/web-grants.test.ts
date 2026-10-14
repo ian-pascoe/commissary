@@ -159,7 +159,7 @@ describe("labels and order", () => {
     expect(subjectLabel({ kind: "team", id: "research" }, directory)).toBe("RESEARCH");
     expect(subjectLabel({ kind: "member", id: "gone" }, directory)).toBe("gone");
 
-    expect(scopeLabel({ kind: "all" })).toBe("All shared accounts");
+    expect(scopeLabel({ kind: "all" })).toBe("All shared credentials");
     expect(scopeLabel({ kind: "provider", provider: "claude" })).toBe("Every claude account");
     expect(scopeLabel({ kind: "credential", id: "work.json" })).toBe("work.json");
   });
@@ -217,7 +217,7 @@ describe("reading grants", () => {
     const groups = groupGrants(all, "credential", directory);
 
     expect(groups.map((group) => group.label)).toEqual([
-      "All shared accounts",
+      "All shared credentials",
       "work.json",
       "Every claude account",
     ]);

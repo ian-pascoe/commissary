@@ -1,4 +1,4 @@
-// Grants (/grants): which models of which shared accounts a member, a team or everyone may use (ADR 0021), read by
+// Grants (/grants): which models of which shared credentials a member, a team or everyone may use (ADR 0023), read by
 // member, by team or by credential. A member may use the union of the grants that name them; there is no deny, so the
 // org's default grant (everyone, every account, every model) is what removes a restriction and what to delete to
 // restrict. A private account is its owner's alone and never appears here. Edits are saved with the grant's revision
@@ -45,7 +45,7 @@ type Note =
   | { readonly tone: "done"; readonly text: string }
   | { readonly tone: "problem"; readonly text: string; readonly stale: boolean };
 
-/** The shared accounts a credential grant can name: the file names of the org's non-private accounts. */
+/** The shared credentials a credential grant can name: the file names of the org's non-private auth files. */
 interface Account {
   readonly id: string;
   readonly label: string;
@@ -61,7 +61,7 @@ const SUBJECTS: ReadonlyArray<{
 ];
 
 const SCOPES: ReadonlyArray<{ readonly kind: GrantDraft["scopeKind"]; readonly label: string }> = [
-  { kind: "all", label: "All shared accounts" },
+  { kind: "all", label: "All shared credentials" },
   { kind: "provider", label: "Every account of a provider" },
   { kind: "credential", label: "One account" },
 ];
@@ -513,6 +513,7 @@ const accountsOf = (
       readonly files: ReadonlyArray<{
         readonly name: string;
         readonly label: string;
+        readonly source: string;
         readonly private?: boolean;
       }>;
     },
@@ -521,7 +522,9 @@ const accountsOf = (
 ): ReadonlyArray<Account> =>
   AsyncResult.isSuccess(result)
     ? result.value.files
-        .filter((file) => file.private !== true)
+        // A config API key is listed under its auth_index, which is not its credential id: a grant names it through its
+        // provider or all credentials.
+        .filter((file) => file.private !== true && file.source === "file")
         .map((file) => ({
           id: file.name,
           label:
@@ -584,11 +587,11 @@ export const GrantsPage = () => {
       <header className={styles["head"]}>
         <h1 className={styles["title"]}>Grants</h1>
         <p className={styles["intro"]}>
-          A grant says which models of which shared accounts a member, a team or everyone may use. A
-          member may use everything their own grants, their teams&rsquo; and everyone&rsquo;s add up
-          to; there is no deny, so a new org starts with one grant that gives everyone every model.
-          Delete it and add narrower ones to restrict. A model a member may not use answers as
-          unknown, and private accounts are never granted: they are their owner&rsquo;s alone.
+          A grant says which models of which shared credentials a member, a team or everyone may
+          use. A member may use everything their own grants, their teams&rsquo; and everyone&rsquo;s
+          add up to; there is no deny, so a new org starts with one grant that gives everyone every
+          model. Delete it and add narrower ones to restrict. A model a member may not use answers
+          as unknown, and private accounts are never granted: they are their owner&rsquo;s alone.
         </p>
       </header>
       {body()}

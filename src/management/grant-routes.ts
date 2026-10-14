@@ -1,6 +1,6 @@
 /**
  * `GET|POST /v8/management/grants` and `PUT|DELETE /grants/:id` (`GrantsGroup` in contract/grants.ts): which upstream
- * models of which shared credentials a member, a team or everyone may use (ADR 0021), and `GET /models/mine`, the
+ * models of which shared credentials a member, a team or everyone may use (ADR 0023), and `GET /models/mine`, the
  * models the caller may use. Workers addition, no Go counterpart.
  *
  * A grant is a config entry (ADR 0025) of the request's org. `POST` creates one (`409 conflict` when the subject and

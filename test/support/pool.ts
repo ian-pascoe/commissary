@@ -3,7 +3,7 @@
 import { Effect, Layer } from "effect";
 import { parseConfigYaml } from "../../src/config/codec.ts";
 import type { Config } from "../../src/config/schema.ts";
-import { ALLOW_ALL, type Allowance } from "../../src/grants/allowance.ts";
+import { ALLOW_ALL, type Reach } from "../../src/grants/reach.ts";
 import type { StoredCredential } from "../../src/credentials/derive.ts";
 import type { CredentialState } from "../../src/credentials/model.ts";
 import { CredentialPool, type PoolStore } from "../../src/credentials/pool.ts";
@@ -78,7 +78,7 @@ export const makePool = async (
     readonly store?: MemoryPoolStore;
     readonly clock?: TestNow;
     /** What a member may use; everything unless a test says otherwise. */
-    readonly allowance?: (member: string | undefined) => Allowance;
+    readonly reach?: (member: string | undefined) => Reach;
   } = {},
 ): Promise<PoolHarness> => {
   const config = await loadConfig(yaml);
@@ -89,7 +89,7 @@ export const makePool = async (
     store,
     config: () => ({ version: 1, config }),
     now: clock.now,
-    allowance: options.allowance ?? (() => ALLOW_ALL),
+    reach: options.reach ?? (() => ALLOW_ALL),
   });
 
   return { pool, store, clock, config };

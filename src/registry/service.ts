@@ -15,7 +15,7 @@ import type { ConfigStoreError } from "../config/errors.ts";
 import type { Config } from "../config/schema.ts";
 import { currentControlPlane, WorkerEnv } from "../platform/env.ts";
 import { CurrentOrg, type OrgId } from "../platform/org.ts";
-import { ALLOW_ALL, type Allowance, allowanceFromTable } from "../grants/allowance.ts";
+import { ALLOW_ALL, type Reach, reachFromTable } from "../grants/reach.ts";
 import type { GrantTable } from "../grants/grant.ts";
 import { projectModel } from "./availability.ts";
 import { assembleCredentialModels } from "./credential-models.ts";
@@ -52,11 +52,11 @@ export class RegistrySnapshot {
     /** Version of `config` in the ControlPlane (0 = defaults, or unknown when built outside the service). */
     readonly configVersion: number = 0,
     /**
-     * The org's grants and teams (ADR 0021) as of this snapshot; `visibleTo` computes each member's allowance from them.
+     * The org's grants and teams (ADR 0023) as of this snapshot; `visibleTo` computes each member's reach from them.
      * Absent only in a registry built without grants (tests): every member then reaches every model.
      */
     readonly grants?: GrantTable,
-    /** Set on a member's view when their allowance is restricted: the models it left out are not in `index`. */
+    /** Set on a member's view when their reach is restricted: the models it left out are not in `index`. */
     readonly grantFilter?: GrantFilter,
   ) {}
 
@@ -93,16 +93,16 @@ export class RegistrySnapshot {
 
   /**
    * The registry as one caller may use it: a private credential's models belong to its owner (ADR 0023), and a shared
-   * credential's models to the members its grants name (ADR 0021), so every other caller, an org admin included, gets
+   * credential's models to the members its grants name (ADR 0023), so every other caller, an org admin included, gets
    * the registry without them. The snapshot itself knows every model; `undefined` is a caller without a member, which
    * only the grants for everyone name. A view is built once per snapshot and member, and a snapshot is built from one
-   * revision of the grants, so a view is never older than its grants.
+   * version of the grants, so a view is never older than its grants.
    */
   visibleTo = (memberId: string | undefined): RegistrySnapshot => {
-    const allowance: Allowance =
-      this.grants === undefined ? ALLOW_ALL : allowanceFromTable(this.grants, memberId);
+    const reach: Reach =
+      this.grants === undefined ? ALLOW_ALL : reachFromTable(this.grants, memberId);
 
-    if (allowance.unrestricted && !this.sources.some((source) => source.owner !== undefined))
+    if (reach.unrestricted && !this.sources.some((source) => source.owner !== undefined))
       return this;
     const key = memberId ?? "";
     const cached = this.#memberViews.get(key);
@@ -117,7 +117,7 @@ export class RegistrySnapshot {
       catalogs: this.catalogs,
       now: this.now,
       configVersion: this.configVersion,
-      allowance,
+      reach,
       ...(this.grants === undefined ? {} : { grants: this.grants }),
     });
 
@@ -150,14 +150,14 @@ export const buildSnapshot = (input: {
   readonly configVersion?: number;
   /** The org's grants and teams; without them every member reaches every model. */
   readonly grants?: GrantTable;
-  /** The allowance a member's view is built under (`visibleTo`); unrestricted by default. */
-  readonly allowance?: Allowance;
+  /** The reach a member's view is built under (`visibleTo`); unrestricted by default. */
+  readonly reach?: Reach;
 }): RegistrySnapshot => {
   const { config, catalogs, now } = input;
   const nowSeconds = Math.floor(now / 1000);
   const clients: ClientRegistration[] = [];
   const sources = input.sources.toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  const filter = grantFilter(input.allowance ?? ALLOW_ALL, config, sources);
+  const filter = grantFilter(input.reach ?? ALLOW_ALL, config, sources);
 
   for (const source of sources) {
     const assembled = assembleCredentialModels(source, {

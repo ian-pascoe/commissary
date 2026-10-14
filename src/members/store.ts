@@ -604,7 +604,7 @@ export class MemberStore {
       .map((row) => row.member_id);
   }
 
-  /** The ids of the teams a member belongs to (a member's grants, ADR 0021). */
+  /** The ids of the teams a member belongs to (a member's grants, ADR 0023). */
   teamIdsOf(memberId: string): ReadonlyArray<string> {
     return this.#teamsOf(memberId);
   }

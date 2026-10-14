@@ -1,6 +1,6 @@
-// The registry as one member may list it under their grants (ADR 0021): a model is listed to a member only when one of
+// The registry as one member may list it under their grants (ADR 0023): a model is listed to a member only when one of
 // its upstream models is granted to them on some shared credential that serves it. The snapshot itself still knows
-// every model for routing; `visibleTo` is the per-member view, cached per snapshot (so per org, grants revision and
+// every model for routing; `visibleTo` is the per-member view, cached per snapshot (so per org, grants version and
 // member).
 import { describe, expect, it } from "vitest";
 import type { GrantEntry, GrantTable } from "../src/grants/grant.ts";
@@ -25,8 +25,8 @@ const NOW = 1_800_000_000_000;
 const table = (
   grants: ReadonlyArray<GrantEntry>,
   teams: GrantTable["teams"] = [],
-  revision = 1,
-): GrantTable => ({ revision, grants, teams });
+  version = 1,
+): GrantTable => ({ version, grants, teams });
 
 const snapshot = (sources: ModelSource[], grants: GrantTable | undefined, yaml = "") =>
   buildSnapshot({

@@ -136,10 +136,10 @@ the Worker asks on every request: a removed member, or a member whose role was l
 ¹ Proxy keys are issued to members: a platform admin who is not a member of the org, or a service token, gets
 `403 member_required` when creating one.
 
-- **Grants** (ADR 0021): a member uses a shared credential only through a grant (a member, a team or everyone; one
+- **Grants** (ADR 0023): a member uses a shared credential only through a grant (a member, a team or everyone; one
   account, every account of a provider or all of them; model patterns). Access is the union of the grants that name the
   member; there is no deny. A new org, and every org that existed before grants, starts with the grant "everyone, all
-  shared accounts, every model": delete it and add narrower ones to restrict. A model a member has no grant for answers
+  shared credentials, every model": delete it and add narrower ones to restrict. A model a member has no grant for answers
   `400 model_not_found`, like an unknown model, and is left out of their model lists; a request without a member (a service
   token) is served by the grants for everyone only. Private credentials are never granted: they are their owner's alone.
 - **Adding a member** (`POST /members` with an email and a role) takes effect the next time the person signs in through Access;

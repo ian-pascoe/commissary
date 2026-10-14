@@ -256,10 +256,10 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
   `callerScope::providers::session::model`). Model prefixes, `force-model-prefix`, exclusions, OAuth/API-key aliases,
   `force-mapping` and alias pools are resolved per credential in `routing.ts`. The caller still resolves the provider set
   (`PickRequest.providers`) from the model registry; the DO enforces the per-credential rules.
-- **Grants** (ADR 0021, _Grants_ below): `pick` takes the caller's `Allowance` (`CredentialPool` option `allowance(member)`,
+- **Grants** (ADR 0023, _Grants_ below): `pick` takes the caller's `Reach` (`CredentialPool` option `reach(member)`,
   computed from the org's grants and the member's teams) and `selection/grants.ts` `grantedRoute` runs **before** the
   availability check, the priority tiers and the strategy. For a shared credential it resolves the requested model as
-  `routing.ts` does (prefix, alias, alias pool) and keeps only the upstream models the allowance permits, so a pool tries
+  `routing.ts` does (prefix, alias, alias pool) and keeps only the upstream models the reach permits, so a pool tries
   its granted members and an alias to an ungranted model is refused. A credential left with no granted route is not a
   candidate; session affinity and the content-based sessions search the candidates that remain, so a session bound to a
   credential whose grant was removed moves to another one (the pick binds the session to the credential it chose).
@@ -267,8 +267,10 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
   nothing for a model some credential would serve, the failure is `model_not_found` (`400`, the body of `unknownModelBody`, the
   one the pipeline answers for a model no credential serves), not `auth_not_found`: an unreachable model answers like an
   unknown one and does not say a grant exists. A prefix (`work/gpt-5`) pins its credential only when that credential is
-  granted. A request without a member (a service token, the orchestrator's traffic in `global`) has the allowance of the
-  grants for everyone only.
+  granted. A request without a member (a service token, the orchestrator's traffic in `global`) has the reach of the
+  grants for everyone only. The failure body names the model the client sent, thinking suffix included, exactly like
+  `resolveModel`'s. A Gemini Interactions **agent** request has no upstream model to match: it selects with
+  `gemini-2.5-flash` (`INTERACTIONS_AGENT_AUTH_SELECTION_MODEL`), so a grant for that model covers every agent.
 - **RPC**: `pick(request)` returns `{ ok: true, credential, route, lease }` (credential snapshot including token
   metadata, resolved base URL/headers, and the requested -> upstream model mapping) or `{ ok: false, failure }`
   (`model_cooldown` 429 + body, `auth_unavailable` 503, `auth_not_found`, `provider_not_found`). `report(lease, result)`
@@ -726,16 +728,16 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
   tier, config `models:`), exclusions, OAuth aliases (`fork`, display names, per-credential first), `oauth.settings`
   context length, prefixes (`force-model-prefix`). OpenAI-compatibility models keep duplicate aliases (model pools) and skip
   exclusions/aliases like Go.
-- **Grants in the registry** (ADR 0021, `grant-filter.ts`): the snapshot knows every model (routing and the pick enforce
+- **Grants in the registry** (ADR 0023, `grant-filter.ts`): the snapshot knows every model (routing and the pick enforce
   grants themselves); `RegistrySnapshot.visibleTo(memberId)` is the registry as one caller may use it. It builds a snapshot
-  of its own from the same sources under the member's `Allowance`: `assembleCredentialModels` drops the models of a shared
+  of its own from the same sources under the member's `Reach`: `assembleCredentialModels` drops the models of a shared
   credential that `grantsReach` says selection could not serve, asking `resolveModelRoute` (the same function the pick uses,
   over the `ModelSource`) whether any upstream model of the id is permitted on that credential. So an alias is listed when
   its upstream model is granted, a pool alias when any member of the pool is, and `prefix/model` when the model is granted on
   the credential behind the prefix. A private credential's models stay with its owner. Views are cached per snapshot and
-  member; a snapshot is built from the grants revision read with the sources (`ControlPlane.grantTable()`: grants, teams
+  member; a snapshot is built from the grants version read with the sources (`ControlPlane.grantTable()`: grants, teams
   and a counter that moves with every grant write and team membership change), so the registry is cached per org, per
-  member and per grants revision, and the whole snapshot is one 5 s TTL stale at most. A registry that cannot read the grants
+  member and per grants version, and the whole snapshot is one 5 s TTL stale at most. A registry that cannot read the grants
   is not built (the previous snapshot keeps serving, `fresh` answers 502); it is never built as if everyone had every model.
   With the default grant, or no restriction, `visibleTo` is the snapshot itself. The lists (`/v1/models`, `/v1beta/models`,
   the Claude and Codex lists, the spawn-agent list), `ModelProviders.providersFor` / `firstAvailableModel` (so a model the
@@ -1967,7 +1969,7 @@ error codes are in `docs/ACCESS.md` "Members, roles and teams".
 
 ## Grants (`src/grants/`, `src/management/grant-routes.ts`)
 
-Workers addition, no Go counterpart; ADR 0021 and ADR 0023. A grant says which upstream models of which **shared**
+Workers addition, no Go counterpart; ADR 0023. A grant says which upstream models of which **shared**
 credentials a subject may use; selection and the model registry read it (_Credentials and selection_, _Model registry_).
 
 - **Entries** (`grants/grant.ts`, `grants/store.ts` `GrantStore`, in each org's ControlPlane, SQLite tables `grants` and
@@ -1983,9 +1985,9 @@ credentials a subject may use; selection and the model registry read it (_Creden
   "everyone, all shared credentials, `*`" and records that in `grant_state`, in one transaction. A new org and every org that
   existed before grants (`global` included) therefore start with it and nothing changes for them until an org admin deletes
   it; deleting it is not undone by a later start (`grant_state` says it was seeded).
-- **Allowance** (`grants/allowance.ts`): the union of the grants that name a holder (`everyone`, their member id, their
+- **Reach** (`grants/reach.ts`): the union of the grants that name a holder (`everyone`, their member id, their
   teams). `unrestricted` when a grant for all credentials gives `*`; `coversAll(credential)` when one grant gives `*` on
-  the credential; `permits(credential, upstreamModel)` otherwise. There is no deny. `allowanceFromTable(table, memberId)`
+  the credential; `permits(credential, upstreamModel)` otherwise. There is no deny. `reachFromTable(table, memberId)`
   is the same computation for the Worker, from `grantTable()`.
 - **Routes** (`grant-routes.ts`, contract `contract/grants.ts`): `GET /v8/management/grants` answers `{version, grants}`;
   `POST /grants` creates one (`409 conflict` when the subject and scope have one); `PUT|DELETE /grants/:id` take `If-Match`

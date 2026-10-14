@@ -25,6 +25,7 @@ const fakeControlPlane = (sources: () => ReadonlyArray<ModelSource>, calls: { co
 
           return sources();
         },
+        grantTable: () => ({ version: 1, grants: [], teams: [] }),
       }),
     },
   } as unknown as Env);

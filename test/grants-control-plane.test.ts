@@ -1,4 +1,4 @@
-// Grants in the real ControlPlane (ADR 0021): the writes (revisions, conflicts, what a grant may name), what a pick does
+// Grants in the real ControlPlane (ADR 0023): the writes (revisions, conflicts, what a grant may name), what a pick does
 // the moment a grant changes, team grants following the team, and grants leaving with their member or team.
 import { afterAll, describe, expect, it } from "vitest";
 import { FULL_ACCESS } from "../src/credentials/ownership.ts";
@@ -253,7 +253,7 @@ describe("grants leave with who they named", () => {
 });
 
 describe("the grant table of the registry", () => {
-  it("carries the grants, the teams and a revision that moves with each change", async () => {
+  it("carries the grants, the teams and a version that moves with each change", async () => {
     const { stub, alice } = await newOrg();
     const created = await stub.createTeam("platform");
 
@@ -265,14 +265,14 @@ describe("the grant table of the registry", () => {
 
     const joined = await stub.grantTable();
 
-    expect(joined.revision).toBeGreaterThan(before.revision);
+    expect(joined.version).toBeGreaterThan(before.version);
     expect(joined.teams).toEqual([{ id: created.value.id, members: [alice] }]);
 
     await creates(stub, grantOf({ kind: "team", id: created.value.id }, ["*"]));
 
     const granted = await stub.grantTable();
 
-    expect(granted.revision).toBeGreaterThan(joined.revision);
+    expect(granted.version).toBeGreaterThan(joined.version);
     expect(granted.grants).toHaveLength(1);
   });
 });

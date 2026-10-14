@@ -1,4 +1,4 @@
-// The Grants page's model (ADR 0021): a grant as the form edits it, what is wrong with a draft, the body a draft becomes,
+// The Grants page's model (ADR 0023): a grant as the form edits it, what is wrong with a draft, the body a draft becomes,
 // what a refused write tells the operator, and how grants are read by member, by team or by credential. Pure: no DOM,
 // tested in test/web-grants.test.ts.
 import type { Grant, GrantBody, GrantScope, GrantSubject } from "#contract/grants.ts";
@@ -39,9 +39,7 @@ export interface GrantDraft {
   readonly models: string;
 }
 
-export type GrantField = "subject" | "scope" | "models";
-
-/** The message of each field that is wrong, and `taken` when another grant has the subject and scope. */
+/** The message of each field that is wrong; a subject and scope another grant already has is reported under `subject`. */
 export interface GrantErrors {
   subject?: string;
   scope?: string;
@@ -66,7 +64,7 @@ export const parsePatterns = (text: string): string[] => [
   ),
 ];
 
-export const patternsText = (models: ReadonlyArray<string>): string => models.join(", ");
+const patternsText = (models: ReadonlyArray<string>): string => models.join(", ");
 
 export const subjectOf = (draft: GrantDraft): GrantSubject =>
   draft.subjectKind === "everyone"
@@ -125,7 +123,7 @@ const sameScope = (a: GrantScope, b: GrantScope): boolean => {
 };
 
 /** The grant that already has the draft's subject and scope, other than the one being edited. */
-export const grantOfPair = (
+const grantOfPair = (
   draft: GrantDraft,
   grants: ReadonlyArray<Grant>,
   editing?: Grant,
@@ -205,7 +203,7 @@ export const subjectLabel = (subject: GrantSubject, directory: Directory): strin
 export const scopeLabel = (scope: GrantScope): string => {
   switch (scope.kind) {
     case "all":
-      return "All shared accounts";
+      return "All shared credentials";
     case "provider":
       return `Every ${scope.provider} account`;
     case "credential":

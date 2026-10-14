@@ -7,7 +7,7 @@
  * answers this question because it owns the cooldown state of every credential.
  */
 import { Schema } from "effect";
-import type { Allowance } from "../../grants/allowance.ts";
+import type { Reach } from "../../grants/reach.ts";
 import type { Json } from "../../json/index.ts";
 import { isCredentialRetryRoundStatus } from "../cooldown/classify.ts";
 import { MIN_QUOTA_COOLDOWN_MS } from "../cooldown/mark-result.ts";
@@ -196,7 +196,7 @@ export interface RetryPlanInput {
   readonly query: RetryQuery;
   readonly routing: RoutingContext;
   /** What the caller may use (their grants), as in `SelectionInput`. */
-  readonly allowance: Allowance;
+  readonly reach: Reach;
   /** `credential -> cooling disabled`. */
   readonly coolingDisabled: (credential: Credential) => boolean;
   readonly now: number;
@@ -245,7 +245,7 @@ export const planRetry = (input: RetryPlanInput): RetryPlan => {
     if (query.model !== "" && resolved === undefined) continue;
 
     const route =
-      resolved === undefined ? undefined : grantedRoute(credential, resolved, input.allowance);
+      resolved === undefined ? undefined : grantedRoute(credential, resolved, input.reach);
 
     if (resolved !== undefined && route === undefined) continue;
 

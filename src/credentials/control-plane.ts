@@ -42,7 +42,7 @@ import {
 import { CredentialStore } from "./store.ts";
 import type { CredentialSummary } from "./summary.ts";
 import type { ModelSource } from "../registry/source.ts";
-import { allowanceOf } from "../grants/allowance.ts";
+import { reachOf } from "../grants/reach.ts";
 import type { GrantChange, GrantSubject, GrantTable, GrantsWire } from "../grants/grant.ts";
 import { GrantStore } from "../grants/store.ts";
 import { type AuthIndexer, orgAuthIndexer } from "../management/auth-index.ts";
@@ -301,7 +301,7 @@ export class ControlPlane extends DurableObject<Env> {
   /** The org's data key: seals and opens the stored secrets once the object started. */
   readonly #secrets = new OrgSecrets();
   readonly #members: MemberStore;
-  /** Which upstream models of which shared credentials each member may use (ADR 0021). */
+  /** Which upstream models of which shared credentials each member may use (ADR 0023). */
   readonly #modelGrants: GrantStore;
   /** The members' private API key groups (sealed rows of their own, never config entries). */
   readonly #privateKeys: PrivateKeyStore;
@@ -341,8 +341,8 @@ export class ControlPlane extends DurableObject<Env> {
       config: () => this.#currentConfig(),
       privateCredentials: () => this.#members.privateCredentials(),
       privateKeys: () => this.#privateKeys.owners(),
-      allowance: (member) =>
-        allowanceOf(this.#modelGrants.entries(), {
+      reach: (member) =>
+        reachOf(this.#modelGrants.entries(), {
           member,
           teams: member === undefined ? [] : this.#members.teamIdsOf(member),
         }),
@@ -700,7 +700,7 @@ export class ControlPlane extends DurableObject<Env> {
     return removed;
   }
 
-  // --- grants (ADR 0021, `grants/store.ts`) -----------------------------------------------------------------------
+  // --- grants (ADR 0023, `grants/store.ts`) -----------------------------------------------------------------------
 
   /** The org's grants with their revisions and the counter they were read at (what the management routes edit). */
   grantEntries(): GrantsWire {
@@ -730,12 +730,12 @@ export class ControlPlane extends DurableObject<Env> {
     return undefined;
   }
 
-  /** Everything the Worker needs to compute any member's allowance: the grants and who is in each team. */
+  /** Everything the Worker needs to compute any member's reach: the grants and who is in each team. */
   grantTable(): GrantTable {
     this.#ensureMembership();
 
     return {
-      revision: this.#modelGrants.version(),
+      version: this.#modelGrants.version(),
       grants: this.#modelGrants.entries(),
       teams: this.#members.teams().map((team) => ({ id: team.id, members: team.members })),
     };

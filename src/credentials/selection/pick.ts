@@ -13,7 +13,7 @@ import type { Json } from "../../json/index.ts";
 import type { RoutingStrategy } from "../../config/schema.ts";
 import { boundSessionIdentity } from "../../session-routing/identity.ts";
 import { lcpNamespace, type MerklePrefixMatcher } from "../../session-routing/matcher.ts";
-import type { Allowance } from "../../grants/allowance.ts";
+import type { Reach } from "../../grants/reach.ts";
 import { type Credential, type CredentialState, executorKey } from "../model.ts";
 import { affinityKey, isSubagentSession, type SessionCache } from "./affinity.ts";
 import { servesMember } from "../ownership.ts";
@@ -60,7 +60,7 @@ export interface SelectionInput {
    * What the caller may use (their grants): shared credentials and upstream models outside it are no candidates. There
    * is no default, so a caller of selection states it (`ALLOW_ALL` is a decision, not an omission).
    */
-  readonly allowance: Allowance;
+  readonly reach: Reach;
   readonly now: number;
 }
 
@@ -176,7 +176,7 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
     if (route === undefined) continue;
 
     // Grants come before cooling, tiers, strategy and affinity: none of them may see a model the caller cannot use.
-    const granted = grantedRoute(credential, route, input.allowance);
+    const granted = grantedRoute(credential, route, input.reach);
 
     if (granted === undefined) {
       withheldByGrants += 1;

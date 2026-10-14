@@ -1,5 +1,5 @@
 /**
- * Grants in the model registry (ADR 0021): which of a credential's models a member's allowance reaches.
+ * Grants in the model registry (ADR 0023): which of a credential's models a member's reach reaches.
  *
  * The registry lists a model to a member only when selection could serve it: some upstream model the model resolves to
  * on that shared credential is granted to them. It asks selection's own routing (`resolveModelRoute`: prefix, alias
@@ -8,22 +8,22 @@
 import type { Config } from "../config/schema.ts";
 import { sanitizeAliases } from "../credentials/derive.ts";
 import { resolveModelRoute, type RoutingContext } from "../credentials/selection/routing.ts";
-import type { Allowance } from "../grants/allowance.ts";
+import type { Reach } from "../grants/reach.ts";
 import type { ModelSource } from "./source.ts";
 
-/** A restricted allowance with the routing context its models resolve in. */
+/** A restricted reach with the routing context its models resolve in. */
 export interface GrantFilter {
-  readonly allowance: Allowance;
+  readonly reach: Reach;
   readonly routing: RoutingContext;
 }
 
-/** The filter of `allowance` over `sources`; `undefined` when the allowance is unrestricted (nothing to filter). */
+/** The filter of `reach` over `sources`; `undefined` when the reach is unrestricted (nothing to filter). */
 export const grantFilter = (
-  allowance: Allowance,
+  reach: Reach,
   config: Pick<Config, "oauth" | "routing">,
   sources: ReadonlyArray<ModelSource>,
 ): GrantFilter | undefined => {
-  if (allowance.unrestricted) return undefined;
+  if (reach.unrestricted) return undefined;
   const oauthModelAlias: Record<string, ReturnType<typeof sanitizeAliases>> = {};
 
   for (const [channel, aliases] of Object.entries(config.oauth["model-alias"]))
@@ -36,7 +36,7 @@ export const grantFilter = (
       knownPrefixes.add(source.prefix);
 
   return {
-    allowance,
+    reach,
     routing: {
       forceModelPrefix: config.routing["force-model-prefix"],
       oauthModelAlias,
@@ -54,11 +54,11 @@ export const grantsReach = (
   if (filter === undefined || source.owner !== undefined) return true;
   const target = { id: source.id, executor: source.executor };
 
-  if (filter.allowance.coversAll(target)) return true;
+  if (filter.reach.coversAll(target)) return true;
   const route = resolveModelRoute(source, modelId, filter.routing);
 
   return (
     route !== undefined &&
-    route.upstreamModels.some((upstream) => filter.allowance.permits(target, upstream))
+    route.upstreamModels.some((upstream) => filter.reach.permits(target, upstream))
   );
 };

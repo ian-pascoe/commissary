@@ -5,7 +5,6 @@
  * errors.go (`newAuthUnavailableError`). Docs: credentials.md §6.5.
  */
 import { goMarshal } from "../../http/json-text.ts";
-import { canonicalModelKey } from "./model-name.ts";
 import type { PickFailure } from "./types.ts";
 
 /** Go `Duration.String()` for whole seconds (`45s`, `1m30s`, `1h0m0s`). */
@@ -41,19 +40,15 @@ export const unknownModelBody = (model: string): string =>
 
 /**
  * Every credential that would serve the model was left out by the caller's grants: the model is unreachable, so it
- * answers like an unknown one (same 400 body as `resolveModel`) and does not say a grant exists (ADR 0021).
+ * answers like an unknown one (same 400 body as `resolveModel`) and does not say a grant exists (ADR 0023).
  */
-export const modelNotFound = (model: string): PickFailure => {
-  const name = canonicalModelKey(model);
-
-  return {
-    code: "model_not_found",
-    message: `unknown provider for model ${name}`,
-    httpStatus: 400,
-    retryable: false,
-    body: unknownModelBody(name),
-  };
-};
+export const modelNotFound = (model: string): PickFailure => ({
+  code: "model_not_found",
+  message: `unknown provider for model ${model}`,
+  httpStatus: 400,
+  retryable: false,
+  body: unknownModelBody(model),
+});
 
 export const authNotFound = (message = "no auth available"): PickFailure => ({
   code: "auth_not_found",

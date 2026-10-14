@@ -1,4 +1,4 @@
-// The grant routes (`/v8/management/grants`, ADR 0021) and `models/mine` through the Access gate and the real
+// The grant routes (`/v8/management/grants`, ADR 0023) and `models/mine` through the Access gate and the real
 // ControlPlane: admin-only CRUD with `If-Match` revisions, the default grant every org starts with, and the model
 // lists two members get from different grants (a team grant reaches the members of the team only).
 import { assert, describe as effectDescribe, it as effectIt } from "@effect/vitest";

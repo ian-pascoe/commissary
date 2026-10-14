@@ -1,4 +1,4 @@
-// The upgrade to grants (ADR 0021): each test starts from the storage a ControlPlane had before grants (no grant tables),
+// The upgrade to grants (ADR 0023): each test starts from the storage a ControlPlane had before grants (no grant tables),
 // restarts it so its constructor migrates, and checks that nothing a member could do changed: the default grant
 // ("everyone, every shared credential, every model") exists once and is not made again after an org admin removed it.
 import { runInDurableObject } from "cloudflare:test";

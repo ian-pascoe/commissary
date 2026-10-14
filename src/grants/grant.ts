@@ -1,9 +1,9 @@
 /**
- * Grants (ADR 0021, GLOSSARY "Grant"): which upstream models of which shared credentials a member may use.
+ * Grants (ADR 0023, GLOSSARY "Grant"): which upstream models of which shared credentials a member may use.
  *
  * A grant names a subject (everyone, one member or one team), a scope (all shared credentials, every credential of one
  * provider, or one credential) and model patterns written like model exclusions (`claude-sonnet-*`, case-insensitive,
- * thinking suffix ignored). A member's allowance is the union of the grants that name them; there is no deny.
+ * thinking suffix ignored). A member's reach is the union of the grants that name them; there is no deny.
  */
 
 export type GrantSubject =
@@ -47,17 +47,17 @@ export interface GrantChange {
 }
 
 /** A team of the org as the registry needs it to resolve a member's grants. */
-export interface GrantTeam {
+interface GrantTeam {
   readonly id: string;
   readonly members: ReadonlyArray<string>;
 }
 
 /**
- * Everything the Worker needs to compute any member's allowance (`grantTable` over RPC). `revision` moves with every
+ * Everything the Worker needs to compute any member's reach (`grantTable` over RPC). `version` moves with every
  * grant write and every change of who belongs to a team, so a registry view built from it is cached against it.
  */
 export interface GrantTable {
-  readonly revision: number;
+  readonly version: number;
   readonly grants: ReadonlyArray<GrantEntry>;
   readonly teams: ReadonlyArray<GrantTeam>;
 }
@@ -65,7 +65,7 @@ export interface GrantTable {
 /** The pattern of the default grant: every model. */
 export const ALL_MODELS = "*";
 
-/** The default grant of a new org, and of every org that existed before grants (ADR 0021). */
+/** The default grant of a new org, and of every org that existed before grants (ADR 0023). */
 export const DEFAULT_GRANT: GrantValue = {
   subject: { kind: "everyone" },
   scope: { kind: "all" },

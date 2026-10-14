@@ -62,7 +62,7 @@ export class ModelProviders extends Context.Service<
         ),
       );
 
-      // What the caller may use (ADR 0021, ADR 0023): the registry as their grants and private credentials leave it, so a
+      // What the caller may use (ADR 0023): the registry as their grants and private credentials leave it, so a
       // model they cannot reach has no provider and answers like an unknown one.
       const visible = Effect.gen(function* () {
         const identity = yield* Effect.serviceOption(AccessPrincipal);

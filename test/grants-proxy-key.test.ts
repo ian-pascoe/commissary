@@ -1,5 +1,5 @@
-// Grants apply to a proxy key like to an Access sign-in (ADR 0021, ADR 0022): the key resolves to its member, and the
-// member's allowance decides what the request may pick. An ungranted model answers like an unknown one (same 400 body),
+// Grants apply to a proxy key like to an Access sign-in (ADR 0022, ADR 0023): the key resolves to its member, and the
+// member's reach decides what the request may pick. An ungranted model answers like an unknown one (same 400 body),
 // and a request without a member (a service token) is served by the default grant only, so upgrading changes nothing.
 import { env } from "cloudflare:workers";
 import { Effect, Layer } from "effect";

@@ -1,4 +1,4 @@
-// My models (/my-models): the models the signed-in member may use, as their grants leave them (ADR 0021). Every member
+// My models (/my-models): the models the signed-in member may use, as their grants leave them (ADR 0023). Every member
 // reads it; an org admin reads their own list here, the org's whole registry is on the Models page.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";

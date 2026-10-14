@@ -1,5 +1,5 @@
 /**
- * Grant storage in the org's ControlPlane SQLite (ADR 0021): the `grants` table and a one-row `grant_state` (the change
+ * Grant storage in the org's ControlPlane SQLite (ADR 0023): the `grants` table and a one-row `grant_state` (the change
  * counter and the seeded flag).
  *
  * The first time a ControlPlane constructs this store it writes the default grant ("everyone, every shared credential,
@@ -34,7 +34,7 @@ const SCHEMA = [
 ];
 
 /** Who the default grant is attributed to. */
-export const SEED_ACTOR = "system";
+const SEED_ACTOR = "system";
 
 interface GrantRow {
   [column: string]: SqlStorageValue;

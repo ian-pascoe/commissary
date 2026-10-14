@@ -1,4 +1,4 @@
-// Grants in selection (ADR 0021): a member's allowance leaves out the shared credentials and upstream models they have no
+// Grants in selection (ADR 0023): a member's reach leaves out the shared credentials and upstream models they have no
 // grant for before priority tiers, strategy and session affinity look at the candidates. Everything that cannot be
 // reached answers like an unknown model.
 import { describe, expect, it } from "vitest";
@@ -15,7 +15,7 @@ import {
 } from "./support/credentials.ts";
 import {
   allCredentials,
-  allowanceFor,
+  reachFor,
   credential,
   everyone,
   grant,
@@ -39,10 +39,10 @@ const harness = (settings = defaultSettings) => {
 
 const as = (
   h: Harness,
-  holder: Parameters<typeof allowanceFor>[1],
-  ...grants: Parameters<typeof allowanceFor>[0]
+  holder: Parameters<typeof reachFor>[1],
+  ...grants: Parameters<typeof reachFor>[0]
 ) => {
-  h.allowance = allowanceFor(grants, holder);
+  h.reach = reachFor(grants, holder);
 
   return h;
 };
@@ -72,7 +72,7 @@ describe("a grant for one credential", () => {
     expect(outcome.failure).toMatchObject({ code: "model_not_found", httpStatus: 400 });
     expect(JSON.parse(outcome.failure.body ?? "")).toEqual({
       error: {
-        message: `unknown provider for model ${OPUS}`,
+        message: `unknown provider for model ${OPUS}(high)`,
         type: "invalid_request_error",
         code: "model_not_found",
         param: "model",
@@ -396,12 +396,12 @@ describe("retry planning", () => {
     memberId: "alice",
   };
 
-  const plan = (...grants: Parameters<typeof allowanceFor>[0]) =>
+  const plan = (...grants: Parameters<typeof reachFor>[0]) =>
     planRetry({
       credentials: [entry(claude("sub-a")), entry(claude("sub-b"))],
       query,
       routing: { ...defaultSettings, knownPrefixes: new Set() },
-      allowance: allowanceFor(grants, { member: "alice", teams: [] }),
+      reach: reachFor(grants, { member: "alice", teams: [] }),
       coolingDisabled: () => false,
       now: NOW,
     });

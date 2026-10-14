@@ -1,6 +1,6 @@
 /**
  * Grants (`/v8/management/grants`, `../grant-routes.ts`): which upstream models of which shared credentials a member, a
- * team or everyone may use (ADR 0021), and `GET /models/mine`, the models the caller may use. Shared with the browser:
+ * team or everyone may use (ADR 0023), and `GET /models/mine`, the models the caller may use. Shared with the browser:
  * imports `effect` and `./config.ts`, `./errors.ts` only.
  *
  * A grant names a subject, a scope and model patterns (`claude-sonnet-*`, case-insensitive, like model exclusions). A
@@ -53,7 +53,7 @@ export const Grant = Schema.Struct({
 
 export type Grant = typeof Grant.Type;
 
-/** `version` is the org's change counter the list was read at. */
+/** `version` is the counter of grant writes and team changes the list was read at. */
 export const Grants = Schema.Struct({
   version: Schema.Int,
   grants: Schema.Array(Grant),
