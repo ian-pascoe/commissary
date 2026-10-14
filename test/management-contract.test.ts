@@ -310,7 +310,7 @@ describe("management contract", () => {
           requestedAt: base + 1000,
           authId: "codex-b.json",
           failed: true,
-          fail: { statusCode: 429, body: "rate limited" },
+          fail: { statusCode: 429, type: "rate_limit_error", code: "rate_limited" },
         }),
       );
       await insertUsageRecord(db, sampleRecord({ requestId: "r3", requestedAt: base + 2000 }));
@@ -331,13 +331,13 @@ describe("management contract", () => {
         const first = page.records[2];
         assert.strictEqual(first?.api_key, "user:dev@example.com");
         assert.strictEqual(first?.failed, false);
-        assert.deepStrictEqual(first?.fail, { status_code: 200, body: "" });
+        assert.deepStrictEqual(first?.fail, { status_code: 200 });
         assert.strictEqual(first?.token_breakdown.output.reasoning_tokens, 12);
         assert.strictEqual(first?.trace_id, "trace-1");
       }).pipe(through(harness)),
     );
 
-    it.effect("filters failed records with their status and body", () =>
+    it.effect("filters failed records with their status, type and code", () =>
       Effect.gen(function* () {
         yield* seedRecords;
         const api = yield* client;
@@ -346,7 +346,11 @@ describe("management contract", () => {
         assert.strictEqual(page.records.length, 1);
         assert.strictEqual(page.records[0]?.request_id, "r2");
         assert.strictEqual(page.records[0]?.failed, true);
-        assert.deepStrictEqual(page.records[0]?.fail, { status_code: 429, body: "rate limited" });
+        assert.deepStrictEqual(page.records[0]?.fail, {
+          status_code: 429,
+          type: "rate_limit_error",
+          code: "rate_limited",
+        });
 
         const ok = yield* api.usage.records({ query: { failed: "false" } });
         assert.deepStrictEqual(

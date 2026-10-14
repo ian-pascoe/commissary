@@ -37,9 +37,6 @@ import {
 } from "./accounting.ts";
 import type { UsageRecord } from "./record.ts";
 
-/** Upstream error bodies are truncated before they are stored. */
-export const MAX_FAIL_BODY_CHARS = 2048;
-
 /** One `usage_records` row. */
 export interface UsageRow {
   request_id: string;
@@ -66,7 +63,9 @@ export interface UsageRow {
   generate: number;
   failed: number;
   fail_status: number | null;
-  fail_body: string | null;
+  /** The failure's error type and code (`migrations/0007_usage_failure.sql`, ADR 0027); never the upstream body. */
+  fail_type: string | null;
+  fail_code: string | null;
   reasoning_effort: string | null;
   service_tier: string;
   response_service_tier: string | null;
@@ -124,7 +123,8 @@ const INSERT_COLUMNS = [
   "generate",
   "failed",
   "fail_status",
-  "fail_body",
+  "fail_type",
+  "fail_code",
   "reasoning_effort",
   "service_tier",
   "response_service_tier",
@@ -192,9 +192,8 @@ export const recordToRow = (record: UsageRecord): Omit<UsageRow, "exported_at"> 
     generate: record.generate === false ? 0 : 1,
     failed: record.failed ? 1 : 0,
     fail_status: record.failed ? (record.fail?.statusCode ?? 500) : null,
-    fail_body: record.failed
-      ? (record.fail?.body ?? "").trim().slice(0, MAX_FAIL_BODY_CHARS)
-      : null,
+    fail_type: record.failed ? trimmedOrNull(record.fail?.type) : null,
+    fail_code: record.failed ? trimmedOrNull(record.fail?.code) : null,
     reasoning_effort: trimmedOrNull(record.reasoningEffort),
     service_tier: record.serviceTier,
     response_service_tier: trimmedOrNull(detail.responseServiceTier),
@@ -278,8 +277,12 @@ export const rowToPayload = (row: UsageRow, authIndexOf: AuthIndexer) => {
     generate: row.generate !== 0,
     stream: row.stream === 1,
     fail: failed
-      ? { status_code: row.fail_status ?? 500, body: row.fail_body ?? "" }
-      : { status_code: 200, body: "" },
+      ? {
+          status_code: row.fail_status ?? 500,
+          ...(row.fail_type === null ? {} : { type: row.fail_type }),
+          ...(row.fail_code === null ? {} : { code: row.fail_code }),
+        }
+      : { status_code: 200 },
     accounting_version:
       row.accounting_version === 0 ? TOKEN_ACCOUNTING_SCHEMA_VERSION : row.accounting_version,
     token_breakdown: {

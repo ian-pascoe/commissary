@@ -13,6 +13,7 @@ import {
   unclassifiedTokenBreakdown,
 } from "./accounting.ts";
 import type { OrgId } from "../platform/org.ts";
+import type { UsageFailure } from "./failure.ts";
 import type { UsageCost } from "./pricing.ts";
 
 export interface UsageDetail {
@@ -82,7 +83,8 @@ export interface UsageRecord {
   readonly latencyMs: number;
   readonly ttftMs?: number;
   readonly failed: boolean;
-  readonly fail?: { readonly statusCode: number; readonly body: string };
+  /** Status, error type and error code of a failed attempt; never the upstream body (ADR 0027, `failure.ts`). */
+  readonly fail?: UsageFailure;
   readonly detail: UsageDetail;
   readonly responseModel?: string;
   readonly reasoningEffort?: string;

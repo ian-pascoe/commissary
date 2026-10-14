@@ -338,7 +338,7 @@ export const conduct = <T, R>(
 
             const usage = attempt.context.usage;
 
-            if (error !== undefined) usage.fail(error.status, error.message);
+            if (error !== undefined) usage.fail(error.status, error.message, error.code);
 
             const context = {
               provider: credential.provider,
@@ -399,7 +399,7 @@ export const conduct = <T, R>(
             Effect.gen(function* () {
               // The rejected attempt keeps its own (failed) usage record; the repeat starts a fresh one.
               const rejected = attempt.context.usage;
-              rejected.fail(error.status, error.message);
+              rejected.fail(error.status, error.message, error.code);
               const record = rejected.finish(yield* Clock.currentTimeMillis);
 
               if (record !== undefined) yield* sink.publish(record);

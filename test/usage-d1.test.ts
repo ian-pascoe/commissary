@@ -32,6 +32,7 @@ import orgMigration from "../migrations/0003_usage_org.sql?raw";
 import costMigration from "../migrations/0004_usage_cost.sql?raw";
 import memberMigration from "../migrations/0005_usage_member.sql?raw";
 import privateMigration from "../migrations/0006_usage_private.sql?raw";
+import failureMigration from "../migrations/0007_usage_failure.sql?raw";
 import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 
 /** The D1 sink without pricing: records are stored as they are published. */
@@ -84,6 +85,7 @@ describe("migration 0003 (usage org)", () => {
       ...statementsOf(costMigration),
       ...statementsOf(memberMigration),
       ...statementsOf(privateMigration),
+      ...statementsOf(failureMigration),
     ])
       await db.prepare(statement).run();
 
@@ -96,6 +98,56 @@ describe("migration 0003 (usage org)", () => {
 
     await insertUsageRecord(db, sampleRecord({ requestId: "new", orgId: OrgId.make("acme") }));
     expect((await listUsageRecords(db, OrgId.make("acme"), {}, authIndexOf)).rows).toHaveLength(1);
+  });
+});
+
+describe("migration 0007 (usage failure)", () => {
+  it("clears the failure bodies stored before it, keeps the rest and adds type and code", async () => {
+    await db.prepare("DROP TABLE usage_records").run();
+
+    for (const statement of [
+      ...statementsOf(initialMigration),
+      ...statementsOf(sessionsMigration),
+      ...statementsOf(orgMigration),
+      ...statementsOf(costMigration),
+      ...statementsOf(memberMigration),
+      ...statementsOf(privateMigration),
+    ])
+      await db.prepare(statement).run();
+
+    // A failed attempt as the previous schema stored it: its body echoes the prompt.
+    await db
+      .prepare(
+        `INSERT INTO usage_records (request_id, requested_at, provider, executor_type, model, alias, endpoint,
+           principal_id, auth_id, auth_type, source, org_id, failed, fail_status, fail_body, acct_total_tokens)
+         VALUES ('old', 1, 'codex', 'codex', 'gpt-5', 'gpt-5', 'POST /v1/responses', 'user:a', 'codex-a.json',
+           'oauth', 'a', 'global', 1, 400, '{"error":{"message":"the prompt said: my secret plan"}}', 500)`,
+      )
+      .run();
+
+    for (const statement of statementsOf(failureMigration)) await db.prepare(statement).run();
+
+    const [row] = await rows();
+    expect(row).toMatchObject({
+      request_id: "old",
+      failed: 1,
+      fail_status: 400,
+      fail_body: null,
+      fail_type: null,
+      fail_code: null,
+      acct_total_tokens: 500,
+    });
+
+    // The record still lists, and exports a failure without a body.
+    const listed = await listUsageRecords(db, GLOBAL_ORG, {}, authIndexOf);
+    expect(listed.rows).toHaveLength(1);
+    expect(rowToPayload(listed.rows[0] as UsageRow, authIndexOf).fail).toEqual({
+      status_code: 400,
+    });
+
+    // Applying the data statement again changes nothing (the ALTERs are run once, as every migration is).
+    await db.prepare("UPDATE usage_records SET fail_body = NULL WHERE fail_body IS NOT NULL").run();
+    expect((await rows())[0]).toMatchObject({ fail_body: null });
   });
 });
 
@@ -123,7 +175,11 @@ describe("migration 0004 (usage cost)", () => {
     const [row] = await rows();
     expect(row).toMatchObject({ request_id: "old", cost_micros: null, unpriced: 0 });
 
-    for (const statement of [...statementsOf(memberMigration), ...statementsOf(privateMigration)])
+    for (const statement of [
+      ...statementsOf(memberMigration),
+      ...statementsOf(privateMigration),
+      ...statementsOf(failureMigration),
+    ])
       await db.prepare(statement).run();
 
     // A new record carries its cost; the old one sums as nothing and is not listed as unpriced.
@@ -202,7 +258,11 @@ describe("migration 0005 (usage member)", () => {
       )
       .run();
 
-    for (const statement of [...statementsOf(memberMigration), ...statementsOf(privateMigration)])
+    for (const statement of [
+      ...statementsOf(memberMigration),
+      ...statementsOf(privateMigration),
+      ...statementsOf(failureMigration),
+    ])
       await db.prepare(statement).run();
 
     const [row] = await rows();
@@ -284,7 +344,8 @@ describe("migration 0006 (usage private)", () => {
       )
       .run();
 
-    for (const statement of statementsOf(privateMigration)) await db.prepare(statement).run();
+    for (const statement of [...statementsOf(privateMigration), ...statementsOf(failureMigration)])
+      await db.prepare(statement).run();
 
     const [row] = await rows();
     expect(row).toMatchObject({ request_id: "old", private: 0 });
@@ -422,18 +483,29 @@ describe("D1 usage sink", () => {
     });
   });
 
-  it("stores failures with a bounded body and is idempotent per request id", async () => {
+  it("stores a failure's status, type and code, never a body, and is idempotent per request id", async () => {
     const record = sampleRecord({
       failed: true,
-      fail: { statusCode: 429, body: "x".repeat(10_000) },
+      fail: { statusCode: 429, type: "rate_limit_error", code: "insufficient_quota" },
     });
 
     await insertUsageRecord(db, record);
     await insertUsageRecord(db, record);
     const stored = await rows();
     expect(stored).toHaveLength(1);
-    expect(stored[0]).toMatchObject({ failed: 1, fail_status: 429 });
-    expect(stored[0]?.fail_body).toHaveLength(2048);
+    expect(stored[0]).toMatchObject({
+      failed: 1,
+      fail_status: 429,
+      fail_type: "rate_limit_error",
+      fail_code: "insufficient_quota",
+      fail_body: null,
+    });
+
+    expect(rowToPayload(stored[0] as UsageRow, authIndexOf).fail).toEqual({
+      status_code: 429,
+      type: "rate_limit_error",
+      code: "insufficient_quota",
+    });
   });
 
   it("never fails the request when the write fails and does nothing without a binding", async () => {
@@ -591,7 +663,7 @@ describe("export queue (GET /observability/usage/queue)", () => {
       failed: false,
       generate: true,
       stream: true,
-      fail: { status_code: 200, body: "" },
+      fail: { status_code: 200 },
       accounting_version: 2,
       token_breakdown: {
         schema_version: 2,
@@ -641,7 +713,7 @@ describe("listing and summary", () => {
         model: "gpt-4",
         principalId: "user:a",
         failed: true,
-        fail: { statusCode: 500, body: "boom" },
+        fail: { statusCode: 500 },
         detail: {
           ...sampleRecord().detail,
           inputTokens: 0,
