@@ -1,0 +1,29 @@
+/* A value to copy: the label above, the read-only field and its button on one line (wrapping on narrow screens). */
+.copy {
+  display: grid;
+  gap: var(--space-1);
+  max-width: 56rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.value {
+  flex: 1 1 20rem;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+
+.note {
+  font-size: var(--text-xs);
+  font-weight: 650;
+}
+
+/* A live region: it stays mounted, taking no room while it is empty. */
+.note:empty {
+  display: none;
+}

@@ -26,6 +26,8 @@
     "web:dev": "vite --config web/vite.config.ts"
   },
   "dependencies": {
+    "@better-auth/core": "1.7.7",
+    "@better-auth/sso": "1.7.7",
     "@effect/atom-react": "4.0.2",
     "@fontsource-variable/atkinson-hyperlegible-next": "5.3.0",
     "@tanstack/react-router": "1.170.41",
@@ -58,6 +60,7 @@
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
     "oxlint-tsgolint": "7.0.2003",
+    "samlify": "2.13.1",
     "typescript": "7.0.2",
     "vite": "8.3.3",
     "vitest": "5.0.3"

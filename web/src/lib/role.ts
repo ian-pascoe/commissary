@@ -64,6 +64,10 @@ export interface PanelPage {
   readonly role: OrgRole;
   /** A plain member opens it too where the org lets members connect private credentials (their own rows only). */
   readonly privateMembers?: boolean;
+  /** The link is active on this exact path only: another page of the nav lives below it (`/settings/sso`). */
+  readonly exact?: boolean;
+  /** The page exists on a hosted proxy only (ADR 0026). */
+  readonly hosted?: boolean;
 }
 
 /** The pages of the shell's nav, in order. A plain member's panel is the Usage page. */
@@ -79,13 +83,24 @@ export const PAGES: ReadonlyArray<PanelPage> = [
   { to: "/management-keys", label: "Management keys", role: "admin" },
   { to: "/members", label: "Members", role: "admin" },
   { to: "/grants", label: "Grants", role: "admin" },
-  { to: "/settings", label: "Settings", role: "admin" },
+  { to: "/settings", label: "Settings", role: "admin", exact: true },
+  // Under Settings: the Worker serves the panel at `/settings/*` already (`PANEL_SECTIONS`).
+  { to: "/settings/sso", label: "Single sign-on", role: "admin", hosted: true },
 ];
 
-/** The nav links a role sees; `privateCredentials`: the org lets members connect private credentials. */
-export const pagesFor = (role: OrgRole, privateCredentials = false): ReadonlyArray<PanelPage> =>
+/**
+ * The nav links a role sees; `privateCredentials`: the org lets members connect private credentials; `hosted`: the
+ * proxy is a hosted one, which has the pages that exist there only.
+ */
+export const pagesFor = (
+  role: OrgRole,
+  privateCredentials = false,
+  hosted = false,
+): ReadonlyArray<PanelPage> =>
   PAGES.filter(
-    (page) => atLeast(role, page.role) || (privateCredentials && page.privateMembers === true),
+    (page) =>
+      (hosted || page.hosted !== true) &&
+      (atLeast(role, page.role) || (privateCredentials && page.privateMembers === true)),
   );
 
 /** The page a role lands on when the one asked for is not theirs: the Overview for org admins, Usage for the rest. */

@@ -200,9 +200,12 @@ const Gate = ({ role }: { readonly role: RoleState }) => {
 export const Shell = () => {
   const nav = usePageLinkStrip();
   const role = useRole();
+  const me = useAtomValue(meAtom);
+  // The pages that exist on a hosted proxy only (Single sign-on).
+  const hosted = AsyncResult.isSuccess(me) && me.value.hosted === true;
 
   const pages =
-    role.kind === "ready" ? pagesFor(role.caller.role, role.caller.privateCredentials) : [];
+    role.kind === "ready" ? pagesFor(role.caller.role, role.caller.privateCredentials, hosted) : [];
 
   const admin = role.kind === "ready" && canManageMembers(role.caller);
   // A plain member connects private accounts where the org allows it (ADR 0023).
@@ -230,7 +233,7 @@ export const Shell = () => {
                 <li key={page.to}>
                   <Link
                     to={page.to}
-                    activeOptions={{ exact: page.to === "/" }}
+                    activeOptions={{ exact: page.to === "/" || page.exact === true }}
                     className={styles["navLink"]}
                   >
                     {page.label}

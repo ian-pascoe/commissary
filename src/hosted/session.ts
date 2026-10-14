@@ -3,17 +3,99 @@
  * session ended by sign-out or suspension stops working at once. New in the Workers port.
  */
 import { Effect } from "effect";
-import { GLOBAL_ORG } from "../platform/org.ts";
+import { syncOrgIndex } from "../members/admission.ts";
+import { WorkerEnv } from "../platform/env.ts";
+import { controlPlaneOf, GLOBAL_ORG } from "../platform/org.ts";
 import { platformOf } from "../platform/registry.ts";
-import { AUTH_TABLES, hostedAuth, type HostedAuth } from "./auth.ts";
+import { emailDomain } from "../sso/domain.ts";
+import { betterAuthProvider, orgOfProviderId } from "../sso/provider.ts";
+import type { SsoAdmission } from "../sso/store.ts";
+import { AUTH_TABLES, hostedAuth, type HostedAuth, type SignInRefusal } from "./auth.ts";
 
 type SessionEnv = Env;
 
-/** The deployment's Better Auth instance; a suspended person cannot start a session. */
+/** Why a sign-in through an org's identity provider was refused, as the sign-in page shows it. */
+const SSO_REFUSALS: Readonly<Record<Exclude<SsoAdmission, { ok: true }>["error"], SignInRefusal>> =
+  {
+    provider_missing: {
+      error: "sso_unavailable",
+      errorDescription: "Your organization no longer signs in with this identity provider.",
+    },
+    domain_unverified: {
+      error: "sso_domain_unverified",
+      errorDescription: "Your email's domain is not one your organization has verified.",
+    },
+    removed: {
+      error: "sso_removed",
+      errorDescription:
+        "An admin removed you from this organization; ask them to add you again before you sign in.",
+    },
+  };
+
+/**
+ * The identity provider of the org `providerId` names, as Better Auth's SSO plugin reads it: with the domains the org
+ * verified that the Platform registry also gives it (one org per domain), `undefined` without one.
+ */
+const ssoProvider = (env: SessionEnv, origin: string) => async (providerId: string) => {
+  const org = orgOfProviderId(providerId);
+
+  if (org === undefined) return undefined;
+
+  const [state, held] = await Promise.all([
+    controlPlaneOf(env, org).ssoState(),
+    platformOf(env).ssoDomainsOf(org),
+  ]);
+
+  if (state.provider === undefined) return undefined;
+  const registered = new Set(held);
+
+  const verified = state.domains
+    .filter((domain) => domain.verifiedAt !== undefined && registered.has(domain.domain))
+    .map((domain) => domain.domain);
+
+  return betterAuthProvider(origin, org, state.provider.settings, verified);
+};
+
+/**
+ * Admits a person the org's identity provider signed in: the registry must give their email's domain to that org, and
+ * the org's ControlPlane makes them a member (`ControlPlane.admitThroughSso`), then the registry's index learns it
+ * before their session starts (so the sign-up does not give them a Personal org instead, `standing.ts`).
+ */
+const admitThroughSso =
+  (env: SessionEnv) =>
+  async (providerId: string, email: string): Promise<SignInRefusal | undefined> => {
+    const org = orgOfProviderId(providerId);
+    const domain = emailDomain(email);
+
+    if (org === undefined || domain === undefined) return SSO_REFUSALS.domain_unverified;
+
+    if ((await platformOf(env).ssoDomain(domain))?.org !== org)
+      return SSO_REFUSALS.domain_unverified;
+    const admission = await controlPlaneOf(env, org).admitThroughSso(email);
+
+    if (!admission.ok) return SSO_REFUSALS[admission.error];
+
+    if (admission.joined || admission.indexStale)
+      await Effect.runPromise(syncOrgIndex(org).pipe(Effect.provideService(WorkerEnv, env)));
+
+    return undefined;
+  };
+
+/**
+ * The deployment's Better Auth instance: a suspended person cannot start a session; the orgs' identity providers sign
+ * people in, and GitHub or Google cannot for a domain that requires single sign-on.
+ */
 export const signedInAuth = (env: SessionEnv, origin: string): Promise<HostedAuth> =>
   hostedAuth(env, origin, {
     maySignIn: async (email) =>
       (await platformOf(env).standing(GLOBAL_ORG, email)).person !== "suspended",
+    ssoProvider: ssoProvider(env, origin),
+    admitThroughSso: admitThroughSso(env),
+    ssoRequired: async (email) => {
+      const domain = emailDomain(email);
+
+      return domain !== undefined && (await platformOf(env).ssoDomain(domain))?.requireSso === true;
+    },
   });
 
 /**
@@ -51,6 +133,25 @@ export const endSessions = (
       Effect.logError(`sessions not ended: ${error.message}`).pipe(Effect.as(0)),
     ),
   );
+};
+
+/**
+ * Ends every session of the people whose email is at `domain` (its org started requiring single sign-on for it): they
+ * sign in again, through the org's identity provider. Answers how many sessions it ended; a D1 failure rejects.
+ */
+export const endDomainSessions = async (
+  env: Pick<Env, "USAGE">,
+  domain: string,
+): Promise<number> => {
+  // A normalized domain (`sso/domain.ts`) holds only letters, digits, `-` and `.`: nothing `LIKE` treats specially.
+  const result = await env.USAGE.prepare(
+    `DELETE FROM ${AUTH_TABLES.session} WHERE "userId" IN
+       (SELECT id FROM ${AUTH_TABLES.user} WHERE lower(email) LIKE ?)`,
+  )
+    .bind(`%@${domain.toLowerCase()}`)
+    .run();
+
+  return result.meta.changes;
 };
 
 /**

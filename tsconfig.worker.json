@@ -18,11 +18,14 @@
     "noEmit": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    // samlify's own declarations put the DOM library into the program (types/samlify.d.ts).
+    "paths": { "samlify": ["./types/samlify.d.ts"] }
   },
   "include": [
     "src",
     "test",
+    "infra/bundle.ts",
     "infra/settings.ts",
     "web/src/lib/account-fields.ts",
     "web/src/lib/accounts.ts",
@@ -50,6 +53,7 @@
     "web/src/lib/settings.ts",
     "web/src/lib/sign-in.ts",
     "web/src/lib/spend.ts",
+    "web/src/lib/sso.ts",
     "web/src/lib/theme.ts",
     "web/src/lib/usage.ts",
     "worker-configuration.d.ts",

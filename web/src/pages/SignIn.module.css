@@ -22,6 +22,28 @@
   width: 100%;
 }
 
+/* The work email form sits under the provider buttons, set off by a hairline. */
+.work {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--hairline);
+}
+
+.workTitle {
+  font-size: var(--text-md);
+  font-weight: 750;
+}
+
+.workForm {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.workForm > button {
+  width: 100%;
+}
+
 .check {
   min-height: 4.0625rem;
 }

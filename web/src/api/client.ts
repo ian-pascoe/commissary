@@ -588,6 +588,31 @@ export const saveGrantAtom = ManagementClient.runtime.fn((write: GrantWrite) =>
   ),
 );
 
+/** The Single sign-on page refetches after a mutation tagged with this key. */
+export const SSO = ["sso"] as const;
+
+/** The org's identity provider and domains, with the proxy's side for the provider's settings (hosted proxy only). */
+export const ssoAtom = ManagementClient.query("sso", "get", {
+  reactivityKeys: SSO,
+  timeToLive: Duration.seconds(30),
+});
+
+// Single sign-on writes (org owners): call with `reactivityKeys: SSO` so the settings refetch afterwards. The test
+// changes nothing.
+export const setSsoProviderAtom = ManagementClient.mutation("sso", "setProvider");
+
+export const removeSsoProviderAtom = ManagementClient.mutation("sso", "removeProvider");
+
+export const testSsoProviderAtom = ManagementClient.mutation("sso", "testProvider");
+
+export const addSsoDomainAtom = ManagementClient.mutation("sso", "addDomain");
+
+export const verifySsoDomainAtom = ManagementClient.mutation("sso", "verifyDomain");
+
+export const updateSsoDomainAtom = ManagementClient.mutation("sso", "updateDomain");
+
+export const removeSsoDomainAtom = ManagementClient.mutation("sso", "removeDomain");
+
 /** The Settings page refetches after a mutation tagged with this key. */
 export const SETTINGS = ["settings"] as const;
 

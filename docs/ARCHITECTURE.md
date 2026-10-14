@@ -2239,6 +2239,23 @@ Access one, unchanged. User docs: `docs/ACCESS.md` "Hosted proxy", `docs/DEPLOY.
   `people` (owned-org limit, suspension) and each org's `created_by` (owned orgs are counted by it) and `suspended_at`.
   Every request checks that neither the person nor the org is suspended, cached 30 s per isolate and forgotten at once
   where a suspension is made; suspending also deletes the person's (or the org members') sessions.
+- **Per-org single sign-on** (`src/sso/`, `sso-adapter.ts`, `management/sso-routes.ts`; issue #76): each org's one
+  identity provider (OIDC or SAML, sealed with the org's data key) and its email domains live in its ControlPlane
+  (`sso/store.ts`); the Platform registry keeps the index of verified domains (`sso_domains`, one org per domain, with
+  `require_sso`) that a sign-in looks up. A domain is proved by a DNS TXT record read over DNS over HTTPS (`sso/dns.ts`).
+  Better Auth's SSO plugin runs the OIDC (PKCE) and SAML flows, but its `ssoProvider` model is never in D1: the adapter
+  wrapper answers it from the org's ControlPlane by provider id (`sso-<org id>`, `sso/provider.ts`), so no migration is
+  needed and nothing writes it (the plugin's registration and domain-verification routes are not passed). `POST
+  /api/auth/sign-in/sso {email}` is rewritten by the Worker to the provider of the org holding the email's domain. A
+  completed SSO sign-in is admitted by `ControlPlane.admitThroughSso` (the email's domain must be one the org verified;
+  a removed person is refused until re-added), which joins the person as a `member` instead of creating a Personal org.
+  Requiring SSO for a domain makes the social sign-in hook refuse that domain (`sso_required`) and deletes the D1
+  sessions of everyone at it. Refusals redirect to `/sign-in?error=<code>`. Differences from Better Auth's own
+  organization SSO: providers are not stored by the plugin, domain proof uses our own TXT record, and membership is the
+  proxy's, not the plugin's.
+  The plugin's dependencies (samlify, xmldom, xpath) are imported lazily, but every module of the bundle is still
+  compiled at Worker startup, which has a CPU time limit: `infra/bundle.ts` aliases `tldts` to a host-name stand-in
+  (`sso/tldts.ts`) and `pnpm-workspace.yaml` keeps one copy of xpath.
 - **Platform-level routes**: `POST /orgs` for everyone signed in, up to the owned-org limit; `PATCH /orgs/<slug>
   {suspended}` and `GET|PATCH /people/<email>` (`people-routes.ts`) for platform admins.
 - **Downloads**: only platform admins download a stored credential (`download_requires_platform_admin`), since no

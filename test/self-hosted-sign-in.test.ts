@@ -21,6 +21,10 @@ describe("self-hosted proxy", () => {
       ["GET", "/api/auth/get-session"],
       ["POST", "/api/auth/sign-in/social"],
       ["POST", "/api/auth/sign-out"],
+      ["POST", "/api/auth/sign-in/sso"],
+      ["GET", "/api/auth/sso/callback/sso-org-1?code=x&state=y"],
+      ["POST", "/api/auth/sso/saml2/sp/acs/sso-org-1"],
+      ["GET", "/api/auth/sso/saml2/sp/metadata?providerId=sso-org-1"],
       ["GET", "/api/auth/callback/github?code=x&state=y"],
       ["POST", "/api/auth/sign-up/email"],
       ["GET", "/api/sign-in-options"],
@@ -34,5 +38,13 @@ describe("self-hosted proxy", () => {
 
       expect(await snapshot(response), `${method} ${path}`).toEqual(unknown);
     }
+  });
+
+  it("has no per-org single sign-on settings: Access configures the identity providers", async () => {
+    const response = await exports.default.fetch(
+      new Request("http://localhost/v8/management/sso", { redirect: "manual" }),
+    );
+
+    expect(response.status).toBe(404);
   });
 });

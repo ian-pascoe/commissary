@@ -137,6 +137,9 @@ export const MIGRATION_ACTOR = "migration";
 
 export const AUTO_JOIN_ACTOR = "auto-join";
 
+/** Who added a person who joined through the org's single sign-on (`joinThroughSso`). */
+export const SSO_ACTOR = "single-sign-on";
+
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS membership (
      id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -393,6 +396,35 @@ export class MemberStore {
 
     const id = this.#transaction(() => {
       const joined = this.#insertMember(email, "member", this.#now(), AUTO_JOIN_ACTOR);
+      this.#changed();
+
+      return joined;
+    });
+
+    return { role: "member", memberId: id, joined: true, indexStale: true };
+  }
+
+  /**
+   * A person the org's identity provider signed in (issue #76, `sso/`): a member already, or one who joins now as a
+   * plain member whatever the auto-join setting (the provider vouches for them). Someone an org admin removed does not
+   * join again until they are added back: `undefined`.
+   */
+  joinThroughSso(email: string): Admission | undefined {
+    const normalized = normalizeEmail(email);
+    const member = this.#memberByEmail(normalized);
+
+    if (member !== undefined)
+      return {
+        role: role(member.role),
+        memberId: member.id,
+        joined: false,
+        indexStale: this.#state().index_synced < this.#state().counter,
+      };
+
+    if (!validEmail(normalized) || this.#removed(removedUser(normalized))) return undefined;
+
+    const id = this.#transaction(() => {
+      const joined = this.#insertMember(normalized, "member", this.#now(), SSO_ACTOR);
       this.#changed();
 
       return joined;

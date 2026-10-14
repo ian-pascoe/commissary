@@ -1,3 +1,7 @@
 allowBuilds:
   esbuild: true
   workerd: true
+
+# samlify (through Better Auth's SSO plugin) pulls three copies of xpath; one keeps the Worker's bundle smaller.
+overrides:
+  xpath: 0.0.34

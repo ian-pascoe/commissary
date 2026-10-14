@@ -15,6 +15,11 @@ export const SIGN_IN_PAGE_PATH = "/sign-in";
 export const AUTH_ROUTES = {
   /** `POST {provider, callbackURL}` with the Turnstile token in `x-captcha-response`: `{url}` to send the browser to. */
   signInSocial: "/api/auth/sign-in/social",
+  /**
+   * `POST {email}` with the Turnstile token: `{url}` of the identity provider of the org that verified the email's
+   * domain (issue #76); `404 sso_not_found` when no org did.
+   */
+  signInSso: "/api/auth/sign-in/sso",
   /** `GET`: `{user: {email, name, image}, session}` or `null`. */
   session: "/api/auth/get-session",
   /** `POST {}`: ends the session. */

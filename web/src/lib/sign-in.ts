@@ -31,6 +31,10 @@ const PROVIDER_LABELS: Readonly<Record<SignInProvider, string>> = {
 
 export const providerLabel = (provider: SignInProvider): string => PROVIDER_LABELS[provider];
 
+/** Whether the `?error=` code is a refused GitHub or Google sign-in that steers the person to the work email form. */
+export const needsWorkEmail = (code: string | null | undefined): boolean =>
+  code?.trim().toLowerCase() === "sso_required";
+
 /** What Better Auth's `?error=` code of a failed sign-in means, in plain words. */
 export const signInProblem = (code: string | null | undefined): string | undefined => {
   if (code === null || code === undefined || code.trim() === "") return undefined;
@@ -48,6 +52,14 @@ export const signInProblem = (code: string | null | undefined): string | undefin
       return "This account is suspended. Ask the person who runs this proxy.";
     case "signup_disabled":
       return "New accounts are not accepted on this proxy.";
+    case "sso_required":
+      return "Your organization requires you to sign in with your work email. Enter it below.";
+    case "sso_removed":
+      return "An admin removed you from this organization. Ask them to add you again, then sign in with your work email.";
+    case "sso_domain_unverified":
+      return "Your organization has not verified your email’s domain. Ask an org owner to verify it, then try again.";
+    case "sso_unavailable":
+      return "Single sign-on is not available for your organization right now. Ask an org owner to check its identity provider.";
     case "invalid_captcha":
     case "captcha_failed":
       return "The bot check failed. Try again.";

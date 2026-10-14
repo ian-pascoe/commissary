@@ -62,6 +62,16 @@ import { locateKey } from "../management/api-keys-write.ts";
 import { API_KEY_FAMILIES } from "../config/schema.ts";
 import { configKeyIds } from "./key-ids.ts";
 import { PrivateKeyStore } from "./private-keys.ts";
+import { emailDomain } from "../sso/domain.ts";
+import {
+  type IdpSettings,
+  type SsoAdmission,
+  type SsoDomain,
+  type SsoResult,
+  type SsoState,
+  SsoStore,
+  type StoredIdp,
+} from "../sso/store.ts";
 import {
   buildConfigCredentialEntry,
   buildCredentialEntry,
@@ -329,6 +339,8 @@ export class ControlPlane extends DurableObject<Env> {
   /** The `SessionState` instances of the org, so deleting the org can wipe them (`session-state/instances.ts`). */
   readonly #sessionInstances: SessionInstanceStore;
   readonly #managementKeys: ManagementKeyStore;
+  /** The org's single sign-on on a hosted proxy (issue #76): its identity provider and email domains. */
+  readonly #sso: SsoStore;
   /** The org this object serves, from its name. */
   readonly #org: OrgId;
   /** Set when the org was deleted: the storage is gone (`wipeOrg`), so the stores must not be used again. */
@@ -367,6 +379,7 @@ export class ControlPlane extends DurableObject<Env> {
     });
     this.#sessionInstances = new SessionInstanceStore(ctx.storage.sql);
     this.#managementKeys = new ManagementKeyStore(ctx.storage.sql, this.#org);
+    this.#sso = new SsoStore(ctx.storage.sql, this.#secrets);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
 
@@ -863,6 +876,66 @@ export class ControlPlane extends DurableObject<Env> {
   /** Checks a presented management key (its id and the SHA-256 of the whole key) at `now`. */
   verifyManagementKey(keyId: string, hash: string, now: number): ManagementKeyVerdict {
     return this.#managementKeys.check(keyId, hash, now);
+  }
+
+  // --- single sign-on (issue #76, `sso/store.ts`; hosted proxies) --------------------------------------------------
+
+  /** The identity provider (with its secret: the Worker hands it to Better Auth) and the domains. */
+  ssoState(): SsoState {
+    return this.#sso.state();
+  }
+
+  setSsoProvider(settings: IdpSettings, by: string, now: number): SsoResult<StoredIdp> {
+    return this.#sso.setProvider(settings, by, now);
+  }
+
+  removeSsoProvider(): SsoResult<StoredIdp> {
+    return this.#sso.removeProvider();
+  }
+
+  addSsoDomain(domain: string, now: number): SsoResult<SsoDomain> {
+    return this.#sso.addDomain(domain, now);
+  }
+
+  ssoDomain(domain: string): SsoResult<SsoDomain> {
+    return this.#sso.domain(domain);
+  }
+
+  markSsoDomainVerified(domain: string, now: number): SsoResult<SsoDomain> {
+    return this.#sso.markVerified(domain, now);
+  }
+
+  setSsoDomainRequired(domain: string, required: boolean): SsoResult<SsoDomain> {
+    return this.#sso.setRequired(domain, required);
+  }
+
+  removeSsoDomain(domain: string): SsoResult<SsoDomain> {
+    return this.#sso.removeDomain(domain);
+  }
+
+  /**
+   * A person the org's identity provider signed in: their email's domain must be one the org verified, with the provider
+   * still set; they are a member then, joining now if they were not (`MemberStore.joinThroughSso`). Refused for someone
+   * an org admin removed, until they are added back.
+   */
+  admitThroughSso(email: string): SsoAdmission {
+    this.#ensureMembership();
+    const domain = emailDomain(email);
+
+    if (this.#sso.provider() === undefined) return { ok: false, error: "provider_missing" };
+
+    if (
+      domain === undefined ||
+      !this.#sso
+        .domains()
+        .some((found) => found.domain === domain && found.verifiedAt !== undefined)
+    )
+      return { ok: false, error: "domain_unverified" };
+    const admission = this.#members.joinThroughSso(email);
+
+    return admission === undefined
+      ? { ok: false, error: "removed" }
+      : { ok: true, joined: admission.joined, indexStale: admission.indexStale };
   }
 
   listTeams(): ReadonlyArray<TeamRecord> {
