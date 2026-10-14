@@ -200,12 +200,28 @@ const hostedSettings = Effect.gen(function* () {
 /** Stage names of pull-request previews (`pr-<number>`, as deployed by .github/workflows/ci.yml). */
 export const PREVIEW_STAGE = /^pr-\d+$/;
 
+/**
+ * Stage of the hosted proxy CI deploys from `main` next to `prod` (docs/DEPLOY.md "Hosted production"). Its settings live
+ * in `.env.hosted` (`pnpm deploy:hosted`) and the GitHub environment `hosted`.
+ */
+export const HOSTED_STAGE = "hosted";
+
 export const readSettings = (dev: boolean, stage: string) =>
   Effect.gen(function* () {
     const preview = !dev && PREVIEW_STAGE.test(stage);
     const secretsKey = yield* secretsKeyGenerations;
+    const mode = yield* proxyMode;
+
+    // Deployed with `.env`'s self-hosted settings, the stage would claim the self-hosted proxy's hostname.
+    if (!dev && stage === HOSTED_STAGE && mode !== "hosted")
+      return yield* Effect.die(
+        new Error(
+          `Invalid deploy settings:\n- the ${HOSTED_STAGE} stage is a hosted proxy: set PROXY_MODE=hosted (deploy it with \`pnpm deploy:hosted\`, which reads .env.hosted)`,
+        ),
+      );
+
     // `alchemy dev` stays self-hosted: the dev bypass needs it.
-    const hosted = !dev && (yield* proxyMode) === "hosted" ? yield* hostedSettings : undefined;
+    const hosted = !dev && mode === "hosted" ? yield* hostedSettings : undefined;
 
     const settings: Settings = {
       hosted: hosted?.hosted,

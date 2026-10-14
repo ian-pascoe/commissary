@@ -193,8 +193,8 @@ history: export accounts from the panel first if you want to keep them.
 A cron trigger (`0 */3 * * *`) refreshes the model catalog from [models.dev](https://models.dev) (also on demand from
 the Models page), prunes old usage rows and re-arms credential refresh alarms.
 
-**Continuous deployment.** `.github/workflows/ci.yml` deploys `main` to production and every pull request to its own
-preview stage on `workers.dev`. The CI credentials are code too (`stacks/github.ts`, `pnpm ci:setup`); see
+**Continuous deployment.** `.github/workflows/ci.yml` deploys `main` to production and, once set up, to a hosted proxy on
+its own domain (stage `hosted`), and every pull request to its own preview stage on `workers.dev`. The CI credentials are code too (`stacks/github.ts`, `pnpm ci:setup`); see
 [DEPLOY.md](docs/DEPLOY.md).
 
 ## Troubleshooting

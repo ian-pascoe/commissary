@@ -5,12 +5,14 @@
 | Event                                    | Stage         | Where                                                        |
 | ---------------------------------------- | ------------- | ------------------------------------------------------------ |
 | Push to `main`                           | `prod`        | `CF_LLM_PROXY_DOMAIN`, GitHub environment `production`       |
+| Push to `main`                           | `hosted`      | its own domain, GitHub environment `hosted` (once set up)    |
 | Pull request from a branch of this repo  | `pr-<number>` | the Worker's `workers.dev` URL, GitHub environment `preview` |
 | That pull request closed (merged or not) | `pr-<number>` | destroyed                                                    |
 
 A preview is a hosted proxy while its pull request has the label `hosted-preview` (adding or removing the label
 redeploys it in the other mode); production is one when the `production` environment sets `PROXY_MODE=hosted`
-([Hosted proxy](#hosted-proxy)). Everything else in this file describes a self-hosted proxy, the default.
+([Hosted proxy](#hosted-proxy)); the `hosted` stage always is ([Hosted production](#hosted-production)). Everything
+else in this file describes a self-hosted proxy, the default.
 
 Deploys run only after typecheck, lint, workflow lint (actionlint, zizmor), the test shards and the smoke test pass.
 Fork and Dependabot pull requests get the checks but no preview (they receive no deploy secrets). A manual run
@@ -89,6 +91,30 @@ serves its `workers.dev` URL, so a sign-in completes only after that URL's callb
 production when the environments set the same `ORG_RATE_LIMIT_NAMESPACE_ID`: the org `global` exists on every stage
 under the same id, so give `preview` its own namespace.
 
+### Hosted production
+
+Next to `prod`, which stays self-hosted behind Access, CI deploys a hosted proxy from `main`: the stage `hosted`, with
+its own hostname, Worker, storage and users. The two share nothing but the code: an org, account or proxy key of one
+does not exist on the other. The stage is always hosted; the deploy refuses it without `PROXY_MODE=hosted`, so it can
+never take the self-hosted proxy's hostname from `.env`.
+
+Its settings live in `.env.hosted` (copy `.env.hosted.example`), never in `.env`, which keeps the self-hosted proxy's
+and the hosted previews'. Set them up once:
+
+1. **Hostname.** Pick one in a zone of the account, other than `CF_LLM_PROXY_DOMAIN` of `.env`.
+2. **OAuth apps.** A GitHub OAuth app for that hostname (a GitHub OAuth app takes one callback host, so not the
+   previews' app) with the callback `https://<host>/api/auth/callback/github`; for Google, add
+   `https://<host>/api/auth/callback/google` to the client's redirect URIs.
+3. **Turnstile.** Add the hostname to a widget (or create one) and put its keys in `.env.hosted`.
+4. **Rate-limit namespace.** An `ORG_RATE_LIMIT_NAMESPACE_ID` that the previews' environment does not use.
+5. **CI.** `pnpm ci:setup` creates the GitHub environment `hosted` (deployments from `main` only) with the settings of
+   `.env.hosted`, and extends the deploy token to the hostname's zone. Until then the `deploy hosted` job of a push to
+   `main` only notes that it is not set up.
+
+The next push to `main` (or a manual run) deploys it and checks it with `tools/check-hosted-deploy.sh`. Whoever signs in with an
+email of `PLATFORM_ADMIN_EMAILS` (verified by the provider) is a platform admin. By hand, `pnpm deploy:hosted`
+deploys the stage from `.env.hosted` alone (`alchemy deploy --stage hosted --env-file .env.hosted`).
+
 **Switching a stage.** Turning a self-hosted stage into a hosted one deletes its Access applications, policies and
 service tokens on the next deploy, and scripts with Access service tokens stop working: issue management keys first.
 Members keep their orgs and roles, and sign in with a provider account whose verified email is their membership email.
@@ -101,15 +127,17 @@ CI's credentials are code: `stacks/github.ts` is a second Alchemy stack that cre
 It manages:
 
 - the GitHub environments `production` (deployments from `main` only, no reviewers: a green push deploys) and
-  `preview`;
+  `preview`, and `hosted` (like `production`) when `.env.hosted` exists ([Hosted production](#hosted-production));
 - `cf-llm-proxy-ci-deploy`, an account-owned Cloudflare API token limited to what `alchemy.run.ts` deploys: Workers Scripts,
   Workers KV Storage, D1, Secrets Store (Alchemy's state store) and Access: Apps and Policies (Write), Account Settings
-  (Read), and Zone Read, DNS Write and Workers Routes Write on the zone of `CF_LLM_PROXY_DOMAIN`;
+  (Read), and Zone Read, DNS Write and Workers Routes Write on the zones of `CF_LLM_PROXY_DOMAIN` (and of the hosted
+  stage's);
 - `cf-llm-proxy-ci-check`, the Access service token of the post-deploy check;
 - in both environments, the secrets `CLOUDFLARE_API_TOKEN`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` and the
   variables `CLOUDFLARE_ACCOUNT_ID`, `ACCESS_*` (from `.env`) and `ACCESS_ALLOW_SERVICE_TOKEN_IDS` (the check token's
   ID); in `production` also `CF_LLM_PROXY_DOMAIN`; and a hosted proxy's settings where `.env` sets them
-  ([Hosted proxy](#hosted-proxy)).
+  ([Hosted proxy](#hosted-proxy));
+- in `hosted`, the secret `CLOUDFLARE_API_TOKEN` and the settings of `.env.hosted` (no Access settings or check token).
 
 Raw secrets never leave Alchemy: Cloudflare returns them once, they go to the encrypted state store and are encrypted
 again for GitHub.

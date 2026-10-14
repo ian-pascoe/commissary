@@ -155,6 +155,31 @@ describe("hosted proxy settings", () => {
     }),
   );
 
+  it.effect("are required on the hosted stage, which never deploys a self-hosted proxy", () =>
+    Effect.gen(function* () {
+      const { settings } = yield* read(hosted, { stage: "hosted" });
+
+      assert.strictEqual(settings.hosted?.githubClientId, "gh-id");
+
+      for (const mode of ["", "self-hosted"]) {
+        const refused = yield* read(
+          {
+            ...hosted,
+            PROXY_MODE: mode,
+            ACCESS_TEAM_DOMAIN: "team",
+            ACCESS_ALLOW_EMAILS: "a@x.com",
+          },
+          { stage: "hosted" },
+        ).pipe(
+          Effect.as("accepted"),
+          Effect.catchDefect((defect) => Effect.succeed(String(defect))),
+        );
+
+        assert.include(refused, "the hosted stage is a hosted proxy: set PROXY_MODE=hosted");
+      }
+    }),
+  );
+
   it.effect("refuse a hosted proxy without a sign-in provider, Turnstile or valid limits", () =>
     Effect.gen(function* () {
       for (const [variables, message] of [
