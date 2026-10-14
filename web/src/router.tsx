@@ -19,6 +19,7 @@ import { NotFound } from "./pages/NotFound.tsx";
 import { PricesPage } from "./pages/Prices.tsx";
 import { ProxyKeysPage } from "./pages/ProxyKeys.tsx";
 import { SettingsPage } from "./pages/Settings.tsx";
+import { SsoPage } from "./pages/Sso.tsx";
 import { UsagePage } from "./pages/Usage.tsx";
 import { readNewKeySearch } from "./lib/keys.ts";
 import { legacyHashTarget } from "./lib/legacy-hash.ts";
@@ -87,6 +88,7 @@ const routeTree = rootRoute.addChildren([
     component: ManagementKeysPage,
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: SettingsPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/settings/sso", component: SsoPage }),
 ]);
 
 // The panel of an org lives under `/o/<slug>` (the router's base path), so its pages keep the paths above.

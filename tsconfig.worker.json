@@ -52,6 +52,7 @@
     "web/src/lib/settings.ts",
     "web/src/lib/sign-in.ts",
     "web/src/lib/spend.ts",
+    "web/src/lib/sso.ts",
     "web/src/lib/theme.ts",
     "web/src/lib/usage.ts",
     "worker-configuration.d.ts",

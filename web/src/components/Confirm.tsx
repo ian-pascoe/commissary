@@ -1,5 +1,5 @@
 // A confirmation before something that cannot be undone: a native modal <dialog> that opens while a request is set.
-import { Trash2 } from "lucide-react";
+import { ShieldCheck, Trash2 } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef } from "react";
 import { kit } from "./Kit.tsx";
 
@@ -9,6 +9,13 @@ export interface ConfirmRequest {
   readonly body: ReactNode;
   readonly action: string;
   readonly busyAction: string;
+  /**
+   * `danger` (the default) is for deleting. `primary` confirms a change that is not a deletion but ends something
+   * (sessions), with the cancel button saying `keep`.
+   */
+  readonly tone?: "danger" | "primary";
+  /** The words of the cancelling button ("Keep it"). */
+  readonly keep?: string;
   /** Runs the change; the dialog stays open, saying so, until it settles. */
   readonly run: () => Promise<void>;
 }
@@ -51,12 +58,21 @@ export const ConfirmDialog = ({
           </h2>
           <div>{request.body}</div>
           <div className={kit["dialogActions"]}>
-            <button type="submit" className={kit["danger"]} disabled={busy} aria-busy={busy}>
-              <Trash2 aria-hidden="true" size={16} strokeWidth={2.25} />
+            <button
+              type="submit"
+              className={request.tone === "primary" ? kit["primary"] : kit["danger"]}
+              disabled={busy}
+              aria-busy={busy}
+            >
+              {request.tone === "primary" ? (
+                <ShieldCheck aria-hidden="true" size={16} strokeWidth={2.25} />
+              ) : (
+                <Trash2 aria-hidden="true" size={16} strokeWidth={2.25} />
+              )}
               {busy ? request.busyAction : request.action}
             </button>
             <button type="button" className={kit["secondary"]} disabled={busy} onClick={onClose}>
-              Keep it
+              {request.keep ?? "Keep it"}
             </button>
           </div>
         </form>

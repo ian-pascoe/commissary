@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AUTH_ROUTES, SIGN_IN_OPTIONS_PATH, SignInOptions } from "#contract/sign-in.ts";
 import { kit, Problem } from "../components/Kit.tsx";
 import {
+  needsWorkEmail,
   providerLabel,
   safeNextPath,
   signInProblem,
@@ -13,6 +14,7 @@ import {
 } from "../lib/sign-in.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
 import styles from "./SignIn.module.css";
+import { WorkEmail } from "./SignInWork.tsx";
 
 const TURNSTILE_SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 
@@ -156,6 +158,7 @@ export const SignInPage = () => {
   const search = new URLSearchParams(window.location.search);
   const next = safeNextPath(search.get("next"));
   const failure = signInProblem(search.get("error"));
+  const steer = needsWorkEmail(search.get("error"));
   const loaded = useOptions();
   const options = loaded.kind === "ready" ? loaded.options : undefined;
   const check = useTurnstile(options?.turnstile_site_key);
@@ -208,30 +211,37 @@ export const SignInPage = () => {
           Loading…
         </p>
       ) : null}
-      {options === undefined ? null : options.providers.length === 0 ? (
-        <p className={kit["muted"]}>No sign-in method is enabled on this proxy.</p>
-      ) : (
+      {options === undefined ? null : (
         <>
-          <div className={styles["providers"]}>
-            {options.providers.map((provider) => (
-              <button
-                key={provider}
-                type="button"
-                className={kit["primary"]}
-                disabled={busy || check.token === undefined}
-                aria-busy={busy}
-                onClick={() => signIn(provider)}
-              >
-                Continue with {providerLabel(provider)}
-              </button>
-            ))}
-          </div>
+          {options.providers.length === 0 ? null : (
+            <div className={styles["providers"]}>
+              {options.providers.map((provider) => (
+                <button
+                  key={provider}
+                  type="button"
+                  className={kit["primary"]}
+                  disabled={busy || check.token === undefined}
+                  aria-busy={busy}
+                  onClick={() => signIn(provider)}
+                >
+                  Continue with {providerLabel(provider)}
+                </button>
+              ))}
+            </div>
+          )}
+          <WorkEmail
+            token={check.token}
+            busy={busy}
+            steer={steer}
+            onBusy={setBusy}
+            onSettled={check.reset}
+          />
           <div ref={check.container} className={styles["check"]} />
           <p className={check.failed ? kit["fieldError"] : kit["muted"]} role="status">
             {check.failed
               ? "The bot check could not run. Reload the page, and allow challenges.cloudflare.com."
               : check.token === undefined
-                ? "Checking that you are not a bot… the buttons work once this finishes."
+                ? "Checking that you are not a bot… signing in works once this finishes."
                 : null}
           </p>
           {problem === undefined ? null : <p className={kit["fieldError"]}>{problem}</p>}
