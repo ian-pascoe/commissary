@@ -48,7 +48,7 @@ beforeEach(async () => {
 const rows = async () =>
   (
     await db
-      .prepare("SELECT * FROM usage_records ORDER BY requested_at, request_id")
+      .prepare("SELECT * FROM usage_records ORDER BY requested_at, org_id, request_id")
       .all<UsageRow>()
   ).results;
 
