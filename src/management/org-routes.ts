@@ -9,10 +9,11 @@
  * caller is a member of otherwise) and the caller's role in the addressed org. Creating an org only adds it to the
  * registry; its ControlPlane starts empty when first used.
  */
-import { Clock, Effect, Match } from "effect";
+import { Clock, Data, Effect, Match } from "effect";
 import { HttpRouter } from "effect/http";
 import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
 import { forgetOrgProxyKeys } from "../access/proxy-key.ts";
+import { syncOrgIndex } from "../members/admission.ts";
 import { roleAtLeast } from "../members/roles.ts";
 import type { JsonObject } from "../json/index.ts";
 import { WorkerEnv } from "../platform/env.ts";
@@ -267,6 +268,18 @@ const exportOrg = Effect.gen(function* () {
   });
 });
 
+/** A deletion that threw: the cause is logged (never with payloads) and the caller is told to try again. */
+class DeletionThrew extends Data.TaggedError("DeletionThrew")<{ readonly cause: unknown }> {}
+
+const deletionFailed = (org: string) => (error: DeletionThrew) =>
+  Effect.logError("org deletion failed").pipe(
+    Effect.annotateLogs({
+      org,
+      cause: error.cause instanceof Error ? error.cause.message : "unknown error",
+    }),
+    Effect.andThen(Effect.fail(replyError(502, "org deletion failed"))),
+  );
+
 const deleteOrgRoute = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
 
@@ -296,8 +309,8 @@ const deleteOrgRoute = Effect.gen(function* () {
 
   const outcome = yield* Effect.tryPromise({
     try: async () => await deleteOrgData(env, org.id, { now }),
-    catch: () => replyError(502, "org deletion failed"),
-  });
+    catch: (cause) => new DeletionThrew({ cause }),
+  }).pipe(Effect.catch(deletionFailed(org.id)));
 
   forgetOrgProxyKeys(org.id);
 
@@ -319,7 +332,90 @@ const deleteOrgRoute = Effect.gen(function* () {
   return jsonReply(200, { deleted: true, id: org.id, slug: org.slug });
 });
 
+/**
+ * `DELETE /me`: a person deletes their own account (ADR 0027). They leave every org they belong to with everything of
+ * theirs; an org they are the only member of is deleted with all it holds; an org they are the only owner of while
+ * others belong is not left ownerless: `409 sole_owner` names such orgs and nothing changes. The first org holds the
+ * deployment's own settings and is never deleted: a person alone in it only leaves it.
+ *
+ * Seam for hosted sign-in (#72): the account of a hosted sign-in (its password, sessions and identity) is kept outside
+ * the orgs, and its deletion belongs here after the last org step and before the registry index is dropped.
+ */
+const deleteAccount = Effect.gen(function* () {
+  const { principal } = yield* AccessPrincipal;
+
+  if (principal.kind !== "user")
+    return yield* replyError(403, "person_required", {
+      message: "only a person can delete their account, not a service token",
+    });
+
+  const body = yield* bodyObject;
+  const confirmed = body["email"];
+
+  if (Object.keys(body).some((key) => key !== "email") || typeof confirmed !== "string")
+    return yield* replyError(400, "invalid body");
+
+  const email = principal.email.trim().toLowerCase();
+
+  if (confirmed.trim().toLowerCase() !== email)
+    return yield* replyError(422, "email_mismatch", {
+      message: "type your own email address to confirm that your account is deleted",
+    });
+
+  const env = yield* WorkerEnv;
+  const now = yield* Clock.currentTimeMillis;
+  const orgs = yield* registry("orgsOfEmail", (stub) => stub.orgsOfEmail(email));
+
+  const standings = yield* Effect.forEach(orgs, (org) =>
+    Effect.tryPromise({
+      try: async () => await controlPlaneOf(env, org.id).accountStanding(email),
+      catch: () => replyError(502, "control plane unavailable"),
+    }).pipe(Effect.map((standing) => ({ org, standing }))),
+  );
+
+  const blocking = standings.filter(({ standing }) => standing.soleOwner);
+
+  if (blocking.length > 0)
+    return yield* replyError(409, "sole_owner", {
+      message:
+        "you are the only owner of an org with other members: hand it over to another member first",
+      orgs: blocking.map(({ org }) => org.slug),
+    });
+
+  const deleted: string[] = [];
+  const left: string[] = [];
+
+  for (const { org, standing } of standings) {
+    if (standing.alone && org.id !== GLOBAL_ORG) {
+      const outcome = yield* Effect.tryPromise({
+        try: async () => await deleteOrgData(env, org.id, { now }),
+        catch: (cause) => new DeletionThrew({ cause }),
+      }).pipe(Effect.catch(deletionFailed(org.id)));
+
+      forgetOrgProxyKeys(org.id);
+
+      if (outcome.state === "incomplete")
+        return yield* replyError(503, "deletion_incomplete", {
+          message: "an org of yours still holds data; send the request again",
+        });
+      deleted.push(org.slug);
+    } else if (standing.member) {
+      yield* Effect.tryPromise({
+        try: async () => await controlPlaneOf(env, org.id).leaveOrg(email),
+        catch: () => replyError(502, "control plane unavailable"),
+      });
+      yield* syncOrgIndex(org.id);
+      left.push(org.slug);
+    }
+  }
+
+  yield* registry("removePerson", (stub) => stub.removePerson(email));
+
+  return jsonReply(200, { deleted: true, orgs_left: left, orgs_deleted: deleted });
+});
+
 export const orgRoutes = [
+  HttpRouter.route("DELETE", `${BASE}/me`, handled(deleteAccount)),
   HttpRouter.route("GET", `${BASE}/export`, handled(exportOrg)),
   HttpRouter.route("DELETE", `${BASE}/org`, handled(deleteOrgRoute)),
   HttpRouter.route("GET", `${BASE}/org`, handled(own)),

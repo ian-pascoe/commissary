@@ -129,6 +129,7 @@ import { platformAdminLists } from "../access/config.ts";
 import { migrateLegacyAdmins } from "../members/migration.ts";
 import type { Actor } from "../members/roles.ts";
 import {
+  type AccountStanding,
   type Admission,
   MemberStore,
   type MemberRecord,
@@ -598,6 +599,27 @@ export class ControlPlane extends DurableObject<Env> {
     if (removed.ok) this.#modelGrants.forget({ kind: "member", id });
 
     return removed;
+  }
+
+  /** A person's place in the org (`MemberStore.standingOf`), for deleting their account. */
+  accountStanding(email: string): AccountStanding {
+    this.#ensureMembership();
+
+    return this.#members.standingOf(email);
+  }
+
+  /**
+   * A person who deletes their account leaves the org with all their data here, and no note of their removal is kept
+   * (`MemberStore.leave`). Answers whether they were a member.
+   */
+  async leaveOrg(email: string): Promise<{ readonly left: boolean }> {
+    this.#ensureMembership();
+    const id = this.#members.leave(email);
+
+    if (id === undefined) return { left: false };
+    await this.#deleteMemberData(id);
+
+    return { left: true };
   }
 
   /**

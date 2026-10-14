@@ -80,6 +80,17 @@ export const OrgExport = Schema.Struct({
 
 export type OrgExport = typeof OrgExport.Type;
 
+/** `DELETE /me`: the caller's own email, typed again. */
+export const DeleteAccount = Schema.Struct({ email: Schema.String });
+
+export const AccountDeleted = Schema.Struct({
+  deleted: Schema.Literal(true),
+  orgs_left: Schema.Array(Schema.String),
+  orgs_deleted: Schema.Array(Schema.String),
+});
+
+export type AccountDeleted = typeof AccountDeleted.Type;
+
 /** `DELETE /org`: the org's name, typed again to confirm. */
 export const DeleteOrg = Schema.Struct({ name: Schema.String });
 
@@ -124,6 +135,17 @@ const slugParam = { params: { slug: Schema.String } };
 export class OrgsGroup extends HttpApiGroup.make("orgs").add(
   /** The caller and the orgs they belong to; anyone Access admits may ask. */
   HttpApiEndpoint.get("me", "/me", { success: Me, error: managementErrors }),
+  /**
+   * The caller deletes their own account (ADR 0027): they leave every org they belong to with all their data there, and
+   * an org they are the only member of is deleted with everything in it. People only. `422 email_mismatch` unless the
+   * body names their own email; `409 sole_owner` (with `orgs`) while they are the only owner of an org that has other
+   * members; `503 deletion_incomplete` when an org needs the call repeated.
+   */
+  HttpApiEndpoint.delete("deleteAccount", "/me", {
+    payload: DeleteAccount,
+    success: AccountDeleted,
+    error: managementErrors,
+  }),
   /** Every org, `global` (slug `default` at first) leading. Platform admins only. */
   HttpApiEndpoint.get("list", "/orgs", { success: OrgList, error: managementErrors }),
   /**
