@@ -124,6 +124,8 @@ the Worker asks on every request: a removed member, or a member whose role was l
 | List members, teams and service tokens; manage teams                                         |                   |     ✓     |              ✓               |       ✓        |
 | Add or remove plain members; register or remove member service tokens                        |                   |     ✓     |              ✓               |       ✓        |
 | Add or remove org admins and owners; change any role                                         |                   |           |              ✓               |       ✓        |
+| Read the models they may use (`GET /models/mine`, the panel's My models)                     |         ✓         |     ✓     |              ✓               |       ✓        |
+| Read, add, edit and remove grants (`/grants`, the panel's Grants page)                       |                   |     ✓     |              ✓               |       ✓        |
 | Create proxy keys for themselves; list and revoke their own (`/proxy-keys`)                  |         ✓         |     ✓     |              ✓               | if a member ¹  |
 | List and revoke every proxy key of the org                                                   |                   |     ✓     |              ✓               |       ✓        |
 | Turn auto-join, or Access sign-ins for clients in `global`, on or off (`PATCH /membership`)  |                   |           |              ✓               |       ✓        |
@@ -134,6 +136,12 @@ the Worker asks on every request: a removed member, or a member whose role was l
 ¹ Proxy keys are issued to members: a platform admin who is not a member of the org, or a service token, gets
 `403 member_required` when creating one.
 
+- **Grants** (ADR 0023): a member uses a shared credential only through a grant (a member, a team or everyone; one
+  account, every account of a provider or all of them; model patterns). Access is the union of the grants that name the
+  member; there is no deny. A new org, and every org that existed before grants, starts with the grant "everyone, all
+  shared credentials, every model": delete it and add narrower ones to restrict. A model a member has no grant for answers
+  `400 model_not_found`, like an unknown model, and is left out of their model lists; a request without a member (a service
+  token) is served by the grants for everyone only. Private credentials are never granted: they are their owner's alone.
 - **Adding a member** (`POST /members` with an email and a role) takes effect the next time the person signs in through Access;
   no email is sent, and Access must still admit them (§2). Removing a member takes them off every team, and they are refused
   from their next request on, even where auto-join is on: a person or service token an org admin removed does not join by

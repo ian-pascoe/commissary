@@ -41,6 +41,7 @@ import {
   openCodeProtocolType,
 } from "./opencode-catalog.ts";
 import { cloneModelInfo, type ModelInfo, type ThinkingSupport } from "./model-info.ts";
+import { type GrantFilter, grantsReach } from "./grant-filter.ts";
 import type { ModelSource } from "./source.ts";
 
 export interface AssemblyOptions {
@@ -48,6 +49,8 @@ export interface AssemblyOptions {
   readonly catalogs: ModelCatalogs;
   /** Unix seconds used as `created` of config-defined models (Go uses `time.Now().Unix()`). */
   readonly nowSeconds: number;
+  /** A member's restricted reach (ADR 0023): models of a shared credential outside it are not registered. */
+  readonly grants?: GrantFilter | undefined;
 }
 
 export interface AssembledModels {
@@ -694,13 +697,18 @@ const baseModels = (source: ModelSource, options: AssemblyOptions): ModelInfo[] 
 
 /** `registerResolvedModelsForAuth`: trims ids and drops blank ones. */
 const finalize = (
-  provider: string,
+  source: ModelSource,
   models: ReadonlyArray<ModelInfo>,
+  options: AssemblyOptions,
 ): AssembledModels | undefined => {
+  const provider = source.executor;
+
   const normalized = models.flatMap((model) => {
     const id = model.id.trim();
 
-    return id === "" ? [] : [id === model.id ? model : { ...model, id }];
+    if (id === "" || !grantsReach(options.grants, source, id)) return [];
+
+    return [id === model.id ? model : { ...model, id }];
   });
 
   return normalized.length === 0 ? undefined : { provider, models: normalized };
@@ -720,7 +728,7 @@ export const assembleCredentialModels = (
   if (source.compat) {
     const models = buildCompatModels(source.models ?? [], source.label, options.nowSeconds);
 
-    return finalize(source.executor, applyModelPrefixes(models, source.prefix, forcePrefix));
+    return finalize(source, applyModelPrefixes(models, source.prefix, forcePrefix), options);
   }
 
   const base = baseModels(source, options);
@@ -743,5 +751,5 @@ export const assembleCredentialModels = (
     if (settings.length > 0) models = applyOAuthSettings(settings, models);
   }
 
-  return finalize(source.executor, applyModelPrefixes(models, source.prefix, forcePrefix));
+  return finalize(source, applyModelPrefixes(models, source.prefix, forcePrefix), options);
 };

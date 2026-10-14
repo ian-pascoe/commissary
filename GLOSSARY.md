@@ -148,8 +148,15 @@ it exists (provider, owner, label), and can disable or remove it. Its traffic is
 _Avoid_: personal account, own key
 
 **Grant**:
-Permission for a member, a team or everyone in an org to use certain shared credentials for certain upstream models.
+Permission for a member, a team or everyone in an org to use certain shared credentials for certain upstream models. A
+member's access is the union of the grants that name them; there is no deny. A new org starts with one grant that gives
+everyone every model on every shared credential.
 _Avoid_: entitlement, ACL, access rule
+
+**Reach**:
+What a member's grants add up to: the upstream models they may use on each shared credential. Selection and the model
+lists are computed under it; a model outside it answers like an unknown one.
+_Avoid_: allowance (a provider's limit), permissions
 
 **Account**:
 A credential that is a provider login: an OAuth sign-in, a device-code login, an imported service account or an

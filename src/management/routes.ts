@@ -44,6 +44,7 @@ import { credentialModelsHandler, credentialRoutes } from "./credentials-routes.
 import { oauthRoutes } from "./oauth-routes.ts";
 import { memberRoutes } from "./member-routes.ts";
 import { orgRoutes } from "./org-routes.ts";
+import { grantRoutes, myModelsHandler } from "./grant-routes.ts";
 import { priceRoutes } from "./price-routes.ts";
 import { proxyKeyRoutes } from "./proxy-key-routes.ts";
 import { quotaCheckHandler, quotaSweepHandler } from "./quota-routes.ts";
@@ -89,6 +90,7 @@ export const ManagementRoutes = HttpRouter.addAll(
       ...oauthRoutes,
       ...orgRoutes,
       ...priceRoutes,
+      ...grantRoutes,
       ...memberRoutes,
       ...proxyKeyRoutes,
       HttpRouter.route("GET", `${BASE}/credentials/models`, bound(credentialModelsHandler)),
@@ -103,6 +105,7 @@ export const ManagementRoutes = HttpRouter.addAll(
       ),
       HttpRouter.route("POST", `${BASE}/api-keys/probe`, bound(apiKeyProbeHandler)),
       HttpRouter.route("GET", `${BASE}/routing/models`, bound(routingModelsHandler)),
+      HttpRouter.route("GET", `${BASE}/models/mine`, bound(myModelsHandler)),
       HttpRouter.route("GET", `${BASE}/models/catalog`, bound(catalogStatusHandler)),
       HttpRouter.route("POST", `${BASE}/models/catalog/refresh`, bound(catalogRefreshHandler)),
       HttpRouter.route("GET", LEGACY_PANEL_PATH, LEGACY_PANEL_REDIRECT),

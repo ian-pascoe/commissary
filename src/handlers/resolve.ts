@@ -9,7 +9,7 @@
 import { Effect } from "effect";
 import { ExecutionError } from "../executor/errors.ts";
 import { parseSuffix } from "../executor/suffix.ts";
-import { goMarshal } from "../http/json-text.ts";
+import { unknownModelBody } from "../credentials/selection/failures.ts";
 import { ModelProviders } from "./model-providers.ts";
 
 export interface ResolvedModel {
@@ -78,17 +78,6 @@ export const adjustProvidersForEntryProtocol = (
 
   return providers;
 };
-
-/** Body of the 400 answer for unroutable models (already JSON; OpenAI handlers pass it through). */
-export const unknownModelBody = (model: string): string =>
-  goMarshal({
-    error: {
-      message: `unknown provider for model ${model}`,
-      type: "invalid_request_error",
-      code: "model_not_found",
-      param: "model",
-    },
-  });
 
 export const resolveModel = Effect.fnUntraced(function* (
   modelName: string,

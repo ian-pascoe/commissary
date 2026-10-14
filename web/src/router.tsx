@@ -5,12 +5,14 @@ import { Shell } from "./components/Shell.tsx";
 import { AccountPage } from "./pages/Account.tsx";
 import { AccountsPage } from "./pages/Accounts.tsx";
 import { ConnectPage } from "./pages/Connect.tsx";
+import { GrantsPage } from "./pages/Grants.tsx";
 import { KeyGroupPage, NewKeyGroupPage, OwnKeyGroupPage } from "./pages/KeyGroup.tsx";
 import { KeysPage } from "./pages/Keys.tsx";
 import { MembersPage } from "./pages/Members.tsx";
 import { ModelRulesPage } from "./pages/ModelRules.tsx";
 import { ModelsPage } from "./pages/Models.tsx";
 import { OverviewPage } from "./pages/Overview.tsx";
+import { MyModelsPage } from "./pages/MyModels.tsx";
 import { NotFound } from "./pages/NotFound.tsx";
 import { PricesPage } from "./pages/Prices.tsx";
 import { ProxyKeysPage } from "./pages/ProxyKeys.tsx";
@@ -73,6 +75,8 @@ const routeTree = rootRoute.addChildren([
     component: PricesPage,
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/members", component: MembersPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/grants", component: GrantsPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/my-models", component: MyModelsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/proxy-keys", component: ProxyKeysPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: SettingsPage }),
 ]);

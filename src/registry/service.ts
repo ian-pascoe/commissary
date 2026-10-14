@@ -15,8 +15,11 @@ import type { ConfigStoreError } from "../config/errors.ts";
 import type { Config } from "../config/schema.ts";
 import { currentControlPlane, WorkerEnv } from "../platform/env.ts";
 import { CurrentOrg, type OrgId } from "../platform/org.ts";
+import { ALLOW_ALL, type Reach, reachFromTable } from "../grants/reach.ts";
+import type { GrantTable } from "../grants/grant.ts";
 import { projectModel } from "./availability.ts";
 import { assembleCredentialModels } from "./credential-models.ts";
+import { type GrantFilter, grantFilter } from "./grant-filter.ts";
 import { CatalogStore } from "./catalog-store.ts";
 import { usesEmbeddedCatalog } from "./catalog-source.ts";
 import { withAntigravityHints } from "../executor/antigravity/models.ts";
@@ -48,6 +51,13 @@ export class RegistrySnapshot {
     readonly sources: ReadonlyArray<ModelSource> = [],
     /** Version of `config` in the ControlPlane (0 = defaults, or unknown when built outside the service). */
     readonly configVersion: number = 0,
+    /**
+     * The org's grants and teams (ADR 0023) as of this snapshot; `visibleTo` computes each member's reach from them.
+     * Absent only in a registry built without grants (tests): every member then reaches every model.
+     */
+    readonly grants?: GrantTable,
+    /** Set on a member's view when their reach is restricted: the models it left out are not in `index`. */
+    readonly grantFilter?: GrantFilter,
   ) {}
 
   /** `util.GetProviderName`: providers of an exact model id, retrying the lower-cased id. */
@@ -82,12 +92,18 @@ export class RegistrySnapshot {
   readonly #memberViews = new Map<string, RegistrySnapshot>();
 
   /**
-   * The registry as one caller may list it (ADR 0023): a private credential's models belong to its owner, so every
-   * other caller, an org admin included, gets the registry without them. The snapshot itself serves routing, where a
-   * private credential is only ever a candidate for its owner (the picker); `undefined` is a caller without a member.
+   * The registry as one caller may use it: a private credential's models belong to its owner (ADR 0023), and a shared
+   * credential's models to the members its grants name (ADR 0023), so every other caller, an org admin included, gets
+   * the registry without them. The snapshot itself knows every model; `undefined` is a caller without a member, which
+   * only the grants for everyone name. A view is built once per snapshot and member, and a snapshot is built from one
+   * version of the grants, so a view is never older than its grants.
    */
   visibleTo = (memberId: string | undefined): RegistrySnapshot => {
-    if (!this.sources.some((source) => source.owner !== undefined)) return this;
+    const reach: Reach =
+      this.grants === undefined ? ALLOW_ALL : reachFromTable(this.grants, memberId);
+
+    if (reach.unrestricted && !this.sources.some((source) => source.owner !== undefined))
+      return this;
     const key = memberId ?? "";
     const cached = this.#memberViews.get(key);
 
@@ -101,6 +117,8 @@ export class RegistrySnapshot {
       catalogs: this.catalogs,
       now: this.now,
       configVersion: this.configVersion,
+      reach,
+      ...(this.grants === undefined ? {} : { grants: this.grants }),
     });
 
     this.#memberViews.set(key, view);
@@ -130,14 +148,24 @@ export const buildSnapshot = (input: {
   readonly catalogs: ModelCatalogs;
   readonly now: number;
   readonly configVersion?: number;
+  /** The org's grants and teams; without them every member reaches every model. */
+  readonly grants?: GrantTable;
+  /** The reach a member's view is built under (`visibleTo`); unrestricted by default. */
+  readonly reach?: Reach;
 }): RegistrySnapshot => {
   const { config, catalogs, now } = input;
   const nowSeconds = Math.floor(now / 1000);
   const clients: ClientRegistration[] = [];
   const sources = input.sources.toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const filter = grantFilter(input.reach ?? ALLOW_ALL, config, sources);
 
   for (const source of sources) {
-    const assembled = assembleCredentialModels(source, { config, catalogs, nowSeconds });
+    const assembled = assembleCredentialModels(source, {
+      config,
+      catalogs,
+      nowSeconds,
+      grants: filter,
+    });
 
     if (assembled === undefined) continue;
     clients.push({
@@ -155,6 +183,8 @@ export const buildSnapshot = (input: {
     now,
     sources,
     input.configVersion ?? 0,
+    input.grants,
+    filter,
   );
 };
 
@@ -198,17 +228,23 @@ export class ModelRegistry extends Context.Service<
 
         const { config, version } = yield* configReader.get;
 
-        const [catalogs, sources] = yield* Effect.all(
+        const fromPlane = <A>(what: string, read: () => Promise<A>) =>
+          Effect.tryPromise({
+            try: read,
+            catch: (cause) =>
+              new ModelRegistryError({
+                message: `failed to read ${what} from ControlPlane`,
+                cause,
+              }),
+          });
+
+        // The grants are read with the sources and never from an older read: a registry that could not read them is not
+        // built (the previous snapshot serves), it is never built as if everyone had every model.
+        const [catalogs, sources, grants] = yield* Effect.all(
           [
             catalogStore.load(usesEmbeddedCatalog(config.models.catalog)),
-            Effect.tryPromise({
-              try: async () => await plane.listModelSources(FULL_ACCESS),
-              catch: (cause) =>
-                new ModelRegistryError({
-                  message: "failed to read model sources from ControlPlane",
-                  cause,
-                }),
-            }),
+            fromPlane("model sources", async () => await plane.listModelSources(FULL_ACCESS)),
+            fromPlane("grants", async () => await plane.grantTable()),
           ],
           { concurrency: "unbounded" },
         );
@@ -223,6 +259,7 @@ export class ModelRegistry extends Context.Service<
           catalogs,
           now,
           configVersion: version,
+          grants,
         });
       });
 

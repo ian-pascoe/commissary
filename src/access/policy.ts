@@ -31,6 +31,8 @@ const MEMBER_READS = [
   `${MANAGEMENT_PREFIX}/observability/usage/records`,
   `${MANAGEMENT_PREFIX}/observability/usage/summary`,
   `${MANAGEMENT_PREFIX}/observability/usage/series`,
+  // The models the caller may use (ADR 0023): the registry as their own grants leave it.
+  `${MANAGEMENT_PREFIX}/models/mine`,
 ];
 
 /**

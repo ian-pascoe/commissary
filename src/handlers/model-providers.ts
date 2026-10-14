@@ -62,16 +62,22 @@ export class ModelProviders extends Context.Service<
         ),
       );
 
+      // What the caller may use (ADR 0023): the registry as their grants and private credentials leave it, so a
+      // model they cannot reach has no provider and answers like an unknown one.
+      const visible = Effect.gen(function* () {
+        const identity = yield* Effect.serviceOption(AccessPrincipal);
+
+        return (yield* snapshot).visibleTo(Option.getOrUndefined(identity)?.memberId);
+      });
+
       return ModelProviders.of({
-        providersFor: (model) =>
-          Effect.map(snapshot, (current) => current.providersForModel(model)),
-        firstAvailableModel: Effect.map(snapshot, (current) => current.firstAvailableModel()),
+        providersFor: (model) => Effect.map(visible, (current) => current.providersForModel(model)),
+        firstAvailableModel: Effect.map(visible, (current) => current.firstAvailableModel()),
         modelType: (model) =>
           Effect.map(snapshot, (current) => current.lookupModelInfo(model, "")?.type),
         // The model list a request may name: a private credential's models are its owner's (ADR 0023).
         spawnAgentSource: Effect.gen(function* () {
-          const identity = yield* Effect.serviceOption(AccessPrincipal);
-          const current = (yield* snapshot).visibleTo(Option.getOrUndefined(identity)?.memberId);
+          const current = yield* visible;
 
           return {
             availableModels: current.availableModels().map((model) => ({

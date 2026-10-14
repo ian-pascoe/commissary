@@ -14,6 +14,7 @@
  */
 import type { Config } from "../config/schema.ts";
 import { sessionAffinityTtlMs } from "../config/accessors.ts";
+import type { Reach } from "../grants/reach.ts";
 import type { JsonObject } from "../json/index.ts";
 import { resetCooldownState } from "./cooldown-reset.ts";
 import { type StoredCredential, deriveFileCredential, sanitizeAliases } from "./derive.ts";
@@ -78,6 +79,12 @@ export interface PoolOptions {
   /** Adjusts the credential handed to executors by `pick` (never persisted), e.g. cached Vertex access tokens. */
   readonly decorate?: (credential: Credential) => Credential;
   /**
+   * What a member may use of the shared credentials (their grants, ADR 0023); `undefined`: a request without a member.
+   * Called on every pick and retry plan, so it must be cheap. Required: a pool without grants would serve everything,
+   * so building one states that (`ALLOW_ALL`).
+   */
+  readonly reach: (member: string | undefined) => Reach;
+  /**
    * Whether the org lets members use private credentials (`membership.private_credentials`). Off: every private
    * credential is disabled (kept, not deleted) until it is on again; call {@link CredentialPool.invalidate} when it
    * changes. Default on.
@@ -133,6 +140,7 @@ export class CredentialPool {
   readonly #now: () => number;
   readonly #newId: () => string;
   readonly #decorate: (credential: Credential) => Credential;
+  readonly #reach: PoolOptions["reach"];
   readonly #privateCredentials: () => boolean;
   readonly #privateKeys: NonNullable<PoolOptions["privateKeys"]>;
   readonly #rotation = new RotationState();
@@ -148,6 +156,7 @@ export class CredentialPool {
     this.#now = options.now ?? Date.now;
     this.#newId = options.newId ?? (() => crypto.randomUUID());
     this.#decorate = options.decorate ?? ((credential) => credential);
+    this.#reach = options.reach;
     this.#privateCredentials = options.privateCredentials ?? (() => true);
     this.#privateKeys = options.privateKeys ?? (() => ({ version: 0, configs: [] }));
     this.#states = options.store.loadStates();
@@ -273,6 +282,7 @@ export class CredentialPool {
       request,
       settings: view.settings,
       runtime: { rotation: this.#rotation, affinity: this.#affinity, lcp: this.#lcp },
+      reach: this.#reach(request.memberId),
       now,
     });
 
@@ -440,6 +450,7 @@ export class CredentialPool {
       credentials: entries,
       query,
       routing: { ...view.settings, knownPrefixes: knownPrefixes(entries) },
+      reach: this.#reach(query.memberId),
       coolingDisabled: (credential) => coolingDisabledFor(credential, view.cooldown),
       now: this.#now(),
     });

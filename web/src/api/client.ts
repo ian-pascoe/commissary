@@ -6,6 +6,7 @@ import { Atom, AtomHttpApi, Reactivity } from "effect/reactivity";
 import { ManagementApi } from "#contract/api.ts";
 import { type BatchAction, batchLimit } from "#contract/credentials.ts";
 import { ManagementError } from "#contract/errors.ts";
+import type { GrantBody, GrantSaved } from "#contract/grants.ts";
 import type { PriceOverrideBody, PriceOverrideSaved } from "#contract/prices.ts";
 import type { RoutingModels } from "#contract/routing.ts";
 import { type ChunkOutcome, chunks, foldOutcomes } from "../lib/batch.ts";
@@ -447,6 +448,70 @@ export const savePriceAtom = ManagementClient.runtime.fn((write: PriceWrite) =>
     };
 
     return yield* Reactivity.mutation(call(), PRICES).pipe(reloadOnConflict(PRICES));
+  }).pipe(
+    Effect.catchIf(
+      (error) => Schema.isSchemaError(error) || HttpClientError.isHttpClientError(error),
+      Effect.die,
+    ),
+  ),
+);
+
+/** The Grants pages refetch after a mutation tagged with this key. */
+export const GRANTS = ["grants"] as const;
+
+/** The org's grants with the revision of each (writes send it back). */
+export const grantsAtom = ManagementClient.query("grants", "list", {
+  reactivityKeys: GRANTS,
+  timeToLive: KEEP,
+});
+
+/** The models the caller may use (a fresh registry on every read, so a grant just written shows). */
+export const myModelsAtom = ManagementClient.query("grants", "mine", {
+  reactivityKeys: GRANTS,
+  timeToLive: KEEP,
+});
+
+/** One grant write: add, replace (with the grant's revision as `If-Match`) or remove. */
+export type GrantWrite =
+  | { readonly kind: "create"; readonly body: GrantBody }
+  | {
+      readonly kind: "replace";
+      readonly id: string;
+      readonly revision: number;
+      readonly body: GrantBody;
+    }
+  | { readonly kind: "remove"; readonly id: string; readonly revision: number };
+
+/**
+ * A grant write; the list refetches afterwards, also after a refusal that stays (409: another edit landed first).
+ * Transport and decoding failures become defects, as in the generated mutations.
+ */
+export const saveGrantAtom = ManagementClient.runtime.fn((write: GrantWrite) =>
+  Effect.gen(function* () {
+    const client = yield* ManagementClient;
+
+    const call = (): Effect.Effect<
+      GrantSaved,
+      ManagementError | Schema.SchemaError | HttpClientError.HttpClientError
+    > => {
+      switch (write.kind) {
+        case "create":
+          return client.grants.create({ payload: write.body });
+        case "replace":
+          return client.grants.replace({
+            params: { id: write.id },
+            headers: { "if-match": String(write.revision) },
+            payload: write.body,
+          });
+        case "remove":
+          return client.grants.remove({
+            params: { id: write.id },
+            headers: { "if-match": String(write.revision) },
+          });
+      }
+    };
+
+    return yield* Reactivity.mutation(call(), GRANTS).pipe(reloadOnConflict(GRANTS));
   }).pipe(
     Effect.catchIf(
       (error) => Schema.isSchemaError(error) || HttpClientError.isHttpClientError(error),

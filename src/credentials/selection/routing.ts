@@ -167,9 +167,18 @@ const entryOf = (alias: OAuthModelAlias): AliasEntry => ({
   forceMapping: alias["force-mapping"] === true,
 });
 
+/**
+ * The part of a credential that routing reads: a `Credential`, or a `ModelSource` (the registry asks the same question
+ * selection does, which models a credential serves, without its tokens).
+ */
+export type RoutableCredential = Pick<
+  Credential,
+  "prefix" | "models" | "excludedModels" | "modelAliases" | "provider" | "authKind"
+>;
+
 /** Splits `prefix/` off the model. `undefined` when this credential cannot serve the model for prefix reasons. */
 const applyPrefix = (
-  credential: Credential,
+  credential: RoutableCredential,
   requested: string,
   context: RoutingContext,
 ): string | undefined => {
@@ -216,7 +225,7 @@ export const rotateRoute = (route: ModelRoute, offset: number): ModelRoute => {
  * Returns `undefined` when the credential does not serve the model. Pools are returned in configured order.
  */
 export const resolveModelRoute = (
-  credential: Credential,
+  credential: RoutableCredential,
   requested: string,
   context: RoutingContext,
 ): ModelRoute | undefined => {
