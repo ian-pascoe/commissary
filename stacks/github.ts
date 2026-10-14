@@ -117,12 +117,16 @@ export default Alchemy.Stack(
     const repo = { owner, repository };
     const zone = yield* zoneFor(accountId, settings.domain);
 
-    const hostedZone =
-      hostedStage === undefined
-        ? undefined
-        : yield* zoneFor(accountId, hostedStage.settings.domain);
+    // Every hostname CI deploys: production's and the hosted stage's, each with its API host (ADR 0028) when set.
+    const hostnames = [settings, ...(hostedStage === undefined ? [] : [hostedStage.settings])]
+      .flatMap(({ domain, apiDomain }) => [domain, apiDomain])
+      .filter((name) => name !== "");
 
-    const zoneIds = [...new Set([zone.id, ...(hostedZone === undefined ? [] : [hostedZone.id])])];
+    const zoneIds = [
+      ...new Set(
+        (yield* Effect.forEach(hostnames, (name) => zoneFor(accountId, name))).map(({ id }) => id),
+      ),
+    ];
 
     const production = yield* GitHub.Environment("Production", {
       ...repo,
@@ -160,7 +164,8 @@ export default Alchemy.Stack(
           resources: { [`com.cloudflare.api.account.${accountId}`]: "*" },
         },
         {
-          // The custom domains of production and the hosted stage (their DNS records and Workers routes).
+          // The custom domains of production and the hosted stage, API hosts included (their DNS records and Workers
+          // routes).
           effect: "allow",
           permissionGroups: ["Zone Read", "DNS Write", "Workers Routes Write"],
           resources: {
@@ -216,6 +221,7 @@ export default Alchemy.Stack(
           ? {
               ...variables,
               CF_LLM_PROXY_DOMAIN: settings.domain,
+              CF_LLM_PROXY_API_DOMAIN: settings.apiDomain,
               PROXY_MODE: settings.hosted === undefined ? "" : "hosted",
             }
           : variables;
@@ -238,6 +244,7 @@ export default Alchemy.Stack(
         ...hostedStage.config.variables,
         CLOUDFLARE_ACCOUNT_ID: accountId,
         CF_LLM_PROXY_DOMAIN: hostedStage.settings.domain,
+        CF_LLM_PROXY_API_DOMAIN: hostedStage.settings.apiDomain,
         PLATFORM_ADMIN_EMAILS: hostedStage.settings.adminEmails.join(","),
         PROXY_MODE: "hosted",
       };
@@ -261,6 +268,7 @@ export default Alchemy.Stack(
       checkServiceTokenId: checkToken.serviceTokenId,
       zone: zone.name,
       hostedDomain: hostedStage?.settings.domain ?? "(no .env.hosted)",
+      hostedApiDomain: hostedStage?.settings.apiDomain ?? "",
     };
   }),
 );

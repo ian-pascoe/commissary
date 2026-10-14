@@ -33,8 +33,16 @@ export interface Settings {
    * on a hosted proxy), with empty storage and no cron trigger. `domain`, `existingAud` and `serviceTokens` are ignored.
    */
   readonly preview: boolean;
-  /** Custom hostname of the Worker (the zone must exist in the account), e.g. `proxy.example.com`. */
+  /**
+   * Custom hostname of the Worker (the zone must exist in the account), e.g. `proxy.example.com`. With `apiDomain`, the
+   * app host: the panel, sign-in and the management API.
+   */
   readonly domain: string;
+  /**
+   * The API host (`CF_LLM_PROXY_API_DOMAIN`, ADR 0028), e.g. `api.example.com`: the only host of the proxy routes, which
+   * leave `domain` then. Empty (the default, and always on a preview): `domain` serves everything.
+   */
+  readonly apiDomain: string;
   /** Access team name or domain, e.g. `myteam` or `myteam.cloudflareaccess.com`. */
   readonly teamDomain: string;
   /** AUD tag(s) of an Access application managed outside this stack; when set, no Access resources are created. */
@@ -130,6 +138,10 @@ const secretsKeyGenerations = Effect.gen(function* () {
 });
 
 const TOKEN_NAME = /^[a-z0-9][a-z0-9-]{0,40}$/;
+
+/** A hostname as a custom domain takes it: lowercase labels, at least two, no scheme, port or path. */
+const HOSTNAME =
+  /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/;
 
 const secret = (name: string) => Effect.map(text(name), (value) => Redacted.make(value.trim()));
 
@@ -227,6 +239,8 @@ export const readSettings = (dev: boolean, stage: string) =>
       hosted: hosted?.hosted,
       preview,
       domain: (yield* text("CF_LLM_PROXY_DOMAIN")).trim(),
+      // A preview serves its workers.dev URL only (one host).
+      apiDomain: dev || preview ? "" : (yield* text("CF_LLM_PROXY_API_DOMAIN")).trim(),
       teamDomain: (yield* text("ACCESS_TEAM_DOMAIN")).trim(),
       existingAud: preview ? "" : (yield* text("ACCESS_AUD")).trim(),
       allowEmails: yield* list("ACCESS_ALLOW_EMAILS"),
@@ -252,6 +266,17 @@ export const readSettings = (dev: boolean, stage: string) =>
 
     if (settings.domain === "" && !preview)
       problems.push("CF_LLM_PROXY_DOMAIN is required (the Worker's custom hostname)");
+
+    if (settings.apiDomain !== "") {
+      if (!HOSTNAME.test(settings.apiDomain))
+        problems.push(
+          `CF_LLM_PROXY_API_DOMAIN must be a lowercase hostname such as api.example.com, not "${settings.apiDomain}"`,
+        );
+      else if (settings.apiDomain === settings.domain.toLowerCase())
+        problems.push(
+          "CF_LLM_PROXY_API_DOMAIN must differ from CF_LLM_PROXY_DOMAIN (unset it to serve everything on one host)",
+        );
+    }
 
     if (hosted !== undefined) {
       if (settings.adminServiceTokens.length > 0)

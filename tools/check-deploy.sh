@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Post-deploy check of where Cloudflare Access sits (ADR 0022). Retries while a new workers.dev hostname or Access
-# application propagates.
+# Post-deploy check of where Cloudflare Access sits (ADR 0022) and, with an API host (ADR 0028), which host serves
+# what. Retries while a new workers.dev hostname or Access application propagates.
 # - /healthz answers 200 through Access with a service token;
 # - the management API answers 200 through Access with a service token (which proves the Worker accepts the Access
 #   JWT, i.e. ACCESS_AUD and the team domain are wired);
@@ -10,12 +10,17 @@
 #   `Authorization`, is served on a proxy route (200): the first deploy with the bypass must not break them, since
 #   `global` keeps Access sign-ins for clients on by default. The JWT is the `CF_Authorization` cookie Access sets for
 #   the service token, which is issued for the main application, like a `cloudflared access login` token;
-# - the control panel without credentials is stopped by Access (anything but 200).
-# Usage: CF_ACCESS_CLIENT_ID=… CF_ACCESS_CLIENT_SECRET=… tools/check-deploy.sh <base-url>
+# - the control panel without credentials is stopped by Access (anything but 200);
+# - with an API host: the proxy routes answer 404 on the app host (through Access) and the management API 404 on the
+#   API host, both from the Worker.
+# Usage: CF_ACCESS_CLIENT_ID=… CF_ACCESS_CLIENT_SECRET=… tools/check-deploy.sh <base-url> [<api-url>]
+# `<api-url>` is where the proxy routes are served (default: `<base-url>`).
 set -euo pipefail
 
-base="${1:?usage: check-deploy.sh <base-url>}"
+base="${1:?usage: check-deploy.sh <base-url> [<api-url>]}"
 base="${base%/}"
+api="${2:-$base}"
+api="${api%/}"
 : "${CF_ACCESS_CLIENT_ID:?CF_ACCESS_CLIENT_ID is required}"
 : "${CF_ACCESS_CLIENT_SECRET:?CF_ACCESS_CLIENT_SECRET is required}"
 
@@ -26,42 +31,43 @@ trap 'rm -f "$body" "$headers"' EXIT
 # The Access JWT a `cloudflared`-style client sends (set by `access_jwt`).
 jwt=""
 
-# Prints the status of `$base$1` with the credentials `$2`: `token` goes through Access with the service token,
+# Prints the status of `$1$2` with the credentials `$3`: `token` goes through Access with the service token,
 # `cloudflared` sends `$jwt` in `cf-access-token` with a dummy API key, `none` sends nothing. Redirects are not followed,
 # so an Access sign-in page shows as 302. The response headers land in `$headers`.
 status() {
   local auth=()
-  case "${2:-none}" in
-    token)
-      auth=(-H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
-      ;;
-    cloudflared) auth=(-H "cf-access-token: $jwt" -H "Authorization: Bearer sk-dummy") ;;
+  case "${3:-none}" in
+  token)
+    auth=(-H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
+    ;;
+  cloudflared) auth=(-H "cf-access-token: $jwt" -H "Authorization: Bearer sk-dummy") ;;
   esac
-  curl -sS -o "$body" -D "$headers" -w '%{http_code}' --max-time 20 "${auth[@]}" "$base$1" || echo 000
+  curl -sS -o "$body" -D "$headers" -w '%{http_code}' --max-time 20 "${auth[@]}" "$1$2" || echo 000
 }
 
-# Waits until `check <path> <credentials>` succeeds; `describe` names the expectation in messages.
+# Waits until `check <code>` succeeds for `<host><path>` with `<credentials>`; `describe` names the expectation.
 expect() {
-  local path="$1" credentials="$2" describe="$3" check="$4" code
+  local host="$1" path="$2" credentials="$3" describe="$4" check="$5" code
   for attempt in $(seq 1 30); do
-    code="$(status "$path" "$credentials")"
+    code="$(status "$host" "$path" "$credentials")"
     if "$check" "$code"; then
-      echo "$path: $code ($describe)"
+      echo "$host$path: $code ($describe)"
       return 0
     fi
-    echo "$path: $code, expected $describe (attempt $attempt/30)"
+    echo "$host$path: $code, expected $describe (attempt $attempt/30)"
     sleep 10
   done
-  echo "::error::$base$path did not answer $describe" >&2
+  echo "::error::$host$path did not answer $describe" >&2
   exit 1
 }
 
 ok() { [ "$1" = 200 ]; }
 worker_401() { [ "$1" = 401 ] && grep -q '"Missing API key"' "$body"; }
+worker_404() { [ "$1" = 404 ] && grep -q '"Not found: ' "$body"; }
 not_ok() { [ "$1" != 200 ] && [ "$1" != 000 ]; }
 
-expect /healthz token "200 through Access" ok
-expect /v8/management/me token "200 through Access" ok
+expect "$base" /healthz token "200 through Access" ok
+expect "$base" /v8/management/me token "200 through Access" ok
 
 # The `CF_Authorization` cookie of the last answer through Access with the service token.
 jwt="$(sed -nE 's/^[Ss]et-[Cc]ookie: *CF_Authorization=([^;[:space:]]+).*/\1/p' "$headers" | tail -n 1)"
@@ -70,7 +76,13 @@ if [ -z "$jwt" ]; then
   exit 1
 fi
 
-expect /v1/models cloudflared "200 with cf-access-token and a dummy key" ok
-expect /v1/models none "401 Missing API key from the Worker" worker_401
-expect /v1beta/models none "401 Missing API key from the Worker" worker_401
-expect / none "no 200 without Access" not_ok
+expect "$api" /v1/models cloudflared "200 with cf-access-token and a dummy key" ok
+expect "$api" /v1/models none "401 Missing API key from the Worker" worker_401
+expect "$api" /v1beta/models none "401 Missing API key from the Worker" worker_401
+expect "$base" / none "no 200 without Access" not_ok
+
+if [ "$api" != "$base" ]; then
+  expect "$api" /healthz none "200 without Access" ok
+  expect "$base" /v1/models token "404 from the Worker: the proxy routes are on the API host" worker_404
+  expect "$api" /v8/management/me none "404 from the Worker: the management API is on the app host" worker_404
+fi

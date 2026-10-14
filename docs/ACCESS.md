@@ -18,7 +18,8 @@ settings in `.env` (template: `.env.example`):
 | Setting                                                  | Creates / sets                                                                                                  |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `CF_LLM_PROXY_DOMAIN`                                    | A **self-hosted application** on that hostname (empty path: the whole hostname), and the Worker's custom domain |
-| (always)                                                 | A second application on the proxy paths of that hostname with a **Bypass** policy for everyone (below)          |
+| `CF_LLM_PROXY_API_DOMAIN` (optional)                     | A second custom domain, the API host, which serves the proxy routes and has no Access application (below)       |
+| (without `CF_LLM_PROXY_API_DOMAIN`)                      | A second application on the proxy paths of that hostname with a **Bypass** policy for everyone (below)          |
 | `ACCESS_ALLOW_EMAILS`, `ACCESS_ALLOW_EMAIL_DOMAINS`      | A reusable **Allow** policy (interactive login with your identity providers)                                    |
 | `ACCESS_SERVICE_TOKENS` (names)                          | One **service token** per name and a **Service Auth** policy that admits exactly those tokens                   |
 | `ACCESS_ALLOW_SERVICE_TOKEN_IDS`                         | Adds service tokens managed elsewhere (by token ID, e.g. CI's) to the **Service Auth** policy                   |
@@ -33,7 +34,12 @@ subrequests (the first line of defence against cross-site request forgery on the
 Alchemy application resource does not manage these fields and its updates are PUT-style, so a follow-up step re-applies them
 after every change of the application: do not edit them in the dashboard.
 
-**The proxy routes leave Access.** The bypass application (`infra/access.ts` `provisionProxyBypass`) covers `/v1`,
+**The proxy routes leave Access.** With an API host (`CF_LLM_PROXY_API_DOMAIN`, ADR 0028) they are served there only,
+and no Access application covers that hostname: the Worker answers the proxy routes on the API host and everything else
+(the panel, the management API, the OAuth callbacks) on `CF_LLM_PROXY_DOMAIN`, each with a `404` naming the other host
+for a path it does not serve (`src/http/hosts.ts`). A client that signs in through Access sends the token of the app
+host's application (`cloudflared access token -app=https://<CF_LLM_PROXY_DOMAIN>`) in `cf-access-token` to the API host;
+the Worker checks it against `ACCESS_AUD` itself. Without an API host, the bypass application (`infra/access.ts` `provisionProxyBypass`) covers `/v1`,
 `/v1beta`, `/v1internal`, `/openai/v1`, `/backend-api/codex`, `/chat/completions`, `/completions` and `/responses` with
 their sub-paths. Access applies the most specific application to a request, and a hostname-and-path application before
 a Worker-level one, so these paths reach the Worker without a sign-in while every other path (the panel, the management

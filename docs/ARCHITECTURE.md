@@ -52,6 +52,11 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
 ## Runtime topology
 
 - **Worker** (stateless): routing, Access verification, request handling, translation, upstream `fetch`, streaming.
+- **Hosts** (ADR 0028, `src/http/hosts.ts`): with `API_DOMAIN` set (deploy setting `CF_LLM_PROXY_API_DOMAIN`), the
+  Worker answers on two custom domains and the default export decides by hostname before the router: the API host
+  serves the proxy routes (the Access zone `protected` of `classifyPath`) and `/healthz`, every other host (the app host
+  `APP_DOMAIN`) everything else; a request on the wrong host answers `404 {"error": "Not found: …"}` naming the right
+  one. Without `API_DOMAIN` nothing is decided there. `GET /me` reports the API host as `api_url` for the panel.
 - **Orgs** (ADR 0021, `src/platform/org.ts`): one deployment serves many orgs, and every request and scheduled job
   belongs to exactly one. The per-request `CurrentOrg` service carries its id (`OrgId`: lowercase letters, digits and
   inner hyphens); `requestContext` provides it next to `WorkerEnv` as `global`, the org of the
@@ -2164,7 +2169,9 @@ prices each attempt, the ControlPlane counts and decides.
 - Access application on the Worker's custom domain, provisioned with the Worker by `alchemy.run.ts`/`infra/access.ts`
   (Allow policy for people, Service Auth policy for the stack's service tokens, SameSite=Lax cookie; its AUD tag feeds
   `ACCESS_AUD`); `workersDev: false` so there are no `workers.dev`/preview URLs and Access cannot be bypassed. The proxy
-  routes are outside it ("Proxy keys" above): there the Worker is the only gate.
+  routes are outside it ("Proxy keys" above): there the Worker is the only gate. With an API host ("Runtime topology")
+  the application covers the app host only and the API host has none; otherwise a bypass application takes the proxy
+  paths of the one host out of Access.
 - The Worker verifies `Cf-Access-Jwt-Assertion` (RS256, JWKS from `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`,
   `iss` = team domain, `aud` contains the application AUD tag, `exp`/`nbf`). JWKS is cached per isolate.
 - Principal: `email` for users, `common_name` (service token client id) for service tokens. The principal replaces the

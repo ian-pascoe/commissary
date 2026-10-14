@@ -163,6 +163,7 @@ model aliases, retries, …) are edited in the control panel and stored in the W
 | Variable                         | Default    | Purpose                                                                                                                            |
 | -------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `CF_LLM_PROXY_DOMAIN`            | (required) | Custom hostname of the Worker and of its Access application                                                                        |
+| `CF_LLM_PROXY_API_DOMAIN`        |            | A second hostname that alone serves the proxy routes, outside Access ([docs/DEPLOY.md](docs/DEPLOY.md#api-host))                   |
 | `ACCESS_TEAM_DOMAIN`             | (required) | Zero Trust team name or `<team>.cloudflareaccess.com`                                                                              |
 | `ACCESS_ALLOW_EMAILS`            |            | Emails allowed to sign in (comma separated)                                                                                        |
 | `ACCESS_ALLOW_EMAIL_DOMAINS`     |            | Email domains allowed to sign in                                                                                                   |
@@ -205,6 +206,7 @@ its own domain (stage `hosted`), and every pull request to its own preview stage
 | Client gets 401 `Missing API key`           | Send a proxy key (`Authorization: Bearer cfp_…`, `x-api-key` or `x-goog-api-key`)           |
 | Client gets 401 `Invalid API key`           | The proxy key is wrong, revoked or expired: create a new one on the Proxy keys page         |
 | Client gets a 302 to `cloudflareaccess.com` | Its path is not a proxy route, or the deploy's bypass application is missing (`ACCESS_AUD`) |
+| Client gets 404 `Not found: …`              | With `CF_LLM_PROXY_API_DOMAIN` set, send the proxy routes to the API host the message names |
 | 500 `Authentication service error`          | `ACCESS_TEAM_DOMAIN` is wrong                                                               |
 | 403 `Forbidden` on the control panel        | Your email or token is not in `PLATFORM_ADMIN_EMAILS` / `PLATFORM_ADMIN_SERVICE_TOKENS`     |
 | A model is missing from `/v1/models`        | No connected account or API key serves it; check the Accounts and Models pages              |

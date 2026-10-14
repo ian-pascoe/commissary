@@ -26,8 +26,9 @@ in `cf-access-token` and a dummy `Authorization` key, the way `cloudflared acces
 JWT is the `CF_Authorization` cookie Access set for the service token); and `/` without credentials is stopped by
 Access. A hosted deploy is checked by `tools/check-hosted-deploy.sh` instead: `/healthz` answers 200,
 `/api/sign-in-options` offers a provider, `/v8/management/me` answers `401 Not signed in` from the Worker, `/` redirects
-to `/sign-in`, and the proxy routes answer `401 Missing API key`. The deploy job then shows
-the URL on the run, and previews get a pull request comment (`tools/preview-comment.sh`) that is updated on every push.
+to `/sign-in`, and the proxy routes answer `401 Missing API key`. With an API host ([API host](#api-host)) both
+scripts send the proxy routes to it and also check that each host refuses the other's paths with the Worker's `404`.
+The deploy job then shows the URL on the run, and previews get a pull request comment (`tools/preview-comment.sh`) that is updated on every push.
 
 ## Preview stages
 
@@ -40,10 +41,30 @@ A stage named `pr-<number>` is a preview (`infra/settings.ts`):
   platform admins (`PLATFORM_ADMIN_EMAILS`).
 - Empty KV, D1 and Durable Objects, and no cron trigger. A preview has no provider credentials, so it serves the panel,
   the management API and the routes but cannot proxy real requests. Add credentials through its panel if you need to.
-- `CF_LLM_PROXY_DOMAIN`, `ACCESS_AUD` and `ACCESS_SERVICE_TOKENS` are ignored.
+- `CF_LLM_PROXY_DOMAIN`, `CF_LLM_PROXY_API_DOMAIN`, `ACCESS_AUD` and `ACCESS_SERVICE_TOKENS` are ignored: one URL serves
+  everything.
 
 Any machine with the deploy settings can deploy a preview by hand: `pnpm run deploy --stage pr-123`, and remove it with
 `pnpm run destroy --stage pr-123`.
+
+## API host
+
+`CF_LLM_PROXY_API_DOMAIN` (optional, ADR 0028) gives a deployment a second hostname, the **API host**, that serves the
+proxy routes (`/v1`, `/v1beta`, `/v1internal`, `/openai/v1`, `/backend-api/codex`, `/chat/completions`, `/completions`,
+`/responses`) and `/healthz`, and nothing else. `CF_LLM_PROXY_DOMAIN` becomes the **app host**: the control panel, sign-in
+and the management API, and no proxy route. One Worker answers on both custom domains and decides by hostname
+(`src/http/hosts.ts`); a path on the wrong host answers `404` with the host that serves it. The panel's Proxy keys page
+tells clients the API host (`GET /me` `api_url`).
+
+- **Self-hosted:** Access covers the app host only; the API host has no Access application and the bypass application
+  of the proxy paths is not created (an existing one is deleted). Clients that sign in through Access send the app
+  application's token (`cloudflared access token -app=https://<app host>`) to the API host in `cf-access-token`.
+- **Hosted:** register the OAuth callbacks and the Turnstile hostname for the app host, where sign-in happens.
+- **Moving to an API host** changes the address of every client: point them at the API host when the deploy finishes
+  (their old base URL answers `404`). On a hosted proxy people sign in again: the session cookie belongs to the old
+  hostname. Unsetting the variable moves everything back to one host.
+- Both hostnames must be in zones of the account; `pnpm ci:setup` writes the variable into the environment and extends
+  the deploy token to the API host's zone.
 
 ## Hosted proxy
 
@@ -68,7 +89,7 @@ set. Replacing it signs everyone out.
 
 1. **OAuth apps.** Register the callback `https://<host>/api/auth/callback/github` (GitHub) and
    `https://<host>/api/auth/callback/google` (Google, "Authorized redirect URIs"), where `<host>` is
-   `CF_LLM_PROXY_DOMAIN`. The Worker reads the verified email and stores no provider token. A
+   `CF_LLM_PROXY_DOMAIN` (the app host when there is an API host). The Worker reads the verified email and stores no provider token. A
    GitHub OAuth app takes a single callback host, so use one app per hostname; a GitHub App takes up to ten callback
    URLs and Google any number.
 2. **Turnstile.** Create a widget (Cloudflare dashboard, Turnstile) for the hostname, managed mode.
@@ -101,7 +122,8 @@ never take the self-hosted proxy's hostname from `.env`.
 Its settings live in `.env.hosted` (copy `.env.hosted.example`), never in `.env`, which keeps the self-hosted proxy's
 and the hosted previews'. Set them up once:
 
-1. **Hostname.** Pick one in a zone of the account, other than `CF_LLM_PROXY_DOMAIN` of `.env`.
+1. **Hostname.** Pick one in a zone of the account, other than `CF_LLM_PROXY_DOMAIN` of `.env`, and optionally an API
+   host (`CF_LLM_PROXY_API_DOMAIN`, [API host](#api-host)). The other steps use the app host.
 2. **OAuth apps.** A GitHub OAuth app for that hostname (a GitHub OAuth app takes one callback host, so not the
    previews' app) with the callback `https://<host>/api/auth/callback/github`; for Google, add
    `https://<host>/api/auth/callback/google` to the client's redirect URIs.
@@ -130,12 +152,12 @@ It manages:
   `preview`, and `hosted` (like `production`) when `.env.hosted` exists ([Hosted production](#hosted-production));
 - `cf-llm-proxy-ci-deploy`, an account-owned Cloudflare API token limited to what `alchemy.run.ts` deploys: Workers Scripts,
   Workers KV Storage, D1, Secrets Store (Alchemy's state store) and Access: Apps and Policies (Write), Account Settings
-  (Read), and Zone Read, DNS Write and Workers Routes Write on the zones of `CF_LLM_PROXY_DOMAIN` (and of the hosted
-  stage's);
+  (Read), and Zone Read, DNS Write and Workers Routes Write on the zones of `CF_LLM_PROXY_DOMAIN` and
+  `CF_LLM_PROXY_API_DOMAIN` (and of the hosted stage's);
 - `cf-llm-proxy-ci-check`, the Access service token of the post-deploy check;
 - in both environments, the secrets `CLOUDFLARE_API_TOKEN`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` and the
   variables `CLOUDFLARE_ACCOUNT_ID`, `ACCESS_*` (from `.env`) and `ACCESS_ALLOW_SERVICE_TOKEN_IDS` (the check token's
-  ID); in `production` also `CF_LLM_PROXY_DOMAIN`; and a hosted proxy's settings where `.env` sets them
+  ID); in `production` also `CF_LLM_PROXY_DOMAIN` and `CF_LLM_PROXY_API_DOMAIN`; and a hosted proxy's settings where `.env` sets them
   ([Hosted proxy](#hosted-proxy));
 - in `hosted`, the secret `CLOUDFLARE_API_TOKEN` and the settings of `.env.hosted` (no Access settings or check token).
 

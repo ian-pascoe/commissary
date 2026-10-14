@@ -37,6 +37,14 @@ A proxy run as a service for anyone: people sign up and sign in through the prox
 org of their own.
 _Avoid_: SaaS, cloud, multi-tenant mode
 
+**API host**:
+The hostname a deployment may give its proxy routes alone (ADR 0028), where clients send proxy keys.
+_Avoid_: proxy domain, endpoint
+
+**App host**:
+The hostname of the control panel, sign-in and the management API; with no API host it serves the proxy routes too.
+_Avoid_: dashboard domain, panel host
+
 **Personal org**:
 The org a hosted proxy gives a person who signs up without being a member anywhere; they are its org owner. An ordinary
 org in every other way.

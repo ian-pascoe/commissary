@@ -141,6 +141,11 @@ export const Me = Schema.Struct({
   hosted: Schema.optionalKey(Schema.Boolean),
   org_limit: Schema.optionalKey(Schema.Number),
   owned_orgs: Schema.optionalKey(Schema.Number),
+  /**
+   * Where clients send proxy keys (`https://<API_DOMAIN>`, ADR 0028) when the deployment serves its proxy routes on an
+   * API host of their own; absent when the panel's own origin serves them.
+   */
+  api_url: Schema.optionalKey(Schema.String),
 });
 
 export type Me = typeof Me.Type;
