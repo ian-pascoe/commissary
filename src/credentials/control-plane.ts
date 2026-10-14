@@ -581,22 +581,41 @@ export class ControlPlane extends DurableObject<Env> {
     return this.#members.setMemberRole(id, role, actor);
   }
 
-  removeMember(id: string, actor: Actor): MemberResult<{ readonly email: string }> {
+  async removeMember(id: string, actor: Actor): Promise<MemberResult<{ readonly email: string }>> {
     this.#ensureMembership();
 
     const removed = this.#members.removeMember(id, actor);
 
-    // ADR 0027: a member who leaves takes their proxy keys with them (a key whose member is gone is refused anyway).
-    if (removed.ok) {
-      for (const key of this.#proxyKeys.list(id)) this.#spend.forget("key", key.id);
-      this.#spend.forget("member", id);
-      this.#proxyKeys.removeMemberKeys(id);
-    }
+    if (removed.ok) await this.#deleteMemberData(id);
 
     // Grants that named the member go with them: whoever joins again under that email is a new member.
     if (removed.ok) this.#modelGrants.forget({ kind: "member", id });
 
     return removed;
+  }
+
+  /**
+   * Zero data retention (ADR 0027): a member who leaves the org takes with them everything of theirs here: proxy keys,
+   * private accounts (with their cooldown and quota state), private API key groups and the OAuth logins they started.
+   * Shared credentials and other members' data stay.
+   */
+  async #deleteMemberData(member: string): Promise<void> {
+    for (const key of this.#proxyKeys.list(member)) this.#spend.forget("key", key.id);
+    this.#spend.forget("member", member);
+    this.#proxyKeys.removeMemberKeys(member);
+
+    const accounts = this.#pool
+      .entries()
+      .filter(({ credential }) => credential.owner === member)
+      .map(({ credential }) => credential.id);
+
+    const removed = this.#removeMany(accounts);
+
+    this.#privateKeys.removeOwner(member);
+    this.#sessions.deleteOwned(member);
+    this.#pool.invalidate();
+
+    if (removed.length > 0) await this.#rearm();
   }
 
   membershipSettings(): MembershipSettingsWire {
