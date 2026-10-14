@@ -62,6 +62,24 @@ export const UpdateOrgSettings = Schema.Struct({
 
 export type UpdateOrgSettings = typeof UpdateOrgSettings.Type;
 
+/**
+ * `GET /export`: what an org keeps before it is deleted (ADR 0027): the org, its shared config with every secret as a
+ * preview, its price overrides, its credentials (summaries without tokens) and who belongs. Usage records are not in
+ * it: the usage routes page and export them.
+ */
+export const OrgExport = Schema.Struct({
+  exported_at: Schema.String,
+  org: OrgView,
+  config: Schema.Unknown,
+  prices: Schema.Array(Schema.Unknown),
+  credentials: Schema.Array(Schema.Unknown),
+  members: Schema.Array(Schema.Unknown),
+  teams: Schema.Array(Schema.Unknown),
+  service_tokens: Schema.Array(Schema.Unknown),
+});
+
+export type OrgExport = typeof OrgExport.Type;
+
 /** `DELETE /org`: the org's name, typed again to confirm. */
 export const DeleteOrg = Schema.Struct({ name: Schema.String });
 
@@ -126,6 +144,8 @@ export class OrgsGroup extends HttpApiGroup.make("orgs").add(
     success: OrgView,
     error: managementErrors,
   }),
+  /** Downloads what the org keeps, secrets as previews, before it is deleted. Org admins. */
+  HttpApiEndpoint.get("export", "/export", { success: OrgExport, error: managementErrors }),
   /**
    * Deletes the addressed org with all its data at once (ADR 0027): usage records, credentials, config, members, proxy
    * keys, session state and its registry entry; the slug is free to take again. Org owners and platform admins; the

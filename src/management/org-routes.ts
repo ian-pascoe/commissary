@@ -21,7 +21,10 @@ import { deleteOrg as deleteOrgData } from "../platform/org-deletion.ts";
 import { platform, type PlatformStub } from "../platform/registry.ts";
 import type { OrgRecord, OrgWriteResult } from "../platform/registry-store.ts";
 import type { OrgView } from "./contract/orgs.ts";
+import { maskConfigSecrets } from "./export-view.ts";
 import { bodyObject, controlPlane, handled, jsonReply, replyError, type Reply } from "./http.ts";
+import { storedConfig } from "./settings-routes.ts";
+import { currentViewer } from "./viewer.ts";
 
 const BASE = "/v8/management";
 
@@ -218,6 +221,52 @@ const updateSettings = Effect.gen(function* () {
   return jsonReply(200, view(result.org));
 });
 
+const exportOrg = Effect.gen(function* () {
+  const org = yield* addressedOrg;
+  const viewer = yield* currentViewer;
+  const now = yield* Clock.currentTimeMillis;
+  const config = yield* storedConfig;
+  const prices = yield* controlPlane("priceOverrideEntries", (stub) => stub.priceOverrideEntries());
+
+  const credentials = yield* controlPlane("listCredentialEntries", (stub) =>
+    stub.listCredentialEntries(viewer),
+  );
+
+  const members = yield* controlPlane("listMembers", (stub) => stub.listMembers());
+  const teams = yield* controlPlane("listTeams", (stub) => stub.listTeams());
+  const tokens = yield* controlPlane("listServiceTokens", (stub) => stub.listServiceTokens());
+  const iso = (at: number) => new Date(at).toISOString();
+  const byId = new Map(members.map((member) => [member.id, member.email]));
+
+  return jsonReply(200, {
+    exported_at: iso(now),
+    org: view(org),
+    config: maskConfigSecrets(config.document),
+    prices: prices.overrides.map(({ id: _id, revision: _revision, ...price }) => ({
+      ...price,
+      updated_at: iso(price.updated_at),
+    })),
+    credentials,
+    members: members.map((member) => ({
+      email: member.email,
+      role: member.role,
+      added_at: iso(member.addedAt),
+      teams: member.teams.flatMap((id) => teams.find((team) => team.id === id)?.name ?? []),
+    })),
+    teams: teams.map((team) => ({
+      name: team.name,
+      created_at: iso(team.createdAt),
+      members: team.members.flatMap((id) => byId.get(id) ?? []),
+    })),
+    service_tokens: tokens.map((token) => ({
+      client_id: token.clientId,
+      name: token.name,
+      role: token.role,
+      added_at: iso(token.addedAt),
+    })),
+  });
+});
+
 const deleteOrgRoute = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
 
@@ -271,6 +320,7 @@ const deleteOrgRoute = Effect.gen(function* () {
 });
 
 export const orgRoutes = [
+  HttpRouter.route("GET", `${BASE}/export`, handled(exportOrg)),
   HttpRouter.route("DELETE", `${BASE}/org`, handled(deleteOrgRoute)),
   HttpRouter.route("GET", `${BASE}/org`, handled(own)),
   HttpRouter.route("PATCH", `${BASE}/org`, handled(updateSettings)),
