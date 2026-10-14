@@ -122,12 +122,15 @@ export const provisionProxyBypass = (settings: Settings, host: string | Output.O
   Effect.gen(function* () {
     if (settings.existingAud !== "") return;
 
+    const uri = (path: string) =>
+      Output.asOutput(host).pipe(Output.map((name) => `${name}${path}`));
+
     yield* Cloudflare.Access.Application("ProxyRoutes", {
       type: "self_hosted",
-      destinations: PROXY_PATHS.map((path) => ({
-        type: "public" as const,
-        uri: Output.asOutput(host).pipe(Output.map((name) => `${name}${path}`)),
-      })),
+      // The first destination, as Cloudflare records it. Declared because an update without a `domain` resends the
+      // recorded one, which Cloudflare refuses once the host changes ("domain not included in destinations").
+      domain: uri(PROXY_PATHS[0]),
+      destinations: PROXY_PATHS.map((path) => ({ type: "public" as const, uri: uri(path) })),
       policies: [{ decision: "bypass", include: ["everyone"] }],
     });
   });
