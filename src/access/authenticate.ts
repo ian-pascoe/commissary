@@ -6,6 +6,7 @@ import {
   ForbiddenError,
   InternalError,
   NotFoundError,
+  type RateLimitedError,
   UnauthorizedError,
 } from "../errors.ts";
 import { WorkerEnv } from "../platform/env.ts";
@@ -32,7 +33,8 @@ export type AccessError =
   | ForbiddenError
   | NotFoundError
   | InternalError
-  | ConfigurationError;
+  | ConfigurationError
+  | RateLimitedError;
 
 let devBypassRefusalLogged = false;
 

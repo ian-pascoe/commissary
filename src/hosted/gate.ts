@@ -2,7 +2,8 @@
  * Authentication on a hosted proxy (ADR 0026), the counterpart of `access/authenticate.ts`: no Access application sits
  * in front of the Worker, so Access JWTs and Access service tokens are accepted nowhere. New in the Workers port.
  *
- * - Proxy routes take proxy keys only. A key of a suspended org or person is refused.
+ * - Proxy routes take proxy keys only. A key of a suspended org or person is refused, and each org's requests are
+ *   rate-limited (`rate-limit.ts`).
  * - The management API and the panel take the session cookie of a person signed in with Better Auth (`session.ts`):
  *   the same verified email Access yields on a self-hosted proxy, so roles, the person-to-orgs index and caller scopes
  *   work unchanged. A first sign-in signs the person up (`standing.ts`). Platform admins are the people in
@@ -18,6 +19,7 @@ import { type AccessZone, scopedUrl } from "../access/routes.ts";
 import { UnauthorizedError } from "../errors.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import type { CurrentOrg } from "../platform/org.ts";
+import { limitOrgRate } from "./rate-limit.ts";
 import { signedInPerson } from "./session.ts";
 import { ensureSignedUp, requireStanding } from "./standing.ts";
 
@@ -55,6 +57,7 @@ export const authenticateHosted = (
         identity.org,
         identity.principal.kind === "key" ? identity.principal.email : undefined,
       );
+      yield* limitOrgRate(identity.org);
 
       return identity;
     }

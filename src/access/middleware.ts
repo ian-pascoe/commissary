@@ -64,6 +64,15 @@ export const accessErrorResponse = (
     Match.tag("UnauthorizedError", (denied) => Effect.succeed(errorResponse(401, denied.message))),
     Match.tag("ForbiddenError", (denied) => Effect.succeed(errorResponse(403, denied.message))),
     Match.tag("NotFoundError", (missing) => Effect.succeed(errorResponse(404, missing.message))),
+    Match.tag("RateLimitedError", (limited) =>
+      Effect.succeed(
+        HttpServerResponse.setHeader(
+          errorResponse(429, limited.message),
+          "retry-after",
+          String(limited.retryAfterSeconds),
+        ),
+      ),
+    ),
     Match.orElse((failure) =>
       Effect.logError(`authentication middleware error: ${failure._tag}: ${failure.message}`).pipe(
         Effect.as(errorResponse(500, "Authentication service error")),
