@@ -11,7 +11,9 @@
   gap: var(--space-4);
 }
 
+/* The title pushes the head's buttons (Check all quotas, Connect account) to the right. */
 .title {
+  margin-right: auto;
   font-size: 2rem;
   font-weight: 750;
   letter-spacing: -0.025em;
@@ -272,9 +274,11 @@
 
 /*
  * What Check all quotas is doing or did: a line under the head, full width. No box until a check starts (the live
- * region stays in the tree); from then on its line is held, so "Checking" turning into the result does not jump.
+ * region stays in the tree); from then on its line is held, so "Checking" turning into the result does not jump. Its
+ * line comes after Connect account, which follows it in the head.
  */
 .sweep {
+  order: 1;
   flex-basis: 100%;
   min-height: 1lh;
   font-size: var(--text-sm);

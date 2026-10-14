@@ -35,10 +35,10 @@
   gap: var(--space-4);
 }
 
-/* The name takes what the actions leave (the host shortens), so the actions never wrap under it. */
+/* The name keeps its width where it can (the host shortens first); the org switcher sits right beside it. */
 .brand {
   display: flex;
-  flex: 1 1 0;
+  flex: 0 1 auto;
   flex-direction: column;
   justify-content: center;
   min-width: 0;
@@ -65,57 +65,29 @@
   color: var(--bar-quiet);
 }
 
+/* The actions hold the bar's right edge, whatever the name and the switcher leave. */
 .actions {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  margin-left: auto;
 }
 
-.connect {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: 2.5rem;
-  padding: 0 var(--space-4) 0 var(--space-3);
-  background: var(--inverse);
-  color: var(--on-inverse);
-  font-size: var(--text-sm);
-  font-weight: 700;
-  text-decoration: none;
-  border-radius: var(--radius);
-  white-space: nowrap;
-}
-
-.connect:hover {
-  background: var(--inverse-hover);
-}
-
-/*
- * Phones keep the name and host in view: Connect account becomes a square with its label hidden, and the bar's
- * squares sit closer to the name.
- */
+/* Phones set the bar's squares closer to the name; the org switcher wraps onto a row of its own (OrgSwitcher). */
 @media (max-width: 30rem) {
   .inner {
-    gap: var(--space-2);
+    flex-wrap: wrap;
+    gap: 0 var(--space-2);
+  }
+
+  /* The name takes what the squares leave, so they never wrap; the row keeps the bar's height over the switcher. */
+  .brand {
+    flex: 1 1 0;
+    min-height: 4rem;
   }
 
   .name {
     font-size: 1.125rem;
-  }
-
-  .connect {
-    width: 2.5rem;
-    padding: 0;
-    justify-content: center;
-  }
-
-  .connectLabel {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
 }
 

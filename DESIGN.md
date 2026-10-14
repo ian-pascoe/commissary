@@ -176,7 +176,7 @@ A signage palette: white, sign ink, one route yellow, one danger red, and a fixe
 ### Primary
 
 - **Wanderweg Yellow** (#f5c400): the route. The shell bar and the reset blades only. 12:1 against ink.
-- **Pressed Yellow** (#dcae00): hover of the refresh button on the shell bar.
+- **Pressed Yellow** (#dcae00): hover of the shell bar's squares and org switcher.
 
 ### Secondary
 
@@ -265,20 +265,21 @@ Square signage. Buttons take a 3px radius; meters 1px. Blades have a square tail
 
 ### Shell Bar
 
-- Yellow, min-height 4rem, ink text, holding only what is global to the page: the wordmark (800, 1.25rem; 1.125rem on phones) over the host in 0.8125rem, then on the right Connect account, Refresh, the theme menu and the account menu. Connect account is an ink button; refresh is a 2px ink outline square that turns Pressed Yellow on hover and spins while loading. At night the bar is a dark board with a 4px yellow route band along its foot (see Dark Theme). The page links live in the sidebar.
+- Yellow, min-height 4rem, ink text, holding only what is global to the page: the wordmark (800, 1.25rem; 1.125rem on phones) over the host in 0.8125rem, right beside it the org switcher, then on the right Refresh, the theme menu and the account menu. Connecting an account starts on the Accounts page, never from the bar. Refresh is a 2px ink outline square that turns Pressed Yellow on hover and spins while loading. At night the bar is a dark board with a 4px yellow route band along its foot (see Dark Theme). The page links live in the sidebar.
+- **Org switcher:** for a caller of several orgs or one who may create them, a 40px select framed like the bar's squares (2px ink outline, Pressed Yellow on hover) with the org's name in 700 and its own chevron, its "Org" label for screen readers only; the last option opens the org chooser. Beside the name it shortens before the name or the bar's squares do; under 30rem (phones) it takes a full-width row of its own along the bar's foot. Choosing an org reloads the panel at its address.
 - **Account menu:** the theme menu's twin (a framed square with the account icon, an "Account" caption): Sign out on a hosted proxy, and Delete my account in red (the danger colour, since it deletes), which asks in the typed confirmation dialog. Focus returns to the square when the menu or the dialog closes.
-- **Theme menu:** the square between Refresh and the account menu, framed like Refresh so the two read as a pair, showing the choice's icon (sun-and-moon for System, sun, moon) with a "Theme: <choice>" tooltip; it opens a menu framed like the dialog with a "Theme" caption and System, Light and Dark as radio items (the chosen one 750 with a check). Arrows, Home and End move; Enter picks and closes; Escape closes. Under 30rem (phones) Connect account becomes an icon square so the name and host stay in view. Hover fills on the bar's squares apply only where the pointer can hover, so a tap leaves no stuck fill.
+- **Theme menu:** the square between Refresh and the account menu, framed like Refresh so the two read as a pair, showing the choice's icon (sun-and-moon for System, sun, moon) with a "Theme: <choice>" tooltip; it opens a menu framed like the dialog with a "Theme" caption and System, Light and Dark as radio items (the chosen one 750 with a check). Arrows, Home and End move; Enter picks and closes; Escape closes. Hover fills on the bar's squares apply only where the pointer can hover, so a tap leaves no stuck fill.
 
 ### Sidebar
 
-- The org switcher (a form field: "Org" label above a 40px select) over the page links of the caller's role, on the page's own ground, set off from the page by one 1px hairline down its right edge: no fill, no box. It stays in view while the page scrolls (sticky, scrolling itself on a short window).
+- The page links of the caller's role, on the page's own ground, set off from the page by one 1px hairline down its right edge: no fill, no box. It stays in view while the page scrolls (sticky, scrolling itself on a short window).
 - Links in groups (`pageGroupsFor` in `web/src/lib/role.ts`, the only source of the links): Overview and Usage first without a heading, then Providers, People and access, and Org, each under a caption heading (0.8125rem, 600, stone-4); a group the role has no page in is left out. Links are 0.9375rem (500), 2.25rem rows (2.75rem on touch screens), spaced 1.5rem between groups.
 - The current page (`aria-current="page"`) is set in 750 with a 4px ink underline under its label, hover a 4px hairline one: the filter tabs' underline language turned into a column. Never a coloured side stripe or a fill.
 - **Drawer (below 64rem):** a framed menu square at the bar's left opens the same content in a native modal `<dialog>` along the left edge (raised, 2px text-colour right edge, no shadow, the dialog backdrop; at most 20rem, always leaving a strip of page in view). Its close square lands where the menu square was. Tab wraps inside it, Escape, the close square, the backdrop and following any link close it, and focus returns to the menu square. No slide: the unfold stays the only authored motion.
 
 ### Buttons
 
-- **Primary / Connect:** ink fill, white text, 3px radius, 700 weight, leading icon from lucide-react; 44px tall in pages, 40px in the shell. Hover mixes ink toward white.
+- **Primary / Connect:** ink fill, white text, 3px radius, 700 weight, leading icon from lucide-react; 44px tall. Hover mixes ink toward white.
 - **Secondary:** white, 2px ink border, 40px tall; hover fills stone-1.
 - **Danger:** white, 2px red border, red text, 40px tall; hover fills red with white text. Only for deleting.
 - **Busy:** the leading icon spins and the label turns into what is happening ("Checking…"); the button is disabled

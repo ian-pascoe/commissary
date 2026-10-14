@@ -1,70 +1,18 @@
-// The shell's sidebar: which org the panel shows and the pages of the caller's role (`pageGroupsFor`, the only source
-// of the links), grouped under small headings. Persistent on wide screens; below `WIDE` it is a drawer behind the
-// bar's menu button: a modal <dialog>, so the page behind it is inert while it is open (focus stays in the drawer),
-// Tab and Shift+Tab wrap around its controls, Escape closes it, and closing returns focus to the menu button. Following
-// a link closes it too.
-import { useAtomValue } from "@effect/atom-react";
+// The shell's sidebar: the pages of the caller's role (`pageGroupsFor`, the only source of the links), grouped under
+// small headings; which org the panel shows is the bar's (OrgSwitcher.tsx). Persistent on wide screens; below `WIDE`
+// it is a drawer behind the bar's menu button: a modal <dialog>, so the page behind it is inert while it is open
+// (focus stays in the drawer), Tab and Shift+Tab wrap around its controls, Escape closes it, and closing returns focus
+// to the menu button. Following a link closes it too.
 import { Link, useLocation } from "@tanstack/react-router";
 import { Menu, X } from "lucide-react";
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
-import { AsyncResult } from "effect/reactivity";
-import { meAtom, panelOrgSlug } from "../api/client.ts";
-import { canCreateOrg } from "../lib/hosted.ts";
-import { orgPanelPath } from "../lib/org.ts";
 import type { PageGroup } from "../lib/role.ts";
-import { kit } from "./Kit.tsx";
 import styles from "./Sidebar.module.css";
 
 /** Where the sidebar stays in view; narrower screens get the drawer (`Sidebar.module.css` uses the same width). */
 const WIDE = "(width >= 64rem)";
 
-const CHOOSER = "/?choose";
-
-/**
- * Which org the panel shows, and the way to another: the orgs the caller manages (`GET /me`), and the chooser where a
- * platform admin creates more. Nothing for a caller of one org who cannot create others.
- */
-const OrgSwitcher = () => {
-  const me = useAtomValue(meAtom);
-
-  if (!AsyncResult.isSuccess(me)) return null;
-  const { orgs, platform_admin: platformAdmin } = me.value;
-  // Where the caller may create orgs (everyone on a hosted proxy) the chooser is worth a way in.
-  const creates = canCreateOrg(me.value);
-
-  if (orgs.length < 2 && !creates) return null;
-  const current = orgs.find((org) => org.slug === panelOrgSlug);
-
-  return (
-    <label className={`${kit["field"]} ${styles["org"]}`}>
-      <span className={kit["fieldLabel"]}>Org</span>
-      <select
-        className={`${kit["input"]} ${styles["orgSelect"]}`}
-        value={current?.slug ?? panelOrgSlug ?? ""}
-        onChange={(event) => {
-          const slug = event.target.value;
-
-          // A full load: the typed client addresses its org once, from the address the panel was opened at.
-          window.location.assign(slug === CHOOSER ? CHOOSER : orgPanelPath(slug));
-        }}
-      >
-        {current === undefined && panelOrgSlug !== undefined ? (
-          <option value={panelOrgSlug}>{panelOrgSlug}</option>
-        ) : null}
-        {orgs.map((org) => (
-          <option key={org.slug} value={org.slug}>
-            {org.name}
-          </option>
-        ))}
-        {creates ? (
-          <option value={CHOOSER}>{platformAdmin ? "All orgs…" : "Your orgs…"}</option>
-        ) : null}
-      </select>
-    </label>
-  );
-};
-
-/** The org switcher over the page links, group by group; `onNavigate` runs when a link is followed. */
+/** The page links, group by group; `onNavigate` runs when a link is followed. */
 const SideNav = ({
   groups,
   onNavigate,
@@ -75,34 +23,31 @@ const SideNav = ({
   const id = useId();
 
   return (
-    <>
-      <OrgSwitcher />
-      <nav aria-label="Main" className={styles["nav"]}>
-        {groups.map((group) => (
-          <div key={group.id} className={styles["group"]}>
-            {group.heading === undefined ? null : (
-              <p id={`${id}-${group.id}`} className={styles["heading"]}>
-                {group.heading}
-              </p>
-            )}
-            <ul aria-labelledby={group.heading === undefined ? undefined : `${id}-${group.id}`}>
-              {group.pages.map((page) => (
-                <li key={page.to}>
-                  <Link
-                    to={page.to}
-                    activeOptions={{ exact: page.to === "/" || page.exact === true }}
-                    className={styles["link"]}
-                    onClick={onNavigate}
-                  >
-                    <span className={styles["label"]}>{page.label}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </nav>
-    </>
+    <nav aria-label="Main" className={styles["nav"]}>
+      {groups.map((group) => (
+        <div key={group.id} className={styles["group"]}>
+          {group.heading === undefined ? null : (
+            <p id={`${id}-${group.id}`} className={styles["heading"]}>
+              {group.heading}
+            </p>
+          )}
+          <ul aria-labelledby={group.heading === undefined ? undefined : `${id}-${group.id}`}>
+            {group.pages.map((page) => (
+              <li key={page.to}>
+                <Link
+                  to={page.to}
+                  activeOptions={{ exact: page.to === "/" || page.exact === true }}
+                  className={styles["link"]}
+                  onClick={onNavigate}
+                >
+                  <span className={styles["label"]}>{page.label}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </nav>
   );
 };
 

@@ -18,7 +18,7 @@ H=(-H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $
 The unscoped address is the `global` org's. To migrate into another org (ADR 0021), use
 `M=https://proxy.example.com/v8/management/orgs/<slug>`; every command below works the same there.
 
-Alternatively use the control panel (`/`) as an admin user: _Connect account_ uploads auth files, and Settings and the API keys
+Alternatively use the control panel (`/`) as an admin user: _Accounts_ → _Connect account_ uploads auth files, and Settings and the API keys
 page edit what the import stored. The panel has no UI for the config import yet, so that step is `curl`.
 
 ## 1. Config
@@ -126,7 +126,7 @@ Caveats:
 
 ## 3. OAuth re-login via the panel
 
-Logging in fresh avoids sharing refresh tokens. In the panel → _Connect account_ (or `GET $M/oauth/auth-url?provider=<claude|codex|antigravity|devin|xai|meta|kimi|kimi-ai>`):
+Logging in fresh avoids sharing refresh tokens. In the panel → _Accounts_ → _Connect account_ (or `GET $M/oauth/auth-url?provider=<claude|codex|antigravity|devin|xai|meta|kimi|kimi-ai>`):
 
 1. Open the returned authorization URL and sign in with the provider.
 2. **Authorization-code providers (Claude, Codex, Antigravity, Devin)**: the provider redirects to `http://localhost:<port>/…callback?code=…&state=…`.

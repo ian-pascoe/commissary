@@ -3,7 +3,7 @@
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
-import { Plus } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import type { CredentialEntry } from "#contract/credentials.ts";
 import type { UsageSummary } from "#contract/usage.ts";
 import { credentialsAtom, nowAtom, usageLastDayAtom } from "../api/client.ts";
@@ -152,10 +152,11 @@ const AccountRow = ({ account, index }: { readonly account: Assessed; readonly i
   );
 };
 
+/** Accounts are connected from the Accounts page only; the first run points there. */
 const ConnectButton = () => (
-  <Link to="/accounts/connect" className={kit["primary"]}>
-    <Plus aria-hidden="true" size={16} strokeWidth={2.5} />
-    Connect account
+  <Link to="/accounts" className={kit["primary"]}>
+    Go to Accounts
+    <ArrowRight aria-hidden="true" size={16} strokeWidth={2.5} />
   </Link>
 );
 
@@ -188,8 +189,8 @@ const Accounts = () => {
             </h2>
             <p className={styles["firstRunText"]}>
               The proxy answers requests with your provider subscriptions. Sign in to Claude, Codex
-              or another provider once, and this page shows how much of each allowance is used and
-              when it resets.
+              or another provider once from the Accounts page, and this page shows how much of each
+              allowance is used and when it resets.
             </p>
             <ConnectButton />
           </section>
