@@ -1693,8 +1693,9 @@ ADR 0027: deleting something deletes it at once, and the proxy keeps no content 
 
 - **Retention** per org, `usage_retention_days` in the Platform registry (see "Usage accounting"). **Usage failures** keep
   status, type and code, not the body (same section).
-- **Member removal** deletes the member's private data in the ControlPlane (`#deleteMemberData`); **proxy keys** are deleted
-  when revoked or expired ("Proxy keys").
+- **Member removal** deletes the member's private data in the ControlPlane (`#deleteMemberData`), and their Spend limits and
+  counters; **proxy keys** are deleted when revoked or expired ("Proxy keys"), and `ProxyKeyStore` reports every key it
+  deletes so the key's Spend limits and counters go with it.
 - **Org deletion** (`deleteOrg`, called by `DELETE /org` and by account deletion) runs, in this order: the org's usage rows in
   D1 (`deleteOrgUsage`, batched), the `SessionState` instances it registered, its `org.<id>.…` keys in the `CACHE` KV
   namespace, its ControlPlane's whole storage (`ControlPlane.wipeOrg`: SQL tables, the key-value store and the refresh
@@ -1959,13 +1960,13 @@ Anyone else gets `403 platform_admin_required` on the three org routes. The pane
 Routes of the addressed org (`/org`, `/export`) and the account route (`DELETE /me`), all in `org-routes.ts` (ADR 0027,
 "Zero data retention" below):
 
-| Route         | Who                       | Does                                                                                                                        |
-| ------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `GET /org`    | org admin                 | the org (`OrgView`: id, slug, name, `usage_retention_days`)                                                                 |
-| `PATCH /org`  | org admin                 | `{usage_retention_days: <1..3650> \| null}`; `422` for any other number                                                     |
-| `GET /export` | org admin                 | the org's settings, masked shared config, price overrides, credential summaries, grants, members, teams, tokens             |
-| `DELETE /org` | org owner, platform admin | `{name}` retyped; deletes the org and everything it holds; `409 global_org`, `422 name_mismatch`, `503 deletion_incomplete` |
-| `DELETE /me`  | a person                  | `{email}` retyped; leaves every org, deletes the orgs the person is alone in; `409 sole_owner`, `422 email_mismatch`        |
+| Route         | Who                                 | Does                                                                                                                        |
+| ------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `GET /org`    | org admin                           | the org (`OrgView`: id, slug, name, `usage_retention_days`)                                                                 |
+| `PATCH /org`  | org admin                           | `{usage_retention_days: <1..3650> \| null}`; `422` for any other number                                                     |
+| `GET /export` | org admin                           | the org's settings, masked shared config, price overrides, credential summaries, grants, members, teams, tokens             |
+| `DELETE /org` | a person: org owner, platform admin | `{name}` retyped; deletes the org and everything it holds; `409 global_org`, `422 name_mismatch`, `503 deletion_incomplete` |
+| `DELETE /me`  | a person                            | `{email}` retyped; leaves every org, deletes the orgs the person is alone in; `409 sole_owner`, `422 email_mismatch`        |
 
 **Panel.** The panel of an org is the same single-page app served at `/o/<slug>/...` (the Worker answers every page path of
 every org with `index.html`). The app reads its org from the address: TanStack Router's `basepath` is `/o/<slug>`, and the

@@ -314,6 +314,13 @@ const deletionFailed = (org: string) => (error: DeletionThrew) =>
 const deleteOrgRoute = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
 
+  // Deleting an org is for a person (an org owner or a platform admin), never for a machine: a leaked service token must
+  // not be able to wipe an org, whatever role it holds.
+  if (identity.principal.kind !== "user")
+    return yield* replyError(403, "person_required", {
+      message: "only a person can delete an org, not a service token",
+    });
+
   if (!roleAtLeast(identity.role, "owner"))
     return yield* replyError(403, "owner_required", {
       message: "only an org owner or a platform admin can delete the org",

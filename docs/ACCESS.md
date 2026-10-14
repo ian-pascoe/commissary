@@ -138,7 +138,7 @@ the Worker asks on every request: a removed member, or a member whose role was l
 | List, create and rename orgs                                                                    |                   |           |                              |       ✓        |
 | Read the org and its retention period (`GET /org`)                                              |                   |     ✓     |              ✓               |       ✓        |
 | Set the usage retention period (`PATCH /org`); download the org's export (`GET /export`)        |                   |     ✓     |              ✓               |       ✓        |
-| Delete the org (`DELETE /org`, retyping its name)                                               |                   |           |              ✓               |       ✓        |
+| Delete the org (`DELETE /org`, retyping its name; people only)                                  |                   |           |              ✓               |       ✓        |
 | Delete their own account (`DELETE /me`)                                                         |  ✓ (people only)  |     ✓     |              ✓               |       ✓        |
 
 ¹ Proxy keys are issued to members: a platform admin who is not a member of the org, or a service token, gets
@@ -346,11 +346,12 @@ The proxy keeps as little as it can and deletes at once; there is no grace perio
   **retention period** (`usage_retention_days`, in days; `null` keeps them). A new org starts at 90 days; `global` and
   every org that existed before keep records until an org admin sets a period, so upgrading deletes no history. The cron
   task `usage-retention` applies each org's period.
-- **Removing a member** (`DELETE /members/<id>`) deletes their proxy keys, private accounts and API key groups, and the
-  OAuth logins they started in that org.
+- **Removing a member** (`DELETE /members/<id>`) deletes their proxy keys, private accounts and API key groups, the
+  OAuth logins they started in that org, and their Spend limits and counters and those of their proxy keys.
 - **Proxy keys** are deleted when revoked and when they expire (an expired key is purged when keys are listed or created,
-  when one is checked, and by the cron task `proxy-key-expiry`).
-- **Deleting an org** (`DELETE /org` with `{"name": "<the org's name>"}`; org owners and platform admins) removes its usage
+  when one is checked, and by the cron task `proxy-key-expiry`); a deleted key's Spend limits and counters go with it.
+- **Deleting an org** (`DELETE /org` with `{"name": "<the org's name>"}`; a person who is an org owner or a platform admin, never a service
+  token: `403 person_required`) removes its usage
   records, replay state, cached keys, credentials, config, members, proxy keys and registry entry at once and frees the
   slug. `global` is never deleted. A big org may answer `503 deletion_incomplete`: send the request again. Download the
   export first (`GET /export`: settings, shared config, price overrides, credential summaries, grants, members, teams and

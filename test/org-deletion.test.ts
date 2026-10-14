@@ -10,6 +10,9 @@ import { insertUsageRecord } from "../src/usage/d1.ts";
 import {
   ADMIN,
   claudeFile,
+  SERVICE_ADMIN,
+  SERVICE_ADMIN_BINDINGS,
+  serviceToken,
   isolatedPlatform,
   jsonInit,
   makeHarness,
@@ -242,6 +245,43 @@ describe("deleting an org", () => {
 
     expect((await remove(org, org.owner)).status).toBe(200);
     expect(await registry.platform.getOrgById(org.id)).toBeUndefined();
+  });
+
+  it("is for a person: a service token is refused, an owner service token and a platform admin one too", async () => {
+    const org = await newOrg();
+    const robot = "robot-owner.access";
+
+    expect(
+      (
+        await send(org.slug, "/service-tokens", org.platform, "POST", {
+          client_id: robot,
+          role: "owner",
+        })
+      ).status,
+    ).toBe(201);
+
+    const refused = await remove(org, await serviceToken(robot));
+
+    expect(refused).toMatchObject({ status: 403, body: { error: "person_required" } });
+
+    // A service token that is a platform admin is a machine too.
+    const machines = makeHarness(undefined, {
+      ...registry.bindings,
+      ...SERVICE_ADMIN_BINDINGS,
+    });
+
+    try {
+      const reply = await machines.json(`/v8/management/orgs/${org.slug}/org`, {
+        ...jsonInit("DELETE", { name: org.name }),
+        auth: await serviceToken(SERVICE_ADMIN),
+      });
+
+      expect(reply).toMatchObject({ status: 403, body: { error: "person_required" } });
+    } finally {
+      await machines.dispose();
+    }
+
+    expect(await registry.platform.getOrgById(org.id)).toBeDefined();
   });
 
   it("is refused to a member of another org", async () => {
