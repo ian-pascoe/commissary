@@ -46,6 +46,7 @@
     "web/src/lib/reset-grants.ts",
     "web/src/lib/role.ts",
     "web/src/lib/settings.ts",
+    "web/src/lib/spend.ts",
     "web/src/lib/theme.ts",
     "web/src/lib/usage.ts",
     "worker-configuration.d.ts",

@@ -33,11 +33,12 @@ describe("the caller's role", () => {
 });
 
 describe("pages", () => {
-  it("opens only Usage, My models and Proxy keys to a plain member and everything to an admin", () => {
+  it("opens only Usage, My models, Proxy keys and Limits to a plain member and everything to an admin", () => {
     expect(pagesFor("member").map((page) => page.to)).toEqual([
       "/usage",
       "/my-models",
       "/proxy-keys",
+      "/limits",
     ]);
     expect(pagesFor("admin").map((page) => page.to)).toContain("/proxy-keys");
     expect(pagesFor("admin").map((page) => page.to)).toContain("/members");
@@ -50,6 +51,7 @@ describe("pages", () => {
     expect(pageAllowed("member", "/grants")).toBe(false);
     expect(pageAllowed("member", "/proxy-keys")).toBe(true);
     expect(pageAllowed("member", "/proxy-keys/")).toBe(true);
+    expect(pageAllowed("member", "/limits")).toBe(true);
     expect(pageAllowed("member", "/usage/prices")).toBe(false);
     expect(pageAllowed("member", "/members")).toBe(false);
     expect(pageAllowed("admin", "/usage/prices")).toBe(true);
@@ -69,6 +71,13 @@ describe("private credentials in the panel (ADR 0023)", () => {
       "/usage",
       "/my-models",
       "/proxy-keys",
+      "/limits",
+    ]);
+    expect(pagesFor("member", false).map((page) => page.to)).toEqual([
+      "/usage",
+      "/my-models",
+      "/proxy-keys",
+      "/limits",
     ]);
     expect(pageAllowed("member", "/accounts", true)).toBe(true);
     expect(pageAllowed("member", "/accounts/connect", true)).toBe(true);

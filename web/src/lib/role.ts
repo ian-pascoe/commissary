@@ -43,7 +43,7 @@ export const roleSummary = (role: OrgRole): string => {
     case "admin":
       return "Manages accounts, keys, models, settings, plain members and teams.";
     case "member":
-      return "Sees their own usage and manages their own proxy keys.";
+      return "Sees their own usage and limits, and manages their own proxy keys.";
   }
 };
 
@@ -75,6 +75,7 @@ export const PAGES: ReadonlyArray<PanelPage> = [
   { to: "/usage", label: "Usage", role: "member" },
   { to: "/my-models", label: "My models", role: "member" },
   { to: "/proxy-keys", label: "Proxy keys", role: "member" },
+  { to: "/limits", label: "Limits", role: "member" },
   { to: "/members", label: "Members", role: "admin" },
   { to: "/grants", label: "Grants", role: "admin" },
   { to: "/settings", label: "Settings", role: "admin" },
@@ -97,7 +98,7 @@ const within = (pathname: string, page: string): boolean =>
 
 /**
  * Whether a role may open a page of the panel (`pathname` is relative to the org's base path). Sub-pages of a page
- * need an org admin, like `/usage/prices`, except the page itself. A plain member opens Usage, My models and Proxy keys, and the
+ * need an org admin, like `/usage/prices`, except the page itself. A plain member opens Usage, My models, Proxy keys and Limits, and the
  * pages of their own private accounts and API keys, with their sub-pages, where the org lets members connect private
  * credentials.
  */
@@ -106,6 +107,7 @@ export const pageAllowed = (role: OrgRole, pathname: string, privateCredentials 
   trimmed(pathname) === "/usage" ||
   trimmed(pathname) === "/my-models" ||
   trimmed(pathname) === "/proxy-keys" ||
+  trimmed(pathname) === "/limits" ||
   (privateCredentials && (within(pathname, "/accounts") || within(pathname, "/keys")));
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -152,6 +154,9 @@ export const canSetAccessClients = canSetAutoJoin;
 
 /** Org admins list and revoke every proxy key of the org; every member their own. */
 export const seesEveryProxyKey = (caller: Caller): boolean => atLeast(caller.role, "admin");
+
+/** Org admins set any Spend limit and the calendar; a plain member limits their own proxy keys. */
+export const setsAnyLimit = (caller: Caller): boolean => atLeast(caller.role, "admin");
 
 export const canManageTeams = (caller: Caller): boolean => atLeast(caller.role, "admin");
 

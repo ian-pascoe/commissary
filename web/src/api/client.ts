@@ -131,6 +131,24 @@ export const createProxyKeyAtom = ManagementClient.mutation("proxyKeys", "create
 
 export const revokeProxyKeyAtom = ManagementClient.mutation("proxyKeys", "revoke");
 
+/** The Limits page refetches after a mutation tagged with this key. */
+export const SPEND = ["spend"] as const;
+
+/** The calendar and the Spend limits the caller sees, with what is spent so far. Short-lived: the Spend moves while they work. */
+export const spendAtom = ManagementClient.query("spend", "overview", {
+  reactivityKeys: SPEND,
+  timeToLive: Duration.seconds(15),
+});
+
+// Spend limit and calendar writes: call with `reactivityKeys: SPEND` so the page refetches afterwards.
+export const createSpendLimitAtom = ManagementClient.mutation("spend", "create");
+
+export const updateSpendLimitAtom = ManagementClient.mutation("spend", "update");
+
+export const removeSpendLimitAtom = ManagementClient.mutation("spend", "remove");
+
+export const updateSpendSettingsAtom = ManagementClient.mutation("spend", "settings");
+
 /** Every credential with its state (`GET /credentials`). */
 export const credentialsAtom = ManagementClient.query("credentials", "list", {
   reactivityKeys: CREDENTIALS,
