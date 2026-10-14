@@ -15,6 +15,7 @@ import { AsyncResult } from "effect/reactivity";
 import { NotAllowed } from "../pages/NotAllowed.tsx";
 import { canManageMembers, homeFor, pageAllowed, pagesFor } from "../lib/role.ts";
 import { type RoleState, useRole } from "../lib/use-role.ts";
+import { DeleteAccount } from "./DeleteAccount.tsx";
 import { Problem } from "./Kit.tsx";
 import styles from "./Shell.module.css";
 import { ThemeMenu } from "./ThemeMenu.tsx";
@@ -239,6 +240,7 @@ export const Shell = () => {
       <main id="main" tabIndex={-1} className={styles["main"]}>
         <Gate role={role} />
       </main>
+      {role.kind === "ready" ? <DeleteAccount /> : null}
     </>
   );
 };

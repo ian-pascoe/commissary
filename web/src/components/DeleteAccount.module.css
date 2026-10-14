@@ -1,0 +1,32 @@
+/* The foot of every page: a plain line with the account's one irreversible action. */
+.foot {
+  max-width: var(--page-width);
+  margin: 0 auto;
+  padding: var(--space-4) var(--page-gutter) var(--space-6);
+  border-top: 1px solid var(--hairline);
+  font-size: var(--text-xs);
+  color: var(--quiet);
+}
+
+.link {
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--text);
+  font: inherit;
+  font-weight: 650;
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.22em;
+  cursor: pointer;
+}
+
+.link:hover {
+  text-decoration-color: var(--text);
+}
+
+.orgs {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}

@@ -20,6 +20,8 @@ export type Outcome<A> =
       /** Where submitted YAML stops parsing (1-based), when the server said. */
       readonly line?: number;
       readonly column?: number;
+      /** The orgs a refusal names (`sole_owner`). */
+      readonly orgs?: ReadonlyArray<string>;
     };
 
 export const useAction = <Arg, A, E>(atom: Atom.AtomResultFn<Arg, A, E>) => {

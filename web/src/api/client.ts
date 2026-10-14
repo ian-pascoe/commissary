@@ -63,6 +63,27 @@ export const meAtom = ManagementClient.query("orgs", "me", {
 /** Creates an org (platform admins; call with `reactivityKeys: ORGS`). */
 export const createOrgAtom = ManagementClient.mutation("orgs", "create");
 
+/** The org the panel shows, with its usage retention period (`GET /org`). */
+export const orgAtom = ManagementClient.query("orgs", "org", {
+  reactivityKeys: ORGS,
+  timeToLive: KEEP,
+});
+
+/** Sets the org's usage retention period (org admins; call with `reactivityKeys: ORGS`). */
+export const updateOrgSettingsAtom = ManagementClient.mutation("orgs", "updateSettings");
+
+/** Reads what the org keeps, secrets as previews, for the Download export button (org admins). */
+export const exportOrgAtom = ManagementClient.mutation("orgs", "export");
+
+/**
+ * Deletes the org at once (org owners and platform admins). Call without `reactivityKeys`: the org's own reads would
+ * refetch a deleted org; the panel reloads at its root instead.
+ */
+export const deleteOrgAtom = ManagementClient.mutation("orgs", "deleteOrg");
+
+/** The caller deletes their own account (people only); the panel reloads at its root afterwards. */
+export const deleteAccountAtom = ManagementClient.mutation("orgs", "deleteAccount");
+
 /** The Members page refetches after a mutation tagged with this key. */
 export const MEMBERS = ["members"] as const;
 

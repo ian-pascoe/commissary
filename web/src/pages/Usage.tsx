@@ -24,6 +24,7 @@ import {
 } from "../api/client.ts";
 import { HistoryChart } from "../components/HistoryChart.tsx";
 import { kit, Problem, Section } from "../components/Kit.tsx";
+import { RetentionNote } from "../components/RetentionNote.tsx";
 import { TrailMark } from "../components/Signs.tsx";
 import { accountName } from "../lib/accounts.ts";
 import { failureMessage } from "../lib/failure.ts";
@@ -827,6 +828,7 @@ const UsageContent = ({ names, admin }: { readonly names: Names; readonly admin:
             ))}
           </select>
         ) : null}
+        <RetentionNote className={styles["retention"]} />
       </header>
       {active.length === 0 ? null : (
         <div className={styles["filters"]} aria-label="Narrowed to">
