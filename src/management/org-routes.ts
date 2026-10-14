@@ -12,9 +12,12 @@
 import { Clock, Effect, Match } from "effect";
 import { HttpRouter } from "effect/http";
 import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
+import { forgetOrgProxyKeys } from "../access/proxy-key.ts";
+import { roleAtLeast } from "../members/roles.ts";
 import type { JsonObject } from "../json/index.ts";
 import { WorkerEnv } from "../platform/env.ts";
-import { controlPlaneOf, newOrgId } from "../platform/org.ts";
+import { controlPlaneOf, GLOBAL_ORG, newOrgId } from "../platform/org.ts";
+import { deleteOrg as deleteOrgData } from "../platform/org-deletion.ts";
 import { platform, type PlatformStub } from "../platform/registry.ts";
 import type { OrgRecord, OrgWriteResult } from "../platform/registry-store.ts";
 import type { OrgView } from "./contract/orgs.ts";
@@ -215,7 +218,60 @@ const updateSettings = Effect.gen(function* () {
   return jsonReply(200, view(result.org));
 });
 
+const deleteOrgRoute = Effect.gen(function* () {
+  const identity = yield* AccessPrincipal;
+
+  if (!roleAtLeast(identity.role, "owner"))
+    return yield* replyError(403, "owner_required", {
+      message: "only an org owner or a platform admin can delete the org",
+    });
+
+  const body = yield* bodyObject;
+  const org = yield* addressedOrg;
+
+  if (Object.keys(body).some((key) => key !== "name") || typeof body["name"] !== "string")
+    return yield* replyError(400, "invalid body");
+
+  if (org.id === GLOBAL_ORG)
+    return yield* replyError(409, "global_org", {
+      message: "the first org holds the deployment's own settings and is never deleted",
+    });
+
+  if (body["name"] !== org.name)
+    return yield* replyError(422, "name_mismatch", {
+      message: "type the org's name exactly to confirm that it is deleted with everything in it",
+    });
+
+  const env = yield* WorkerEnv;
+  const now = yield* Clock.currentTimeMillis;
+
+  const outcome = yield* Effect.tryPromise({
+    try: async () => await deleteOrgData(env, org.id, { now }),
+    catch: () => replyError(502, "org deletion failed"),
+  });
+
+  forgetOrgProxyKeys(org.id);
+
+  if (outcome.state === "incomplete") {
+    yield* Effect.logWarning("org deletion incomplete").pipe(
+      Effect.annotateLogs({ org: org.id, step: outcome.step }),
+    );
+
+    return yield* replyError(503, "deletion_incomplete", {
+      message: "the org still holds data; send the request again",
+    });
+  }
+
+  if (outcome.state === "refused")
+    return yield* replyError(409, outcome.reason === "global" ? "global_org" : "org_not_found", {
+      message: outcome.message,
+    });
+
+  return jsonReply(200, { deleted: true, id: org.id, slug: org.slug });
+});
+
 export const orgRoutes = [
+  HttpRouter.route("DELETE", `${BASE}/org`, handled(deleteOrgRoute)),
   HttpRouter.route("GET", `${BASE}/org`, handled(own)),
   HttpRouter.route("PATCH", `${BASE}/org`, handled(updateSettings)),
   HttpRouter.route("GET", `${BASE}/me`, handled(me)),

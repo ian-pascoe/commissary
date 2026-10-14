@@ -81,6 +81,7 @@ import {
   type StatusResult,
 } from "../oauth/service.ts";
 import { OAuthSessions, SqliteSessionTable } from "../oauth/session-store.ts";
+import { SessionInstanceStore } from "../session-state/instances.ts";
 import type {
   AccountResult,
   BatchAction,
@@ -317,8 +318,12 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #proxyKeys: ProxyKeyStore;
   /** The org's Spend limits (issue #71): what the management API does with them and the ledger the pool checks. */
   readonly #spend: SpendService;
+  /** The `SessionState` instances of the org, so deleting the org can wipe them (`session-state/instances.ts`). */
+  readonly #sessionInstances: SessionInstanceStore;
   /** The org this object serves, from its name. */
   readonly #org: OrgId;
+  /** Set when the org was deleted: the storage is gone (`wipeOrg`), so the stores must not be used again. */
+  #wiped = false;
   /**
    * Settles once the org's data key is open, or failed to open (the stores then throw the reason). Only callers that
    * construct the object themselves (tests) wait on it; RPC calls wait on the input gate.
@@ -343,6 +348,7 @@ export class ControlPlane extends DurableObject<Env> {
     this.#modelGrants = new GrantStore(ctx.storage.sql, transaction);
     this.#privateKeys = new PrivateKeyStore(ctx.storage.sql, transaction, this.#secrets);
     this.#proxyKeys = new ProxyKeyStore(ctx.storage.sql, this.#org);
+    this.#sessionInstances = new SessionInstanceStore(ctx.storage.sql);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
 
@@ -649,6 +655,37 @@ export class ControlPlane extends DurableObject<Env> {
       this.#proxyKeys.setAccessClients(settings.accessClients);
 
     return this.membershipSettings();
+  }
+
+  // --- org deletion (ADR 0027) ----------------------------------------------------------------------------------------
+
+  /** A `SessionState` instance of this org tells where it holds entries until `expiresAt` (epoch ms). */
+  registerSessionInstance(name: string, now: number, expiresAt: number): void {
+    if (!this.#wiped) this.#sessionInstances.register(name, now, expiresAt);
+  }
+
+  /** Up to `limit` names of this org's `SessionState` instances that may still hold entries at `now`. */
+  sessionInstances(now: number, limit: number): ReadonlyArray<string> {
+    return this.#wiped ? [] : this.#sessionInstances.list(now, limit);
+  }
+
+  /** The instances named were wiped; forgets them. */
+  forgetSessionInstances(names: ReadonlyArray<string>): void {
+    if (!this.#wiped) this.#sessionInstances.forget(names);
+  }
+
+  /**
+   * Deletes everything this object stores, tables included: the org was deleted (`platform/org-deletion.ts`, ADR 0027).
+   * Its refresh alarm goes with its storage. Nothing reaches this id afterwards (the Platform registry no longer lists
+   * the org, and a new org takes a new id); the object itself is evicted when idle and, if ever started again, finds
+   * an empty org. Until then the object answers the calls a repeated deletion makes (`sessionInstances`, `wipeOrg`) as an
+   * empty org does, and no other.
+   */
+  async wipeOrg(): Promise<void> {
+    this.#wiped = true;
+    await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+    await this.ctx.storage.sync();
   }
 
   // --- proxy keys (ADR 0022, `proxy-keys/store.ts`) -----------------------------------------------------------------

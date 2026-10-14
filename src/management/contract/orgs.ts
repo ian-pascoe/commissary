@@ -62,6 +62,20 @@ export const UpdateOrgSettings = Schema.Struct({
 
 export type UpdateOrgSettings = typeof UpdateOrgSettings.Type;
 
+/** `DELETE /org`: the org's name, typed again to confirm. */
+export const DeleteOrg = Schema.Struct({ name: Schema.String });
+
+export type DeleteOrg = typeof DeleteOrg.Type;
+
+/** `DELETE /org`: the org that is gone. */
+export const OrgDeleted = Schema.Struct({
+  deleted: Schema.Literal(true),
+  id: Schema.String,
+  slug: Schema.String,
+});
+
+export type OrgDeleted = typeof OrgDeleted.Type;
+
 /** An org the caller belongs to, as the panel's org switcher lists it. */
 export const MyOrg = Schema.Struct({ slug: Schema.String, name: Schema.String });
 
@@ -110,6 +124,17 @@ export class OrgsGroup extends HttpApiGroup.make("orgs").add(
   HttpApiEndpoint.patch("updateSettings", "/org", {
     payload: UpdateOrgSettings,
     success: OrgView,
+    error: managementErrors,
+  }),
+  /**
+   * Deletes the addressed org with all its data at once (ADR 0027): usage records, credentials, config, members, proxy
+   * keys, session state and its registry entry; the slug is free to take again. Org owners and platform admins; the
+   * body repeats the org's name. `422 name_mismatch`, `409 global_org` (the first org is never deleted), `503
+   * deletion_incomplete` (a big org: send the request again until it succeeds).
+   */
+  HttpApiEndpoint.delete("deleteOrg", "/org", {
+    payload: DeleteOrg,
+    success: OrgDeleted,
     error: managementErrors,
   }),
   /** Renames an org's name and/or slug. Platform admins only. `404 org_not_found`, plus the errors of `create`. */
