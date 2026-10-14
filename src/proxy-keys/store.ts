@@ -166,11 +166,21 @@ const record = (row: KeyRow): ProxyKeyRecord => ({
 export class ProxyKeyStore {
   readonly #sql: SqlStorage;
   readonly #org: OrgId;
+  readonly #removed: (ids: ReadonlyArray<string>) => void;
 
-  /** `org`: the org the keys name; Access sign-ins stay accepted on the proxy routes of `global` until turned off. */
-  constructor(sql: SqlStorage, org: OrgId) {
+  /**
+   * `org`: the org the keys name; Access sign-ins stay accepted on the proxy routes of `global` until turned off.
+   * `removed` is told the ids of the keys deleted from now on (revoked, expired or their member gone), so what hangs on
+   * a key (its Spend limits and counters) is deleted with it.
+   */
+  constructor(
+    sql: SqlStorage,
+    org: OrgId,
+    removed: (ids: ReadonlyArray<string>) => void = () => {},
+  ) {
     this.#sql = sql;
     this.#org = org;
+    this.#removed = removed;
 
     for (const statement of SCHEMA) sql.exec(statement);
 
@@ -283,21 +293,37 @@ export class ProxyKeyStore {
       return refuse("proxy_key_not_found", MESSAGES.notFound);
 
     this.#sql.exec(`DELETE FROM proxy_keys WHERE id = ?`, id);
+    this.#removed([id]);
 
     return { ok: true, value: { ...record(row), revokedAt: now } };
   }
 
   /** Deletes every key that has expired at `now`, whoever's; answers how many. */
   purgeExpired(now: number): number {
-    return this.#sql.exec(
-      `DELETE FROM proxy_keys WHERE expires_at IS NOT NULL AND expires_at <= ?`,
-      now,
-    ).rowsWritten;
+    const ids = this.#sql
+      .exec<{ id: string }>(
+        `SELECT id FROM proxy_keys WHERE expires_at IS NOT NULL AND expires_at <= ?`,
+        now,
+      )
+      .toArray()
+      .map((row) => row.id);
+
+    if (ids.length === 0) return 0;
+    this.#sql.exec(`DELETE FROM proxy_keys WHERE expires_at IS NOT NULL AND expires_at <= ?`, now);
+    this.#removed(ids);
+
+    return ids.length;
   }
 
   /** Deletes every key of a member who leaves the org (ADR 0027). */
   removeMemberKeys(memberId: string): void {
+    const ids = this.#sql
+      .exec<{ id: string }>(`SELECT id FROM proxy_keys WHERE member_id = ?`, memberId)
+      .toArray()
+      .map((row) => row.id);
+
     this.#sql.exec(`DELETE FROM proxy_keys WHERE member_id = ?`, memberId);
+    this.#removed(ids);
   }
 
   /**
@@ -311,6 +337,7 @@ export class ProxyKeyStore {
 
     if (row.expires_at !== null && now >= row.expires_at) {
       this.#sql.exec(`DELETE FROM proxy_keys WHERE id = ?`, keyId);
+      this.#removed([keyId]);
 
       return { ok: false, reason: "expired" };
     }

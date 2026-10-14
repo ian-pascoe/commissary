@@ -348,7 +348,9 @@ export class ControlPlane extends DurableObject<Env> {
     this.#members = new MemberStore(ctx.storage.sql, this.#org, transaction);
     this.#modelGrants = new GrantStore(ctx.storage.sql, transaction);
     this.#privateKeys = new PrivateKeyStore(ctx.storage.sql, transaction, this.#secrets);
-    this.#proxyKeys = new ProxyKeyStore(ctx.storage.sql, this.#org);
+    this.#proxyKeys = new ProxyKeyStore(ctx.storage.sql, this.#org, (ids) => {
+      for (const id of ids) this.#spend.forget("key", id);
+    });
     this.#sessionInstances = new SessionInstanceStore(ctx.storage.sql);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
@@ -357,7 +359,7 @@ export class ControlPlane extends DurableObject<Env> {
       members: () => this.#members.members(),
       teams: () => this.#members.teams(),
       teamsOf: (memberId) => this.#members.member(memberId)?.teams ?? [],
-      keys: () => this.#proxyKeys.list(),
+      keys: () => this.#proxyKeys.list(undefined, Date.now()),
       credentials: () =>
         this.#pool.entries().flatMap(({ credential }) =>
           credential.owner === undefined
@@ -628,7 +630,7 @@ export class ControlPlane extends DurableObject<Env> {
    * Shared credentials and other members' data stay.
    */
   async #deleteMemberData(member: string): Promise<void> {
-    for (const key of this.#proxyKeys.list(member)) this.#spend.forget("key", key.id);
+    // The member's keys take their Spend limits and counters along (the store reports each key it deletes).
     this.#spend.forget("member", member);
     this.#proxyKeys.removeMemberKeys(member);
 
