@@ -18,11 +18,13 @@ The members of each org the deployment serves, signed in through Cloudflare Acce
 Each holds a role in their org:
 
 - **Org owners and org admins** run the org: they connect accounts, manage API keys, models and settings, and decide
-  who belongs (the Members page: members, teams, service tokens, auto-join). Owners also change roles. On a self-hosted
+  who belongs (the Members page: members, teams, service tokens, auto-join) and who may use which models of which shared
+  accounts (the Grants page, by member, by team or by credential). Owners also change roles. On a self-hosted
   deployment this is often one person, the owner of the deployment, who is also a **platform admin** (owner of every
   org, the only one who creates orgs).
 - **Plain members** use the proxy from their coding agents and open the panel to see their own usage and to create and
-  revoke their own proxy keys (the Proxy keys page; org admins see every key of the org). Where the org lets members
+  revoke their own proxy keys (the Proxy keys page; org admins see every key of the org), and to see which models their
+  grants let them use (My models). Where the org lets members
   connect private credentials, they also get their own Accounts and API keys pages: they connect their own accounts and
   add their own keys, used only for their requests; org admins see that each exists (provider, owner, label) and can
   disable or remove it, never how it is used. Every other page is closed to them.

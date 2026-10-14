@@ -256,6 +256,19 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
   `callerScope::providers::session::model`). Model prefixes, `force-model-prefix`, exclusions, OAuth/API-key aliases,
   `force-mapping` and alias pools are resolved per credential in `routing.ts`. The caller still resolves the provider set
   (`PickRequest.providers`) from the model registry; the DO enforces the per-credential rules.
+- **Grants** (ADR 0021, _Grants_ below): `pick` takes the caller's `Allowance` (`CredentialPool` option `allowance(member)`,
+  computed from the org's grants and the member's teams) and `selection/grants.ts` `grantedRoute` runs **before** the
+  availability check, the priority tiers and the strategy. For a shared credential it resolves the requested model as
+  `routing.ts` does (prefix, alias, alias pool) and keeps only the upstream models the allowance permits, so a pool tries
+  its granted members and an alias to an ungranted model is refused. A credential left with no granted route is not a
+  candidate; session affinity and the content-based sessions search the candidates that remain, so a session bound to a
+  credential whose grant was removed moves to another one (the pick binds the session to the credential it chose).
+  A private credential is never filtered (grants do not apply; the owner rule of ADR 0023 decides). When grants alone left
+  nothing for a model some credential would serve, the failure is `model_not_found` (`400`, the body of `unknownModelBody`, the
+  one the pipeline answers for a model no credential serves), not `auth_not_found`: an unreachable model answers like an
+  unknown one and does not say a grant exists. A prefix (`work/gpt-5`) pins its credential only when that credential is
+  granted. A request without a member (a service token, the orchestrator's traffic in `global`) has the allowance of the
+  grants for everyone only.
 - **RPC**: `pick(request)` returns `{ ok: true, credential, route, lease }` (credential snapshot including token
   metadata, resolved base URL/headers, and the requested -> upstream model mapping) or `{ ok: false, failure }`
   (`model_cooldown` 429 + body, `auth_unavailable` 503, `auth_not_found`, `provider_not_found`). `report(lease, result)`
@@ -713,6 +726,22 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
   tier, config `models:`), exclusions, OAuth aliases (`fork`, display names, per-credential first), `oauth.settings`
   context length, prefixes (`force-model-prefix`). OpenAI-compatibility models keep duplicate aliases (model pools) and skip
   exclusions/aliases like Go.
+- **Grants in the registry** (ADR 0021, `grant-filter.ts`): the snapshot knows every model (routing and the pick enforce
+  grants themselves); `RegistrySnapshot.visibleTo(memberId)` is the registry as one caller may use it. It builds a snapshot
+  of its own from the same sources under the member's `Allowance`: `assembleCredentialModels` drops the models of a shared
+  credential that `grantsReach` says selection could not serve, asking `resolveModelRoute` (the same function the pick uses,
+  over the `ModelSource`) whether any upstream model of the id is permitted on that credential. So an alias is listed when
+  its upstream model is granted, a pool alias when any member of the pool is, and `prefix/model` when the model is granted on
+  the credential behind the prefix. A private credential's models stay with its owner. Views are cached per snapshot and
+  member; a snapshot is built from the grants revision read with the sources (`ControlPlane.grantTable()`: grants, teams
+  and a counter that moves with every grant write and team membership change), so the registry is cached per org, per
+  member and per grants revision, and the whole snapshot is one 5 s TTL stale at most. A registry that cannot read the grants
+  is not built (the previous snapshot keeps serving, `fresh` answers 502); it is never built as if everyone had every model.
+  With the default grant, or no restriction, `visibleTo` is the snapshot itself. The lists (`/v1/models`, `/v1beta/models`,
+  the Claude and Codex lists, the spawn-agent list), `ModelProviders.providersFor` / `firstAvailableModel` (so a model the
+  member cannot reach answers `400 model_not_found` like an unknown one, also for another member's private-only model, which
+  used to answer `503`) and the routing view (`routingView(snapshot.visibleTo(member))`) all read the caller's view.
+  `GET /v8/management/models/mine` answers the caller's own list (every role).
 - **Index** (`registry.ts`): provider counts, per-provider records ("last registered wins", credentials registered in id
   order), the 5 min quota window and suspension rules of `modelRegistrationAvailability`, `GetModelProviders`,
   `GetModelInfo`, `LookupModelInfo` (registry, then static catalogs), `GetFirstAvailableModel`, native web-search capability.
@@ -1243,7 +1272,8 @@ panel paths and `/management.html` as `management`); there is no management key.
   `web/src/lib/prices.ts`) lists, adds, edits and removes the org's price overrides over `/price-overrides`, with the
   entry revision as `If-Match` (a `409` reloads the list and says to make the edit again); the form opens with the
   provider and model from the address, or edits the override that has them. The Usage page also breaks down and filters
-  by member (`by=member`, `?member=`, shown by email) and filters by team (`?team=`, a picker of the org's teams). **Members** (`/members`, `web/src/pages/Members*.tsx`, rules in
+  by member (`by=member`, `?member=`, shown by email) and filters by team (`?team=`, a picker of the org's teams). **Grants**
+  (`/grants`) and **My models** (`/my-models`) are described in _Grants_ below. **Members** (`/members`, `web/src/pages/Members*.tsx`, rules in
   `web/src/lib/role.ts`) lists the org's members, teams and service tokens and offers only what the caller's role allows
   (read from the org-scoped `GET /me`): admins add and remove plain members and manage teams, owners change roles and
   auto-join, and a token role above member is offered to a platform admin only. A plain member's panel is the Usage page
@@ -1934,6 +1964,42 @@ error codes are in `docs/ACCESS.md` "Members, roles and teams".
   admins of the time owners, `access.admin-emails` admins, `access.admin-service-tokens` owner service tokens. A stored
   document from before config entries keeps its admin lists as entries until then. In any other org the lists are only
   removed.
+
+## Grants (`src/grants/`, `src/management/grant-routes.ts`)
+
+Workers addition, no Go counterpart; ADR 0021 and ADR 0023. A grant says which upstream models of which **shared**
+credentials a subject may use; selection and the model registry read it (_Credentials and selection_, _Model registry_).
+
+- **Entries** (`grants/grant.ts`, `grants/store.ts` `GrantStore`, in each org's ControlPlane, SQLite tables `grants` and
+  `grant_state`, `CREATE IF NOT EXISTS`, so there is no D1 migration): a subject (`everyone`, a member id or a team id), a
+  scope (`all` shared credentials, one `provider` (the executor key), or one `credential` id) and model patterns written like
+  model exclusions (`matchWildcard`: case-insensitive `*`, the thinking suffix ignored; lower-cased and de-duplicated when
+  stored; at least one). Each grant is a config entry in the sense of ADR 0025: a revision, `updated_at`, `updated_by`, and a
+  write names the revision it is based on (`0` creates; a stale one is a `conflict`); one grant per subject and scope. The
+  store keeps a counter that moves with every grant write and with every change of who is on a team
+  (`membershipChanged`, called by the ControlPlane's team writes). A grant for a member or team the org does not have is
+  refused, and removing a member or deleting a team deletes the grants that name them in the same call.
+- **Default grant and upgrade** (`GrantStore`'s constructor): the first time a ControlPlane constructs the store it writes
+  "everyone, all shared credentials, `*`" and records that in `grant_state`, in one transaction. A new org and every org that
+  existed before grants (`global` included) therefore start with it and nothing changes for them until an org admin deletes
+  it; deleting it is not undone by a later start (`grant_state` says it was seeded).
+- **Allowance** (`grants/allowance.ts`): the union of the grants that name a holder (`everyone`, their member id, their
+  teams). `unrestricted` when a grant for all credentials gives `*`; `coversAll(credential)` when one grant gives `*` on
+  the credential; `permits(credential, upstreamModel)` otherwise. There is no deny. `allowanceFromTable(table, memberId)`
+  is the same computation for the Worker, from `grantTable()`.
+- **Routes** (`grant-routes.ts`, contract `contract/grants.ts`): `GET /v8/management/grants` answers `{version, grants}`;
+  `POST /grants` creates one (`409 conflict` when the subject and scope have one); `PUT|DELETE /grants/:id` take `If-Match`
+  (`409` stale, `400 invalid_if_match` missing); an empty pattern list or a member or team the org does not have is `422
+  invalid_config`. Org admins only. `GET /models/mine` answers `{models}` from `snapshot.visibleTo(caller)` for every role
+  (`MEMBER_READS` in `access/policy.ts`).
+- **Panel** (`web/src/pages/Grants.tsx`, `MyModels.tsx`, model in `web/src/lib/grants.ts`): **Grants** (`/grants`, org
+  admins) reads the grants by member (what reaches each member: their own, their teams' and everyone's, marked "via"), by team
+  or by credential (who may use each account, provider or all of them) and adds, edits and removes them with the entry
+  revision as `If-Match` (a `409` reloads the list). **My models** (`/my-models`, every member) lists the models the caller
+  may use, and says what to ask for when there are none.
+- **Scope of the guarantee**: the pick enforces grants against the ControlPlane's own copy, so a removed grant stops
+  selection on the next request. Model lists lag by the registry's 5 s snapshot TTL. Grants never apply to private
+  credentials, and spend limits are separate (ADR 0024).
 
 ## Proxy keys (`src/proxy-keys/`, `src/access/proxy-key.ts`, `src/management/proxy-key-routes.ts`)
 
