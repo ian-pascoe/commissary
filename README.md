@@ -170,7 +170,6 @@ model aliases, retries, …) are edited in the control panel and stored in the W
 | `ACCESS_SESSION_DURATION`        | `24h`      | Access session length for browser sign-ins                                                                                         |
 | `ACCESS_SERVICE_TOKEN_HEADER`    |            | Accept service tokens as JSON in one header (e.g. `x-api-key`) for management scripts without custom headers                       |
 | `ACCESS_AUD`                     |            | Use an Access application you manage yourself instead of creating one                                                              |
-| `USAGE_RETENTION_DAYS`           | `30`       | How long usage records are kept in D1                                                                                              |
 | `CF_LLM_PROXY_CPU_MS`            | `300000`   | CPU limit per request in ms; lower it on plans with smaller limits                                                                 |
 
 [ACCESS.md](docs/ACCESS.md) explains what each Access setting creates, how the Worker validates requests, and how to

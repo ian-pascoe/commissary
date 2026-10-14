@@ -97,6 +97,8 @@ exists from the start with the slug `default` and holds everything the deploymen
 | Org list, create  | `GET`/`POST /v8/management/orgs`                                          |
 | Rename an org     | `PATCH /v8/management/orgs/<slug>` (name and/or slug)                     |
 | Who am I, my orgs | `GET /v8/management/me`                                                   |
+| Delete my account | `DELETE /v8/management/me` with `{"email": "<your email>"}`               |
+| The org itself    | `GET`/`PATCH`/`DELETE /v8/management/orgs/<slug>/org`, `.../export`       |
 
 A **platform admin** (`PLATFORM_ADMIN_*`) manages every org through these addresses and is the only one who may list, create and
 rename orgs: anyone else gets `403 {"error":"platform_admin_required"}`. An org the registry does not list answers `404` to a
@@ -134,6 +136,10 @@ the Worker asks on every request: a removed member, or a member whose role was l
 | Allow or stop private credentials (`PATCH /membership`, `private_credentials`)                  |                   |     ✓     |              ✓               |       ✓        |
 | Give a service token a role above plain member; download a credential                           |                   |           | owner **service token** only |       ✓        |
 | List, create and rename orgs                                                                    |                   |           |                              |       ✓        |
+| Read the org (`GET /org`)                                                                       |         ✓         |     ✓     |              ✓               |       ✓        |
+| Set the usage retention period (`PATCH /org`); download the org's export (`GET /export`)        |                   |     ✓     |              ✓               |       ✓        |
+| Delete the org (`DELETE /org`, retyping its name)                                               |                   |           |              ✓               |       ✓        |
+| Delete their own account (`DELETE /me`)                                                         |  ✓ (people only)  |     ✓     |              ✓               |       ✓        |
 
 ¹ Proxy keys are issued to members: a platform admin who is not a member of the org, or a service token, gets
 `403 member_required` when creating one.
@@ -332,12 +338,37 @@ put a server-side client in between.
   document. A key whose secret a stored key of its family has keeps that key's credential id, so the next read shows the
   same `auth_index` (the next read confirms, as above); a wrong guess has replaced every stored key with the document's. Configuration error messages never quote a value.
 
+### Zero data retention (ADR 0027)
+
+The proxy keeps as little as it can and deletes at once; there is no grace period, no soft delete and no restore.
+
+- **Usage records** keep an upstream failure's status, type and code but not its body, and are pruned after the org's
+  **retention period** (`usage_retention_days`, in days; `null` keeps them). A new org starts at 90 days; `global` and
+  every org that existed before keep records until an org admin sets a period, so upgrading deletes no history. The cron
+  task `usage-retention` applies each org's period.
+- **Removing a member** (`DELETE /members/<id>`) deletes their proxy keys, private accounts and API key groups, and the
+  OAuth logins they started in that org.
+- **Proxy keys** are deleted when revoked and when they expire (an expired key is purged when keys are listed or created,
+  when one is checked, and by the cron task `proxy-key-expiry`).
+- **Deleting an org** (`DELETE /org` with `{"name": "<the org's name>"}`; org owners and platform admins) removes its usage
+  records, replay state, cached keys, credentials, config, members, proxy keys and registry entry at once and frees the
+  slug. `global` is never deleted. A big org may answer `503 deletion_incomplete`: send the request again. Download the
+  export first (`GET /export`: settings, shared config, price overrides, credential summaries, members, teams and
+  service tokens, every secret as a preview; usage records come from the usage routes).
+- **Deleting an account** (`DELETE /me` with the caller's own email; people only) removes the person from every org with
+  their data there, deletes the orgs they were the only member of, and keeps no removal note, so the address can start
+  over. It is refused with `409 sole_owner` (and the org slugs) while they are the only owner of an org with other members:
+  hand it over first. Access signs the person in again on their next request, which creates a new, empty membership; a
+  hosted sign-in (#72) will also delete the sign-in account itself here.
+- **Replay state** that thinking and continuity depend on stays, bounded by its expiry of at most seven days; stale state of
+  a deleted org that was not registered expires on its own within that time.
+
 ### Logs and personal data
 
 Every proxied request produces one structured log line (Workers Logs) whose `principal` field is the caller:
 `key:<key id>` for a proxy key, `user:<email>` for people, `service:<client id>` for service tokens. Usage records in D1 store the same id. Emails are
-personal data: restrict who can read Workers Logs and the D1 database, and set the retention you need
-(`USAGE_RETENTION_DAYS`, Workers Logs retention). Tokens, API keys, JWTs, request bodies, headers and query strings are never
+personal data: restrict who can read Workers Logs and the D1 database, and set the retention you need (each org's usage
+retention period, `PATCH /org` with `usage_retention_days`, and Workers Logs retention). Tokens, API keys, JWTs, request bodies, headers and query strings are never
 logged; scheduled-job failures are logged as a one-line summary with URL queries removed.
 
 ## 5. Optional: single-header service token
