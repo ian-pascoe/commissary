@@ -3,7 +3,7 @@
 interface __BaseEnv_Env {
   /** Model catalogs, signature cache, Antigravity state (Workers KV). */
   CACHE: KVNamespace;
-  /** Usage records (D1); schema in migrations/. */
+  /** Usage records and, on a hosted proxy, Better Auth's people and sessions (D1); schema in migrations/. */
   USAGE: D1Database;
   /** Static assets (management panel). */
   ASSETS: Fetcher;
@@ -36,6 +36,26 @@ interface __BaseEnv_Env {
   SECRETS_KEY: string;
   /** During a rotation, the secrets key `SECRETS_KEY` replaces: data keys still wrapped by it are wrapped again. */
   SECRETS_KEY_PREVIOUS?: string;
+  /**
+   * `hosted`: a hosted proxy (ADR 0026, src/hosted/): the Worker signs people in with Better Auth and Access is not
+   * used; unset or `self-hosted`: Cloudflare Access in front of the panel and the management API (ADR 0022).
+   */
+  PROXY_MODE?: string;
+  /** Hosted: Better Auth's signing secret. Deployed: an Alchemy `Random` (alchemy.run.ts). */
+  BETTER_AUTH_SECRET?: string;
+  /** Hosted: the GitHub OAuth app; GitHub sign-in is offered when both are set. */
+  SIGN_IN_GITHUB_CLIENT_ID?: string;
+  SIGN_IN_GITHUB_CLIENT_SECRET?: string;
+  /** Hosted: the Google OAuth client; Google sign-in is offered when both are set. */
+  SIGN_IN_GOOGLE_CLIENT_ID?: string;
+  SIGN_IN_GOOGLE_CLIENT_SECRET?: string;
+  /** Hosted: Cloudflare Turnstile widget keys guarding sign-in and sign-up. */
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
+  /** Hosted: how many orgs a person may own unless a platform admin raised their limit (default 3). */
+  OWNED_ORG_LIMIT?: string;
+  /** Hosted: the per-org request rate limit of the proxy routes (Workers rate limiting, keyed by org id). */
+  ORG_RATE_LIMIT?: RateLimit;
   CONTROL_PLANE: DurableObjectNamespace<import("./index").ControlPlane>;
   SESSION_STATE: DurableObjectNamespace<import("./index").SessionState>;
   /** The Platform registry: one object per deployment (`platformOf`, src/platform/registry.ts). */

@@ -33,6 +33,12 @@ export class ForbiddenError extends Schema.TaggedError<ForbiddenError>()("Forbid
   message: Schema.String,
 }) {}
 
+/** The caller sent more requests than allowed; maps to HTTP 429 with `Retry-After` (seconds). */
+export class RateLimitedError extends Schema.TaggedError<RateLimitedError>()("RateLimitedError", {
+  message: Schema.String,
+  retryAfterSeconds: Schema.Number,
+}) {}
+
 /** The requested resource does not exist; maps to HTTP 404. */
 export class NotFoundError extends Schema.TaggedError<NotFoundError>()("NotFoundError", {
   message: Schema.String,

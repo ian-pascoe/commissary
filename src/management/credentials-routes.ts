@@ -19,7 +19,9 @@
 import { Clock, Effect } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { AccessPrincipal } from "../access/principal.ts";
+import { isHosted } from "../hosted/mode.ts";
 import { holdsSensitivePowers } from "../members/roles.ts";
+import { WorkerEnv } from "../platform/env.ts";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { ModelRegistry } from "../registry/service.ts";
 import { currentViewer } from "./viewer.ts";
@@ -381,6 +383,18 @@ const downloadCredential = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
   const viewer = yield* currentViewer;
   const name = (yield* queryParams).get("name")?.trim() ?? "";
+
+  // A management key never downloads a credential (ADR 0026), on any proxy.
+  if (identity.principal.kind === "mkey")
+    return yield* replyError(403, "download_requires_service_token", {
+      message: "a management key cannot download a credential file",
+    });
+
+  // On a hosted proxy only platform admins download stored credentials, their owners included (ADR 0026).
+  if (isHosted(yield* WorkerEnv) && !identity.platformAdmin)
+    return yield* replyError(403, "download_requires_platform_admin", {
+      message: "on a hosted proxy only a platform admin can download a credential file",
+    });
 
   // A private credential is its owner's alone: not even an org admin with the sensitive powers downloads it.
   const { access, private: isPrivate } = yield* controlPlane("credentialAccess", (stub) =>

@@ -3,6 +3,7 @@
 import { Data, Effect } from "effect";
 import { ConfigurationError } from "../errors.ts";
 import type { Principal } from "./principal.ts";
+import { isHosted } from "../hosted/mode.ts";
 
 export interface AccessConfig {
   /** Issuer expected in `iss`, e.g. `https://team.cloudflareaccess.com`. */
@@ -117,7 +118,9 @@ export const loadAccessConfig = (
 /** The platform admin allow-lists: lowercased emails and service token client ids. */
 export type AdminLists = Pick<AccessConfig, "adminEmails" | "adminServiceTokens">;
 
-/** Whether `principal` is a platform admin; a proxy key never is (its member's rights stay in the member's org). */
+/**
+ * Whether `principal` is a platform admin; a proxy key or a management key never is (their rights stay in their org).
+ */
 export const isAdmin = (lists: AdminLists, principal: Principal): boolean => {
   switch (principal.kind) {
     case "user":
@@ -125,6 +128,7 @@ export const isAdmin = (lists: AdminLists, principal: Principal): boolean => {
     case "service":
       return lists.adminServiceTokens.has(principal.commonName);
     case "key":
+    case "mkey":
       return false;
   }
 };
@@ -132,7 +136,7 @@ export const isAdmin = (lists: AdminLists, principal: Principal): boolean => {
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 type DevBypassEnv = Pick<Env, "ACCESS_DEV_BYPASS"> &
-  Partial<Pick<Env, "ACCESS_TEAM_DOMAIN" | "ACCESS_AUD">>;
+  Partial<Pick<Env, "ACCESS_TEAM_DOMAIN" | "ACCESS_AUD" | "PROXY_MODE">>;
 
 /** Outcome of the dev bypass check: `undefined` when `ACCESS_DEV_BYPASS` is unset or the host is not loopback. */
 export type DevBypass = DevBypassOutcome | undefined;
@@ -145,13 +149,18 @@ type DevBypassOutcome = Data.TaggedEnum<{
 const { Active, Refused } = Data.taggedEnum<DevBypassOutcome>();
 
 /**
- * Whether the Worker is wired to Access (`ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` set): a deployed stage. Such a Worker
- * refuses the dev bypass and the fixed development keys (`AUTH_INDEX_KEY`, `SECRETS_KEY`).
+ * Whether the Worker is wired to Access (`ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` set) or is a hosted proxy
+ * (`PROXY_MODE=hosted`, ADR 0026, which signs people in itself): a deployed stage. Such a Worker refuses the dev bypass
+ * and the fixed development keys (`AUTH_INDEX_KEY`, `SECRETS_KEY`).
  */
 export const isDeployedStage = (env: {
   readonly ACCESS_TEAM_DOMAIN?: string | undefined;
   readonly ACCESS_AUD?: string | undefined;
-}): boolean => (env.ACCESS_TEAM_DOMAIN ?? "").trim() !== "" || (env.ACCESS_AUD ?? "").trim() !== "";
+  readonly PROXY_MODE?: string | undefined;
+}): boolean =>
+  (env.ACCESS_TEAM_DOMAIN ?? "").trim() !== "" ||
+  (env.ACCESS_AUD ?? "").trim() !== "" ||
+  isHosted(env);
 
 /**
  * `ACCESS_DEV_BYPASS` is honoured only when the request itself targets a loopback host, which is only the case under

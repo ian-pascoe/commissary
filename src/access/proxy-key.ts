@@ -111,7 +111,7 @@ const unavailable = (cause: unknown) =>
     message: `proxy key verification: ${cause instanceof Error ? cause.message : "unknown error"}`,
   });
 
-const orgExists = Effect.fnUntraced(function* (org: OrgId, now: number) {
+export const orgExists = Effect.fnUntraced(function* (org: OrgId, now: number) {
   if (now < (knownOrgs.get(org) ?? 0)) return true;
 
   const found = yield* platform("getOrgById", (stub) => stub.getOrgById(org)).pipe(

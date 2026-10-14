@@ -1,26 +1,42 @@
 // The org chooser: the panel's address without an org (`/`) when the caller manages several, or asked for it
-// (`/?choose`). Each org opens its panel (`/o/<slug>/`); a platform admin also creates orgs here.
+// (`/?choose`). Each org opens its panel (`/o/<slug>/`); a platform admin (or anyone, on a hosted proxy, up to their
+// limit) also creates orgs here, and a platform admin of a hosted proxy suspends them.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import { type FormEvent, useId, useState } from "react";
-import { createOrgAtom, meAtom, ORGS } from "../api/client.ts";
+import type { Me } from "#contract/orgs.ts";
+import { createOrgAtom, meAtom, ORGS, orgListAtom, updateOrgAtom } from "../api/client.ts";
+import { ConfirmDialog, type ConfirmRequest } from "../components/Confirm.tsx";
 import { kit, Problem } from "../components/Kit.tsx";
+import { SignOut } from "../components/SignOut.tsx";
+import {
+  atOrgLimit,
+  canCreateOrg,
+  canSuspend,
+  orgCountText,
+  orgLimitNote,
+  orgProblem,
+} from "../lib/hosted.ts";
 import { orgPanelPath } from "../lib/org.ts";
 import { useAction } from "../lib/use-action.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
 import styles from "./Orgs.module.css";
 
-const NewOrg = () => {
+const NewOrg = ({ me }: { readonly me: Me }) => {
   const create = useAction(createOrgAtom);
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
   const [privateCredentials, setPrivateCredentials] = useState(false);
   const [problem, setProblem] = useState<string | undefined>(undefined);
   const ids = useId();
+  const full = atOrgLimit(me);
+  const count = orgCountText(me);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setProblem(undefined);
+
+    if (full) return;
 
     const outcome = await create.run({
       payload: {
@@ -37,12 +53,18 @@ const NewOrg = () => {
       return;
     }
 
-    setProblem(outcome.detail ?? outcome.message);
+    setProblem(orgProblem(outcome.error, outcome.message, outcome.detail));
   };
 
   return (
     <form className={styles["create"]} onSubmit={submit} aria-label="Create an org">
       <h2 className={kit["sectionTitle"]}>New org</h2>
+      {count === undefined ? null : (
+        <p className={kit["muted"]} role="status">
+          You own {count}.
+        </p>
+      )}
+      {full ? <p className={kit["fieldError"]}>{orgLimitNote(me)}</p> : null}
       <label className={kit["field"]} htmlFor={`${ids}-name`}>
         <span className={kit["fieldLabel"]}>Name</span>
         <input
@@ -51,6 +73,7 @@ const NewOrg = () => {
           value={name}
           maxLength={100}
           required
+          disabled={full}
           onChange={(event) => setName(event.target.value)}
         />
       </label>
@@ -62,6 +85,7 @@ const NewOrg = () => {
           value={slug}
           maxLength={63}
           required
+          disabled={full}
           autoCapitalize="none"
           spellCheck={false}
           placeholder="acme"
@@ -77,6 +101,7 @@ const NewOrg = () => {
           id={`${ids}-private`}
           type="checkbox"
           checked={privateCredentials}
+          disabled={full}
           onChange={(event) => setPrivateCredentials(event.target.checked)}
         />
         <span>Let members connect private accounts and API keys</span>
@@ -87,11 +112,118 @@ const NewOrg = () => {
       </p>
       {problem === undefined ? null : <p className={kit["fieldError"]}>{problem}</p>}
       <div>
-        <button type="submit" className={kit["primary"]} disabled={create.busy}>
+        <button type="submit" className={kit["primary"]} disabled={create.busy || full}>
           {create.busy ? "Creating…" : "Create org"}
         </button>
       </div>
     </form>
+  );
+};
+
+/** One org of the list, with (for a hosted platform admin) its suspension and the button that changes it. */
+const OrgRow = ({
+  slug,
+  name,
+  suspended,
+  onSuspension,
+}: {
+  readonly slug: string;
+  readonly name: string;
+  readonly suspended: boolean | undefined;
+  /** Present for platform admins of a hosted proxy. */
+  readonly onSuspension: (() => void) | undefined;
+}) => (
+  <li className={styles["row"]}>
+    <a className={styles["org"]} href={orgPanelPath(slug)}>
+      <span className={styles["orgName"]}>
+        {name}
+        {suspended === true ? <span className={styles["state"]}>Suspended</span> : null}
+      </span>
+      <span className={styles["orgSlug"]}>/o/{slug}</span>
+    </a>
+    {onSuspension === undefined ? null : (
+      <button
+        type="button"
+        className={kit["secondary"]}
+        aria-label={`${suspended === true ? "Unsuspend" : "Suspend"} ${name}`}
+        onClick={onSuspension}
+      >
+        {suspended === true ? "Unsuspend" : "Suspend"}
+      </button>
+    )}
+  </li>
+);
+
+const OrgList = ({ me }: { readonly me: Me }) => {
+  const suspendable = canSuspend(me);
+  const registry = useAtomValue(orgListAtom);
+  const update = useAction(updateOrgAtom);
+  const [confirm, setConfirm] = useState<ConfirmRequest | undefined>(undefined);
+  const [note, setNote] = useState<string | undefined>(undefined);
+
+  const suspensions = new Map(
+    suspendable && AsyncResult.isSuccess(registry)
+      ? registry.value.orgs.map((org) => [org.slug, org.suspended === true] as const)
+      : [],
+  );
+
+  const ask = (slug: string, name: string, suspended: boolean) => {
+    setNote(undefined);
+
+    setConfirm({
+      title: `${suspended ? "Unsuspend" : "Suspend"} ${name}?`,
+      body: suspended ? (
+        <p>Its members can use the org and its proxy keys work again. Nothing was deleted.</p>
+      ) : (
+        <p>
+          Everyone in {name} is signed out of it and its proxy and management keys are refused until
+          you unsuspend it. Nothing is deleted.
+        </p>
+      ),
+      action: suspended ? "Unsuspend org" : "Suspend org",
+      busyAction: suspended ? "Unsuspending…" : "Suspending…",
+      run: async () => {
+        const outcome = await update.run({
+          params: { slug },
+          payload: { suspended: !suspended },
+          reactivityKeys: ORGS,
+        });
+
+        setNote(
+          outcome.ok
+            ? `${suspended ? "Unsuspended" : "Suspended"} ${name}.`
+            : `Could not change ${name}. ${orgProblem(outcome.error, outcome.message, outcome.detail)}`,
+        );
+      },
+    });
+  };
+
+  return (
+    <>
+      <ul className={styles["list"]}>
+        {me.orgs.map((org) => {
+          const suspended = suspensions.get(org.slug);
+
+          return (
+            <OrgRow
+              key={org.slug}
+              slug={org.slug}
+              name={org.name}
+              suspended={suspended}
+              onSuspension={
+                suspendable && suspended !== undefined
+                  ? () => ask(org.slug, org.name, suspended)
+                  : undefined
+              }
+            />
+          );
+        })}
+      </ul>
+      <p className={kit["muted"]} role="status">
+        {note}
+      </p>
+      <ConfirmDialog request={confirm} busy={update.busy} onClose={() => setConfirm(undefined)} />
+    </>
   );
 };
 
@@ -113,20 +245,23 @@ export const OrgsPage = () => {
         onSuccess: ({ value }) => (
           <>
             {value.orgs.length === 0 ? (
-              <p className={kit["muted"]}>You do not manage any org.</p>
+              <p className={kit["muted"]}>
+                {canCreateOrg(value)
+                  ? "You are not in an org yet. Create one below."
+                  : "You do not manage any org."}
+              </p>
             ) : (
-              <ul className={styles["list"]}>
-                {value.orgs.map((org) => (
-                  <li key={org.slug}>
-                    <a className={styles["org"]} href={orgPanelPath(org.slug)}>
-                      <span className={styles["orgName"]}>{org.name}</span>
-                      <span className={styles["orgSlug"]}>/o/{org.slug}</span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
+              <OrgList me={value} />
             )}
-            {value.platform_admin ? <NewOrg /> : null}
+            {canCreateOrg(value) ? <NewOrg me={value} /> : null}
+            {canSuspend(value) ? (
+              <p>
+                <a className={styles["link"]} href="/people">
+                  People: org limits and suspension
+                </a>
+              </p>
+            ) : null}
+            {value.hosted === true ? <SignOut className={kit["secondary"]} /> : null}
           </>
         ),
       })}

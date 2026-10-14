@@ -6,7 +6,8 @@
  * `/orgs` and `/orgs/:slug` are platform-level. Every other management route also exists once per org, as
  * `/v8/management/orgs/<slug>/<route>`; the unscoped spelling means the deployment's first org, `global` (ADR 0021).
  * Only platform admins (`PLATFORM_ADMIN_*`) may list, create and rename orgs: anyone else gets
- * `403 platform_admin_required`.
+ * `403 platform_admin_required`. On a hosted proxy (ADR 0026) anyone signed in may create orgs, up to their owned-org
+ * limit (`409 org_limit_reached`), and becomes the new org's owner.
  */
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api";
@@ -24,6 +25,8 @@ export const OrgView = Schema.Struct({
   created_at: Schema.String,
   /** How many days the org's usage records are kept; `null`: forever (ADR 0027). */
   usage_retention_days: Schema.NullOr(Schema.Int),
+  /** Hosted proxy: a platform admin suspended it (refused everywhere, nothing deleted). Absent otherwise. */
+  suspended: Schema.optionalKey(Schema.Boolean),
 });
 
 export type OrgView = typeof OrgView.Type;
@@ -44,10 +47,14 @@ export const CreateOrg = Schema.Struct({
 
 export type CreateOrg = typeof CreateOrg.Type;
 
-/** `PATCH /orgs/:slug`: the fields to change. Renaming the slug breaks the old address; the id stays. */
+/**
+ * `PATCH /orgs/:slug`: the fields to change. Renaming the slug breaks the old address; the id stays. `suspended` (a
+ * hosted proxy only) suspends the org, signing its members out, or unsuspends it.
+ */
 export const UpdateOrg = Schema.Struct({
   slug: Schema.optionalKey(Schema.String),
   name: Schema.optionalKey(Schema.String),
+  suspended: Schema.optionalKey(Schema.Boolean),
 });
 
 export type UpdateOrg = typeof UpdateOrg.Type;
@@ -127,6 +134,13 @@ export const Me = Schema.Struct({
    * panel offers a plain member their own Accounts page only then. Absent when the caller belongs to no org there.
    */
   private_credentials: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Present on a hosted proxy only (ADR 0026): anyone signed in may create orgs, up to `org_limit` orgs of their own
+   * (`owned_orgs` so far). A platform admin has no limit (both absent then).
+   */
+  hosted: Schema.optionalKey(Schema.Boolean),
+  org_limit: Schema.optionalKey(Schema.Number),
+  owned_orgs: Schema.optionalKey(Schema.Number),
 });
 
 export type Me = typeof Me.Type;

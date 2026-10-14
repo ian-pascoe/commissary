@@ -6,7 +6,9 @@
  *
  *   pnpm ci:setup        # alchemy deploy --config stacks/github.ts --profile admin --stage ci
  *
- * The deploy settings (CF_LLM_PROXY_DOMAIN, ACCESS_*) come from `.env`, like `alchemy.run.ts`.
+ * The deploy settings (CF_LLM_PROXY_DOMAIN, ACCESS_*) come from `.env`, like `alchemy.run.ts`, and so do a hosted
+ * proxy's (SIGN_IN_*, TURNSTILE_*, …), written whenever `.env` sets them: previews labeled `hosted-preview` need them
+ * even while production is self-hosted.
  */
 import * as zones from "@distilled.cloud/cloudflare/zones";
 import * as Alchemy from "alchemy";
@@ -19,6 +21,29 @@ import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Stream from "effect/Stream";
 import { readSettings } from "../infra/settings.ts";
+
+/** A hosted proxy's settings (docs/DEPLOY.md "Hosted proxy"): GitHub variables, then GitHub secrets. */
+const HOSTED_VARIABLES = [
+  "SIGN_IN_GITHUB_CLIENT_ID",
+  "SIGN_IN_GOOGLE_CLIENT_ID",
+  "TURNSTILE_SITE_KEY",
+  "OWNED_ORG_LIMIT",
+  "ORG_RATE_LIMIT",
+  "ORG_RATE_LIMIT_NAMESPACE_ID",
+] as const;
+
+const HOSTED_SECRETS = [
+  "SIGN_IN_GITHUB_CLIENT_SECRET",
+  "SIGN_IN_GOOGLE_CLIENT_SECRET",
+  "TURNSTILE_SECRET_KEY",
+] as const;
+
+/** The `.env` value of `name`, trimmed; "" when unset. */
+const optional = (name: string) =>
+  Config.String(name).pipe(
+    Config.withDefault(""),
+    Config.map((value) => value.trim()),
+  );
 
 /** Account-scoped "Access: Apps and Policies Write" (the catalog name is shared with a zone-scoped group). */
 const ACCESS_APPS_AND_POLICIES_WRITE = { id: "1e13c5124ca64b72b1969a67e8829049" };
@@ -109,7 +134,20 @@ export default Alchemy.Stack(
       }),
     );
 
+    const hostedVariables: Record<string, string> = {};
+    const hostedSecrets: Record<string, Redacted.Redacted> = {};
+
+    for (const name of HOSTED_VARIABLES) hostedVariables[name] = yield* optional(name);
+
+    for (const name of HOSTED_SECRETS) {
+      const value = yield* optional(name);
+
+      // GitHub rejects empty secrets; an unset secret reads as "" in the workflow anyway.
+      if (value !== "") hostedSecrets[name] = Redacted.make(value);
+    }
+
     const variables = {
+      ...hostedVariables,
       CLOUDFLARE_ACCOUNT_ID: accountId,
       ACCESS_TEAM_DOMAIN: settings.teamDomain,
       ACCESS_ALLOW_EMAILS: settings.allowEmails.join(","),
@@ -123,14 +161,22 @@ export default Alchemy.Stack(
       CLOUDFLARE_API_TOKEN: deployToken.value,
       CF_ACCESS_CLIENT_ID: checkToken.clientId.pipe(Output.map((id) => Redacted.make(id))),
       CF_ACCESS_CLIENT_SECRET: checkSecret,
+      ...hostedSecrets,
     } satisfies Record<string, Redacted.Redacted | Output.Output<Redacted.Redacted>>;
 
     for (const [label, environment] of [
       ["Production", production],
       ["Preview", preview],
     ] as const) {
+      // Production's mode follows `.env`; a preview's follows its `hosted-preview` label (ci.yml).
       const scoped =
-        label === "Production" ? { ...variables, CF_LLM_PROXY_DOMAIN: settings.domain } : variables;
+        label === "Production"
+          ? {
+              ...variables,
+              CF_LLM_PROXY_DOMAIN: settings.domain,
+              PROXY_MODE: settings.hosted === undefined ? "" : "hosted",
+            }
+          : variables;
 
       for (const [name, value] of Object.entries(scoped)) {
         // GitHub rejects empty variables; an unset variable reads as "" in the workflow anyway.

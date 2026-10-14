@@ -37,8 +37,19 @@ A proxy run as a service for anyone: people sign up and sign in through the prox
 org of their own.
 _Avoid_: SaaS, cloud, multi-tenant mode
 
+**Personal org**:
+The org a hosted proxy gives a person who signs up without being a member anywhere; they are its org owner. An ordinary
+org in every other way.
+_Avoid_: default org, home org, workspace
+
+**Owned-org limit**:
+How many orgs one person may own on a hosted proxy, their Personal org included: the deployment's default unless a
+platform admin set theirs. Platform admins have none.
+_Avoid_: quota, org quota (a quota is a provider's)
+
 **Platform admin**:
 A person named by the deployment who can repair any org, and the only one who can create orgs on a self-hosted proxy.
+On a hosted proxy they also set owned-org limits and suspend people and orgs.
 _Avoid_: operator, superuser, admin (on its own)
 
 **Org slug**:
@@ -170,8 +181,8 @@ lists are computed under it; a model outside it answers like an unknown one.
 _Avoid_: allowance (a provider's limit), permissions
 
 **Sign-in account**:
-A person's own identity with the proxy, which a hosted proxy keeps outside every org (#72). Deleting it removes the
-person from every org with their data there. On a self-hosted proxy Access is the sign-in, so deleting the account only
+A person's own identity with the proxy, which a hosted proxy keeps outside every org (Better Auth's user with its
+sessions and linked GitHub/Google accounts). Deleting it removes the person from every org with their data there. On a self-hosted proxy Access is the sign-in, so deleting the account only
 leaves the orgs until Access signs the person in again.
 _Avoid_: account (that is a provider login, below), user
 

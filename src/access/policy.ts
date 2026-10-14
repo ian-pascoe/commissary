@@ -3,7 +3,8 @@
  * counterpart: Go has one management key for everything.
  *
  * - **platform-level**: needs no role in any org: who the caller is (`/v8/management/me`), the org list
- *   (`/v8/management/orgs`, `/v8/management/orgs/<slug>`; their handlers ask for a platform admin), the panel's pages
+ *   (`/v8/management/orgs`, `/v8/management/orgs/<slug>`, a hosted proxy's `/v8/management/people/<email>`; their
+ *   handlers ask for a platform admin, or on a hosted proxy let anyone create an org), the panel's pages
  *   without an org (they redirect to an org of the caller or show the org chooser), its bundle files and the old
  *   panel's address.
  * - **member**: any role in the org: the proxy routes, the panel's pages of the org, reading usage (a plain member
@@ -85,6 +86,9 @@ const ME = `${MANAGEMENT_PREFIX}/me`;
 
 const ORGS = `${MANAGEMENT_PREFIX}/${ORGS_SEGMENT}`;
 
+/** The people of a hosted proxy (`management/people-routes.ts`, whose handlers ask for a platform admin). */
+const PEOPLE = `${MANAGEMENT_PREFIX}/people`;
+
 const withoutTrailingSlash = (path: string): string =>
   path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
 
@@ -109,6 +113,8 @@ export const routeAccess = (
 
   if (address === undefined) {
     if (route === ORGS || route.startsWith(`${ORGS}/`)) return "platform";
+
+    if (route.startsWith(`${PEOPLE}/`)) return "platform";
 
     if (route === "/assets" || route.startsWith("/assets/") || route.startsWith(LEGACY_PANEL_PATH))
       return "platform";

@@ -1,4 +1,11 @@
 import { DurableObject } from "cloudflare:workers";
+import {
+  type ManagementKeyRecord,
+  type ManagementKeyResult,
+  ManagementKeyStore,
+  type ManagementKeyVerdict,
+} from "../management-keys/store.ts";
+import { isHosted } from "../hosted/mode.ts";
 import { Effect, Schema } from "effect";
 import { FetchHttpClient, type HttpClient } from "effect/http";
 import {
@@ -127,7 +134,7 @@ import {
 import { buildQuotaTarget, type QuotaTargetResult } from "../quota/target.ts";
 import { platformAdminLists } from "../access/config.ts";
 import { migrateLegacyAdmins } from "../members/migration.ts";
-import type { Actor } from "../members/roles.ts";
+import type { Actor, OrgRole } from "../members/roles.ts";
 import {
   type AccountStanding,
   type Admission,
@@ -321,6 +328,7 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #spend: SpendService;
   /** The `SessionState` instances of the org, so deleting the org can wipe them (`session-state/instances.ts`). */
   readonly #sessionInstances: SessionInstanceStore;
+  readonly #managementKeys: ManagementKeyStore;
   /** The org this object serves, from its name. */
   readonly #org: OrgId;
   /** Set when the org was deleted: the storage is gone (`wipeOrg`), so the stores must not be used again. */
@@ -345,13 +353,20 @@ export class ControlPlane extends DurableObject<Env> {
     const credentials = new CredentialStore(ctx.storage.sql, this.#secrets);
 
     this.#config = new ConfigStore(ctx.storage.sql, this.#org, transaction, this.#secrets);
-    this.#members = new MemberStore(ctx.storage.sql, this.#org, transaction);
+    this.#members = new MemberStore(
+      ctx.storage.sql,
+      this.#org,
+      transaction,
+      Date.now,
+      !isHosted(env),
+    );
     this.#modelGrants = new GrantStore(ctx.storage.sql, transaction);
     this.#privateKeys = new PrivateKeyStore(ctx.storage.sql, transaction, this.#secrets);
     this.#proxyKeys = new ProxyKeyStore(ctx.storage.sql, this.#org, (ids) => {
       for (const id of ids) this.#spend.forget("key", id);
     });
     this.#sessionInstances = new SessionInstanceStore(ctx.storage.sql);
+    this.#managementKeys = new ManagementKeyStore(ctx.storage.sql, this.#org);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
 
@@ -820,6 +835,34 @@ export class ControlPlane extends DurableObject<Env> {
     this.#ensureMembership();
 
     return this.#spend.setSettings(settings);
+  }
+
+  // --- management keys (ADR 0026, `management-keys/store.ts`) ----------------------------------------------------
+
+  listManagementKeys(): ReadonlyArray<ManagementKeyRecord> {
+    return this.#managementKeys.list();
+  }
+
+  /** Issues a management key (the Worker checked the role); the answer carries the whole key, shown this once. */
+  createManagementKey(
+    input: {
+      readonly name: string;
+      readonly role: OrgRole;
+      readonly createdBy: string;
+      readonly ownerEmail?: string;
+    },
+    now: number,
+  ): ManagementKeyResult<{ readonly record: ManagementKeyRecord; readonly key: string }> {
+    return this.#managementKeys.create(input, now);
+  }
+
+  revokeManagementKey(id: string): ManagementKeyResult<ManagementKeyRecord> {
+    return this.#managementKeys.revoke(id);
+  }
+
+  /** Checks a presented management key (its id and the SHA-256 of the whole key) at `now`. */
+  verifyManagementKey(keyId: string, hash: string, now: number): ManagementKeyVerdict {
+    return this.#managementKeys.check(keyId, hash, now);
   }
 
   listTeams(): ReadonlyArray<TeamRecord> {

@@ -9,9 +9,10 @@
  * ControlPlane which change the registry holds. A failed push is logged and retried with the next change or admission.
  */
 import { Data, Effect } from "effect";
-import type { Principal } from "../access/principal.ts";
+import type { AdmissiblePrincipal } from "../access/principal.ts";
+import { isHosted } from "../hosted/mode.ts";
 import { WorkerEnv } from "../platform/env.ts";
-import { controlPlaneOf, type OrgId } from "../platform/org.ts";
+import { controlPlaneOf, GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 import { platformOf } from "../platform/registry.ts";
 import type { ClientsUseProxyKeys } from "../proxy-keys/store.ts";
 import type { Admission, PrincipalRef } from "./store.ts";
@@ -26,7 +27,7 @@ const failure = (label: string) => (cause: unknown) =>
     message: `${label}: ${cause instanceof Error ? cause.message : "unknown error"}`,
   });
 
-export const principalRef = (principal: Principal): PrincipalRef =>
+export const principalRef = (principal: AdmissiblePrincipal): PrincipalRef =>
   principal.kind === "service"
     ? { kind: "service", clientId: principal.commonName }
     : { kind: "user", email: principal.email };
@@ -80,21 +81,22 @@ export const syncOrgIndex = (org: OrgId): Effect.Effect<void, never, WorkerEnv> 
 
 /**
  * The role of `principal` in `org`, `undefined` when it has none. With `autoJoin`, a person joins an org that has
- * auto-join on (on for `global`) as a plain member on their first request. `client`: the request is for a proxy
+ * auto-join on (on for `global`) as a plain member on their first request; on a hosted proxy (ADR 0026) nobody joins
+ * `global` that way, even where its setting is still on from a self-hosted past. `client`: the request is for a proxy
  * route, which takes an Access sign-in only while the org accepts them there (`ClientsUseProxyKeys` otherwise).
  */
 export const admitPrincipal = (
   org: OrgId,
-  principal: Principal,
+  principal: AdmissiblePrincipal,
   autoJoin = true,
   client = false,
 ): Effect.Effect<Admission | ClientsUseProxyKeys | undefined, MembershipUnavailable, WorkerEnv> =>
   Effect.gen(function* () {
     const env = yield* WorkerEnv;
+    const joins = autoJoin && !(org === GLOBAL_ORG && isHosted(env));
 
     const admission = yield* Effect.tryPromise({
-      try: async () =>
-        await controlPlaneOf(env, org).admit(principalRef(principal), autoJoin, client),
+      try: async () => await controlPlaneOf(env, org).admit(principalRef(principal), joins, client),
       catch: failure("admit"),
     });
 

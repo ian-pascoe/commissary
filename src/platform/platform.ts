@@ -18,7 +18,11 @@ import {
   type OrgRecord,
   type OrgRemoval,
   type OrgWriteResult,
+  type PersonPatch,
+  type PersonRecord,
   PlatformStore,
+  type SignInState,
+  type Standing,
 } from "./registry-store.ts";
 
 export class Platform extends DurableObject<Env> {
@@ -86,6 +90,39 @@ export class Platform extends DurableObject<Env> {
   /** Rebuilds one org's membership index from the lists its ControlPlane holds. */
   replaceOrgIndex(org: string, index: OrgIndex): IndexRepair {
     return this.#store.replaceOrgIndex(org, index);
+  }
+
+  // --- people of a hosted proxy (ADR 0026, `src/hosted/`) ---------------------------------------------------------
+
+  /** A person signed in: suspended, signed up, or due the Personal org created for them here. `now`: epoch ms. */
+  signIn(email: string, now: number): SignInState {
+    return this.#store.signIn(email, now);
+  }
+
+  /** The person owns their Personal org (or was invited): they are signed up. */
+  finishSignUp(email: string, now: number): void {
+    this.#store.finishSignUp(email, now);
+  }
+
+  /** `defaultLimit`: the deployment's owned-org limit (`OWNED_ORG_LIMIT`). */
+  person(email: string, defaultLimit: number): PersonRecord {
+    return this.#store.person(email, defaultLimit);
+  }
+
+  updatePerson(email: string, patch: PersonPatch, now: number, defaultLimit: number): PersonRecord {
+    return this.#store.updatePerson(email, patch, now, defaultLimit);
+  }
+
+  setOrgSuspended(slug: string, suspended: boolean, now: number): OrgWriteResult {
+    return this.#store.setOrgSuspended(slug, suspended, now);
+  }
+
+  standing(org: string, email?: string): Standing {
+    return this.#store.standing(org, email);
+  }
+
+  emailsOfOrg(org: string): ReadonlyArray<string> {
+    return this.#store.emailsOfOrg(org);
   }
 
   /** The shared model catalog's refresh lease (`SweepLeaseStore`): taken at the start of a download. */

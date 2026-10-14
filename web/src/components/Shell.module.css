@@ -267,3 +267,44 @@
   max-width: 40rem;
   color: var(--quiet);
 }
+
+/* Sign out (hosted proxy): the theme menu's twin on the bar; its words show where there is room. */
+.signOut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 2.5rem;
+  padding: 0 var(--space-3);
+  background: transparent;
+  color: var(--on-bar);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  border: 2px solid var(--on-bar);
+  border-radius: var(--radius);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  .signOut:hover {
+    background: var(--bar-pressed);
+  }
+}
+
+@media (max-width: 48rem) {
+  .signOut {
+    width: 2.5rem;
+    padding: 0;
+  }
+
+  .signOut > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

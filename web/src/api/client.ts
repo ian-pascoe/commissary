@@ -84,6 +84,35 @@ export const deleteOrgAtom = ManagementClient.mutation("orgs", "deleteOrg");
 /** The caller deletes their own account (people only); the panel reloads at its root afterwards. */
 export const deleteAccountAtom = ManagementClient.mutation("orgs", "deleteAccount");
 
+/** Every org with its suspension (platform admins; refetches after a mutation tagged with `ORGS`). */
+export const orgListAtom = ManagementClient.query("orgs", "list", {
+  reactivityKeys: ORGS,
+  timeToLive: Duration.seconds(30),
+});
+
+/** Suspends or unsuspends an org on a hosted proxy (platform admins; call with `reactivityKeys: ORGS`). */
+export const updateOrgAtom = ManagementClient.mutation("orgs", "update");
+
+/** Looks a person up (hosted proxy, platform admins). */
+export const getPersonAtom = ManagementClient.mutation("people", "get");
+
+/** Changes a person's org limit or suspension (hosted proxy, platform admins). */
+export const updatePersonAtom = ManagementClient.mutation("people", "update");
+
+/** The Management keys page refetches after a mutation tagged with this key. */
+export const MANAGEMENT_KEYS = ["management-keys"] as const;
+
+/** The org's management keys. Short-lived: "last used" moves while scripts run. */
+export const managementKeysAtom = ManagementClient.query("managementKeys", "list", {
+  reactivityKeys: MANAGEMENT_KEYS,
+  timeToLive: Duration.seconds(30),
+});
+
+// Management key writes: call with `reactivityKeys: MANAGEMENT_KEYS`. A creation answers the whole key, once.
+export const createManagementKeyAtom = ManagementClient.mutation("managementKeys", "create");
+
+export const revokeManagementKeyAtom = ManagementClient.mutation("managementKeys", "revoke");
+
 /** The Members page refetches after a mutation tagged with this key. */
 export const MEMBERS = ["members"] as const;
 

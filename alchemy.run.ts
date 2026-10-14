@@ -2,7 +2,9 @@
  * Infrastructure of the Workers port, deployed with Alchemy (`pnpm deploy`, `pnpm dev`, `pnpm destroy`): the Worker
  * with its Durable Objects, static assets and cron trigger, the KV namespace, the D1 usage database (migrations
  * applied on every deploy), the `auth_index` HMAC key and the Cloudflare Access application, policies and service tokens
- * in front of it (except the proxy routes, where clients send proxy keys).
+ * in front of it (except the proxy routes, where clients send proxy keys). A hosted proxy (`PROXY_MODE=hosted`, ADR
+ * 0026) creates no Access resources: the Worker signs people in itself, and gets its sign-in settings, Better Auth's
+ * secret and the per-org rate limit instead.
  * Deploy-time settings are read from the environment / `.env` (see `.env.example` and infra/settings.ts).
  */
 import * as Alchemy from "alchemy";
@@ -66,9 +68,40 @@ export default Alchemy.Stack(
     // `alchemy dev` serves the Worker on localhost without Access: the dev bypass (src/access/config.ts) makes every
     // loopback request an admin. Deployed Workers never get it and require the Access JWT (or a proxy key on the proxy
     // routes).
-    const access: AccessWiring = dev
-      ? { aud: "", adminServiceTokens: "", serviceTokenClientIds: {} }
-      : yield* provisionAccess(settings);
+    const { hosted } = settings;
+
+    const access: AccessWiring =
+      dev || hosted !== undefined
+        ? { aud: "", adminServiceTokens: "", serviceTokenClientIds: {} }
+        : yield* provisionAccess(settings);
+
+    // A hosted proxy (ADR 0026): Better Auth's signing secret, minted like the keys above, and its settings.
+    const hostedEnv =
+      hosted === undefined
+        ? {}
+        : {
+            PROXY_MODE: "hosted",
+            BETTER_AUTH_SECRET: yield* Alchemy.makeRandom("BetterAuthSecret", { bytes: 32 }),
+            ...(hosted.githubClientId === ""
+              ? {}
+              : {
+                  SIGN_IN_GITHUB_CLIENT_ID: hosted.githubClientId,
+                  SIGN_IN_GITHUB_CLIENT_SECRET: hosted.githubClientSecret,
+                }),
+            ...(hosted.googleClientId === ""
+              ? {}
+              : {
+                  SIGN_IN_GOOGLE_CLIENT_ID: hosted.googleClientId,
+                  SIGN_IN_GOOGLE_CLIENT_SECRET: hosted.googleClientSecret,
+                }),
+            TURNSTILE_SITE_KEY: hosted.turnstileSiteKey,
+            TURNSTILE_SECRET_KEY: hosted.turnstileSecretKey,
+            OWNED_ORG_LIMIT: hosted.ownedOrgLimit,
+            ORG_RATE_LIMIT: Cloudflare.RateLimit("ORG_RATE_LIMIT", {
+              namespaceId: hosted.orgRateLimitNamespaceId,
+              simple: { limit: hosted.orgRateLimit, period: 60 },
+            }),
+          };
 
     const worker = yield* Cloudflare.Worker("Proxy", {
       main: "./src/index.ts",
@@ -91,7 +124,7 @@ export default Alchemy.Stack(
         CONTROL_PLANE: Cloudflare.DurableObject("ControlPlane"),
         SESSION_STATE: Cloudflare.DurableObject("SessionState"),
         PLATFORM: Cloudflare.DurableObject("Platform"),
-        ACCESS_TEAM_DOMAIN: dev ? "" : settings.teamDomain,
+        ACCESS_TEAM_DOMAIN: dev || hosted !== undefined ? "" : settings.teamDomain,
         ACCESS_AUD: access.aud,
         PLATFORM_ADMIN_EMAILS: settings.adminEmails.join(","),
         PLATFORM_ADMIN_SERVICE_TOKENS: access.adminServiceTokens,
@@ -101,13 +134,14 @@ export default Alchemy.Stack(
         AUTH_INDEX_KEY: authIndexKey,
         ...(secretsKey === undefined ? {} : { SECRETS_KEY: secretsKey }),
         ...(previousSecretsKey === undefined ? {} : { SECRETS_KEY_PREVIOUS: previousSecretsKey }),
+        ...hostedEnv,
       },
     });
 
     // The bypass is derived from the Worker's output on every stage, so it is applied only after the Worker: the first
     // deploy must not take the proxy routes out of Access while the old Worker, which only reads the Access edge's
     // `Cf-Access-Jwt-Assertion`, still serves them (clients sending `cf-access-token` would get 401 in between).
-    if (!dev)
+    if (!dev && hosted === undefined)
       yield* provisionProxyBypass(
         settings,
         Output.asOutput(worker.url).pipe(

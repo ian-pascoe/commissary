@@ -45,6 +45,8 @@ import { oauthRoutes } from "./oauth-routes.ts";
 import { memberRoutes } from "./member-routes.ts";
 import { orgRoutes } from "./org-routes.ts";
 import { grantRoutes, myModelsHandler } from "./grant-routes.ts";
+import { peopleRoutes } from "./people-routes.ts";
+import { managementKeyRoutes } from "./management-key-routes.ts";
 import { priceRoutes } from "./price-routes.ts";
 import { proxyKeyRoutes } from "./proxy-key-routes.ts";
 import { spendRoutes } from "./spend-routes.ts";
@@ -90,11 +92,13 @@ export const ManagementRoutes = HttpRouter.addAll(
       ...usageRoutes,
       ...oauthRoutes,
       ...orgRoutes,
+      ...peopleRoutes,
       ...priceRoutes,
       ...grantRoutes,
       ...memberRoutes,
       ...proxyKeyRoutes,
       ...spendRoutes,
+      ...managementKeyRoutes,
       HttpRouter.route("GET", `${BASE}/credentials/models`, bound(credentialModelsHandler)),
       HttpRouter.route("POST", `${BASE}/credentials/batch`, credentialsBatchHandler),
       HttpRouter.route("POST", `${BASE}/credentials/quota`, bound(quotaCheckHandler)),

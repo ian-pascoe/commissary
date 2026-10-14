@@ -5,8 +5,10 @@ import type { OrgRole } from "../members/roles.ts";
 import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 
 /**
- * The authenticated caller: an Access user (email), an Access service token (client id), or a proxy key a member
- * presented on a proxy route (ADR 0022, `proxy-key.ts`; never on a management route).
+ * The authenticated caller: a person (an Access user, or on a hosted proxy a person signed in with Better Auth: their
+ * verified email), an Access service token (client id), a proxy key a member presented on a proxy route (ADR 0022,
+ * `proxy-key.ts`; never on a management route), or a management key a script presented on the management API (ADR
+ * 0026, `management-key.ts`; never on a proxy route).
  */
 export type Principal =
   | { readonly kind: "user"; readonly email: string; readonly sub: string }
@@ -17,12 +19,25 @@ export type Principal =
       /** The member the key belongs to, and their email at the time it was verified. */
       readonly memberId: string;
       readonly email: string;
+    }
+  | {
+      readonly kind: "mkey";
+      readonly keyId: string;
+      readonly name: string;
+      /** The person who issued it, when a person did: their suspension refuses it on a hosted proxy. */
+      readonly ownerEmail?: string;
     };
+
+/** A principal that is a member of an org, or may become one: anything but a management key, which belongs to its org. */
+export type AdmissiblePrincipal = Exclude<Principal, { readonly kind: "mkey" }>;
 
 /** A verified principal plus the identifiers derived from it. */
 export interface AccessIdentity {
   readonly principal: Principal;
-  /** Stable text identity for usage records: `user:<lowercased email>`, `service:<common_name>` or `key:<key id>`. */
+  /**
+   * Stable text identity for usage records and audit: `user:<lowercased email>`, `service:<common_name>`,
+   * `key:<key id>` or `mkey:<key id>`.
+   */
   readonly principalId: string;
   /**
    * Irreversible namespace used to isolate session state between callers (`callerScope(principalId, org)`). A proxy
@@ -60,6 +75,8 @@ export const principalId = (principal: Principal): string => {
       return `service:${principal.commonName}`;
     case "key":
       return `key:${principal.keyId}`;
+    case "mkey":
+      return `mkey:${principal.keyId}`;
   }
 };
 

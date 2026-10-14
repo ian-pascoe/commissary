@@ -46,6 +46,8 @@ export const PANEL_SECTIONS = [
   "my-models",
   "proxy-keys",
   "limits",
+  "management-keys",
+  "people",
   "assets",
 ] as const;
 
@@ -178,6 +180,13 @@ export const isPanelPagePath = (path: string): boolean => {
     page === LEGACY_PANEL_PATH ||
     PANEL_SECTIONS.some((section) => section !== "assets" && inSection(page, section))
   );
+};
+
+/** Whether a request URL is one of the panel's bundle files (`/assets/*`), however it is spelled. */
+export const isPanelAssetPath = (requestUrl: string): boolean => {
+  const path = normalizedPath(requestUrl);
+
+  return path !== undefined && inSection(path, "assets");
 };
 
 export type AccessZone = "public" | "protected" | "management";

@@ -55,25 +55,28 @@ const randomHex = (bytes: number): string =>
     byte.toString(16).padStart(2, "0"),
   ).join("");
 
-/** A new key of `org` with a fresh id and secret. */
-export const mintProxyKey = (org: OrgId): MintedProxyKey => {
+/**
+ * A new key of `org` with a fresh id and secret, its text starting with `prefix`: `cfp_` for a proxy key, `cfm_` for a
+ * management key (`management-keys/key.ts`), which has the same shape.
+ */
+export const mintOrgKey = (prefix: string, org: OrgId): MintedProxyKey => {
   const keyId = randomHex(10);
   const secret = base64Url(crypto.getRandomValues(new Uint8Array(SECRET_BYTES)));
-  const key = `${PROXY_KEY_PREFIX}${org}_${keyId}_${secret}`;
+  const key = `${prefix}${org}_${keyId}_${secret}`;
 
   return {
     key,
     org,
     keyId,
     hash: hashProxyKey(key),
-    prefix: `${PROXY_KEY_PREFIX}${org}_${keyId}_${secret.slice(0, SHOWN_SECRET_CHARACTERS)}`,
+    prefix: `${prefix}${org}_${keyId}_${secret.slice(0, SHOWN_SECRET_CHARACTERS)}`,
   };
 };
 
-/** The org, id and hash of a key, `undefined` when the text is not a well-formed proxy key. */
-export const parseProxyKey = (text: string): ParsedProxyKey | undefined => {
-  if (!looksLikeProxyKey(text)) return undefined;
-  const parts = text.slice(PROXY_KEY_PREFIX.length).split("_");
+/** The org, id and hash of a key starting with `prefix`, `undefined` when the text is not one well formed. */
+export const parseOrgKey = (prefix: string, text: string): ParsedProxyKey | undefined => {
+  if (!text.startsWith(prefix)) return undefined;
+  const parts = text.slice(prefix.length).split("_");
 
   // The secret may contain `_` (base64url): the org and the id never do.
   const [org, keyId, ...rest] = parts;
@@ -84,3 +87,10 @@ export const parseProxyKey = (text: string): ParsedProxyKey | undefined => {
 
   return SECRET.test(secret) ? { org, keyId, hash: hashProxyKey(text) } : undefined;
 };
+
+/** A new proxy key of `org` with a fresh id and secret. */
+export const mintProxyKey = (org: OrgId): MintedProxyKey => mintOrgKey(PROXY_KEY_PREFIX, org);
+
+/** The org, id and hash of a key, `undefined` when the text is not a well-formed proxy key. */
+export const parseProxyKey = (text: string): ParsedProxyKey | undefined =>
+  parseOrgKey(PROXY_KEY_PREFIX, text);

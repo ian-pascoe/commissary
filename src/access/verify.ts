@@ -5,7 +5,7 @@ import type { JWTPayload } from "jose";
 import { InternalError, UnauthorizedError } from "../errors.ts";
 import type { AccessConfig } from "./config.ts";
 import { AccessJwks } from "./jwks.ts";
-import type { Principal } from "./principal.ts";
+import type { AdmissiblePrincipal } from "./principal.ts";
 
 /** Allowed clock difference in seconds for `exp` / `nbf`. */
 export const CLOCK_SKEW_SECONDS = 30;
@@ -14,7 +14,7 @@ export const CLOCK_SKEW_SECONDS = 30;
 const invalidCredential = () => new UnauthorizedError({ message: "Invalid API key" });
 
 /** User tokens carry `email` + `sub`; service tokens carry the client id in `common_name`. */
-export const principalFromClaims = (claims: JWTPayload): Principal | undefined => {
+export const principalFromClaims = (claims: JWTPayload): AdmissiblePrincipal | undefined => {
   const email = typeof claims["email"] === "string" ? claims["email"].trim() : "";
 
   if (email !== "")
@@ -35,7 +35,7 @@ export const principalFromClaims = (claims: JWTPayload): Principal | undefined =
 export const verifyAccessJwt = (
   token: string,
   config: Pick<AccessConfig, "issuer" | "jwksUrl" | "audiences">,
-): Effect.Effect<Principal, UnauthorizedError | InternalError, AccessJwks> =>
+): Effect.Effect<AdmissiblePrincipal, UnauthorizedError | InternalError, AccessJwks> =>
   Effect.gen(function* () {
     const jwks = yield* AccessJwks;
 
