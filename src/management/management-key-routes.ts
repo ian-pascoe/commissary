@@ -94,6 +94,14 @@ const revokeManagementKey = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
   const params = yield* HttpRouter.params;
   const id = params["id"] ?? "";
+  const keys = yield* controlPlane("listManagementKeys", (stub) => stub.listManagementKeys());
+  const target = keys.find((key) => key.id === id);
+
+  // Like issuing: an org admin does not take away a key holding the owner role.
+  if (target !== undefined && !roleAtLeast(identity.role, target.role))
+    return yield* replyError(403, "role_too_high", {
+      message: "you can revoke only a management key holding at most your own role",
+    });
 
   const result = yield* controlPlane("revokeManagementKey", (stub) => stub.revokeManagementKey(id));
 

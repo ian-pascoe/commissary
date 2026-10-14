@@ -156,6 +156,14 @@ describe("issuing keys", () => {
     );
 
     expect([badName.status, errorOf(badName)]).toEqual([422, "invalid_name"]);
+
+    // Nor does an org admin revoke a key holding the owner role; an owner (here a platform admin) does.
+    const owners = await issue(slug, ADMIN, "owners", "owner");
+    const path = api(slug, `/management-keys/${owners.id}`);
+    const refused = await asPerson(admin, path, { method: "DELETE" });
+
+    expect([refused.status, errorOf(refused)]).toEqual([403, "role_too_high"]);
+    expect((await asPerson(ADMIN, path, { method: "DELETE" })).status).toBe(200);
   });
 });
 

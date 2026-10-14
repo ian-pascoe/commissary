@@ -2221,7 +2221,7 @@ Access one, unchanged. User docs: `docs/ACCESS.md` "Hosted proxy", `docs/DEPLOY.
   Google, account linking by verified email) over D1 (`auth_*` tables, migration `0007_hosted_auth.sql`), mounted at
   `/api/auth/*`, of which the Worker passes only social sign-in, the providers' callbacks, `get-session` and
   `sign-out` (the rest answers 404). An unverified email is refused; provider tokens, IP and user agent are never stored
-  (database hooks blank them). `POST /api/auth/sign-in/social` needs a Turnstile token (`x-captcha-response`), verified
+  (database hooks blank them). `POST /api/auth/sign-in/social` needs a Turnstile token (`x-captcha-response`) solved on the proxy's hostname, verified
   against `TURNSTILE_SECRET_KEY`. `/api/sign-in-options` tells the panel's `/sign-in` page the enabled providers and the
   Turnstile site key. The session cookie is read on every request, so a session ended by sign-out or suspension stops
   working at once.
@@ -2232,7 +2232,8 @@ Access one, unchanged. User docs: `docs/ACCESS.md` "Hosted proxy", `docs/DEPLOY.
   session redirects to `/sign-in?next=…`; the management API answers `401 Not signed in`. The cross-site checks
   (`access/csrf.ts`) run first, as on a self-hosted proxy.
 - **Standing** (`standing.ts`, Platform registry `signIn`/`standing`): the first request of a new person signs them up,
-  creating a Personal org they own unless the person-to-orgs index already lists them (invited). The registry records
+  creating a Personal org they own unless the person-to-orgs index already lists them (invited); `admitPrincipal` never
+  auto-joins anyone to `global` on a hosted proxy, whatever its stored setting. The registry records
   `people` (owned-org limit, suspension) and each org's `created_by` (owned orgs are counted by it) and `suspended_at`.
   Every request checks that neither the person nor the org is suspended, cached 30 s per isolate and forgotten at once
   where a suspension is made; suspending also deletes the person's (or the org members') sessions.

@@ -114,15 +114,28 @@ describe("signing up", () => {
     expect(bob.owned_orgs).toBe(0);
   });
 
-  it("does not let everyone signed in join global", async () => {
+  it("does not let everyone signed in join global, even with its auto-join on", async () => {
+    const root = await signIn({ email: ROOT });
+
+    // A stage that was self-hosted keeps `global`'s auto-join on.
+    expect(
+      (
+        await call(
+          "/v8/management/orgs/default/membership",
+          json(root, "PATCH", { auto_join: true }),
+        )
+      ).status,
+    ).toBe(200);
+
     const cookie = await signIn({ email: "eve@example.com" });
 
-    const response = await call("/v8/management/orgs/global/members", {
+    const response = await call("/v8/management/orgs/default/members", {
       headers: panelHeaders(cookie),
     });
 
     expect(response.status).toBe(403);
-    expect((await me(cookie)).orgs.map((org) => org.slug)).not.toContain("global");
+    expect((await me(cookie)).orgs.map((org) => org.slug)).not.toContain("default");
+    await call("/v8/management/orgs/default/membership", json(root, "PATCH", { auto_join: false }));
   });
 });
 

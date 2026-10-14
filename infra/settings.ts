@@ -3,10 +3,6 @@ import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 
 /**
- * Deploy-time settings of the stack, read from the shell environment and `.env` (see `.env.example`). They
- * are inputs of `alchemy deploy` only; the Worker itself never reads this file.
- */
-/**
  * A hosted proxy's settings (ADR 0026, `PROXY_MODE=hosted`): the Worker signs people in itself, so no Access application
  * is created. Secrets come from the shell (CI: the GitHub environment's secrets) and are bound as secret text.
  */
@@ -25,6 +21,10 @@ export interface HostedSettings {
   readonly orgRateLimitNamespaceId: number;
 }
 
+/**
+ * Deploy-time settings of the stack, read from the shell environment and `.env` (see `.env.example`). They
+ * are inputs of `alchemy deploy` only; the Worker itself never reads this file.
+ */
 export interface Settings {
   /** `PROXY_MODE=hosted` (ADR 0026): set for a hosted proxy, `undefined` for a self-hosted one (the default). */
   readonly hosted: HostedSettings | undefined;

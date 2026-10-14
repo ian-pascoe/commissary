@@ -222,7 +222,8 @@ A **management key** (ADR 0026) is how a script calls the management API without
 `cfm_<org id>_<key id>_<secret>`, sent as `Authorization: Bearer cfm_…`. Org admins issue them in the panel (**Management
 keys**) or with `POST /v8/management/orgs/<slug>/management-keys {"name": "ci", "role": "admin"}`;
 the answer carries the whole key once, and the org's ControlPlane stores only its SHA-256 and a visible prefix. `GET`
-lists the org's keys and `DELETE /management-keys/<id>` revokes one.
+lists the org's keys and `DELETE /management-keys/<id>` revokes one (only a caller holding at least the key's role
+revokes it, `403 role_too_high` otherwise).
 
 - A key acts in its own org only, with its role there (no higher than its issuer's), and is never a platform admin. An
   unscoped management URL means the key's org; another org's URL answers 403.
@@ -427,14 +428,15 @@ application. Everything in §1-§2 and the service tokens of §3 do not apply; m
 management keys work as above. What changes:
 
 - **Sign-in.** People sign in at `/sign-in` with GitHub or Google (Better Auth, `src/hosted/`), behind a Cloudflare
-  Turnstile challenge. The Worker keeps the verified email and a session in D1 (`auth_*` tables), never the provider's
+  Turnstile challenge (a token solved on another hostname is refused). The Worker keeps the verified email and a session in D1 (`auth_*` tables), never the provider's
   tokens; Better Auth's session cookie is `HttpOnly` and `SameSite=Lax` (and `Secure` over HTTPS). The panel signs out with **Sign out**. Without a
   session the management API answers `401 Not signed in` and a panel page redirects to `/sign-in?next=<page>`.
 - **Who is who.** The signed-in email is the principal, like Access's `email` claim, so a member invited by email signs
   in with a provider account whose verified email matches. Access JWTs and Access service tokens are accepted nowhere.
   Platform admins are the emails in `PLATFORM_ADMIN_EMAILS`; `PLATFORM_ADMIN_SERVICE_TOKENS` means nothing.
 - **Sign-up.** Anyone may sign up. A person signing in for the first time who is not a member anywhere gets a Personal
-  org they own; an invited person gets none. Nobody joins `global` by signing in.
+  org they own; an invited person gets none. Nobody joins `global` by signing in, even where its
+  auto-join is still on from a self-hosted past.
 - **Owning orgs.** Everyone signed in may create orgs and owns the ones they create, up to `OWNED_ORG_LIMIT` (default
   3; platform admins have no limit). A platform admin raises one person's limit with `PATCH /v8/management/people/<email>
   {"org_limit": 10}` (`null` restores the default), or on the panel's **People** page.

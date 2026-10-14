@@ -8,6 +8,7 @@ import {
   cookiesOf,
   finishSignIn,
   GOOD_TURNSTILE,
+  OTHER_SITE_TURNSTILE,
   installFakes,
   ORIGIN,
   restoreFetch,
@@ -92,13 +93,16 @@ describe("sign-in with GitHub", () => {
     expect(stored).toEqual({ ipAddress: null, userAgent: null });
   });
 
-  it("refuses an email the provider has not verified", async () => {
-    upstreams.person = { email: "eve@example.com", verified: false };
-    const callback = await finishSignIn(await startSignIn());
+  it("refuses an email the provider has not verified, a platform admin's too", async () => {
+    // root@example.com is in the test Worker's PLATFORM_ADMIN_EMAILS.
+    for (const email of ["eve@example.com", "root@example.com"]) {
+      upstreams.person = { email, verified: false };
+      const callback = await finishSignIn(await startSignIn());
 
-    expect(callback.status).toBe(302);
-    expect(callback.headers.get("location")).toContain("/sign-in?error=email_not_verified");
-    expect(cookiesOf(callback)).not.toContain("session_token");
+      expect(callback.status).toBe(302);
+      expect(callback.headers.get("location")).toContain("/sign-in?error=email_not_verified");
+      expect(cookiesOf(callback)).not.toContain("session_token");
+    }
 
     const people = await env.USAGE.prepare("SELECT count(*) AS n FROM auth_user").first<{
       n: number;
@@ -130,7 +134,7 @@ describe("sign-in with GitHub", () => {
 
 describe("Turnstile", () => {
   it("blocks a sign-in (and so a sign-up) without a valid token", async () => {
-    for (const token of [null, "", "forged"]) {
+    for (const token of [null, "", "forged", OTHER_SITE_TURNSTILE]) {
       const start = await startSignIn(token);
 
       expect(start.status).toBe(403);
@@ -138,7 +142,10 @@ describe("Turnstile", () => {
     }
 
     // A missing token never reaches siteverify.
-    expect(upstreams.siteverify.map((body) => body["response"])).toEqual(["forged"]);
+    expect(upstreams.siteverify.map((body) => body["response"])).toEqual([
+      "forged",
+      OTHER_SITE_TURNSTILE,
+    ]);
   });
 
   it("blocks a sign-in while siteverify is unreachable", async () => {

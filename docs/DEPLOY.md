@@ -87,6 +87,8 @@ under the same id, so give `preview` its own namespace.
 **Switching a stage.** Turning a self-hosted stage into a hosted one deletes its Access applications, policies and
 service tokens on the next deploy, and scripts with Access service tokens stop working: issue management keys first.
 Members keep their orgs and roles, and sign in with a provider account whose verified email is their membership email.
+`global`'s auto-join stops admitting anyone (on a hosted proxy nobody joins `global` by signing in), so add the people
+who should stay in it as members first.
 
 ## Setup
 

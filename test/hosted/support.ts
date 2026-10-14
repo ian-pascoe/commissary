@@ -9,6 +9,9 @@ export const ORIGIN = "https://proxy.test";
 /** The Turnstile token the fake siteverify accepts; any other token fails. */
 export const GOOD_TURNSTILE = "turnstile-ok";
 
+/** A token the fake siteverify accepts but reports as issued on another site's widget. */
+export const OTHER_SITE_TURNSTILE = "turnstile-other-site";
+
 /** Who the fake GitHub signs in next, and whether it verified their email. */
 export interface GitHubPerson {
   readonly email: string;
@@ -56,7 +59,13 @@ export const installFakes = async (): Promise<void> => {
 
       if (upstreams.turnstileDown) return new Response("down", { status: 500 });
 
-      return Response.json({ success: body["response"] === GOOD_TURNSTILE });
+      if (body["response"] === OTHER_SITE_TURNSTILE)
+        return Response.json({ success: true, hostname: "elsewhere.example" });
+
+      return Response.json({
+        success: body["response"] === GOOD_TURNSTILE,
+        hostname: new URL(ORIGIN).hostname,
+      });
     }
 
     if (url.startsWith("https://github.com/login/oauth/access_token"))

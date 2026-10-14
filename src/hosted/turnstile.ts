@@ -16,13 +16,19 @@ const MAX_TOKEN_LENGTH = 2048;
 export type TurnstileOutcome = "passed" | "failed" | "unavailable";
 
 /**
- * Asks siteverify whether `token` is a fresh token of the deployment's widget. `failed` for a missing, malformed, used
- * or expired token; `unavailable` when siteverify cannot be reached (the sign-in is refused either way).
+/** How long siteverify may take before the sign-in is refused as `unavailable`. */
+const SITEVERIFY_TIMEOUT_MS = 10_000;
+
+/**
+ * Asks siteverify whether `token` is a fresh token of the deployment's widget, solved on `hostname` (the proxy's). `failed`
+ * for a missing, malformed, used or expired token, or one solved on another site; `unavailable` when siteverify cannot be
+ * reached in time (the sign-in is refused either way).
  */
 export const verifyTurnstile = (
   secret: string,
   token: string | undefined,
   remoteIp: string | undefined,
+  hostname: string,
 ): Effect.Effect<TurnstileOutcome> => {
   const response = token?.trim() ?? "";
 
@@ -32,6 +38,7 @@ export const verifyTurnstile = (
     const answer = await fetch(SITEVERIFY_URL, {
       method: "POST",
       headers: { "content-type": "application/json" },
+      signal: AbortSignal.timeout(SITEVERIFY_TIMEOUT_MS),
       body: JSON.stringify({
         secret,
         response,
@@ -40,10 +47,12 @@ export const verifyTurnstile = (
     });
 
     if (!answer.ok) return "unavailable" as const;
-    // Only `success` is read; anything but `true` fails.
-    const body = await answer.json<{ readonly success?: unknown }>();
+    // Anything but `success: true` fails, and so does a token solved on another hostname (a widget's site key may be
+    // shared by several hostnames).
+    const body = await answer.json<{ readonly success?: unknown; readonly hostname?: unknown }>();
+    const elsewhere = typeof body.hostname === "string" && body.hostname !== hostname;
 
-    return body.success === true ? ("passed" as const) : ("failed" as const);
+    return body.success === true && !elsewhere ? ("passed" as const) : ("failed" as const);
   }).pipe(
     Effect.catch(() =>
       Effect.logWarning("Turnstile siteverify unreachable").pipe(Effect.as("unavailable" as const)),

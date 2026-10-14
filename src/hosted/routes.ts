@@ -85,6 +85,7 @@ const authRoute = hostedOnly(
         secret,
         request.headers[TURNSTILE_TOKEN_HEADER],
         request.headers["cf-connecting-ip"],
+        url.hostname,
       );
 
       if (outcome !== "passed")
@@ -98,9 +99,15 @@ const authRoute = hostedOnly(
 
     const web = yield* HttpServerRequest.toWeb(request).pipe(Effect.orDie);
 
-    const response = yield* Effect.promise(async () =>
+    const response = yield* Effect.tryPromise(async () =>
       (await signedInAuth(env, url.origin)).handler(web),
+    ).pipe(
+      Effect.catch((error) =>
+        Effect.logError(`sign-in request failed: ${error.message}`).pipe(Effect.as(undefined)),
+      ),
     );
+
+    if (response === undefined) return jsonReply(500, { error: "Sign-in failed" });
 
     return HttpServerResponse.setHeaders(HttpServerResponse.fromWeb(response), NO_STORE);
   }),

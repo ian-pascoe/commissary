@@ -9,6 +9,7 @@
  * Better Auth is imported on first use: a self-hosted proxy never loads it.
  */
 import type { betterAuth, BetterAuthOptions } from "better-auth";
+import { SIGN_IN_PAGE_PATH } from "../management/contract/sign-in.ts";
 
 /** Where Better Auth's routes live; `routes.ts` lets through only {@link AUTH_PATHS}. */
 export const AUTH_BASE_PATH = "/api/auth";
@@ -142,7 +143,7 @@ export const authOptions = (env: AuthEnv, origin: string, hooks: AuthHooks = {})
     // Turnstile (`turnstile.ts`) guards the only way in; Better Auth's own limiter would count per isolate only.
     rateLimit: { enabled: false },
     advanced: { useSecureCookies: true, ipAddress: { disableIpTracking: true } },
-    onAPIError: { errorURL: "/sign-in" },
+    onAPIError: { errorURL: SIGN_IN_PAGE_PATH },
     telemetry: { enabled: false },
   }) satisfies BetterAuthOptions;
 
