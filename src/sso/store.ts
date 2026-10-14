@@ -190,7 +190,10 @@ export class SsoStore {
       const current = this.provider()?.settings;
 
       if (current?.kind !== "oidc" || current.clientSecret === "")
-        return refused("client_secret_required", "an OIDC provider needs its client secret");
+        return refused(
+          "client_secret_required",
+          "an OIDC identity provider needs its client secret",
+        );
       next = { ...settings, clientSecret: current.clientSecret };
     }
 

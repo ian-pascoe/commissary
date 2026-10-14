@@ -28,35 +28,39 @@ const FETCH_TIMEOUT_MS = 10_000;
 
 const problem = (error: IdpProblem["error"], message: string): IdpProblem => ({ error, message });
 
-/** An https URL whose host is a public name or address (Better Auth's own test for IdP endpoints). */
-const publicHttpsUrl = async (value: string): Promise<URL | undefined> => {
-  let url: URL;
-
-  try {
-    url = new URL(value);
-  } catch {
-    return undefined;
-  }
-
-  if (url.protocol !== "https:" || url.username !== "" || url.password !== "") return undefined;
-  const { isPublicRoutableHost } = await import("@better-auth/core/utils/host");
-
-  return isPublicRoutableHost(url.hostname) ? url : undefined;
-};
-
-/** Whether `url` is a public https URL, for Better Auth's discovery (`isTrustedOrigin`). */
-const isPublicHttps = async (): Promise<(url: string) => boolean> => {
+/**
+ * A test of `value` for an https URL without credentials whose host is a public name or address (Better Auth's own
+ * test for IdP endpoints): the URL, or `undefined`.
+ */
+const publicHttpsTest = async (): Promise<(value: string) => URL | undefined> => {
   const { isPublicRoutableHost } = await import("@better-auth/core/utils/host");
 
   return (value) => {
-    try {
-      const url = new URL(value);
+    let url: URL;
 
-      return url.protocol === "https:" && isPublicRoutableHost(url.hostname);
+    try {
+      url = new URL(value);
     } catch {
-      return false;
+      return undefined;
     }
+
+    return url.protocol === "https:" &&
+      url.username === "" &&
+      url.password === "" &&
+      isPublicRoutableHost(url.hostname)
+      ? url
+      : undefined;
   };
+};
+
+const publicHttpsUrl = async (value: string): Promise<URL | undefined> =>
+  (await publicHttpsTest())(value);
+
+/** Whether `url` is a public https URL, for Better Auth's discovery (`isTrustedOrigin`). */
+const isPublicHttps = async (): Promise<(url: string) => boolean> => {
+  const test = await publicHttpsTest();
+
+  return (value) => test(value) !== undefined;
 };
 
 /** What an org owner sends for an OIDC provider; an empty secret keeps the stored one (`SsoStore.setProvider`). */
@@ -242,7 +246,7 @@ export const testIdp = (
 
     if (keys === 0)
       return yield* Effect.fail(
-        problem("provider_unreachable", "the provider publishes no signing keys"),
+        problem("provider_unreachable", "the identity provider publishes no signing keys"),
       );
 
     return { message: `the discovery document and ${keys} signing key(s) loaded` };

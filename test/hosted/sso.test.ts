@@ -49,6 +49,32 @@ const resolver = (request: Request): Response | undefined => {
   });
 };
 
+/** The person Google signs in next. */
+let googleEmail = "";
+
+const base64url = (json: string) =>
+  btoa(json).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+
+/** Google's token endpoint: an ID token for {@link googleEmail} (Better Auth reads it without checking a signature). */
+const google = (request: Request): Response | undefined => {
+  if (request.url !== "https://oauth2.googleapis.com/token") return undefined;
+
+  const claims = {
+    iss: "https://accounts.google.com",
+    sub: `google-${googleEmail}`,
+    email: googleEmail,
+    email_verified: true,
+    name: googleEmail,
+  };
+
+  return Response.json({
+    access_token: "ya29.test",
+    token_type: "Bearer",
+    expires_in: 3600,
+    id_token: `${base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }))}.${base64url(JSON.stringify(claims))}.signature`,
+  });
+};
+
 beforeAll(async () => {
   await installFakes();
   const fakes = globalThis.fetch;
@@ -56,7 +82,9 @@ beforeAll(async () => {
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(input, init);
 
-    return resolver(request) ?? (await oidcIssuer(request)) ?? (await fakes(request));
+    return (
+      resolver(request) ?? google(request) ?? (await oidcIssuer(request)) ?? (await fakes(request))
+    );
   };
 });
 
@@ -156,6 +184,30 @@ const startSso = (email: string) =>
     body: JSON.stringify({ email }),
   });
 
+/** Signs `email` in through Google; the callback's response. */
+const googleSignIn = async (email: string): Promise<Response> => {
+  const start = await call("/api/auth/sign-in/social", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: ORIGIN,
+      "sec-fetch-site": "same-origin",
+      "x-captcha-response": GOOD_TURNSTILE,
+    },
+    body: JSON.stringify({ provider: "google", callbackURL: "/" }),
+  });
+
+  expect(start.status).toBe(200);
+  const { url } = await start.clone().json<{ url: string }>();
+  const state = new URL(url).searchParams.get("state") ?? "";
+
+  googleEmail = email;
+
+  return await call(`/api/auth/callback/google?code=code-1&state=${encodeURIComponent(state)}`, {
+    headers: { cookie: cookiesOf(start), "sec-fetch-site": "cross-site" },
+  });
+};
+
 /** Signs `email` in through the fake OIDC issuer; the callback's response. */
 const oidcSignIn = async (email: string): Promise<Response> => {
   const start = await startSso(email);
@@ -235,6 +287,7 @@ describe("setting up single sign-on", () => {
     const body = await settings.text();
 
     expect(body).not.toContain(OIDC_CLIENT_SECRET);
+    // SAFETY: a 200 answers `SsoSettings` (contract/sso.ts).
     expect(JSON.parse(body) as Settings).toMatchObject({
       provider: {
         kind: "oidc",
@@ -248,6 +301,30 @@ describe("setting up single sign-on", () => {
     // The provider answers a test.
     const test = await call(sso("setup", "/provider/test"), json(owner, "POST"));
     expect(test.status).toBe(200);
+  });
+
+  it("does not let a management key change it, even an owner's", async () => {
+    const owner = await orgOwnedBy("keyed-sso");
+
+    const issued = await call(
+      "/v8/management/orgs/keyed-sso/management-keys",
+      json(owner, "POST", { name: "ci", role: "owner" }),
+    );
+
+    expect(issued.status).toBe(201);
+    const { key } = await issued.json<{ key: string }>();
+    const headers = { authorization: `Bearer ${key}`, "content-type": "application/json" };
+
+    expect((await call(sso("keyed-sso"), { headers })).status).toBe(200);
+
+    const refused = await call(sso("keyed-sso", "/domains"), {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ domain: "keyed.com" }),
+    });
+
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ error: "management_key_forbidden" });
   });
 
   it("does not let a second org claim a domain another org verified", async () => {
@@ -360,6 +437,24 @@ describe("signing in with an org's identity provider", () => {
     expect(refusal(replay)).toBe("invalid_saml_response");
   });
 
+  it("keeps the role of someone who already was a member", async () => {
+    const owner = await oidcOrg("member-org", "member-corp.com");
+
+    expect(
+      (
+        await call(
+          "/v8/management/orgs/member-org/members",
+          json(owner, "POST", { email: "ada@member-corp.com", role: "admin" }),
+        )
+      ).status,
+    ).toBe(201);
+
+    expect((await oidcSignIn("ada@member-corp.com")).headers.get("location")).toBe("/");
+    expect(await members(owner, "member-org")).toContainEqual(
+      expect.objectContaining({ email: "ada@member-corp.com", role: "admin" }),
+    );
+  });
+
   it("does not redirect for a domain no org verified", async () => {
     const owner = await orgOwnedBy("pending-org");
     expect(
@@ -452,10 +547,12 @@ describe("requiring single sign-on", () => {
     expect((await signedIn(github)).status).toBe(401);
     expect((await signedIn(other)).status).toBe(200);
 
-    // GitHub is refused for the domain now; the identity provider still signs her in.
+    // GitHub and Google are refused for the domain now; the identity provider still signs her in.
     upstreams.person = { email: "gina@strict.com" };
     expect(await signIn({ email: "gina@strict.com" })).toBe("");
     expect(await signIn({ email: "gina@example.com" })).toContain("session_token");
+    expect(refusal(await googleSignIn("gina@strict.com"))).toBe("sso_required");
+    expect(cookiesOf(await googleSignIn("gina@example.com"))).toContain("session_token");
     expect((await oidcSignIn("gina@strict.com")).headers.get("location")).toBe("/");
 
     // The provider cannot be removed while a domain requires it.

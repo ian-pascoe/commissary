@@ -130,6 +130,8 @@ the Worker asks on every request: a removed member, or a member whose role was l
 | List members, teams and service tokens; manage teams                                            |                   |     ✓     |              ✓               |       ✓        |
 | Add or remove plain members; register or remove member service tokens                           |                   |     ✓     |              ✓               |       ✓        |
 | Add or remove org admins and owners; change any role                                            |                   |           |              ✓               |       ✓        |
+| Read the org's single sign-on settings (hosted proxy, `/sso`)                                   |                   |     ✓     |              ✓               |       ✓        |
+| Change single sign-on: identity provider, domains, requiring it (not with a management key)     |                   |           |              ✓               |       ✓        |
 | Read the models they may use (`GET /models/mine`, the panel's My models)                        |         ✓         |     ✓     |              ✓               |       ✓        |
 | Read, add, edit and remove grants (`/grants`, the panel's Grants page)                          |                   |     ✓     |              ✓               |       ✓        |
 | Read the Spend limits that bind them and limit their own proxy keys (`/spend`, `/spend/limits`) |         ✓         |     ✓     |              ✓               |       ✓        |
@@ -472,36 +474,40 @@ changes them. A self-hosted proxy has none of this: Access is where its identity
      (HTTP-POST) and metadata URL the page shows. Assertions must be signed, answer a request the proxy made, and are
      accepted once.
 
-   **Test** asks the provider again (discovery document and signing keys, or the certificate's validity) without
+   **Test** asks the identity provider again (discovery document and signing keys, or the certificate's validity) without
    signing anyone in.
 
-3. **Sign in.** On `/sign-in` a person enters their work email; when an org verified its domain and set a provider,
-   the browser goes to that provider. The email the provider returns must be at one of the org's verified domains. A
+3. **Sign in.** On `/sign-in` a person enters their work email; when an org verified its domain and set an identity provider,
+   the browser goes to that provider. The email the identity provider returns must be at one of the org's verified domains. A
    person signing in this way becomes a `member` of the org (no Personal org), unless an org admin removed them: they
    are refused (`sso_removed`) until an admin adds them again.
-4. **Require single sign-on** (per verified domain, with a provider set). GitHub and Google are then refused for
+4. **Require single sign-on** (per verified domain, with an identity provider set). GitHub and Google are then refused for
    emails of that domain (`sso_required`), and every session of a person at the domain ends at once, so everyone signs
-   in again through the identity provider. The provider cannot be removed while a domain requires it.
+   in again through the identity provider. The identity provider cannot be removed while a domain requires it.
 
 ## Troubleshooting
 
-| Symptom                                | Cause                                                                                                  |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| 302 to `cloudflareaccess.com` in a CLI | Service token headers missing/wrong, or no Service Auth policy for the token                           |
-| 403 from Access (before the Worker)    | Token not in the Service Auth policy (name missing from `ACCESS_SERVICE_TOKENS`)                       |
-| 500 `Authentication service error`     | `ACCESS_TEAM_DOMAIN` wrong (check the team name) or `ACCESS_AUD` empty                                 |
-| 401 `Missing API key`                  | No proxy key (proxy routes), or the request reached the Worker without Access (management)             |
-| 401 `Invalid API key`                  | Wrong, revoked or expired proxy key; AUD/issuer mismatch, expired JWT                                  |
-| 401 with a working `cloudflared` token | `global` takes proxy keys only (`access_clients` off): create a proxy key                              |
-| 403 `member_required`                  | Proxy keys are issued to members of the org: add yourself as a member                                  |
-| 403 `Forbidden`                        | No role in the org (add the member, or turn auto-join on), or a plain member on a route for org admins |
-| 403 `owner_required`                   | Adding or removing an org admin or owner, or changing a role, needs an org owner                       |
-| 403 `service_token_owner_required`     | A service token role above member needs an owner service token of the org, or a platform admin         |
-| 409 `last_owner`                       | The change would leave an org with members but no owner: make someone else an owner first              |
-| 403 `platform_admin_required`          | Listing, creating or renaming orgs needs a platform admin                                              |
-| 404 on `/o/<slug>/...`                 | No org has that slug (a platform admin sees 404; others 403)                                           |
-| 403 `private_credential`               | Download of a member's private credential by anyone but its owner                                      |
-| 403 `private_credentials_unavailable`  | Adding a private API key group where the org does not let members hold private credentials             |
-| 403 `download_requires_service_token`  | Credential download called by a person: use a service token that is an owner of the org                |
-| 403 `Cross-site request rejected`      | Browser request from another origin (or a proxy POST from a web app)                                   |
-| 415 `Unsupported Content-Type`         | Management write without `content-type: application/json` (or YAML/multipart)                          |
+| Symptom                                | Cause                                                                                                    |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 302 to `cloudflareaccess.com` in a CLI | Service token headers missing/wrong, or no Service Auth policy for the token                             |
+| 403 from Access (before the Worker)    | Token not in the Service Auth policy (name missing from `ACCESS_SERVICE_TOKENS`)                         |
+| 500 `Authentication service error`     | `ACCESS_TEAM_DOMAIN` wrong (check the team name) or `ACCESS_AUD` empty                                   |
+| 401 `Missing API key`                  | No proxy key (proxy routes), or the request reached the Worker without Access (management)               |
+| 401 `Invalid API key`                  | Wrong, revoked or expired proxy key; AUD/issuer mismatch, expired JWT                                    |
+| 401 with a working `cloudflared` token | `global` takes proxy keys only (`access_clients` off): create a proxy key                                |
+| 403 `member_required`                  | Proxy keys are issued to members of the org: add yourself as a member                                    |
+| 403 `Forbidden`                        | No role in the org (add the member, or turn auto-join on), or a plain member on a route for org admins   |
+| 403 `owner_required`                   | Adding or removing an org admin or owner, changing a role, or changing single sign-on needs an org owner |
+| 403 `service_token_owner_required`     | A service token role above member needs an owner service token of the org, or a platform admin           |
+| 409 `last_owner`                       | The change would leave an org with members but no owner: make someone else an owner first                |
+| 403 `platform_admin_required`          | Listing, creating or renaming orgs needs a platform admin                                                |
+| 404 on `/o/<slug>/...`                 | No org has that slug (a platform admin sees 404; others 403)                                             |
+| 403 `private_credential`               | Download of a member's private credential by anyone but its owner                                        |
+| 403 `private_credentials_unavailable`  | Adding a private API key group where the org does not let members hold private credentials               |
+| 403 `download_requires_service_token`  | Credential download called by a person: use a service token that is an owner of the org                  |
+| 403 `Cross-site request rejected`      | Browser request from another origin (or a proxy POST from a web app)                                     |
+| 415 `Unsupported Content-Type`         | Management write without `content-type: application/json` (or YAML/multipart)                            |
+| 422 `record_not_found`                 | Single sign-on: the domain's TXT record is not published yet (or not visible to DNS yet): retry later    |
+| 409 `domain_taken`                     | Single sign-on: another org verified the domain; it must remove it first                                 |
+| `/sign-in?error=sso_required`          | The person's domain requires single sign-on: sign in with the work email instead of GitHub or Google     |
+| `/sign-in?error=sso_removed`           | An org admin removed the person from the org that holds their domain: an admin adds them again           |

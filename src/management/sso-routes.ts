@@ -94,9 +94,17 @@ const actorOf = (principal: Principal): string => {
   }
 };
 
-/** The org owner role, needed for every change. */
+/**
+ * The org owner role, needed for every change, held by a person (or a platform admin): an identity provider signs
+ * people in, so a management key, which never carries a person's powers (ADR 0026), cannot set one.
+ */
 const ownerOnly = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
+
+  if (identity.principal.kind === "mkey")
+    return yield* replyError(403, "management_key_forbidden", {
+      message: "a management key cannot change single sign-on",
+    });
 
   if (!roleAtLeast(identity.role, "owner"))
     return yield* replyError(403, "owner_required", {
@@ -269,10 +277,16 @@ const updateDomain = Effect.gen(function* () {
       stub.setSsoDomainRequired(updated.domain, identity.org, updated.requireSso),
     );
 
-    if (!recorded)
-      yield* Effect.logWarning(
-        "single sign-on requirement not recorded: the registry lists another org",
-      ).pipe(Effect.annotateLogs({ org: identity.org }));
+    // The registry no longer gives the domain to the org (freed by a removal that did not finish): undo the change.
+    if (!recorded) {
+      yield* controlPlane("setSsoDomainRequired", (stub) =>
+        stub.setSsoDomainRequired(param, !input.require_sso),
+      );
+
+      return yield* replyError(409, "domain_unverified", {
+        message: `the domain ${updated.domain} is not verified for this org any more; verify it again`,
+      });
+    }
   }
 
   // GitHub and Google sessions of the domain's people would outlive the requirement: end them all.
@@ -307,12 +321,14 @@ const removeDomain = Effect.gen(function* () {
   const identity = yield* ownerOnly;
   const param = yield* domainParam;
 
-  const removed = yield* refusal(
-    yield* controlPlane("removeSsoDomain", (stub) => stub.removeSsoDomain(param)),
-  );
+  const domain = yield* refusal(yield* controlPlane("ssoDomain", (stub) => stub.ssoDomain(param)));
 
-  yield* registry("releaseSsoDomain", (stub) =>
-    stub.releaseSsoDomain(removed.domain, identity.org),
+  // Freed in the registry first: should the ControlPlane fail next, the domain is still listed there and removing it
+  // again finishes the job, rather than the registry keeping a domain the org no longer lists.
+  yield* registry("releaseSsoDomain", (stub) => stub.releaseSsoDomain(domain.domain, identity.org));
+
+  const removed = yield* refusal(
+    yield* controlPlane("removeSsoDomain", (stub) => stub.removeSsoDomain(domain.domain)),
   );
 
   return jsonReply(200, domainView(removed));

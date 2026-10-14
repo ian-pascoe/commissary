@@ -133,7 +133,7 @@ export class SsoGroup extends HttpApiGroup.make("sso").add(
     success: SsoDomainView,
     error: managementErrors,
   }),
-  /** `409 domain_unverified` / `provider_missing` when requiring single sign-on is not possible yet. */
+  /** `409 domain_unverified` / `404 provider_missing` when requiring single sign-on is not possible yet. */
   HttpApiEndpoint.patch("updateDomain", "/sso/domains/:domain", {
     ...domainParam,
     payload: UpdateSsoDomain,
