@@ -58,7 +58,7 @@ import { CurrentOrg, type OrgId } from "../platform/org.ts";
 import { noteSelection, notePrincipal, RequestTrace } from "../observability/trace.ts";
 import type { SessionRouting } from "../session-routing/routing.ts";
 import { UsageReporter } from "../usage/reporter.ts";
-import { UsageSink } from "../usage/sink.ts";
+import { priceForSpend, UsageSink } from "../usage/sink.ts";
 import { ModelCapabilities } from "./model-capabilities.ts";
 
 /** Upstream attempts (executor calls) allowed for one request. */
@@ -138,6 +138,8 @@ export interface Prepared {
   readonly orgId: OrgId;
   /** The caller's member id in the org (usage `member_id`), when they have one. */
   readonly memberId?: string;
+  /** The proxy key the request came with (Spend limits of a key apply to everything it spends; issue #71). */
+  readonly proxyKeyId?: string;
   readonly callerScope: string;
   readonly endpoint: string;
   readonly session: PickSession | undefined;
@@ -347,20 +349,33 @@ export const conduct = <T, R>(
 
             // A refresh replaces the token material: report against the credential version that was actually used.
             const version = attempt.context.credential.credentialVersion ?? lease.credentialVersion;
+
+            // The records are built first: the Cost of the attempt is charged to the Spend limits by the report.
+            const finishedAt = yield* Clock.currentTimeMillis;
+            const record = usage.finish(finishedAt);
+            const extras = record === undefined ? [] : usage.additionalRecords(finishedAt);
+            const records = record === undefined ? [] : [record, ...extras];
+
+            // Only an attempt under a Spend limit is priced here; the others are priced when they are stored.
+            const priced =
+              lease.spend === undefined || lease.spend.length === 0
+                ? { records, costMicros: undefined }
+                : yield* priceForSpend(sink, records);
+
             yield* picker.report(
-              { ...lease, credentialVersion: version },
-              error === undefined
-                ? successReport({ ...context, headers })
-                : failureReport(error, { ...context, action }),
+              {
+                ...lease,
+                credentialVersion: version,
+              },
+              {
+                ...(error === undefined
+                  ? successReport({ ...context, headers })
+                  : failureReport(error, { ...context, action })),
+                ...(priced.costMicros === undefined ? {} : { costMicros: priced.costMicros }),
+              },
             );
-            const record = usage.finish(yield* Clock.currentTimeMillis);
 
-            if (record !== undefined) {
-              yield* sink.publish(record);
-
-              for (const extra of usage.additionalRecords(yield* Clock.currentTimeMillis))
-                yield* sink.publish(extra);
-            }
+            for (const published of priced.records) yield* sink.publish(published);
 
             return action;
           }).pipe(Effect.ensuring(Effect.sync(release)));
@@ -443,6 +458,7 @@ export const conduct = <T, R>(
               ...(credits ? { ignoreCooldown: true } : {}),
               callerScope: prepared.callerScope,
               ...(prepared.memberId === undefined ? {} : { memberId: prepared.memberId }),
+              ...(prepared.proxyKeyId === undefined ? {} : { proxyKeyId: prepared.proxyKeyId }),
               excludedIds,
               retryRound: round,
               requestRetry: settings.requestRetry,
@@ -525,8 +541,12 @@ export const conduct = <T, R>(
           const pick = yield* credits ? nextCreditsPick : pickNext(tried);
 
           if (Result.isFailure(pick)) {
-            // Without an earlier upstream error the selection failure itself is the answer.
-            return failed(lastError === undefined ? pick.failure : preferred(lastError), false);
+            // Without an earlier upstream error the selection failure itself is the answer. A Spend limit is the
+            // request's, not a credential's: no other round or credential changes it, so the request stops here.
+            return failed(
+              lastError === undefined ? pick.failure : preferred(lastError),
+              pick.failure.code === "spend_limit_reached",
+            );
           }
 
           const picked = pick.success;

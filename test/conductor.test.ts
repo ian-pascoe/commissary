@@ -6,7 +6,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Exit, Fiber, Layer, Scope, Stream } from "effect";
 import type { HttpServerRequest } from "effect/http";
 import { TestClock } from "effect/testing";
-import { AccessPrincipal } from "../src/access/principal.ts";
+import { type AccessIdentity, AccessPrincipal } from "../src/access/principal.ts";
 import type { ConfigReader } from "../src/config/reader.ts";
 import { ExecutionError } from "../src/executor/errors.ts";
 import { CredentialRefresher } from "../src/executor/helps/credential-refresh.ts";
@@ -20,8 +20,12 @@ import { ModelProviders } from "../src/handlers/model-providers.ts";
 import { WorkerEnv } from "../src/platform/env.ts";
 import { Formats } from "../src/translator/formats.ts";
 import { asString } from "../src/json/index.ts";
+import type { UsageCost } from "../src/usage/pricing.ts";
 import type { UsageRecord } from "../src/usage/record.ts";
 import { UsageSink } from "../src/usage/sink.ts";
+import type { PoolOptions } from "../src/credentials/pool.ts";
+import { SpendLedger } from "../src/spend/ledger.ts";
+import { periodBounds } from "../src/spend/period.ts";
 import {
   jsonResponse,
   mockHttpClient,
@@ -36,6 +40,7 @@ import {
   type PoolHarness,
 } from "./support/pool.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { limit, MemorySpendBook, USD } from "./support/spend.ts";
 
 const identity = {
   principal: { kind: "user", email: "dev@example.com", sub: "sub" },
@@ -100,6 +105,14 @@ interface SetupOptions {
   readonly providers?: Layer.Layer<ModelProviders, never, ConfigReader>;
   readonly prepare?: (harness: PoolHarness) => void;
   readonly store?: MemoryPoolStore;
+  /** The org's Spend limits (issue #71). */
+  readonly spend?: PoolOptions["spend"];
+  /** Members' private API key groups: YAML configs by member id. */
+  readonly privateConfigs?: Readonly<Record<string, string>>;
+  /** Who asks (a member, a proxy key); a user without a member by default. */
+  readonly identity?: AccessIdentity;
+  /** What the usage sink says an attempt cost, for the Spend limits (nothing by default). */
+  readonly cost?: (record: UsageRecord) => UsageCost | undefined;
 }
 
 const setup = (
@@ -109,7 +122,14 @@ const setup = (
 ): Effect.Effect<Run> =>
   Effect.gen(function* () {
     const harness = yield* Effect.promise(
-      async () => await makePool(yaml, options.store === undefined ? {} : { store: options.store }),
+      async () =>
+        await makePool(yaml, {
+          ...(options.store === undefined ? {} : { store: options.store }),
+          ...(options.spend === undefined ? {} : { spend: options.spend }),
+          ...(options.privateConfigs === undefined
+            ? {}
+            : { privateConfigs: options.privateConfigs }),
+        }),
     );
 
     options.prepare?.(harness);
@@ -128,7 +148,7 @@ const setup = (
       ModelCapabilities.configLayer,
       options.executors ?? ExecutorRegistry.layer,
       refresher,
-      UsageSink.memory(records),
+      UsageSink.memory(records, options.cost),
       mockHttpClient(calls, (call) => respond(call, calls.length - 1)),
       Thinking.live,
     ).pipe(Layer.provideMerge(staticConfigReader(harness.config)));
@@ -137,7 +157,7 @@ const setup = (
       // The layer provides every service the conductor needs (`Scope` is provided by the caller where used).
       effect.pipe(
         Effect.provide(layer),
-        Effect.provideService(AccessPrincipal, identity),
+        Effect.provideService(AccessPrincipal, options.identity ?? identity),
         Effect.provideService(WorkerEnv, {} as Env),
         Effect.provideService(CurrentOrg, GLOBAL_ORG),
       ) as unknown as Effect.Effect<A, E>;
@@ -961,3 +981,174 @@ describe("credential preparation and 401 refresh (tryRefreshAfterUnauthorized)",
 });
 
 const failure_ = <A>(effect: Effect.Effect<A, ExecutionError>) => Effect.flip(effect);
+
+describe("Spend limits (issue #71)", () => {
+  const asMember = (memberId: string): AccessIdentity => ({
+    ...identity,
+    memberId,
+    role: "member",
+  });
+
+  const asKey = (memberId: string, keyId: string): AccessIdentity => ({
+    ...identity,
+    principal: { kind: "key", keyId, memberId, email: "dev@example.com" },
+    principalId: `key:${keyId}`,
+    memberId,
+    role: "member",
+  });
+
+  /** Every successful attempt costs `micros`; a failed one nothing. */
+  const costing =
+    (micros: number) =>
+    (record: UsageRecord): UsageCost | undefined =>
+      record.failed ? undefined : { micros, unpriced: false };
+
+  const ledgerOf = (book: MemorySpendBook) => new SpendLedger(book, () => []);
+
+  const spentToday = (book: MemorySpendBook, run: Run, kind: "member" | "key", subject: string) =>
+    book.spent(
+      { kind, subject },
+      "day",
+      periodBounds("day", run.harness.clock.now(), "UTC", "monday").start,
+    );
+
+  it.effect(
+    "charges the cost of an attempt and refuses at the limit with a 429 that no credential or cooldown follows",
+    () =>
+      Effect.gen(function* () {
+        const book = new MemorySpendBook([limit("member", "m1", "day", 5 * USD)]);
+
+        const run = yield* setup(config(group("a") + group("b")), () => jsonResponse(CHAT_OK), {
+          spend: ledgerOf(book),
+          identity: asMember("m1"),
+          cost: costing(3 * USD),
+        });
+
+        yield* run.exec(executeNonStream(chatInput()));
+        assert.strictEqual(spentToday(book, run, "member", "m1"), 3 * USD);
+        // The record stored for the attempt carries the cost it was charged.
+        assert.strictEqual(run.records[0]?.cost?.micros, 3 * USD);
+
+        yield* run.exec(executeNonStream(chatInput()));
+        assert.strictEqual(spentToday(book, run, "member", "m1"), 6 * USD);
+
+        const error = yield* failure(run.exec(executeNonStream(chatInput())));
+
+        const resetSeconds = Math.ceil(
+          (periodBounds("day", run.harness.clock.now(), "UTC", "monday").end -
+            run.harness.clock.now()) /
+            1000,
+        );
+
+        assert.strictEqual(error.status, 429);
+        assert.strictEqual(error.code, "spend_limit_reached");
+        assert.strictEqual(error.safeHeaders?.["retry-after"], String(resetSeconds));
+        assert.include(error.message, "daily");
+        // No upstream call, no cooldown and no failure on any credential.
+        assert.strictEqual(run.calls.length, 2);
+        assert.deepStrictEqual(
+          run.harness.pool.list().map((item) => [item.unavailable, item.failed]),
+          [
+            [false, 0],
+            [false, 0],
+          ],
+        );
+
+        // The period ends: the member is served again and the counter starts over.
+        run.harness.clock.advance(24 * 3600 * 1000);
+        yield* run.exec(executeNonStream(chatInput()));
+        assert.strictEqual(run.calls.length, 3);
+        assert.strictEqual(spentToday(book, run, "member", "m1"), 3 * USD);
+      }),
+  );
+
+  it.effect(
+    "refuses before any credential is tried when the proxy key has no room, and never charges a failed attempt",
+    () =>
+      Effect.gen(function* () {
+        const book = new MemorySpendBook([limit("key", "k1", "day", 0)]);
+
+        const refused = yield* setup(config(group("a") + group("b")), () => jsonResponse(CHAT_OK), {
+          spend: ledgerOf(book),
+          identity: asKey("m1", "k1"),
+          cost: costing(USD),
+        });
+
+        const error = yield* failure(refused.exec(executeNonStream(chatInput())));
+
+        assert.strictEqual(error.status, 429);
+        assert.strictEqual(error.code, "spend_limit_reached");
+        assert.strictEqual(refused.calls.length, 0);
+
+        // Failover to the next credential charges only what the attempt that answered cost.
+        const roomy = new MemorySpendBook([limit("key", "k1", "day", 10 * USD)]);
+
+        const failover = yield* setup(
+          config(group("a") + group("b")),
+          (call) => (keyOf(call) === "a" ? upstreamError(500) : jsonResponse(CHAT_OK)),
+          { spend: ledgerOf(roomy), identity: asKey("m1", "k1"), cost: costing(USD) },
+        );
+
+        yield* failover.exec(executeNonStream(chatInput()));
+        assert.deepStrictEqual(failover.calls.map(keyOf), ["a", "b"]);
+        assert.strictEqual(spentToday(roomy, failover, "key", "k1"), USD);
+      }),
+  );
+
+  it.effect("skips a shared credential at its own limit while another one serves", () =>
+    Effect.gen(function* () {
+      const run0 = yield* setup(config(group("a") + group("b")), () => jsonResponse(CHAT_OK));
+      const a = run0.harness.pool.list().find((item) => item.label === "a");
+
+      assert.isDefined(a);
+      const book = new MemorySpendBook([limit("credential", a?.id ?? "", "day", 0)]);
+
+      const run = yield* setup(config(group("a") + group("b")), () => jsonResponse(CHAT_OK), {
+        spend: ledgerOf(book),
+        identity: asMember("m1"),
+      });
+
+      for (let i = 0; i < 3; i += 1) yield* run.exec(executeNonStream(chatInput()));
+      assert.deepStrictEqual(run.calls.map(keyOf), ["b", "b", "b"]);
+    }),
+  );
+
+  it.effect("counts a member's private credential traffic toward the proxy key's limit only", () =>
+    Effect.gen(function* () {
+      const book = new MemorySpendBook([
+        limit("member", "m1", "day", 0),
+        limit("key", "k1", "day", 10 * USD),
+      ]);
+
+      const run = yield* setup(config(group("a")), () => jsonResponse(CHAT_OK), {
+        spend: ledgerOf(book),
+        // Same provider as the shared group (a member's own key for it), with a key of its own.
+        privateConfigs: { m1: config(group("a").replace("key-a", "key-mine")) },
+        identity: asKey("m1", "k1"),
+        cost: costing(2 * USD),
+      });
+
+      yield* run.exec(executeNonStream(chatInput()));
+      // The member is at their limit, so only their private credential serves; the member's counter stays at zero.
+      assert.deepStrictEqual(run.calls.map(keyOf), ["mine"]);
+      assert.strictEqual(spentToday(book, run, "member", "m1"), 0);
+      assert.strictEqual(spentToday(book, run, "key", "k1"), 2 * USD);
+    }),
+  );
+
+  it.effect("an unpriced model costs nothing and charges nothing", () =>
+    Effect.gen(function* () {
+      const book = new MemorySpendBook([limit("member", "m1", "day", USD)]);
+
+      const run = yield* setup(config(group("a")), () => jsonResponse(CHAT_OK), {
+        spend: ledgerOf(book),
+        identity: asMember("m1"),
+        cost: () => ({ micros: 0, unpriced: true }),
+      });
+
+      for (let i = 0; i < 3; i += 1) yield* run.exec(executeNonStream(chatInput()));
+      assert.strictEqual(run.calls.length, 3);
+      assert.strictEqual(spentToday(book, run, "member", "m1"), 0);
+    }),
+  );
+});

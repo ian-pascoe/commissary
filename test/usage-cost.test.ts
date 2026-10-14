@@ -274,6 +274,48 @@ describe("the cost of a record at write time", () => {
   });
 });
 
+describe("costing for a Spend limit (issue #71)", () => {
+  const costOf = async (record: UsageRecord) =>
+    await Effect.gen(function* () {
+      return yield* (yield* UsageSink).cost(record);
+    }).pipe(Effect.provide(sink), Effect.provideService(WorkerEnv, env), Effect.runPromise);
+
+  it("prices a record with the prices that are stored, and writes none", async () => {
+    expect(await costOf(sampleRecord({ requestId: "spend-a" }))).toEqual({
+      micros: 380,
+      unpriced: false,
+    });
+
+    expect(await costOf(sampleRecord({ requestId: "spend-b", model: "mystery-1" }))).toEqual({
+      micros: 0,
+      unpriced: true,
+    });
+  });
+
+  it("stores a record that was costed for a limit with that cost, not a second pricing", async () => {
+    await publish(sampleRecord({ requestId: "spend-c", cost: { micros: 7, unpriced: false } }));
+
+    expect(await stored("spend-c")).toEqual({ cost_micros: 7, unpriced: 0 });
+  });
+
+  it("answers no cost when pricing fails, which charges nothing", async () => {
+    const failing = Layer.succeed(
+      UsagePricing,
+      UsagePricing.of({ costOf: () => Effect.die(new Error("catalog down")) }),
+    );
+
+    const cost = await Effect.gen(function* () {
+      return yield* (yield* UsageSink).cost(sampleRecord({ requestId: "spend-d" }));
+    }).pipe(
+      Effect.provide(D1UsageSink.pipe(Layer.provide(failing))),
+      Effect.provideService(WorkerEnv, env),
+      Effect.runPromise,
+    );
+
+    expect(cost).toBeUndefined();
+  });
+});
+
 describe("records written directly", () => {
   it("keeps the cost a record carries", async () => {
     await insertUsageRecord(
