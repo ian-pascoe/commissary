@@ -6,7 +6,7 @@ import type { Config } from "../../src/config/schema.ts";
 import { ALLOW_ALL, type Reach } from "../../src/grants/reach.ts";
 import type { StoredCredential } from "../../src/credentials/derive.ts";
 import type { CredentialState } from "../../src/credentials/model.ts";
-import { CredentialPool, type PoolStore } from "../../src/credentials/pool.ts";
+import { CredentialPool, type PoolOptions, type PoolStore } from "../../src/credentials/pool.ts";
 import {
   type ControlPlaneApi,
   makeControlPlanePicker,
@@ -79,17 +79,32 @@ export const makePool = async (
     readonly clock?: TestNow;
     /** What a member may use; everything unless a test says otherwise. */
     readonly reach?: (member: string | undefined) => Reach;
+    /** The org's Spend limits (`src/spend/ledger.ts`). */
+    readonly spend?: PoolOptions["spend"];
+    /** Members' private API key groups: YAML configs by owner (member id). */
+    readonly privateConfigs?: Readonly<Record<string, string>>;
   } = {},
 ): Promise<PoolHarness> => {
   const config = await loadConfig(yaml);
   const store = options.store ?? new MemoryPoolStore();
   const clock = options.clock ?? new TestNow();
 
+  const privateConfigs = await Promise.all(
+    Object.entries(options.privateConfigs ?? {}).map(async ([owner, yaml]) => ({
+      owner,
+      config: await loadConfig(yaml),
+    })),
+  );
+
   const pool = new CredentialPool({
     store,
     config: () => ({ version: 1, config }),
     now: clock.now,
     reach: options.reach ?? (() => ALLOW_ALL),
+    ...(options.spend === undefined ? {} : { spend: options.spend }),
+    ...(privateConfigs.length === 0
+      ? {}
+      : { privateKeys: () => ({ version: 1, configs: privateConfigs }) }),
   });
 
   return { pool, store, clock, config };

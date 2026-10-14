@@ -18,6 +18,7 @@ import {
   type CredentialState,
   executorKey,
 } from "../model.ts";
+import type { SpendGate } from "../../spend/model.ts";
 import { servesMember } from "../ownership.ts";
 import { availabilityBlock, isBlockedForModel } from "./availability.ts";
 import { grantedRoute } from "./grants.ts";
@@ -200,6 +201,8 @@ export interface RetryPlanInput {
   /** `credential -> cooling disabled`. */
   readonly coolingDisabled: (credential: Credential) => boolean;
   readonly now: number;
+  /** The Spend limits of the request's member (`spend/ledger.ts`): shared credentials may be out of reach until a period ends. */
+  readonly spend?: SpendGate | undefined;
 }
 
 /** `shouldRetryAfterErrorWithAttempted` steps 3-5 (the caller has already checked the error class). */
@@ -223,6 +226,8 @@ export const planRetry = (input: RetryPlanInput): RetryPlan => {
     if (credential.disabled || state.status === "disabled") continue;
 
     if (!servesMember(credential, query.memberId)) continue;
+
+    if (input.spend?.sharedBlocked !== undefined && credential.owner === undefined) continue;
 
     if (pinned !== "" && credential.id !== pinned) continue;
 
@@ -250,7 +255,14 @@ export const planRetry = (input: RetryPlanInput): RetryPlan => {
     if (resolved !== undefined && route === undefined) continue;
 
     if (query.round >= effectiveRequestRetry(credential, query.requestRetry)) continue;
-    const { eligible, next } = routeAvailability(state, credential, route, now);
+    const availability = routeAvailability(state, credential, route, now);
+    const { eligible } = availability;
+
+    // A credential at its Spend limit is free again when its period ends.
+    const next = Math.max(
+      availability.next,
+      input.spend?.credentials.get(credential.id)?.resetsAt ?? 0,
+    );
 
     if (!eligible) continue;
     allowed = true;

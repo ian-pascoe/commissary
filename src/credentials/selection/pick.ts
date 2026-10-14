@@ -12,6 +12,7 @@
 import type { Json } from "../../json/index.ts";
 import type { RoutingStrategy } from "../../config/schema.ts";
 import { boundSessionIdentity } from "../../session-routing/identity.ts";
+import type { SpendGate } from "../../spend/model.ts";
 import { lcpNamespace, type MerklePrefixMatcher } from "../../session-routing/matcher.ts";
 import type { Reach } from "../../grants/reach.ts";
 import { type Credential, type CredentialState, executorKey } from "../model.ts";
@@ -62,6 +63,8 @@ export interface SelectionInput {
    */
   readonly reach: Reach;
   readonly now: number;
+  /** What the Spend limits say about this request (`spend/ledger.ts`); absent: nothing limits it. */
+  readonly spend?: SpendGate;
 }
 
 export type SelectionOutcome =
@@ -151,6 +154,9 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
     if (credential.disabled) continue;
 
     if (!servesMember(credential, request.memberId)) continue;
+
+    // A member, team or org limit without room: only the member's private credentials may serve.
+    if (input.spend?.sharedBlocked !== undefined && credential.owner === undefined) continue;
 
     if (pinned !== "" && credential.id !== pinned) continue;
 
@@ -254,6 +260,14 @@ export const selectCredential = (input: SelectionInput): SelectionOutcome => {
   let earliest = 0;
 
   for (const candidate of pool) {
+    // A shared credential at its own Spend limit is skipped like an unavailable one, until its period ends.
+    const held = input.spend?.credentials.get(candidate.id);
+
+    if (held !== undefined) {
+      if (earliest === 0 || held.resetsAt < earliest) earliest = held.resetsAt;
+      continue;
+    }
+
     const block = isBlockedForModel(
       candidate.entry.credential,
       candidate.entry.state,

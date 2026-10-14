@@ -3,6 +3,7 @@
  * RPC boundary. Requests are decoded with these schemas inside the DO; results are plain objects.
  */
 import { Schema } from "effect";
+import { SpendScope } from "../../spend/model.ts";
 import { AuthKind, Credential, CredentialError } from "../model.ts";
 
 const optional = Schema.optionalKey;
@@ -61,6 +62,8 @@ export const PickRequest = Schema.Struct({
    * without one (a service token) is served by shared credentials only.
    */
   memberId: optional(Schema.String),
+  /** The proxy key the request came with: its Spend limits apply to whatever credential serves it. */
+  proxyKeyId: optional(Schema.String),
   requireAuthKind: optional(AuthKind),
   /** Skip Codex credentials on the free plan. */
   disallowFreeCodex: optional(Schema.Boolean),
@@ -118,6 +121,8 @@ export const Lease = Schema.Struct({
   issuedAt: Schema.Number,
   /** Opaque session-affinity cache keys bound by this pick. */
   affinityKeys: optional(Schema.Array(Schema.String)),
+  /** The Spend scopes with a limit that the attempt's Cost is charged to (`ReportResult.costMicros`); absent: none. */
+  spend: optional(Schema.Array(SpendScope)),
   /** LCP binding made by this pick: the sequence to refresh on success or drop on failure (`generation` guards races). */
   lcp: optional(
     Schema.Struct({
@@ -136,6 +141,7 @@ export const PickFailureCode = Schema.Literals([
   "auth_unavailable",
   "model_cooldown",
   "model_not_found",
+  "spend_limit_reached",
 ]);
 
 export type PickFailureCode = typeof PickFailureCode.Type;
@@ -144,12 +150,12 @@ export type PickFailureCode = typeof PickFailureCode.Type;
 export const PickFailure = Schema.Struct({
   code: PickFailureCode,
   message: Schema.String,
-  /** 429 for `model_cooldown`, 400 for `model_not_found`, 503 for `auth_unavailable` with a known recovery; unset otherwise. */
+  /** 429 for `model_cooldown` and `spend_limit_reached`, 400 for `model_not_found`, 503 for `auth_unavailable` with a known recovery; unset otherwise. */
   httpStatus: optional(Schema.Int),
   retryable: Schema.Boolean,
   /** Seconds until the earliest cooldown ends (also the `Retry-After` header value). */
   retryAfterSeconds: optional(Schema.Int),
-  /** JSON error body for `model_cooldown` (`{"error":{"code":"model_cooldown",...}}`) and `model_not_found`. */
+  /** JSON error body for `model_cooldown`, `spend_limit_reached` (`{"error":{"code":"model_cooldown",...}}`) and `model_not_found`. */
   body: optional(Schema.String),
 });
 
@@ -186,6 +192,8 @@ export const ReportResult = Schema.Struct({
   skipQuotaObservation: optional(Schema.Boolean),
   /** Count the request but never touch availability (`responses/compact` request faults). */
   availabilityNeutral: optional(Schema.Boolean),
+  /** What the attempt cost in micro-USD; charged to the Spend scopes of the lease (none when it has none). */
+  costMicros: optional(Schema.Number),
 });
 
 export type ReportResult = typeof ReportResult.Type;
