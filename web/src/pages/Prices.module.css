@@ -197,7 +197,7 @@
   margin-top: calc(-1 * var(--space-4));
 }
 
-@container (max-width: 48rem) {
+@container (max-width: 43rem) {
   .wide {
     display: none;
   }

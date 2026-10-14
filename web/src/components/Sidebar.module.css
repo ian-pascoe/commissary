@@ -1,7 +1,8 @@
 /*
  * The sidebar: the org switcher over the page links, on the page's own ground, set off from the page by one hairline
  * (no box, no fill). The links speak the shell's underline language: a 4px rule under the label, hairline on hover and
- * sign ink on the current page, which is also set heavier. Below 64rem the same content opens as a drawer.
+ * sign ink on the current page, which is also set heavier. Below 64rem (`WIDE` in Sidebar.tsx, and the frame's
+ * breakpoint in Shell.module.css: change them together) the same content opens as a drawer.
  */
 .sidebar {
   display: none;

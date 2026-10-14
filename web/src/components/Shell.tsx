@@ -100,7 +100,7 @@ const Gate = ({ role }: { readonly role: RoleState }) => {
 export const Shell = () => {
   const role = useRole();
   const me = useAtomValue(meAtom);
-  // The pages that exist on a hosted proxy only (Single sign-on).
+  // A hosted proxy adds a page (Single sign-on) and the account menu's Sign out.
   const hosted = AsyncResult.isSuccess(me) && me.value.hosted === true;
 
   const groups =
@@ -138,7 +138,7 @@ export const Shell = () => {
             ) : null}
             {role.kind === "ready" ? admin ? <OrgAdminRefresh /> : <UsageRefresh /> : null}
             <ThemeMenu />
-            <AccountMenu deletes={role.kind === "ready"} />
+            <AccountMenu hosted={hosted} offersDelete={role.kind === "ready"} />
           </div>
         </div>
       </header>

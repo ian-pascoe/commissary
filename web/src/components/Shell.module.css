@@ -16,7 +16,7 @@
 
 /*
  * The shell is the yellow of the trail signs and everything on it is sign ink. At night it is a dark board with the
- * route as a yellow band along its foot (the band is invisible on the yellow bar); the current page's rule sits on it.
+ * route as a yellow band along its foot (the band is invisible on the yellow bar).
  */
 .bar {
   background: var(--bar);
@@ -26,7 +26,7 @@
 
 /* Aligned with the frame below: the name over the sidebar's links, the actions at the page's right edge. */
 .inner {
-  max-width: calc(var(--page-width) + var(--sidebar-width));
+  max-width: var(--frame-width);
   margin: 0 auto;
   padding: 0 var(--page-gutter);
   min-height: 4rem;
@@ -148,12 +148,13 @@
   }
 }
 
-/* The sidebar beside the page on wide screens; below 64rem the page alone (the sidebar is a drawer). */
+/* The sidebar beside the page on wide screens; below 64rem the page alone (the sidebar is a drawer). 64rem is
+   `WIDE` in Sidebar.tsx and the breakpoint of Sidebar.module.css: change them together. */
 .frame {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-height: calc(100dvh - 4rem);
-  max-width: calc(var(--page-width) + var(--sidebar-width));
+  max-width: var(--frame-width);
   margin: 0 auto;
 }
 
@@ -165,7 +166,8 @@
 
 /*
  * The pages' stylesheets ask how wide the page is (`@container`), not the window, which is wider than the page by the
- * sidebar.
+ * sidebar. A query measures the content box, inside the gutters: below 64rem the window less 5rem, so a page's
+ * breakpoint is its window breakpoint less 5rem.
  */
 .main {
   container-type: inline-size;

@@ -188,7 +188,7 @@ tr[data-reached="true"] .left {
   background: none;
 }
 
-@container (max-width: 48rem) {
+@container (max-width: 43rem) {
   .table th,
   .table td {
     padding-inline: var(--space-2);

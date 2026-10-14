@@ -436,7 +436,7 @@
  * go, and one key line above the list names the figure. Priority is left to the account page there: it is a
  * setting, not a reading.
  */
-@container (max-width: 48rem) {
+@container (max-width: 43rem) {
   .accounts > thead {
     position: absolute;
     width: 1px;
@@ -541,7 +541,7 @@
   }
 }
 
-@container (max-width: 40rem) {
+@container (max-width: 35rem) {
   .barRule {
     display: none;
   }

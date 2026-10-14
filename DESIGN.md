@@ -202,7 +202,7 @@ Each token is a `light-dark()` pair (day / night); contrast of text on its groun
 - **route** (yellow, both) with **on-route** (ink, both): the reset blades. The sign keeps its black lettering at night.
 - **danger** (red / #f45c4a, 5.0 / 5.7 as text) with **on-danger** (white / ink): closed blades, marks, failed figures, 100% meters, the danger button.
 - **paint** / **paint-edge**: the white of the white-red-white tip band and its stone-4 edge (no edge at night).
-- **bar**, **on-bar**, **bar-quiet** (the host), **bar-hover**, **bar-pressed**, **bar-route**: the shell. **backdrop**: behind a dialog.
+- **bar**, **on-bar**, **bar-quiet** (the host), **bar-pressed**, **bar-route**: the shell. **backdrop**: behind a dialog.
 - **weight-body** / **tracking-body**: body text weight and tracking (400 / normal; 430 / 0.005em at night).
 
 ### Dark Theme
@@ -247,7 +247,7 @@ The night version of the trail sign, for the same operator checking in after dar
 
 The shell bar spans the window; under it a 15rem sidebar (`--sidebar-width`) sits beside a single page column, max width 80rem, gutter 2.5rem (1rem under 40rem); bar and frame share one centred max width (95rem), so the wordmark stands over the sidebar's links. Below 64rem the sidebar is a drawer and the page takes the full width. Page sections stack on a 4rem gap. Spacing scale: 4, 8, 12, 16, 24, 40, 64 px. The accounts table runs in urgency order: marker, provider and address, quota meters (max 26rem), reset blade, requests right-aligned. Below, the last day: a 13rem column of totals beside the by-model table with a thin ink share bar.
 
-Pages size themselves by the page column, not the window (`@container` queries on `main`), since the sidebar takes part of a wide window: the breakpoints below are page widths. Under 48rem each account row becomes a grid: account, quota, then reset blade left and request count right.
+Pages size themselves by the page column, not the window (`@container` queries on `main`), since the sidebar takes part of a wide window. A query measures the column inside its gutters, the window less 5rem below 64rem, so a page breakpoint is its window breakpoint less 5rem (35rem, 43rem, 59rem for windows of 40rem, 48rem, 64rem). Under a 43rem page each account row becomes a grid: account, quota, then reset blade left and request count right.
 
 ## Elevation & Depth
 
@@ -267,7 +267,7 @@ Square signage. Buttons take a 3px radius; meters 1px. Blades have a square tail
 
 - Yellow, min-height 4rem, ink text, holding only what is global to the page: the wordmark (800, 1.25rem; 1.125rem on phones) over the host in 0.8125rem, then on the right Connect account, Refresh, the theme menu and the account menu. Connect account is an ink button; refresh is a 2px ink outline square that turns Pressed Yellow on hover and spins while loading. At night the bar is a dark board with a 4px yellow route band along its foot (see Dark Theme). The page links live in the sidebar.
 - **Account menu:** the theme menu's twin (a framed square with the account icon, an "Account" caption): Sign out on a hosted proxy, and Delete my account in red (the danger colour, since it deletes), which asks in the typed confirmation dialog. Focus returns to the square when the menu or the dialog closes.
-- **Theme menu:** the last square on the bar, framed like Refresh so the two read as a pair, showing the choice's icon (sun-and-moon for System, sun, moon) with a "Theme: <choice>" tooltip; it opens a menu framed like the dialog with a "Theme" caption and System, Light and Dark as radio items (the chosen one 750 with a check). Arrows, Home and End move; Enter picks and closes; Escape closes. Under 30rem (phones) Connect account becomes an icon square so the name and host stay in view. Hover fills on the bar's squares apply only where the pointer can hover, so a tap leaves no stuck fill.
+- **Theme menu:** the square between Refresh and the account menu, framed like Refresh so the two read as a pair, showing the choice's icon (sun-and-moon for System, sun, moon) with a "Theme: <choice>" tooltip; it opens a menu framed like the dialog with a "Theme" caption and System, Light and Dark as radio items (the chosen one 750 with a check). Arrows, Home and End move; Enter picks and closes; Escape closes. Under 30rem (phones) Connect account becomes an icon square so the name and host stay in view. Hover fills on the bar's squares apply only where the pointer can hover, so a tap leaves no stuck fill.
 
 ### Sidebar
 
@@ -293,7 +293,7 @@ Square signage. Buttons take a 3px radius; meters 1px. Blades have a square tail
 ### Filter Tabs
 
 - A radiogroup above a list: 0.875rem labels (650) with an optional count in stone-4 (400), 40px tall, a 4px underline
-  that is stone-2 on hover and ink when chosen. Same underline language as the shell links. Shared from `Kit` (`tabs`,
+  that is stone-2 on hover and ink when chosen. Same underline language as the sidebar links. Shared from `Kit` (`tabs`,
   `tab`, `tabCount`): the Accounts filter, the Usage range, breakdown and All / Failed switches.
 
 ### Filter Chips

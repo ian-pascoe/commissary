@@ -21,7 +21,11 @@ const menuMove = (key: string, index: number, count: number): number | undefined
   }
 };
 
-/** `start`: the item an opening menu focuses first. */
+/** The registered items, in order, without the indices a menu leaves out (the account menu's Sign out when self-hosted). */
+const presentItems = (items: ReadonlyArray<HTMLButtonElement | null | undefined>) =>
+  items.filter((item) => item instanceof HTMLButtonElement);
+
+/** `start`: the item an opening menu focuses first, or its first item when that one is not there. */
 export const useMenuButton = (start: () => number = () => 0) => {
   const [open, setOpen] = useState(false);
   const menuId = useId();
@@ -35,7 +39,7 @@ export const useMenuButton = (start: () => number = () => 0) => {
   useEffect(() => {
     if (!open) return undefined;
 
-    items.current[first.current()]?.focus();
+    (items.current[first.current()] ?? presentItems(items.current)[0])?.focus();
 
     const closeOutside = (event: PointerEvent) => {
       if (event.target instanceof Node && root.current?.contains(event.target) !== true)
@@ -61,7 +65,7 @@ export const useMenuButton = (start: () => number = () => 0) => {
   };
 
   const onMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const present = items.current.filter((item) => item !== null);
+    const present = presentItems(items.current);
     const index = present.findIndex((item) => item === document.activeElement);
     const target = menuMove(event.key, index, present.length);
 
@@ -82,7 +86,6 @@ export const useMenuButton = (start: () => number = () => 0) => {
   };
 
   return {
-    open,
     close,
     root,
     item,

@@ -352,7 +352,7 @@
   font-weight: 750;
 }
 
-@container (max-width: 48rem) {
+@container (max-width: 43rem) {
   .aliasForm,
   .patternForm {
     grid-template-columns: minmax(0, 1fr);

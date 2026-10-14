@@ -389,7 +389,7 @@
   display: none;
 }
 
-@container (max-width: 64rem) {
+@container (max-width: 59rem) {
   .wide {
     display: none;
   }
@@ -402,7 +402,7 @@
 }
 
 /* Narrow screens: each request becomes a small card of three lines. */
-@container (max-width: 48rem) {
+@container (max-width: 43rem) {
   .shareHead,
   .share {
     display: none;

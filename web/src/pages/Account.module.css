@@ -394,14 +394,14 @@
   gap: var(--space-3);
 }
 
-@container (max-width: 64rem) {
+@container (max-width: 59rem) {
   .columns {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-6);
   }
 }
 
-@container (max-width: 40rem) {
+@container (max-width: 35rem) {
   .name {
     font-size: 1.625rem;
   }
