@@ -15,6 +15,7 @@ import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import { addressedSlug } from "../access/org-address.ts";
 import { AccessPrincipal } from "../access/principal.ts";
 import { PANEL_ORG_PREFIX, PANEL_SECTIONS } from "../access/routes.ts";
+import { isHosted } from "../hosted/mode.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import { jsonReply } from "./http.ts";
 import { openableOrgs } from "./org-routes.ts";
@@ -38,6 +39,18 @@ export const PANEL_CSP = [
   "form-action 'self'",
   "frame-ancestors 'none'",
 ].join("; ");
+
+/** Where the Turnstile widget of a hosted proxy's sign-in page (`src/hosted/turnstile.ts`) loads from. */
+export const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
+
+/**
+ * The panel's policy on a hosted proxy: {@link PANEL_CSP} plus the Turnstile widget (its script and its frame) on the
+ * sign-in page. Every page gets it, since the panel moves between pages without a reload.
+ */
+export const HOSTED_PANEL_CSP = PANEL_CSP.replace(
+  "script-src 'self'",
+  `script-src 'self' ${TURNSTILE_ORIGIN}`,
+).replace("frame-ancestors 'none'", `frame-src ${TURNSTILE_ORIGIN}; frame-ancestors 'none'`);
 
 const PAGE_HEADERS = {
   "content-type": "text/html; charset=utf-8",
@@ -103,7 +116,13 @@ export const webPanelPage = Effect.gen(function* () {
       });
   }
 
+  return yield* panelIndex;
+});
+
+/** The panel's `index.html` (the panel's router picks the page in the browser); `404` when the panel is not built. */
+export const panelIndex = Effect.gen(function* () {
   const url = yield* requestUrl;
+  const env = yield* WorkerEnv;
 
   const asset = yield* fetchAsset(
     new Request(new URL("/", url), { headers: { accept: "text/html" } }),
@@ -117,7 +136,12 @@ export const webPanelPage = Effect.gen(function* () {
     return jsonReply(404, { error: PANEL_NOT_BUILT });
   }
 
-  return HttpServerResponse.raw(asset.body, { status: 200, headers: PAGE_HEADERS });
+  return HttpServerResponse.raw(asset.body, {
+    status: 200,
+    headers: isHosted(env)
+      ? { ...PAGE_HEADERS, "content-security-policy": HOSTED_PANEL_CSP }
+      : PAGE_HEADERS,
+  });
 });
 
 /**

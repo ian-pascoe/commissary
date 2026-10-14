@@ -3,6 +3,7 @@ import { HttpRouter } from "effect/http";
 import { AccessLayer, withAccess } from "../access/layer.ts";
 import { orgAddressing } from "../access/org-address.ts";
 import { ProxyLayer } from "../handlers/layer.ts";
+import { HostedRoutes } from "../hosted/routes.ts";
 import { ManagementRoutesLive } from "../management/routes.ts";
 import { WorkersLoggerLayer } from "../observability/logger.ts";
 import { TraceLayer } from "../observability/trace.ts";
@@ -18,6 +19,8 @@ import { RootRoutes } from "./routes.ts";
 export const AppLayer = Layer.mergeAll(
   RootRoutes,
   OAuthCallbackRoutes,
+  // Sign-in of a hosted proxy (ADR 0026); unknown paths on a self-hosted one.
+  HostedRoutes,
   AccessLayer,
   ProxyLayer,
   withAccess(ModelRoutesLive),
