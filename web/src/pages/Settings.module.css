@@ -70,7 +70,7 @@
 }
 
 /* Wide screens: the jumps follow the reader down the page, beside the column. */
-@media (width >= 78rem) {
+@container (width >= 73rem) {
   .page {
     gap: var(--space-7);
   }
@@ -509,7 +509,7 @@
 }
 
 /* Keys that do nothing on Workers. */
-@media (width < 40rem) {
+@container (width < 35rem) {
   .field {
     grid-template-columns: minmax(0, 1fr);
   }

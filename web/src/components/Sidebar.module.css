@@ -1,0 +1,163 @@
+/*
+ * The sidebar: the org switcher over the page links, on the page's own ground, set off from the page by one hairline
+ * (no box, no fill). The links speak the shell's underline language: a 4px rule under the label, hairline on hover and
+ * sign ink on the current page, which is also set heavier. Below 64rem (`WIDE` in Sidebar.tsx, and the frame's
+ * breakpoint in Shell.module.css: change them together) the same content opens as a drawer.
+ */
+.sidebar {
+  display: none;
+  border-right: 1px solid var(--hairline);
+}
+
+@media (width >= 64rem) {
+  .sidebar {
+    display: block;
+  }
+}
+
+/* Stays in view while the page scrolls, and scrolls itself where the window is too short for every link. */
+.sidebarBody {
+  position: sticky;
+  top: 0;
+  max-height: 100dvh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: var(--space-6) var(--space-5) var(--space-6) var(--page-gutter);
+}
+
+.org {
+  margin-bottom: var(--space-5);
+}
+
+.orgSelect {
+  width: 100%;
+  min-width: 0;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+
+.nav {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.nav ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.heading {
+  margin-bottom: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--quiet);
+}
+
+.link {
+  display: flex;
+  align-items: center;
+  min-height: 2.25rem;
+  color: var(--text);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.label {
+  padding: var(--space-1) 0;
+  box-shadow: inset 0 -4px 0 transparent;
+}
+
+@media (hover: hover) {
+  .link:hover .label {
+    box-shadow: inset 0 -4px 0 var(--hairline);
+  }
+}
+
+.link[aria-current="page"] {
+  font-weight: 750;
+}
+
+.link[aria-current="page"] .label {
+  box-shadow: inset 0 -4px 0 var(--text);
+}
+
+@media (pointer: coarse) {
+  .link {
+    min-height: 2.75rem;
+  }
+}
+
+/* The bar's menu button: a framed square like Refresh, only where the sidebar is a drawer. */
+.menuButton,
+.close {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  background: transparent;
+  border: 2px solid currentcolor;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.menuButton {
+  align-self: center;
+  color: var(--on-bar);
+}
+
+.menuButton[aria-expanded="true"] {
+  background: var(--bar-pressed);
+}
+
+@media (hover: hover) {
+  .menuButton:hover {
+    background: var(--bar-pressed);
+  }
+
+  .close:hover {
+    background: var(--sunk);
+  }
+}
+
+@media (width >= 64rem) {
+  .menuButton {
+    display: none;
+  }
+}
+
+/* The drawer: the sidebar's content on a raised board along the left edge, framed like the dialog (2px, no shadow). */
+.drawer {
+  width: min(20rem, calc(100vw - 3.5rem));
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  color: var(--text);
+  background: var(--raised);
+  border: 0;
+  border-right: 2px solid var(--text);
+}
+
+.drawer::backdrop {
+  background: var(--backdrop);
+}
+
+.drawerBody {
+  display: grid;
+  align-content: start;
+  min-height: 100%;
+  padding: var(--space-3) var(--space-5) var(--space-6) var(--page-gutter);
+}
+
+/* The close button lands where the menu button was, so the drawer reads as the menu opened in place. */
+.close {
+  justify-self: start;
+  margin-bottom: var(--space-3);
+  color: var(--text);
+}

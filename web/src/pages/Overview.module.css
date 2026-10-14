@@ -229,7 +229,7 @@
 }
 
 /* Narrow screens: each account row stacks; the reset blade and the request count share its last line. */
-@media (max-width: 48rem) {
+@container (max-width: 43rem) {
   .accounts > thead {
     position: absolute;
     width: 1px;

@@ -89,7 +89,6 @@
   --bar: light-dark(var(--yellow), #1a1b18);
   --on-bar: light-dark(var(--ink), #e1e2de);
   --bar-quiet: light-dark(color-mix(in oklab, var(--ink) 72%, var(--yellow)), #959692);
-  --bar-hover: light-dark(color-mix(in oklab, var(--ink) 25%, var(--yellow)), #4f504d);
   --bar-pressed: light-dark(var(--yellow-deep), #30312e);
   --bar-route: var(--yellow);
 
@@ -123,6 +122,10 @@
   --radius: 3px;
   --page-width: 80rem;
   --page-gutter: var(--space-6);
+  /* The shell's sidebar beside the page, on screens of 64rem and wider. */
+  --sidebar-width: 15rem;
+  /* The shell bar's content and the frame under it (sidebar and page) share this centred width. */
+  --frame-width: calc(var(--page-width) + var(--sidebar-width));
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }

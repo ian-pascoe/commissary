@@ -220,7 +220,7 @@
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 48rem) {
+@container (max-width: 43rem) {
   .reveal {
     padding: var(--space-4);
   }

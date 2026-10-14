@@ -1,25 +1,17 @@
-// The page frame: the shell bar (name and host, page links, Connect account, Refresh, the theme menu) above the page.
+// The page frame: the shell bar (name and host, Connect account, Refresh, the theme and account menus) over the
+// sidebar (the org switcher and the page links; a drawer on narrow screens) beside the page.
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { Link, Navigate, Outlet, useLocation } from "@tanstack/react-router";
 import { Plus, RefreshCw } from "lucide-react";
-import { useEffect, useRef } from "react";
-import {
-  credentialsAtom,
-  meAtom,
-  panelOrgSlug,
-  usageEpochAtom,
-  usageLastDayAtom,
-} from "../api/client.ts";
-import { orgPanelPath } from "../lib/org.ts";
 import { AsyncResult } from "effect/reactivity";
+import { credentialsAtom, meAtom, usageEpochAtom, usageLastDayAtom } from "../api/client.ts";
 import { NotAllowed } from "../pages/NotAllowed.tsx";
-import { canManageMembers, homeFor, pageAllowed, pagesFor } from "../lib/role.ts";
+import { canManageMembers, homeFor, pageAllowed, pageGroupsFor } from "../lib/role.ts";
 import { type RoleState, useRole } from "../lib/use-role.ts";
-import { canCreateOrg } from "../lib/hosted.ts";
-import { DeleteAccount } from "./DeleteAccount.tsx";
+import { AccountMenu } from "./AccountMenu.tsx";
 import { Problem } from "./Kit.tsx";
 import styles from "./Shell.module.css";
-import { SignOut } from "./SignOut.tsx";
+import { Sidebar, SidebarDrawer } from "./Sidebar.tsx";
 import { ThemeMenu } from "./ThemeMenu.tsx";
 
 const RefreshIcon = ({
@@ -72,98 +64,6 @@ const OrgAdminRefresh = () => {
   );
 };
 
-const CHOOSER = "/?choose";
-
-/**
- * Which org the panel shows, and the way to another: the orgs the caller manages (`GET /me`), and the chooser where a
- * platform admin creates more. Nothing for a caller of one org who cannot create others.
- */
-const OrgSwitcher = () => {
-  const me = useAtomValue(meAtom);
-
-  if (!AsyncResult.isSuccess(me)) return null;
-  const { orgs, platform_admin: platformAdmin } = me.value;
-  // Where the caller may create orgs (everyone on a hosted proxy) the chooser is worth a way in.
-  const creates = canCreateOrg(me.value);
-
-  if (orgs.length < 2 && !creates) return null;
-  const current = orgs.find((org) => org.slug === panelOrgSlug);
-
-  return (
-    <label className={styles["org"]}>
-      <span className={styles["orgLabel"]}>Org</span>
-      <select
-        className={styles["orgSelect"]}
-        value={current?.slug ?? panelOrgSlug ?? ""}
-        onChange={(event) => {
-          const slug = event.target.value;
-
-          // A full load: the typed client addresses its org once, from the address the panel was opened at.
-          window.location.assign(slug === CHOOSER ? CHOOSER : orgPanelPath(slug));
-        }}
-      >
-        {current === undefined && panelOrgSlug !== undefined ? (
-          <option value={panelOrgSlug}>{panelOrgSlug}</option>
-        ) : null}
-        {orgs.map((org) => (
-          <option key={org.slug} value={org.slug}>
-            {org.name}
-          </option>
-        ))}
-        {creates ? (
-          <option value={CHOOSER}>{platformAdmin ? "All orgs…" : "Your orgs…"}</option>
-        ) : null}
-      </select>
-    </label>
-  );
-};
-
-/** Sign out, on a hosted proxy only: a self-hosted panel has no session of its own (Cloudflare Access holds it). */
-const AccountSignOut = () => {
-  const me = useAtomValue(meAtom);
-
-  return AsyncResult.isSuccess(me) && me.value.hosted === true ? (
-    <SignOut className={styles["signOut"]} />
-  ) : null;
-};
-
-/**
- * Narrow screens scroll the page links sideways: keep the current page's link in view, and mark which ends of the
- * strip have more links beyond them (the stylesheet fades those edges).
- */
-const usePageLinkStrip = () => {
-  const nav = useRef<HTMLElement>(null);
-  const pathname = useLocation({ select: (location) => location.pathname });
-
-  useEffect(() => {
-    const strip = nav.current;
-
-    if (strip === null) return;
-
-    const mark = () => {
-      strip.dataset["start"] = String(strip.scrollLeft <= 1);
-      strip.dataset["end"] = String(strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 1);
-    };
-
-    mark();
-    strip.addEventListener("scroll", mark, { passive: true });
-    window.addEventListener("resize", mark);
-
-    return () => {
-      strip.removeEventListener("scroll", mark);
-      window.removeEventListener("resize", mark);
-    };
-  }, []);
-
-  useEffect(() => {
-    nav.current
-      ?.querySelector('[aria-current="page"]')
-      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [pathname]);
-
-  return nav;
-};
-
 /** The page, once the caller's role is known and opens it; otherwise what is going on instead. */
 const Gate = ({ role }: { readonly role: RoleState }) => {
   const pathname = useLocation({ select: (location) => location.pathname });
@@ -198,14 +98,15 @@ const Gate = ({ role }: { readonly role: RoleState }) => {
 };
 
 export const Shell = () => {
-  const nav = usePageLinkStrip();
   const role = useRole();
   const me = useAtomValue(meAtom);
-  // The pages that exist on a hosted proxy only (Single sign-on).
+  // A hosted proxy adds a page (Single sign-on) and the account menu's Sign out.
   const hosted = AsyncResult.isSuccess(me) && me.value.hosted === true;
 
-  const pages =
-    role.kind === "ready" ? pagesFor(role.caller.role, role.caller.privateCredentials, hosted) : [];
+  const groups =
+    role.kind === "ready"
+      ? pageGroupsFor(role.caller.role, role.caller.privateCredentials, hosted)
+      : [];
 
   const admin = role.kind === "ready" && canManageMembers(role.caller);
   // A plain member connects private accounts where the org allows it (ADR 0023).
@@ -218,6 +119,7 @@ export const Shell = () => {
       </a>
       <header className={styles["bar"]}>
         <div className={styles["inner"]}>
+          <SidebarDrawer groups={groups} />
           <Link
             to={role.kind === "ready" ? homeFor(role.caller.role) : "/"}
             className={styles["brand"]}
@@ -227,23 +129,7 @@ export const Shell = () => {
               {window.location.host}
             </span>
           </Link>
-          <nav ref={nav} aria-label="Main" className={styles["nav"]}>
-            <ul>
-              {pages.map((page) => (
-                <li key={page.to}>
-                  <Link
-                    to={page.to}
-                    activeOptions={{ exact: page.to === "/" || page.exact === true }}
-                    className={styles["navLink"]}
-                  >
-                    {page.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
           <div className={styles["actions"]}>
-            <OrgSwitcher />
             {connects ? (
               <Link to="/accounts/connect" className={styles["connect"]}>
                 <Plus aria-hidden="true" size={16} strokeWidth={2.5} />
@@ -252,14 +138,16 @@ export const Shell = () => {
             ) : null}
             {role.kind === "ready" ? admin ? <OrgAdminRefresh /> : <UsageRefresh /> : null}
             <ThemeMenu />
-            <AccountSignOut />
+            <AccountMenu hosted={hosted} offersDelete={role.kind === "ready"} />
           </div>
         </div>
       </header>
-      <main id="main" tabIndex={-1} className={styles["main"]}>
-        <Gate role={role} />
-      </main>
-      {role.kind === "ready" ? <DeleteAccount /> : null}
+      <div className={styles["frame"]}>
+        <Sidebar groups={groups} />
+        <main id="main" tabIndex={-1} className={styles["main"]}>
+          <Gate role={role} />
+        </main>
+      </div>
     </>
   );
 };

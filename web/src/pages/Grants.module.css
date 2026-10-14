@@ -220,7 +220,7 @@
   margin-top: calc(-1 * var(--space-4));
 }
 
-@media (max-width: 48rem) {
+@container (max-width: 43rem) {
   .pair {
     grid-template-columns: minmax(0, 1fr);
   }

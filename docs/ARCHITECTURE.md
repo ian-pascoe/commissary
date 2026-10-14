@@ -1974,7 +1974,7 @@ Routes of the addressed org (`/org`, `/export`) and the account route (`DELETE /
 **Panel.** The panel of an org is the same single-page app served at `/o/<slug>/...` (the Worker answers every page path of
 every org with `index.html`). The app reads its org from the address: TanStack Router's `basepath` is `/o/<slug>`, and the
 typed client rewrites each request to `/v8/management/orgs/<slug>/...` except `/orgs` (`web/src/lib/org.ts`,
-`ManagementClient`'s `transformClient`; the one hand-written request, the Vertex import, does the same). The shell shows an
+`ManagementClient`'s `transformClient`; the one hand-written request, the Vertex import, does the same). The shell's sidebar shows an
 org switcher to anyone who belongs to several orgs or may create them; choosing an org reloads the app at its address. An
 address without an org (`/`, `/accounts`, ...) goes through `orgRedirect` (`web-panel.ts`): a caller who belongs to exactly
 one org is redirected (`302`, uncached, path and query kept) to the same page of it; otherwise the app loads without an

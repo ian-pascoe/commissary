@@ -1,9 +1,17 @@
-// Ends the session of a hosted proxy and goes to the sign-in page. Rendered only where `me.hosted` is true.
+// Ends the session of a hosted proxy and goes to the sign-in page. Rendered only where `me.hosted` is true: a button
+// on the org chooser and the People page, an item of the account menu in the shell.
 import { LogOut } from "lucide-react";
-import { useState } from "react";
+import { type Ref, useState } from "react";
 import { AUTH_ROUTES, SIGN_IN_PAGE_PATH } from "#contract/sign-in.ts";
 
-export const SignOut = ({ className }: { readonly className?: string | undefined }) => {
+export interface SignOutProps {
+  readonly className?: string | undefined;
+  /** As an item of a menu: `menuitem`, out of the tab order. */
+  readonly role?: "menuitem" | undefined;
+  readonly ref?: Ref<HTMLButtonElement> | undefined;
+}
+
+export const SignOut = ({ className, role, ref }: SignOutProps) => {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -34,7 +42,10 @@ export const SignOut = ({ className }: { readonly className?: string | undefined
 
   return (
     <button
+      ref={ref}
       type="button"
+      role={role}
+      tabIndex={role === undefined ? undefined : -1}
       className={className}
       disabled={busy}
       aria-busy={busy}

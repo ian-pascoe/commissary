@@ -291,7 +291,7 @@ td > .chips + .pick {
   min-width: 10rem;
 }
 
-@media (max-width: 48rem) {
+@container (max-width: 43rem) {
   .table th,
   .table td {
     padding-inline: var(--space-2);
@@ -299,5 +299,10 @@ td > .chips + .pick {
 
   .wide {
     min-width: 0;
+  }
+
+  /* A percentage width lets a table cell's picker shrink below its longest option, so a phone's page holds the row. */
+  .pick {
+    width: 100%;
   }
 }

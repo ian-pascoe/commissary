@@ -1,8 +1,7 @@
-// "Delete my account" in the foot of every page (ADR 0027): the caller leaves every org they belong to with all they
+// "Delete my account", from the shell's account menu (ADR 0027): the caller leaves every org they belong to with all they
 // hold there, and an org they are alone in is deleted. They type their own email; the answer `409 sole_owner` lists the
 // orgs they must hand over first. A service token cannot do it (403 `person_required`; `/me` does not say who the
 // caller is), so the refusal is shown instead. A hard reload at the panel root afterwards.
-import { useState } from "react";
 import { deleteAccountAtom } from "../api/client.ts";
 import { orgPanelPath } from "../lib/org.ts";
 import { useAction } from "../lib/use-action.ts";
@@ -29,9 +28,14 @@ const HandOver = ({ slugs }: { readonly slugs: ReadonlyArray<string> }) => {
   );
 };
 
-export const DeleteAccount = () => {
+export const DeleteAccount = ({
+  open,
+  onClose,
+}: {
+  readonly open: boolean;
+  readonly onClose: () => void;
+}) => {
   const remove = useAction(deleteAccountAtom);
-  const [open, setOpen] = useState(false);
 
   const confirm = async (email: string) => {
     const outcome = await remove.run({ payload: { email: email.trim() } });
@@ -58,28 +62,23 @@ export const DeleteAccount = () => {
   };
 
   return (
-    <footer className={styles["foot"]}>
-      <button type="button" className={styles["link"]} onClick={() => setOpen(true)}>
-        Delete my account
-      </button>
-      <TypedConfirm
-        open={open}
-        title="Delete my account?"
-        label="Your email address"
-        action="Delete my account"
-        busyAction="Deleting…"
-        onConfirm={confirm}
-        onClose={() => setOpen(false)}
-      >
-        <p>
-          You leave every org you belong to, and everything of yours in them is deleted: your proxy
-          keys and your private accounts and API keys. An org where you are the only member is
-          deleted with all its data. This is immediate and permanent; there is no grace period and
-          nothing can be restored.
-        </p>
-        <p>The first org is never deleted: if you are alone there, you only leave it.</p>
-        <p>Type the email address you are signed in with to confirm.</p>
-      </TypedConfirm>
-    </footer>
+    <TypedConfirm
+      open={open}
+      title="Delete my account?"
+      label="Your email address"
+      action="Delete my account"
+      busyAction="Deleting…"
+      onConfirm={confirm}
+      onClose={onClose}
+    >
+      <p>
+        You leave every org you belong to, and everything of yours in them is deleted: your proxy
+        keys and your private accounts and API keys. An org where you are the only member is deleted
+        with all its data. This is immediate and permanent; there is no grace period and nothing can
+        be restored.
+      </p>
+      <p>The first org is never deleted: if you are alone there, you only leave it.</p>
+      <p>Type the email address you are signed in with to confirm.</p>
+    </TypedConfirm>
   );
 };

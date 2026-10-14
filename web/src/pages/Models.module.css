@@ -369,7 +369,7 @@
 }
 
 /* Narrow screens: each model stacks (id with its context, then its state, then providers and origin). */
-@media (max-width: 48rem) {
+@container (max-width: 43rem) {
   .models > thead,
   .routes > thead {
     position: absolute;
