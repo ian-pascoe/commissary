@@ -1,5 +1,6 @@
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
+import { BUNDLE_ALIASES } from "./infra/bundle.ts";
 
 /** Bindings of a self-hosted proxy (`PROXY_MODE` unset), the deployment every test but `test/hosted/` runs against. */
 const SELF_HOSTED_BINDINGS = {
@@ -82,6 +83,7 @@ const worker = (bindings: Record<string, string>, hosted: boolean) =>
   });
 
 export default defineConfig({
+  resolve: { alias: { ...BUNDLE_ALIASES } },
   test: {
     // The first test in each file pays for module transformation inside workerd; keep generous timeouts.
     testTimeout: 30_000,

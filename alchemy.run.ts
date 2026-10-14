@@ -12,6 +12,7 @@ import * as Cloudflare from "alchemy/Cloudflare";
 import * as Effect from "effect/Effect";
 import * as Output from "alchemy/Output";
 import { type AccessWiring, provisionAccess, provisionProxyBypass } from "./infra/access.ts";
+import { BUNDLE_ALIASES } from "./infra/bundle.ts";
 import { readSettings } from "./infra/settings.ts";
 import { DEV_AUTH_INDEX_KEY } from "./src/management/auth-index-key.ts";
 import { DEV_SECRETS_KEY, secretsKeyResourceId } from "./src/secrets/key.ts";
@@ -113,6 +114,7 @@ export default Alchemy.Stack(
       ...(dev || settings.preview ? {} : { domain: settings.domain }),
       ...(access.application === undefined ? {} : { access: access.application }),
       limits: { cpuMs: settings.cpuMs },
+      build: { input: { resolve: { alias: { ...BUNDLE_ALIASES } } } },
       // The control panel (`pnpm web:build`). The Worker runs first so proxy routes are never shadowed by assets and
       // Access gates the panel (src/management/web-panel.ts serves it).
       assets: { directory: "./public", runWorkerFirst: true },
