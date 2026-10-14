@@ -188,7 +188,7 @@ A **proxy key** (ADR 0022) is how a client authenticates on the proxy routes: `c
 random bits of secret. Any member creates keys for themselves in the panel (**Proxy keys**) or with
 `POST /v8/management/proxy-keys {"name": "laptop", "expires_at": "<ISO time, optional>"}`; the answer carries the whole
 key once (`key`), and the org's ControlPlane stores only its SHA-256, a visible prefix (`cfp_<org id>_<key id>_<4
-characters>`), its member, its name and when it was created, last used (to the minute), expires and was revoked.
+characters>`), its member, its name and when it was created, last used (to the minute) and expires.
 
 - A key names its org by the org's permanent id, so the Worker asks that org's ControlPlane and no other (after the Platform
   registry confirms that the org exists). The presented key's hash is compared with the stored one in
@@ -198,10 +198,12 @@ characters>`), its member, its name and when it was created, last used (to the m
   member's tools share it. A key is never a platform admin.
 - `GET /proxy-keys` lists the caller's keys (an org admin's: every key of the org, with `member_email`); `DELETE
   /proxy-keys/<id>` revokes one (`404 proxy_key_not_found` for another member's key unless an org admin asks). A revoked
-  key stays listed and is refused from the next request on in the isolate that revoked it and within 30 seconds
-  everywhere (each isolate trusts a verified key for at most 30 seconds, and never past its expiry). Removing a member
-  deletes their keys (ADR 0027). A member holds at most 100 live keys; a revoked or expired key stays listed until a
-  new key needs its place (a member keeps at most 100 keys in all).
+  key is **deleted** (the answer still says when it was revoked), and is refused from the next request on in the isolate
+  that revoked it and within 30 seconds everywhere (each isolate trusts a verified key for at most 30 seconds, and never
+  past its expiry). An expired key is deleted too: by the next listing or new key of the org, by a request that
+  presents it, and by a scheduled sweep for an org nobody opens. Removing a member deletes their keys, private
+  accounts, private API key groups and unfinished sign-ins (ADR 0027). A member holds at most 100 keys; revoking or
+  waiting out one frees its place.
 - Proxy keys are never accepted on the management API or the panel: those stay behind Access.
 
 **Access sign-ins for clients** (`GET`/`PATCH /membership`, `{"access_clients": true}`): clients set up before proxy keys

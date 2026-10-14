@@ -654,11 +654,11 @@ export class ControlPlane extends DurableObject<Env> {
   // --- proxy keys (ADR 0022, `proxy-keys/store.ts`) -----------------------------------------------------------------
 
   /** The org's proxy keys, or one member's, with the email of the member each belongs to. */
-  listProxyKeys(memberId?: string): ReadonlyArray<ProxyKeyListing> {
+  listProxyKeys(memberId: string | undefined, now: number): ReadonlyArray<ProxyKeyListing> {
     this.#ensureMembership();
     const emails = new Map(this.#members.members().map((member) => [member.id, member.email]));
 
-    return this.#proxyKeys.list(memberId).map((key) => ({
+    return this.#proxyKeys.list(memberId, now).map((key) => ({
       ...key,
       ...(emails.has(key.memberId) ? { memberEmail: emails.get(key.memberId) } : {}),
     }));
@@ -677,7 +677,14 @@ export class ControlPlane extends DurableObject<Env> {
     return this.#proxyKeys.create(input, now);
   }
 
-  /** Revokes a key; `memberId` limits the call to that member's keys (`ProxyKeyStore.revoke`). */
+  /** Deletes the keys that have expired at `now` in every member's name (the cron sweep); answers how many. */
+  purgeExpiredProxyKeys(now: number): number {
+    this.#ensureMembership();
+
+    return this.#proxyKeys.purgeExpired(now);
+  }
+
+  /** Revokes a key by deleting it; `memberId` limits the call to that member's keys (`ProxyKeyStore.revoke`). */
   revokeProxyKey(id: string, now: number, memberId?: string): ProxyKeyResult<ProxyKeyRecord> {
     this.#ensureMembership();
 

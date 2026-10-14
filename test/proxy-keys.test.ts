@@ -3,6 +3,7 @@
 // reaches its own org's ControlPlane and serves its member's private credentials, revocation within the cache window,
 // and the Access sign-ins a proxy route still takes while the org's `access_clients` setting is on. Through the router with the real ControlPlanes and a Platform
 // registry of its own; the cache window through `authenticateRequest` with `TestClock`.
+import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { assert, it as effectIt } from "@effect/vitest";
 import { Effect, Layer } from "effect";
@@ -13,6 +14,7 @@ import { authenticateRequest } from "../src/access/authenticate.ts";
 import type { AccessJwks } from "../src/access/jwks.ts";
 import { AccessPrincipal } from "../src/access/principal.ts";
 import { VERIFIED_KEY_TTL_MS } from "../src/access/proxy-key.ts";
+import { scheduledTasks } from "../src/scheduled.ts";
 import { requestContext, type WorkerEnv } from "../src/platform/env.ts";
 import { controlPlaneOf, type CurrentOrg, GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 import { mintProxyKey, parseProxyKey } from "../src/proxy-keys/key.ts";
@@ -171,6 +173,19 @@ const wholeKey = (created: KeyBody): string => {
   return created.key;
 };
 
+/** Issues a key straight through the ControlPlane and answers its name. */
+const createKeyDirect = async (
+  stub: ReturnType<typeof controlPlaneOf>,
+  memberId: string,
+  name: string,
+): Promise<string> => {
+  const issued = await stub.createProxyKey({ memberId, name }, Date.now());
+
+  if (!issued.ok) throw new Error(issued.message);
+
+  return issued.value.record.name;
+};
+
 /** A proxy route called with `headers` only: no Access sign-in. */
 const proxy = async (path: string, headers: Record<string, string>, method = "GET") =>
   await harness.json(path, { method, headers, auth: false });
@@ -273,18 +288,25 @@ describe("issuing keys", () => {
     const byAdmin = await send(slug, `/proxy-keys/${bobs.id}`, admin, "DELETE");
     expect(byAdmin.status).toBe(200);
 
-    // Revoked keys stay listed, marked.
+    // A revoked key is deleted, not kept marked (ADR 0027): gone from the lists, and revoking it again finds nothing.
     const after = (await send(slug, "/proxy-keys", alice)).body as { keys: Array<KeyBody> };
-    expect(after.keys[0]?.revoked_at).toBeDefined();
+    expect(after.keys).toEqual([]);
+    expect((await send(slug, "/proxy-keys", admin)).body).toEqual({ keys: [] });
+
+    const again = await send(slug, `/proxy-keys/${alices.id}`, alice, "DELETE");
+    expect([again.status, errorOf(again)]).toEqual([404, "proxy_key_not_found"]);
   });
 
-  it("holds a member to 100 live keys and drops their longest-dead key to make room", async () => {
+  it("holds a member to 100 keys and gives a place back when a key is revoked or expires", async () => {
     const { org, alice } = await staffedOrg("issue-limit");
     const stub = controlPlaneOf(env, org);
     const now = Date.now();
 
-    const issue = async (name: string, at: number) => {
-      const issued = await stub.createProxyKey({ memberId: alice.id, name }, at);
+    const issue = async (name: string, at: number, expiresAt?: number) => {
+      const issued = await stub.createProxyKey(
+        { memberId: alice.id, name, ...(expiresAt === undefined ? {} : { expiresAt }) },
+        at,
+      );
 
       if (!issued.ok) throw new Error(issued.message);
 
@@ -293,23 +315,110 @@ describe("issuing keys", () => {
 
     const ids: Array<string> = [];
 
-    for (let index = 0; index < MAX_KEYS_PER_MEMBER; index++)
+    // The last of them expires soon.
+    for (let index = 0; index < MAX_KEYS_PER_MEMBER - 1; index++)
       ids.push(await issue(`key ${index}`, now + index));
+
+    const soon = await issue("soon", now + 99, now + 1000);
 
     const full = await stub.createProxyKey({ memberId: alice.id, name: "one more" }, now + 200);
     expect(full).toMatchObject({ ok: false, error: "too_many_keys" });
 
-    // Two revoked keys: the one revoked first gives up its row; the other stays listed.
-    const [first, second] = [ids[7] ?? "", ids[3] ?? ""];
-    await stub.revokeProxyKey(first, now + 300);
-    await stub.revokeProxyKey(second, now + 301);
+    // A revoked key leaves at once and frees its place.
+    const [first] = ids;
+    expect((await stub.revokeProxyKey(first ?? "", now + 300)).ok).toBe(true);
     const added = await issue("replacement", now + 400);
 
-    const listed = (await stub.listProxyKeys(alice.id)).map((key) => key.id);
+    let listed = (await stub.listProxyKeys(alice.id, now + 400)).map((key) => key.id);
     expect(listed).toHaveLength(MAX_KEYS_PER_MEMBER);
     expect(listed).toContain(added);
-    expect(listed).toContain(second);
     expect(listed).not.toContain(first);
+
+    // An expired key is deleted by the next listing or creation, and gives its place back too.
+    listed = (await stub.listProxyKeys(alice.id, now + 1000)).map((key) => key.id);
+    expect(listed).toHaveLength(MAX_KEYS_PER_MEMBER - 1);
+    expect(listed).not.toContain(soon);
+  });
+
+  it("deletes expired keys whenever the org lists or issues keys, and on the cron sweep", async () => {
+    const { org, alice, bob } = await staffedOrg("issue-expiry");
+    const stub = controlPlaneOf(env, org);
+    const now = Date.now();
+
+    const rows = async () =>
+      await runInDurableObject(stub, (_instance, state) =>
+        state.storage.sql
+          .exec<{ name: string }>("SELECT name FROM proxy_keys ORDER BY name")
+          .toArray()
+          .map((row) => row.name),
+      );
+
+    const issue = async (memberId: string, name: string, expiresAt?: number) => {
+      const issued = await stub.createProxyKey(
+        { memberId, name, ...(expiresAt === undefined ? {} : { expiresAt }) },
+        now,
+      );
+
+      expect(issued.ok).toBe(true);
+    };
+
+    await issue(alice.id, "a-live");
+    await issue(alice.id, "a-short", now + 1000);
+    await issue(bob.id, "b-short", now + 2000);
+    await issue(bob.id, "b-long", now + 100_000);
+    expect(await rows()).toEqual(["a-live", "a-short", "b-long", "b-short"]);
+
+    // Nothing has expired yet: a listing deletes nothing.
+    await stub.listProxyKeys(undefined, now + 999);
+    expect(await rows()).toHaveLength(4);
+
+    // A listing after the expiry deletes the key, not only hides it.
+    await stub.listProxyKeys(alice.id, now + 1000);
+    expect(await rows()).toEqual(["a-live", "b-long", "b-short"]);
+
+    // Issuing a key does the same for every member's keys.
+    await stub.createProxyKey({ memberId: alice.id, name: "a-new" }, now + 2000);
+    expect(await rows()).toEqual(["a-live", "a-new", "b-long"]);
+
+    // A key presented after its expiry is refused and deleted on the spot.
+    const presented = await stub.createProxyKey(
+      { memberId: bob.id, name: "b-presented", expiresAt: now + 2500 },
+      now + 2000,
+    );
+
+    if (!presented.ok) throw new Error(presented.message);
+    const parsed = parseProxyKey(presented.value.key);
+
+    if (parsed === undefined) throw new Error("the issued key does not parse");
+    expect(await stub.verifyProxyKey(parsed.keyId, parsed.hash, now + 2600)).toEqual({
+      ok: false,
+      reason: "expired",
+    });
+    expect(await rows()).toEqual(["a-live", "a-new", "b-long"]);
+
+    // The cron sweep covers an org nobody opens.
+    expect(await stub.purgeExpiredProxyKeys(now + 100_000)).toBe(1);
+    expect(await rows()).toEqual(["a-live", "a-new"]);
+    expect(scheduledTasks.find((task) => task.name === "proxy-key-expiry")?.scope).toBe("org");
+  });
+
+  it("deletes a revoked key a previous version kept, when the org's ControlPlane starts", async () => {
+    const { org, alice } = await staffedOrg("issue-legacy");
+    const stub = controlPlaneOf(env, org);
+    const kept = await createKeyDirect(stub, alice.id, "kept");
+
+    await runInDurableObject(stub, (_instance, state) => {
+      state.storage.sql.exec(
+        `INSERT INTO proxy_keys (id, member_id, name, hash, prefix, created_at, revoked_at)
+         VALUES ('legacykey', ?, 'legacy', 'x', 'cfp_x', 1, 2)`,
+        alice.id,
+      );
+    });
+    await evictDurableObject(stub);
+
+    const names = (await stub.listProxyKeys(alice.id, Date.now())).map((listed) => listed.name);
+
+    expect(names).toEqual([kept]);
   });
 });
 
