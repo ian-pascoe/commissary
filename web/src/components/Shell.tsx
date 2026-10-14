@@ -1,8 +1,8 @@
-// The page frame: the shell bar (name and host, Connect account, Refresh, the theme and account menus) over the
-// sidebar (the org switcher and the page links; a drawer on narrow screens) beside the page.
+// The page frame: the shell bar (name and host, the org switcher, Refresh, the theme and account menus) over the
+// sidebar (the page links; a drawer on narrow screens) beside the page. Connecting an account starts on Accounts.
 import { useAtomRefresh, useAtomSet, useAtomValue } from "@effect/atom-react";
 import { Link, Navigate, Outlet, useLocation } from "@tanstack/react-router";
-import { Plus, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { AsyncResult } from "effect/reactivity";
 import { credentialsAtom, meAtom, usageEpochAtom, usageLastDayAtom } from "../api/client.ts";
 import { NotAllowed } from "../pages/NotAllowed.tsx";
@@ -10,6 +10,7 @@ import { canManageMembers, homeFor, pageAllowed, pageGroupsFor } from "../lib/ro
 import { type RoleState, useRole } from "../lib/use-role.ts";
 import { AccountMenu } from "./AccountMenu.tsx";
 import { Problem } from "./Kit.tsx";
+import { OrgSwitcher } from "./OrgSwitcher.tsx";
 import styles from "./Shell.module.css";
 import { Sidebar, SidebarDrawer } from "./Sidebar.tsx";
 import { ThemeMenu } from "./ThemeMenu.tsx";
@@ -109,8 +110,6 @@ export const Shell = () => {
       : [];
 
   const admin = role.kind === "ready" && canManageMembers(role.caller);
-  // A plain member connects private accounts where the org allows it (ADR 0023).
-  const connects = admin || (role.kind === "ready" && role.caller.privateCredentials);
 
   return (
     <>
@@ -129,13 +128,8 @@ export const Shell = () => {
               {window.location.host}
             </span>
           </Link>
+          <OrgSwitcher />
           <div className={styles["actions"]}>
-            {connects ? (
-              <Link to="/accounts/connect" className={styles["connect"]}>
-                <Plus aria-hidden="true" size={16} strokeWidth={2.5} />
-                <span className={styles["connectLabel"]}>Connect account</span>
-              </Link>
-            ) : null}
             {role.kind === "ready" ? admin ? <OrgAdminRefresh /> : <UsageRefresh /> : null}
             <ThemeMenu />
             <AccountMenu hosted={hosted} offersDelete={role.kind === "ready"} />

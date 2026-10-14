@@ -1,5 +1,5 @@
 // Accounts: every connected account by provider, with a filter for those that need attention or are disabled and a
-// search; each row opens the account. Connecting starts from the header's Connect account.
+// search; each row opens the account. Connecting starts here too, from the head's Connect account.
 //
 // "Check all quotas" in the head asks every enabled account's provider for its allowance now (`POST
 // /credentials/quota/all`) and lists the accounts whose check failed.
@@ -22,6 +22,7 @@ import {
   Gauge,
   ListChecks,
   type LucideIcon,
+  Plus,
   Power,
   PowerOff,
   RefreshCw,
@@ -870,10 +871,15 @@ const List = ({ accounts }: { readonly accounts: ReadonlyArray<Assessed> }) => {
   );
 };
 
+/** The page's title, with Connect account (the panel's only way in to connecting) and any other actions. */
 const Head = ({ children }: { readonly children?: ReactNode }) => (
   <header className={styles["head"]}>
     <h1 className={styles["title"]}>Accounts</h1>
     {children}
+    <Link to="/accounts/connect" className={kit["primary"]}>
+      <Plus aria-hidden="true" size={16} strokeWidth={2.5} />
+      Connect account
+    </Link>
   </header>
 );
 
