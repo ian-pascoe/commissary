@@ -300,7 +300,7 @@
   color: var(--quiet);
 }
 
-@media (max-width: 48rem) {
+@container (max-width: 48rem) {
   .fields {
     grid-template-columns: minmax(0, 1fr);
   }

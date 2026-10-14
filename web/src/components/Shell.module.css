@@ -24,18 +24,21 @@
   box-shadow: inset 0 -4px 0 var(--bar-route);
 }
 
+/* Aligned with the frame below: the name over the sidebar's links, the actions at the page's right edge. */
 .inner {
-  max-width: var(--page-width);
+  max-width: calc(var(--page-width) + var(--sidebar-width));
   margin: 0 auto;
   padding: 0 var(--page-gutter);
   min-height: 4rem;
   display: flex;
   align-items: stretch;
-  gap: var(--space-6);
+  gap: var(--space-4);
 }
 
+/* The name takes what the actions leave (the host shortens), so the actions never wrap under it. */
 .brand {
   display: flex;
+  flex: 1 1 0;
   flex-direction: column;
   justify-content: center;
   min-width: 0;
@@ -44,6 +47,9 @@
 }
 
 .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 1.25rem;
   font-weight: 800;
   letter-spacing: -0.03em;
@@ -59,78 +65,10 @@
   color: var(--bar-quiet);
 }
 
-.nav ul {
-  display: flex;
-  height: 100%;
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.navLink {
-  display: flex;
-  align-items: center;
-  height: 100%;
-  padding: 0 var(--space-3);
-  color: var(--on-bar);
-  font-size: 0.9375rem;
-  font-weight: 500;
-  text-decoration: none;
-  white-space: nowrap;
-  box-shadow: inset 0 -4px 0 transparent;
-}
-
-.navLink:hover {
-  box-shadow: inset 0 -4px 0 var(--bar-hover);
-}
-
-.navLink[aria-current="page"] {
-  font-weight: 750;
-  box-shadow: inset 0 -4px 0 var(--on-bar);
-}
-
-.navLink:focus-visible {
-  outline-offset: -3px;
-}
-
 .actions {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-}
-
-/* The org switcher: sign ink on the bar, a frame like the other controls. */
-.org {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-xs);
-  font-weight: 650;
-}
-
-.orgLabel {
-  color: var(--bar-quiet);
-}
-
-.orgSelect {
-  height: 2.5rem;
-  max-width: 11rem;
-  padding: 0 var(--space-2);
-  background: transparent;
-  color: var(--on-bar);
-  font: inherit;
-  font-size: var(--text-sm);
-  font-weight: 700;
-  border: 2px solid currentcolor;
-  border-radius: var(--radius);
-}
-
-@media (max-width: 40rem) {
-  .orgLabel {
-    display: none;
-  }
 }
 
 .connect {
@@ -152,8 +90,19 @@
   background: var(--inverse-hover);
 }
 
-/* Phones keep the name and host in view: Connect account becomes a square with its label hidden. */
+/*
+ * Phones keep the name and host in view: Connect account becomes a square with its label hidden, and the bar's
+ * squares sit closer to the name.
+ */
 @media (max-width: 30rem) {
+  .inner {
+    gap: var(--space-2);
+  }
+
+  .name {
+    font-size: 1.125rem;
+  }
+
   .connect {
     width: 2.5rem;
     padding: 0;
@@ -199,9 +148,28 @@
   }
 }
 
-.main {
-  max-width: var(--page-width);
+/* The sidebar beside the page on wide screens; below 64rem the page alone (the sidebar is a drawer). */
+.frame {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: calc(100dvh - 4rem);
+  max-width: calc(var(--page-width) + var(--sidebar-width));
   margin: 0 auto;
+}
+
+@media (width >= 64rem) {
+  .frame {
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  }
+}
+
+/*
+ * The pages' stylesheets ask how wide the page is (`@container`), not the window, which is wider than the page by the
+ * sidebar.
+ */
+.main {
+  container-type: inline-size;
+  min-width: 0;
   padding: var(--space-6) var(--page-gutter) var(--space-7);
 }
 
@@ -209,102 +177,8 @@
   outline: none;
 }
 
-/* Narrow screens: name and actions on the first row, page links wrap onto the second. */
-@media (max-width: 64rem) {
-  .inner {
-    flex-wrap: wrap;
-    column-gap: var(--space-4);
-    row-gap: var(--space-1);
-    padding-top: var(--space-3);
-  }
-
-  /* The name takes what the actions leave (the host shortens), so the actions never wrap under it. */
-  .brand {
-    flex: 1 1 0;
-  }
-
-  /* One row of page links that scrolls sideways; an edge with more links beyond it fades out. */
-  .nav {
-    --fade-start: 2.5rem;
-    --fade-end: 2.5rem;
-
-    order: 3;
-    flex-basis: 100%;
-    margin: 0 calc(var(--page-gutter) * -1);
-    padding: 0 calc(var(--page-gutter) - var(--space-3));
-    overflow-x: auto;
-    scrollbar-width: none;
-    scroll-padding-inline: 3rem;
-    mask-image: linear-gradient(
-      to right,
-      transparent,
-      #000 var(--fade-start),
-      #000 calc(100% - var(--fade-end)),
-      transparent
-    );
-  }
-
-  .nav[data-start="true"] {
-    --fade-start: 0px;
-  }
-
-  .nav[data-end="true"] {
-    --fade-end: 0px;
-  }
-
-  .nav ul {
-    width: max-content;
-    gap: 0;
-  }
-
-  .navLink {
-    height: 2.75rem;
-  }
-}
-
 /* Waiting for the caller's role, or not being able to read it. */
 .gate {
   max-width: 40rem;
   color: var(--quiet);
-}
-
-/* Sign out (hosted proxy): the theme menu's twin on the bar; its words show where there is room. */
-.signOut {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  height: 2.5rem;
-  padding: 0 var(--space-3);
-  background: transparent;
-  color: var(--on-bar);
-  font: inherit;
-  font-size: var(--text-sm);
-  font-weight: 700;
-  border: 2px solid var(--on-bar);
-  border-radius: var(--radius);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-@media (hover: hover) {
-  .signOut:hover {
-    background: var(--bar-pressed);
-  }
-}
-
-@media (max-width: 48rem) {
-  .signOut {
-    width: 2.5rem;
-    padding: 0;
-  }
-
-  .signOut > span {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
 }

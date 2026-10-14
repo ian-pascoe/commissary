@@ -76,7 +76,7 @@
   color: var(--quiet);
 }
 
-@media (max-width: 48rem) {
+@container (max-width: 48rem) {
   .wide {
     display: none;
   }

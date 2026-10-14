@@ -123,6 +123,8 @@
   --radius: 3px;
   --page-width: 80rem;
   --page-gutter: var(--space-6);
+  /* The shell's sidebar beside the page, on screens of 64rem and wider. */
+  --sidebar-width: 15rem;
 
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }

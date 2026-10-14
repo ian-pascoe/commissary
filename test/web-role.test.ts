@@ -10,6 +10,7 @@ import {
   holdsOnlyPrivate,
   homeFor,
   pageAllowed,
+  pageGroupsFor,
   pagesFor,
   roleOf,
   tokenRoleChanges,
@@ -58,12 +59,74 @@ describe("pages", () => {
   });
 });
 
+describe("the sidebar's groups of pages", () => {
+  const outline = (groups: ReturnType<typeof pageGroupsFor>) =>
+    groups.map((group) => [group.heading ?? "", group.pages.map((page) => page.label)]);
+
+  it("shows an org admin every page, grouped under headings, with Overview and Usage first", () => {
+    expect(outline(pageGroupsFor("admin"))).toEqual([
+      ["", ["Overview", "Usage"]],
+      ["Providers", ["Accounts", "API keys", "Models"]],
+      [
+        "People and access",
+        ["Members", "Grants", "My models", "Proxy keys", "Management keys", "Limits"],
+      ],
+      ["Org", ["Settings"]],
+    ]);
+    expect(outline(pageGroupsFor("owner"))).toEqual(outline(pageGroupsFor("admin")));
+  });
+
+  it("puts Single sign-on beside Settings on a hosted proxy only", () => {
+    expect(outline(pageGroupsFor("admin", false, true)).at(-1)).toEqual([
+      "Org",
+      ["Settings", "Single sign-on"],
+    ]);
+    expect(outline(pageGroupsFor("admin", false, false)).at(-1)).toEqual(["Org", ["Settings"]]);
+    expect(outline(pageGroupsFor("member", true, true)).map(([heading]) => heading)).toEqual([
+      "",
+      "Providers",
+      "People and access",
+    ]);
+  });
+
+  it("leaves out the groups a plain member has no page in", () => {
+    expect(outline(pageGroupsFor("member"))).toEqual([
+      ["", ["Usage"]],
+      ["People and access", ["My models", "Proxy keys", "Limits"]],
+    ]);
+    expect(outline(pageGroupsFor("member", true))).toEqual([
+      ["", ["Usage"]],
+      ["Providers", ["Accounts", "API keys"]],
+      ["People and access", ["My models", "Proxy keys", "Limits"]],
+    ]);
+  });
+
+  it("holds exactly the pages the role opens, each once", () => {
+    for (const [role, privateCredentials, hosted] of [
+      ["member", false, false],
+      ["member", true, true],
+      ["admin", false, true],
+      ["owner", true, false],
+    ] as const) {
+      const grouped = pageGroupsFor(role, privateCredentials, hosted).flatMap(
+        (group) => group.pages,
+      );
+
+      expect(grouped.map((page) => page.to).toSorted()).toEqual(
+        pagesFor(role, privateCredentials, hosted)
+          .map((page) => page.to)
+          .toSorted(),
+      );
+    }
+  });
+});
+
 describe("private credentials in the panel (ADR 0023)", () => {
   it("opens a plain member their own accounts and API keys only where the org allows private credentials", () => {
     expect(pagesFor("member", true).map((page) => page.to)).toEqual([
+      "/usage",
       "/accounts",
       "/keys",
-      "/usage",
       "/my-models",
       "/proxy-keys",
       "/limits",

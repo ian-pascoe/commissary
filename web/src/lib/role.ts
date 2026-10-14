@@ -57,9 +57,24 @@ export const effectiveRole = (me: Pick<Me, "role" | "platform_admin">): OrgRole 
 // ---------------------------------------------------------------------------------------------------------------
 // Pages
 
+/**
+ * The sidebar's groups, in order: the pages everyone glances at (no heading), the org's providers, who may use them
+ * and how, and the org itself.
+ */
+export const PAGE_GROUPS = [
+  { id: "glance", heading: undefined },
+  { id: "providers", heading: "Providers" },
+  { id: "people", heading: "People and access" },
+  { id: "org", heading: "Org" },
+] as const;
+
+export type PageGroupId = (typeof PAGE_GROUPS)[number]["id"];
+
 export interface PanelPage {
   readonly to: string;
   readonly label: string;
+  /** The sidebar group the page's link sits in. */
+  readonly group: PageGroupId;
   /** The least role that opens the page. */
   readonly role: OrgRole;
   /** A plain member opens it too where the org lets members connect private credentials (their own rows only). */
@@ -70,22 +85,28 @@ export interface PanelPage {
   readonly hosted?: boolean;
 }
 
-/** The pages of the shell's nav, in order. A plain member's panel is the Usage page. */
+/** The pages of the shell's sidebar, in order, group by group. A plain member's panel is the Usage page. */
 export const PAGES: ReadonlyArray<PanelPage> = [
-  { to: "/", label: "Overview", role: "admin" },
-  { to: "/accounts", label: "Accounts", role: "admin", privateMembers: true },
-  { to: "/keys", label: "API keys", role: "admin", privateMembers: true },
-  { to: "/models", label: "Models", role: "admin" },
-  { to: "/usage", label: "Usage", role: "member" },
-  { to: "/my-models", label: "My models", role: "member" },
-  { to: "/proxy-keys", label: "Proxy keys", role: "member" },
-  { to: "/limits", label: "Limits", role: "member" },
-  { to: "/management-keys", label: "Management keys", role: "admin" },
-  { to: "/members", label: "Members", role: "admin" },
-  { to: "/grants", label: "Grants", role: "admin" },
-  { to: "/settings", label: "Settings", role: "admin", exact: true },
+  { to: "/", label: "Overview", group: "glance", role: "admin" },
+  { to: "/usage", label: "Usage", group: "glance", role: "member" },
+  { to: "/accounts", label: "Accounts", group: "providers", role: "admin", privateMembers: true },
+  { to: "/keys", label: "API keys", group: "providers", role: "admin", privateMembers: true },
+  { to: "/models", label: "Models", group: "providers", role: "admin" },
+  { to: "/members", label: "Members", group: "people", role: "admin" },
+  { to: "/grants", label: "Grants", group: "people", role: "admin" },
+  { to: "/my-models", label: "My models", group: "people", role: "member" },
+  { to: "/proxy-keys", label: "Proxy keys", group: "people", role: "member" },
+  { to: "/management-keys", label: "Management keys", group: "people", role: "admin" },
+  { to: "/limits", label: "Limits", group: "people", role: "member" },
+  { to: "/settings", label: "Settings", group: "org", role: "admin", exact: true },
   // Under Settings: the Worker serves the panel at `/settings/*` already (`PANEL_SECTIONS`).
-  { to: "/settings/sso", label: "Single sign-on", role: "admin", hosted: true },
+  {
+    to: "/settings/sso",
+    label: "Single sign-on",
+    group: "org",
+    role: "admin",
+    hosted: true,
+  },
 ];
 
 /**
@@ -102,6 +123,28 @@ export const pagesFor = (
       (hosted || page.hosted !== true) &&
       (atLeast(role, page.role) || (privateCredentials && page.privateMembers === true)),
   );
+
+export interface PageGroup {
+  readonly id: PageGroupId;
+  /** The small heading above the group's links; none for the first group. */
+  readonly heading: string | undefined;
+  readonly pages: ReadonlyArray<PanelPage>;
+}
+
+/** The links of {@link pagesFor} as the sidebar groups them, without the groups the role has no page in. */
+export const pageGroupsFor = (
+  role: OrgRole,
+  privateCredentials = false,
+  hosted = false,
+): ReadonlyArray<PageGroup> => {
+  const pages = pagesFor(role, privateCredentials, hosted);
+
+  return PAGE_GROUPS.flatMap(({ id, heading }) => {
+    const grouped = pages.filter((page) => page.group === id);
+
+    return grouped.length === 0 ? [] : [{ id, heading, pages: grouped }];
+  });
+};
 
 /** The page a role lands on when the one asked for is not theirs: the Overview for org admins, Usage for the rest. */
 export const homeFor = (role: OrgRole): string => (atLeast(role, "admin") ? "/" : "/usage");

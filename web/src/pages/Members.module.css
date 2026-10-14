@@ -291,7 +291,7 @@ td > .chips + .pick {
   min-width: 10rem;
 }
 
-@media (max-width: 48rem) {
+@container (max-width: 48rem) {
   .table th,
   .table td {
     padding-inline: var(--space-2);

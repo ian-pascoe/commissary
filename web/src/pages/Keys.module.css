@@ -290,7 +290,7 @@
 }
 
 /* Narrow screens: each key stacks (key with its request figure, then its state, then its actions). */
-@media (max-width: 48rem) {
+@container (max-width: 48rem) {
   .keys > thead {
     position: absolute;
     width: 1px;

@@ -50,7 +50,7 @@
   font-weight: 650;
 }
 
-@media (max-width: 48rem) {
+@container (max-width: 48rem) {
   .row {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-1);

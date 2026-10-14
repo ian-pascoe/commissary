@@ -1,4 +1,4 @@
-/* The theme menu: a framed square on the shell (Refresh's twin) over a small framed list. */
+/* The bar's menus (theme, account): a framed square on the shell (Refresh's twin) over a small framed list. */
 .root {
   position: relative;
   display: flex;
@@ -64,6 +64,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -81,6 +82,20 @@
 
 .check {
   margin-left: auto;
+}
+
+/* Deleting the account: red, like the danger button, the only thing red is for here. */
+.danger {
+  color: var(--danger);
+}
+
+.item:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.item:disabled:hover {
+  background: none;
 }
 
 @media (pointer: coarse) {
