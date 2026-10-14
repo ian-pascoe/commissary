@@ -126,6 +126,8 @@ export const BREAKDOWNS: ReadonlyArray<Breakdown> = [
   { id: "auth", label: "Account", noun: "Account", filter: "account", adminOnly: true },
   { id: "provider", label: "Provider", noun: "Provider", filter: "provider", adminOnly: false },
   { id: "member", label: "Member", noun: "Member", filter: "member", adminOnly: true },
+  { id: "team", label: "Team", noun: "Team", filter: "team", adminOnly: true },
+  { id: "key", label: "Proxy key", noun: "Proxy key", filter: undefined, adminOnly: false },
   { id: "principal", label: "User", noun: "User", filter: "user", adminOnly: true },
   { id: "endpoint", label: "Endpoint", noun: "Endpoint", filter: undefined, adminOnly: false },
 ];
@@ -187,7 +189,18 @@ export const lenient = <S extends Schema.Top>(schema: S) =>
  */
 export const UsageSearch = Schema.Struct({
   range: lenient(Schema.Literals(["day", "week", "month"])),
-  by: lenient(Schema.Literals(["model", "auth", "provider", "member", "principal", "endpoint"])),
+  by: lenient(
+    Schema.Literals([
+      "model",
+      "auth",
+      "provider",
+      "member",
+      "team",
+      "key",
+      "principal",
+      "endpoint",
+    ]),
+  ),
   model: lenient(Schema.String),
   provider: lenient(Schema.String),
   account: lenient(Schema.String),

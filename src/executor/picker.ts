@@ -11,7 +11,8 @@
  *    `excludedIds` (credentials already tried in this round), `retryRound` (credentials age out of later rounds),
  *    `pinnedId`, session affinity (`session` within `callerScope`), priorities/weights and cooldowns. It returns an
  *    immutable snapshot, the per-credential model route and a lease. It fails with an `ExecutionError` whose `code`
- *    is `provider_not_found`, `auth_not_found`, `auth_unavailable` or `model_cooldown` (429 with `Retry-After`).
+ *    is `provider_not_found`, `auth_not_found`, `auth_unavailable`, `model_cooldown` or `spend_limit_reached` (429 with
+ *    `Retry-After`; the second is a Spend limit, which no other credential or round changes).
  *  - `report` must be called exactly once per attempt with the lease so cooldown/quota bookkeeping and affinity stay
  *    consistent. It never fails (bookkeeping errors are logged by the implementation).
  *  - `planRetry` answers whether another retry round is worthwhile and how long to wait first.
@@ -67,6 +68,8 @@ export interface PickRequest {
   readonly callerScope: string;
   /** The member the request is for: their private credentials are candidates, no one else's (ADR 0023). */
   readonly memberId?: string;
+  /** The proxy key the request came with: its Spend limits apply to whatever credential serves it (issue #71). */
+  readonly proxyKeyId?: string;
   /** Session identity for affinity/stickiness, when the request carries one. */
   readonly session?: PickSession;
   /** Conversation fingerprints for the LCP matcher (requests without an explicit `session`). */

@@ -5,6 +5,7 @@
  * errors.go (`newAuthUnavailableError`). Docs: credentials.md §6.5.
  */
 import { goMarshal } from "../../http/json-text.ts";
+import type { Refusal, SubjectKind } from "../../spend/model.ts";
 import type { PickFailure } from "./types.ts";
 
 /** Go `Duration.String()` for whole seconds (`45s`, `1m30s`, `1h0m0s`). */
@@ -96,5 +97,45 @@ export const modelCooldown = (model: string, provider: string, resetInMs: number
     retryable: true,
     retryAfterSeconds: resetSeconds,
     body: JSON.stringify({ error }),
+  };
+};
+
+const ADJECTIVE = { day: "daily", week: "weekly", month: "monthly" } as const;
+
+const SUBJECT: Readonly<Record<SubjectKind, string>> = {
+  key: "this proxy key",
+  member: "your membership",
+  team: "your team",
+  org: "your org",
+  credential: "this credential",
+};
+
+/**
+ * `spend_limit_reached`: a Spend limit has no room, so the request is refused for the rest of the period (HTTP 429 with
+ * `Retry-After` until it ends). Not retryable: no other credential or later round changes it, and no credential is
+ * cooled for it. New in the Workers port (issue #71).
+ */
+export const spendLimitReached = (refusal: Refusal, now: number): PickFailure => {
+  const resetSeconds = Math.max(1, Math.ceil((refusal.resetsAt - now) / 1000));
+  const resetsAt = new Date(refusal.resetsAt).toISOString();
+
+  const message = `The ${ADJECTIVE[refusal.period]} Spend limit of ${SUBJECT[refusal.kind]} is reached; it resets at ${resetsAt}`;
+
+  return {
+    code: "spend_limit_reached",
+    message,
+    httpStatus: 429,
+    retryable: false,
+    retryAfterSeconds: resetSeconds,
+    body: JSON.stringify({
+      error: {
+        code: "spend_limit_reached",
+        message,
+        period: refusal.period,
+        limit: refusal.kind,
+        resets_at: resetsAt,
+        reset_seconds: resetSeconds,
+      },
+    }),
   };
 };

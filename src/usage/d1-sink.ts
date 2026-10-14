@@ -27,17 +27,26 @@ export const writeUsageRecord = (db: D1Database, record: UsageRecord): Effect.Ef
     ),
   );
 
-/** `record` with its cost; the record as it is when it cannot be costed. */
-const costed = (pricing: UsagePricing["Service"], record: UsageRecord) =>
-  pricing.costOf(record).pipe(
-    Effect.map((cost): UsageRecord => (cost === undefined ? record : { ...record, cost })),
-    Effect.catchCause((cause) =>
-      Effect.logWarning("usage record pricing failed").pipe(
-        Effect.annotateLogs({ requestId: record.requestId, error: causeSummary(cause) }),
-        Effect.as(record),
+/** What `record` costs; `undefined` when it cannot be costed (pricing failures are logged, never raised). */
+const priced = (pricing: UsagePricing["Service"], record: UsageRecord) =>
+  pricing
+    .costOf(record)
+    .pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning("usage record pricing failed").pipe(
+          Effect.annotateLogs({ requestId: record.requestId, error: causeSummary(cause) }),
+          Effect.as(undefined),
+        ),
       ),
-    ),
-  );
+    );
+
+/** `record` with its cost; the record as it is when it cannot be costed or was costed already (for a Spend limit). */
+const costed = (pricing: UsagePricing["Service"], record: UsageRecord) =>
+  record.cost !== undefined
+    ? Effect.succeed(record)
+    : priced(pricing, record).pipe(
+        Effect.map((cost): UsageRecord => (cost === undefined ? record : { ...record, cost })),
+      );
 
 /** Needs `UsagePricing` (`UsagePricing.none` stores records without a cost). */
 export const D1UsageSink = Layer.effect(
@@ -46,6 +55,14 @@ export const D1UsageSink = Layer.effect(
     const pricing = yield* UsagePricing;
 
     return UsageSink.of({
+      cost: (record) =>
+        Effect.contextWith((context: Context.Context<never>) => {
+          const env = Context.getOrUndefined(context, WorkerEnv);
+
+          return env === undefined
+            ? Effect.undefined
+            : priced(pricing, record).pipe(Effect.provideService(WorkerEnv, env));
+        }),
       publish: (record) =>
         Effect.contextWith((context: Context.Context<never>) => {
           // The bindings are per-request services of the invocation, resolved here and never captured by the layer.

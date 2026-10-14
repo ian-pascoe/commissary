@@ -23,7 +23,9 @@ import { type CooldownSettings, coolingDisabledFor, markResult } from "./cooldow
 import { shouldSkipCredentialCooldown } from "./cooldown/classify.ts";
 import { type Credential, type CredentialState, emptyState } from "./model.ts";
 import { MerklePrefixMatcher } from "../session-routing/matcher.ts";
+import type { SpendPolicy } from "../spend/ledger.ts";
 import { SessionCache } from "./selection/affinity.ts";
+import { spendLimitReached } from "./selection/failures.ts";
 import { canonicalModelKey } from "./selection/model-name.ts";
 import { rotateRoute } from "./selection/routing.ts";
 import {
@@ -98,6 +100,11 @@ export interface PoolOptions {
     readonly version: number;
     readonly configs: ReadonlyArray<{ readonly owner: string; readonly config: Config }>;
   };
+  /**
+   * The org's Spend limits (issue #71): `pick` refuses or narrows the selection by them and tags the lease with the
+   * scopes to charge, `report` charges the attempt's cost to them. Absent: nothing is limited.
+   */
+  readonly spend?: SpendPolicy;
 }
 
 /** A stored (auth file) credential with its runtime state: the unit the refresh manager works on. */
@@ -143,6 +150,7 @@ export class CredentialPool {
   readonly #reach: PoolOptions["reach"];
   readonly #privateCredentials: () => boolean;
   readonly #privateKeys: NonNullable<PoolOptions["privateKeys"]>;
+  readonly #spend: SpendPolicy | undefined;
   readonly #rotation = new RotationState();
   readonly #affinity = new SessionCache();
   readonly #lcp = new MerklePrefixMatcher();
@@ -159,6 +167,7 @@ export class CredentialPool {
     this.#reach = options.reach;
     this.#privateCredentials = options.privateCredentials ?? (() => true);
     this.#privateKeys = options.privateKeys ?? (() => ({ version: 0, configs: [] }));
+    this.#spend = options.spend;
     this.#states = options.store.loadStates();
   }
 
@@ -277,6 +286,13 @@ export class CredentialPool {
     for (const credential of view.credentials.values())
       entries.push({ credential, state: this.#state(credential.id) });
 
+    const caller = { memberId: request.memberId, proxyKeyId: request.proxyKeyId };
+    const gate = this.#spend?.gate(caller, now);
+
+    // A limit of the request's proxy key without room refuses it whatever credential would serve: no cooldown, no failover.
+    if (gate?.refuse !== undefined)
+      return { ok: false, failure: spendLimitReached(gate.refuse, now) };
+
     const outcome = selectCredential({
       credentials: entries,
       request,
@@ -284,9 +300,16 @@ export class CredentialPool {
       runtime: { rotation: this.#rotation, affinity: this.#affinity, lcp: this.#lcp },
       reach: this.#reach(request.memberId),
       now,
+      ...(gate === undefined ? {} : { spend: gate }),
     });
 
-    if (!outcome.ok) return outcome;
+    if (!outcome.ok) {
+      // Shared credentials were kept away by a member, team or org limit: that is why nothing could serve the request.
+      if (gate?.sharedBlocked !== undefined && outcome.failure.code !== "provider_not_found")
+        return { ok: false, failure: spendLimitReached(gate.sharedBlocked, now) };
+
+      return outcome;
+    }
 
     const { credential } = outcome.entry;
     let route = outcome.route;
@@ -300,6 +323,10 @@ export class CredentialPool {
 
     const stateModel = canonicalModelKey(route.selectionModel);
 
+    const spend =
+      this.#spend?.scopes(caller, { id: credential.id, shared: credential.owner === undefined }) ??
+      [];
+
     const lease: Lease = {
       id: this.#newId(),
       credentialId: credential.id,
@@ -309,6 +336,7 @@ export class CredentialPool {
       issuedAt: now,
       ...(outcome.affinityKeys.length === 0 ? {} : { affinityKeys: outcome.affinityKeys }),
       ...(outcome.lcp === undefined ? {} : { lcp: outcome.lcp }),
+      ...(spend.length === 0 ? {} : { spend }),
     };
 
     return {
@@ -334,6 +362,10 @@ export class CredentialPool {
    * session-affinity effects.
    */
   report(lease: Lease, result: ReportResult): ReportOutcome {
+    // What the attempt cost is spent whatever became of the credential meanwhile (removed, replaced, stale lease).
+    if (lease.spend !== undefined && result.costMicros !== undefined)
+      this.#spend?.charge(lease.spend, result.costMicros, this.#now());
+
     const view = this.#current();
     const credential = view.credentials.get(lease.credentialId);
 
@@ -446,13 +478,16 @@ export class CredentialPool {
     for (const credential of view.credentials.values())
       entries.push({ credential, state: this.#state(credential.id) });
 
+    const now = this.#now();
+
     return planRetry({
       credentials: entries,
       query,
       routing: { ...view.settings, knownPrefixes: knownPrefixes(entries) },
       reach: this.#reach(query.memberId),
       coolingDisabled: (credential) => coolingDisabledFor(credential, view.cooldown),
-      now: this.#now(),
+      now,
+      spend: this.#spend?.gate({ memberId: query.memberId }, now),
     });
   }
 

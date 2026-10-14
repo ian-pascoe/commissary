@@ -264,6 +264,21 @@ const usageSummary = Effect.gen(function* () {
   const org = yield* CurrentOrg;
   const authIndexOf = yield* currentAuthIndexer;
 
+  // Teams are not on the records: their members are read from the ControlPlane (a member may be in several teams).
+  const teams =
+    groupBy === "team"
+      ? yield* controlPlane("teamMemberIds", async (stub) => {
+          const listed = await stub.listTeams();
+
+          return await Promise.all(
+            listed.map(async (team) => ({
+              id: team.id,
+              memberIds: (await stub.teamMemberIds(team.id)) ?? [],
+            })),
+          );
+        })
+      : undefined;
+
   const summary = yield* query("summary", () =>
     summarizeUsage(
       db,
@@ -272,6 +287,7 @@ const usageSummary = Effect.gen(function* () {
         ...filter,
         // SAFETY: groupBy was checked against GROUP_BY above.
         groupBy: groupBy as GroupBy,
+        ...(teams === undefined ? {} : { teams }),
         ...(limit === undefined ? {} : { limit }),
       },
       authIndexOf,

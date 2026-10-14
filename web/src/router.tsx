@@ -8,6 +8,7 @@ import { ConnectPage } from "./pages/Connect.tsx";
 import { GrantsPage } from "./pages/Grants.tsx";
 import { KeyGroupPage, NewKeyGroupPage, OwnKeyGroupPage } from "./pages/KeyGroup.tsx";
 import { KeysPage } from "./pages/Keys.tsx";
+import { LimitsPage } from "./pages/Limits.tsx";
 import { MembersPage } from "./pages/Members.tsx";
 import { ModelRulesPage } from "./pages/ModelRules.tsx";
 import { ModelsPage } from "./pages/Models.tsx";
@@ -78,6 +79,7 @@ const routeTree = rootRoute.addChildren([
   createRoute({ getParentRoute: () => rootRoute, path: "/grants", component: GrantsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/my-models", component: MyModelsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/proxy-keys", component: ProxyKeysPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/limits", component: LimitsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: SettingsPage }),
 ]);
 

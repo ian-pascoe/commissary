@@ -20,6 +20,7 @@ import {
   usageSeriesAtom,
   usageSummaryAtom,
   usageUnpricedAtom,
+  proxyKeysAtom,
 } from "../api/client.ts";
 import { HistoryChart } from "../components/HistoryChart.tsx";
 import { kit, Problem, Section } from "../components/Kit.tsx";
@@ -67,7 +68,17 @@ interface Names {
   readonly members: ReadonlyMap<string, string>;
   /** Team names by team id. */
   readonly teams: ReadonlyMap<string, string>;
+  /** Proxy key names by key id. */
+  readonly keys: ReadonlyMap<string, string>;
 }
+
+/** Proxy keys by id: a plain member lists their own, an org admin every key. */
+const useKeyNames = (): ReadonlyMap<string, string> => {
+  const result = useAtomValue(proxyKeysAtom);
+  const keys = AsyncResult.isSuccess(result) ? result.value.keys : [];
+
+  return new Map(keys.map((key) => [key.id, key.name]));
+};
 
 const useNames = (): Names => {
   const result = useAtomValue(credentialsAtom);
@@ -76,16 +87,18 @@ const useNames = (): Names => {
   const files = AsyncResult.isSuccess(result) ? result.value.files : [];
   const members = AsyncResult.isSuccess(people) ? people.value.members : [];
   const teams = AsyncResult.isSuccess(groups) ? groups.value.teams : [];
+  const keys = useKeyNames();
 
   return {
+    keys,
     byIndex: new Map(files.map((entry) => [entry.auth_index, entry])),
     members: new Map(members.map((member) => [member.id, member.email])),
     teams: new Map(teams.map((team) => [team.id, team.name])),
   };
 };
 
-/** A plain member may not read the accounts: nothing is named. */
-const NO_NAMES: Names = { byIndex: new Map(), members: new Map(), teams: new Map() };
+/** A plain member may not read the accounts, members or teams: only their own proxy keys are named. */
+const NO_NAMES: Omit<Names, "keys"> = { byIndex: new Map(), members: new Map(), teams: new Map() };
 
 /** A breakdown row's or filter's value as the operator knows it. */
 const valueName = (key: FilterKey | Breakdown["id"], value: string, names: Names): string => {
@@ -105,6 +118,8 @@ const valueName = (key: FilterKey | Breakdown["id"], value: string, names: Names
       return value === "" ? "No member" : (names.members.get(value) ?? value);
     case "team":
       return names.teams.get(value) ?? value;
+    case "key":
+      return value === "" ? "No proxy key" : (names.keys.get(value) ?? value);
     case "user":
     case "principal":
       return value === "" ? "Unknown user" : value;
@@ -852,6 +867,12 @@ const UsageContent = ({ names, admin }: { readonly names: Names; readonly admin:
   );
 };
 
+const MemberUsage = () => {
+  const keys = useKeyNames();
+
+  return <UsageContent names={{ ...NO_NAMES, keys }} admin={false} />;
+};
+
 const OrgAdminUsage = () => {
   const names = useNames();
 
@@ -864,9 +885,5 @@ export const UsagePage = () => {
 
   if (role.kind !== "ready") return null;
 
-  return canManageMembers(role.caller) ? (
-    <OrgAdminUsage />
-  ) : (
-    <UsageContent names={NO_NAMES} admin={false} />
-  );
+  return canManageMembers(role.caller) ? <OrgAdminUsage /> : <MemberUsage />;
 };

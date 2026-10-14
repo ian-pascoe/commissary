@@ -24,7 +24,8 @@ Each holds a role in their org:
   org, the only one who creates orgs).
 - **Plain members** use the proxy from their coding agents and open the panel to see their own usage and to create and
   revoke their own proxy keys (the Proxy keys page; org admins see every key of the org), and to see which models their
-  grants let them use (My models). Where the org lets members
+  grants let them use (My models), and the Spend limits that bind them with what is left of each (Limits; they may cap
+  their own proxy keys, and org admins set every other limit and the org's calendar). Where the org lets members
   connect private credentials, they also get their own Accounts and API keys pages: they connect their own accounts and
   add their own keys, used only for their requests; org admins see that each exists (provider, owner, label) and can
   disable or remove it, never how it is used. Every other page is closed to them.

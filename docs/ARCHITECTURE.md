@@ -1526,7 +1526,7 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   `token_breakdown`; `api_key` = Access principal id, `auth_index` = the management (keyed) `auth_index`) and the Workers
   additions `.../records` (filters `since|until|provider|model|principal|member|team|auth_index|failed`, `limit`, keyset
   `before`; `team` is the team's member ids, one `json_each` parameter so a large team stays within D1's bound parameters)
-  and `.../summary` (`group_by=model|provider|principal|member|auth|endpoint|day`, totals per v2 bucket, avg latency/TTFT) and
+  and `.../summary` (`group_by=model|provider|principal|member|team|key|auth|endpoint|day`, totals per v2 bucket, avg latency/TTFT) and
   `.../series` (not in Go; the panel's per-account quota-window bars: `since` required, `until` default now, `bucket=hour|day`
   UTC, `group_by=auth|model|provider`, filters `provider|model|member|team|auth_index`; per key the points `{start, requests, failed,
   total_tokens}` (`acct_total_tokens`) of buckets with requests, one aggregate query; hour ranges are capped at 31 days and
@@ -2001,7 +2001,7 @@ credentials a subject may use; selection and the model registry read it (_Creden
   may use, and says what to ask for when there are none.
 - **Scope of the guarantee**: the pick enforces grants against the ControlPlane's own copy, so a removed grant stops
   selection on the next request. Model lists lag by the registry's 5 s snapshot TTL. Grants never apply to private
-  credentials, and spend limits are separate (ADR 0024).
+  credentials, and Spend limits are separate (ADR 0024, _Spend limits_).
 
 ## Proxy keys (`src/proxy-keys/`, `src/access/proxy-key.ts`, `src/management/proxy-key-routes.ts`)
 
@@ -2041,6 +2041,65 @@ Workers addition replacing the Go client API keys (`access.api-keys`, imported b
   most specific application, so the main application keeps every other path. It is derived from the Worker's output, so
   a deploy applies it only after the new Worker, which reads `cf-access-token`, is live. `tools/check-deploy.sh` verifies
   both sides after each CI deploy, and that a `cloudflared`-style request (`cf-access-token` plus a dummy key) is served.
+
+## Spend limits (`src/spend/`, `src/management/spend-routes.ts`)
+
+Workers addition, no Go counterpart; ADR 0024. A Spend limit caps the Cost an org's traffic adds up to over a day, week or
+month. Cost is the attempt's token breakdown at the model's price (_Usage accounting and observability_); the Worker
+prices each attempt, the ControlPlane counts and decides.
+
+- **Entries** (`spend/store.ts` `SpendStore`, in each org's ControlPlane, SQLite tables `spend_limits`, `spend_counters`
+  and `spend_settings`, `CREATE IF NOT EXISTS`, so there is no D1 migration and a ControlPlane that predates the feature
+  upgrades in place with no limits): a subject (`member`, `team`, `org`, `credential` (a shared one, named by its
+  `auth_index`) or `key` (a proxy key id)), a period and an amount in micro-USD, written by an org admin or, on their own
+  proxy key, by a member. Each limit has a revision and `updated_at/by`; an edit or delete names the revision in `If-Match`
+  (`409 conflict` when stale). There is one limit per subject, period and writer, and the limits on one subject and period
+  are enforced together, so the smaller amount binds. A member may not write a limit above an admin's on the same key and
+  period (`422 exceeds_admin_limit`). A credential limit stores the credential's id and is named by its `auth_index` at the
+  edge. Removing a member (with their proxy keys), deleting a team and removing a credential delete the limits and
+  counters that name them in the same call; revoking a proxy key leaves its limit, which no request meets any more.
+- **Calendar** (`spend_settings`, `PATCH /spend/settings`, org admins): an IANA time zone and the first day of the week;
+  `UTC` and Monday until set. A day runs from local midnight to the next local midnight (`spend/period.ts`, through
+  `Intl`, so a DST day has 23 or 25 hours), a week from the first day of the week, a month from the 1st. A counter is
+  keyed by the start of its period, and changing the time zone or the first day of the week deletes the counters, so every
+  period starts afresh under the new calendar (an old counter cannot come back when the calendar returns).
+- **Counters**: only a subject with a limit has one, and only for the current period of each limit's period; an org
+  without limits stores nothing and its check returns at once. A new limit counts from its creation (it does not look back
+  at earlier usage), and the last limit of a subject and period drops its counter.
+- **Check** (`spend/ledger.ts` `SpendLedger`, the pool's `SpendPolicy`; `credentials/selection/pick.ts`): before a credential
+  is chosen the pool asks the ledger for the `SpendGate` of the caller (member, teams, proxy key): a **key** limit with no
+  room refuses the request; a **member, team or org** limit with no room keeps the shared credentials away, so only the
+  member's own private credentials may serve it, and when none can the request is refused; a **credential** limit with no
+  room skips that credential like an unavailable one (the next credential serves, and with none left the answer is the usual
+  `503 auth_unavailable`: the limit is the credential's, not the request's). A refusal is the pick failure `spend_limit_reached`: `429` with the OpenAI-shaped body, a message naming the
+  period ("the daily Spend limit ... is reached") and `Retry-After` until the period ends. It is request-level: no
+  cooldown is set on any credential and the conductor does not fail over (`spendLimitReached` stops the attempt loop).
+- **Charge** (`conductor.ts` `finish`, `usage/sink.ts` `priceForSpend`): when the lease carries limits the Worker builds the
+  attempt's usage records first, prices them (`UsageSink.cost`, the same price table the D1 sink writes with, so the
+  stored record and the counter agree), reports `costMicros` with `report`, and the ControlPlane adds it to every
+  counter the attempt belongs to (`SpendLedger.scopes`): the key's, and, for traffic served by a **shared** credential,
+  the member's, the member's teams', the org's and the credential's. Traffic served by a **private** credential is the
+  member's own account with the provider, so only the key's counters see it. An org admin who reads a key limit's `spent_micros` therefore sees a total that includes
+  that key's private-credential Cost, but only the total: which credential or model it went to stays with the owner. An unpriced attempt costs 0 and is never
+  capped. The attempt in flight when a limit is reached finishes, so Spend can pass a limit by the Cost of the requests
+  already running (ADR 0024). Alpha search publishes no usage record, so it is not charged; a key limit still refuses it.
+- **`global`**: an org starts with no limits and an upgrade adds none, so nothing is limited until an org admin sets one;
+  the first request of an org with no limits does no ledger work.
+- **Routes** (`spend-routes.ts`, contract `contract/spend.ts`; `access/policy.ts`): `GET /spend` answers the calendar and
+  the limits the caller sees with `spent_micros`, `remaining_micros`, `period_start`, `resets_at` and `editable`
+  (org admins: every limit; a plain member: their own member limit, their teams', the org's and those on their proxy
+  keys); `POST /spend/limits` (201), `PUT|DELETE /spend/limits/:id` and `PATCH /spend/settings` (org admins only). Every
+  other route above is open to members; the ControlPlane's `SpendService` decides what each may write
+  (`403 forbidden` for a member on anything but their own keys, `404 subject_not_found`, `409 conflict` for a second
+  limit on the subject and period, `422 invalid_limit`).
+- **Usage breakdowns** (`usage/d1.ts`): `GET /observability/usage/summary?group_by=team|key` adds the cost by team (each
+  team's members' records summed apart, so a member on two teams counts in both and the groups can overlap) and by
+  proxy key (`key:<id>` principals; other sign-ins have the empty key). The private-traffic filter applies to both: a
+  private-credential record is read by its owner alone.
+- **Panel** (`web/src/pages/Limits.tsx`, `LimitsForms.tsx`, model in `web/src/lib/spend.ts`): **Limits** (`/limits`, every
+  member) lists the limits the caller sees with the Spend so far, what is left and when each starts over; org admins add,
+  edit and remove any limit and set the calendar, a plain member limits their own proxy keys. The Usage page offers Team and
+  Proxy key breakdowns beside Member.
 
 ## Authentication (Cloudflare Access)
 

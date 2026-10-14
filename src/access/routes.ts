@@ -45,6 +45,7 @@ export const PANEL_SECTIONS = [
   "grants",
   "my-models",
   "proxy-keys",
+  "limits",
   "assets",
 ] as const;
 
