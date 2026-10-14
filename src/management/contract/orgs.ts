@@ -73,6 +73,7 @@ export const OrgExport = Schema.Struct({
   config: Schema.Unknown,
   prices: Schema.Array(Schema.Unknown),
   credentials: Schema.Array(Schema.Unknown),
+  grants: Schema.Array(Schema.Unknown),
   members: Schema.Array(Schema.Unknown),
   teams: Schema.Array(Schema.Unknown),
   service_tokens: Schema.Array(Schema.Unknown),

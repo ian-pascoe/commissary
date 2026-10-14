@@ -353,7 +353,7 @@ The proxy keeps as little as it can and deletes at once; there is no grace perio
 - **Deleting an org** (`DELETE /org` with `{"name": "<the org's name>"}`; org owners and platform admins) removes its usage
   records, replay state, cached keys, credentials, config, members, proxy keys and registry entry at once and frees the
   slug. `global` is never deleted. A big org may answer `503 deletion_incomplete`: send the request again. Download the
-  export first (`GET /export`: settings, shared config, price overrides, credential summaries, members, teams and
+  export first (`GET /export`: settings, shared config, price overrides, credential summaries, grants, members, teams and
   service tokens, every secret as a preview; usage records come from the usage routes).
 - **Deleting an account** (`DELETE /me` with the caller's own email; people only) removes the person from every org with
   their data there, deletes the orgs they were the only member of, and keeps no removal note, so the address can start

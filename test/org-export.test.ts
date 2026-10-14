@@ -105,6 +105,7 @@ interface Exported {
   readonly config: Record<string, unknown>;
   readonly prices: ReadonlyArray<Record<string, unknown>>;
   readonly credentials: ReadonlyArray<Record<string, unknown>>;
+  readonly grants: ReadonlyArray<Record<string, unknown>>;
   readonly members: ReadonlyArray<{ readonly email: string; readonly role: string }>;
 }
 
@@ -127,6 +128,10 @@ describe("GET /export", () => {
       { provider: "claude", model: "claude-sonnet-4-5", input: 3 },
     ]);
     expect(body.credentials.map((entry) => entry["name"])).toContain("shared.json");
+
+    // The org's grants are named by people, not by ids.
+    expect(body.grants.length).toBeGreaterThan(0);
+    expect(JSON.stringify(body.grants)).not.toContain("mem_");
 
     // The shared group is there with its key as a preview.
     const text = JSON.stringify(body);

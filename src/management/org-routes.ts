@@ -22,6 +22,7 @@ import { deleteOrg as deleteOrgData } from "../platform/org-deletion.ts";
 import { platform, type PlatformStub } from "../platform/registry.ts";
 import type { OrgRecord, OrgWriteResult } from "../platform/registry-store.ts";
 import type { OrgView } from "./contract/orgs.ts";
+import type { GrantSubject } from "../grants/grant.ts";
 import { maskConfigSecrets } from "./export-view.ts";
 import { bodyObject, controlPlane, handled, jsonReply, replyError, type Reply } from "./http.ts";
 import { storedConfig } from "./settings-routes.ts";
@@ -222,6 +223,19 @@ const updateSettings = Effect.gen(function* () {
   return jsonReply(200, view(result.org));
 });
 
+/** A grant's subject by what a person reads: the member's email or the team's name instead of an id. */
+const exportedSubject = (
+  subject: GrantSubject,
+  members: ReadonlyMap<string, string>,
+  teams: ReadonlyMap<string, string>,
+): JsonObject => {
+  if (subject.kind === "member") return { kind: "member", email: members.get(subject.id) ?? "" };
+
+  if (subject.kind === "team") return { kind: "team", name: teams.get(subject.id) ?? "" };
+
+  return { kind: "everyone" };
+};
+
 const exportOrg = Effect.gen(function* () {
   const org = yield* addressedOrg;
   const viewer = yield* currentViewer;
@@ -234,10 +248,12 @@ const exportOrg = Effect.gen(function* () {
   );
 
   const members = yield* controlPlane("listMembers", (stub) => stub.listMembers());
+  const grants = yield* controlPlane("grantEntries", (stub) => stub.grantEntries());
   const teams = yield* controlPlane("listTeams", (stub) => stub.listTeams());
   const tokens = yield* controlPlane("listServiceTokens", (stub) => stub.listServiceTokens());
   const iso = (at: number) => new Date(at).toISOString();
   const byId = new Map(members.map((member) => [member.id, member.email]));
+  const teamNames = new Map(teams.map((team) => [team.id, team.name]));
 
   return jsonReply(200, {
     exported_at: iso(now),
@@ -248,6 +264,12 @@ const exportOrg = Effect.gen(function* () {
       updated_at: iso(price.updated_at),
     })),
     credentials,
+    grants: grants.grants.map((grant) => ({
+      subject: exportedSubject(grant.subject, byId, teamNames),
+      scope: grant.scope,
+      models: grant.models,
+      updated_at: iso(grant.updated_at),
+    })),
     members: members.map((member) => ({
       email: member.email,
       role: member.role,
