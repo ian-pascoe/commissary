@@ -165,7 +165,7 @@ describe("the cost of a record at write time", () => {
         requestId: "refused",
         model: "mystery-1",
         failed: true,
-        fail: { statusCode: 401, body: "no" },
+        fail: { statusCode: 401 },
         detail: { ...empty, cachedTokens: 0, cacheReadTokens: 0, totalTokens: 0 },
       }),
     );

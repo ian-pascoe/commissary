@@ -8,7 +8,7 @@ import { formatAgo, formatDate } from "./format.ts";
 /** A key's name is 1 to 100 characters (code points, as the server counts), without control characters. */
 export const KEY_NAME_MAX = 100;
 
-/** The most keys a member holds (revoked ones count). */
+/** The most keys a member holds. A revoked or expired key is deleted, so only keys that work count (ADR 0027). */
 export const KEYS_PER_MEMBER = 100;
 
 export type KeyStatus = "active" | "expired" | "revoked";
@@ -20,7 +20,11 @@ const instant = (iso: string | undefined): number | undefined => {
   return Number.isNaN(ms) ? undefined : ms;
 };
 
-/** Revoked wins over expired; a key expires at its `expires_at` instant, as the server reads it. */
+/**
+ * The server deletes a revoked or expired key, so the list holds keys that work; a key expires at its `expires_at`
+ * instant, as the server reads it, and the page may show one for the moment between that instant and the next reload.
+ * Revoked wins over expired for the answer of a revocation.
+ */
 export const keyStatus = (key: ProxyKeyView, now: number): KeyStatus => {
   if (key.revoked_at !== undefined) return "revoked";
   const expires = instant(key.expires_at);
@@ -187,7 +191,7 @@ export const keyProblem = (error: string | undefined, message: string, detail?: 
     case "invalid_expiry":
       return "An expiry has to be a time in the future.";
     case "too_many_keys":
-      return `A member holds at most ${KEYS_PER_MEMBER} proxy keys, revoked ones included. Revoke keys you no longer use, and ask an org admin if none is left to revoke.`;
+      return `A member holds at most ${KEYS_PER_MEMBER} proxy keys. Revoke keys you no longer use, and ask an org admin if none is left to revoke.`;
     case "proxy_key_not_found":
       return "That key no longer exists. Reload to see the current list.";
     default:

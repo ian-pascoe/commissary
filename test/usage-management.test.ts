@@ -40,7 +40,7 @@ const seed = async () => {
       requestedAt: 1_700_000_002_000,
       model: "gpt-4",
       failed: true,
-      fail: { statusCode: 502, body: "bad gateway" },
+      fail: { statusCode: 502, type: "bad_gateway" },
     }),
   );
 };
@@ -113,7 +113,7 @@ describe("GET /records and /summary", () => {
     expect((next.body as { next_before?: string }).next_before).toBeUndefined();
     const failed = await json(`${BASE}/records?failed=true`);
     expect((failed.body as { records: Array<{ fail: unknown }> }).records).toMatchObject([
-      { fail: { status_code: 502, body: "bad gateway" } },
+      { fail: { status_code: 502, type: "bad_gateway" } },
     ]);
 
     const since = await json(

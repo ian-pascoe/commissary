@@ -17,10 +17,20 @@ import type { SectionId } from "../lib/settings.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
 import { CATALOG_OPTIONS } from "./SettingsCopy.ts";
 import { SettingsSection } from "./SettingsForm.tsx";
-import { ErrorRules, PayloadRules } from "./SettingsFacts.tsx";
+import { DangerBody } from "./SettingsDanger.tsx";
+import { ErrorRules, PayloadRules, PlainSection } from "./SettingsFacts.tsx";
+import { RetentionBody } from "./SettingsRetention.tsx";
 import styles from "./Settings.module.css";
 
-const JUMPS: ReadonlyArray<readonly [SectionId | "payload", string]> = [
+/** Sections without a form: nothing to leave unsaved. */
+type PlainId = "payload" | "retention" | "danger";
+
+type JumpId = SectionId | PlainId;
+
+const isPlain = (id: JumpId): id is PlainId =>
+  id === "payload" || id === "retention" || id === "danger";
+
+const JUMPS: ReadonlyArray<readonly [JumpId, string]> = [
   ["routing", "Routing"],
   ["retries", "Retries & cooldowns"],
   ["requests", "Requests & streaming"],
@@ -29,6 +39,8 @@ const JUMPS: ReadonlyArray<readonly [SectionId | "payload", string]> = [
   ["providers", "Providers"],
   ["catalogs", "Model catalog"],
   ["refresh", "Account refresh"],
+  ["retention", "Usage records"],
+  ["danger", "Danger zone"],
 ];
 
 /** Unsaved changes by section. */
@@ -51,7 +63,7 @@ const Head = ({ view }: { readonly view: SettingsView | undefined }) => (
 const Jumps = ({ dirty }: { readonly dirty: Dirty }) => (
   <nav className={styles["jumps"]} aria-label="Sections">
     {JUMPS.map(([id, title]) => {
-      const count = id === "payload" ? 0 : (dirty[id] ?? 0);
+      const count = isPlain(id) ? 0 : (dirty[id] ?? 0);
 
       return (
         <a key={id} href={`#${id}`}>
@@ -89,7 +101,7 @@ const LeaveGuard = ({ dirty }: { readonly dirty: Dirty }) => {
   }, [blocker.status]);
 
   const sections = JUMPS.flatMap(([id, title]) =>
-    id !== "payload" && (dirty[id] ?? 0) > 0 ? [title] : [],
+    !isPlain(id) && (dirty[id] ?? 0) > 0 ? [title] : [],
   );
 
   return (
@@ -305,6 +317,14 @@ const Body = ({
       <SettingsSection id="refresh" title="Account refresh" {...common}>
         {({ field }) => field("oauth.auth-auto-refresh-workers")}
       </SettingsSection>
+
+      <PlainSection id="retention" title="Usage records">
+        <RetentionBody />
+      </PlainSection>
+
+      <PlainSection id="danger" title="Danger zone">
+        <DangerBody />
+      </PlainSection>
     </>
   );
 };

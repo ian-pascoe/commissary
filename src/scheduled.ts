@@ -8,7 +8,7 @@
  * it only ever reaches that org's ControlPlane (ADR 0021). One org's failure does not stop the next org. The orgs
  * are the ones the Platform registry lists ({@link registeredOrgs}).
  */
-import { Effect, Layer } from "effect";
+import { Clock, Effect, Layer } from "effect";
 import { FetchHttpClient, type HttpClient } from "effect/http";
 import { ConfigReader } from "./config/reader.ts";
 import { refreshAntigravityModels } from "./executor/antigravity/models.ts";
@@ -51,7 +51,7 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
   // (`fetchAvailableModels`, KV `ag:models:<credential>`); the version first so the probes use the fresh user agent.
   { name: "antigravity-version", scope: "deployment", run: refreshAntigravityVersion },
   { name: "antigravity-models", scope: "org", run: refreshAntigravityModels },
-  // Usage history older than `USAGE_RETENTION_DAYS` is deleted from D1 (every org's).
+  // Usage history older than each org's retention period is deleted from D1 (an org with none keeps everything).
   { name: "usage-retention", scope: "deployment", run: pruneExpiredUsage },
   // helps.StartXAIVersionUpdater (3 h): latest Grok CLI version from npm into KV for the chat-proxy identity headers.
   { name: "xai-client-version-refresh", scope: "deployment", run: refreshXaiClientVersion() },
@@ -63,6 +63,18 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
       const plane = yield* currentControlPlane;
 
       return yield* Effect.promise(() => plane.refreshDevinStatus());
+    }),
+  },
+  // Expired proxy keys are deleted, not kept marked (ADR 0027): a listing or issue deletes them too, this covers an org
+  // nobody opens.
+  {
+    name: "proxy-key-expiry",
+    scope: "org",
+    run: Effect.gen(function* () {
+      const plane = yield* currentControlPlane;
+      const now = yield* Clock.currentTimeMillis;
+
+      return yield* Effect.promise(() => plane.purgeExpiredProxyKeys(now));
     }),
   },
   // Credential refresh safety sweep: re-arms the ControlPlane refresh alarm. Before the quota

@@ -33,6 +33,8 @@ export interface ServerDetail {
   readonly path?: string;
   readonly line?: number;
   readonly column?: number;
+  /** The slugs of the orgs a refusal is about (`409 sole_owner` on deleting an account). */
+  readonly orgs?: ReadonlyArray<string>;
 }
 
 /** The server's `message`, `path`, `line` and `column` (a refused setting says which and why), when it sent them. */
@@ -40,13 +42,14 @@ export const serverDetail = (cause: Cause.Cause<unknown>): ServerDetail => {
   const failure = Cause.findErrorOption(cause);
 
   if (Option.isNone(failure) || !(failure.value instanceof ManagementError)) return {};
-  const { message, path, line, column } = failure.value;
+  const { message, path, line, column, orgs } = failure.value;
 
   return {
     ...(message === undefined ? {} : { message }),
     ...(path === undefined ? {} : { path }),
     ...(line === undefined ? {} : { line }),
     ...(column === undefined ? {} : { column }),
+    ...(orgs === undefined ? {} : { orgs }),
   };
 };
 

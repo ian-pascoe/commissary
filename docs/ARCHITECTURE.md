@@ -1519,9 +1519,15 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   are config entries in their own ControlPlane table (`config_price_overrides`, unique per lower-cased provider and
   model, with a revision like every entry) so a Go-document import, which replaces the other entry tables, leaves them
   alone; the table is created idempotently with the rest of the schema. Rates must be finite, from 0 to 100,000.
-- **Retention** (`retention.ts`, cron task `usage-retention`): deletes records older than `USAGE_RETENTION_DAYS` (default
-  30, `0` = keep) in bounded batches, across every org (a deployment-wide cron task). `usage-statistics-enabled` and `redis-usage-queue-retention-seconds` are not used:
+- **Retention** (`retention.ts`, cron task `usage-retention`, ADR 0027): deletes each org's records older than that org's
+  `usage_retention_days` (a column of the Platform registry's `orgs` table, added idempotently when the registry starts;
+  `null` keeps them; new orgs start at 90, `global` and existing orgs at `null`) in bounded batches (a deployment-wide cron
+  task). The deployment variable `USAGE_RETENTION_DAYS` (default 30) is gone: the period belongs to the org and an org admin
+  sets it (`PATCH /org`). `usage-statistics-enabled` and `redis-usage-queue-retention-seconds` are not used:
   persistence is always on when the `USAGE` binding exists.
+- **Failures without a body** (difference from Go): a failed attempt's usage record keeps the upstream status, error type
+  and error code, and nothing of the response body (the `fail_body` column stays `NULL`; migration `0007` clears the
+  bodies stored before it). Go's queue keeps the failure body for the management API.
 - **Management** (`management/usage-routes.ts`): `GET /v8/management/observability/usage/queue?count=N` (atomically pops the oldest unexported records, Go queue JSON with
   `token_breakdown`; `api_key` = Access principal id, `auth_index` = the management (keyed) `auth_index`) and the Workers
   additions `.../records` (filters `since|until|provider|model|principal|member|team|auth_index|failed`, `limit`, keyset
@@ -1681,6 +1687,39 @@ error; `X-Opencode-Session` from a client is also an explicit session identity f
 OpenCode Go keys are listed as Accounts (config-sourced) for their usage windows. Not ported/added: the `jev`/systemone
 endpoint.
 
+## Zero data retention (`src/platform/org-deletion.ts`, `src/management/{org-routes,export-view}.ts`)
+
+ADR 0027: deleting something deletes it at once, and the proxy keeps no content it does not need. The pieces:
+
+- **Retention** per org, `usage_retention_days` in the Platform registry (see "Usage accounting"). **Usage failures** keep
+  status, type and code, not the body (same section).
+- **Member removal** deletes the member's private data in the ControlPlane (`#deleteMemberData`), and their Spend limits and
+  counters; **proxy keys** are deleted when revoked or expired ("Proxy keys"), and `ProxyKeyStore` reports every key it
+  deletes so the key's Spend limits and counters go with it.
+- **Org deletion** (`deleteOrg`, called by `DELETE /org` and by account deletion) runs, in this order: the org's usage rows in
+  D1 (`deleteOrgUsage`, batched), the `SessionState` instances it registered, its `org.<id>.…` keys in the `CACHE` KV
+  namespace, its ControlPlane's whole storage (`ControlPlane.wipeOrg`: SQL tables, the key-value store and the refresh
+  alarm) and last its registry entry, which frees the slug. The registry entry goes last, so a deletion that stops half way
+  (a Worker invocation has a subrequest limit: `DELETION_BUDGET`, 400 calls; the step is named in the log) is repeated by
+  sending the request again: the org is still listed and each earlier step finds less to do. `global` is refused. After the
+  wipe the object keeps a `#wiped` flag: a stale in-memory ControlPlane of the deleted org answers empty for session
+  instances and refuses to wipe twice; a request that still names the org's id is refused by the registry check before a
+  ControlPlane is reached.
+- **`SessionState` registration**: a `SessionState` instance is named by its store, caller scope and session, which hold no
+  org id to enumerate. So the instance registers itself with its org's ControlPlane when it first writes
+  (`session-state/instances.ts`, from the org-scoped store name; table `session_instances` with the expiry of the data, at
+  most seven days) and org deletion wipes the registered ones. Instances written before this change are not registered: they
+  hold replay state only, which expires on its own within seven days.
+- **Export** (`GET /export`, `export-view.ts`): the panel offers it before an org is deleted. It assembles what the org has
+  from the same reads the pages use and masks every secret as a preview (`maskConfigSecrets`: secret-named keys, header
+  values the header classifier calls secret or does not know, credentials in a `proxy-url`); it never carries tokens. Usage
+  records are not included: the usage routes page and export them.
+- **Account deletion** (`DELETE /me`): decides first (`ControlPlane.accountStanding` per org: refuse while the person is the
+  only owner of an org that has other members), then deletes the orgs the person is alone in (never `global`), leaves the
+  others (`ControlPlane.leaveOrg`: removes the member and their data and clears the removal note that blocks a removed
+  member from auto-joining again, which only an admin removal keeps), re-syncs the registry index and drops the person's
+  index rows. The seam for #72: a hosted sign-in account is deleted after the last org step.
+
 ## SessionState Durable Object (`src/session-state/`)
 
 Replaces the per-process maps of `internal/cache` (and the Home KV): `SESSION_STATE.getByName(<store>:<sha256(scope, session)[:32]>)`
@@ -1737,6 +1776,9 @@ two orgs never share an instance.
   sequential replay application of Go is ported (its batched splice path is an optimisation that "retains the exact legacy
   behavior"), and context fingerprints are self-consistent hashes (not byte-identical with Go's); the Gemini cache is per caller
   instead of global; a miss no longer reserves a tombstone (the generation of the absent entry fences concurrent writers).
+- **Retention and deletion** (ADR 0027): an instance keeps its entries for at most seven days (`session-state` TTLs are
+  unchanged). It registers itself with its org's ControlPlane on its first write so that deleting the org can wipe it
+  (`session-state/instances.ts`, `SessionState.wipe`); see "Zero data retention".
 
 ## Local token counting (`src/tokenizer/`, `src/executor/helps/token-count.ts`)
 
@@ -1915,6 +1957,17 @@ Platform-level routes (`org-routes.ts`, contract group `orgs`, `src/management/c
 
 Anyone else gets `403 platform_admin_required` on the three org routes. The panel reads `/me` for its org switcher.
 
+Routes of the addressed org (`/org`, `/export`) and the account route (`DELETE /me`), all in `org-routes.ts` (ADR 0027,
+"Zero data retention" below):
+
+| Route         | Who                                 | Does                                                                                                                        |
+| ------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `GET /org`    | org admin                           | the org (`OrgView`: id, slug, name, `usage_retention_days`)                                                                 |
+| `PATCH /org`  | org admin                           | `{usage_retention_days: <1..3650> \| null}`; `422` for any other number                                                     |
+| `GET /export` | org admin                           | the org's settings, masked shared config, price overrides, credential summaries, grants, members, teams, tokens             |
+| `DELETE /org` | a person: org owner, platform admin | `{name}` retyped; deletes the org and everything it holds; `409 global_org`, `422 name_mismatch`, `503 deletion_incomplete` |
+| `DELETE /me`  | a person                            | `{email}` retyped; leaves every org, deletes the orgs the person is alone in; `409 sole_owner`, `422 email_mismatch`        |
+
 **Panel.** The panel of an org is the same single-page app served at `/o/<slug>/...` (the Worker answers every page path of
 every org with `index.html`). The app reads its org from the address: TanStack Router's `basepath` is `/o/<slug>`, and the
 typed client rewrites each request to `/v8/management/orgs/<slug>/...` except `/orgs` (`web/src/lib/org.ts`,
@@ -2012,12 +2065,14 @@ Workers addition replacing the Go client API keys (`access.api-keys`, imported b
   base64url. The org id is the permanent id, not the slug, so renaming an org keeps its keys working. Only the SHA-256 of
   the whole key is stored, with a display prefix (`cfp_<org>_<key id>_` and 4 characters of the secret).
 - **Store**: table `proxy_keys` in each org's ControlPlane (`CREATE IF NOT EXISTS`, next to the members tables): member id,
-  name, hash, prefix, created, last used (written at most once a minute per key), expiry, revocation. Listing and revoking
+  name, hash, prefix, created, last used (written at most once a minute per key), expiry. Listing and revoking
   are narrowed to the caller's own keys unless the gate admitted an org admin; creating checks in the ControlPlane that
-  the member exists. Revoking keeps the row (shown as revoked, as the issue asks) but a member keeps at most 100 rows:
-  at most 100 live keys (`409 too_many_keys`), and a new key replaces the longest-dead revoked or expired one when the
-  member is at 100 (ADR 0027 keeps as little as it can). Removing a member deletes their keys in the same Durable Object
-  call.
+  the member exists. Nothing dead is kept (ADR 0027): revoking deletes the row (the answer still carries `revoked_at`),
+  an expired key's row is deleted by the next listing, issue or presentation of it (`purgeExpired`, also the org cron
+  task `proxy-key-expiry` for an org nobody opens), and the rows the first version kept as revoked are deleted when the
+  ControlPlane starts (the `revoked_at` column stays, never written). A member holds at most 100 keys (`409
+  too_many_keys`). Removing a member deletes their keys, private accounts, private key groups and OAuth logins in the
+  same Durable Object call.
 - **Gate** (`access/proxy-key.ts`): on a proxy route the first `cfp_…` credential in the Go config access provider's order
   wins over everything else, including an Access JWT. Verification asks the Platform registry whether the org exists (the
   answer is trusted for 30 s per isolate) (so a made-up org id never creates a ControlPlane), then the org's ControlPlane, which compares

@@ -97,6 +97,8 @@ exists from the start with the slug `default` and holds everything the deploymen
 | Org list, create  | `GET`/`POST /v8/management/orgs`                                          |
 | Rename an org     | `PATCH /v8/management/orgs/<slug>` (name and/or slug)                     |
 | Who am I, my orgs | `GET /v8/management/me`                                                   |
+| Delete my account | `DELETE /v8/management/me` with `{"email": "<your email>"}`               |
+| The org itself    | `GET`/`PATCH`/`DELETE /v8/management/orgs/<slug>/org`, `.../export`       |
 
 A **platform admin** (`PLATFORM_ADMIN_*`) manages every org through these addresses and is the only one who may list, create and
 rename orgs: anyone else gets `403 {"error":"platform_admin_required"}`. An org the registry does not list answers `404` to a
@@ -134,6 +136,10 @@ the Worker asks on every request: a removed member, or a member whose role was l
 | Allow or stop private credentials (`PATCH /membership`, `private_credentials`)                  |                   |     ✓     |              ✓               |       ✓        |
 | Give a service token a role above plain member; download a credential                           |                   |           | owner **service token** only |       ✓        |
 | List, create and rename orgs                                                                    |                   |           |                              |       ✓        |
+| Read the org and its retention period (`GET /org`)                                              |                   |     ✓     |              ✓               |       ✓        |
+| Set the usage retention period (`PATCH /org`); download the org's export (`GET /export`)        |                   |     ✓     |              ✓               |       ✓        |
+| Delete the org (`DELETE /org`, retyping its name; people only)                                  |                   |           |              ✓               |       ✓        |
+| Delete their own account (`DELETE /me`)                                                         |  ✓ (people only)  |     ✓     |              ✓               |       ✓        |
 
 ¹ Proxy keys are issued to members: a platform admin who is not a member of the org, or a service token, gets
 `403 member_required` when creating one.
@@ -188,7 +194,7 @@ A **proxy key** (ADR 0022) is how a client authenticates on the proxy routes: `c
 random bits of secret. Any member creates keys for themselves in the panel (**Proxy keys**) or with
 `POST /v8/management/proxy-keys {"name": "laptop", "expires_at": "<ISO time, optional>"}`; the answer carries the whole
 key once (`key`), and the org's ControlPlane stores only its SHA-256, a visible prefix (`cfp_<org id>_<key id>_<4
-characters>`), its member, its name and when it was created, last used (to the minute), expires and was revoked.
+characters>`), its member, its name and when it was created, last used (to the minute) and expires.
 
 - A key names its org by the org's permanent id, so the Worker asks that org's ControlPlane and no other (after the Platform
   registry confirms that the org exists). The presented key's hash is compared with the stored one in
@@ -198,10 +204,12 @@ characters>`), its member, its name and when it was created, last used (to the m
   member's tools share it. A key is never a platform admin.
 - `GET /proxy-keys` lists the caller's keys (an org admin's: every key of the org, with `member_email`); `DELETE
   /proxy-keys/<id>` revokes one (`404 proxy_key_not_found` for another member's key unless an org admin asks). A revoked
-  key stays listed and is refused from the next request on in the isolate that revoked it and within 30 seconds
-  everywhere (each isolate trusts a verified key for at most 30 seconds, and never past its expiry). Removing a member
-  deletes their keys (ADR 0027). A member holds at most 100 live keys; a revoked or expired key stays listed until a
-  new key needs its place (a member keeps at most 100 keys in all).
+  key is **deleted** (the answer still says when it was revoked), and is refused from the next request on in the isolate
+  that revoked it and within 30 seconds everywhere (each isolate trusts a verified key for at most 30 seconds, and never
+  past its expiry). An expired key is deleted too: by the next listing or new key of the org, by a request that
+  presents it, and by a scheduled sweep for an org nobody opens. Removing a member deletes their keys, private
+  accounts, private API key groups and unfinished sign-ins (ADR 0027). A member holds at most 100 keys; revoking or
+  waiting out one frees its place.
 - Proxy keys are never accepted on the management API or the panel: those stay behind Access.
 
 **Access sign-ins for clients** (`GET`/`PATCH /membership`, `{"access_clients": true}`): clients set up before proxy keys
@@ -330,12 +338,38 @@ put a server-side client in between.
   document. A key whose secret a stored key of its family has keeps that key's credential id, so the next read shows the
   same `auth_index` (the next read confirms, as above); a wrong guess has replaced every stored key with the document's. Configuration error messages never quote a value.
 
+### Zero data retention (ADR 0027)
+
+The proxy keeps as little as it can and deletes at once; there is no grace period, no soft delete and no restore.
+
+- **Usage records** keep an upstream failure's status, type and code but not its body, and are pruned after the org's
+  **retention period** (`usage_retention_days`, in days; `null` keeps them). A new org starts at 90 days; `global` and
+  every org that existed before keep records until an org admin sets a period, so upgrading deletes no history. The cron
+  task `usage-retention` applies each org's period.
+- **Removing a member** (`DELETE /members/<id>`) deletes their proxy keys, private accounts and API key groups, the
+  OAuth logins they started in that org, and their Spend limits and counters and those of their proxy keys.
+- **Proxy keys** are deleted when revoked and when they expire (an expired key is purged when keys are listed or created,
+  when one is checked, and by the cron task `proxy-key-expiry`); a deleted key's Spend limits and counters go with it.
+- **Deleting an org** (`DELETE /org` with `{"name": "<the org's name>"}`; a person who is an org owner or a platform admin, never a service
+  token: `403 person_required`) removes its usage
+  records, replay state, cached keys, credentials, config, members, proxy keys and registry entry at once and frees the
+  slug. `global` is never deleted. A big org may answer `503 deletion_incomplete`: send the request again. Download the
+  export first (`GET /export`: settings, shared config, price overrides, credential summaries, grants, members, teams and
+  service tokens, every secret as a preview; usage records come from the usage routes).
+- **Deleting an account** (`DELETE /me` with the caller's own email; people only) removes the person from every org with
+  their data there, deletes the orgs they were the only member of, and keeps no removal note, so the address can start
+  over. It is refused with `409 sole_owner` (and the org slugs) while they are the only owner of an org with other members:
+  hand it over first. Access signs the person in again on their next request, which creates a new, empty membership; a
+  hosted sign-in (#72) will also delete the sign-in account itself here.
+- **Replay state** that thinking and continuity depend on stays, bounded by its expiry of at most seven days; stale state of
+  a deleted org that was not registered expires on its own within that time.
+
 ### Logs and personal data
 
 Every proxied request produces one structured log line (Workers Logs) whose `principal` field is the caller:
 `key:<key id>` for a proxy key, `user:<email>` for people, `service:<client id>` for service tokens. Usage records in D1 store the same id. Emails are
-personal data: restrict who can read Workers Logs and the D1 database, and set the retention you need
-(`USAGE_RETENTION_DAYS`, Workers Logs retention). Tokens, API keys, JWTs, request bodies, headers and query strings are never
+personal data: restrict who can read Workers Logs and the D1 database, and set the retention you need (each org's usage
+retention period, `PATCH /org` with `usage_retention_days`, and Workers Logs retention). Tokens, API keys, JWTs, request bodies, headers and query strings are never
 logged; scheduled-job failures are logged as a one-line summary with URL queries removed.
 
 ## 5. Optional: single-header service token

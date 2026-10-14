@@ -16,6 +16,7 @@ import {
   type OrgInput,
   type OrgPatch,
   type OrgRecord,
+  type OrgRemoval,
   type OrgWriteResult,
   PlatformStore,
 } from "./registry-store.ts";
@@ -57,6 +58,21 @@ export class Platform extends DurableObject<Env> {
   /** Renames the org addressed by `slug` (its name, its slug, or both). */
   updateOrg(slug: string, patch: OrgPatch): OrgWriteResult {
     return this.#store.updateOrg(slug, patch);
+  }
+
+  /** Sets (or, with `null`, clears) how many days the org's usage records are kept (ADR 0027). */
+  setUsageRetention(id: string, days: number | null): OrgWriteResult {
+    return this.#store.setUsageRetention(id, days);
+  }
+
+  /** Deletes the org and its index rows at once; `global` is refused (ADR 0027). */
+  deleteOrg(id: string): OrgRemoval {
+    return this.#store.deleteOrg(id);
+  }
+
+  /** Deletes a person's index rows in every org; answers how many orgs listed them. */
+  removePerson(email: string): number {
+    return this.#store.removePerson(email);
   }
 
   orgsOfEmail(email: string): ReadonlyArray<OrgRecord> {

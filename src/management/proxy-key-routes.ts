@@ -65,8 +65,10 @@ const listProxyKeys = Effect.gen(function* () {
 
   if (!every && identity.memberId === undefined) return jsonReply(200, { keys: [] });
 
+  const now = yield* Clock.currentTimeMillis;
+
   const keys = yield* controlPlane("listProxyKeys", (stub) =>
-    stub.listProxyKeys(every ? undefined : identity.memberId),
+    stub.listProxyKeys(every ? undefined : identity.memberId, now),
   );
 
   return jsonReply(200, { keys: keys.map((key) => view(key, identity)) });

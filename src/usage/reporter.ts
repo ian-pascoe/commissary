@@ -7,6 +7,7 @@
  * (stream end included) and publishes the record with its v2 token breakdown.
  */
 import { ensureTokenBreakdown } from "./accounting.ts";
+import { failureDetail, type UsageFailure } from "./failure.ts";
 import { mergeStreamUsageDetail } from "./parsers.ts";
 import type { UsageDetail, UsageRecord } from "./record.ts";
 import { emptyUsageDetail, hasNonZeroTokenUsage } from "./record.ts";
@@ -44,7 +45,7 @@ export interface UsageReporterInit {
 
 export class UsageReporter {
   #detail: UsageDetail | undefined;
-  #failure: { statusCode: number; body: string } | undefined;
+  #failure: UsageFailure | undefined;
   #responseModel: string | undefined;
   #ttftAt: number | undefined;
   #firstPacketAt: number | undefined;
@@ -156,9 +157,16 @@ export class UsageReporter {
     );
   }
 
-  /** Marks the attempt failed; the first failure is kept. */
-  fail(statusCode: number, body: string): void {
-    this.#failure ??= { statusCode: statusCode > 0 ? statusCode : 500, body };
+  /**
+   * Marks the attempt failed; the first failure is kept. `body` is the upstream's error text: it is read for the
+   * error's type and code and dropped, so the record keeps the status and those two identifiers only (ADR 0027).
+   * `code` is the proxy's own code for the error, which wins over the upstream's.
+   */
+  fail(statusCode: number, body: string, code?: string): void {
+    this.#failure ??= {
+      statusCode: statusCode > 0 ? statusCode : 500,
+      ...failureDetail({ message: body, code }),
+    };
   }
 
   observeResponseModel(model: string | undefined): void {

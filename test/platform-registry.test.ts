@@ -3,7 +3,9 @@
 import { evictDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
+import { runInDurableObject } from "cloudflare:test";
 import { DEFAULT_ORG_SLUG, GLOBAL_ORG, newOrgId } from "../src/platform/org.ts";
+import { DEFAULT_USAGE_RETENTION_DAYS } from "../src/platform/registry-store.ts";
 import { PLATFORM_NAME, platformOf } from "../src/platform/registry.ts";
 
 const fresh = () => env.PLATFORM.getByName(`registry-${crypto.randomUUID()}`);
@@ -15,7 +17,13 @@ describe("seed", () => {
     const platform = fresh();
 
     expect(await platform.listOrgs()).toEqual([
-      { id: GLOBAL_ORG, slug: DEFAULT_ORG_SLUG, name: "Default", createdAt: expect.any(Number) },
+      {
+        id: GLOBAL_ORG,
+        slug: DEFAULT_ORG_SLUG,
+        name: "Default",
+        createdAt: expect.any(Number),
+        usageRetentionDays: null,
+      },
     ]);
     expect((await platform.getOrgBySlug("default"))?.id).toBe(GLOBAL_ORG);
     expect((await platform.getOrgById("global"))?.slug).toBe("default");
@@ -209,6 +217,137 @@ describe("membership index", () => {
     expect(
       await fresh().replaceOrgIndex("ghost", { emails: ["a@b.c"], serviceTokens: [] }),
     ).toEqual({ ok: false, error: "not_found" });
+  });
+});
+
+describe("usage retention", () => {
+  it("gives a new org 90 days and keeps the orgs that existed before the setting without a period", async () => {
+    const platform = fresh();
+
+    // The registry as it was before the setting: no column, `global` and one more org.
+    await runInDurableObject(platform, (_instance, state) => {
+      state.storage.sql.exec("ALTER TABLE orgs DROP COLUMN usage_retention_days");
+      state.storage.sql.exec(
+        "INSERT INTO orgs (id, slug, name, created_at) VALUES ('org-old', 'old', 'Old', 1)",
+      );
+    });
+    await evictDurableObject(platform);
+
+    expect((await platform.listOrgs()).map((org) => [org.slug, org.usageRetentionDays])).toEqual([
+      ["default", null],
+      ["old", null],
+    ]);
+
+    const created = await platform.createOrg({ slug: "fresh", name: "Fresh" }, NOW);
+
+    if (!created.ok) throw new Error(created.message);
+    expect(DEFAULT_USAGE_RETENTION_DAYS).toBe(90);
+    expect(created.org.usageRetentionDays).toBe(90);
+
+    // Restarting changes nothing.
+    await evictDurableObject(platform);
+    expect((await platform.listOrgs()).map((org) => [org.slug, org.usageRetentionDays])).toEqual([
+      ["default", null],
+      ["old", null],
+      ["fresh", 90],
+    ]);
+  });
+
+  it("sets and clears the period of an org, refusing anything but whole days", async () => {
+    const platform = fresh();
+    const created = await platform.createOrg({ slug: "acme", name: "Acme" }, NOW);
+
+    if (!created.ok) throw new Error(created.message);
+
+    expect(await platform.setUsageRetention(created.org.id, 30)).toMatchObject({
+      ok: true,
+      org: { usageRetentionDays: 30 },
+    });
+    expect((await platform.getOrgById(created.org.id))?.usageRetentionDays).toBe(30);
+    expect(await platform.setUsageRetention(created.org.id, null)).toMatchObject({
+      ok: true,
+      org: { usageRetentionDays: null },
+    });
+
+    for (const days of [0, -1, 1.5, 3651, Number.NaN])
+      expect(await platform.setUsageRetention(created.org.id, days)).toMatchObject({
+        ok: false,
+        error: "invalid_retention",
+      });
+
+    expect(await platform.setUsageRetention("org-ghost", 30)).toMatchObject({
+      ok: false,
+      error: "not_found",
+    });
+  });
+});
+
+describe("removal", () => {
+  const setup = async () => {
+    const platform = fresh();
+    const acme = await platform.createOrg({ slug: "acme", name: "Acme" }, NOW);
+    const beta = await platform.createOrg({ slug: "beta", name: "Beta" }, NOW + 1);
+
+    if (!acme.ok || !beta.ok) throw new Error("setup");
+    await platform.replaceOrgIndex(acme.org.id, {
+      emails: ["alice@example.com", "bob@example.com"],
+      serviceTokens: ["acme.access"],
+    });
+    await platform.replaceOrgIndex(beta.org.id, {
+      emails: ["alice@example.com"],
+      serviceTokens: ["beta.access"],
+    });
+
+    return { platform, acme: acme.org, beta: beta.org };
+  };
+
+  it("removes an org with its index rows, frees its slug and leaves the other orgs alone", async () => {
+    const { platform, acme, beta } = await setup();
+
+    expect(await platform.deleteOrg(acme.id)).toEqual({ ok: true });
+
+    expect(await platform.getOrgById(acme.id)).toBeUndefined();
+    expect(await platform.getOrgBySlug("acme")).toBeUndefined();
+    expect(await platform.orgOfServiceToken("acme.access")).toBeUndefined();
+    expect((await platform.orgsOfEmail("alice@example.com")).map((org) => org.slug)).toEqual([
+      "beta",
+    ]);
+    expect(await platform.orgsOfEmail("bob@example.com")).toEqual([]);
+    expect((await platform.orgOfServiceToken("beta.access"))?.id).toBe(beta.id);
+
+    // Its rows are gone from the tables, not hidden.
+    await runInDurableObject(platform, (_instance, state) => {
+      const count = (sql: string) => state.storage.sql.exec<{ n: number }>(sql, acme.id).one().n;
+
+      expect(count("SELECT COUNT(*) AS n FROM orgs WHERE id = ?")).toBe(0);
+      expect(count("SELECT COUNT(*) AS n FROM org_members WHERE org_id = ?")).toBe(0);
+      expect(count("SELECT COUNT(*) AS n FROM org_service_tokens WHERE org_id = ?")).toBe(0);
+    });
+
+    // The slug can be taken again, by an org with an id of its own.
+    const reused = await platform.createOrg({ slug: "acme", name: "Acme again" }, NOW + 2);
+
+    if (!reused.ok) throw new Error(reused.message);
+    expect(reused.org.id).not.toBe(acme.id);
+  });
+
+  it("never removes global, and answers not_found for an org it does not list", async () => {
+    const { platform } = await setup();
+
+    expect(await platform.deleteOrg(GLOBAL_ORG)).toMatchObject({ ok: false, error: "global" });
+    expect((await platform.getOrgById(GLOBAL_ORG))?.slug).toBe("default");
+    expect(await platform.deleteOrg("org-ghost")).toMatchObject({ ok: false, error: "not_found" });
+  });
+
+  it("removes a person from the index of every org", async () => {
+    const { platform } = await setup();
+
+    expect(await platform.removePerson(" Alice@Example.com ")).toBe(2);
+    expect(await platform.orgsOfEmail("alice@example.com")).toEqual([]);
+    expect((await platform.orgsOfEmail("bob@example.com")).map((org) => org.slug)).toEqual([
+      "acme",
+    ]);
+    expect(await platform.removePerson("alice@example.com")).toBe(0);
   });
 });
 

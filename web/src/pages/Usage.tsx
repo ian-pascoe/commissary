@@ -24,6 +24,7 @@ import {
 } from "../api/client.ts";
 import { HistoryChart } from "../components/HistoryChart.tsx";
 import { kit, Problem, Section } from "../components/Kit.tsx";
+import { RetentionNote } from "../components/RetentionNote.tsx";
 import { TrailMark } from "../components/Signs.tsx";
 import { accountName } from "../lib/accounts.ts";
 import { failureMessage } from "../lib/failure.ts";
@@ -531,13 +532,22 @@ const Detail = ({ record }: { readonly record: UsageRecord }) => {
           </div>
         ))}
       </dl>
-      {record.failed && record.fail.body !== "" ? (
+      {record.failed ? (
         <div className={styles["failure"]}>
           <p className={styles["failureTitle"]}>
             <TrailMark />
             The provider answered HTTP {record.fail.status_code}
           </p>
-          <pre>{record.fail.body}</pre>
+          {record.fail.type === undefined && record.fail.code === undefined ? null : (
+            <pre>
+              {[
+                record.fail.type === undefined ? undefined : `type: ${record.fail.type}`,
+                record.fail.code === undefined ? undefined : `code: ${record.fail.code}`,
+              ]
+                .filter((line) => line !== undefined)
+                .join("\n")}
+            </pre>
+          )}
         </div>
       ) : null}
     </div>
@@ -818,6 +828,7 @@ const UsageContent = ({ names, admin }: { readonly names: Names; readonly admin:
             ))}
           </select>
         ) : null}
+        <RetentionNote className={styles["retention"]} />
       </header>
       {active.length === 0 ? null : (
         <div className={styles["filters"]} aria-label="Narrowed to">

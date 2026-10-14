@@ -21,8 +21,6 @@ interface __BaseEnv_Env {
   ACCESS_ADMIN_SERVICE_TOKENS?: string;
   /** Local development only: treats loopback requests as this admin. Never set when deployed. */
   ACCESS_DEV_BYPASS: string;
-  /** Days of usage history kept in D1; 0 keeps everything. */
-  USAGE_RETENTION_DAYS: string;
   /** Overrides the Meta key-mint endpoint (empty: default). */
   META_MINT_URL: string;
   /**

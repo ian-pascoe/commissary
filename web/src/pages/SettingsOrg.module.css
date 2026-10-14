@@ -1,0 +1,79 @@
+/* The org's own settings: the usage retention form and the export and delete controls. Rows between hairlines like
+   the other settings; no boxes. */
+.form {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 65ch;
+}
+
+.choices {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.choice {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+
+.days {
+  width: 6rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.state {
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+
+.suggest {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  max-width: 65ch;
+  margin-bottom: var(--space-4);
+  padding-left: var(--space-4);
+  border-left: 4px solid var(--text);
+  font-size: var(--text-sm);
+}
+
+.rows {
+  display: grid;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.row {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.rowTitle {
+  font-size: var(--text-md);
+  font-weight: 750;
+}
+
+.body {
+  max-width: 65ch;
+  font-size: var(--text-sm);
+  color: var(--quiet);
+}
+
+.body strong {
+  color: var(--text);
+}

@@ -111,6 +111,15 @@ export interface MemberRefused {
   readonly message: string;
 }
 
+/** A person's place in an org, for deleting their account (`MemberStore.standingOf`). */
+export interface AccountStanding {
+  readonly member: boolean;
+  /** They are the org's only member. */
+  readonly alone: boolean;
+  /** They are its only owner and others belong too. */
+  readonly soleOwner: boolean;
+}
+
 export type MemberResult<A> = { readonly ok: true; readonly value: A } | MemberRefused;
 
 /** The admin lists of the config document from before members (`access.admin-*`) and the deployment's admins. */
@@ -491,6 +500,43 @@ export class MemberStore {
     });
 
     return ok({ email: current.email });
+  }
+
+  /**
+   * What an account deletion needs to know of `email` in this org: whether they belong, and whether they are the only
+   * owner of an org that has other members (that org would be left without one).
+   */
+  standingOf(email: string): AccountStanding {
+    const member = this.#memberByEmail(email.trim().toLowerCase());
+
+    if (member === undefined) return { member: false, alone: false, soleOwner: false };
+    const others = this.#count(`SELECT COUNT(*) AS n FROM members WHERE id <> ?`, member.id);
+
+    return {
+      member: true,
+      alone: others === 0,
+      soleOwner: role(member.role) === "owner" && this.#owners() === 1 && others > 0,
+    };
+  }
+
+  /**
+   * Removes the person who deleted their account, without the note that keeps an admin-removed member from joining
+   * again (ADR 0027: nothing is kept about them); answers the id they had, `undefined` when they were not a member.
+   */
+  leave(email: string): string | undefined {
+    const normalized = email.trim().toLowerCase();
+    const member = this.#memberByEmail(normalized);
+
+    if (member === undefined) return undefined;
+
+    this.#transaction(() => {
+      this.#sql.exec(`DELETE FROM team_members WHERE member_id = ?`, member.id);
+      this.#sql.exec(`DELETE FROM members WHERE id = ?`, member.id);
+      this.#restore(removedUser(normalized));
+      this.#changed();
+    });
+
+    return member.id;
   }
 
   // --- teams --------------------------------------------------------------------------------------------------

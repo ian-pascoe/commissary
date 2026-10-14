@@ -33,7 +33,6 @@ export default defineConfig({
           // loopback hosts (`http://localhost/...`) while ACCESS_TEAM_DOMAIN/ACCESS_AUD stay empty; other hosts still
           // fail closed (`https://proxy.test/...` answers 500 without Access settings).
           ACCESS_DEV_BYPASS: "true",
-          USAGE_RETENTION_DAYS: "30",
           META_MINT_URL: "",
           // Fixed test key of the keyed `auth_index` (deployed: an Alchemy `Random`, alchemy.run.ts); 64 characters, so
           // tests that configure Access (where shorter keys are refused, src/management/auth-index.ts) can use it too.

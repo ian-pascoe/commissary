@@ -184,6 +184,21 @@ export class PrivateKeyStore {
     }
   }
 
+  /** Deletes every private group of `owner` (a member who left the org, ADR 0027); the number removed. */
+  removeOwner(owner: string): number {
+    return this.#transaction(() => {
+      const removed = this.#sql
+        .exec<{ n: number }>(`SELECT COUNT(*) AS n FROM ${TABLE} WHERE owner = ?`, owner)
+        .one().n;
+
+      if (removed === 0) return 0;
+      this.#sql.exec(`DELETE FROM ${TABLE} WHERE owner = ?`, owner);
+      this.#sql.exec(`UPDATE private_key_changes SET counter = counter + 1 WHERE id = 1`);
+
+      return removed;
+    });
+  }
+
   /**
    * Disables or enables one private key by its credential id, the way a shared key is (`ConfigStore.setKeyExcludedAll`):
    * `*` joins or leaves its `excluded-models`. The key's group keeps its revision, so the owner's open form still saves.

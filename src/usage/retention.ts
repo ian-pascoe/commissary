@@ -1,42 +1,41 @@
 /**
- * Usage retention cron job: deletes usage records older than `USAGE_RETENTION_DAYS` (default 30; 0 keeps everything).
+ * Usage retention cron job (ADR 0027): deletes the usage records older than each org's retention period. An org's period
+ * is a number of days in the Platform registry, or none, which keeps its records forever (`global` and every org that
+ * existed before the setting start with none; a new org starts with 90 days).
  *
- * Go counterpart: `redis-usage-queue-retention-seconds` bounds the in-process queue (internal/redisqueue/queue.go);
- * D1 keeps history, so retention is expressed in days and applied by the scheduled handler.
+ * Go counterpart: `redis-usage-queue-retention-seconds` bounds the in-process queue (internal/redisqueue/queue.go); D1
+ * keeps history, so retention is expressed in days per org and applied by the scheduled handler. The deployment-wide
+ * `USAGE_RETENTION_DAYS` variable it replaces is gone: the period belongs to the org.
  */
 import { Clock, Effect } from "effect";
 import { WorkerEnv } from "../platform/env.ts";
+import { platform } from "../platform/registry.ts";
 import { pruneUsageRecords } from "./d1.ts";
-
-export const DEFAULT_RETENTION_DAYS = 30;
 
 const DAY_MS = 86_400_000;
 
-/** Parses the variable: blank/invalid -> default, <= 0 -> 0 (disabled). */
-export const retentionDays = (raw: string | undefined): number => {
-  const value = (raw ?? "").trim();
-
-  if (value === "") return DEFAULT_RETENTION_DAYS;
-  const days = Number(value);
-
-  if (!Number.isFinite(days)) return DEFAULT_RETENTION_DAYS;
-
-  return days <= 0 ? 0 : days;
-};
-
-/** Deletes records older than the retention window; returns how many were removed. */
+/**
+ * Deletes each org's records older than its period; returns how many were removed. When the registry cannot be
+ * reached nothing is deleted (the failure is the job's), since without it no org's period is known.
+ */
 export const pruneExpiredUsage = Effect.gen(function* () {
   const env = yield* WorkerEnv;
-  const days = retentionDays(env.USAGE_RETENTION_DAYS);
+  const orgs = yield* platform("listOrgs", (stub) => stub.listOrgs());
+  const now = yield* Clock.currentTimeMillis;
+  let total = 0;
 
-  if (days === 0) return 0;
-  const cutoff = (yield* Clock.currentTimeMillis) - days * DAY_MS;
-  const removed = yield* Effect.promise(() => pruneUsageRecords(env.USAGE, cutoff));
+  for (const org of orgs) {
+    if (org.usageRetentionDays === null) continue;
+    const cutoff = now - org.usageRetentionDays * DAY_MS;
+    const removed = yield* Effect.promise(() => pruneUsageRecords(env.USAGE, org.id, cutoff));
 
-  if (removed > 0)
-    yield* Effect.logInfo("usage retention").pipe(
-      Effect.annotateLogs({ removed, retentionDays: days }),
-    );
+    if (removed > 0)
+      yield* Effect.logInfo("usage retention").pipe(
+        Effect.annotateLogs({ org: org.id, removed, retentionDays: org.usageRetentionDays }),
+      );
 
-  return removed;
+    total += removed;
+  }
+
+  return total;
 });

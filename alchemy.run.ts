@@ -96,7 +96,6 @@ export default Alchemy.Stack(
         PLATFORM_ADMIN_EMAILS: settings.adminEmails.join(","),
         PLATFORM_ADMIN_SERVICE_TOKENS: access.adminServiceTokens,
         ACCESS_DEV_BYPASS: dev ? settings.devBypass : "",
-        USAGE_RETENTION_DAYS: settings.usageRetentionDays,
         META_MINT_URL: settings.metaMintUrl,
         // Redacted: bound as a secret (`secret_text`), never as a plain variable.
         AUTH_INDEX_KEY: authIndexKey,

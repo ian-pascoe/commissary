@@ -390,8 +390,9 @@ describe("POST /v1/chat/completions (stream)", () => {
     expect(await response.text()).toBe('{"error":{"message":"quota","status":429}}');
     expect(p.records[0]).toMatchObject({
       failed: true,
-      fail: { statusCode: 429, body: "upstream stream returned an error payload" },
+      fail: { statusCode: 429 },
     });
+    expect(p.records[0]?.fail).not.toHaveProperty("body");
   });
 
   it("writes a terminal error frame for mid-stream upstream errors", async () => {

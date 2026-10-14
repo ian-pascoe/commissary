@@ -15,6 +15,8 @@ export class ManagementError extends Schema.Error<ManagementError>("ManagementEr
   /** 1-based position of a YAML syntax error in the submitted text (`422 invalid_yaml`). */
   line: Schema.optionalKey(Schema.Int),
   column: Schema.optionalKey(Schema.Int),
+  /** Org slugs the error is about (`409 sole_owner` of `DELETE /me`: the orgs to hand over first). */
+  orgs: Schema.optionalKey(Schema.Array(Schema.String)),
 }) {}
 
 /** Statuses the management handlers answer with an error body; the client decodes each into `ManagementError`. */

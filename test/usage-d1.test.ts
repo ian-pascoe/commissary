@@ -22,7 +22,7 @@ import { D1UsageSink } from "../src/usage/d1-sink.ts";
 import { UsagePricing } from "../src/usage/pricing-service.ts";
 import { ensureTokenBreakdown } from "../src/usage/accounting.ts";
 import { parseClaudeUsage } from "../src/usage/parsers.ts";
-import { pruneExpiredUsage, retentionDays } from "../src/usage/retention.ts";
+import { pruneExpiredUsage } from "../src/usage/retention.ts";
 import { UsageSink } from "../src/usage/sink.ts";
 import { authIndexOf } from "./support/auth-index.ts";
 import { resetUsageDb, sampleRecord, statementsOf } from "./support/usage.ts";
@@ -32,7 +32,9 @@ import orgMigration from "../migrations/0003_usage_org.sql?raw";
 import costMigration from "../migrations/0004_usage_cost.sql?raw";
 import memberMigration from "../migrations/0005_usage_member.sql?raw";
 import privateMigration from "../migrations/0006_usage_private.sql?raw";
+import failureMigration from "../migrations/0007_usage_failure.sql?raw";
 import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
+import { platformOf } from "../src/platform/registry.ts";
 
 /** The D1 sink without pricing: records are stored as they are published. */
 const sink = D1UsageSink.pipe(Layer.provide(UsagePricing.none));
@@ -46,7 +48,7 @@ beforeEach(async () => {
 const rows = async () =>
   (
     await db
-      .prepare("SELECT * FROM usage_records ORDER BY requested_at, request_id")
+      .prepare("SELECT * FROM usage_records ORDER BY requested_at, org_id, request_id")
       .all<UsageRow>()
   ).results;
 
@@ -84,6 +86,7 @@ describe("migration 0003 (usage org)", () => {
       ...statementsOf(costMigration),
       ...statementsOf(memberMigration),
       ...statementsOf(privateMigration),
+      ...statementsOf(failureMigration),
     ])
       await db.prepare(statement).run();
 
@@ -96,6 +99,56 @@ describe("migration 0003 (usage org)", () => {
 
     await insertUsageRecord(db, sampleRecord({ requestId: "new", orgId: OrgId.make("acme") }));
     expect((await listUsageRecords(db, OrgId.make("acme"), {}, authIndexOf)).rows).toHaveLength(1);
+  });
+});
+
+describe("migration 0007 (usage failure)", () => {
+  it("clears the failure bodies stored before it, keeps the rest and adds type and code", async () => {
+    await db.prepare("DROP TABLE usage_records").run();
+
+    for (const statement of [
+      ...statementsOf(initialMigration),
+      ...statementsOf(sessionsMigration),
+      ...statementsOf(orgMigration),
+      ...statementsOf(costMigration),
+      ...statementsOf(memberMigration),
+      ...statementsOf(privateMigration),
+    ])
+      await db.prepare(statement).run();
+
+    // A failed attempt as the previous schema stored it: its body echoes the prompt.
+    await db
+      .prepare(
+        `INSERT INTO usage_records (request_id, requested_at, provider, executor_type, model, alias, endpoint,
+           principal_id, auth_id, auth_type, source, org_id, failed, fail_status, fail_body, acct_total_tokens)
+         VALUES ('old', 1, 'codex', 'codex', 'gpt-5', 'gpt-5', 'POST /v1/responses', 'user:a', 'codex-a.json',
+           'oauth', 'a', 'global', 1, 400, '{"error":{"message":"the prompt said: my secret plan"}}', 500)`,
+      )
+      .run();
+
+    for (const statement of statementsOf(failureMigration)) await db.prepare(statement).run();
+
+    const [row] = await rows();
+    expect(row).toMatchObject({
+      request_id: "old",
+      failed: 1,
+      fail_status: 400,
+      fail_body: null,
+      fail_type: null,
+      fail_code: null,
+      acct_total_tokens: 500,
+    });
+
+    // The record still lists, and exports a failure without a body.
+    const listed = await listUsageRecords(db, GLOBAL_ORG, {}, authIndexOf);
+    expect(listed.rows).toHaveLength(1);
+    expect(rowToPayload(listed.rows[0] as UsageRow, authIndexOf).fail).toEqual({
+      status_code: 400,
+    });
+
+    // Applying the data statement again changes nothing (the ALTERs are run once, as every migration is).
+    await db.prepare("UPDATE usage_records SET fail_body = NULL WHERE fail_body IS NOT NULL").run();
+    expect((await rows())[0]).toMatchObject({ fail_body: null });
   });
 });
 
@@ -123,7 +176,11 @@ describe("migration 0004 (usage cost)", () => {
     const [row] = await rows();
     expect(row).toMatchObject({ request_id: "old", cost_micros: null, unpriced: 0 });
 
-    for (const statement of [...statementsOf(memberMigration), ...statementsOf(privateMigration)])
+    for (const statement of [
+      ...statementsOf(memberMigration),
+      ...statementsOf(privateMigration),
+      ...statementsOf(failureMigration),
+    ])
       await db.prepare(statement).run();
 
     // A new record carries its cost; the old one sums as nothing and is not listed as unpriced.
@@ -202,7 +259,11 @@ describe("migration 0005 (usage member)", () => {
       )
       .run();
 
-    for (const statement of [...statementsOf(memberMigration), ...statementsOf(privateMigration)])
+    for (const statement of [
+      ...statementsOf(memberMigration),
+      ...statementsOf(privateMigration),
+      ...statementsOf(failureMigration),
+    ])
       await db.prepare(statement).run();
 
     const [row] = await rows();
@@ -284,7 +345,8 @@ describe("migration 0006 (usage private)", () => {
       )
       .run();
 
-    for (const statement of statementsOf(privateMigration)) await db.prepare(statement).run();
+    for (const statement of [...statementsOf(privateMigration), ...statementsOf(failureMigration)])
+      await db.prepare(statement).run();
 
     const [row] = await rows();
     expect(row).toMatchObject({ request_id: "old", private: 0 });
@@ -422,18 +484,29 @@ describe("D1 usage sink", () => {
     });
   });
 
-  it("stores failures with a bounded body and is idempotent per request id", async () => {
+  it("stores a failure's status, type and code, never a body, and is idempotent per request id", async () => {
     const record = sampleRecord({
       failed: true,
-      fail: { statusCode: 429, body: "x".repeat(10_000) },
+      fail: { statusCode: 429, type: "rate_limit_error", code: "insufficient_quota" },
     });
 
     await insertUsageRecord(db, record);
     await insertUsageRecord(db, record);
     const stored = await rows();
     expect(stored).toHaveLength(1);
-    expect(stored[0]).toMatchObject({ failed: 1, fail_status: 429 });
-    expect(stored[0]?.fail_body).toHaveLength(2048);
+    expect(stored[0]).toMatchObject({
+      failed: 1,
+      fail_status: 429,
+      fail_type: "rate_limit_error",
+      fail_code: "insufficient_quota",
+      fail_body: null,
+    });
+
+    expect(rowToPayload(stored[0] as UsageRow, authIndexOf).fail).toEqual({
+      status_code: 429,
+      type: "rate_limit_error",
+      code: "insufficient_quota",
+    });
   });
 
   it("never fails the request when the write fails and does nothing without a binding", async () => {
@@ -591,7 +664,7 @@ describe("export queue (GET /observability/usage/queue)", () => {
       failed: false,
       generate: true,
       stream: true,
-      fail: { status_code: 200, body: "" },
+      fail: { status_code: 200 },
       accounting_version: 2,
       token_breakdown: {
         schema_version: 2,
@@ -641,7 +714,7 @@ describe("listing and summary", () => {
         model: "gpt-4",
         principalId: "user:a",
         failed: true,
-        fail: { statusCode: 500, body: "boom" },
+        fail: { statusCode: 500 },
         detail: {
           ...sampleRecord().detail,
           inputTokens: 0,
@@ -778,45 +851,98 @@ describe("listing and summary", () => {
 });
 
 describe("retention", () => {
-  it("prunes records older than the cutoff", async () => {
-    for (const at of [1000, 2000, 3000])
+  const day = 86_400_000;
+
+  it("prunes the records of one org older than the cutoff and leaves the other orgs alone", async () => {
+    const acme = OrgId.make("acme");
+
+    for (const at of [1000, 2000, 3000]) {
+      await insertUsageRecord(db, sampleRecord({ requestedAt: at, orgId: acme }));
       await insertUsageRecord(db, sampleRecord({ requestedAt: at }));
-    expect(await pruneUsageRecords(db, 2500)).toBe(2);
-    expect((await rows()).map((row) => row.requested_at)).toEqual([3000]);
+    }
+
+    expect(await pruneUsageRecords(db, acme, 2500)).toBe(2);
+    expect((await rows()).map((row) => [row.org_id, row.requested_at])).toEqual([
+      ["global", 1000],
+      ["global", 2000],
+      ["acme", 3000],
+      ["global", 3000],
+    ]);
   });
 
-  it("the cron task deletes records older than USAGE_RETENTION_DAYS using the Effect clock", async () => {
-    const day = 86_400_000;
-    const now = 100 * day;
-    await insertUsageRecord(db, sampleRecord({ requestId: "old", requestedAt: now - 31 * day }));
-    await insertUsageRecord(db, sampleRecord({ requestId: "recent", requestedAt: now - 29 * day }));
+  describe("the scheduled job", () => {
+    const org = () => OrgId.make(`ret-${crypto.randomUUID().slice(0, 8)}`);
 
-    const run = (bindings: Env) =>
+    /** An org of the Platform registry with `days` of retention (`null`: none), as the job lists it. */
+    const registered = async (id: OrgId, days: number | null) => {
+      const registry = platformOf(env);
+      const created = await registry.createOrg({ slug: id, name: id, id }, 1);
+
+      if (!created.ok) throw new Error(created.message);
+      await registry.setUsageRetention(id, days);
+    };
+
+    const run = (now: number) =>
       Effect.gen(function* () {
         yield* TestClock.setTime(now);
 
         return yield* pruneExpiredUsage;
       }).pipe(
         Effect.provide(TestClock.layer()),
-        Effect.provideService(WorkerEnv, bindings),
+        Effect.provideService(WorkerEnv, env),
         Effect.runPromise,
       );
 
-    expect(await run({ ...env, USAGE_RETENTION_DAYS: "0" })).toBe(0);
-    expect(await rows()).toHaveLength(2);
-    expect(await run({ ...env, USAGE_RETENTION_DAYS: "30" })).toBe(1);
-    expect((await rows()).map((row) => row.request_id)).toEqual(["recent"]);
-  });
+    it("deletes records past each org's own period and keeps everything of an org with none", async () => {
+      const now = 1000 * day;
+      const month = org();
+      const quarter = org();
+      const forever = org();
 
-  it("parses the retention variable and is registered as a cron task", () => {
-    expect([
-      retentionDays(undefined),
-      retentionDays(""),
-      retentionDays("abc"),
-      retentionDays("7"),
-      retentionDays("-1"),
-    ]).toEqual([30, 30, 30, 7, 0]);
-    expect(scheduledTasks.map((task) => task.name)).toContain("usage-retention");
+      await registered(month, 30);
+      await registered(quarter, 90);
+      await registered(forever, null);
+
+      for (const [orgId, age, name] of [
+        [month, 31, "month-old"],
+        [month, 29, "month-recent"],
+        [quarter, 31, "quarter-31"],
+        [quarter, 91, "quarter-old"],
+        [forever, 2000, "forever-ancient"],
+        // `global` has no period in a fresh registry: its history stays.
+        [GLOBAL_ORG, 2000, "global-ancient"],
+      ] as const)
+        await insertUsageRecord(
+          db,
+          sampleRecord({ requestId: name, orgId, requestedAt: now - age * day }),
+        );
+
+      expect(await run(now)).toBe(2);
+      expect((await rows()).map((row) => row.request_id).toSorted()).toEqual([
+        "forever-ancient",
+        "global-ancient",
+        "month-recent",
+        "quarter-31",
+      ]);
+    });
+
+    it("counts the period from the clock, so a record is pruned the day after it passes", async () => {
+      const id = org();
+      await registered(id, 10);
+      await insertUsageRecord(
+        db,
+        sampleRecord({ requestId: "edge", orgId: id, requestedAt: 100 * day }),
+      );
+
+      expect(await run(110 * day)).toBe(0);
+      expect(await run(110 * day + 1)).toBe(1);
+    });
+
+    it("is registered as a cron task of the whole deployment", () => {
+      expect(scheduledTasks.find((task) => task.name === "usage-retention")?.scope).toBe(
+        "deployment",
+      );
+    });
   });
 });
 

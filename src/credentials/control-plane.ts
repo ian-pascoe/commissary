@@ -81,6 +81,7 @@ import {
   type StatusResult,
 } from "../oauth/service.ts";
 import { OAuthSessions, SqliteSessionTable } from "../oauth/session-store.ts";
+import { SessionInstanceStore } from "../session-state/instances.ts";
 import type {
   AccountResult,
   BatchAction,
@@ -128,6 +129,7 @@ import { platformAdminLists } from "../access/config.ts";
 import { migrateLegacyAdmins } from "../members/migration.ts";
 import type { Actor } from "../members/roles.ts";
 import {
+  type AccountStanding,
   type Admission,
   MemberStore,
   type MemberRecord,
@@ -317,8 +319,12 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #proxyKeys: ProxyKeyStore;
   /** The org's Spend limits (issue #71): what the management API does with them and the ledger the pool checks. */
   readonly #spend: SpendService;
+  /** The `SessionState` instances of the org, so deleting the org can wipe them (`session-state/instances.ts`). */
+  readonly #sessionInstances: SessionInstanceStore;
   /** The org this object serves, from its name. */
   readonly #org: OrgId;
+  /** Set when the org was deleted: the storage is gone (`wipeOrg`), so the stores must not be used again. */
+  #wiped = false;
   /**
    * Settles once the org's data key is open, or failed to open (the stores then throw the reason). Only callers that
    * construct the object themselves (tests) wait on it; RPC calls wait on the input gate.
@@ -342,7 +348,10 @@ export class ControlPlane extends DurableObject<Env> {
     this.#members = new MemberStore(ctx.storage.sql, this.#org, transaction);
     this.#modelGrants = new GrantStore(ctx.storage.sql, transaction);
     this.#privateKeys = new PrivateKeyStore(ctx.storage.sql, transaction, this.#secrets);
-    this.#proxyKeys = new ProxyKeyStore(ctx.storage.sql, this.#org);
+    this.#proxyKeys = new ProxyKeyStore(ctx.storage.sql, this.#org, (ids) => {
+      for (const id of ids) this.#spend.forget("key", id);
+    });
+    this.#sessionInstances = new SessionInstanceStore(ctx.storage.sql);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
 
@@ -350,7 +359,7 @@ export class ControlPlane extends DurableObject<Env> {
       members: () => this.#members.members(),
       teams: () => this.#members.teams(),
       teamsOf: (memberId) => this.#members.member(memberId)?.teams ?? [],
-      keys: () => this.#proxyKeys.list(),
+      keys: () => this.#proxyKeys.list(undefined, Date.now()),
       credentials: () =>
         this.#pool.entries().flatMap(({ credential }) =>
           credential.owner === undefined
@@ -581,22 +590,62 @@ export class ControlPlane extends DurableObject<Env> {
     return this.#members.setMemberRole(id, role, actor);
   }
 
-  removeMember(id: string, actor: Actor): MemberResult<{ readonly email: string }> {
+  async removeMember(id: string, actor: Actor): Promise<MemberResult<{ readonly email: string }>> {
     this.#ensureMembership();
 
     const removed = this.#members.removeMember(id, actor);
 
-    // ADR 0027: a member who leaves takes their proxy keys with them (a key whose member is gone is refused anyway).
-    if (removed.ok) {
-      for (const key of this.#proxyKeys.list(id)) this.#spend.forget("key", key.id);
-      this.#spend.forget("member", id);
-      this.#proxyKeys.removeMemberKeys(id);
-    }
+    if (removed.ok) await this.#deleteMemberData(id);
 
     // Grants that named the member go with them: whoever joins again under that email is a new member.
     if (removed.ok) this.#modelGrants.forget({ kind: "member", id });
 
     return removed;
+  }
+
+  /** A person's place in the org (`MemberStore.standingOf`), for deleting their account. */
+  accountStanding(email: string): AccountStanding {
+    this.#ensureMembership();
+
+    return this.#members.standingOf(email);
+  }
+
+  /**
+   * A person who deletes their account leaves the org with all their data here, and no note of their removal is kept
+   * (`MemberStore.leave`). Answers whether they were a member.
+   */
+  async leaveOrg(email: string): Promise<{ readonly left: boolean }> {
+    this.#ensureMembership();
+    const id = this.#members.leave(email);
+
+    if (id === undefined) return { left: false };
+    await this.#deleteMemberData(id);
+
+    return { left: true };
+  }
+
+  /**
+   * Zero data retention (ADR 0027): a member who leaves the org takes with them everything of theirs here: proxy keys,
+   * private accounts (with their cooldown and quota state), private API key groups and the OAuth logins they started.
+   * Shared credentials and other members' data stay.
+   */
+  async #deleteMemberData(member: string): Promise<void> {
+    // The member's keys take their Spend limits and counters along (the store reports each key it deletes).
+    this.#spend.forget("member", member);
+    this.#proxyKeys.removeMemberKeys(member);
+
+    const accounts = this.#pool
+      .entries()
+      .filter(({ credential }) => credential.owner === member)
+      .map(({ credential }) => credential.id);
+
+    const removed = this.#removeMany(accounts);
+
+    this.#privateKeys.removeOwner(member);
+    this.#sessions.deleteOwned(member);
+    this.#pool.invalidate();
+
+    if (removed.length > 0) await this.#rearm();
   }
 
   membershipSettings(): MembershipSettingsWire {
@@ -632,14 +681,45 @@ export class ControlPlane extends DurableObject<Env> {
     return this.membershipSettings();
   }
 
+  // --- org deletion (ADR 0027) ----------------------------------------------------------------------------------------
+
+  /** A `SessionState` instance of this org tells where it holds entries until `expiresAt` (epoch ms). */
+  registerSessionInstance(name: string, now: number, expiresAt: number): void {
+    if (!this.#wiped) this.#sessionInstances.register(name, now, expiresAt);
+  }
+
+  /** Up to `limit` names of this org's `SessionState` instances that may still hold entries at `now`. */
+  sessionInstances(now: number, limit: number): ReadonlyArray<string> {
+    return this.#wiped ? [] : this.#sessionInstances.list(now, limit);
+  }
+
+  /** The instances named were wiped; forgets them. */
+  forgetSessionInstances(names: ReadonlyArray<string>): void {
+    if (!this.#wiped) this.#sessionInstances.forget(names);
+  }
+
+  /**
+   * Deletes everything this object stores, tables included: the org was deleted (`platform/org-deletion.ts`, ADR 0027).
+   * Its refresh alarm goes with its storage. Nothing reaches this id afterwards (the Platform registry no longer lists
+   * the org, and a new org takes a new id); the object itself is evicted when idle and, if ever started again, finds
+   * an empty org. Until then the object answers the calls a repeated deletion makes (`sessionInstances`, `wipeOrg`) as an
+   * empty org does, and no other.
+   */
+  async wipeOrg(): Promise<void> {
+    this.#wiped = true;
+    await this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAll();
+    await this.ctx.storage.sync();
+  }
+
   // --- proxy keys (ADR 0022, `proxy-keys/store.ts`) -----------------------------------------------------------------
 
   /** The org's proxy keys, or one member's, with the email of the member each belongs to. */
-  listProxyKeys(memberId?: string): ReadonlyArray<ProxyKeyListing> {
+  listProxyKeys(memberId: string | undefined, now: number): ReadonlyArray<ProxyKeyListing> {
     this.#ensureMembership();
     const emails = new Map(this.#members.members().map((member) => [member.id, member.email]));
 
-    return this.#proxyKeys.list(memberId).map((key) => ({
+    return this.#proxyKeys.list(memberId, now).map((key) => ({
       ...key,
       ...(emails.has(key.memberId) ? { memberEmail: emails.get(key.memberId) } : {}),
     }));
@@ -658,7 +738,14 @@ export class ControlPlane extends DurableObject<Env> {
     return this.#proxyKeys.create(input, now);
   }
 
-  /** Revokes a key; `memberId` limits the call to that member's keys (`ProxyKeyStore.revoke`). */
+  /** Deletes the keys that have expired at `now` in every member's name (the cron sweep); answers how many. */
+  purgeExpiredProxyKeys(now: number): number {
+    this.#ensureMembership();
+
+    return this.#proxyKeys.purgeExpired(now);
+  }
+
+  /** Revokes a key by deleting it; `memberId` limits the call to that member's keys (`ProxyKeyStore.revoke`). */
   revokeProxyKey(id: string, now: number, memberId?: string): ProxyKeyResult<ProxyKeyRecord> {
     this.#ensureMembership();
 

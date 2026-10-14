@@ -92,6 +92,12 @@ export const forgetVerifiedProxyKeysOf = (org: OrgId, memberId: string): void =>
     if (cached.key.org === org && cached.key.memberId === memberId) verified.delete(hash);
 };
 
+/** Forgets every key and the existence of `org` in this isolate (the org was deleted), so it refuses them at once. */
+export const forgetOrgProxyKeys = (org: OrgId): void => {
+  for (const [hash, cached] of verified) if (cached.key.org === org) verified.delete(hash);
+  knownOrgs.delete(org);
+};
+
 /** Empties the caches, for tests. */
 export const resetProxyKeyCaches = (): void => {
   verified.clear();

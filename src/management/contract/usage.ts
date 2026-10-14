@@ -158,8 +158,15 @@ export const UsageRecord = Schema.Struct({
   request_id: Schema.String,
   failed: Schema.Boolean,
   stream: Schema.Boolean,
-  /** `{200, ""}` for a successful request. */
-  fail: Schema.Struct({ status_code: Schema.Number, body: Schema.String }),
+  /**
+   * `{status_code: 200}` for a successful request. A failed one carries the status code and the error's `type` and
+   * `code` when the upstream gave them, never its body (ADR 0027).
+   */
+  fail: Schema.Struct({
+    status_code: Schema.Number,
+    type: optional(Schema.String),
+    code: optional(Schema.String),
+  }),
   /** Empty when none was requested. */
   reasoning_effort: Schema.String,
   service_tier: Schema.String,

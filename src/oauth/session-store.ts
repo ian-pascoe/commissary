@@ -46,6 +46,8 @@ export interface SessionTable {
   delete(state: string): void;
   /** Removes every session that expired at or before `now`. */
   purge(now: number): void;
+  /** Removes every session of `owner` (a member who left the org). */
+  deleteOwned(owner: string): void;
 }
 
 export class MemorySessionTable implements SessionTable {
@@ -61,6 +63,9 @@ export class MemorySessionTable implements SessionTable {
   }
   purge(now: number): void {
     for (const [state, session] of this.rows) if (session.expiresAt <= now) this.rows.delete(state);
+  }
+  deleteOwned(owner: string): void {
+    for (const [state, session] of this.rows) if (session.owner === owner) this.rows.delete(state);
   }
 }
 
@@ -166,6 +171,10 @@ export class SqliteSessionTable implements SessionTable {
   purge(now: number): void {
     this.#sql.exec("DELETE FROM oauth_sessions WHERE expires_at <= ?", now);
   }
+
+  deleteOwned(owner: string): void {
+    this.#sql.exec("DELETE FROM oauth_sessions WHERE owner = ?", owner);
+  }
 }
 
 export interface NewSession {
@@ -204,6 +213,11 @@ export class OAuthSessions {
       ...(session.owner === undefined ? {} : { owner: session.owner }),
       data: session.data,
     });
+  }
+
+  /** Deletes every session of the member `owner`: the logins they started in this org (ADR 0027). */
+  deleteOwned(owner: string): void {
+    this.#table.deleteOwned(owner);
   }
 
   /** `Get`: expired sessions are gone. */

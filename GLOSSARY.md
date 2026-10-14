@@ -18,6 +18,17 @@ A company or group that uses the proxy as one unit, with its own members, teams,
 limits. Nothing in one org is visible to another. A self-hosted proxy usually serves a single org.
 _Avoid_: tenant, workspace, organisation (kept for a provider's own organisation, such as an Anthropic organisation)
 
+**Retention period**:
+How many days an org keeps its usage records before they are deleted; an org admin sets it (none keeps them). It is the
+one retention setting, per org; deletions of orgs, members, credentials and proxy keys keep nothing and have no grace
+period.
+_Avoid_: TTL, expiry (a proxy key and replay state expire on their own)
+
+**Export**:
+What an org owner downloads before deleting the org: its settings, shared config, prices, credential summaries and
+people, with every secret as a preview. It holds no usage records and cannot rebuild a secret.
+_Avoid_: backup (nothing can be restored from it)
+
 **Self-hosted proxy**:
 A proxy run by an org for its own people, who sign in through Cloudflare Access.
 
@@ -157,6 +168,12 @@ _Avoid_: entitlement, ACL, access rule
 What a member's grants add up to: the upstream models they may use on each shared credential. Selection and the model
 lists are computed under it; a model outside it answers like an unknown one.
 _Avoid_: allowance (a provider's limit), permissions
+
+**Sign-in account**:
+A person's own identity with the proxy, which a hosted proxy keeps outside every org (#72). Deleting it removes the
+person from every org with their data there. On a self-hosted proxy Access is the sign-in, so deleting the account only
+leaves the orgs until Access signs the person in again.
+_Avoid_: account (that is a provider login, below), user
 
 **Account**:
 A credential that is a provider login: an OAuth sign-in, a device-code login, an imported service account or an
