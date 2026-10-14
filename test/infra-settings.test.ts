@@ -1,10 +1,10 @@
 // Deploy settings (infra/settings.ts): the platform admins (PLATFORM_ADMIN_* and the deprecated ACCESS_ADMIN_* names
-// they replace, which a deployment may still set) and the secrets key generations.
+// they replace, which a deployment may still set), the secrets key generations and a hosted proxy's settings.
 import { assert, describe, it } from "@effect/vitest";
-import { ConfigProvider, Effect, Logger } from "effect";
+import { ConfigProvider, Effect, Logger, Redacted } from "effect";
 import { readSettings } from "../infra/settings.ts";
 
-const read = (variables: Record<string, string>) => {
+const read = (variables: Record<string, string>, deployed?: { readonly stage: string }) => {
   const warnings: Array<string> = [];
 
   const capture = Logger.layer([
@@ -13,7 +13,7 @@ const read = (variables: Record<string, string>) => {
     }),
   ]);
 
-  return readSettings(true, "dev").pipe(
+  return readSettings(deployed === undefined, deployed?.stage ?? "dev").pipe(
     Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown(variables))),
     Effect.provide(capture),
     Effect.map((settings) => ({ settings, warnings })),
@@ -108,6 +108,71 @@ describe("secrets key generations", () => {
 
         assert.include(refusal, message);
       }
+    }),
+  );
+});
+
+describe("hosted proxy settings", () => {
+  const hosted = {
+    PROXY_MODE: "hosted",
+    CF_LLM_PROXY_DOMAIN: "proxy.example.com",
+    SIGN_IN_GITHUB_CLIENT_ID: "gh-id",
+    SIGN_IN_GITHUB_CLIENT_SECRET: "gh-secret",
+    TURNSTILE_SITE_KEY: "site",
+    TURNSTILE_SECRET_KEY: "turnstile-secret",
+  };
+
+  const refusal = (variables: Record<string, string>) =>
+    read(variables, { stage: "prod" }).pipe(
+      Effect.as("accepted"),
+      Effect.catchDefect((defect) => Effect.succeed(String(defect))),
+    );
+
+  it.effect("need no Access settings, and default the org limits", () =>
+    Effect.gen(function* () {
+      const { settings } = yield* read(hosted, { stage: "prod" });
+
+      assert.strictEqual(settings.hosted?.githubClientId, "gh-id");
+      assert.strictEqual(
+        Redacted.value(settings.hosted?.githubClientSecret ?? Redacted.make("")),
+        "gh-secret",
+      );
+      assert.strictEqual(settings.hosted?.googleClientId, "");
+      assert.strictEqual(settings.hosted?.ownedOrgLimit, "3");
+      assert.strictEqual(settings.hosted?.orgRateLimit, 600);
+      assert.strictEqual(settings.hosted?.orgRateLimitNamespaceId, 7201);
+    }),
+  );
+
+  it.effect("are not read on a self-hosted proxy or in `alchemy dev`", () =>
+    Effect.gen(function* () {
+      assert.strictEqual((yield* read({ ...hosted, PROXY_MODE: "" })).settings.hosted, undefined);
+      assert.strictEqual((yield* read(hosted)).settings.hosted, undefined);
+      assert.include(
+        yield* refusal({ ...hosted, PROXY_MODE: "self-hosted" }),
+        "ACCESS_TEAM_DOMAIN is required",
+      );
+    }),
+  );
+
+  it.effect("refuse a hosted proxy without a sign-in provider, Turnstile or valid limits", () =>
+    Effect.gen(function* () {
+      for (const [variables, message] of [
+        [{ PROXY_MODE: "managed" }, "PROXY_MODE must be self-hosted or hosted"],
+        [{ SIGN_IN_GITHUB_CLIENT_SECRET: "" }, "a hosted proxy needs a sign-in provider"],
+        [
+          { TURNSTILE_SECRET_KEY: "" },
+          "a hosted proxy needs TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY",
+        ],
+        [{ OWNED_ORG_LIMIT: "-1" }, "OWNED_ORG_LIMIT must be a whole number from 0"],
+        [{ ORG_RATE_LIMIT: "0" }, "ORG_RATE_LIMIT must be a whole number from 1"],
+        [
+          { ORG_RATE_LIMIT_NAMESPACE_ID: "x" },
+          "ORG_RATE_LIMIT_NAMESPACE_ID must be a positive integer",
+        ],
+        [{ CF_LLM_PROXY_DOMAIN: "" }, "CF_LLM_PROXY_DOMAIN is required"],
+      ] as const)
+        assert.include(yield* refusal({ ...hosted, ...variables }), message);
     }),
   );
 });

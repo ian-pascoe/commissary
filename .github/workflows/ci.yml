@@ -1,12 +1,14 @@
 # Checks every pull request and push to main, then deploys:
-# - pull requests from this repository: a preview stage `pr-<number>` on its workers.dev URL (destroyed on close);
-# - main: the `prod` stage.
+# - pull requests from this repository: a preview stage `pr-<number>` on its workers.dev URL (destroyed on close); with
+#   the label `hosted-preview` the preview is a hosted proxy (PROXY_MODE=hosted, ADR 0026), without it a self-hosted one;
+# - main: the `prod` stage (PROXY_MODE from the production environment, self-hosted when unset).
 # Deploy setup (environments, secrets, variables): docs/DEPLOY.md.
 name: ci
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, closed]
+    # labeled/unlabeled: adding or removing `hosted-preview` redeploys the preview in the other mode.
+    types: [opened, synchronize, reopened, closed, labeled, unlabeled]
   push:
     branches: [main]
   workflow_dispatch:
@@ -20,7 +22,10 @@ env:
 jobs:
   static:
     name: typecheck, lint, workflows
-    if: github.event.action != 'closed'
+    if: >-
+      github.event.action != 'closed' &&
+      (github.event.action != 'labeled' && github.event.action != 'unlabeled' ||
+       github.event.label.name == 'hosted-preview')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -44,7 +49,10 @@ jobs:
 
   test:
     name: test (${{ matrix.shard }}/3)
-    if: github.event.action != 'closed'
+    if: >-
+      github.event.action != 'closed' &&
+      (github.event.action != 'labeled' && github.event.action != 'unlabeled' ||
+       github.event.label.name == 'hosted-preview')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -67,7 +75,10 @@ jobs:
 
   smoke:
     name: smoke (alchemy dev)
-    if: github.event.action != 'closed'
+    if: >-
+      github.event.action != 'closed' &&
+      (github.event.action != 'labeled' && github.event.action != 'unlabeled' ||
+       github.event.label.name == 'hosted-preview')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -89,6 +100,8 @@ jobs:
     # Production only from main (a manual run on another branch must not deploy it).
     if: >-
       github.event.action != 'closed' &&
+      (github.event.action != 'labeled' && github.event.action != 'unlabeled' ||
+       github.event.label.name == 'hosted-preview') &&
       ((github.event_name == 'pull_request' &&
         github.event.pull_request.head.repo.full_name == github.repository &&
         github.actor != 'dependabot[bot]') ||
@@ -120,6 +133,21 @@ jobs:
       # Rotation of the secrets key (docs/DEPLOY.md); unset means generation 1 and no rotation.
       SECRETS_KEY_GENERATION: ${{ vars.SECRETS_KEY_GENERATION }}
       SECRETS_KEY_PREVIOUS_GENERATION: ${{ vars.SECRETS_KEY_PREVIOUS_GENERATION }}
+      # A hosted proxy (ADR 0026, docs/DEPLOY.md "Hosted proxy"): previews with the `hosted-preview` label, production
+      # when its environment sets PROXY_MODE=hosted. The sign-in settings are read only then.
+      PROXY_MODE: >-
+        ${{ github.event_name == 'pull_request' &&
+        (contains(github.event.pull_request.labels.*.name, 'hosted-preview') && 'hosted' || 'self-hosted') ||
+        vars.PROXY_MODE }}
+      SIGN_IN_GITHUB_CLIENT_ID: ${{ vars.SIGN_IN_GITHUB_CLIENT_ID }}
+      SIGN_IN_GITHUB_CLIENT_SECRET: ${{ secrets.SIGN_IN_GITHUB_CLIENT_SECRET }}
+      SIGN_IN_GOOGLE_CLIENT_ID: ${{ vars.SIGN_IN_GOOGLE_CLIENT_ID }}
+      SIGN_IN_GOOGLE_CLIENT_SECRET: ${{ secrets.SIGN_IN_GOOGLE_CLIENT_SECRET }}
+      TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
+      TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+      OWNED_ORG_LIMIT: ${{ vars.OWNED_ORG_LIMIT }}
+      ORG_RATE_LIMIT: ${{ vars.ORG_RATE_LIMIT }}
+      ORG_RATE_LIMIT_NAMESPACE_ID: ${{ vars.ORG_RATE_LIMIT_NAMESPACE_ID }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -139,11 +167,17 @@ jobs:
           if [ -z "$url" ]; then echo "::error::the deploy printed no url output" >&2; exit 1; fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
       - name: Check the deploy and Access
+        if: env.PROXY_MODE != 'hosted'
         env:
           URL: ${{ steps.deploy.outputs.url }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: tools/check-deploy.sh "$URL"
+      - name: Check the hosted deploy
+        if: env.PROXY_MODE == 'hosted'
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: tools/check-hosted-deploy.sh "$URL"
       - name: Comment the preview URL
         if: github.event_name == 'pull_request'
         env:
@@ -152,7 +186,8 @@ jobs:
           URL: ${{ steps.deploy.outputs.url }}
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          tools/preview-comment.sh "$PR" "Preview \`$STAGE\` deployed at $URL (commit ${SHA:0:8}). Sign in with Access; storage starts empty and is destroyed when the pull request closes."
+          if [ "$PROXY_MODE" = hosted ]; then how="a hosted proxy: sign in with GitHub or Google"; else how="sign in with Access"; fi
+          tools/preview-comment.sh "$PR" "Preview \`$STAGE\` deployed at $URL (commit ${SHA:0:8}), $how; storage starts empty and is destroyed when the pull request closes."
 
   destroy-preview:
     name: destroy preview

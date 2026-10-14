@@ -147,6 +147,9 @@ describe("authentication", () => {
     // Answered by the assets binding (404 while the panel is not built), never refused or redirected.
     for (const path of ["/sign-in", "/assets/missing.js"])
       expect([200, 404]).toContain((await call(path)).status);
+
+    // What tools/check-hosted-deploy.sh probes after a deploy.
+    expect((await call("/healthz")).status).toBe(200);
   });
 
   it("accepts no Access JWT and no Access service token", async () => {
