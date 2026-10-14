@@ -78,6 +78,11 @@ set. Replacing it signs everyone out.
    `auth_account`, `auth_verification`); every deploy applies it, also on a self-hosted proxy, where they stay empty.
    The Platform registry and each ControlPlane add their new tables and columns on first use.
 
+**Single sign-on.** Orgs set up their own identity providers on the panel ([ACCESS.md](ACCESS.md#single-sign-on-for-an-org));
+the deploy needs nothing for it: no setting, binding or D1 migration (the providers and domains live in each org's
+ControlPlane and the domain index in the Platform registry, created on first use). The Worker reaches the identity
+providers and `cloudflare-dns.com` (domain proof) with `fetch`.
+
 **Hosted previews.** A preview with the `hosted-preview` label uses the `preview` environment's sign-in settings and
 serves its `workers.dev` URL, so a sign-in completes only after that URL's callback is registered with the provider
 (and its hostname added to the Turnstile widget). Previews share the rate-limit namespace with each other, and with

@@ -186,6 +186,16 @@ sessions and linked GitHub/Google accounts). Deleting it removes the person from
 leaves the orgs until Access signs the person in again.
 _Avoid_: account (that is a provider login, below), user
 
+**Identity provider**:
+An org's own sign-in service on a hosted proxy (OIDC or SAML, such as Okta or Entra ID), one per org, through which the
+people of the org's verified domains sign in and join the org. A provider of models is never called this.
+_Avoid_: IdP (in user-facing text), SSO connection, provider (alone)
+
+**Verified domain**:
+An email domain an org proved it controls with a DNS TXT record; one org holds it at a time. Its people may sign in
+through the org's identity provider, and the org may require them to (GitHub and Google are then refused for it).
+_Avoid_: claimed domain, owned domain
+
 **Account**:
 A credential that is a provider login: an OAuth sign-in, a device-code login, an imported service account or an
 uploaded auth file. API keys whose provider reports allowances, such as OpenCode Go keys, are listed beside the accounts

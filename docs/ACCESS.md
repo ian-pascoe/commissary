@@ -452,6 +452,37 @@ management keys work as above. What changes:
 - **Browser protections.** The cross-site checks of §4 apply unchanged, Better Auth checks the origin of its own
   requests, and the sign-in routes (`/api/auth/*`, `/api/sign-in-options`, `/sign-in`) exist only on a hosted proxy.
 
+### Single sign-on for an org
+
+On a hosted proxy an org can sign its people in with its own identity provider (OIDC or SAML), on the panel's
+**Single sign-on** page or under `/v8/management/orgs/<slug>/sso`. Org admins see the settings; only the org owner
+changes them. A self-hosted proxy has none of this: Access is where its identity providers are configured.
+
+1. **Prove a domain.** The owner adds an email domain (`example.com`); the proxy shows a TXT record to publish:
+   `_cf-llm-proxy-challenge.example.com` holding `cf-llm-proxy-domain-verification=<token>`. **Verify** looks it up
+   through Cloudflare's DNS over HTTPS resolver. Only that exact domain is proved (a subdomain is a domain of its own),
+   and one org holds a domain at a time: another org can verify it once the first removes it.
+2. **Set the identity provider.** One per org:
+   - **OIDC**: the issuer URL, and a client registered there with the redirect URI the page shows
+     (`https://<host>/api/auth/sso/callback/sso-<org id>`), its client id and secret. The proxy reads the issuer's
+     discovery document when the provider is saved; the secret is sealed with the org's data key and never shown
+     again (leave it blank to keep it). Sign-in uses PKCE and asks for `openid email profile`.
+   - **SAML**: the identity provider's sign-in URL (HTTP-Redirect binding), its entity id and its signing
+     certificate (PEM). Register the proxy as a service provider with the entity id, assertion consumer service URL
+     (HTTP-POST) and metadata URL the page shows. Assertions must be signed, answer a request the proxy made, and are
+     accepted once.
+
+   **Test** asks the provider again (discovery document and signing keys, or the certificate's validity) without
+   signing anyone in.
+
+3. **Sign in.** On `/sign-in` a person enters their work email; when an org verified its domain and set a provider,
+   the browser goes to that provider. The email the provider returns must be at one of the org's verified domains. A
+   person signing in this way becomes a `member` of the org (no Personal org), unless an org admin removed them: they
+   are refused (`sso_removed`) until an admin adds them again.
+4. **Require single sign-on** (per verified domain, with a provider set). GitHub and Google are then refused for
+   emails of that domain (`sso_required`), and every session of a person at the domain ends at once, so everyone signs
+   in again through the identity provider. The provider cannot be removed while a domain requires it.
+
 ## Troubleshooting
 
 | Symptom                                | Cause                                                                                                  |
