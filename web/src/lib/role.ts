@@ -73,8 +73,10 @@ export const PAGES: ReadonlyArray<PanelPage> = [
   { to: "/keys", label: "API keys", role: "admin", privateMembers: true },
   { to: "/models", label: "Models", role: "admin" },
   { to: "/usage", label: "Usage", role: "member" },
+  { to: "/my-models", label: "My models", role: "member" },
   { to: "/proxy-keys", label: "Proxy keys", role: "member" },
   { to: "/members", label: "Members", role: "admin" },
+  { to: "/grants", label: "Grants", role: "admin" },
   { to: "/settings", label: "Settings", role: "admin" },
 ];
 
@@ -95,13 +97,14 @@ const within = (pathname: string, page: string): boolean =>
 
 /**
  * Whether a role may open a page of the panel (`pathname` is relative to the org's base path). Sub-pages of a page
- * need an org admin, like `/usage/prices`, except the page itself. A plain member opens Usage and Proxy keys, and the
+ * need an org admin, like `/usage/prices`, except the page itself. A plain member opens Usage, My models and Proxy keys, and the
  * pages of their own private accounts and API keys, with their sub-pages, where the org lets members connect private
  * credentials.
  */
 export const pageAllowed = (role: OrgRole, pathname: string, privateCredentials = false): boolean =>
   atLeast(role, "admin") ||
   trimmed(pathname) === "/usage" ||
+  trimmed(pathname) === "/my-models" ||
   trimmed(pathname) === "/proxy-keys" ||
   (privateCredentials && (within(pathname, "/accounts") || within(pathname, "/keys")));
 

@@ -1,0 +1,231 @@
+.page {
+  display: grid;
+  gap: var(--space-6);
+  max-width: 56rem;
+}
+
+.head {
+  display: grid;
+  gap: var(--space-3);
+  padding-bottom: var(--space-5);
+  border-bottom: 2px solid var(--text);
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+
+.intro {
+  max-width: 65ch;
+  font-size: var(--text-sm);
+  color: var(--quiet);
+}
+
+.empty,
+.none {
+  max-width: 60ch;
+  color: var(--quiet);
+}
+
+/* The three ways to read the grants. */
+.views {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.view {
+  height: 2.5rem;
+  padding: 0 var(--space-4);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text);
+  background: none;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.view[aria-pressed="true"] {
+  color: var(--surface, #fff);
+  background: var(--text);
+  border-color: var(--text);
+}
+
+.group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.groupTitle {
+  font-size: var(--text-md, 1rem);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.table {
+  width: 100%;
+  font-size: var(--text-sm);
+}
+
+.table th,
+.table td {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.table > thead th {
+  padding-top: 0;
+  padding-bottom: var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--quiet);
+  border-bottom: 2px solid var(--text);
+  white-space: nowrap;
+}
+
+.table tr > :first-child {
+  padding-left: 0;
+}
+
+.table tr > :last-child {
+  padding-right: 0;
+}
+
+.name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.secondary {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-body);
+  color: var(--quiet);
+}
+
+.every {
+  font-weight: 600;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.chip {
+  padding: 0 var(--space-2);
+  background: var(--sunk);
+  border-radius: var(--radius);
+}
+
+.actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--quiet);
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.icon:hover {
+  color: var(--text);
+  background: var(--sunk);
+}
+
+.icon:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.icon:disabled:hover {
+  color: var(--quiet);
+  background: none;
+}
+
+.foot {
+  display: flex;
+}
+
+.form {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--sunk);
+  border-radius: var(--radius);
+}
+
+.pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-4);
+}
+
+.form input,
+.form select {
+  width: 100%;
+}
+
+.hint {
+  min-height: 1lh;
+  font-size: var(--text-xs);
+  color: var(--quiet);
+}
+
+.formActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.quiet {
+  height: 2.5rem;
+  padding: 0 var(--space-3);
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.quiet:hover {
+  background: var(--field);
+}
+
+.form input::-webkit-calendar-picker-indicator {
+  display: none !important;
+}
+
+.note {
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.note:empty {
+  margin-top: calc(-1 * var(--space-4));
+}
+
+@media (max-width: 48rem) {
+  .pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .views {
+    flex-wrap: wrap;
+  }
+}
