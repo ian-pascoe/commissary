@@ -99,7 +99,8 @@ export default defineConfig({
       {
         extends: true,
         plugins: [worker(HOSTED_BINDINGS, true)],
-        test: { name: "hosted", include: ["test/hosted/**/*.test.ts"] },
+        // Each file's `installFakes` loads Better Auth once (slow under a full parallel run), outside the tests.
+        test: { name: "hosted", include: ["test/hosted/**/*.test.ts"], hookTimeout: 120_000 },
       },
     ],
   },

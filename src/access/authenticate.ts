@@ -75,7 +75,7 @@ export const resetAccessWarnings = (): void => {
  * request's `CurrentOrg` otherwise. An unknown slug is a 404 for a platform admin (who may create it), and a 403 like
  * any org one may not manage for everybody else, so the registry's slugs cannot be probed.
  */
-const targetOrg = (slug: OrgSlug | undefined, platformAdmin: boolean) =>
+export const targetOrg = (slug: OrgSlug | undefined, platformAdmin: boolean) =>
   Effect.gen(function* () {
     if (slug === undefined) return yield* CurrentOrg;
 
@@ -100,7 +100,7 @@ const targetOrg = (slug: OrgSlug | undefined, platformAdmin: boolean) =>
  * `access_clients` setting); otherwise the client is asked for a proxy key, like a request without credentials, and
  * `Invalid API key` when it sent another credential (`credentialSent`).
  */
-const admitted = (
+export const admitted = (
   principal: Principal,
   org: OrgId,
   platformAdmin: boolean,
@@ -135,7 +135,7 @@ const admitted = (
   });
 
 /** The identity of a live proxy key: its member, in the org the key names (ADR 0022). Never a platform admin. */
-const keyIdentity = Effect.fnUntraced(function* (text: string) {
+export const keyIdentity = Effect.fnUntraced(function* (text: string) {
   const key = yield* verifyProxyKey(text);
 
   return yield* makeIdentity(

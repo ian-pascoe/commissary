@@ -12,6 +12,9 @@
  * usage job reads for every org at once: a number of days, or NULL for none (keep records forever). The column is added
  * on start when it is missing, so every org that existed before it starts with none and an upgrade deletes no history;
  * an org created afterwards gets {@link DEFAULT_USAGE_RETENTION_DAYS}. Removing an org or a person deletes their rows.
+ *
+ * A hosted proxy (ADR 0026) also keeps its people here: who signed up (and the Personal org they got), how many orgs
+ * each may own, and who a platform admin suspended; orgs record who created them and whether they are suspended.
  */
 import { Schema } from "effect";
 import { DEFAULT_ORG_SLUG, GLOBAL_ORG, newOrgId, OrgId, OrgSlug } from "./org.ts";
@@ -27,6 +30,10 @@ export interface OrgRecord {
   readonly createdAt: number;
   /** How many days the org's usage records are kept; `null`: forever (ADR 0027). */
   readonly usageRetentionDays: number | null;
+  /** The (lowercased) email of the person who created it on a hosted proxy; absent otherwise. */
+  readonly createdBy?: string;
+  /** Epoch milliseconds a platform admin suspended it; absent while it is not suspended. */
+  readonly suspendedAt?: number;
 }
 
 /** New orgs keep their usage records this long unless an admin chooses otherwise (ADR 0027). */
@@ -40,6 +47,11 @@ export type OrgInput = {
   readonly slug: string;
   readonly name: string;
   readonly id?: OrgId;
+  /**
+   * A person creating an org on a hosted proxy, and how many orgs a person may own unless a platform admin gave them
+   * another limit: the org is refused (`org_limit_reached`) once they created that many.
+   */
+  readonly createdBy?: { readonly email: string; readonly defaultLimit: number };
 };
 
 export type OrgPatch = { readonly slug?: string; readonly name?: string };
@@ -54,7 +66,8 @@ export type OrgWriteResult =
         | "invalid_name"
         | "invalid_retention"
         | "slug_taken"
-        | "not_found";
+        | "not_found"
+        | "org_limit_reached";
       readonly message: string;
     };
 
@@ -83,6 +96,49 @@ export interface OrgIndex {
   readonly emails: ReadonlyArray<string>;
   readonly serviceTokens: ReadonlyArray<string>;
 }
+
+/** A person of a hosted proxy, as platform admins see them. */
+export interface PersonRecord {
+  /** Lowercased. */
+  readonly email: string;
+  /** Epoch ms of their first sign-in; absent before it. */
+  readonly signedUpAt?: number;
+  /** How many orgs they may own: a platform admin's choice, or the deployment's default. */
+  readonly orgLimit: number;
+  /** Whether {@link orgLimit} is a platform admin's choice for them. */
+  readonly orgLimitSet: boolean;
+  /** How many orgs they created (their Personal org included). */
+  readonly ownedOrgs: number;
+  readonly suspendedAt?: number;
+}
+
+/** What a platform admin changes about a person: `orgLimit: null` returns them to the deployment's default. */
+export interface PersonPatch {
+  readonly orgLimit?: number | null;
+  readonly suspended?: boolean;
+}
+
+/**
+ * Where a person who signed in stands (`signIn`): suspended; signed up (or a member of some org, so invited:
+ * `signUp` is recorded then); or due a Personal org, already created here, that the Worker still has to give them
+ * (make them its owner, then `finishSignUp`).
+ */
+export type SignInState =
+  | { readonly kind: "suspended" }
+  | { readonly kind: "ready" }
+  | { readonly kind: "personal"; readonly org: OrgRecord };
+
+/** Where an org and a person stand for a key or a session of a hosted proxy. */
+export interface Standing {
+  readonly org: "active" | "suspended" | "missing";
+  readonly person: "active" | "suspended";
+}
+
+/** The most orgs a platform admin may let one person own. */
+export const MAX_ORG_LIMIT = 1000;
+
+/** The name of the org a person gets when they sign up without an invitation. */
+export const PERSONAL_ORG_NAME = "Personal";
 
 export const MAX_NAME_LENGTH = 100;
 
@@ -114,8 +170,21 @@ interface OrgRow {
   name: string;
   created_at: number;
   usage_retention_days: number | null;
+  created_by: string | null;
+  suspended_at: number | null;
   [column: string]: SqlStorageValue;
 }
+
+interface PersonRow {
+  email: string;
+  signed_up_at: number | null;
+  personal_org: string | null;
+  org_limit: number | null;
+  suspended_at: number | null;
+  [column: string]: SqlStorageValue;
+}
+
+const ORG_COLUMNS = "id, slug, name, created_at, usage_retention_days, created_by, suspended_at";
 
 const SLUG_PROBLEM =
   "an org slug is 1 to 63 lowercase letters, digits and inner hyphens (it appears in URLs)";
@@ -162,6 +231,30 @@ export class PlatformStore {
        )`,
     );
     sql.exec(`CREATE INDEX IF NOT EXISTS org_service_tokens_by_org ON org_service_tokens (org_id)`);
+
+    // Hosted proxies (ADR 0026): who created an org and whether it is suspended, and the people who signed up.
+    const orgColumns = new Set(
+      sql
+        .exec<{ name: string }>("PRAGMA table_info(orgs)")
+        .toArray()
+        .map((column) => column.name),
+    );
+
+    if (!orgColumns.has("created_by")) sql.exec(`ALTER TABLE orgs ADD COLUMN created_by TEXT`);
+
+    if (!orgColumns.has("suspended_at"))
+      sql.exec(`ALTER TABLE orgs ADD COLUMN suspended_at INTEGER`);
+    sql.exec(`CREATE INDEX IF NOT EXISTS orgs_by_creator ON orgs (created_by)`);
+
+    sql.exec(
+      `CREATE TABLE IF NOT EXISTS people (
+         email TEXT PRIMARY KEY,
+         signed_up_at INTEGER,
+         personal_org TEXT,
+         org_limit INTEGER,
+         suspended_at INTEGER
+       )`,
+    );
     // The deployment that existed before orgs. Left alone when it exists (a platform admin may have renamed it).
     sql.exec(
       `INSERT OR IGNORE INTO orgs (id, slug, name, created_at, usage_retention_days) VALUES (?, ?, ?, ?, NULL)`,
@@ -181,6 +274,8 @@ export class PlatformStore {
       name: row.name,
       createdAt: row.created_at,
       usageRetentionDays: row.usage_retention_days,
+      ...(row.created_by === null ? {} : { createdBy: row.created_by }),
+      ...(row.suspended_at === null ? {} : { suspendedAt: row.suspended_at }),
     };
   }
 
@@ -188,7 +283,7 @@ export class PlatformStore {
   listOrgs(): ReadonlyArray<OrgRecord> {
     return this.#sql
       .exec<OrgRow>(
-        `SELECT id, slug, name, created_at, usage_retention_days FROM orgs ORDER BY id <> '${GLOBAL_ORG}', created_at, id`,
+        `SELECT ${ORG_COLUMNS} FROM orgs ORDER BY id <> '${GLOBAL_ORG}', created_at, id`,
       )
       .toArray()
       .map((row) => this.#record(row));
@@ -196,10 +291,7 @@ export class PlatformStore {
 
   orgBySlug(slug: string): OrgRecord | undefined {
     const row = this.#sql
-      .exec<OrgRow>(
-        `SELECT id, slug, name, created_at, usage_retention_days FROM orgs WHERE slug = ?`,
-        slug,
-      )
+      .exec<OrgRow>(`SELECT ${ORG_COLUMNS} FROM orgs WHERE slug = ?`, slug)
       .toArray()[0];
 
     return row === undefined ? undefined : this.#record(row);
@@ -207,10 +299,7 @@ export class PlatformStore {
 
   orgById(id: string): OrgRecord | undefined {
     const row = this.#sql
-      .exec<OrgRow>(
-        `SELECT id, slug, name, created_at, usage_retention_days FROM orgs WHERE id = ?`,
-        id,
-      )
+      .exec<OrgRow>(`SELECT ${ORG_COLUMNS} FROM orgs WHERE id = ?`, id)
       .toArray()[0];
 
     return row === undefined ? undefined : this.#record(row);
@@ -227,16 +316,32 @@ export class PlatformStore {
     if (this.orgBySlug(input.slug) !== undefined)
       return { ok: false, error: "slug_taken", message: `the slug “${input.slug}” is in use` };
 
+    const creator =
+      input.createdBy === undefined ? undefined : normalizeEmail(input.createdBy.email);
+
+    if (
+      input.createdBy !== undefined &&
+      creator !== undefined &&
+      this.#ownedOrgs(creator) >= this.#orgLimit(creator, input.createdBy.defaultLimit)
+    )
+      return {
+        ok: false,
+        error: "org_limit_reached",
+        message: "you own as many orgs as you may; ask a platform admin to raise your limit",
+      };
+
     // Never derived from the slug: a renamed org's old slug may be taken again, and its id must stay unique.
     const id = input.id ?? newOrgId();
 
     this.#sql.exec(
-      `INSERT INTO orgs (id, slug, name, created_at, usage_retention_days) VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO orgs (id, slug, name, created_at, usage_retention_days, created_by)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       id,
       input.slug,
       name,
       now,
       DEFAULT_USAGE_RETENTION_DAYS,
+      creator ?? null,
     );
 
     const org = this.orgById(id);
@@ -305,12 +410,16 @@ export class PlatformStore {
 
     this.#sql.exec(`DELETE FROM org_members WHERE org_id = ?`, id);
     this.#sql.exec(`DELETE FROM org_service_tokens WHERE org_id = ?`, id);
+    this.#sql.exec(`UPDATE people SET personal_org = NULL WHERE personal_org = ?`, id);
     this.#sql.exec(`DELETE FROM orgs WHERE id = ?`, id);
 
     return { ok: true };
   }
 
-  /** Deletes the index rows of a person in every org (their account was deleted); answers how many orgs listed them. */
+  /**
+   * Deletes the index rows of a person in every org (their account was deleted), and on a hosted proxy their record and
+   * their name on the orgs they created; answers how many orgs listed them.
+   */
   removePerson(email: string): number {
     const normalized = normalizeEmail(email);
 
@@ -319,6 +428,8 @@ export class PlatformStore {
       .one().n;
 
     this.#sql.exec(`DELETE FROM org_members WHERE email = ?`, normalized);
+    this.#sql.exec(`DELETE FROM people WHERE email = ?`, normalized);
+    this.#sql.exec(`UPDATE orgs SET created_by = NULL WHERE created_by = ?`, normalized);
 
     return listed;
   }
@@ -327,7 +438,7 @@ export class PlatformStore {
   orgsOfEmail(email: string): ReadonlyArray<OrgRecord> {
     return this.#sql
       .exec<OrgRow>(
-        `SELECT o.id, o.slug, o.name, o.created_at, o.usage_retention_days FROM orgs o
+        `SELECT o.id, o.slug, o.name, o.created_at, o.usage_retention_days, o.created_by, o.suspended_at FROM orgs o
          JOIN org_members m ON m.org_id = o.id WHERE m.email = ? ORDER BY o.id <> '${GLOBAL_ORG}', o.created_at, o.id`,
         normalizeEmail(email),
       )
@@ -339,7 +450,7 @@ export class PlatformStore {
   orgOfServiceToken(clientId: string): OrgRecord | undefined {
     const row = this.#sql
       .exec<OrgRow>(
-        `SELECT o.id, o.slug, o.name, o.created_at, o.usage_retention_days FROM orgs o
+        `SELECT o.id, o.slug, o.name, o.created_at, o.usage_retention_days, o.created_by, o.suspended_at FROM orgs o
          JOIN org_service_tokens t ON t.org_id = o.id WHERE t.client_id = ?`,
         clientId.trim(),
       )
@@ -386,5 +497,168 @@ export class PlatformStore {
       serviceTokens: tokens.length - conflicts.length,
       conflicts,
     };
+  }
+
+  // --- people of a hosted proxy (ADR 0026) ----------------------------------------------------------------------
+
+  #person(email: string): PersonRow | undefined {
+    return this.#sql
+      .exec<PersonRow>(
+        `SELECT email, signed_up_at, personal_org, org_limit, suspended_at FROM people WHERE email = ?`,
+        email,
+      )
+      .toArray()[0];
+  }
+
+  #ownedOrgs(email: string): number {
+    return (
+      this.#sql
+        .exec<{ n: number }>(`SELECT count(*) AS n FROM orgs WHERE created_by = ?`, email)
+        .toArray()[0]?.n ?? 0
+    );
+  }
+
+  #orgLimit(email: string, defaultLimit: number): number {
+    return this.#person(email)?.org_limit ?? defaultLimit;
+  }
+
+  /**
+   * A person signed in (a verified email): suspended, signed up already, or due a Personal org. A person the index
+   * lists in any org was invited, and is signed up without one. The Personal org is created here, once (a second call
+   * before {@link finishSignUp} answers the same org), with a slug of its own.
+   */
+  signIn(email: string, now: number): SignInState {
+    const address = normalizeEmail(email);
+    const person = this.#person(address);
+
+    if (person?.suspended_at != null) return { kind: "suspended" };
+
+    if (person?.signed_up_at != null) return { kind: "ready" };
+    const pending = person?.personal_org == null ? undefined : this.orgById(person.personal_org);
+
+    if (pending !== undefined) return { kind: "personal", org: pending };
+
+    if (this.orgsOfEmail(address).length > 0) {
+      this.finishSignUp(address, now);
+
+      return { kind: "ready" };
+    }
+
+    let slug = "";
+
+    do slug = `personal-${crypto.randomUUID().replaceAll("-", "").slice(0, 10)}`;
+    while (this.orgBySlug(slug) !== undefined);
+    const id = newOrgId();
+
+    this.#sql.exec(
+      `INSERT INTO orgs (id, slug, name, created_at, usage_retention_days, created_by)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      id,
+      slug,
+      PERSONAL_ORG_NAME,
+      now,
+      DEFAULT_USAGE_RETENTION_DAYS,
+      address,
+    );
+    this.#sql.exec(
+      `INSERT INTO people (email, personal_org) VALUES (?, ?)
+       ON CONFLICT (email) DO UPDATE SET personal_org = excluded.personal_org`,
+      address,
+      id,
+    );
+
+    const org = this.orgById(id);
+
+    if (org === undefined) throw new Error("the Personal org just created is missing");
+
+    return { kind: "personal", org };
+  }
+
+  /** The person is signed up: their Personal org (if any) has them as its owner. */
+  finishSignUp(email: string, now: number): void {
+    this.#sql.exec(
+      `INSERT INTO people (email, signed_up_at) VALUES (?, ?)
+       ON CONFLICT (email) DO UPDATE SET signed_up_at = coalesce(people.signed_up_at, excluded.signed_up_at)`,
+      normalizeEmail(email),
+      now,
+    );
+  }
+
+  /** A person as platform admins see them; one who never signed in has no sign-up time. */
+  person(email: string, defaultLimit: number): PersonRecord {
+    const address = normalizeEmail(email);
+    const row = this.#person(address);
+
+    return {
+      email: address,
+      ...(row?.signed_up_at == null ? {} : { signedUpAt: row.signed_up_at }),
+      orgLimit: row?.org_limit ?? defaultLimit,
+      orgLimitSet: row?.org_limit != null,
+      ownedOrgs: this.#ownedOrgs(address),
+      ...(row?.suspended_at == null ? {} : { suspendedAt: row.suspended_at }),
+    };
+  }
+
+  /** Changes a person's org limit and/or suspension; a person who never signed in can be prepared too. */
+  updatePerson(email: string, patch: PersonPatch, now: number, defaultLimit: number): PersonRecord {
+    const address = normalizeEmail(email);
+
+    this.#sql.exec(`INSERT OR IGNORE INTO people (email) VALUES (?)`, address);
+
+    if (patch.orgLimit !== undefined)
+      this.#sql.exec(`UPDATE people SET org_limit = ? WHERE email = ?`, patch.orgLimit, address);
+
+    if (patch.suspended !== undefined)
+      this.#sql.exec(
+        `UPDATE people SET suspended_at = CASE WHEN ? THEN coalesce(suspended_at, ?) ELSE NULL END
+         WHERE email = ?`,
+        patch.suspended ? 1 : 0,
+        now,
+        address,
+      );
+
+    return this.person(address, defaultLimit);
+  }
+
+  /** Suspends or unsuspends the org addressed by `slug`; nothing of it is deleted. */
+  setOrgSuspended(slug: string, suspended: boolean, now: number): OrgWriteResult {
+    const current = this.orgBySlug(slug);
+
+    if (current === undefined)
+      return { ok: false, error: "not_found", message: `no org has the slug “${slug}”` };
+
+    this.#sql.exec(
+      `UPDATE orgs SET suspended_at = CASE WHEN ? THEN coalesce(suspended_at, ?) ELSE NULL END
+       WHERE id = ?`,
+      suspended ? 1 : 0,
+      now,
+      current.id,
+    );
+
+    const org = this.orgById(current.id);
+
+    if (org === undefined) throw new Error("the org just suspended is missing");
+
+    return { ok: true, org };
+  }
+
+  /** Where `org` and the person with `email` stand (a key's org and member, a session's person and org). */
+  standing(org: string, email: string | undefined): Standing {
+    const found = this.orgById(org);
+    const person = email === undefined ? undefined : this.#person(normalizeEmail(email));
+
+    return {
+      org:
+        found === undefined ? "missing" : found.suspendedAt === undefined ? "active" : "suspended",
+      person: person?.suspended_at == null ? "active" : "suspended",
+    };
+  }
+
+  /** The emails the index lists in `org` (whom a suspension signs out). */
+  emailsOfOrg(org: string): ReadonlyArray<string> {
+    return this.#sql
+      .exec<{ email: string }>(`SELECT email FROM org_members WHERE org_id = ? ORDER BY email`, org)
+      .toArray()
+      .map((row) => row.email);
   }
 }

@@ -1,6 +1,6 @@
 // Router middleware gating the proxy and management routes (mirrors AuthMiddleware in
 // internal/api/server_middleware.go: flat `{"error": "..."}` bodies).
-import { Effect, Match, Result } from "effect";
+import { Effect, Match, Predicate, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { CurrentOrg, type OrgId } from "../platform/org.ts";
 import { authenticateRequest } from "./authenticate.ts";
@@ -9,7 +9,11 @@ import { crossSiteRejection } from "./csrf.ts";
 import { AccessJwks } from "./jwks.ts";
 import { AccessPrincipal } from "./principal.ts";
 import type { AccessIdentity, Principal } from "./principal.ts";
-import { classifyPath } from "./routes.ts";
+import { classifyPath, isPanelAssetPath, isPanelPagePath, normalizedPath } from "./routes.ts";
+import { authenticateHosted } from "../hosted/gate.ts";
+import { isHosted } from "../hosted/mode.ts";
+import { SIGN_IN_PAGE_PATH } from "../management/contract/sign-in.ts";
+import { WorkerEnv } from "../platform/env.ts";
 
 const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
 
@@ -69,6 +73,31 @@ export const accessErrorResponse = (
 };
 
 /**
+ * On a hosted proxy, a browser that opens a panel page without a session goes to the sign-in page, which brings it back
+ * (`next`, a path of this origin) once signed in.
+ */
+const signInRedirect = (
+  request: HttpServerRequest.HttpServerRequest,
+  failure: AccessError,
+): HttpServerResponse.HttpServerResponse | undefined => {
+  const url = new URL(request.originalUrl, "http://localhost");
+
+  if (
+    !Predicate.isTagged(failure, "UnauthorizedError") ||
+    (request.method !== "GET" && request.method !== "HEAD") ||
+    !isPanelPagePath(normalizedPath(request.originalUrl) ?? "")
+  )
+    return undefined;
+
+  const next = `${url.pathname}${url.search}`;
+
+  return HttpServerResponse.redirect(
+    next === "/" ? SIGN_IN_PAGE_PATH : `${SIGN_IN_PAGE_PATH}?next=${encodeURIComponent(next)}`,
+    { status: 302, headers: { "cache-control": "no-store" } },
+  );
+};
+
+/**
  * Global middleware: requests under the protected prefixes (see `routes.ts`) must carry a valid Access JWT, or on a
  * proxy route a proxy key (`proxy-key.ts`), and come from a member of the request's org with the role the route needs
  * (`policy.ts`, ADR 0022): a platform admin
@@ -90,7 +119,10 @@ export const AccessGate = HttpRouter.middleware<{ provides: AccessPrincipal }>()
         const request = yield* HttpServerRequest.HttpServerRequest;
         const zone = classifyPath(request.originalUrl);
 
-        if (zone === "public") {
+        const hosted = isHosted(yield* WorkerEnv);
+
+        // A hosted proxy's sign-in page loads the panel's bundle before anyone is signed in; the bundle holds no data.
+        if (zone === "public" || (hosted && isPanelAssetPath(request.originalUrl))) {
           return yield* Effect.provideService(app, AccessPrincipal, PUBLIC_ROUTE_IDENTITY);
         }
 
@@ -104,13 +136,18 @@ export const AccessGate = HttpRouter.middleware<{ provides: AccessPrincipal }>()
         if (rejection !== undefined) return errorResponse(rejection.status, rejection.message);
 
         const authenticated = yield* Effect.result(
-          authenticateRequest(request.headers, request.originalUrl, zone, request.method).pipe(
-            Effect.provideService(AccessJwks, jwks),
-          ),
+          hosted
+            ? authenticateHosted(request.headers, request.originalUrl, zone, request.method)
+            : authenticateRequest(request.headers, request.originalUrl, zone, request.method).pipe(
+                Effect.provideService(AccessJwks, jwks),
+              ),
         );
 
-        if (Result.isFailure(authenticated))
-          return yield* accessErrorResponse(authenticated.failure);
+        if (Result.isFailure(authenticated)) {
+          const page = hosted ? signInRedirect(request, authenticated.failure) : undefined;
+
+          return page ?? (yield* accessErrorResponse(authenticated.failure));
+        }
 
         return yield* app.pipe(
           Effect.provideService(AccessPrincipal, authenticated.success),

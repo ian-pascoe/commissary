@@ -74,6 +74,9 @@ export const installFakes = async (): Promise<void> => {
 
     return new Response(`unexpected ${url}`, { status: 599 });
   };
+
+  // Loads Better Auth (imported lazily by the Worker) here, under the hook timeout, rather than in the first test.
+  await call("/api/auth/get-session");
 };
 
 export const restoreFetch = (): void => {

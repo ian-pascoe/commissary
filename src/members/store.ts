@@ -264,12 +264,15 @@ export class MemberStore {
   /**
    * `org`: auto-join starts on for `global` (self-hosted deployments keep admitting everyone Access admits) and off
    * for every other org; `transaction` runs a body in one storage transaction (`ctx.storage.transactionSync`).
+   * `globalAutoJoin: false` (a hosted proxy, ADR 0026, where anyone may sign in) starts `global` with auto-join off too:
+   * people join it only by invitation.
    */
   constructor(
     sql: SqlStorage,
     org: OrgId,
     transaction: <T>(body: () => T) => T,
     now: () => number = Date.now,
+    globalAutoJoin = true,
   ) {
     this.#sql = sql;
     this.#org = org;
@@ -295,7 +298,7 @@ export class MemberStore {
       `INSERT OR IGNORE INTO membership
          (id, auto_join, private_credentials, admins_migrated, counter, index_synced)
        VALUES (1, ?, ?, 0, 0, 0)`,
-      org === GLOBAL_ORG ? 1 : 0,
+      org === GLOBAL_ORG && globalAutoJoin ? 1 : 0,
       org === GLOBAL_ORG ? 1 : 0,
     );
   }

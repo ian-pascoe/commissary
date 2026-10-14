@@ -7,7 +7,7 @@
  * (`access/csrf.ts`), and starts a sign-in only with a Turnstile token (`turnstile.ts`).
  */
 import { Effect } from "effect";
-import { HttpRouter, HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http";
+import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { crossSiteRejection } from "../access/csrf.ts";
 import {
   AUTH_ROUTES,
@@ -19,7 +19,7 @@ import { jsonReply } from "../management/http.ts";
 import { panelIndex } from "../management/web-panel.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import { AUTH_BASE_PATH, authConfigurationProblem, enabledProviders } from "./auth.ts";
-import { isHosted } from "./mode.ts";
+import { hostedOnly, routeNotFound } from "./only.ts";
 import { signedInAuth } from "./session.ts";
 import { TURNSTILE_TOKEN_HEADER, verifyTurnstile } from "./turnstile.ts";
 
@@ -33,23 +33,6 @@ const PASSED = new Set([
 const CALLBACK_PREFIX = `${AUTH_BASE_PATH}/callback/`;
 
 const NO_STORE = { "cache-control": "no-store" } as const;
-
-/** Answers like a path the router does not know (`http/cors.ts` turns it into the plain 404). */
-const notFound = Effect.gen(function* () {
-  const request = yield* HttpServerRequest.HttpServerRequest;
-
-  return yield* new HttpServerError.HttpServerError({
-    reason: new HttpServerError.RouteNotFound({ request }),
-  });
-});
-
-/** Runs `handler` on a hosted proxy only; a self-hosted proxy has no such route. */
-const hostedOnly = <A, E, R>(handler: Effect.Effect<A, E, R>) =>
-  Effect.gen(function* () {
-    const env = yield* WorkerEnv;
-
-    return isHosted(env) ? yield* handler : yield* notFound;
-  });
 
 const configurationProblem = Effect.gen(function* () {
   const env = yield* WorkerEnv;
@@ -74,7 +57,7 @@ const authRoute = hostedOnly(
     const env = yield* WorkerEnv;
     const url = new URL(request.originalUrl, "http://localhost");
 
-    if (!passed(request.method, url.pathname)) return yield* notFound;
+    if (!passed(request.method, url.pathname)) return yield* routeNotFound;
 
     const rejection = crossSiteRejection(
       request.method,

@@ -3,13 +3,55 @@
  * session ended by sign-out or suspension stops working at once. New in the Workers port.
  */
 import { Effect } from "effect";
-import { hostedAuth, type HostedAuth } from "./auth.ts";
+import { GLOBAL_ORG } from "../platform/org.ts";
+import { platformOf } from "../platform/registry.ts";
+import { AUTH_TABLES, hostedAuth, type HostedAuth } from "./auth.ts";
 
-type SessionEnv = Parameters<typeof hostedAuth>[0];
+type SessionEnv = Env;
 
-/** The deployment's Better Auth instance. */
+/** The deployment's Better Auth instance; a suspended person cannot start a session. */
 export const signedInAuth = (env: SessionEnv, origin: string): Promise<HostedAuth> =>
-  hostedAuth(env, origin);
+  hostedAuth(env, origin, {
+    maySignIn: async (email) =>
+      (await platformOf(env).standing(GLOBAL_ORG, email)).person !== "suspended",
+  });
+
+/**
+ * Ends every session of the people with these emails (a suspension): their next request is not signed in. Their
+ * accounts stay: nothing is deleted.
+ */
+export const endSessions = (
+  env: Pick<Env, "USAGE">,
+  emails: ReadonlyArray<string>,
+): Effect.Effect<number> => {
+  const unique = [...new Set(emails.map((email) => email.toLowerCase()))];
+
+  if (unique.length === 0) return Effect.succeed(0);
+
+  return Effect.tryPromise(async () => {
+    let ended = 0;
+
+    // D1 binds at most 100 parameters per statement.
+    for (let start = 0; start < unique.length; start += 90) {
+      const batch = unique.slice(start, start + 90);
+
+      const result = await env.USAGE.prepare(
+        `DELETE FROM ${AUTH_TABLES.session} WHERE "userId" IN
+           (SELECT id FROM ${AUTH_TABLES.user} WHERE lower(email) IN (${batch.map(() => "?").join(", ")}))`,
+      )
+        .bind(...batch)
+        .run();
+
+      ended += result.meta.changes;
+    }
+
+    return ended;
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.logError(`sessions not ended: ${error.message}`).pipe(Effect.as(0)),
+    ),
+  );
+};
 
 /** A signed-in person: Better Auth's user id and their email, which the provider verified. */
 export interface SignedInPerson {

@@ -8,6 +8,9 @@
  * anyone Access admits and says which orgs the control panel may open (all of them for a platform admin, the orgs the
  * caller is a member of otherwise) and the caller's role in the addressed org. Creating an org only adds it to the
  * registry; its ControlPlane starts empty when first used.
+ *
+ * On a hosted proxy (ADR 0026) anyone signed in may create orgs, up to their owned-org limit, and becomes the new org's
+ * owner; platform admins suspend and unsuspend orgs through the rename route (`suspended`).
  */
 import { Clock, Data, Effect, Match } from "effect";
 import { HttpRouter } from "effect/http";
@@ -16,6 +19,10 @@ import { forgetOrgProxyKeys } from "../access/proxy-key.ts";
 import { syncOrgIndex } from "../members/admission.ts";
 import { roleAtLeast } from "../members/roles.ts";
 import type { JsonObject } from "../json/index.ts";
+import { endSessions } from "../hosted/session.ts";
+import { forgetStanding, ownedOrgLimit } from "../hosted/standing.ts";
+import { isHosted } from "../hosted/mode.ts";
+import { syncOrgIndex } from "../members/admission.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import { controlPlaneOf, GLOBAL_ORG, newOrgId } from "../platform/org.ts";
 import { deleteOrg as deleteOrgData } from "../platform/org-deletion.ts";
@@ -49,6 +56,7 @@ const view = (org: OrgRecord): OrgView => ({
   name: org.name,
   created_at: new Date(org.createdAt).toISOString(),
   usage_retention_days: org.usageRetentionDays,
+  ...(org.suspendedAt === undefined ? {} : { suspended: true }),
 });
 
 /**
@@ -85,6 +93,21 @@ const requirePlatformAdmin = Effect.gen(function* () {
     });
 });
 
+/** On a hosted proxy, how many orgs a person (not a platform admin) owns and may own. */
+const ownedOrgs = (identity: AccessIdentity) =>
+  Effect.gen(function* () {
+    const env = yield* WorkerEnv;
+    const { principal } = identity;
+
+    if (!isHosted(env)) return {};
+
+    if (identity.platformAdmin || principal.kind !== "user") return { hosted: true };
+    const limit = ownedOrgLimit(env);
+    const person = yield* registry("person", (stub) => stub.person(principal.email, limit));
+
+    return { hosted: true, org_limit: person.orgLimit, owned_orgs: person.ownedOrgs };
+  });
+
 const me = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
   const orgs = yield* openableOrgs(identity);
@@ -99,6 +122,7 @@ const me = Effect.gen(function* () {
     role: identity.role ?? null,
     orgs: orgs.map((org) => ({ slug: org.slug, name: org.name })),
     ...(settings === undefined ? {} : { private_credentials: settings.privateCredentials }),
+    ...(yield* ownedOrgs(identity)),
   });
 });
 
@@ -140,12 +164,31 @@ const stringFields = (
 const refused = (result: Extract<OrgWriteResult, { ok: false }>): Reply =>
   Match.value(result.error).pipe(
     Match.when("slug_taken", () => replyError(409, "slug_taken", { message: result.message })),
+    Match.when("org_limit_reached", () =>
+      replyError(409, "org_limit_reached", { message: result.message }),
+    ),
     Match.when("not_found", () => replyError(404, "org_not_found", { message: result.message })),
     Match.orElse((error) => replyError(422, error, { message: result.message })),
   );
 
+/**
+ * Who may create an org: a platform admin; on a hosted proxy also a person signed in, who becomes its owner and counts
+ * it against their owned-org limit. `undefined` for a platform admin.
+ */
+const creator = Effect.gen(function* () {
+  const identity = yield* AccessPrincipal;
+  const env = yield* WorkerEnv;
+  const { principal } = identity;
+
+  if (identity.platformAdmin) return undefined;
+
+  if (!isHosted(env) || principal.kind !== "user") return yield* requirePlatformAdmin;
+
+  return { email: principal.email.toLowerCase(), defaultLimit: ownedOrgLimit(env) };
+});
+
 const create = Effect.gen(function* () {
-  yield* requirePlatformAdmin;
+  const person = yield* creator;
   const body = yield* bodyObject;
   const { private_credentials: privateCredentials, ...named } = body;
 
@@ -156,14 +199,13 @@ const create = Effect.gen(function* () {
   if (slug === undefined || name === undefined) return yield* replyError(400, "invalid body");
   const now = yield* Clock.currentTimeMillis;
   const id = newOrgId();
+  const env = yield* WorkerEnv;
 
   // The creator chooses whether members of the new org may connect private credentials (off unless asked). The org's
   // ControlPlane takes the choice before the org exists in the registry: a failure here creates nothing (a retry is safe),
   // and an org that does exist never has a different setting than the one chosen. A refused registry write leaves the
   // unreachable ControlPlane of an id nobody holds, which has no slug and is never addressed.
   if (privateCredentials === true) {
-    const env = yield* WorkerEnv;
-
     yield* Effect.tryPromise({
       try: async () =>
         await controlPlaneOf(env, id).setMembershipSettings({ privateCredentials: true }),
@@ -171,26 +213,93 @@ const create = Effect.gen(function* () {
     });
   }
 
-  const result = yield* registry("createOrg", (stub) => stub.createOrg({ slug, name, id }, now));
+  // A person creating an org owns it; the same applies to an org refused by the registry, which nobody reaches.
+  if (person !== undefined) {
+    const added = yield* Effect.tryPromise({
+      try: async () =>
+        await controlPlaneOf(env, id).addMember(
+          { email: person.email, role: "owner" },
+          { role: "owner", sensitive: false },
+          person.email,
+        ),
+      catch: () => replyError(502, "control plane unavailable"),
+    });
+
+    if (!added.ok) return yield* replyError(502, "control plane unavailable");
+  }
+
+  const result = yield* registry("createOrg", (stub) =>
+    stub.createOrg({ slug, name, id, ...(person === undefined ? {} : { createdBy: person }) }, now),
+  );
 
   if (!result.ok) return yield* refused(result);
+
+  if (person !== undefined) yield* syncOrgIndex(id);
 
   return jsonReply(201, view(result.org));
 });
 
+/**
+ * Suspends or unsuspends an org of a hosted proxy: its members are signed out, its keys refused (`hosted/standing.ts`
+ * forgets what this isolate knew at once; other isolates within `STANDING_TTL_MS`).
+ */
+const suspendOrg = (slug: string, suspended: boolean) =>
+  Effect.gen(function* () {
+    const env = yield* WorkerEnv;
+    const now = yield* Clock.currentTimeMillis;
+
+    const result = yield* registry("setOrgSuspended", (stub) =>
+      stub.setOrgSuspended(slug, suspended, now),
+    );
+
+    if (!result.ok) return yield* refused(result);
+    const { org } = result;
+    forgetStanding({ org: org.id });
+
+    if (suspended) {
+      const emails = yield* registry("emailsOfOrg", (stub) => stub.emailsOfOrg(org.id));
+      const ended = yield* endSessions(env, emails);
+
+      yield* Effect.logInfo("org suspended").pipe(
+        Effect.annotateLogs({ org: org.id, sessionsEnded: ended }),
+      );
+    }
+
+    return org;
+  });
+
 const update = Effect.gen(function* () {
   yield* requirePlatformAdmin;
+  const env = yield* WorkerEnv;
   const { slug: current } = yield* HttpRouter.params;
   const body = yield* bodyObject;
-  const patch = yield* stringFields(body, ["slug", "name"]);
+  const { suspended, ...renamed } = body;
 
-  if (current === undefined || (patch.slug === undefined && patch.name === undefined))
+  // Suspension exists on a hosted proxy only; elsewhere the field is an unknown one.
+  if (suspended !== undefined && (!isHosted(env) || typeof suspended !== "boolean"))
     return yield* replyError(400, "invalid body");
-  const result = yield* registry("updateOrg", (stub) => stub.updateOrg(current, patch));
+  const patch = yield* stringFields(renamed, ["slug", "name"]);
 
-  if (!result.ok) return yield* refused(result);
+  if (
+    current === undefined ||
+    (patch.slug === undefined && patch.name === undefined && suspended === undefined)
+  )
+    return yield* replyError(400, "invalid body");
 
-  return jsonReply(200, view(result.org));
+  const renamedOrg =
+    patch.slug === undefined && patch.name === undefined
+      ? undefined
+      : yield* registry("updateOrg", (stub) => stub.updateOrg(current, patch));
+
+  if (renamedOrg !== undefined && !renamedOrg.ok) return yield* refused(renamedOrg);
+
+  if (typeof suspended === "boolean")
+    return jsonReply(200, view(yield* suspendOrg(renamedOrg?.org.slug ?? current, suspended)));
+
+  // Without `suspended`, a slug or a name was given, so the rename ran.
+  return renamedOrg === undefined
+    ? yield* replyError(400, "invalid body")
+    : jsonReply(200, view(renamedOrg.org));
 });
 
 /** The org the request addresses, from the registry (`404 org_not_found` when it is no longer listed). */

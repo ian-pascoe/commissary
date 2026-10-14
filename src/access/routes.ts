@@ -180,6 +180,13 @@ export const isPanelPagePath = (path: string): boolean => {
   );
 };
 
+/** Whether a request URL is one of the panel's bundle files (`/assets/*`), however it is spelled. */
+export const isPanelAssetPath = (requestUrl: string): boolean => {
+  const path = normalizedPath(requestUrl);
+
+  return path !== undefined && inSection(path, "assets");
+};
+
 export type AccessZone = "public" | "protected" | "management";
 
 /**

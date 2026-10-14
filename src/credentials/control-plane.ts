@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { isHosted } from "../hosted/mode.ts";
 import { Effect, Schema } from "effect";
 import { FetchHttpClient, type HttpClient } from "effect/http";
 import {
@@ -345,7 +346,13 @@ export class ControlPlane extends DurableObject<Env> {
     const credentials = new CredentialStore(ctx.storage.sql, this.#secrets);
 
     this.#config = new ConfigStore(ctx.storage.sql, this.#org, transaction, this.#secrets);
-    this.#members = new MemberStore(ctx.storage.sql, this.#org, transaction);
+    this.#members = new MemberStore(
+      ctx.storage.sql,
+      this.#org,
+      transaction,
+      Date.now,
+      !isHosted(env),
+    );
     this.#modelGrants = new GrantStore(ctx.storage.sql, transaction);
     this.#privateKeys = new PrivateKeyStore(ctx.storage.sql, transaction, this.#secrets);
     this.#proxyKeys = new ProxyKeyStore(ctx.storage.sql, this.#org, (ids) => {

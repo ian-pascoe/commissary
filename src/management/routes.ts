@@ -45,6 +45,7 @@ import { oauthRoutes } from "./oauth-routes.ts";
 import { memberRoutes } from "./member-routes.ts";
 import { orgRoutes } from "./org-routes.ts";
 import { grantRoutes, myModelsHandler } from "./grant-routes.ts";
+import { peopleRoutes } from "./people-routes.ts";
 import { priceRoutes } from "./price-routes.ts";
 import { proxyKeyRoutes } from "./proxy-key-routes.ts";
 import { spendRoutes } from "./spend-routes.ts";
@@ -90,6 +91,7 @@ export const ManagementRoutes = HttpRouter.addAll(
       ...usageRoutes,
       ...oauthRoutes,
       ...orgRoutes,
+      ...peopleRoutes,
       ...priceRoutes,
       ...grantRoutes,
       ...memberRoutes,
