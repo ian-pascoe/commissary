@@ -587,7 +587,7 @@ describe("credential preparation rules (needsPreparation)", () => {
 
   const iso = (offsetMs: number) => new Date(NOW + offsetMs).toISOString();
 
-  it("API keys never need it; OAuth tokens only when missing or expired", () => {
+  it("Provider keys never need it; OAuth tokens only when missing or expired", () => {
     assert.isFalse(needsPreparation(snapshot({ kind: "apikey", metadata: {} }), NOW));
     assert.isFalse(
       needsPreparation(oauth("claude", { access_token: "t", expired: iso(3_600_000) }), NOW),

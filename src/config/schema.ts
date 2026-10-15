@@ -14,9 +14,9 @@ import { Effect, Schema } from "effect";
 import { PayloadConfig } from "./payload/schema.ts";
 import {
   API_KEY_FAMILIES,
-  ApiKeyEntry,
-  ApiKeyFamily,
-  ApiKeyGroup,
+  ProviderKeyEntry,
+  ProviderKeyFamily,
+  ProviderKeyGroup,
   CloakConfig,
   ModelEntry,
   OpenAICompatGroup,
@@ -26,7 +26,7 @@ import {
   OpenCodeProtocol,
   RequestScopedErrorRule,
   ThinkingSupport,
-} from "../management/contract/api-keys.ts";
+} from "../management/contract/provider-keys.ts";
 import { DisableImageGeneration, RoutingStrategy } from "../management/contract/settings.ts";
 
 // --- field helpers -------------------------------------------------------------------------------------------------
@@ -54,12 +54,12 @@ const Strings = Schema.Array(Schema.String);
 
 // --- shared pieces -------------------------------------------------------------------------------------------------
 
-// The API-key group schemas are browser-safe and shared with the control panel: they live in the management contract.
+// The provider-key group schemas are browser-safe and shared with the control panel: they live in the management contract.
 export {
   API_KEY_FAMILIES,
-  ApiKeyEntry,
-  ApiKeyFamily,
-  ApiKeyGroup,
+  ProviderKeyEntry,
+  ProviderKeyFamily,
+  ProviderKeyGroup,
   CloakConfig,
   ModelEntry,
   OpenAICompatGroup,
@@ -164,16 +164,16 @@ const upstream = section({
   }),
 });
 
-const apiKeys = section({
-  gemini: list(ApiKeyGroup),
-  interactions: list(ApiKeyGroup),
-  vertex: list(ApiKeyGroup),
-  codex: list(ApiKeyGroup),
-  claude: list(ApiKeyGroup),
-  xai: list(ApiKeyGroup),
-  meta: list(ApiKeyGroup),
-  "opencode-zen": list(ApiKeyGroup),
-  "opencode-go": list(ApiKeyGroup),
+const providerKeys = section({
+  gemini: list(ProviderKeyGroup),
+  interactions: list(ProviderKeyGroup),
+  vertex: list(ProviderKeyGroup),
+  codex: list(ProviderKeyGroup),
+  claude: list(ProviderKeyGroup),
+  xai: list(ProviderKeyGroup),
+  meta: list(ProviderKeyGroup),
+  "opencode-zen": list(ProviderKeyGroup),
+  "opencode-go": list(ProviderKeyGroup),
   "openai-compatibility": list(OpenAICompatGroup),
 });
 
@@ -264,7 +264,7 @@ export const Config = Schema.Struct({
     }),
   }),
   upstream,
-  "api-keys": apiKeys,
+  "api-keys": providerKeys,
   oauth,
   multimedia,
   observability,

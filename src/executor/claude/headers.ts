@@ -78,9 +78,9 @@ export const defaultDeviceProfile = (config: Config): DeviceProfile => {
   };
 };
 
-/** Deterministic per-API-key agent session id (Go caches a random UUID per key for an hour). */
-export const cachedSessionId = (apiKey: string): string => {
-  const hex = createHash("sha256").update(`cpa-claude-session|${apiKey}`).digest("hex");
+/** Deterministic per-provider-key agent session id (Go caches a random UUID per key for an hour). */
+export const cachedSessionId = (providerKey: string): string => {
+  const hex = createHash("sha256").update(`cpa-claude-session|${providerKey}`).digest("hex");
 
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${"89ab"[Number.parseInt(hex.charAt(16), 16) % 4]}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 };
@@ -88,7 +88,7 @@ export const cachedSessionId = (apiKey: string): string => {
 export interface HeaderInput {
   readonly config: Config;
   readonly credential: CredentialSnapshot;
-  readonly apiKey: string;
+  readonly providerKey: string;
   readonly url: URL;
   readonly stream: boolean;
   readonly countTokens: boolean;
@@ -143,20 +143,28 @@ const copyCallerFingerprintHeaders = (
 
 /** Builds the headers for a Messages / count_tokens request. */
 export const buildClaudeHeaders = (input: HeaderInput) => {
-  const { config, credential, apiKey, body, incoming, confirmedClaudeCode, countTokens, stream } =
-    input;
+  const {
+    config,
+    credential,
+    providerKey,
+    body,
+    incoming,
+    confirmedClaudeCode,
+    countTokens,
+    stream,
+  } = input;
 
   const headers: Record<string, string> = {};
   const isAnthropicBase = isAnthropicUpstreamURL(input.url);
-  const useAPIKey = !claudeCredentialUsesOAuth(credential, apiKey);
+  const useAPIKey = !claudeCredentialUsesOAuth(credential, providerKey);
   const applyCLIFingerprint = input.fingerprint.profileClaudeCodeCLI || input.wire.cloak;
   const preserveCallerFingerprint = !applyCLIFingerprint && !confirmedClaudeCode;
   const useOAuthBetas = input.fingerprint.useOAuthBetas;
   const defaults = config.upstream.claude["header-defaults"];
 
-  if (apiKey.trim() !== "") {
-    if (isAnthropicBase && useAPIKey) headers["x-api-key"] = apiKey;
-    else headers["authorization"] = `Bearer ${apiKey}`;
+  if (providerKey.trim() !== "") {
+    if (isAnthropicBase && useAPIKey) headers["x-api-key"] = providerKey;
+    else headers["authorization"] = `Bearer ${providerKey}`;
   }
 
   headers["content-type"] = "application/json";
@@ -345,7 +353,7 @@ export const buildClaudeHeaders = (input: HeaderInput) => {
   const sessionId = input.sessionId.trim();
 
   if (sessionId !== "") headers["x-claude-code-session-id"] = sessionId;
-  else identity("x-claude-code-session-id", cachedSessionId(apiKey));
+  else identity("x-claude-code-session-id", cachedSessionId(providerKey));
 
   for (const name of [
     "x-claude-code-agent-id",

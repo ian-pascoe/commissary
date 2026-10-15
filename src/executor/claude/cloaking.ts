@@ -579,24 +579,24 @@ export const obfuscateSensitiveWords = (body: JsonObject, words: readonly string
 };
 
 /** `generateFakeUserIDWithSessionID` (cloak without the CLI profile). */
-const fakeUserId = (apiKey: string, cacheUserID: boolean): string => {
-  const sessionId = cachedSessionId(apiKey);
+const fakeUserId = (providerKey: string, cacheUserID: boolean): string => {
+  const sessionId = cachedSessionId(providerKey);
 
   const deviceId = cacheUserID
-    ? createHash("sha256").update(`cpa-claude-fake-device|${apiKey}`).digest("hex")
+    ? createHash("sha256").update(`cpa-claude-fake-device|${providerKey}`).digest("hex")
     : randomBytes(32).toString("hex");
 
   return JSON.stringify({ device_id: deviceId, account_uuid: "", session_id: sessionId });
 };
 
 /** `injectFakeUserID`. */
-const injectFakeUserID = (body: JsonObject, apiKey: string, cacheUserID: boolean): void => {
+const injectFakeUserID = (body: JsonObject, providerKey: string, cacheUserID: boolean): void => {
   const metadata = body.metadata;
   const existing = str(get(body, "metadata.user_id"));
 
   if (metadata === undefined || existing === "" || !isValidUserID(existing)) {
-    if (!isObj(metadata)) body.metadata = { user_id: fakeUserId(apiKey, cacheUserID) };
-    else metadata.user_id = fakeUserId(apiKey, cacheUserID);
+    if (!isObj(metadata)) body.metadata = { user_id: fakeUserId(providerKey, cacheUserID) };
+    else metadata.user_id = fakeUserId(providerKey, cacheUserID);
   }
 };
 
@@ -618,7 +618,7 @@ export interface CloakRequest {
   readonly config: Config;
   readonly credential: CredentialSnapshot;
   readonly body: JsonObject;
-  readonly apiKey: string;
+  readonly providerKey: string;
   readonly policy: WirePolicy;
   readonly settings: CloakSettings;
   readonly cchSigning: boolean;
@@ -778,7 +778,8 @@ export const applyCloaking = (request: CloakRequest): CloakResult => {
   if (!explicit && (probeOrHelper || (isSubagent && !subagentRequests1h(request.incoming, body))))
     stripCacheControlTTL(body);
 
-  if (!policy.profileClaudeCodeCLI) injectFakeUserID(body, request.apiKey, settings.cacheUserID);
+  if (!policy.profileClaudeCodeCLI)
+    injectFakeUserID(body, request.providerKey, settings.cacheUserID);
 
   return { cloaked: true, continuityKey, promptId, previousMessageId };
 };

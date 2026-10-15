@@ -10,5 +10,5 @@ The one key a member's clients send, which reaches every area, is now an **API k
 
 ## Consequences
 
-- This decides terms, not identifiers. Settings (`CF_LLM_PROXY_*`), Alchemy stack IDs, the `cfp_` key prefix, package and repo names are renamed or frozen separately, and code may keep `proxyKey` names until then.
+- This decides terms, not identifiers. #103 decided the identifiers: everything is renamed and nothing is frozen except the Go config keys (done in #121 and #122).
 - Panel labels and docs swap "API key" and "provider key" at once; the two names must not drift apart mid-rename.

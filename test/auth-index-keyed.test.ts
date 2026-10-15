@@ -186,7 +186,7 @@ api-keys:
       expect(requestLine).toMatchObject({ status: 200, attempts: 1 });
       expect(requestLine).not.toHaveProperty("authIndex");
 
-      // Management reads that index in the Worker fail, and `GET /api-keys`, which indexes inside the ControlPlane:
+      // Management reads that index in the Worker fail, and `GET /provider-keys`, which indexes inside the ControlPlane:
       // the test's object keeps the valid key, so an instance over the same storage gets the refused bindings.
       await runInDurableObject(env.CONTROL_PLANE.getByName("global"), async (_instance, state) => {
         const refused = new ControlPlane(state, {
@@ -196,7 +196,7 @@ api-keys:
         });
 
         await refused.started;
-        expect(() => refused.apiKeysView(FULL_ACCESS)).toThrow(AuthIndexKeyError);
+        expect(() => refused.providerKeysView(FULL_ACCESS)).toThrow(AuthIndexKeyError);
       });
 
       for (const path of [
@@ -466,7 +466,7 @@ describe("no raw config id or unkeyed hash in any response", () => {
       const since = Date.now() - 86_400_000;
 
       for (const path of [
-        `${BASE}/api-keys`,
+        `${BASE}/provider-keys`,
         `${BASE}/credentials`,
         `${BASE}/credentials/models?name=${encodeURIComponent(configIds[0] ?? "")}`,
         `${BASE}/routing/models`,
@@ -588,8 +588,8 @@ describe("no raw config id or unkeyed hash in any response", () => {
 });
 
 describe("views join on the keyed auth_index", () => {
-  it("api-keys, routing/models, credentials, usage summary, series and records agree", async () => {
-    const keys = await json<KeysList>(`${BASE}/api-keys`);
+  it("provider-keys, routing/models, credentials, usage summary, series and records agree", async () => {
+    const keys = await json<KeysList>(`${BASE}/provider-keys`);
 
     const keyIndexes = Object.values(keys.families).flatMap((groups) =>
       groups.flatMap((group) =>

@@ -1,5 +1,5 @@
 ---
-name: cf-llm-proxy control panel
+name: Commissary control panel
 description: A personal LLM gateway panel set as Swiss hiking trail signage (Wanderweg), where quota is a walk to the next reset.
 colors:
   white: "#ffffff"
@@ -151,7 +151,7 @@ components:
     rounded: "{rounded.default}"
 ---
 
-# Design System: cf-llm-proxy control panel
+# Design System: Commissary control panel
 
 ## Overview
 
@@ -267,7 +267,7 @@ Square signage. Buttons take a 3px radius; meters 1px. Blades have a square tail
 
 - Yellow, min-height 4rem, ink text, holding only what is global to the page: the wordmark (800, 1.25rem; 1.125rem on phones) over the host in 0.8125rem, right beside it the org switcher, then on the right Refresh, the theme menu and the account menu. Connecting an account starts on the Accounts page, never from the bar. Refresh is a 2px ink outline square that turns Pressed Yellow on hover and spins while loading. At night the bar is a dark board with a 4px yellow route band along its foot (see Dark Theme). The page links live in the sidebar.
 - **Org switcher:** for a caller of several orgs or one who may create them, a 40px select framed like the bar's squares (2px ink outline, Pressed Yellow on hover) with the org's name in 700 and its own chevron, its "Org" label for screen readers only; the last option opens the org chooser. Beside the name it shortens before the name or the bar's squares do; under 30rem (phones) it takes a full-width row of its own along the bar's foot. Choosing an org reloads the panel at its address.
-- **Account menu:** the theme menu's twin (a framed square with the account icon, an "Account" caption): Sign out on a hosted proxy, and Delete my account in red (the danger colour, since it deletes), which asks in the typed confirmation dialog. Focus returns to the square when the menu or the dialog closes.
+- **Account menu:** the theme menu's twin (a framed square with the account icon, an "Account" caption): Sign out on Commissary Cloud, and Delete my account in red (the danger colour, since it deletes), which asks in the typed confirmation dialog. Focus returns to the square when the menu or the dialog closes.
 - **Theme menu:** the square between Refresh and the account menu, framed like Refresh so the two read as a pair, showing the choice's icon (sun-and-moon for System, sun, moon) with a "Theme: <choice>" tooltip; it opens a menu framed like the dialog with a "Theme" caption and System, Light and Dark as radio items (the chosen one 750 with a check). Arrows, Home and End move; Enter picks and closes; Escape closes. Hover fills on the bar's squares apply only where the pointer can hover, so a tap leaves no stuck fill.
 
 ### Sidebar

@@ -1,19 +1,21 @@
 /**
- * Which credential each API key of a config is, and the config entry ids of key groups and API keys (ADR 0025).
+ * Which credential each provider key of a config is, and the config entry ids of key groups and provider keys (ADR 0025).
  *
  * `configKeyIds` maps every position in `config["api-keys"]` to the credential the key produced; the ControlPlane and
- * the API keys view/writes share it, so both agree on which key an `auth_index` names. `assignEntryIds` gives every
+ * the provider keys view/writes share it, so both agree on which key an `auth_index` names. `assignEntryIds` gives every
  * group and key without one an entry id before the config is stored as entries: a key takes the id of the credential
  * it produces today (Go's content hash, `synthesize.ts`), so importing or migrating a config keeps every credential
  * id, and with it cooldowns, usage `auth_id` and auth indexes.
  */
 import { Schema } from "effect";
 import { encodeConfig } from "../config/codec.ts";
-import { type ApiKeyFamily, Config } from "../config/schema.ts";
+import { type ProviderKeyFamily, Config } from "../config/schema.ts";
 import { isJsonArray, isJsonObject, type JsonObject } from "../json/index.ts";
-import { apiKeyIdKind, synthesizeConfigCredentials } from "./synthesize.ts";
+import { providerKeyIdKind, synthesizeConfigCredentials } from "./synthesize.ts";
 
-const FAMILY_PROVIDERS: Readonly<Record<Exclude<ApiKeyFamily, "openai-compatibility">, string>> = {
+const FAMILY_PROVIDERS: Readonly<
+  Record<Exclude<ProviderKeyFamily, "openai-compatibility">, string>
+> = {
   gemini: "gemini",
   interactions: "gemini-interactions",
   vertex: "vertex",
@@ -33,7 +35,7 @@ export interface GroupKeyIds {
 }
 
 /** Per family and group index: the ids of the credentials `synthesizeConfigCredentials` made for them. */
-export type ConfigKeyIds = Readonly<Record<ApiKeyFamily, ReadonlyArray<GroupKeyIds>>>;
+export type ConfigKeyIds = Readonly<Record<ProviderKeyFamily, ReadonlyArray<GroupKeyIds>>>;
 
 export interface ConfigKeyIdsOptions {
   /**
@@ -46,20 +48,20 @@ export interface ConfigKeyIdsOptions {
 /**
  * Maps every position in `config["api-keys"]` (family, group, key) to the id of the credential it produced, through
  * the synthesised credentials (`attributes.config_index`), the same order the credential pool uses. Shared by the
- * ControlPlane and the API keys view/writes, so both agree on which key an `auth_index` names.
+ * ControlPlane and the provider keys view/writes, so both agree on which key an `auth_index` names.
  */
 export const configKeyIds = (
   config: Pick<Config, "api-keys">,
   options: ConfigKeyIdsOptions = {},
 ): ConfigKeyIds => {
-  const apiKeys = config["api-keys"];
+  const providerKeys = config["api-keys"];
 
   const synthesised: Pick<Config, "api-keys"> =
     options.includeDisabledGroups === true
       ? {
           "api-keys": {
-            ...apiKeys,
-            "openai-compatibility": apiKeys["openai-compatibility"].map((group) =>
+            ...providerKeys,
+            "openai-compatibility": providerKeys["openai-compatibility"].map((group) =>
               group.disabled === true ? { ...group, disabled: false } : group,
             ),
           },
@@ -83,11 +85,11 @@ export const configKeyIds = (
     }
   }
 
-  const grouped = (family: Exclude<ApiKeyFamily, "openai-compatibility">): GroupKeyIds[] => {
+  const grouped = (family: Exclude<ProviderKeyFamily, "openai-compatibility">): GroupKeyIds[] => {
     const provider = FAMILY_PROVIDERS[family];
     let position = 0;
 
-    return apiKeys[family].map((group) => ({
+    return providerKeys[family].map((group) => ({
       keys: group.keys.map(() => {
         const id = byPosition.get(`${provider}:${position}`);
         position += 1;
@@ -107,7 +109,7 @@ export const configKeyIds = (
     meta: grouped("meta"),
     "opencode-zen": grouped("opencode-zen"),
     "opencode-go": grouped("opencode-go"),
-    "openai-compatibility": apiKeys["openai-compatibility"].map((group, index) => {
+    "openai-compatibility": providerKeys["openai-compatibility"].map((group, index) => {
       const ids = compat.get(String(index)) ?? [];
 
       return {
@@ -126,7 +128,7 @@ export const freshEntryId = (kind: string): string =>
 export const GROUP_ID_KIND = "group";
 
 /**
- * `config` with an entry id on every key group and API key. Ids already set are kept; a duplicate keeps its first
+ * `config` with an entry id on every key group and provider key. Ids already set are kept; a duplicate keeps its first
  * holder and the later one gets a fresh id. A key without one takes the id of the credential it produces
  * (`configKeyIds`; for the keys of a disabled OpenAI-compatible endpoint, the id it would produce enabled), and a key
  * that produces no credential (an empty key without a base URL) a fresh one. No id is one of `taken` (ids held
@@ -178,7 +180,7 @@ export const assignEntryIds = (
     return id;
   };
 
-  const keyIdOf = (family: ApiKeyFamily, group: number, key: number): string | undefined =>
+  const keyIdOf = (family: ProviderKeyFamily, group: number, key: number): string | undefined =>
     enabled[family][group]?.keys[key] ?? all[family][group]?.keys[key];
 
   const withIds = <
@@ -188,7 +190,7 @@ export const assignEntryIds = (
       readonly keys: ReadonlyArray<{ readonly id?: string | undefined }>;
     },
   >(
-    family: ApiKeyFamily,
+    family: ProviderKeyFamily,
     groups: ReadonlyArray<G>,
   ): G[] =>
     groups.map((group, groupIndex) => ({
@@ -196,31 +198,31 @@ export const assignEntryIds = (
       id: claim(undefined, group.id, GROUP_ID_KIND),
       keys: group.keys.map((key, keyIndex) => ({
         ...key,
-        id: claim(keyIdOf(family, groupIndex, keyIndex), key.id, apiKeyIdKind(family, group)),
+        id: claim(keyIdOf(family, groupIndex, keyIndex), key.id, providerKeyIdKind(family, group)),
       })),
     }));
 
-  const apiKeys = config["api-keys"];
+  const providerKeys = config["api-keys"];
 
   return {
     ...config,
     "api-keys": {
-      gemini: withIds("gemini", apiKeys.gemini),
-      interactions: withIds("interactions", apiKeys.interactions),
-      vertex: withIds("vertex", apiKeys.vertex),
-      codex: withIds("codex", apiKeys.codex),
-      claude: withIds("claude", apiKeys.claude),
-      xai: withIds("xai", apiKeys.xai),
-      meta: withIds("meta", apiKeys.meta),
-      "opencode-zen": withIds("opencode-zen", apiKeys["opencode-zen"]),
-      "opencode-go": withIds("opencode-go", apiKeys["opencode-go"]),
-      "openai-compatibility": withIds("openai-compatibility", apiKeys["openai-compatibility"]),
+      gemini: withIds("gemini", providerKeys.gemini),
+      interactions: withIds("interactions", providerKeys.interactions),
+      vertex: withIds("vertex", providerKeys.vertex),
+      codex: withIds("codex", providerKeys.codex),
+      claude: withIds("claude", providerKeys.claude),
+      xai: withIds("xai", providerKeys.xai),
+      meta: withIds("meta", providerKeys.meta),
+      "opencode-zen": withIds("opencode-zen", providerKeys["opencode-zen"]),
+      "opencode-go": withIds("opencode-go", providerKeys["opencode-go"]),
+      "openai-compatibility": withIds("openai-compatibility", providerKeys["openai-compatibility"]),
     },
   };
 };
 
 /**
- * `config` (an imported document, without ids) with each API key taking the id of the stored key of its family with
+ * `config` (an imported document, without ids) with each provider key taking the id of the stored key of its family with
  * the same secret, each stored id at most once. A key whose secret was edited in the panel kept its id while its
  * content hash changed, so a later import of a document with that secret keeps its credential id and auth index too.
  */
@@ -248,23 +250,23 @@ export const withStoredKeyIds = (config: Config, stored: Config): Config => {
     }));
   };
 
-  const apiKeys = config["api-keys"];
+  const providerKeys = config["api-keys"];
   const storedKeys = stored["api-keys"];
 
   return {
     ...config,
     "api-keys": {
-      gemini: withIds(apiKeys.gemini, storedKeys.gemini),
-      interactions: withIds(apiKeys.interactions, storedKeys.interactions),
-      vertex: withIds(apiKeys.vertex, storedKeys.vertex),
-      codex: withIds(apiKeys.codex, storedKeys.codex),
-      claude: withIds(apiKeys.claude, storedKeys.claude),
-      xai: withIds(apiKeys.xai, storedKeys.xai),
-      meta: withIds(apiKeys.meta, storedKeys.meta),
-      "opencode-zen": withIds(apiKeys["opencode-zen"], storedKeys["opencode-zen"]),
-      "opencode-go": withIds(apiKeys["opencode-go"], storedKeys["opencode-go"]),
+      gemini: withIds(providerKeys.gemini, storedKeys.gemini),
+      interactions: withIds(providerKeys.interactions, storedKeys.interactions),
+      vertex: withIds(providerKeys.vertex, storedKeys.vertex),
+      codex: withIds(providerKeys.codex, storedKeys.codex),
+      claude: withIds(providerKeys.claude, storedKeys.claude),
+      xai: withIds(providerKeys.xai, storedKeys.xai),
+      meta: withIds(providerKeys.meta, storedKeys.meta),
+      "opencode-zen": withIds(providerKeys["opencode-zen"], storedKeys["opencode-zen"]),
+      "opencode-go": withIds(providerKeys["opencode-go"], storedKeys["opencode-go"]),
       "openai-compatibility": withIds(
-        apiKeys["openai-compatibility"],
+        providerKeys["openai-compatibility"],
         storedKeys["openai-compatibility"],
       ),
     },
@@ -280,9 +282,9 @@ interface StoredKey {
 export const withoutEntryIds = (config: Config): Config => {
   // SAFETY: the config schema encodes to a plain JSON object.
   const document = structuredClone(encodeConfig(config)) as JsonObject;
-  const apiKeys = document["api-keys"];
+  const providerKeys = document["api-keys"];
 
-  for (const groups of isJsonObject(apiKeys) ? Object.values(apiKeys) : [])
+  for (const groups of isJsonObject(providerKeys) ? Object.values(providerKeys) : [])
     for (const group of isJsonArray(groups) ? groups : []) {
       if (!isJsonObject(group)) continue;
       delete group.id;

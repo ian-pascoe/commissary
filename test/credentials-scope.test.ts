@@ -26,7 +26,7 @@ export const requiresAViewer = async () => {
   // @ts-expect-error a viewer is required
   await stub.listModelSources();
   // @ts-expect-error a viewer is required
-  await stub.apiKeysView();
+  await stub.providerKeysView();
   // @ts-expect-error a viewer is required
   await stub.listCredentialEntries();
   // @ts-expect-error a viewer is required
@@ -46,7 +46,7 @@ export const requiresAViewer = async () => {
   // @ts-expect-error a viewer is required
   await stub.credentialIdOfAuthIndex("0123456789abcdef");
   // @ts-expect-error a viewer is required
-  await stub.apiKeyProbeTarget("0123456789abcdef");
+  await stub.providerKeyProbeTarget("0123456789abcdef");
   // @ts-expect-error a viewer is required
   await stub.resetCredentialCooldown(ref);
   // @ts-expect-error a viewer is required

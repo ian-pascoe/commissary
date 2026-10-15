@@ -7,7 +7,7 @@
  * - **settings**: one entry per setting, named by its dotted path (`routing.strategy`). The settings are the leaves of
  *   the Settings page (`SETTINGS_TREE`) plus `oauth.settings` and `oauth.request-scoped-errors`, each map one entry.
  *   A setting at its default is not stored.
- * - **key groups** and **API keys**: a group is its endpoint and shared settings, each key an entry of its own whose id
+ * - **key groups** and **provider keys**: a group is its endpoint and shared settings, each key an entry of its own whose id
  *   is its credential id (`credentials/key-ids.ts`); both carry a position that orders them.
  * - **model aliases** and **model exclusions**: one entry per channel (`oauth.model-alias.<channel>`,
  *   `oauth.excluded-models.<channel>`).
@@ -26,7 +26,7 @@ import {
 import { setOwn } from "../json/value.ts";
 import { SETTINGS_TREE } from "../management/contract/settings.ts";
 import { encodeConfig } from "./codec.ts";
-import { API_KEY_FAMILIES, type ApiKeyFamily, Config } from "./schema.ts";
+import { API_KEY_FAMILIES, type ProviderKeyFamily, Config } from "./schema.ts";
 import { Schema } from "effect";
 
 interface Tree {
@@ -67,7 +67,7 @@ export interface SettingRow {
 
 export interface GroupRow {
   readonly id: string;
-  readonly family: ApiKeyFamily;
+  readonly family: ProviderKeyFamily;
   readonly position: number;
   /** The group without its id and keys. */
   readonly value: JsonObject;
@@ -104,7 +104,7 @@ export interface EntryRows {
   readonly payload: ReadonlyArray<PayloadRow>;
 }
 
-/** Key settings that are not-applied keys: dropped from an API key entry (`not-applied.ts`). */
+/** Key settings that are not-applied keys: dropped from a provider key entry (`not-applied.ts`). */
 const NOT_APPLIED_KEY_FIELDS = ["experimental-cch-signing"];
 
 /** The value at a dotted path of a JSON document; `undefined` when absent. */
@@ -156,7 +156,7 @@ const objectOf = (value: Json | undefined): JsonObject => (isJsonObject(value) ?
 const arrayOf = (value: Json | undefined): Json[] => (isJsonArray(value) ? value : []);
 
 /**
- * The rows of `config`, which must carry an entry id on every key group and API key (`assignEntryIds`). Payload rules
+ * The rows of `config`, which must carry an entry id on every key group and provider key (`assignEntryIds`). Payload rules
  * get ids from `payloadId`. Settings at their default, not-applied keys and `config-version` are left out.
  */
 export const entriesOfConfig = (config: Config, payloadId: () => string): EntryRows => {
@@ -172,10 +172,10 @@ export const entriesOfConfig = (config: Config, payloadId: () => string): EntryR
 
   const groups: GroupRow[] = [];
   const keys: KeyRow[] = [];
-  const apiKeys = objectOf(document["api-keys"]);
+  const providerKeys = objectOf(document["api-keys"]);
 
   for (const family of API_KEY_FAMILIES) {
-    for (const [position, raw] of arrayOf(apiKeys[family]).entries()) {
+    for (const [position, raw] of arrayOf(providerKeys[family]).entries()) {
       const { id, keys: groupKeys, ...value } = objectOf(raw);
 
       if (typeof id !== "string") throw new Error(`a ${family} key group has no entry id`);
@@ -184,7 +184,8 @@ export const entriesOfConfig = (config: Config, payloadId: () => string): EntryR
       for (const [keyPosition, rawKey] of arrayOf(groupKeys).entries()) {
         const { id: keyId, ...keyValue } = objectOf(rawKey);
 
-        if (typeof keyId !== "string") throw new Error(`an API key of ${family} has no entry id`);
+        if (typeof keyId !== "string")
+          throw new Error(`a provider key of ${family} has no entry id`);
 
         for (const field of NOT_APPLIED_KEY_FIELDS) delete keyValue[field];
         keys.push({ id: keyId, groupId: id, position: keyPosition, value: keyValue });
@@ -240,19 +241,19 @@ export const documentOfEntries = (rows: EntryRows): JsonObject => {
     keysByGroup.set(key.groupId, list);
   }
 
-  const apiKeys: JsonObject = {};
+  const providerKeys: JsonObject = {};
 
   for (const group of rows.groups.toSorted(byPosition)) {
     const keys = (keysByGroup.get(group.id) ?? [])
       .toSorted(byPosition)
       .map((key): JsonObject => ({ id: key.id, ...key.value }));
 
-    const list = arrayOf(apiKeys[group.family]);
+    const list = arrayOf(providerKeys[group.family]);
     list.push({ id: group.id, ...group.value, keys });
-    apiKeys[group.family] = list;
+    providerKeys[group.family] = list;
   }
 
-  if (rows.groups.length > 0) document["api-keys"] = apiKeys;
+  if (rows.groups.length > 0) document["api-keys"] = providerKeys;
 
   const channelMap = (list: ReadonlyArray<ChannelRow>): JsonObject => {
     const map: JsonObject = {};

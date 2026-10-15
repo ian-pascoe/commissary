@@ -104,9 +104,11 @@ describe("credentials", () => {
   });
 
   it("fails with the Go 401 messages when no key is usable", () => {
-    expect(() => requireMetaToken(credential("meta"))).toThrow(/missing API key or access token/);
+    expect(() => requireMetaToken(credential("meta"))).toThrow(
+      /missing provider key or access token/,
+    );
     expect(() => requireMetaToken(credential("meta", { kind: "apikey" }))).toThrow(
-      /meta-api-key requires a valid API key/,
+      /meta-api-key requires a valid provider key/,
     );
   });
 });

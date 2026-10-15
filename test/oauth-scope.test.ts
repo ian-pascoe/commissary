@@ -3,9 +3,9 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { makeDevinExecutor } from "../src/executor/devin/executor.ts";
 import {
-  configForApiKey,
+  configForProviderKey,
   scopeContext,
-  withApiKeyScope,
+  withProviderKeyScope,
 } from "../src/executor/helps/oauth-scope.ts";
 import { makeExecutorRegistry } from "../src/executor/registry.ts";
 import type { ExecutionContext, ProviderExecutor } from "../src/executor/types.ts";
@@ -24,11 +24,11 @@ upstream:
     model-level-cooling: true
 `;
 
-describe("configForApiKey", () => {
+describe("configForProviderKey", () => {
   it("zeroes the OAuth-only provider settings and leaves everything else", async () => {
     const config = await loadConfig(YAML);
     expect(config.oauth.providers.codex["header-defaults"]["user-agent"]).toBe("codex-oauth-ua");
-    const scoped = configForApiKey(config);
+    const scoped = configForProviderKey(config);
     expect(scoped.oauth.providers.codex["header-defaults"]["user-agent"]).toBe("");
     expect(scoped.oauth.providers.devin["sensitive-words"]).toEqual([]);
     expect(scoped.upstream.claude["model-level-cooling"]).toBe(true);
@@ -36,7 +36,7 @@ describe("configForApiKey", () => {
     expect(config.oauth.providers.codex["header-defaults"]["user-agent"]).toBe("codex-oauth-ua");
   });
 
-  it("only scopes API-key credentials", async () => {
+  it("only scopes provider-key credentials", async () => {
     const config = await loadConfig(YAML);
     const usage = (await harness(credential("meta"), () => new Response(""))).usage;
     const base = { config, usage };
@@ -50,7 +50,7 @@ describe("configForApiKey", () => {
   });
 });
 
-describe("withApiKeyScope", () => {
+describe("withProviderKeyScope", () => {
   const seen: ExecutionContext[] = [];
 
   const probe: ProviderExecutor = {
@@ -77,7 +77,7 @@ describe("withApiKeyScope", () => {
     ]) {
       seen.length = 0;
       await Effect.runPromise(
-        withApiKeyScope(provider, probe)
+        withProviderKeyScope(provider, probe)
           .execute(
             { config, usage, credential: credential(provider, { kind: "apikey" }) },
             { model: "m", payload: {} },
@@ -89,7 +89,7 @@ describe("withApiKeyScope", () => {
     }
 
     const devin = makeDevinExecutor();
-    expect(withApiKeyScope("devin", devin)).toBe(devin);
+    expect(withProviderKeyScope("devin", devin)).toBe(devin);
   });
 });
 

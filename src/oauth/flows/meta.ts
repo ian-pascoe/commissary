@@ -1,5 +1,5 @@
 /**
- * Meta (Muse Code) login: RFC 8628 device flow followed by minting an LLM API key from the DCA token.
+ * Meta (Muse Code) login: RFC 8628 device flow followed by minting an LLM provider key from the DCA token.
  *
  * Go source: auth_files_provider_oauth.go (`RequestMetaToken`, `buildMetaAuthRecord`), internal/auth/meta/meta.go
  * (`StartDeviceFlow`, `WaitForAuthorization`, `MintAPIKey`, `CreateTokenStorage`, `MetaTokenStorage.SaveTokenToFile`,
@@ -51,7 +51,7 @@ const formPost = (url: string, params: Record<string, string>) =>
   );
 
 /** `MintAPIKey`; failures are advisory (the DCA token is stored without a key). */
-const mintApiKey = (dcaToken: string, mintUrl: string | undefined) =>
+const mintProviderKey = (dcaToken: string, mintUrl: string | undefined) =>
   Effect.gen(function* () {
     const request = HttpClientRequest.post(metaMintUrl(mintUrl)).pipe(
       HttpClientRequest.setHeaders({
@@ -164,8 +164,8 @@ export const metaFlow = (mintUrl?: string): DeviceFlow => ({
       const expiresIn = Math.trunc(seconds(token.expires_in));
       const dcaExpiresAt = expiresIn > 0 ? Math.floor(now / 1000) + expiresIn : 0;
       const dcaExpired = dcaExpiresAt > 0 ? rfc3339(dcaExpiresAt * 1000) : "";
-      const minted = yield* mintApiKey(dcaToken, mintUrl);
-      const apiKey = str(minted?.api_key);
+      const minted = yield* mintProviderKey(dcaToken, mintUrl);
+      const providerKey = str(minted?.api_key);
       const email = str(minted?.user_email);
       const name = str(minted?.user_full_name);
 
@@ -173,19 +173,19 @@ export const metaFlow = (mintUrl?: string): DeviceFlow => ({
       const metadata: JsonObject = {
         type: "meta",
         auth_kind: "oauth",
-        access_token: apiKey === "" ? dcaToken : apiKey,
+        access_token: providerKey === "" ? dcaToken : providerKey,
       };
 
       metadata.dca_token = dcaToken;
 
-      if (apiKey !== "") metadata.api_key = apiKey;
+      if (providerKey !== "") metadata.api_key = providerKey;
 
       if (str(token.token_type) !== "") metadata.token_type = str(token.token_type);
 
       if (expiresIn > 0) metadata.expires_in = expiresIn;
 
       // With a minted key `expired` stays empty so the selector does not block the credential on the DCA timer.
-      if (apiKey === "" && dcaExpired !== "") metadata.expired = dcaExpired;
+      if (providerKey === "" && dcaExpired !== "") metadata.expired = dcaExpired;
 
       if (dcaExpired !== "") metadata.dca_expired = dcaExpired;
 

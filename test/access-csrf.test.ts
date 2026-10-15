@@ -46,7 +46,7 @@ describe("crossSiteRejection", () => {
 
     expect(check("POST", "/v1/chat/completions", sameOrigin)).toBeUndefined();
     expect(
-      check("POST", "/v9/management/api-keys/probe", sameOrigin, "management"),
+      check("POST", "/v9/management/provider-keys/probe", sameOrigin, "management"),
     ).toBeUndefined();
     expect(
       check("GET", "/v9/management/settings", { "sec-fetch-site": "same-origin" }, "management"),
@@ -65,7 +65,8 @@ describe("crossSiteRejection", () => {
 
   it("refuses state-changing cross-site requests on protected and management zones", () => {
     for (const zone of ["protected", "management"] as const) {
-      const path = zone === "protected" ? "/v1/chat/completions" : "/v9/management/api-keys/probe";
+      const path =
+        zone === "protected" ? "/v1/chat/completions" : "/v9/management/provider-keys/probe";
 
       const json = { "content-type": "application/json" };
       expect(check("POST", path, { ...json, origin: "https://evil.test" }, zone)).toBe(403);
@@ -145,7 +146,7 @@ describe("crossSiteRejection", () => {
       "/v9/management/settings",
       "/v9/management/oauth/callback?provider=claude&state=s&code=c",
       "/v9/management/credentials/download?name=a.json",
-      "/V8/Management/Settings",
+      "/V9/Management/Settings",
       "/assets/index.js",
     ])
       expect(check("GET", path, link, "management")).toBe(403);
@@ -156,7 +157,7 @@ describe("crossSiteRejection", () => {
 
   it("requires JSON (multipart for uploads, YAML for the config import) on management writes", () => {
     expect(
-      write("POST", "/v9/management/api-keys/probe", {
+      write("POST", "/v9/management/provider-keys/probe", {
         "content-type": "application/json; charset=utf-8",
       }),
     ).toBeUndefined();
@@ -165,11 +166,11 @@ describe("crossSiteRejection", () => {
         "content-type": "application/merge-patch+json",
       }),
     ).toBeUndefined();
-    expect(write("POST", "/v9/management/api-keys/probe", { "content-type": "text/plain" })).toBe(
-      415,
-    );
     expect(
-      write("POST", "/v9/management/api-keys/probe", {
+      write("POST", "/v9/management/provider-keys/probe", { "content-type": "text/plain" }),
+    ).toBe(415);
+    expect(
+      write("POST", "/v9/management/provider-keys/probe", {
         "content-type": "application/x-www-form-urlencoded",
       }),
     ).toBe(415);
@@ -193,7 +194,9 @@ describe("crossSiteRejection", () => {
       415,
     );
     // Bodies without a type are refused; bodiless writes (`DELETE ?name=`, `POST .../refresh`) are fine.
-    expect(write("POST", "/v9/management/api-keys/probe", { "content-length": "12" })).toBe(415);
+    expect(write("POST", "/v9/management/provider-keys/probe", { "content-length": "12" })).toBe(
+      415,
+    );
     expect(
       write("POST", "/v9/management/credentials/refresh", { "transfer-encoding": "chunked" }),
     ).toBe(415);

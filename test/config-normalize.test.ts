@@ -8,7 +8,7 @@ import { assertImportKeeps } from "./support/config-entries.ts";
 // (modulo entry ids and the not-applied keys it drops).
 const parse = (yaml: string) => parseConfigYaml(yaml).pipe(Effect.tap(assertImportKeeps));
 
-describe("duplicate API keys are removed across the whole flattened list", () => {
+describe("duplicate provider keys are removed across the whole flattened list", () => {
   it.effect("gemini: same key/base-url/proxy/prefix/headers in different groups", () =>
     Effect.gen(function* () {
       const config = yield* parse(`

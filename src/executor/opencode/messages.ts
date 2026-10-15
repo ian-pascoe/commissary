@@ -8,7 +8,7 @@
  *
  * Deliberate deviation from Go (no OpenCode provider there; see docs/ARCHITECTURE.md "OpenCode Zen and OpenCode
  * Go"): none of the Claude executor's Anthropic-account shaping applies (no cloaking, system prompt injection,
- * `anthropic-beta` negotiation, tool-name aliasing or thinking replay); the gateway is a plain API-key Messages
+ * `anthropic-beta` negotiation, tool-name aliasing or thinking replay); the gateway is a plain provider-key Messages
  * endpoint. Client `anthropic-beta` headers are not forwarded (configure them as custom headers if a model needs one).
  * A client's `metadata.user_id` (Claude Code puts its device, account and session ids there) is replaced by a stable
  * UUIDv5 of it before the payload rules run, so no raw client identity reaches the gateway.
@@ -72,7 +72,7 @@ const send = Effect.fnUntraced(function* (attempt: OpenCodeAttempt, stream: bool
     credential: attempt.context.credential,
     options: attempt.options,
     protocol: "messages",
-    apiKey: attempt.apiKey,
+    providerKey: attempt.providerKey,
     stream,
   });
 

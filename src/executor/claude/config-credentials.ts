@@ -6,7 +6,7 @@
  * so only explicitly configured models are listed; production routing goes through the model registry
  * (`registry/credential-models.ts`), where keys without `models` serve the static Claude catalog like Go.
  */
-import type { ApiKeyGroup } from "../../config/schema.ts";
+import type { ProviderKeyGroup } from "../../config/schema.ts";
 import type { ConfigCredential } from "../config-credentials.ts";
 
 const headerAttributes = (
@@ -23,8 +23,8 @@ const headerAttributes = (
 };
 
 const modelIds = (
-  group: ApiKeyGroup,
-  entryModels: ApiKeyGroup["models"],
+  group: ProviderKeyGroup,
+  entryModels: ProviderKeyGroup["models"],
   prefix: string,
   forcePrefix: boolean,
 ): string[] => {
@@ -52,15 +52,15 @@ const modelIds = (
 };
 
 export const claudeConfigCredentials = (
-  groups: ReadonlyArray<ApiKeyGroup>,
+  groups: ReadonlyArray<ProviderKeyGroup>,
   forceModelPrefix: boolean,
 ): ConfigCredential[] => {
   const out: ConfigCredential[] = [];
   groups.forEach((group, groupIndex) => {
     group.keys.forEach((entry, keyIndex) => {
-      const apiKey = entry["api-key"].trim();
+      const providerKey = entry["api-key"].trim();
 
-      if (apiKey === "") return;
+      if (providerKey === "") return;
       const prefix = (entry.prefix ?? group.prefix ?? "").trim();
       const priority = entry.priority ?? group.priority ?? 0;
       const profile = (entry["fingerprint-profile"] ?? "").trim().toLowerCase();
@@ -68,7 +68,7 @@ export const claudeConfigCredentials = (
       const baseUrl = (group["base-url"] ?? "").trim();
 
       const attributes = {
-        api_key: apiKey,
+        api_key: providerKey,
         auth_kind: "apikey",
         source: `config:claude[${groupIndex}.${keyIndex}]`,
         config_index: `${groupIndex}.${keyIndex}`,

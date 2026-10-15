@@ -1,6 +1,6 @@
 /**
  * Pieces shared by the contract groups that edit config entries (`routing.ts` rule edits, `settings.ts`,
- * `api-keys.ts`). Every config entry has a revision (ADR 0025): a write names the revision of each entry it changes
+ * `provider-keys.ts`). Every config entry has a revision (ADR 0025): a write names the revision of each entry it changes
  * and is refused with `409 conflict` when one changed since; an entry that is not stored is at revision 0.
  * Shared with the browser: imports `effect` only.
  */

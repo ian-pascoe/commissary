@@ -44,7 +44,7 @@ export const withCredentialPolicy = (
     }),
 });
 
-/** `credentialPolicyAllows(codex_alpha_search_v1)`: OAuth credentials, or API keys with `alpha-search` enabled. */
+/** `credentialPolicyAllows(codex_alpha_search_v1)`: OAuth credentials, or provider keys with `alpha-search` enabled. */
 export const allowsCodexAlphaSearch = (credential: CredentialSnapshot): boolean =>
   credential.provider.trim().toLowerCase() === "codex" &&
   (credential.kind === "oauth" ||

@@ -95,7 +95,7 @@ describe("protocol resolution", () => {
       "opencode-zen",
     );
 
-    expect(stale?.apiKey).toBe("k2");
+    expect(stale?.providerKey).toBe("k2");
   });
 
   it("matches model entries by name (suffix stripped) and then by alias", () => {
@@ -185,7 +185,7 @@ describe("gateway headers", () => {
       }),
       options: options(),
       protocol: "chat",
-      apiKey: "k",
+      providerKey: "k",
       stream: true,
     });
 

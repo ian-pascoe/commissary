@@ -15,11 +15,11 @@ const SELF_HOSTED_BINDINGS = {
   META_MINT_URL: "",
   // Fixed test key of the keyed `auth_index` (deployed: an Alchemy `Random`, alchemy.run.ts); 64 characters, so
   // tests that configure Access (where shorter keys are refused, src/management/auth-index.ts) can use it too.
-  AUTH_INDEX_KEY: "commissary-test-auth-index-key-0123456789abcdef0123456789abcdef012",
+  AUTH_INDEX_KEY: "commissary-test-auth-index-key-0123456789abcdef0123456789abcdef01234",
   // Fixed test secrets keys (deployed: an Alchemy `Random`, alchemy.run.ts), 64 characters like the minted ones. The
   // previous key lets tests start a ControlPlane whose data key is still wrapped by it (a rotation, src/secrets/).
-  SECRETS_KEY: "commissary-test-secrets-key-0123456789abcdef0123456789abcdef0123",
-  SECRETS_KEY_PREVIOUS: "commissary-test-previous-secrets-key-0123456789abcdef0123456789",
+  SECRETS_KEY: "commissary-test-secrets-key-0123456789abcdef0123456789abcdef012345",
+  SECRETS_KEY_PREVIOUS: "commissary-test-previous-secrets-key-0123456789abcdef012345678901",
 };
 
 /**
@@ -33,7 +33,7 @@ const HOSTED_BINDINGS = {
   PROXY_MODE: "hosted",
   PLATFORM_ADMIN_EMAILS: "root@example.com",
   PLATFORM_ADMIN_SERVICE_TOKENS: "admin-token.access",
-  BETTER_AUTH_SECRET: "commissary-test-better-auth-secret-0123456789abcdef0123456789ab",
+  BETTER_AUTH_SECRET: "commissary-test-better-auth-secret-0123456789abcdef0123456789abcd",
   SIGN_IN_GITHUB_CLIENT_ID: "github-client-id",
   SIGN_IN_GITHUB_CLIENT_SECRET: "github-client-secret",
   SIGN_IN_GOOGLE_CLIENT_ID: "google-client-id",

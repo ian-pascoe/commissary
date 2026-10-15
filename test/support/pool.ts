@@ -81,7 +81,7 @@ export const makePool = async (
     readonly reach?: (member: string | undefined) => Reach;
     /** The org's Spend limits (`src/spend/ledger.ts`). */
     readonly spend?: PoolOptions["spend"];
-    /** Members' private API key groups: YAML configs by owner (member id). */
+    /** Members' private provider key groups: YAML configs by owner (member id). */
     readonly privateConfigs?: Readonly<Record<string, string>>;
   } = {},
 ): Promise<PoolHarness> => {

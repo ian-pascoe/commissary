@@ -1,4 +1,4 @@
-// One API key group, or a new one: its endpoint (name, base URL, prefix, priority), its keys (new ones are typed in
+// One provider key group, or a new one: its endpoint (name, base URL, prefix, priority), its keys (new ones are typed in
 // once and never shown again), the models it offers and the ones it excludes, saved in one write; and deleting it.
 // Settings the form does not show are kept as they are (the server restores them).
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
@@ -6,10 +6,10 @@ import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
 import { ArrowLeft, Plus, Search, Trash2, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useId, useRef, useState } from "react";
-import type { ApiKeyFamily, ApiKeysList, ProbeResult } from "#contract/api-keys.ts";
+import type { ProviderKeyFamily, ProviderKeysList, ProbeResult } from "#contract/provider-keys.ts";
 import {
-  API_KEYS,
-  apiKeysAtom,
+  PROVIDER_KEYS,
+  providerKeysAtom,
   deleteKeyGroupAtom,
   probeKeyAtom,
   putKeyGroupAtom,
@@ -53,14 +53,14 @@ const ownRoute = getRouteApi("/keys/private/$family/$index");
 
 const newRoute = getRouteApi("/keys/new");
 
-const FAMILY_NOTES: Readonly<Record<ApiKeyFamily, string>> = {
-  claude: "Anthropic API keys, or a Claude-compatible endpoint.",
+const FAMILY_NOTES: Readonly<Record<ProviderKeyFamily, string>> = {
+  claude: "Anthropic provider keys, or a Claude-compatible endpoint.",
   codex: "OpenAI keys for the Responses API; the endpoint needs a base URL.",
   gemini: "Google AI Studio keys for the Gemini API.",
   interactions: "Gemini keys used only for the native Interactions API.",
   vertex: "Vertex AI express-mode keys; every model needs an alias.",
   xai: "xAI keys for Grok; the endpoint needs a base URL.",
-  meta: "Meta Llama API keys.",
+  meta: "Meta Llama provider keys.",
   "opencode-zen":
     "OpenCode Zen keys; models come from the OpenCode catalog unless listed. A listed model can pin its protocol.",
   "opencode-go":
@@ -220,7 +220,7 @@ const GroupForm = ({
   privately,
   onReload,
 }: {
-  readonly family: ApiKeyFamily;
+  readonly family: ProviderKeyFamily;
   readonly view: AnyGroupView | undefined;
   /** The group is the caller's private one (ADR 0023). */
   readonly privately: boolean;
@@ -265,8 +265,8 @@ const GroupForm = ({
     // One branch per request shape: the mutation takes a union of argument objects, not a union payload.
     const outcome = await save.run(
       request.family === "openai-compatibility"
-        ? { payload: request, reactivityKeys: API_KEYS }
-        : { payload: request, reactivityKeys: API_KEYS },
+        ? { payload: request, reactivityKeys: PROVIDER_KEYS }
+        : { payload: request, reactivityKeys: PROVIDER_KEYS },
     );
 
     if (outcome.ok) {
@@ -413,7 +413,7 @@ const GroupForm = ({
                 {asking ? (
                   <div className={kit["field"]}>
                     <label className={kit["fieldLabel"]} htmlFor={`${ids}-secret-${key.id}`}>
-                      {key.stored === undefined ? "API key" : "New API key"}
+                      {key.stored === undefined ? "Provider key" : "New provider key"}
                     </label>
                     <input
                       id={`${ids}-secret-${key.id}`}
@@ -674,7 +674,7 @@ const DeleteGroup = ({
   privately,
   onReload,
 }: {
-  readonly family: ApiKeyFamily;
+  readonly family: ProviderKeyFamily;
   readonly view: AnyGroupView;
   readonly privately: boolean;
   readonly onReload: () => void;
@@ -716,7 +716,7 @@ const DeleteGroup = ({
                 revision: view.revision,
                 ...(privately ? { private: true } : {}),
               },
-              reactivityKeys: API_KEYS,
+              reactivityKeys: PROVIDER_KEYS,
             });
 
             dialog.current?.close();
@@ -760,22 +760,22 @@ const DeleteGroup = ({
 const Back = () => (
   <Link to="/keys" className={styles["back"]}>
     <ArrowLeft aria-hidden="true" size={16} strokeWidth={2.25} />
-    API keys
+    Provider keys
   </Link>
 );
 
-const Loaded = ({ children }: { readonly children: (list: ApiKeysList) => ReactNode }) => {
-  const result = useAtomValue(apiKeysAtom);
-  const retry = useAtomRefresh(apiKeysAtom);
+const Loaded = ({ children }: { readonly children: (list: ProviderKeysList) => ReactNode }) => {
+  const result = useAtomValue(providerKeysAtom);
+  const retry = useAtomRefresh(providerKeysAtom);
 
   return AsyncResult.match(result, {
     onInitial: () => (
       <p className={kit["muted"]} aria-busy="true">
-        Loading API keys…
+        Loading provider keys…
       </p>
     ),
     onFailure: (failure) => (
-      <Problem onRetry={retry}>Could not load the API keys. {failureMessage(failure)}</Problem>
+      <Problem onRetry={retry}>Could not load the provider keys. {failureMessage(failure)}</Problem>
     ),
     onSuccess: ({ value }) => children(value),
   });
@@ -795,7 +795,7 @@ const ExistingGroup = ({
   readonly index: string;
   readonly privately: boolean;
 }) => {
-  const retry = useAtomRefresh(apiKeysAtom);
+  const retry = useAtomRefresh(providerKeysAtom);
   const known = isFamily(family) ? family : undefined;
   const position = /^\d+$/.test(index) ? Number(index) : -1;
 
@@ -832,13 +832,13 @@ const GroupPage = ({
   privately,
   onReload,
 }: {
-  readonly family: ApiKeyFamily;
+  readonly family: ProviderKeyFamily;
   readonly view: AnyGroupView;
   readonly privately: boolean;
   readonly onReload: () => void;
 }) => {
   const title = groupTitle(family, view);
-  usePageTitle(`${title} · API keys`);
+  usePageTitle(`${title} · Provider keys`);
 
   return (
     <div className={styles["page"]}>
@@ -868,7 +868,7 @@ const MissingGroup = () => {
         <h1 className={styles["name"]}>Group not found</h1>
       </header>
       <p className={kit["muted"]}>
-        No API key group is stored here. It may have been deleted, or the configuration changed
+        No provider key group is stored here. It may have been deleted, or the configuration changed
         since the link was made. <Link to="/keys">See every key</Link>.
       </p>
     </div>
@@ -877,11 +877,11 @@ const MissingGroup = () => {
 
 export const NewKeyGroupPage = () => {
   const { family } = newRoute.useSearch();
-  const retry = useAtomRefresh(apiKeysAtom);
+  const retry = useAtomRefresh(providerKeysAtom);
   const role = useRole();
   const caller = role.kind === "ready" ? role.caller : undefined;
   const [mine, setMine] = useState(false);
-  usePageTitle(family === undefined ? "Add API key" : `Add ${familyName(family)} key`);
+  usePageTitle(family === undefined ? "Add provider key" : `Add ${familyName(family)} key`);
 
   return (
     <div className={styles["page"]}>
@@ -890,7 +890,7 @@ export const NewKeyGroupPage = () => {
         <div>
           {family === undefined ? null : <p className={styles["provider"]}>{familyName(family)}</p>}
           <h1 className={styles["name"]}>
-            {family === undefined ? "Add an API key" : "New key group"}
+            {family === undefined ? "Add a provider key" : "New key group"}
           </h1>
         </div>
       </header>
@@ -911,7 +911,12 @@ export const NewKeyGroupPage = () => {
         <Loaded>
           {(list) => (
             <>
-              <Ownership caller={caller} noun="API key group" chosen={mine} onChange={setMine} />
+              <Ownership
+                caller={caller}
+                noun="Provider key group"
+                chosen={mine}
+                onChange={setMine}
+              />
               <GroupForm
                 key={`${family}:${list.version}`}
                 family={family}

@@ -1,16 +1,16 @@
 /**
- * `/v9/management/api-keys*` (`ApiKeysGroup` in contract/api-keys.ts): the API keys page's list, group writes and
+ * `/v9/management/provider-keys*` (`ProviderKeysGroup` in contract/provider-keys.ts): the provider keys page's list, group writes and
  * connection test.
  *
  * Workers addition, no Go counterpart (Go's panel edits whole family arrays through `PUT /api-keys` style routes with
- * raw keys). Reads never carry secrets (`api-keys-view.ts`). Writes are semantic, one group at a time: a key group and
+ * raw keys). Reads never carry secrets (`provider-keys-view.ts`). Writes are semantic, one group at a time: a key group and
  * its keys are config entries (ADR 0025), and a write names the group's `id` and the `revision` it was read at. The
  * edit is applied to the assembled document to check it, then the group alone is written (`writeKeyGroup`), with no
  * retry: a group changed since is a `409 conflict` instead of silently overwriting a concurrent change, and a write of
  * another group never conflicts. The edited document is dry-run through the config decoder first, so a group the
  * normaliser would drop for its own shape (codex without base-url, an empty key) is refused with `422` and the reason
  * instead of "succeeding". A typed key that duplicates a key of another group is dropped from the written group,
- * silently and never refused (stored keys win, `api-keys-write.ts` `settleDuplicates`): the reply must not tell a
+ * silently and never refused (stored keys win, `provider-keys-write.ts` `settleDuplicates`): the reply must not tell a
  * right guess of a stored key from a wrong one, and the normaliser's first-wins must not delete the stored key instead.
  */
 import { Effect, Schema } from "effect";
@@ -22,7 +22,7 @@ import { keyIdentities } from "../config/normalize.ts";
 import type { WriteResult } from "../config/store.ts";
 import { configKeyIds } from "../credentials/key-ids.ts";
 import { isJsonObject, type JsonObject } from "../json/index.ts";
-import { probeApiKey } from "./api-keys-probe.ts";
+import { probeProviderKey } from "./provider-keys-probe.ts";
 import { currentAuthIndexer } from "./auth-index.ts";
 import {
   applyGroupWrite,
@@ -31,18 +31,18 @@ import {
   type GroupWrite,
   isDedupedFamily,
   settleDuplicates,
-} from "./api-keys-write.ts";
+} from "./provider-keys-write.ts";
 import {
-  type ApiKeyFamily,
+  type ProviderKeyFamily,
   DeleteGroupRequest,
   ProbeRequest,
   PutGroupRequest,
-} from "./contract/api-keys.ts";
+} from "./contract/provider-keys.ts";
 import { bodyJson, controlPlane, handled, jsonReply, type Reply, replyError } from "./http.ts";
 import { storedConfig } from "./settings-routes.ts";
 import { currentViewer } from "./viewer.ts";
 
-const BASE = "/v9/management/api-keys";
+const BASE = "/v9/management/provider-keys";
 
 const invalidBody = () => replyError(400, "invalid body");
 
@@ -98,8 +98,10 @@ const written = (result: GroupWriteResult) => {
 
 /** The position of group `id` in `family` of the assembled config; a group gone since it was read is a conflict. */
 const indexOf = (
-  config: { readonly "api-keys": Record<ApiKeyFamily, ReadonlyArray<{ readonly id?: string }>> },
-  family: ApiKeyFamily,
+  config: {
+    readonly "api-keys": Record<ProviderKeyFamily, ReadonlyArray<{ readonly id?: string }>>;
+  },
+  family: ProviderKeyFamily,
   id: string | undefined,
 ) => {
   if (id === undefined) return Effect.succeed(undefined);
@@ -114,11 +116,11 @@ const familyCounts = (groups: ReadonlyArray<{ readonly keys: ReadonlyArray<unkno
 const familyOf = (
   config: {
     readonly "api-keys": Record<
-      ApiKeyFamily,
+      ProviderKeyFamily,
       ReadonlyArray<{ readonly keys: ReadonlyArray<unknown> }>
     >;
   },
-  family: ApiKeyFamily,
+  family: ProviderKeyFamily,
 ) => config["api-keys"][family];
 
 /**
@@ -144,13 +146,13 @@ const privateStoredConfig = Effect.gen(function* () {
 
 const list = Effect.gen(function* () {
   const viewer = yield* currentViewer;
-  const view = yield* controlPlane("apiKeysView", (stub) => stub.apiKeysView(viewer));
+  const view = yield* controlPlane("providerKeysView", (stub) => stub.providerKeysView(viewer));
 
   return jsonReply(200, view);
 });
 
 /** `write` with the typed keys that duplicate another group's key dropped (families Go deduplicates only). */
-const settled = (family: ApiKeyFamily, index: number | undefined, write: GroupWrite) =>
+const settled = (family: ProviderKeyFamily, index: number | undefined, write: GroupWrite) =>
   Effect.gen(function* () {
     if (!isDedupedFamily(family)) return write;
 
@@ -247,21 +249,21 @@ const probe = Effect.gen(function* () {
 
   const viewer = yield* currentViewer;
 
-  const resolved = yield* controlPlane("apiKeyProbeTarget", (stub) =>
-    stub.apiKeyProbeTarget(authIndex, viewer),
+  const resolved = yield* controlPlane("providerKeyProbeTarget", (stub) =>
+    stub.providerKeyProbeTarget(authIndex, viewer),
   );
 
   if (!resolved.ok) return yield* replyError(404, "api key not found");
-  const result = yield* probeApiKey(resolved.target);
+  const result = yield* probeProviderKey(resolved.target);
 
   return jsonReply(200, result);
 });
 
-export const apiKeysRoutes = [
+export const providerKeysRoutes = [
   HttpRouter.route("GET", BASE, handled(list)),
   HttpRouter.route("PUT", `${BASE}/groups`, handled(putGroup)),
   HttpRouter.route("DELETE", `${BASE}/groups`, handled(deleteGroup)),
 ];
 
 /** Needs an `HttpClient` (bound in `routes.ts`). */
-export const apiKeyProbeHandler = handled(probe);
+export const providerKeyProbeHandler = handled(probe);

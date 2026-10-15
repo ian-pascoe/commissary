@@ -235,7 +235,7 @@ export const CredentialOwner = Schema.Struct({
 
 /**
  * One account of the credential list. `source` is `"file"` for an auth file (`id` and `name` are the file name) or
- * `"config"` for a config API key whose provider reports quota with the key (OpenCode Go): `id` and `name` are then its
+ * `"config"` for a config provider key whose provider reports quota with the key (OpenCode Go): `id` and `name` are then its
  * keyed `auth_index` (the content-addressed credential id is never sent), `account` the masked key, `supports_quota`
  * true, and `key_group` where it is edited. A config account takes the quota check, the cooldown reset and the
  * `auth_index` filters; the file-only operations (delete, download, field edits, token refresh, batch actions) answer
@@ -284,7 +284,7 @@ export const CredentialEntry = Schema.Struct({
   disable_cooling: optional(Schema.Boolean),
   /**
    * Extra upstream request headers. Values whose names look secret are masked (`[redacted]…abcd`, `REDACTED_PREFIX`
-   * in `api-keys.ts`); sending the mask back for the same header keeps the stored value.
+   * in `provider-keys.ts`); sending the mask back for the same header keeps the stored value.
    */
   headers: optional(Schema.Record(Schema.String, Schema.String)),
   /** The account's own exclusions (lower-case names or `*` patterns), without the channel rules. */
@@ -293,7 +293,7 @@ export const CredentialEntry = Schema.Struct({
   model_aliases: optional(Schema.Array(CredentialModelAlias)),
   cooldowns: Schema.Array(Cooldown),
   /**
-   * `source: "config"` only: where the config API key is edited, the group `index` of `family` under `api-keys` (the
+   * `source: "config"` only: where the config provider key is edited, the group `index` of `family` under `api-keys` (the
    * panel's `/keys/<family>/<index>`).
    */
   key_group: optional(Schema.Struct({ family: Schema.String, index: Schema.Int })),
@@ -361,7 +361,7 @@ export type CredentialFieldsPatch = typeof CredentialFieldsPatch.Type;
 /**
  * What a batch applies to every account it names (`POST /credentials/batch`). A `delete` of a name that is not stored
  * (already deleted, or never there) answers `ok: true`, like a delete that just happened: what was asked for holds.
- * A config API key named by its `auth_index` (as the list names it) answers `config_credential`: it cannot be changed
+ * A config provider key named by its `auth_index` (as the list names it) answers `config_credential`: it cannot be changed
  * here.
  */
 export const BatchAction = Schema.Literals(["enable", "disable", "refresh", "delete"]);
@@ -434,7 +434,7 @@ export class CredentialsGroup extends HttpApiGroup.make("credentials").add(
     error: managementErrors,
   }),
   /**
-   * Enable or disable one credential, by auth file `name` and/or `auth_index`. A config API key is addressed by its
+   * Enable or disable one credential, by auth file `name` and/or `auth_index`. A config provider key is addressed by its
    * `auth_index` only (`KeyRuntime.auth_index`) and is disabled by adding `*` to its `excluded-models` (`via`, as Go
    * answers); its `auth_index` stays the same. OpenAI-compatible keys answer 409: disable the endpoint (the group's
    * `disabled`) instead.

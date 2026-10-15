@@ -6,14 +6,14 @@
  * (`CooldownSnapshotForAuth`) and types.go (`RecentRequestsSnapshot`). Pure: no secrets are included (the Codex
  * `id_token` is reduced to a few claims), so the result can leave the ControlPlane Durable Object.
  *
- * Differences: auth files are listed, plus the config API keys whose provider reports quota with the key itself
- * (`CONFIG_QUOTA_PROVIDERS`, OpenCode Go; Go lists no config API keys, its panel shows them on the providers page
+ * Differences: auth files are listed, plus the config provider keys whose provider reports quota with the key itself
+ * (`CONFIG_QUOTA_PROVIDERS`, OpenCode Go; Go lists no config provider keys, its panel shows them on the providers page
  * only) as `source: "config"` entries ({@link buildConfigCredentialEntry}); `recent_requests` come from the
  * credential's recent-requests ring; cooldown reasons are reduced to the quota reason or the last error class.
  * `quota_report` is the stored server-side quota check and `reset_grants` the last Claude reset grant status read
  * (src/quota, Workers additions with no Go counterpart). The account's own routing fields (`prefix`, `disable_cooling`,
  * `headers`, `excluded_models`, `model_aliases`) are a Workers addition for the control panel: the effective prefix,
- * every header value masked except safe headers and pure client copies (`maskHeaders`, as on the API keys page), and
+ * every header value masked except safe headers and pure client copies (`maskHeaders`, as on the provider keys page), and
  * the account's own exclusions and aliases, without the channel rules.
  */
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
@@ -179,13 +179,13 @@ export interface ConfigKeyGroup {
 const isDisablingPattern = (pattern: string): boolean => pattern.trim() === "*";
 
 /**
- * Builds the panel entry of a config API key listed on the Accounts page (`source: "config"`).
+ * Builds the panel entry of a config provider key listed on the Accounts page (`source: "config"`).
  *
  * The credential id is an unsalted hash of the key (`credentials/synthesize.ts`), so it is never sent: the entry's `id`
  * and `name` are the keyed `auth_index`, which is what the quota check, the cron sweep's results and the panel address
  * the account by. Nothing secret is included: the key appears only as its masked preview (`account`, `[redacted]
- * …abcd`), headers are left out and the status message is scrubbed like the API keys page's last error. `disabled` is
- * the API keys page's reading (`*` in the key's `excluded-models`, the only way a config key is disabled); `key_group`
+ * …abcd`), headers are left out and the status message is scrubbed like the provider keys page's last error. `disabled` is
+ * the provider keys page's reading (`*` in the key's `excluded-models`, the only way a config key is disabled); `key_group`
  * is where the key is edited. The file-only fields (size, file times, note, weight, routing fields) are absent.
  */
 export const buildConfigCredentialEntry = (
@@ -203,7 +203,7 @@ export const buildConfigCredentialEntry = (
   const nextRetry = state.nextRetryAfter > now ? state.nextRetryAfter : 0;
   const key = credential.attributes.api_key?.trim() ?? "";
 
-  // The status message is the last upstream error: scrubbed of the key and token-shaped text like the API keys page.
+  // The status message is the last upstream error: scrubbed of the key and token-shaped text like the provider keys page.
   const scrub = (message: string): string =>
     redactSecrets(key === "" ? message : message.replaceAll(key, "[redacted]"));
 
@@ -389,7 +389,7 @@ export const buildCredentialEntry = (
   const cooling = coolingOverride(metadata);
 
   if (cooling !== undefined) entry.disable_cooling = cooling;
-  // Secret-looking header values leave masked, like the API keys page; writing the mask back keeps them.
+  // Secret-looking header values leave masked, like the provider keys page; writing the mask back keeps them.
   const headers = maskHeaders(extractHeaders(metadata.headers));
 
   if (Object.keys(headers).length > 0) entry.headers = headers;

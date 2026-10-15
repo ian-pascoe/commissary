@@ -5,7 +5,7 @@
 // a header keeps its mask until the operator replaces the value, and the mask goes back unchanged, which the server
 // reads as "keep". An error names its field and, for aliases and headers, the row (a `422` path such as
 // `headers.X-Team` or `model_aliases.1` is mapped back to its row).
-import { REDACTED_PREFIX } from "#contract/api-keys.ts";
+import { REDACTED_PREFIX } from "#contract/provider-keys.ts";
 import type {
   CredentialEntry,
   CredentialFieldsPatch,

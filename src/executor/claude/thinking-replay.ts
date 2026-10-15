@@ -1,5 +1,5 @@
 /**
- * Thinking replay for Anthropic-compatible API-key gateways (`is-compat` models): the signed thinking blocks of the
+ * Thinking replay for Anthropic-compatible provider-key gateways (`is-compat` models): the signed thinking blocks of the
  * last assistant turn are cached and restored into the next request when the client dropped them.
  *
  * Go source: internal/runtime/executor/claude_thinking_replay.go, kimi_thinking_replay.go (restore /
@@ -152,11 +152,11 @@ export const replayScopeValid = (scope: ReplayScope | undefined): scope is Repla
 export const replayModelFamily = (
   credentialId: string,
   baseURL: string,
-  apiKey: string,
+  providerKey: string,
   baseModel: string,
 ): string => {
   if (baseModel === "") return "";
-  const identity = credentialId.trim() || baseURL.trim() || apiKey.trim();
+  const identity = credentialId.trim() || baseURL.trim() || providerKey.trim();
 
   if (identity === "") return `claude:${baseModel}`;
 

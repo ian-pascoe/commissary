@@ -1,5 +1,5 @@
 // Config entries (ADR 0025): per-entry revisions, the Go config import, the migration of a stored document, and the
-// entry routes (`/settings`, `/api-keys/groups`, `/model-rules/*`) through the router and the real ControlPlane.
+// entry routes (`/settings`, `/provider-keys/groups`, `/model-rules/*`) through the router and the real ControlPlane.
 import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { runInDurableObject } from "cloudflare:test";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -8,7 +8,7 @@ import { decodeConfig, encodeConfig } from "../src/config/codec.ts";
 import { MIGRATION_PRINCIPAL } from "../src/config/store.ts";
 import { configKeyIds } from "../src/credentials/key-ids.ts";
 import type { Json } from "../src/json/index.ts";
-import type { ApiKeysList } from "../src/management/contract/api-keys.ts";
+import type { ProviderKeysList } from "../src/management/contract/provider-keys.ts";
 import type { RoutingModels } from "../src/management/contract/routing.ts";
 import type { SettingsView } from "../src/management/contract/settings.ts";
 import { OrgId } from "../src/platform/org.ts";
@@ -98,7 +98,7 @@ describe("config import", () => {
 
     const after = await current();
     expect(comparable(after)).toEqual(comparable(before));
-    // Every API key keeps the id of the credential it produced (Go's content hash).
+    // Every provider key keeps the id of the credential it produced (Go's content hash).
     expect(configKeyIds(after)).toEqual(configKeyIds(before));
     expect(configKeyIds(after, { includeDisabledGroups: true })).toEqual(
       configKeyIds(before, { includeDisabledGroups: true }),
@@ -389,18 +389,18 @@ describe("PATCH /settings", () => {
   });
 });
 
-const API_KEYS = "/v9/management/api-keys";
+const PROVIDER_KEYS = "/v9/management/provider-keys";
 
-const keysList = async (): Promise<ApiKeysList> => {
-  const response = await json(API_KEYS);
+const keysList = async (): Promise<ProviderKeysList> => {
+  const response = await json(PROVIDER_KEYS);
 
   expect(response.status).toBe(200);
 
   // SAFETY: the shape is checked against the contract in management-contract.test.ts.
-  return response.body as ApiKeysList;
+  return response.body as ProviderKeysList;
 };
 
-describe("API key groups", () => {
+describe("Provider key groups", () => {
   beforeEach(async () => {
     await controlPlane().importConfig(
       JSON.stringify({
@@ -429,7 +429,7 @@ describe("API key groups", () => {
     expect(authIndex).toBeDefined();
 
     const written = await json(
-      `${API_KEYS}/groups`,
+      `${PROVIDER_KEYS}/groups`,
       jsonInit("PUT", {
         family: "claude",
         id: group.id,
@@ -453,7 +453,7 @@ describe("API key groups", () => {
     const otherIndex = must(other?.group.keys[0]?.auth_index);
 
     const rotated = await json(
-      `${API_KEYS}/groups`,
+      `${PROVIDER_KEYS}/groups`,
       jsonInit("PUT", {
         family: "claude",
         id: group.id,
@@ -488,7 +488,7 @@ describe("API key groups", () => {
 
     const write = (group: NonNullable<typeof first>, secret: string) =>
       json(
-        `${API_KEYS}/groups`,
+        `${PROVIDER_KEYS}/groups`,
         jsonInit("PUT", {
           family: "claude",
           id: group.id,
@@ -542,14 +542,14 @@ describe("API key groups", () => {
     const first = must((await keysList()).families.claude[0]);
 
     const stale = await json(
-      `${API_KEYS}/groups`,
+      `${PROVIDER_KEYS}/groups`,
       jsonInit("DELETE", { family: "claude", id: first.id, revision: first.revision + 1 }),
     );
 
     expect(stale.status).toBe(409);
 
     const removed = await json(
-      `${API_KEYS}/groups`,
+      `${PROVIDER_KEYS}/groups`,
       jsonInit("DELETE", { family: "claude", id: first.id, revision: first.revision }),
     );
 

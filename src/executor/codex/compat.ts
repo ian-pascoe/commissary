@@ -10,7 +10,7 @@ import type { CredentialSnapshot } from "../picker.ts";
 import type { ExecutorRequest } from "../types.ts";
 
 interface FlatEntry {
-  readonly apiKey: string;
+  readonly providerKey: string;
   readonly baseUrl: string;
   readonly models: ReadonlyArray<ModelEntry>;
 }
@@ -22,7 +22,7 @@ const flatEntries = (config: Config): FlatEntry[] => {
   for (const group of config["api-keys"].codex) {
     for (const key of group.keys) {
       out.push({
-        apiKey: key["api-key"].trim(),
+        providerKey: key["api-key"].trim(),
         baseUrl: (group["base-url"] ?? "").trim(),
         models: key.models ?? group.models ?? [],
       });
@@ -34,7 +34,7 @@ const flatEntries = (config: Config): FlatEntry[] => {
 
 const eq = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();
 
-/** `resolveCodexKeyConfig`: the config entry of an API-key credential (index first, then key + base URL). */
+/** `resolveCodexKeyConfig`: the config entry of a provider-key credential (index first, then key + base URL). */
 export const resolveCodexKeyConfig = (
   config: Config,
   credential: CredentialSnapshot,
@@ -49,7 +49,7 @@ export const resolveCodexKeyConfig = (
 
     if (
       entry !== undefined &&
-      (attrKey === "" || eq(entry.apiKey, attrKey)) &&
+      (attrKey === "" || eq(entry.providerKey, attrKey)) &&
       (attrBase === "" || eq(entry.baseUrl, attrBase))
     )
       return entry;
@@ -57,13 +57,13 @@ export const resolveCodexKeyConfig = (
 
   for (const entry of entries) {
     if (attrKey !== "" && attrBase !== "") {
-      if (eq(entry.apiKey, attrKey) && eq(entry.baseUrl, attrBase)) return entry;
+      if (eq(entry.providerKey, attrKey) && eq(entry.baseUrl, attrBase)) return entry;
       continue;
     }
 
     if (
       attrKey !== "" &&
-      eq(entry.apiKey, attrKey) &&
+      eq(entry.providerKey, attrKey) &&
       (entry.baseUrl === "" || eq(entry.baseUrl, attrBase))
     )
       return entry;
@@ -71,7 +71,7 @@ export const resolveCodexKeyConfig = (
     if (attrKey === "" && attrBase !== "" && eq(entry.baseUrl, attrBase)) return entry;
   }
 
-  if (attrKey !== "") return entries.find((entry) => eq(entry.apiKey, attrKey));
+  if (attrKey !== "") return entries.find((entry) => eq(entry.providerKey, attrKey));
 
   return undefined;
 };
@@ -111,7 +111,7 @@ const configModelIsCompat = (
 
 /**
  * `resolveCodexModelIsCompat`: the resolved model info wins; without one the credential's config entry decides (a
- * non-empty `models` list is authoritative), then the generic API-key capability lookup.
+ * non-empty `models` list is authoritative), then the generic provider-key capability lookup.
  */
 export const resolveCodexModelIsCompat = (
   config: Config,

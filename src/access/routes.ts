@@ -111,7 +111,7 @@ export const parseOrgAddress = (pathname: string): OrgAddress | undefined => {
 
   const first = next();
 
-  if (first === "v8") {
+  if (first === "v9") {
     if (next() !== "management" || next() !== ORGS_SEGMENT) return undefined;
     const slug = next();
     const path = rest();

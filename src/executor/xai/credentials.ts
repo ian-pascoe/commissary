@@ -5,7 +5,7 @@
  * xaiCompactBaseURL, xaiSpeechRequestURL, xaiIsDefaultAPIBaseURL, xaiIsCLIChatProxyBaseURL),
  * internal/auth/xai/types.go (DefaultAPIBaseURL, CLIChatProxyBaseURL).
  *
- * OAuth (Grok CLI login) credentials talk to the CLI chat proxy unless `using_api` says otherwise; API keys always use
+ * OAuth (Grok CLI login) credentials talk to the CLI chat proxy unless `using_api` says otherwise; provider keys always use
  * the official API. `/responses/compact` and `/tts` never go to the chat proxy (it answers 404 and a 404 would cool
  * the whole credential pool down).
  */
@@ -20,7 +20,7 @@ export const XAI_CLI_CHAT_PROXY_BASE_URL = "https://cli-chat-proxy.grok.com/v1";
 
 const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");
 
-/** `xaiCreds`: bearer token (attribute API key, else OAuth access token) and configured base URL. */
+/** `xaiCreds`: bearer token (attribute provider key, else OAuth access token) and configured base URL. */
 export const xaiCreds = (credential: CredentialSnapshot) => {
   let token = text(credential.attributes["api_key"]);
   let baseURL = text(credential.attributes["base_url"]);

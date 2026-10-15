@@ -3,7 +3,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Config } from "../src/config/schema.ts";
 import {
-  apiKeyCredential,
+  providerKeyCredential,
   codexModels,
   fixedPicker,
   oauthCredential,
@@ -213,8 +213,8 @@ describe("POST /v1/responses (non-stream)", () => {
     expect(upstream.reasoning.effort).toBe("medium");
   });
 
-  it("serves the /backend-api/codex alias and accepts an API-key credential with a custom base URL", async () => {
-    const p = pipeline(() => sseResponse(TEXT_STREAM), { credentials: [apiKeyCredential()] });
+  it("serves the /backend-api/codex alias and accepts a provider-key credential with a custom base URL", async () => {
+    const p = pipeline(() => sseResponse(TEXT_STREAM), { credentials: [providerKeyCredential()] });
 
     const response = await p.call(
       "/backend-api/codex/responses",
@@ -667,11 +667,11 @@ describe("POST /v1/alpha/search", () => {
     expect(JSON.parse(call.body)).toEqual({ id: "s1", model: "gpt-5.4", query: "q" });
   });
 
-  it("only uses API keys with alpha-search enabled and needs a base URL", async () => {
+  it("only uses provider keys with alpha-search enabled and needs a base URL", async () => {
     const p = pipeline(() => jsonResponse({ ok: true }), {
       credentials: [
-        apiKeyCredential({ id: "plain" }),
-        apiKeyCredential({
+        providerKeyCredential({ id: "plain" }),
+        providerKeyCredential({
           id: "alpha",
           attributes: { api_key: "k", base_url: "https://s.test/v1/", codex_alpha_search: "true" },
         }),

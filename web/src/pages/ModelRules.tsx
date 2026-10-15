@@ -3,8 +3,8 @@
 // clients, optionally keeping the original; exclusions take models away, with a live count of the models a pattern
 // matches. Add forms stay closed until asked for and take the focus when they open. Each edit is
 // a delta saved with the channel entry's revision and re-applied once to a fresh read on 409 (`saveRuleChange`); the
-// view refetches after a save, so the Models page shows the effect at once. API key and OpenAI-compatible rules live
-// on the API keys page, an account's own rules in its file; this page only points there.
+// view refetches after a save, so the Models page shows the effect at once. Provider key and OpenAI-compatible rules live
+// on the provider keys page, an account's own rules in its file; this page only points there.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
@@ -743,7 +743,8 @@ export const ModelRulesPage = () => {
           Each rule applies to every account of one provider, its channel, as soon as it is saved.
           An alias lets clients call a model by another name; with Keep original, they can use both.
           An exclusion hides every model whose provider&rsquo;s name matches, where * matches any
-          characters. API keys keep their own rules on the <Link to="/keys">API keys</Link> page.
+          characters. Provider keys keep their own rules on the{" "}
+          <Link to="/keys">Provider keys</Link> page.
         </p>
       </header>
       {AsyncResult.match(result, {

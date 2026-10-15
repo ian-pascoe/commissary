@@ -90,7 +90,7 @@ export const PAGES: ReadonlyArray<PanelPage> = [
   { to: "/", label: "Overview", group: "glance", role: "admin" },
   { to: "/usage", label: "Usage", group: "glance", role: "member" },
   { to: "/accounts", label: "Accounts", group: "providers", role: "admin", privateMembers: true },
-  { to: "/keys", label: "API keys", group: "providers", role: "admin", privateMembers: true },
+  { to: "/keys", label: "Provider keys", group: "providers", role: "admin", privateMembers: true },
   { to: "/models", label: "Models", group: "providers", role: "admin" },
   { to: "/members", label: "Members", group: "people", role: "admin" },
   { to: "/grants", label: "Grants", group: "people", role: "admin" },
@@ -158,7 +158,7 @@ const within = (pathname: string, page: string): boolean =>
 /**
  * Whether a role may open a page of the panel (`pathname` is relative to the org's base path). Sub-pages of a page
  * need an org admin, like `/usage/prices`, except the page itself. A plain member opens Usage, My models, Proxy keys and Limits, and the
- * pages of their own private accounts and API keys, with their sub-pages, where the org lets members connect private
+ * pages of their own private accounts and provider keys, with their sub-pages, where the org lets members connect private
  * credentials.
  */
 export const pageAllowed = (role: OrgRole, pathname: string, privateCredentials = false): boolean =>

@@ -107,7 +107,7 @@ interface SetupOptions {
   readonly store?: MemoryPoolStore;
   /** The org's Spend limits (issue #71). */
   readonly spend?: PoolOptions["spend"];
-  /** Members' private API key groups: YAML configs by member id. */
+  /** Members' private provider key groups: YAML configs by member id. */
   readonly privateConfigs?: Readonly<Record<string, string>>;
   /** Who asks (a member, a proxy key); a user without a member by default. */
   readonly identity?: AccessIdentity;

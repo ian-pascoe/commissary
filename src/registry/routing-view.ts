@@ -113,7 +113,7 @@ interface Context {
   readonly authIndex: AuthIndexer;
 }
 
-/** The alias/exclusion channel of a credential; empty for API keys and OpenAI-compatible groups. */
+/** The alias/exclusion channel of a credential; empty for provider keys and OpenAI-compatible groups. */
 const channelOf = (source: ModelSource): string =>
   source.compat || source.source === "config"
     ? ""

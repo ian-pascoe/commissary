@@ -1,7 +1,7 @@
 /**
  * Refresh protocol lookup by executor key (`executorKey`: `kimi.com` -> `kimi`).
  *
- * Providers without an entry (gemini API keys, openai-compatible, devin, aistudio) have no token refresh. Vertex is
+ * Providers without an entry (gemini provider keys, openai-compatible, devin, aistudio) have no token refresh. Vertex is
  * handled separately by the manager (minted access tokens are cached, not persisted in the auth file).
  */
 import { refreshAntigravity } from "./antigravity.ts";

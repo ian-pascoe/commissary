@@ -6,7 +6,7 @@
  *
  * Deviation from Go: the header carries only the request id (a random UUID, also the usage records' `trace_id`). Go
  * sends `<selection time yyyyMMddHHmmss>-<auth index>-<request id>`, refreshed whenever a credential is selected, to
- * every API client; Go's auth index is an unsalted hash of the credential id, which for a config API key is itself a
+ * every API client; Go's auth index is an unsalted hash of the credential id, which for a config provider key is itself a
  * hash of the key, so any client could confirm key guesses offline. Even keyed, the index would tell clients which
  * credential served them. Admins correlate a response with its credential through the usage records (`trace_id` →
  * `auth_index`) or the request log line (`authIndex`, keyed). Nothing in this repository or the Go panel parses the

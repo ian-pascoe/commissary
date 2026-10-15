@@ -137,7 +137,7 @@ const MembershipToggle = ({
   );
 };
 
-/** Whether plain members may connect private accounts and API keys (ADR 0023); org admins decide. */
+/** Whether plain members may connect private accounts and provider keys (ADR 0023); org admins decide. */
 const PrivateCredentials = () => {
   const result = useAtomValue(membershipAtom);
   const retry = useAtomRefresh(membershipAtom);
@@ -163,16 +163,16 @@ const PrivateCredentials = () => {
                     reactivityKeys: [...MEMBERS, ...ORGS],
                   }),
                   event.target.checked
-                    ? "Members can connect private accounts and API keys now."
-                    : "Private accounts and API keys are switched off, not deleted.",
+                    ? "Members can connect private accounts and provider keys now."
+                    : "Private accounts and provider keys are switched off, not deleted.",
                 );
               }}
             />
-            <span>Let members connect private accounts and API keys</span>
+            <span>Let members connect private accounts and provider keys</span>
           </label>
           <p className={kit["muted"]}>
             {on
-              ? "On: a member's private account or API key is used only for their own requests. Org admins see that it exists, its provider, owner and label, and can disable or remove it, but not how it is used."
+              ? "On: a member's private account or provider key is used only for their own requests. Org admins see that it exists, its provider, owner and label, and can disable or remove it, but not how it is used."
               : "Off: members cannot connect private credentials, and the ones they connected stay in place but are not used. Turning it on again brings them back."}
           </p>
           <NoteLine note={note} />

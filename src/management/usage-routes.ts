@@ -11,7 +11,7 @@
  * the Access principal as `api_key`. Credentials appear only as the keyed `auth_index` (`group_by=auth` keys, the
  * export's `auth_index`, the `auth_index` filter); the stored credential id is never answered, and the old `auth_id`
  * filter is refused (400) rather than ignored. Go's `GET /observability/usage/api-keys` (`GetAPIKeyUsage`, api_key_usage.go,
- * per-key counters for the upstream panel) is not ported: the Keys page's `GET /api-keys` carries the same counters.
+ * per-key counters for the upstream panel) is not ported: the Keys page's `GET /provider-keys` carries the same counters.
  * `summary`, `series` and `records` carry the cost stored on each record (`cost_micros`, ADR 0024) and `unpriced`
  * lists the provider and model pairs that had no price. Every route reads the records of the request's org only (ADR 0021).
  *

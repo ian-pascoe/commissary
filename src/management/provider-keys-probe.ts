@@ -1,9 +1,9 @@
 /**
- * `POST /v9/management/api-keys/probe` (`contract/api-keys.ts` `ProbeResult`): one connection test of a config API key.
+ * `POST /v9/management/provider-keys/probe` (`contract/provider-keys.ts` `ProbeResult`): one connection test of a config provider key.
  *
  * Workers addition, no Go counterpart. The upstream panel tests keys from the browser through Go's (not ported)
  * `POST /requests/api-call` with the raw key (`useConnectivityTest.ts`, `models.ts`); here the ControlPlane hands the
- * Worker a probe target (`apiKeyProbeTarget`, like `quotaProbeTarget`) and the Worker makes the request itself, so
+ * Worker a probe target (`providerKeyProbeTarget`, like `quotaProbeTarget`) and the Worker makes the request itself, so
  * the key never reaches the browser and only goes to the base host configured for it (which a key-page write can
  * change while keeping the key). The probe is a model listing (which doubles as model discovery) or, for Vertex (no
  * listing), a one-token `countTokens`. Per family:
@@ -21,7 +21,7 @@
  *
  * The call is not reported to the credential pool (no counters, no cooldown) and is bounded to 30 s in total. Failures
  * carry a fixed message and the upstream status only: response bodies are never copied (an upstream can echo a key).
- * Unverified against the live services: that Meta serves `/models` and that Vertex API-key mode accepts `countTokens`.
+ * Unverified against the live services: that Meta serves `/models` and that Vertex provider-key mode accepts `countTokens`.
  */
 import { Clock, Effect, Result } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
@@ -33,24 +33,24 @@ import {
   OPENCODE_USER_AGENT,
 } from "../executor/opencode/headers.ts";
 import { isJsonObject, type Json, tryParseJson } from "../json/index.ts";
-import { DEFAULT_BASE_URLS } from "./api-keys-view.ts";
-import type { ApiKeyFamily, ProbeResult } from "./contract/api-keys.ts";
+import { DEFAULT_BASE_URLS } from "./provider-keys-view.ts";
+import type { ProviderKeyFamily, ProbeResult } from "./contract/provider-keys.ts";
 
 /** What a probe needs from one config credential; carries the key, so it only crosses the RPC boundary to the Worker. */
-export interface ApiKeyProbeTarget {
+export interface ProviderKeyProbeTarget {
   readonly id: string;
-  readonly family: ApiKeyFamily;
+  readonly family: ProviderKeyFamily;
   /** Configured base URL, or the family's default. */
   readonly baseUrl: string;
-  readonly apiKey: string;
+  readonly providerKey: string;
   /** Configured headers except the `$name` ones (which copy a client header). */
   readonly headers: Readonly<Record<string, string>>;
   /** Names of the configured models (Vertex tests the first). */
   readonly models: ReadonlyArray<string>;
 }
 
-export type ApiKeyProbeTargetResult =
-  | { readonly ok: true; readonly target: ApiKeyProbeTarget }
+export type ProviderKeyProbeTargetResult =
+  | { readonly ok: true; readonly target: ProviderKeyProbeTarget }
   | { readonly ok: false; readonly error: "not_found" };
 
 const PROVIDER_FAMILIES = {
@@ -63,15 +63,15 @@ const PROVIDER_FAMILIES = {
   meta: "meta",
   "opencode-zen": "opencode-zen",
   "opencode-go": "opencode-go",
-} as const satisfies Readonly<Record<string, ApiKeyFamily>>;
+} as const satisfies Readonly<Record<string, ProviderKeyFamily>>;
 
 /** The probe target of a config credential; `undefined` for a credential of another provider. */
-export const buildApiKeyProbeTarget = (
+export const buildProviderKeyProbeTarget = (
   credential: Pick<Credential, "id" | "provider" | "attributes" | "headers" | "models">,
-): ApiKeyProbeTarget | undefined => {
+): ProviderKeyProbeTarget | undefined => {
   const compat = credential.attributes.compat_name !== undefined;
 
-  const family: ApiKeyFamily | undefined = compat
+  const family: ProviderKeyFamily | undefined = compat
     ? "openai-compatibility"
     : Object.entries(PROVIDER_FAMILIES).find(([provider]) => provider === credential.provider)?.[1];
 
@@ -85,7 +85,7 @@ export const buildApiKeyProbeTarget = (
     id: credential.id,
     family,
     baseUrl: base,
-    apiKey: (credential.attributes.api_key ?? "").trim(),
+    providerKey: (credential.attributes.api_key ?? "").trim(),
     headers: Object.fromEntries(
       Object.entries(credential.headers).filter(([, value]) => !value.startsWith("$")),
     ),
@@ -141,7 +141,7 @@ const send = (
 const ok = (exchange: Exchange): boolean => exchange.status >= 200 && exchange.status < 300;
 
 /** Request headers: the configured ones first, so the authentication headers always win. */
-const headersOf = (target: ApiKeyProbeTarget, auth: Readonly<Record<string, string>>) => ({
+const headersOf = (target: ProviderKeyProbeTarget, auth: Readonly<Record<string, string>>) => ({
   accept: "application/json",
   ...target.headers,
   ...auth,
@@ -149,7 +149,7 @@ const headersOf = (target: ApiKeyProbeTarget, auth: Readonly<Record<string, stri
 
 const bearer = (key: string) => (key === "" ? {} : { authorization: `Bearer ${key}` });
 
-const claudeAuth = (target: ApiKeyProbeTarget) => {
+const claudeAuth = (target: ProviderKeyProbeTarget) => {
   const first = (() => {
     try {
       return isAnthropicUpstreamURL(new URL(target.baseUrl));
@@ -158,11 +158,11 @@ const claudeAuth = (target: ApiKeyProbeTarget) => {
     }
   })();
 
-  if (target.apiKey === "") return { "anthropic-version": "2023-06-01" };
+  if (target.providerKey === "") return { "anthropic-version": "2023-06-01" };
 
-  return first && !isClaudeOAuthToken(target.apiKey)
-    ? { "x-api-key": target.apiKey, "anthropic-version": "2023-06-01" }
-    : { ...bearer(target.apiKey), "anthropic-version": "2023-06-01" };
+  return first && !isClaudeOAuthToken(target.providerKey)
+    ? { "x-api-key": target.providerKey, "anthropic-version": "2023-06-01" }
+    : { ...bearer(target.providerKey), "anthropic-version": "2023-06-01" };
 };
 
 const modelIdOf = (value: string): string => value.replace(/^models\//, "");
@@ -196,7 +196,7 @@ export const parseModelList = (
 };
 
 const listing = Effect.fnUntraced(function* (
-  target: ApiKeyProbeTarget,
+  target: ProviderKeyProbeTarget,
 ): Effect.fn.Return<Probed, Failure, HttpClient.HttpClient> {
   const base = trimSlash(target.baseUrl);
   const { family } = target;
@@ -204,7 +204,7 @@ const listing = Effect.fnUntraced(function* (
   if (family === "gemini" || family === "interactions") {
     const headers = headersOf(
       target,
-      target.apiKey === "" ? {} : { "x-goog-api-key": target.apiKey },
+      target.providerKey === "" ? {} : { "x-goog-api-key": target.providerKey },
     );
 
     const models: Array<{ id: string; display_name?: string }> = [];
@@ -240,7 +240,7 @@ const listing = Effect.fnUntraced(function* (
         ? `${base}/models`
         : `${base}/v1/models`;
 
-  const auth = family === "claude" ? claudeAuth(target) : bearer(target.apiKey);
+  const auth = family === "claude" ? claudeAuth(target) : bearer(target.providerKey);
 
   const exchange = yield* send(
     HttpClientRequest.get(url).pipe(HttpClientRequest.setHeaders(headersOf(target, auth))),
@@ -250,14 +250,14 @@ const listing = Effect.fnUntraced(function* (
 });
 
 const countTokens = Effect.fnUntraced(function* (
-  target: ApiKeyProbeTarget,
+  target: ProviderKeyProbeTarget,
   model: string,
 ): Effect.fn.Return<Probed, Failure, HttpClient.HttpClient> {
   const request = HttpClientRequest.post(
     `${trimSlash(target.baseUrl)}/v1/publishers/google/models/${encodeURIComponent(model)}:countTokens`,
   ).pipe(
     HttpClientRequest.setHeaders(
-      headersOf(target, target.apiKey === "" ? {} : { "x-goog-api-key": target.apiKey }),
+      headersOf(target, target.providerKey === "" ? {} : { "x-goog-api-key": target.providerKey }),
     ),
     HttpClientRequest.bodyText(
       JSON.stringify({ contents: [{ role: "user", parts: [{ text: "hi" }] }] }),
@@ -274,12 +274,12 @@ const countTokens = Effect.fnUntraced(function* (
 export const OPENCODE_PROBE_MODEL = "commissary-key-check";
 
 const openCodeAuthCheck = Effect.fnUntraced(function* (
-  target: ApiKeyProbeTarget,
+  target: ProviderKeyProbeTarget,
 ): Effect.fn.Return<Probed, Failure, HttpClient.HttpClient> {
   const request = HttpClientRequest.post(`${trimSlash(target.baseUrl)}/chat/completions`).pipe(
     HttpClientRequest.setHeaders(
       headersOf(target, {
-        ...bearer(target.apiKey),
+        ...bearer(target.providerKey),
         "user-agent": OPENCODE_USER_AGENT,
         "x-opencode-client": OPENCODE_CLIENT,
         [OPENCODE_SESSION_HEADER]: crypto.randomUUID(),
@@ -315,7 +315,7 @@ const validBase = (value: string): boolean => {
 };
 
 const run = Effect.fnUntraced(function* (
-  target: ApiKeyProbeTarget,
+  target: ProviderKeyProbeTarget,
 ): Effect.fn.Return<Probed, Failure, HttpClient.HttpClient> {
   if (!validBase(target.baseUrl)) return yield* Effect.fail(failure("invalid base url"));
 
@@ -334,8 +334,8 @@ const run = Effect.fnUntraced(function* (
 });
 
 /** Probes one key; always answers a result (a failure is `ok: false`), never fails. */
-export const probeApiKey = (
-  target: ApiKeyProbeTarget,
+export const probeProviderKey = (
+  target: ProviderKeyProbeTarget,
 ): Effect.Effect<ProbeResult, never, HttpClient.HttpClient> =>
   Effect.gen(function* () {
     const started = yield* Clock.currentTimeMillis;

@@ -21,7 +21,7 @@ export const xaiOauth = (overrides: Partial<CredentialSnapshot> = {}): Credentia
   ...overrides,
 });
 
-/** API-key credential: official API. */
+/** Provider-key credential: official API. */
 export const xaiKey = (overrides: Partial<CredentialSnapshot> = {}): CredentialSnapshot => ({
   id: "xai-key-1",
   provider: "xai",

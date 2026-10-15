@@ -54,11 +54,11 @@ import type { GrantChange, GrantSubject, GrantTable, GrantsWire } from "../grant
 import { GrantStore } from "../grants/store.ts";
 import { type AuthIndexer, orgAuthIndexer } from "../management/auth-index.ts";
 import {
-  type ApiKeyProbeTargetResult,
-  buildApiKeyProbeTarget,
-} from "../management/api-keys-probe.ts";
-import { buildApiKeysList } from "../management/api-keys-view.ts";
-import { locateKey } from "../management/api-keys-write.ts";
+  type ProviderKeyProbeTargetResult,
+  buildProviderKeyProbeTarget,
+} from "../management/provider-keys-probe.ts";
+import { buildProviderKeysList } from "../management/provider-keys-view.ts";
+import { locateKey } from "../management/provider-keys-write.ts";
 import { API_KEY_FAMILIES } from "../config/schema.ts";
 import { configKeyIds } from "./key-ids.ts";
 import { PrivateKeyStore } from "./private-keys.ts";
@@ -203,11 +203,11 @@ const NOT_FOUND: Omit<AccountResult, "name"> = {
   message: "auth file not found",
 };
 
-/** A batch named a config API key (by its `auth_index`, the name the Accounts page lists it under). */
+/** A batch named a config provider key (by its `auth_index`, the name the Accounts page lists it under). */
 const CONFIG_CREDENTIAL: Omit<AccountResult, "name"> = {
   ok: false,
   error: "config_credential",
-  message: "config API keys are managed on the API keys page",
+  message: "config provider keys are managed on the provider keys page",
 };
 
 /** The shape of an `auth_index` (`management/auth-index.ts`): only such names are looked up as one. */
@@ -215,7 +215,7 @@ const AUTH_INDEX_PATTERN = /^[0-9a-f]{16}$/;
 
 const isDisablingPattern = (pattern: string): boolean => pattern.trim() === "*";
 
-/** On the Accounts page: auth files, and config API keys whose provider reports quota with the key. */
+/** On the Accounts page: auth files, and config provider keys whose provider reports quota with the key. */
 const listed = ({ credential }: RefreshTarget): boolean =>
   credential.source === "file" ||
   (credential.source === "config" && isConfigQuotaProvider(executorKey(credential)));
@@ -331,7 +331,7 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #members: MemberStore;
   /** Which upstream models of which shared credentials each member may use (ADR 0023). */
   readonly #modelGrants: GrantStore;
-  /** The members' private API key groups (sealed rows of their own, never config entries). */
+  /** The members' private provider key groups (sealed rows of their own, never config entries). */
   readonly #privateKeys: PrivateKeyStore;
   readonly #proxyKeys: ProxyKeyStore;
   /** The org's Spend limits (issue #71): what the management API does with them and the ledger the pool checks. */
@@ -543,7 +543,7 @@ export class ControlPlane extends DurableObject<Env> {
     return this.#config.writeChannelRule(kind, channel, revision, value, by);
   }
 
-  /** Writes or deletes one key group with its API keys at the revision it names. */
+  /** Writes or deletes one key group with its provider keys at the revision it names. */
   writeKeyGroup(
     change: KeyGroupChange,
     by: string,
@@ -654,7 +654,7 @@ export class ControlPlane extends DurableObject<Env> {
 
   /**
    * Zero data retention (ADR 0027): a member who leaves the org takes with them everything of theirs here: proxy keys,
-   * private accounts (with their cooldown and quota state), private API key groups and the OAuth logins they started.
+   * private accounts (with their cooldown and quota state), private provider key groups and the OAuth logins they started.
    * Shared credentials and other members' data stay.
    */
   async #deleteMemberData(member: string): Promise<void> {
@@ -1378,7 +1378,7 @@ export class ControlPlane extends DurableObject<Env> {
   // --- management API (src/management) -------------------------------------------------------------------------
 
   /**
-   * Panel entries of all stored auth files, plus the config API keys whose provider reports quota with the key
+   * Panel entries of all stored auth files, plus the config provider keys whose provider reports quota with the key
    * (`CONFIG_QUOTA_PROVIDERS`, listed by their `auth_index`, `buildConfigCredentialEntry`). No secrets.
    */
   listCredentialEntries(viewer: Scope): WireJsonObject[] {
@@ -1464,7 +1464,7 @@ export class ControlPlane extends DurableObject<Env> {
   }
 
   /**
-   * Whether `name` is the `auth_index` of a config API key: the management routes answer a file-only operation on one
+   * Whether `name` is the `auth_index` of a config provider key: the management routes answer a file-only operation on one
    * (delete, download, refresh, field edits) with a clear refusal instead of "not found".
    */
   isConfigKey(name: string, viewer: Scope): boolean {
@@ -1535,7 +1535,7 @@ export class ControlPlane extends DurableObject<Env> {
   }
 
   /**
-   * Enables/disables a credential addressed by file name and/or `auth_index`. A config API key is disabled by
+   * Enables/disables a credential addressed by file name and/or `auth_index`. A config provider key is disabled by
    * adding `*` to its `excluded-models` in the config (Go `toggleConfigAPIKeyExcludedAll`); the credential id and
    * `auth_index` stay the same (`excluded-models` is not part of the identity).
    */
@@ -1576,10 +1576,10 @@ export class ControlPlane extends DurableObject<Env> {
       : { ok: false, error: "invalid", message: stored.message };
   }
 
-  // --- API keys page (src/management/api-keys-*.ts) ------------------------------------------------------------
+  // --- provider keys page (src/management/provider-keys-*.ts) ------------------------------------------------------------
 
   /** The `api-keys` groups with runtime state: one snapshot of config version and credential pool (no secrets). */
-  apiKeysView(viewer: Scope): WireJsonObject {
+  providerKeysView(viewer: Scope): WireJsonObject {
     const { version, config } = this.#currentConfig();
     const { groups } = this.#config.entries().revisions;
     const entries = this.#pool.entries();
@@ -1588,8 +1588,8 @@ export class ControlPlane extends DurableObject<Env> {
     // Shared groups are for org admins (and internal callers); everyone else sees none of them.
     const view =
       isFullAccess(viewer) || viewer.admin
-        ? buildApiKeysList(version, groups, config, entries, now, this.#authIndex)
-        : buildApiKeysList(
+        ? buildProviderKeysList(version, groups, config, entries, now, this.#authIndex)
+        : buildProviderKeysList(
             version,
             {},
             this.#privateKeys.configOf("").config,
@@ -1605,7 +1605,7 @@ export class ControlPlane extends DurableObject<Env> {
       const mine = this.#privateKeys.configOf(viewer.member);
 
       view.own =
-        buildApiKeysList(version, mine.revisions, mine.config, entries, now, this.#authIndex)
+        buildProviderKeysList(version, mine.revisions, mine.config, entries, now, this.#authIndex)
           .families ?? {};
     }
 
@@ -1725,15 +1725,15 @@ export class ControlPlane extends DurableObject<Env> {
   }
 
   /**
-   * What the Worker needs to probe a config API key (`POST /api-keys/probe`): the family, base URL, headers and the
+   * What the Worker needs to probe a config provider key (`POST /provider-keys/probe`): the family, base URL, headers and the
    * key itself. Carries the secret: the Worker uses it for the upstream call only and never returns it.
    */
-  apiKeyProbeTarget(authIndex: string, viewer: Scope): ApiKeyProbeTargetResult {
+  providerKeyProbeTarget(authIndex: string, viewer: Scope): ProviderKeyProbeTargetResult {
     const target = findCredential(this.#scope(viewer, "full"), { authIndex }, this.#authIndex);
 
     const probe =
       target?.credential.source === "config"
-        ? buildApiKeyProbeTarget(target.credential)
+        ? buildProviderKeyProbeTarget(target.credential)
         : undefined;
 
     return probe === undefined ? { ok: false, error: "not_found" } : { ok: true, target: probe };
@@ -1817,8 +1817,8 @@ export class ControlPlane extends DurableObject<Env> {
    * interleaves, and a failure leaves no half-applied batch), dropping the pool's derived view once, then re-arm the
    * refresh alarm once. A batch delete clears exactly what a single delete clears: the credential with its runtime
    * (cooldown) state and session bindings, its quota report and the refresher's in-memory state. A name that is no
-   * longer stored is already deleted, so a delete answers it `ok`, a config API key's id included: answering it
-   * `not_found` would confirm a guessed config id, i.e. a guessed API key (`auth-index.ts`). Enable, disable and
+   * longer stored is already deleted, so a delete answers it `ok`, a config provider key's id included: answering it
+   * `not_found` would confirm a guessed config id, i.e. a guessed provider key (`auth-index.ts`). Enable, disable and
    * refresh answer every name that is no stored auth file `not_found`, config ids or not.
    *
    * Refresh forces each refresh with at most {@link BATCH_REFRESH_CONCURRENCY} upstream calls at a time; an account
@@ -1839,7 +1839,7 @@ export class ControlPlane extends DurableObject<Env> {
         .map(({ credential }) => credential.id),
     );
 
-    // Config API keys listed on the Accounts page by their `auth_index` (public, so a clear answer confirms nothing).
+    // Config provider keys listed on the Accounts page by their `auth_index` (public, so a clear answer confirms nothing).
     const configKeys = new Set(
       names.filter((name) => !stored.has(name) && this.isConfigKey(name, viewer)),
     );
@@ -2162,7 +2162,7 @@ export class ControlPlane extends DurableObject<Env> {
 
   /**
    * Listed names of the enabled accounts whose provider has a usage endpoint (cron `quota-check`, "Check all
-   * quotas"): auth file names, and the `auth_index` of each listed config API key without `*` in its
+   * quotas"): auth file names, and the `auth_index` of each listed config provider key without `*` in its
    * `excluded-models` ({@link quotaProbeTarget} resolves both). Reports of credentials that no longer exist (a config
    * key whose identity changed with an edit, its id being content-addressed) are dropped here.
    */

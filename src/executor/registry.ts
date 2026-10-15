@@ -15,7 +15,7 @@ import {
   makeGeminiInteractionsExecutor,
   makeVertexExecutor,
 } from "./gemini/index.ts";
-import { withApiKeyScope } from "./helps/oauth-scope.ts";
+import { withProviderKeyScope } from "./helps/oauth-scope.ts";
 import { makeKimiExecutor } from "./kimi/executor.ts";
 import { makeMetaExecutor } from "./meta/executor.ts";
 import { makeOpenAICompatExecutor } from "./openai-compat/executor.ts";
@@ -69,8 +69,8 @@ export const makeExecutorRegistry = () => {
 
       if (fixed === undefined && !isOpenAICompatProvider(key)) return undefined;
       const executor = fixed === undefined ? makeOpenAICompatExecutor(key) : fixed();
-      // `ForAPIKey` (oauth_scope_executor.go): API-key credentials see the config without OAuth-only settings.
-      const scoped = withApiKeyScope(key, executor);
+      // `ForAPIKey` (oauth_scope_executor.go): provider-key credentials see the config without OAuth-only settings.
+      const scoped = withProviderKeyScope(key, executor);
       cache.set(key, scoped);
 
       return scoped;

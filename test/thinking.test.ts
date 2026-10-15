@@ -1188,7 +1188,7 @@ describe("configuration_update routing", () => {
   });
 });
 
-describe("configured API-key model definitions", () => {
+describe("configured provider-key model definitions", () => {
   it("maps cross-family xhigh/max intent to a supported level", () => {
     const cases: ReadonlyArray<readonly [string, string, string[], string]> = [
       ["xhigh stays xhigh", "xhigh", ["high", "max", "xhigh"], "xhigh"],

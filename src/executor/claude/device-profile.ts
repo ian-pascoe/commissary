@@ -168,11 +168,18 @@ const subclientScope = (profile: DeviceProfile | undefined): string => {
 /** `claudeDeviceProfileScopedKey`. */
 export const profileScopeKey = (
   credential: Pick<CredentialSnapshot, "id">,
-  apiKey: string,
+  providerKey: string,
   profile: DeviceProfile | undefined,
 ): string => {
   const id = credential.id.trim();
-  let key = id !== "" ? `auth:${id}` : apiKey.trim() !== "" ? `api_key:${apiKey.trim()}` : "global";
+
+  let key =
+    id !== ""
+      ? `auth:${id}`
+      : providerKey.trim() !== ""
+        ? `api_key:${providerKey.trim()}`
+        : "global";
+
   const subclient = subclientScope(profile);
 
   if (subclient !== "") key += `|subclient:${subclient}`;
@@ -219,7 +226,7 @@ export interface DeviceProfileStore {
    */
   readonly resolve: (
     credential: Pick<CredentialSnapshot, "id">,
-    apiKey: string,
+    providerKey: string,
     headers: Headers | undefined,
     config: Config,
   ) => Effect.Effect<DeviceProfile>;
@@ -228,14 +235,14 @@ export interface DeviceProfileStore {
 export const makeSessionStateDeviceProfileStore = (
   backend: BackendResolver = resolveBackend(),
 ): DeviceProfileStore => ({
-  resolve: (credential, apiKey, headers, config) => {
+  resolve: (credential, providerKey, headers, config) => {
     const baseline = defaultDeviceProfile(config);
     let candidate = extractProfile(headers, baseline);
 
     if (candidate !== undefined) candidate = pinPlatform(candidate, baseline);
 
     if (candidate !== undefined && !meetsBaseline(candidate, baseline)) candidate = undefined;
-    const address = addressOf(profileScopeKey(credential, apiKey, candidate));
+    const address = addressOf(profileScopeKey(credential, providerKey, candidate));
 
     return bestEffort(
       "claude device profile",

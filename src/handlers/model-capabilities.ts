@@ -24,7 +24,7 @@ import type {
 
 /** What the thinking pipeline needs to know about the model of one attempt. */
 export interface ThinkingResolution {
-  /** The exact definition served by the credential (API-key models can override the catalogue); `undefined` = unknown. */
+  /** The exact definition served by the credential (provider-key models can override the catalogue); `undefined` = unknown. */
   readonly modelInfo: ThinkingModelInfo | undefined;
   /** Registry lookup for everything else (`registry.LookupModelInfo`). */
   readonly lookup: ModelInfoLookup | undefined;

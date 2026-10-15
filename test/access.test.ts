@@ -829,7 +829,7 @@ describe("classifyPath", () => {
     expect(classifyPath("https://x.test/V1/models")).toBe("protected");
     expect(classifyPath("https://x.test/%76%31/models")).toBe("protected");
     expect(classifyPath("https://x.test/a/../v1/models")).toBe("protected");
-    expect(classifyPath("https://x.test/V8/Management/x")).toBe("management");
+    expect(classifyPath("https://x.test/V9/Management/x")).toBe("management");
     expect(classifyPath("https://x.test/%2576%31/models")).toBe("public");
   });
 });

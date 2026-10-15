@@ -164,9 +164,9 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
     stream: boolean,
   ) {
     const thinking = yield* Thinking;
-    const { apiKey, baseUrl, deviceSeed } = devinCredentials(context.credential);
+    const { providerKey, baseUrl, deviceSeed } = devinCredentials(context.credential);
 
-    if (apiKey === "") {
+    if (providerKey === "") {
       return yield* new ExecutionError({
         status: 401,
         message: "devin credentials missing: api_key or session_token required",
@@ -232,7 +232,7 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
     );
 
     const wire = buildGetChatMessageRequest({
-      sessionToken: apiKey,
+      sessionToken: providerKey,
       deviceSeed,
       chatModelUid,
       systemPrompt: parsed.systemPrompt,
@@ -268,7 +268,7 @@ export const makeDevinExecutor = (executorOptions: DevinExecutorOptions = {}): P
     );
 
     const headers = {
-      authorization: `Basic ${apiKey}-${apiKey}`,
+      authorization: `Basic ${providerKey}-${providerKey}`,
       "content-type": "application/connect+proto",
       "connect-protocol-version": "1",
       accept: "*/*",

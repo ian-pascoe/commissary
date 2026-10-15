@@ -59,7 +59,7 @@ const newOrg = async () => {
 
   expect(
     (
-      await send(slug, "/api-keys/groups", platform, "PUT", {
+      await send(slug, "/provider-keys/groups", platform, "PUT", {
         family: "claude",
         revision: 0,
         group: {
@@ -75,7 +75,7 @@ const newOrg = async () => {
   ).toBe(200);
   expect(
     (
-      await send(slug, "/api-keys/groups", alice.auth, "PUT", {
+      await send(slug, "/provider-keys/groups", alice.auth, "PUT", {
         family: "claude",
         revision: 0,
         group: { "base-url": "https://alice.example.test/v1", keys: [{ "api-key": PRIVATE_KEY }] },

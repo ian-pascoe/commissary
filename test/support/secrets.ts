@@ -22,7 +22,7 @@ const SEALED: ReadonlyArray<{ readonly table: string; readonly column: string }>
 
 /** A secrets key nobody configured: the data key does not open under it. */
 export const UNRELATED_SECRETS_KEY =
-  "commissary-test-unrelated-secrets-key-0123456789abcdef0123456789";
+  "commissary-test-unrelated-secrets-key-0123456789abcdef012345678901";
 
 /** The data key of `org`'s ControlPlane, opened from its storage under `keys` (the test bindings by default). */
 const openStored = (state: DurableObjectState, org: OrgId, keys: SecretsKeys) =>

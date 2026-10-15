@@ -72,7 +72,7 @@ const send = Effect.fnUntraced(function* (attempt: OpenCodeAttempt, stream: bool
     credential: attempt.context.credential,
     options: attempt.options,
     protocol: "chat",
-    apiKey: attempt.apiKey,
+    providerKey: attempt.providerKey,
     stream,
   });
 

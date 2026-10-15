@@ -559,7 +559,7 @@ describe("meta", () => {
     ]);
   });
 
-  it("mints an API key from the DCA token and persists the identity fields", async () => {
+  it("mints a provider key from the DCA token and persists the identity fields", async () => {
     const { outcome, requests } = await run(
       refreshMeta,
       {

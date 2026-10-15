@@ -7,7 +7,7 @@
  * Go management key, IP ban and `allow-remote` logic. Routes that are not ported: plugins, Home, the file-log routes,
  * `GET /server/latest-version`, the static `routing/model-definitions/:channel` catalog, `GET /oauth/callback` and
  * `GET /observability/usage/api-keys` (all four only fed the upstream panel; the control panel reads
- * `routing/models`, `credentials/models`, `POST /oauth/callback` and `api-keys`), the deprecated `/v0/management`
+ * `routing/models`, `credentials/models`, `POST /oauth/callback` and `provider-keys`), the deprecated `/v0/management`
  * tree, `POST /requests/api-call` (the upstream panel's token-substituting upstream probe; quota and key checks and
  * Claude reset grants run server-side, so tokens never leave the Worker), and the upstream panel page itself (Go serves it at
  * `/management.html`; here that path redirects to `/`). The upstream panel's `X-CPA-Version` and
@@ -37,7 +37,7 @@ import type { CurrentOrg } from "../platform/org.ts";
 import { CatalogStore } from "../registry/catalog-store.ts";
 import { ModelRegistryLive } from "../registry/live.ts";
 import type { ModelRegistry } from "../registry/service.ts";
-import { apiKeyProbeHandler, apiKeysRoutes } from "./api-keys-routes.ts";
+import { providerKeyProbeHandler, providerKeysRoutes } from "./provider-keys-routes.ts";
 import { catalogRefreshHandler, catalogStatusHandler } from "./catalog-routes.ts";
 import { credentialsBatchHandler } from "./credentials-batch.ts";
 import { credentialModelsHandler, credentialRoutes } from "./credentials-routes.ts";
@@ -87,7 +87,7 @@ export const ManagementRoutes = HttpRouter.addAll(
 
     return [
       ...modelRuleRoutes,
-      ...apiKeysRoutes,
+      ...providerKeysRoutes,
       ...settingsRoutes,
       ...credentialRoutes,
       ...usageRoutes,
@@ -111,7 +111,7 @@ export const ManagementRoutes = HttpRouter.addAll(
         `${BASE}/credentials/reset-grants/claim`,
         bound(claimResetGrantHandler),
       ),
-      HttpRouter.route("POST", `${BASE}/api-keys/probe`, bound(apiKeyProbeHandler)),
+      HttpRouter.route("POST", `${BASE}/provider-keys/probe`, bound(providerKeyProbeHandler)),
       HttpRouter.route("GET", `${BASE}/routing/models`, bound(routingModelsHandler)),
       HttpRouter.route("GET", `${BASE}/models/mine`, bound(myModelsHandler)),
       HttpRouter.route("GET", `${BASE}/models/catalog`, bound(catalogStatusHandler)),

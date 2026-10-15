@@ -1,5 +1,5 @@
 /**
- * `GET /v9/management/api-keys` (`contract/api-keys.ts` `ApiKeysList`): the config's `api-keys` groups joined with
+ * `GET /v9/management/provider-keys` (`contract/provider-keys.ts` `ProviderKeysList`): the config's `api-keys` groups joined with
  * the runtime state of the credentials they produced. Built inside the ControlPlane Durable Object so the config
  * version and the runtime state are one snapshot.
  *
@@ -11,7 +11,7 @@
  * unsalted hash of the key and its settings, so it is never sent (nor the key's entry id, which is the credential id).
  * A group is identified by its entry id and carries its revision, which a write of the group names (ADR 0025).
  */
-import type { ApiKeyGroup, Config, OpenAICompatGroup } from "../config/schema.ts";
+import type { ProviderKeyGroup, Config, OpenAICompatGroup } from "../config/schema.ts";
 import { maskHeaders, maskSecret } from "../credentials/summary.ts";
 import { redactSecrets } from "../credentials/redact.ts";
 import type { RefreshTarget } from "../credentials/pool.ts";
@@ -25,11 +25,11 @@ import type { JsonObject } from "../json/index.ts";
 import type { AuthIndexer } from "./auth-index.ts";
 import { configKeyIds } from "../credentials/key-ids.ts";
 import { cooldownSnapshot, recentRequestBuckets } from "./credential-entry.ts";
-import type { ApiKeyFamily } from "./contract/api-keys.ts";
+import type { ProviderKeyFamily } from "./contract/provider-keys.ts";
 
 /** Base URL a family talks to when the group sets none (what the executors use). */
 export const DEFAULT_BASE_URLS: Readonly<
-  Record<Exclude<ApiKeyFamily, "openai-compatibility">, string>
+  Record<Exclude<ProviderKeyFamily, "openai-compatibility">, string>
 > = {
   gemini: GEMINI_ENDPOINT,
   interactions: GEMINI_ENDPOINT,
@@ -123,8 +123,8 @@ const entryOf = (id: string | undefined, lookup: Lookup): JsonObject => ({
 });
 
 const groupView = (
-  family: Exclude<ApiKeyFamily, "openai-compatibility">,
-  group: ApiKeyGroup,
+  family: Exclude<ProviderKeyFamily, "openai-compatibility">,
+  group: ProviderKeyGroup,
   index: number,
   lookup: Lookup,
 ): JsonObject => {
@@ -136,7 +136,7 @@ const groupView = (
   const keyViews = keys.map((entry, keyIndex): JsonObject => {
     const {
       id: _entryId,
-      "api-key": apiKey,
+      "api-key": providerKey,
       "proxy-url": keyProxy,
       "experimental-cch-signing": cch,
       headers: keyHeaders,
@@ -151,7 +151,7 @@ const groupView = (
 
     return {
       ...(id === undefined ? {} : { auth_index: lookup.authIndex(id) }),
-      key_preview: keyPreview(apiKey),
+      key_preview: keyPreview(providerKey),
       disabled: excluded.some(isDisablingPattern),
       runtime: runtimeFor(lookup, id),
       ...plainObject(visible),
@@ -200,11 +200,11 @@ const compatGroupView = (group: OpenAICompatGroup, index: number, lookup: Lookup
 };
 
 /**
- * The `ApiKeysList` of `config` (assembled at `version`, key group revisions `revisions`); `entries` are the pool's
+ * The `ProviderKeysList` of `config` (assembled at `version`, key group revisions `revisions`); `entries` are the pool's
  * credentials, of which only the config ones are used. `now` is epoch milliseconds; `authIndex` is the deployment's
  * indexer.
  */
-export const buildApiKeysList = (
+export const buildProviderKeysList = (
   version: number,
   revisions: Readonly<Record<string, number>>,
   config: Pick<Config, "api-keys">,
@@ -225,10 +225,10 @@ export const buildApiKeysList = (
     authIndex,
   };
 
-  const apiKeys = config["api-keys"];
+  const providerKeys = config["api-keys"];
 
-  const standard = (family: Exclude<ApiKeyFamily, "openai-compatibility">): JsonObject[] =>
-    apiKeys[family].map((group, index) => groupView(family, group, index, lookup));
+  const standard = (family: Exclude<ProviderKeyFamily, "openai-compatibility">): JsonObject[] =>
+    providerKeys[family].map((group, index) => groupView(family, group, index, lookup));
 
   return {
     version,
@@ -242,7 +242,7 @@ export const buildApiKeysList = (
       meta: standard("meta"),
       "opencode-zen": standard("opencode-zen"),
       "opencode-go": standard("opencode-go"),
-      "openai-compatibility": apiKeys["openai-compatibility"].map((group, index) =>
+      "openai-compatibility": providerKeys["openai-compatibility"].map((group, index) =>
         compatGroupView(group, index, lookup),
       ),
     },

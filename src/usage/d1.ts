@@ -23,7 +23,7 @@
  *
  * Rows keep the credential id (`auth_id`); every read answers with the keyed `auth_index` instead
  * (`management/auth-index.ts`), computed on read under the deployment's key. A config credential id is an unsalted
- * hash of its API key, so it never leaves the database: the `auth` grouping keys are indexes, and the credential filter
+ * hash of its provider key, so it never leaves the database: the `auth` grouping keys are indexes, and the credential filter
  * takes an index, resolved to the live credential's id by the ControlPlane or, for a credential that no longer exists,
  * against the distinct ids of the filtered rows (`resolveAuthIds`).
  */

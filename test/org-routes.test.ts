@@ -3,7 +3,7 @@
 // and a Platform registry of its own (`isolatedPlatform`).
 import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import type { ApiKeysList } from "../src/management/contract/api-keys.ts";
+import type { ProviderKeysList } from "../src/management/contract/provider-keys.ts";
 import type { RoutingModels } from "../src/management/contract/routing.ts";
 import type { SettingsView } from "../src/management/contract/settings.ts";
 import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
@@ -510,11 +510,11 @@ describe("org-scoped management routes", () => {
     expect(await strategy(ORG)).toBe("fill-first");
     expect(await strategy("/v9/management")).toBe("round-robin");
     // Duplicate slashes and case in the fixed prefix reach the same org and the same path.
-    expect(await strategy("//V8/Management//Orgs/scoped-cfg/")).toBe("fill-first");
+    expect(await strategy("//V9/Management//Orgs/scoped-cfg/")).toBe("fill-first");
 
     // A key group, by id and revision.
     const written = await harness.json(
-      `${ORG}/api-keys/groups`,
+      `${ORG}/provider-keys/groups`,
       jsonInit("PUT", {
         family: "claude",
         revision: 0,
@@ -525,7 +525,7 @@ describe("org-scoped management routes", () => {
     expect(written.status).toBe(200);
 
     const groups = async (base: string) =>
-      ((await harness.json(`${base}/api-keys`)).body as ApiKeysList).families.claude;
+      ((await harness.json(`${base}/provider-keys`)).body as ProviderKeysList).families.claude;
 
     expect(await groups("/v9/management")).toEqual([]);
     const [group] = await groups(ORG);
@@ -534,7 +534,7 @@ describe("org-scoped management routes", () => {
     expect(
       (
         await harness.json(
-          `${ORG}/api-keys/groups`,
+          `${ORG}/provider-keys/groups`,
           jsonInit("DELETE", {
             family: "claude",
             id: group?.id ?? "",

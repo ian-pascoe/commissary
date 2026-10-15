@@ -104,11 +104,11 @@ const NewOrg = ({ me }: { readonly me: Me }) => {
           disabled={full}
           onChange={(event) => setPrivateCredentials(event.target.checked)}
         />
-        <span>Let members connect private accounts and API keys</span>
+        <span>Let members connect private accounts and provider keys</span>
       </label>
       <p className={kit["muted"]}>
-        A private account or API key is used only for its owner&rsquo;s requests; org admins see
-        that it exists, not how it is used. Org admins can change this later.
+        A private account or provider key is used only for its owner&rsquo;s requests; org admins
+        see that it exists, not how it is used. Org admins can change this later.
       </p>
       {problem === undefined ? null : <p className={kit["fieldError"]}>{problem}</p>}
       <div>

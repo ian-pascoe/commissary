@@ -1,13 +1,13 @@
-// The API keys page's model (web/src/lib/keys.ts): sections, key standing, group facts, and the group form's
+// The provider keys page's model (web/src/lib/keys.ts): sections, key standing, group facts, and the group form's
 // validation and the write it becomes (stored keys by auth_index, nothing the form does not show is lost).
 import { describe, expect, it } from "vitest";
 import type {
-  ApiKeysList,
-  ApiKeyView,
+  ProviderKeysList,
+  ProviderKeyView,
   CompatGroupView,
   GroupView,
   KeyRuntime,
-} from "#contract/api-keys.ts";
+} from "#contract/provider-keys.ts";
 import {
   changesIdentity,
   choosesProtocol,
@@ -43,7 +43,7 @@ const runtime = (overrides: Partial<KeyRuntime> = {}): KeyRuntime => ({
   ...overrides,
 });
 
-const key = (overrides: Partial<ApiKeyView> = {}): ApiKeyView => ({
+const key = (overrides: Partial<ProviderKeyView> = {}): ProviderKeyView => ({
   auth_index: "a1",
   key_preview: "[redacted]…abcd",
   disabled: false,
@@ -74,7 +74,7 @@ const compat = (overrides: Partial<CompatGroupView["group"]> = {}): CompatGroupV
   warnings: [],
 });
 
-const list = (families: Partial<ApiKeysList["families"]>): ApiKeysList => ({
+const list = (families: Partial<ProviderKeysList["families"]>): ProviderKeysList => ({
   version: 7,
   families: {
     gemini: [],
@@ -285,7 +285,7 @@ describe("the group form", () => {
 
     expect(codex.baseUrl).toBe("Codex keys need a base URL.");
     expect(Object.values(codex.keyErrors)).toEqual([
-      { field: "secret", text: "Enter the API key, or remove this row." },
+      { field: "secret", text: "Enter the provider key, or remove this row." },
     ]);
     expect(validateDraft("claude", { ...empty, keys: [] }).keys).toBe("Add at least one key.");
     expect(validateDraft("openai-compatibility", { ...empty, keys: [] }).name).toBeDefined();

@@ -87,7 +87,7 @@ const newOrg = async (): Promise<Org> => {
     201,
   );
 
-  const group = await send(slug, "/api-keys/groups", org.alice.auth, "PUT", {
+  const group = await send(slug, "/provider-keys/groups", org.alice.auth, "PUT", {
     family: "claude",
     revision: 0,
     group: { "base-url": "https://api.example.test/v1", keys: [{ "api-key": "sk-alice-0001" }] },

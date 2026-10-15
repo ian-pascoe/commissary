@@ -1,5 +1,5 @@
 // Shared and private credentials through the management API and the real ControlPlane (ADR 0023, ADR 0025): a
-// member's private account or API key is theirs alone, an org admin sees that it exists and may disable or remove it,
+// member's private account or provider key is theirs alone, an org admin sees that it exists and may disable or remove it,
 // and the org setting turns private credentials off without deleting them. Selection itself is tested in
 // credentials-ownership.test.ts; here the same rule is checked end to end.
 import { env } from "cloudflare:workers";
@@ -352,7 +352,7 @@ describe("a member's private account", () => {
   });
 });
 
-describe("a member's private API keys", () => {
+describe("a member's private provider keys", () => {
   const group = (_name: string, key: string) => ({
     family: "claude" as const,
     revision: 0,
@@ -360,7 +360,7 @@ describe("a member's private API keys", () => {
   });
 
   const put = async (org: Org, who: Auth, body: Payload) =>
-    await send(org, "/api-keys/groups", who, "PUT", body);
+    await send(org, "/provider-keys/groups", who, "PUT", body);
 
   interface Listed {
     readonly families: Record<string, ReadonlyArray<{ readonly id: string }>>;
@@ -369,7 +369,7 @@ describe("a member's private API keys", () => {
   }
 
   const list = async (org: Org, who: Auth): Promise<Listed> => {
-    const reply = await send(org, "/api-keys", who);
+    const reply = await send(org, "/provider-keys", who);
 
     expect(reply.status).toBe(200);
 
@@ -490,8 +490,10 @@ describe("a member's private API keys", () => {
     const { id, revision } = added.body as { id: string; revision: number };
     const removal = { family: "claude", id, revision, private: true };
 
-    expect((await send(org, "/api-keys/groups", org.bob, "DELETE", removal)).status).toBe(409);
-    expect((await send(org, "/api-keys/groups", org.admin, "DELETE", removal)).status).toBe(200);
+    expect((await send(org, "/provider-keys/groups", org.bob, "DELETE", removal)).status).toBe(409);
+    expect((await send(org, "/provider-keys/groups", org.admin, "DELETE", removal)).status).toBe(
+      200,
+    );
     expect((await list(org, org.alice)).own?.["claude"]).toEqual([]);
 
     const again = await put(org, org.alice, group("alice-ai", "sk-alice-secret-key-0003"));
@@ -499,7 +501,7 @@ describe("a member's private API keys", () => {
 
     expect(
       (
-        await send(org, "/api-keys/groups", org.alice, "DELETE", {
+        await send(org, "/provider-keys/groups", org.alice, "DELETE", {
           family: "claude",
           id: second.id,
           revision: second.revision,

@@ -1,5 +1,5 @@
-// `/v1/alpha/search` with API-key credentials: the upstream model is the route the credential pool resolved for the
-// pick (prefix stripping, API-key aliases), not a second, config-only resolution (Go `ResolveExecutionModel` +
+// `/v1/alpha/search` with provider-key credentials: the upstream model is the route the credential pool resolved for the
+// pick (prefix stripping, provider-key aliases), not a second, config-only resolution (Go `ResolveExecutionModel` +
 // `rewriteCodexAlphaSearchModel`).
 import { afterAll, describe, expect, it } from "vitest";
 import { jsonResponse, makePipeline, postJson } from "./support/pipeline.ts";
@@ -21,7 +21,7 @@ api-keys:
           alpha-search: true
 `;
 
-describe("POST /v1/alpha/search with API keys", async () => {
+describe("POST /v1/alpha/search with provider keys", async () => {
   const harness = await makePool(YAML);
 
   const p = makePipeline({
@@ -33,7 +33,7 @@ describe("POST /v1/alpha/search with API keys", async () => {
 
   afterAll(p.dispose);
 
-  it("forwards the pool's upstream model (prefix and Codex API-key alias resolved)", async () => {
+  it("forwards the pool's upstream model (prefix and Codex provider-key alias resolved)", async () => {
     const response = await p.call(
       "/v1/alpha/search",
       postJson({ model: "team/search-alias", query: "q" }),

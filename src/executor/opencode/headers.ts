@@ -54,14 +54,14 @@ export const openCodeSessionId = (options: ExecutorOptions): string => {
 };
 
 /** Auth headers of a protocol. */
-export const openCodeAuthHeaders = (protocol: OpenCodeProtocol, apiKey: string) => {
+export const openCodeAuthHeaders = (protocol: OpenCodeProtocol, providerKey: string) => {
   switch (protocol) {
     case "messages":
-      return { "x-api-key": apiKey, "anthropic-version": ANTHROPIC_VERSION };
+      return { "x-api-key": providerKey, "anthropic-version": ANTHROPIC_VERSION };
     case "gemini":
-      return { "x-goog-api-key": apiKey };
+      return { "x-goog-api-key": providerKey };
     default:
-      return { authorization: `Bearer ${apiKey}` };
+      return { authorization: `Bearer ${providerKey}` };
   }
 };
 
@@ -77,12 +77,12 @@ export const openCodeHeaders = (input: {
   readonly credential: CredentialSnapshot;
   readonly options: ExecutorOptions;
   readonly protocol: OpenCodeProtocol;
-  readonly apiKey: string;
+  readonly providerKey: string;
   readonly stream: boolean;
 }): Record<string, string> => {
   const headers = {
     "content-type": "application/json",
-    ...openCodeAuthHeaders(input.protocol, input.apiKey),
+    ...openCodeAuthHeaders(input.protocol, input.providerKey),
     ...openCodeIdentityHeaders(input.options),
     ...(input.stream
       ? { accept: "text/event-stream", "cache-control": "no-cache" }

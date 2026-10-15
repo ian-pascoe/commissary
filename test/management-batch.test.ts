@@ -170,7 +170,7 @@ describe("POST /credentials/batch", () => {
     expect((await files()).find((file) => file.name === "a.json")?.disabled).toBe(false);
   });
 
-  it("reports unknown names and config API keys as not_found next to the ones that succeeded", async () => {
+  it("reports unknown names and config provider keys as not_found next to the ones that succeeded", async () => {
     await seed("a.json");
     await controlPlane().importConfig(
       "api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-x }]\n",

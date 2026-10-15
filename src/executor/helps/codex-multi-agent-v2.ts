@@ -781,7 +781,7 @@ export const optimizeCodexMultiAgentV2Request = (
 
 /**
  * `OptimizeCodexMultiAgentV2RequestForAuth`: orphan delegation rewrite, the optimisation and, for compat models, the
- * `agent_message` conversion. API-key credentials see the config without OAuth-only settings (the executor scope).
+ * `agent_message` conversion. Provider-key credentials see the config without OAuth-only settings (the executor scope).
  */
 export const optimizeCodexMultiAgentV2RequestForAuth = (
   headers: HeaderInput | undefined,

@@ -44,7 +44,7 @@ export interface ThinkingRequest {
   /** Whether request translation changed Responses `configuration_update` items. */
   readonly configurationUpdatesChanged?: boolean;
   /**
-   * Credential-resolved model capabilities (API-key models may override the registry), `null` = resolved but unknown.
+   * Credential-resolved model capabilities (provider-key models may override the registry), `null` = resolved but unknown.
    * Without it the model is treated as unknown (user-defined, no validation).
    */
   readonly modelInfo?: ThinkingModelInfo | null | undefined;

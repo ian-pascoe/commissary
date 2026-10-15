@@ -2,7 +2,7 @@
  * OpenCode Zen `gemini` protocol: Gemini `generateContent` / `streamGenerateContent` at `{base}/models/{model}:{action}`.
  *
  * Go source (engine): internal/runtime/executor/gemini_executor.go through the shared Google engine
- * (`gemini/google.ts`), as an API-key Gemini variant whose target is the gateway: `x-goog-api-key` plus the OpenCode
+ * (`gemini/google.ts`), as a provider-key Gemini variant whose target is the gateway: `x-goog-api-key` plus the OpenCode
  * client and session headers. Interactions are never used natively (they translate to `generateContent`).
  *
  * Deliberate deviation from Go (no OpenCode provider there; see docs/ARCHITECTURE.md "OpenCode Zen and OpenCode
@@ -31,10 +31,10 @@ export const makeOpenCodeGeminiEngine = (
     translators: registry,
     nativeInteractions: () => false,
     resolveTarget: (context, options) =>
-      Effect.map(openCodeEndpoint(context, provider), ({ baseUrl, apiKey }) => ({
+      Effect.map(openCodeEndpoint(context, provider), ({ baseUrl, providerKey }) => ({
         url: (action, model) => `${baseUrl}/models/${encodeURIComponent(model)}:${action}`,
         interactionsUrl: () => `${baseUrl}/interactions`,
-        authHeaders: { ...openCodeIdentityHeaders(options), "x-goog-api-key": apiKey },
+        authHeaders: { ...openCodeIdentityHeaders(options), "x-goog-api-key": providerKey },
       })),
   });
 

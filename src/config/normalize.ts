@@ -8,9 +8,9 @@
  */
 import { tryParseJson } from "../json/index.ts";
 import type {
-  ApiKeyEntry,
-  ApiKeyFamily,
-  ApiKeyGroup,
+  ProviderKeyEntry,
+  ProviderKeyFamily,
+  ProviderKeyGroup,
   Config,
   ModelEntry,
   OAuthModelAlias,
@@ -94,13 +94,13 @@ const normalizeScopedErrors = (
   return clean;
 };
 
-const normalizeGroup = (group: ApiKeyGroup): ApiKeyGroup => {
+const normalizeGroup = (group: ProviderKeyGroup): ProviderKeyGroup => {
   const headers = normalizeHeaders(group.headers);
   const excluded = normalizeExcludedModels(group["excluded-models"]);
   const prefix = group.prefix === undefined ? undefined : normalizeModelPrefix(group.prefix);
   const scoped = normalizeScopedErrors(group["request-scoped-errors"]);
 
-  // SAFETY: the spread keeps every ApiKeyGroup field; the overrides only differ by explicit undefined values.
+  // SAFETY: the spread keeps every ProviderKeyGroup field; the overrides only differ by explicit undefined values.
   return {
     ...group,
     name: trimmedOrUndefined(group.name),
@@ -129,7 +129,7 @@ const normalizeGroup = (group: ApiKeyGroup): ApiKeyGroup => {
             }),
           }),
     })),
-  } as ApiKeyGroup;
+  } as ProviderKeyGroup;
 };
 
 /** `FormatSortedHeaders`: order-independent header identity (key/value pairs, NUL separated). */
@@ -151,7 +151,7 @@ const modelsWithAliasAndName = (
         ),
       };
 
-const withVertexModels = (key: ApiKeyEntry): ApiKeyEntry => ({
+const withVertexModels = (key: ProviderKeyEntry): ProviderKeyEntry => ({
   ...key,
   ...modelsWithAliasAndName(key.models),
 });
@@ -161,11 +161,11 @@ const withVertexModels = (key: ApiKeyEntry): ApiKeyEntry => ({
  * group to the Go uniqueness id; the first occurrence wins and groups left without keys are dropped.
  */
 const dedupeAcrossGroups = (
-  groups: readonly ApiKeyGroup[],
-  identity: (group: ApiKeyGroup, key: ApiKeyEntry) => string,
-): ApiKeyGroup[] => {
+  groups: readonly ProviderKeyGroup[],
+  identity: (group: ProviderKeyGroup, key: ProviderKeyEntry) => string,
+): ProviderKeyGroup[] => {
   const seen = new Set<string>();
-  const out: ApiKeyGroup[] = [];
+  const out: ProviderKeyGroup[] = [];
 
   for (const group of groups) {
     const keys = group.keys.filter((key) => {
@@ -184,7 +184,7 @@ const dedupeAcrossGroups = (
 };
 
 /** `formatGeminiKeyDedupID`: key, base URL, proxy, prefix and sorted headers (entry values override the group's). */
-const geminiIdentity = (group: ApiKeyGroup, key: ApiKeyEntry): string =>
+const geminiIdentity = (group: ProviderKeyGroup, key: ProviderKeyEntry): string =>
   [
     key["api-key"],
     group["base-url"] ?? "",
@@ -194,7 +194,7 @@ const geminiIdentity = (group: ApiKeyGroup, key: ApiKeyEntry): string =>
   ].join("\0");
 
 /** Vertex keys are unique by key and base URL (`SanitizeVertexCompatKeys`). */
-const vertexIdentity = (group: ApiKeyGroup, key: ApiKeyEntry): string =>
+const vertexIdentity = (group: ProviderKeyGroup, key: ProviderKeyEntry): string =>
   `${key["api-key"]}|${group["base-url"] ?? ""}`;
 
 /** The families whose keys Go deduplicates across groups (the others keep every key). */
@@ -202,8 +202,9 @@ export type DedupedFamily = "gemini" | "interactions" | "vertex";
 
 export const DEDUPED_FAMILIES: ReadonlyArray<DedupedFamily> = ["gemini", "interactions", "vertex"];
 
-const IDENTITY: Readonly<Record<DedupedFamily, (group: ApiKeyGroup, key: ApiKeyEntry) => string>> =
-  { gemini: geminiIdentity, interactions: geminiIdentity, vertex: vertexIdentity };
+const IDENTITY: Readonly<
+  Record<DedupedFamily, (group: ProviderKeyGroup, key: ProviderKeyEntry) => string>
+> = { gemini: geminiIdentity, interactions: geminiIdentity, vertex: vertexIdentity };
 
 /**
  * The uniqueness id of every key of the `family` groups of `config` as normalisation computes it (group and key
@@ -225,24 +226,24 @@ export const keyIdentities = (
 const withoutProtocol = (models: readonly ModelEntry[] | undefined): ModelEntry[] | undefined =>
   models?.map(({ protocol: _ignored, ...model }) => model);
 
-const groupWithoutProtocol = (group: ApiKeyGroup): ApiKeyGroup =>
-  compact<ApiKeyGroup>({
+const groupWithoutProtocol = (group: ProviderKeyGroup): ProviderKeyGroup =>
+  compact<ProviderKeyGroup>({
     ...group,
     models: withoutProtocol(group.models),
     keys: group.keys.map((key) =>
-      compact<ApiKeyEntry>({ ...key, models: withoutProtocol(key.models) }),
+      compact<ProviderKeyEntry>({ ...key, models: withoutProtocol(key.models) }),
     ),
   });
 
 /** Applies the per-family rules of config_normalization.go to the grouped layout. */
 const normalizeFamily = (
-  family: Exclude<ApiKeyFamily, "openai-compatibility">,
-  groups: readonly ApiKeyGroup[],
-): ApiKeyGroup[] => {
-  const out: ApiKeyGroup[] = [];
+  family: Exclude<ProviderKeyFamily, "openai-compatibility">,
+  groups: readonly ProviderKeyGroup[],
+): ProviderKeyGroup[] => {
+  const out: ProviderKeyGroup[] = [];
 
   for (const raw of groups) {
-    const normalized = compact<ApiKeyGroup>(normalizeGroup(raw));
+    const normalized = compact<ProviderKeyGroup>(normalizeGroup(raw));
 
     // Deviation (no Go counterpart): `protocol` only means something to the OpenCode gateways.
     const group =
@@ -452,7 +453,7 @@ const trimValues = <T extends Record<string, unknown>>(value: T): T =>
 export const normalizeConfig = (config: Config): Config => {
   const usage = config.observability.usage;
   const retention = usage["redis-usage-queue-retention-seconds"];
-  const apiKeys = config["api-keys"];
+  const providerKeys = config["api-keys"];
   const payload = config.requests.payload;
 
   return {
@@ -500,19 +501,19 @@ export const normalizeConfig = (config: Config): Config => {
       },
     },
     "api-keys": {
-      gemini: dedupeAcrossGroups(normalizeFamily("gemini", apiKeys.gemini), IDENTITY.gemini),
+      gemini: dedupeAcrossGroups(normalizeFamily("gemini", providerKeys.gemini), IDENTITY.gemini),
       interactions: dedupeAcrossGroups(
-        normalizeFamily("interactions", apiKeys.interactions),
+        normalizeFamily("interactions", providerKeys.interactions),
         IDENTITY.interactions,
       ),
-      vertex: dedupeAcrossGroups(normalizeFamily("vertex", apiKeys.vertex), IDENTITY.vertex),
-      codex: normalizeFamily("codex", apiKeys.codex),
-      claude: normalizeFamily("claude", apiKeys.claude),
-      xai: normalizeFamily("xai", apiKeys.xai),
-      meta: normalizeFamily("meta", apiKeys.meta),
-      "opencode-zen": normalizeFamily("opencode-zen", apiKeys["opencode-zen"]),
-      "opencode-go": normalizeFamily("opencode-go", apiKeys["opencode-go"]),
-      "openai-compatibility": normalizeCompat(apiKeys["openai-compatibility"]),
+      vertex: dedupeAcrossGroups(normalizeFamily("vertex", providerKeys.vertex), IDENTITY.vertex),
+      codex: normalizeFamily("codex", providerKeys.codex),
+      claude: normalizeFamily("claude", providerKeys.claude),
+      xai: normalizeFamily("xai", providerKeys.xai),
+      meta: normalizeFamily("meta", providerKeys.meta),
+      "opencode-zen": normalizeFamily("opencode-zen", providerKeys["opencode-zen"]),
+      "opencode-go": normalizeFamily("opencode-go", providerKeys["opencode-go"]),
+      "openai-compatibility": normalizeCompat(providerKeys["openai-compatibility"]),
     },
     oauth: {
       ...config.oauth,

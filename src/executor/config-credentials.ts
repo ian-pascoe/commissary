@@ -1,5 +1,5 @@
 /**
- * Credentials synthesised from config API keys (currently `api-keys.openai-compatibility`) and the model ids they
+ * Credentials synthesised from config provider keys (currently `api-keys.openai-compatibility`) and the model ids they
  * serve.
  *
  * Go source: internal/watcher/synthesizer/config.go (synthesizeOpenAICompat), internal/watcher/synthesizer/helpers.go
@@ -107,7 +107,7 @@ export const configCredentials = (config: Config): ConfigCredential[] => {
 
     const make = (
       keyIndex: number,
-      apiKey: string,
+      providerKey: string,
       weight: number | undefined,
     ): ConfigCredential => ({
       credential: {
@@ -120,7 +120,7 @@ export const configCredentials = (config: Config): ConfigCredential[] => {
           ...base,
           source: `config:${providerName}[${index}.${keyIndex}]`,
           ...(weight !== undefined ? { weight: String(weight) } : {}),
-          ...(apiKey !== "" ? { api_key: apiKey } : {}),
+          ...(providerKey !== "" ? { api_key: providerKey } : {}),
         },
         metadata,
       },

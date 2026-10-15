@@ -1,5 +1,5 @@
 /**
- * The `api-keys` config groups as the panel's API keys page sees them (`../api-keys-routes.ts`), plus the schemas of
+ * The `api-keys` config groups as the panel's provider keys page sees them (`../provider-keys-routes.ts`), plus the schemas of
  * those groups themselves: `config/schema.ts` re-exports the group schemas from here, so there is one definition.
  * Shared with the browser: imports `effect` and sibling contract modules only.
  *
@@ -63,7 +63,7 @@ export type OpenCodeProtocol = typeof OpenCodeProtocol.Type;
 export const isOpenCodeProtocol = (value: string | undefined): value is OpenCodeProtocol =>
   OPENCODE_PROTOCOLS.some((protocol) => protocol === value);
 
-/** Model entry of an API-key group (the union of the per-provider Go model structs). */
+/** Model entry of a provider-key group (the union of the per-provider Go model structs). */
 export const ModelEntry = Schema.Struct({
   /** Upstream model name. */
   name: Schema.String,
@@ -133,20 +133,20 @@ const keyFields = {
 };
 
 /**
- * The config entry id of a key group or API key (ADR 0025), set by the ControlPlane when the entry is stored. An API
+ * The config entry id of a key group or provider key (ADR 0025), set by the ControlPlane when the entry is stored. An API
  * key's id is its credential id, so it never leaves the Worker; a group's id is random and names the group in writes.
  * A Go config document never sets it: the import drops ids and assigns its own.
  */
 const entryId = { id: optional(Schema.String) };
 
-/** One credential inside an API-key group. */
-export const ApiKeyEntry = Schema.Struct({
+/** One credential inside a provider-key group. */
+export const ProviderKeyEntry = Schema.Struct({
   ...entryId,
   "api-key": Schema.String,
   ...keyFields,
 });
 
-export type ApiKeyEntry = typeof ApiKeyEntry.Type;
+export type ProviderKeyEntry = typeof ProviderKeyEntry.Type;
 
 const groupFields = {
   name: optional(Schema.String),
@@ -155,13 +155,13 @@ const groupFields = {
 };
 
 /** `api-keys.<provider>[]` group: one endpoint, shared settings and a list of keys. */
-export const ApiKeyGroup = Schema.Struct({
+export const ProviderKeyGroup = Schema.Struct({
   ...entryId,
   ...groupFields,
-  keys: Schema.Array(ApiKeyEntry),
+  keys: Schema.Array(ProviderKeyEntry),
 });
 
-export type ApiKeyGroup = typeof ApiKeyGroup.Type;
+export type ProviderKeyGroup = typeof ProviderKeyGroup.Type;
 
 const compatKeyFields = {
   weight: optional(Weight),
@@ -211,11 +211,11 @@ export const API_KEY_FAMILIES = [
   "openai-compatibility",
 ] as const;
 
-export const ApiKeyFamily = Schema.Literals(API_KEY_FAMILIES);
+export const ProviderKeyFamily = Schema.Literals(API_KEY_FAMILIES);
 
-export type ApiKeyFamily = typeof ApiKeyFamily.Type;
+export type ProviderKeyFamily = typeof ProviderKeyFamily.Type;
 
-/** The families whose groups are `ApiKeyGroup` (all but the OpenAI-compatible endpoints). */
+/** The families whose groups are `ProviderKeyGroup` (all but the OpenAI-compatible endpoints). */
 export const KeyGroupFamily = Schema.Literals([
   "gemini",
   "interactions",
@@ -269,7 +269,7 @@ const {
 const { "proxy-url": _sharedProxy, ...visibleSharedFields } = sharedKeyFields;
 
 /** A key as the page sees it: no `api-key`, hidden settings left out. */
-export const ApiKeyView = Schema.Struct({
+export const ProviderKeyView = Schema.Struct({
   /** Absent when the key produced no credential (an empty key without a base URL). */
   auth_index: optional(Schema.String),
   /** `[redacted]…abcd`, or empty for a key-less entry. */
@@ -281,16 +281,16 @@ export const ApiKeyView = Schema.Struct({
   ...visibleKeyFields,
 });
 
-export type ApiKeyView = typeof ApiKeyView.Type;
+export type ProviderKeyView = typeof ProviderKeyView.Type;
 
-export const ApiKeyGroupBody = Schema.Struct({
+export const ProviderKeyGroupBody = Schema.Struct({
   name: optional(Schema.String),
   "base-url": optional(Schema.String),
   ...visibleSharedFields,
-  keys: Schema.Array(ApiKeyView),
+  keys: Schema.Array(ProviderKeyView),
 });
 
-export type ApiKeyGroupBody = typeof ApiKeyGroupBody.Type;
+export type ProviderKeyGroupBody = typeof ProviderKeyGroupBody.Type;
 
 /** One group of a key family. `effective_base_url` is the configured base URL or the provider's default. */
 export const GroupView = Schema.Struct({
@@ -300,7 +300,7 @@ export const GroupView = Schema.Struct({
   revision: Schema.Int,
   /** Position in the family. */
   index: Schema.Int,
-  group: ApiKeyGroupBody,
+  group: ProviderKeyGroupBody,
   effective_base_url: Schema.String,
   /** Settings that do nothing on Workers and were kept (their values are never shown). */
   warnings: Schema.Array(Schema.String),
@@ -355,12 +355,12 @@ const GroupFamilies = Schema.Struct({
 
 /**
  * What an org admin sees of another member's private key group (ADR 0023): that it exists, its provider, owner and
- * label. The `id` and `revision` let an org admin remove it (`DELETE /api-keys/groups` with `private`).
+ * label. The `id` and `revision` let an org admin remove it (`DELETE /provider-keys/groups` with `private`).
  */
 export const LimitedKeyGroup = Schema.Struct({
   id: Schema.String,
   revision: Revision,
-  family: ApiKeyFamily,
+  family: ProviderKeyFamily,
   provider: Schema.String,
   label: Schema.String,
   limited: Schema.Literal(true),
@@ -371,11 +371,11 @@ export const LimitedKeyGroup = Schema.Struct({
 export type LimitedKeyGroup = typeof LimitedKeyGroup.Type;
 
 /**
- * `GET /api-keys`: every group, with its id and revision. `families` holds the org's shared groups (empty for a plain
+ * `GET /provider-keys`: every group, with its id and revision. `families` holds the org's shared groups (empty for a plain
  * member). `own` holds the caller's private groups in full (a member only), `others` lists the other members'
  * private groups for an org admin, existence only.
  */
-export const ApiKeysList = Schema.Struct({
+export const ProviderKeysList = Schema.Struct({
   /** The org's change counter. */
   version: Schema.Int,
   families: GroupFamilies,
@@ -383,7 +383,7 @@ export const ApiKeysList = Schema.Struct({
   others: optional(Schema.Array(LimitedKeyGroup)),
 });
 
-export type ApiKeysList = typeof ApiKeysList.Type;
+export type ProviderKeysList = typeof ProviderKeysList.Type;
 
 // --- writes ---------------------------------------------------------------------------------------------------------
 
@@ -422,7 +422,7 @@ export const CompatGroupInput = Schema.Struct({
 export type CompatGroupInput = typeof CompatGroupInput.Type;
 
 /**
- * `PUT /api-keys/groups`: replaces the group `id` at `revision`, or adds a group (no `id`, `revision` 0) after the
+ * `PUT /provider-keys/groups`: replaces the group `id` at `revision`, or adds a group (no `id`, `revision` 0) after the
  * family's last one.
  */
 export const PutGroupRequest = Schema.Union([
@@ -446,7 +446,7 @@ export const PutGroupRequest = Schema.Union([
 export type PutGroupRequest = typeof PutGroupRequest.Type;
 
 export const DeleteGroupRequest = Schema.Struct({
-  family: ApiKeyFamily,
+  family: ProviderKeyFamily,
   id: Schema.String,
   revision: Revision,
   /** The group is a private one (the caller's own, or any member's for an org admin). */
@@ -456,7 +456,7 @@ export const DeleteGroupRequest = Schema.Struct({
 export type DeleteGroupRequest = typeof DeleteGroupRequest.Type;
 
 /** Answer of a group write: the new change counter and the group's id and new revision (0 once deleted). */
-export const ApiKeysWritten = Schema.Struct({
+export const ProviderKeysWritten = Schema.Struct({
   status: Schema.Literal("ok"),
   version: Schema.Int,
   id: Schema.String,
@@ -471,7 +471,7 @@ export const ProbeModel = Schema.Struct({
 });
 
 /**
- * `POST /api-keys/probe`: one request to the key's configured base host (a model list, or a token count for Vertex).
+ * `POST /provider-keys/probe`: one request to the key's configured base host (a model list, or a token count for Vertex).
  * `error` is a fixed message plus the upstream status: response bodies and keys are never copied.
  */
 export const ProbeResult = Schema.Struct({
@@ -484,22 +484,22 @@ export const ProbeResult = Schema.Struct({
 
 export type ProbeResult = typeof ProbeResult.Type;
 
-export class ApiKeysGroup extends HttpApiGroup.make("apiKeys").add(
-  HttpApiEndpoint.get("list", "/api-keys", {
-    success: ApiKeysList,
+export class ProviderKeysGroup extends HttpApiGroup.make("providerKeys").add(
+  HttpApiEndpoint.get("list", "/provider-keys", {
+    success: ProviderKeysList,
     error: managementErrors,
   }),
-  HttpApiEndpoint.put("putGroup", "/api-keys/groups", {
+  HttpApiEndpoint.put("putGroup", "/provider-keys/groups", {
     payload: PutGroupRequest,
-    success: ApiKeysWritten,
+    success: ProviderKeysWritten,
     error: managementErrors,
   }),
-  HttpApiEndpoint.delete("deleteGroup", "/api-keys/groups", {
+  HttpApiEndpoint.delete("deleteGroup", "/provider-keys/groups", {
     payload: DeleteGroupRequest,
-    success: ApiKeysWritten,
+    success: ProviderKeysWritten,
     error: managementErrors,
   }),
-  HttpApiEndpoint.post("probe", "/api-keys/probe", {
+  HttpApiEndpoint.post("probe", "/provider-keys/probe", {
     payload: ProbeRequest,
     success: ProbeResult,
     error: managementErrors,

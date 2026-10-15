@@ -177,7 +177,7 @@ describe("POST /v1/responses (non-stream)", () => {
     expect(p.records[0]?.detail.inputTokens).toBe(10);
   });
 
-  it("sends API-key credentials to the official API without the CLI identity", async () => {
+  it("sends provider-key credentials to the official API without the CLI identity", async () => {
     const p = pipeline(() => sseResponse(TEXT_STREAM), {
       credentials: [xaiKey({ attributes: { api_key: "k", "header:X-Org": "acme" } })],
     });
@@ -192,7 +192,7 @@ describe("POST /v1/responses (non-stream)", () => {
     expect(call.headers["x-org"]).toBe("acme");
   });
 
-  it("honours using_api=false for API-key style base URLs and explicit custom base URLs", async () => {
+  it("honours using_api=false for provider-key style base URLs and explicit custom base URLs", async () => {
     const p = pipeline(() => sseResponse(TEXT_STREAM), {
       credentials: [
         xaiOauth({ attributes: { auth_kind: "oauth", base_url: "https://grok.example.test/v1/" } }),

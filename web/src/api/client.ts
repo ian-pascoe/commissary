@@ -362,19 +362,19 @@ export const accountModelsAtom = Atom.family((name: string) =>
   }),
 );
 
-/** The API keys page refetches after a mutation tagged with this key. */
-export const API_KEYS = ["api-keys"] as const;
+/** The provider keys page refetches after a mutation tagged with this key. */
+export const PROVIDER_KEYS = ["provider-keys"] as const;
 
-/** Every configured API key group with its id, revision and its keys' state (writes name the group by both). */
-export const apiKeysAtom = ManagementClient.query("apiKeys", "list", {
-  reactivityKeys: API_KEYS,
+/** Every configured provider key group with its id, revision and its keys' state (writes name the group by both). */
+export const providerKeysAtom = ManagementClient.query("providerKeys", "list", {
+  reactivityKeys: PROVIDER_KEYS,
   timeToLive: KEEP,
 });
 
-// Group writes: call with `reactivityKeys: API_KEYS`.
-export const putKeyGroupAtom = ManagementClient.mutation("apiKeys", "putGroup");
+// Group writes: call with `reactivityKeys: PROVIDER_KEYS`.
+export const putKeyGroupAtom = ManagementClient.mutation("providerKeys", "putGroup");
 
-export const deleteKeyGroupAtom = ManagementClient.mutation("apiKeys", "deleteGroup");
+export const deleteKeyGroupAtom = ManagementClient.mutation("providerKeys", "deleteGroup");
 
 /**
  * One connection test per key (`auth_index`; call it with no argument). `mutation` atoms are shared per endpoint and
@@ -385,7 +385,7 @@ export const probeKeyAtom = Atom.family((authIndex: string) =>
     Effect.gen(function* () {
       const client = yield* ManagementClient;
 
-      return yield* client.apiKeys.probe({ payload: { auth_index: authIndex } });
+      return yield* client.providerKeys.probe({ payload: { auth_index: authIndex } });
     }),
   ),
 );
@@ -651,8 +651,8 @@ export const saveSettingsAtom = Atom.family((_section: string) =>
   ),
 );
 
-// Mutations: call with `reactivityKeys: CREDENTIALS` so the credential list refetches afterwards (`API_KEYS` for a
-// config API key).
+// Mutations: call with `reactivityKeys: CREDENTIALS` so the credential list refetches afterwards (`PROVIDER_KEYS` for a
+// config provider key).
 export const setDisabledAtom = ManagementClient.mutation("credentials", "setDisabled");
 
 export const patchFieldsAtom = ManagementClient.mutation("credentials", "patchFields");

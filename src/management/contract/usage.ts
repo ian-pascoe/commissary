@@ -62,7 +62,7 @@ export type UsageSummary = typeof UsageSummary.Type;
 
 /**
  * Filters: `since` inclusive and `until` exclusive (epoch milliseconds); `auth_index` is a credential's keyed index (the
- * `auth_index` of `/credentials`, `/api-keys` and the records). Grouped `by=auth`, the keys are `auth_index` values;
+ * `auth_index` of `/credentials`, `/provider-keys` and the records). Grouped `by=auth`, the keys are `auth_index` values;
  * grouped by `member`, member ids (`""` for records without one). A plain member reads only their own records, whatever
  * the filters say.
  */

@@ -39,7 +39,7 @@ export interface ProxyLayerOptions {
   readonly modelProviders?: Layer.Layer<ModelProviders, never, ConfigReader>;
   /** Defaults to the model registry snapshot (`ModelCapabilities.configLayer` serves tests without one). */
   readonly modelCapabilities?: Layer.Layer<ModelCapabilities, never, ConfigReader>;
-  /** Defaults to the ControlPlane (`CredentialRefresher.none` for tests with API keys only). */
+  /** Defaults to the ControlPlane (`CredentialRefresher.none` for tests with provider keys only). */
   readonly credentialRefresher?: Layer.Layer<CredentialRefresher>;
   readonly httpClient?: Layer.Layer<HttpClient.HttpClient>;
   /** Defaults to the D1 sink, which costs each record from the org's config and the catalog. */

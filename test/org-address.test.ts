@@ -16,7 +16,7 @@ describe("parseOrgAddress", () => {
     ["/v9/management/orgs/acme/credentials/x%2Fy", "acme", "/v9/management/credentials/x%2Fy"],
     ["/v9/management/orgs/a1-b/me", "a1-b", "/v9/management/me"],
     // The prefix is matched as the router matches it: case-insensitively, skipping duplicate slashes.
-    ["//V8/Management/Orgs/Acme//config", "acme", "/v9/management/config"],
+    ["//V9/Management/Orgs/Acme//config", "acme", "/v9/management/config"],
     ["/v9/management/%6Frgs/acme/config", "acme", "/v9/management/config"],
     ["/o/acme", "acme", "/"],
     ["/o/acme/", "acme", "/"],

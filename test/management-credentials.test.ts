@@ -399,7 +399,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     ).toBe(404);
   });
 
-  it("toggles config API keys through excluded-models and refuses compat keys", async () => {
+  it("toggles config provider keys through excluded-models and refuses compat keys", async () => {
     await controlPlane().importConfig(
       "api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-x }]\n",
       "test",
@@ -427,7 +427,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     });
 
     const claudeKeyDisabled = async () => {
-      const view = (await controlPlane().apiKeysView(FULL_ACCESS)) as unknown as {
+      const view = (await controlPlane().providerKeysView(FULL_ACCESS)) as unknown as {
         families: { claude: Array<{ group: { keys: Array<{ disabled: boolean }> } }> };
       };
 

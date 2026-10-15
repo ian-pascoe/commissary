@@ -1,5 +1,5 @@
 /**
- * Meta "refresh": mint an LLM API key from the device (DCA) token. Not a token refresh and never scheduled.
+ * Meta "refresh": mint an LLM provider key from the device (DCA) token. Not a token refresh and never scheduled.
  *
  * Go source: internal/auth/meta/meta.go (`MintAPIKey`), internal/runtime/executor/meta_executor.go (`Refresh`,
  * `extractDCAToken`, `metaCreds`, `ShouldPrepareRequestAuth`). Docs: credentials.md §9.4.
@@ -32,8 +32,8 @@ export const metaDcaToken = (metadata: Readonly<JsonObject>): string => {
   return access.startsWith("dca:") ? access : "";
 };
 
-/** `metaCreds` token: the minted API key (never a `dca:` token). */
-export const metaApiKey = (metadata: Readonly<JsonObject>): string => {
+/** `metaCreds` token: the minted provider key (never a `dca:` token). */
+export const metaProviderKey = (metadata: Readonly<JsonObject>): string => {
   for (const key of ["api_key", "access_token"]) {
     const value = str(metadata[key]);
 
@@ -45,7 +45,7 @@ export const metaApiKey = (metadata: Readonly<JsonObject>): string => {
 
 /** `ShouldPrepareRequestAuth`: a DCA token without a minted key. */
 export const metaNeedsMint = (metadata: Readonly<JsonObject>): boolean =>
-  metaApiKey(metadata) === "" && metaDcaToken(metadata) !== "";
+  metaProviderKey(metadata) === "" && metaDcaToken(metadata) !== "";
 
 const setOrDelete = (target: JsonObject, key: string, value: string): void => {
   if (value !== "") target[key] = value;
@@ -58,7 +58,7 @@ export const refreshMeta = (context: RefreshContext): RefreshProtocolEffect =>
     const dcaToken = metaDcaToken(metadata);
 
     if (dcaToken === "") {
-      if (metaApiKey(metadata) !== "") return metadata;
+      if (metaProviderKey(metadata) !== "") return metadata;
 
       return yield* Effect.fail(
         refreshError({ message: "meta executor: missing API key or DCA token", status: 401 }),
@@ -86,9 +86,9 @@ export const refreshMeta = (context: RefreshContext): RefreshProtocolEffect =>
     }
 
     const minted = parseJsonObject(reply.text);
-    const apiKey = str(minted?.api_key);
+    const providerKey = str(minted?.api_key);
 
-    if (minted === undefined || apiKey === "") {
+    if (minted === undefined || providerKey === "") {
       return yield* Effect.fail(
         refreshError({ message: "meta executor: mint API key returned empty key" }),
       );
@@ -99,8 +99,8 @@ export const refreshMeta = (context: RefreshContext): RefreshProtocolEffect =>
       str(metadata.base_url) ||
       str(metadata.api_base_url) ||
       META_DEFAULT_BASE_URL;
-    metadata.api_key = apiKey;
-    metadata.access_token = apiKey;
+    metadata.api_key = providerKey;
+    metadata.access_token = providerKey;
     metadata.dca_token = dcaToken;
     delete metadata.expired;
 

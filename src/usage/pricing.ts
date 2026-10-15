@@ -7,7 +7,7 @@
  * the cost in micro-dollars is the sum of tokens times price, rounded once. A model with neither price is unpriced:
  * the attempt costs nothing and says so.
  *
- * Subscription accounts are costed like API keys, at the API price of the provider they stand for: a provider key
+ * Subscription accounts are costed like provider keys, at the API price of the provider they stand for: a provider key
  * names the models.dev providers whose prices apply (`PRICE_PROVIDERS`). A provider the table does not list (Devin,
  * an OpenAI-compatible gateway) has no catalog price: its models need a price override.
  *

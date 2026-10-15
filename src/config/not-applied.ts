@@ -4,7 +4,7 @@
  * the keys that are set is logged when a config document is stored, and the Settings page lists them with their
  * `reason` (never their values: proxy URLs and client keys may be secret).
  */
-import type { ApiKeyEntry, Config } from "./schema.ts";
+import type { ProviderKeyEntry, Config } from "./schema.ts";
 
 export interface NotAppliedRule {
   readonly key: string;
@@ -12,13 +12,13 @@ export interface NotAppliedRule {
   readonly reason: string;
   /**
    * The key's mapping path when one exists (`PATCH /settings` may remove it with `null`); absent for keys inside
-   * lists (they are edited where the list lives, e.g. the API keys page).
+   * lists (they are edited where the list lives, e.g. the provider keys page).
    */
   readonly path?: ReadonlyArray<string>;
   readonly isSet: (config: Config) => boolean;
 }
 
-const claudeKeys = (config: Config): ReadonlyArray<ApiKeyEntry> =>
+const claudeKeys = (config: Config): ReadonlyArray<ProviderKeyEntry> =>
   config["api-keys"].claude.flatMap((group) => group.keys);
 
 export const NOT_APPLIED_RULES: ReadonlyArray<NotAppliedRule> = [

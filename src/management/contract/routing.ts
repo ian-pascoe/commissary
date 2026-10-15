@@ -12,7 +12,7 @@
  * `EntrySaved.revision`.
  *
  * Concepts. A *channel* is the credential's provider key as stored (lower-case auth-file `type`, e.g. `claude`,
- * `kimi.com`): the key of `oauth.model-alias` and `oauth.excluded-models`; API keys and OpenAI-compatible groups have
+ * `kimi.com`): the key of `oauth.model-alias` and `oauth.excluded-models`; provider keys and OpenAI-compatible groups have
  * none. A *route* is one credential's way to one model id. `upstream` is the name the provider sees (the id before
  * aliasing and prefixing).
  */
@@ -45,7 +45,7 @@ export const RouteOrigin = Schema.Literals(["catalog", "config", "alias"]);
 
 export type RouteOrigin = typeof RouteOrigin.Type;
 
-/** Which rule list a `rule_scope` points at: the channel's global list, one account's file, one API key (group). */
+/** Which rule list a `rule_scope` points at: the channel's global list, one account's file, one provider key (group). */
 export const RuleScope = Schema.Literals(["channel", "account", "key"]);
 
 export type RuleScope = typeof RuleScope.Type;
@@ -56,7 +56,7 @@ export const ModelRoute = Schema.Struct({
   source: Schema.Literals(["file", "config"]),
   /** Credential provider as stored; equals `channel` for accounts. */
   provider: Schema.String,
-  /** Alias/exclusion channel; absent for API keys and OpenAI-compatible groups. */
+  /** Alias/exclusion channel; absent for provider keys and OpenAI-compatible groups. */
   channel: optional(Schema.String),
   /** Account email, compat group name or `<family>-apikey`. */
   label: Schema.String,

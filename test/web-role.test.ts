@@ -66,7 +66,7 @@ describe("the sidebar's groups of pages", () => {
   it("shows an org admin every page, grouped under headings, with Overview and Usage first", () => {
     expect(outline(pageGroupsFor("admin"))).toEqual([
       ["", ["Overview", "Usage"]],
-      ["Providers", ["Accounts", "API keys", "Models"]],
+      ["Providers", ["Accounts", "Provider keys", "Models"]],
       [
         "People and access",
         ["Members", "Grants", "My models", "Proxy keys", "Management keys", "Limits"],
@@ -96,7 +96,7 @@ describe("the sidebar's groups of pages", () => {
     ]);
     expect(outline(pageGroupsFor("member", true))).toEqual([
       ["", ["Usage"]],
-      ["Providers", ["Accounts", "API keys"]],
+      ["Providers", ["Accounts", "Provider keys"]],
       ["People and access", ["My models", "Proxy keys", "Limits"]],
     ]);
   });
@@ -122,7 +122,7 @@ describe("the sidebar's groups of pages", () => {
 });
 
 describe("private credentials in the panel (ADR 0023)", () => {
-  it("opens a plain member their own accounts and API keys only where the org allows private credentials", () => {
+  it("opens a plain member their own accounts and provider keys only where the org allows private credentials", () => {
     expect(pagesFor("member", true).map((page) => page.to)).toEqual([
       "/usage",
       "/accounts",

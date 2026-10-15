@@ -11,7 +11,7 @@
 // and on each failed row, and those stay selected. The delete confirmation stays open until the deletion settles.
 // Escape, the bar's Done or the toggle (then reading Done) leaves the selection, focus returning to the toggle.
 //
-// Config API keys whose provider reports quota (OpenCode Go) are listed too, marked "Config key": they take the quota
+// Config provider keys whose provider reports quota (OpenCode Go) are listed too, marked "Config key": they take the quota
 // check like any account but live in the config, so a selection leaves them out (their row keeps opening the account,
 // which links to the key's group on the Keys page).
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";

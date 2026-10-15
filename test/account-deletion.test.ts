@@ -95,7 +95,7 @@ const newPerson = async () => {
   );
   expect(
     (
-      await send(shared.slug, "/api-keys/groups", auth, "PUT", {
+      await send(shared.slug, "/provider-keys/groups", auth, "PUT", {
         family: "claude",
         revision: 0,
         group: { "base-url": "https://api.example.test/v1", keys: [{ "api-key": "sk-gone-0001" }] },

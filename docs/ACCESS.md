@@ -2,13 +2,13 @@
 
 Cloudflare Access signs people in for the control panel and the management API (ADR 0022): it authenticates the caller
 (identity provider login or a service token), then forwards the request with a signed `Cf-Access-Jwt-Assertion` header
-that the Worker verifies. The Worker never sees their passwords. Clients of the proxy routes (`/v1*`, `/openai/v1*`,
-`/backend-api/codex*` and the unprefixed aliases) are not behind Access: they send a **proxy key** the proxy issued to a
-member, which the Worker checks itself (§4, "Proxy keys" below, [CLIENTS.md](CLIENTS.md)). Scripts on the management API
+that the Worker verifies. The Worker never sees their passwords. Clients of the client API (`/v1*`, `/openai/v1*`,
+`/backend-api/codex*` and the unprefixed aliases) are not behind Access: they send an **API key** Commissary issued to a
+member, which the Worker checks itself (§4, "API keys" below, [CLIENTS.md](CLIENTS.md)). Scripts on the management API
 may send a **management key** instead of an Access service token ("Management keys" below).
 
-This is a self-hosted proxy, the default. A **hosted proxy** (`PROXY_MODE=hosted`, ADR 0026) has no Access application
-and signs people in itself: see [Hosted proxy](#hosted-proxy) at the end.
+This is a self-hosted Commissary, the default. **Commissary Cloud** (`PROXY_MODE=hosted`, ADR 0026) has no Access application
+and signs people in itself: see [Commissary Cloud](#commissary-cloud) at the end.
 
 ## 1. What the deploy creates
 
@@ -18,8 +18,8 @@ settings in `.env` (template: `.env.example`):
 | Setting                                                  | Creates / sets                                                                                                  |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `CF_LLM_PROXY_DOMAIN`                                    | A **self-hosted application** on that hostname (empty path: the whole hostname), and the Worker's custom domain |
-| `CF_LLM_PROXY_API_DOMAIN` (optional)                     | A second custom domain, the API host, which serves the proxy routes and has no Access application (below)       |
-| (without `CF_LLM_PROXY_API_DOMAIN`)                      | A second application on the proxy paths of that hostname with a **Bypass** policy for everyone (below)          |
+| `CF_LLM_PROXY_API_DOMAIN` (optional)                     | A second custom domain, the API host, which serves the client API and has no Access application (below)         |
+| (without `CF_LLM_PROXY_API_DOMAIN`)                      | A second application on the client API paths of that hostname with a **Bypass** policy for everyone (below)     |
 | `ACCESS_ALLOW_EMAILS`, `ACCESS_ALLOW_EMAIL_DOMAINS`      | A reusable **Allow** policy (interactive login with your identity providers)                                    |
 | `ACCESS_SERVICE_TOKENS` (names)                          | One **service token** per name and a **Service Auth** policy that admits exactly those tokens                   |
 | `ACCESS_ALLOW_SERVICE_TOKEN_IDS`                         | Adds service tokens managed elsewhere (by token ID, e.g. CI's) to the **Service Auth** policy                   |
@@ -34,8 +34,8 @@ subrequests (the first line of defence against cross-site request forgery on the
 Alchemy application resource does not manage these fields and its updates are PUT-style, so a follow-up step re-applies them
 after every change of the application: do not edit them in the dashboard.
 
-**The proxy routes leave Access.** With an API host (`CF_LLM_PROXY_API_DOMAIN`, ADR 0028) they are served there only,
-and no Access application covers that hostname: the Worker answers the proxy routes on the API host and everything else
+**The client API leaves Access.** With an API host (`CF_LLM_PROXY_API_DOMAIN`, ADR 0028) they are served there only,
+and no Access application covers that hostname: the Worker answers the client API on the API host and everything else
 (the panel, the management API, the OAuth callbacks) on `CF_LLM_PROXY_DOMAIN`, each with a `404` naming the other host
 for a path it does not serve (`src/http/hosts.ts`). A client that signs in through Access sends the token of the app
 host's application (`cloudflared access token -app=https://<CF_LLM_PROXY_DOMAIN>`) in `cf-access-token` to the API host;
@@ -43,12 +43,12 @@ the Worker checks it against `ACCESS_AUD` itself. Without an API host, the bypas
 `/v1beta`, `/v1internal`, `/openai/v1`, `/backend-api/codex`, `/chat/completions`, `/completions` and `/responses` with
 their sub-paths. Access applies the most specific application to a request, and a hostname-and-path application before
 a Worker-level one, so these paths reach the Worker without a sign-in while every other path (the panel, the management
-API, the OAuth callbacks) stays behind the main application. The Worker is then the only gate of the proxy routes: it
-answers `401` to a request without a valid proxy key (§4).
+API, the OAuth callbacks) stays behind the main application. The Worker is then the only gate of the client API: it
+answers `401` to a request without a valid API key (§4).
 
 The production Worker has no `workers.dev` or preview URLs, so the custom domain is the only way in. Pull-request preview
 stages (`pr-<number>`, see [DEPLOY.md](DEPLOY.md)) instead serve their `workers.dev` URL behind their own application,
-which the Worker enrolls into, with the bypass application on the proxy paths of that URL. Service token credentials:
+which the Worker enrolls into, with the bypass application on the client API paths of that URL. Service token credentials:
 
 - The Client IDs are printed in the deploy outputs (`serviceTokens`).
 - The Client Secrets are returned by Cloudflare only on creation; the deploy writes them to
@@ -63,8 +63,8 @@ which the Worker enrolls into, with the bypass application on the proxy paths of
 or other tooling) and the deploy creates no Access resources; `ACCESS_ALLOW_*`/`ACCESS_SERVICE_TOKENS` must then be empty.
 The application must cover the Worker's whole hostname, with an Allow policy for people and a Service Auth policy for tokens
 (an Allow policy does not match service tokens). Set SameSite=Lax on its cookie yourself, and add the bypass application for
-the proxy paths above (a self-hosted application on `<host>/v1`, `<host>/v1beta`, ... with a Bypass policy that includes
-everyone); without it clients need Access in front of their proxy key.
+the client API paths above (a self-hosted application on `<host>/v1`, `<host>/v1beta`, ... with a Bypass policy that includes
+everyone); without it clients need Access in front of their API key.
 
 ## 2. Policies
 
@@ -72,7 +72,7 @@ everyone); without it clients need Access in front of their proxy key.
 | ----------------------------------- | ---------------- | -------------------------- | ------------------------------------------------------ |
 | People using the panel / browsers   | **Allow**        | Emails, email domain       | Interactive login                                      |
 | Management automation (scripts, CI) | **Service Auth** | The stack's service tokens | Non-interactive; an Allow policy does not match tokens |
-| Clients of the proxy routes         | **Bypass**       | Everyone                   | The Worker checks their proxy key instead              |
+| Clients of the client API           | **Bypass**       | Everyone                   | The Worker checks their API key instead                |
 
 Need IdP groups, device posture or other rules? Extend the policies in `infra/access.ts` (Alchemy's
 `Cloudflare.Access.Policy` accepts every Cloudflare rule shape).
@@ -114,7 +114,7 @@ A **platform admin** (`PLATFORM_ADMIN_*`) manages every org through these addres
 rename orgs: anyone else gets `403 {"error":"platform_admin_required"}`. An org the registry does not list answers `404` to a
 platform admin and `403` to anyone else. The unscoped addresses (`/v9/management/credentials`, `/accounts`, ...) keep working
 and mean `global`, so existing scripts and bookmarks are unchanged. `/` opens the panel of the only org the caller belongs to
-and asks which one to open when there are several (`/?choose` always asks, to create an org). A person's login and proxy keys
+and asks which one to open when there are several (`/?choose` always asks, to create an org). A person's login and API keys
 are unaffected: clients reach their org with their key, not with the address.
 
 Renaming `ACCESS_ADMIN_*` to `PLATFORM_ADMIN_*` is the only settings change an upgrade asks for, and it can wait: the old names are
@@ -127,33 +127,33 @@ Everyone else reaches an org as one of its **members** (ADR 0022). A member hold
 owner of every org without being stored as a member. Members, teams and service tokens live in the org's ControlPlane, which
 the Worker asks on every request: a removed member, or a member whose role was lowered, is refused on their next request.
 
-| Who may                                                                                         |   Plain member    | Org admin |          Org owner           | Platform admin |
-| ----------------------------------------------------------------------------------------------- | :---------------: | :-------: | :--------------------------: | :------------: |
-| Use the proxy endpoints of the org                                                              |         ✓         |     ✓     |              ✓               |       ✓        |
-| Open the org's panel; read usage (`GET /observability/usage/records`, `/summary`, `/series`)    | own requests only |     ✓     |              ✓               |       ✓        |
-| Connect, list, disable and remove their **own private** accounts and API keys (see below)       |  ✓ where allowed  |     ✓     |              ✓               |       ✓        |
-| Every other management route of the org (credentials, keys, models, settings, prices, ...)      |                   |     ✓     |              ✓               |       ✓        |
-| List members, teams and service tokens; manage teams                                            |                   |     ✓     |              ✓               |       ✓        |
-| Add or remove plain members; register or remove member service tokens                           |                   |     ✓     |              ✓               |       ✓        |
-| Add or remove org admins and owners; change any role                                            |                   |           |              ✓               |       ✓        |
-| Read the org's single sign-on settings (hosted proxy, `/sso`)                                   |                   |     ✓     |              ✓               |       ✓        |
-| Change single sign-on: identity provider, domains, requiring it (not with a management key)     |                   |           |              ✓               |       ✓        |
-| Read the models they may use (`GET /models/mine`, the panel's My models)                        |         ✓         |     ✓     |              ✓               |       ✓        |
-| Read, add, edit and remove grants (`/grants`, the panel's Grants page)                          |                   |     ✓     |              ✓               |       ✓        |
-| Read the Spend limits that bind them and limit their own proxy keys (`/spend`, `/spend/limits`) |         ✓         |     ✓     |              ✓               |       ✓        |
-| Set any Spend limit and the org's calendar (`/spend/limits`, `/spend/settings`)                 |                   |     ✓     |              ✓               |       ✓        |
-| Create proxy keys for themselves; list and revoke their own (`/proxy-keys`)                     |         ✓         |     ✓     |              ✓               | if a member ¹  |
-| List and revoke every proxy key of the org                                                      |                   |     ✓     |              ✓               |       ✓        |
-| Turn auto-join, or Access sign-ins for clients in `global`, on or off (`PATCH /membership`)     |                   |           |              ✓               |       ✓        |
-| Allow or stop private credentials (`PATCH /membership`, `private_credentials`)                  |                   |     ✓     |              ✓               |       ✓        |
-| Give a service token a role above plain member; download a credential                           |                   |           | owner **service token** only |       ✓        |
-| List, create and rename orgs                                                                    |                   |           |                              |       ✓        |
-| Read the org and its retention period (`GET /org`)                                              |                   |     ✓     |              ✓               |       ✓        |
-| Set the usage retention period (`PATCH /org`); download the org's export (`GET /export`)        |                   |     ✓     |              ✓               |       ✓        |
-| Delete the org (`DELETE /org`, retyping its name; people only)                                  |                   |           |              ✓               |       ✓        |
-| Delete their own account (`DELETE /me`)                                                         |  ✓ (people only)  |     ✓     |              ✓               |       ✓        |
+| Who may                                                                                        |   Plain member    | Org admin |          Org owner           | Platform admin |
+| ---------------------------------------------------------------------------------------------- | :---------------: | :-------: | :--------------------------: | :------------: |
+| Use the client API endpoints of the org                                                        |         ✓         |     ✓     |              ✓               |       ✓        |
+| Open the org's panel; read usage (`GET /observability/usage/records`, `/summary`, `/series`)   | own requests only |     ✓     |              ✓               |       ✓        |
+| Connect, list, disable and remove their **own private** accounts and provider keys (see below) |  ✓ where allowed  |     ✓     |              ✓               |       ✓        |
+| Every other management route of the org (credentials, keys, models, settings, prices, ...)     |                   |     ✓     |              ✓               |       ✓        |
+| List members, teams and service tokens; manage teams                                           |                   |     ✓     |              ✓               |       ✓        |
+| Add or remove plain members; register or remove member service tokens                          |                   |     ✓     |              ✓               |       ✓        |
+| Add or remove org admins and owners; change any role                                           |                   |           |              ✓               |       ✓        |
+| Read the org's single sign-on settings (Commissary Cloud, `/sso`)                              |                   |     ✓     |              ✓               |       ✓        |
+| Change single sign-on: identity provider, domains, requiring it (not with a management key)    |                   |           |              ✓               |       ✓        |
+| Read the models they may use (`GET /models/mine`, the panel's My models)                       |         ✓         |     ✓     |              ✓               |       ✓        |
+| Read, add, edit and remove grants (`/grants`, the panel's Grants page)                         |                   |     ✓     |              ✓               |       ✓        |
+| Read the Spend limits that bind them and limit their own API keys (`/spend`, `/spend/limits`)  |         ✓         |     ✓     |              ✓               |       ✓        |
+| Set any Spend limit and the org's calendar (`/spend/limits`, `/spend/settings`)                |                   |     ✓     |              ✓               |       ✓        |
+| Create API keys for themselves; list and revoke their own (`/api-keys`)                        |         ✓         |     ✓     |              ✓               | if a member ¹  |
+| List and revoke every API key of the org                                                       |                   |     ✓     |              ✓               |       ✓        |
+| Turn auto-join, or Access sign-ins for clients in `global`, on or off (`PATCH /membership`)    |                   |           |              ✓               |       ✓        |
+| Allow or stop private credentials (`PATCH /membership`, `private_credentials`)                 |                   |     ✓     |              ✓               |       ✓        |
+| Give a service token a role above plain member; download a credential                          |                   |           | owner **service token** only |       ✓        |
+| List, create and rename orgs                                                                   |                   |           |                              |       ✓        |
+| Read the org and its retention period (`GET /org`)                                             |                   |     ✓     |              ✓               |       ✓        |
+| Set the usage retention period (`PATCH /org`); download the org's export (`GET /export`)       |                   |     ✓     |              ✓               |       ✓        |
+| Delete the org (`DELETE /org`, retyping its name; people only)                                 |                   |           |              ✓               |       ✓        |
+| Delete their own account (`DELETE /me`)                                                        |  ✓ (people only)  |     ✓     |              ✓               |       ✓        |
 
-¹ Proxy keys are issued to members: a platform admin who is not a member of the org, or a service token, gets
+¹ API keys are issued to members: a platform admin who is not a member of the org, or a service token, gets
 `403 member_required` when creating one.
 
 - **Grants** (ADR 0023): a member uses a shared credential only through a grant (a member, a team or everyone; one
@@ -162,12 +162,12 @@ the Worker asks on every request: a removed member, or a member whose role was l
   shared credentials, every model": delete it and add narrower ones to restrict. A model a member has no grant for answers
   `400 model_not_found`, like an unknown model, and is left out of their model lists; a request without a member (a service
   token) is served by the grants for everyone only. Private credentials are never granted: they are their owner's alone.
-- **Spend limits** (ADR 0024): an org admin caps what a member, a team, the org, a shared credential or a proxy key may spend
+- **Spend limits** (ADR 0024): an org admin caps what a member, a team, the org, a shared credential or an API key may spend
   (API-equivalent Cost) in a day, week or month of the org's time zone (the Limits page). A plain member sees the limits that
-  bind them and may cap their own proxy keys, never above a limit an org admin set on that key (`422
+  bind them and may cap their own API keys, never above a limit an org admin set on that key (`422
   exceeds_admin_limit`); `PATCH /spend/settings` is for org admins. A request that meets a limit with no room is refused
   with `429 spend_limit_reached` and `Retry-After` until the period ends; no account is put in cooldown. A member,
-  team or org limit does not count what a member's **private** accounts serve (and does not stop them), a proxy key's limit
+  team or org limit does not count what a member's **private** accounts serve (and does not stop them), an API key's limit
   counts everything the key does. An org starts with no limits, `global` included.
 - **Adding a member** (`POST /members` with an email and a role) takes effect the next time the person signs in through Access;
   no email is sent, and Access must still admit them (§2). Removing a member takes them off every team, and they are refused
@@ -176,12 +176,12 @@ the Worker asks on every request: a removed member, or a member whose role was l
 - **Auto-join** (`GET`/`PATCH /membership`, `{"auto_join": true}`): with it on, a person Access admits who is not a member of
   the org joins it as a plain member on their first request. It is on for `global`, so a self-hosted deployment keeps admitting
   everyone its Access policies admit, and off for every new org, where only added members get in (`403` for anyone else, the
-  proxy endpoints included).
-- **Shared and private credentials** (ADR 0023): every account and API key belongs to the org (**shared**, managed by org admins,
+  client API endpoints included).
+- **Shared and private credentials** (ADR 0023): every account and provider key belongs to the org (**shared**, managed by org admins,
   as before) or to one member (**private**). A private credential is used only for its owner's requests, never for an org
   admin's, another member's or a service token's. Its owner manages it through the same routes as an org admin manages a shared
-  one (`/credentials*`, `/oauth/*`, `/api-keys*`; what a plain member creates is always private); an org admin sees that it
-  exists (provider, owner, label, whether it is disabled) in `GET /credentials` and `GET /api-keys` (`others`), may disable
+  one (`/credentials*`, `/oauth/*`, `/provider-keys*`; what a plain member creates is always private); an org admin sees that it
+  exists (provider, owner, label, whether it is disabled) in `GET /credentials` and `GET /provider-keys` (`others`), may disable
   or remove it, and reaches nothing else about it: no models, quota, usage or file, and `404` for any other operation. Its
   download is refused to everyone but its owner (`403 private_credential`, also for an owner service token). Private traffic
   is left out of org-wide usage summaries, series, listings and exports; only the owner reads it. `private_credentials` of
@@ -200,11 +200,11 @@ the Worker asks on every request: a removed member, or a member whose role was l
   and cannot grant itself those powers: a person who is an org owner registers only plain-member tokens
   (`403 service_token_owner_required` otherwise).
 
-### Proxy keys
+### API keys
 
-A **proxy key** (ADR 0022) is how a client authenticates on the proxy routes: `cfp_<org id>_<key id>_<secret>`, with 288
-random bits of secret. Any member creates keys for themselves in the panel (**Proxy keys**) or with
-`POST /v9/management/proxy-keys {"name": "laptop", "expires_at": "<ISO time, optional>"}`; the answer carries the whole
+An **API key** (ADR 0022) is how a client authenticates on the client API: `cfp_<org id>_<key id>_<secret>`, with 288
+random bits of secret. Any member creates keys for themselves in the panel (**API keys**) or with
+`POST /v9/management/api-keys {"name": "laptop", "expires_at": "<ISO time, optional>"}`; the answer carries the whole
 key once (`key`), and the org's ControlPlane stores only its SHA-256, a visible prefix (`cfp_<org id>_<key id>_<4
 characters>`), its member, its name and when it was created, last used (to the minute) and expires.
 
@@ -214,15 +214,15 @@ characters>`), its member, its name and when it was created, last used (to the m
 - A request with a key acts as the key's member in the key's org, with their role there: usage records store the key
   (`principal` `key:<key id>`) and the member (`member_id`), and the caller scope of session state is the member's, so one
   member's tools share it. A key is never a platform admin.
-- `GET /proxy-keys` lists the caller's keys (an org admin's: every key of the org, with `member_email`); `DELETE
-  /proxy-keys/<id>` revokes one (`404 proxy_key_not_found` for another member's key unless an org admin asks). A revoked
+- `GET /api-keys` lists the caller's keys (an org admin's: every key of the org, with `member_email`); `DELETE
+  /api-keys/<id>` revokes one (`404 api_key_not_found` for another member's key unless an org admin asks). A revoked
   key is **deleted** (the answer still says when it was revoked), and is refused from the next request on in the isolate
   that revoked it and within 30 seconds everywhere (each isolate trusts a verified key for at most 30 seconds, and never
   past its expiry). An expired key is deleted too: by the next listing or new key of the org, by a request that
   presents it, and by a scheduled sweep for an org nobody opens. Removing a member deletes their keys, private
-  accounts, private API key groups and unfinished sign-ins (ADR 0027). A member holds at most 100 keys; revoking or
+  accounts, private provider key groups and unfinished sign-ins (ADR 0027). A member holds at most 100 keys; revoking or
   waiting out one frees its place.
-- Proxy keys are never accepted on the management API or the panel: those stay behind Access.
+- API keys are never accepted on the management API or the panel: those stay behind Access.
 
 ### Management keys
 
@@ -237,20 +237,20 @@ revokes it, `403 role_too_high` otherwise).
   unscoped management URL means the key's org; another org's URL answers 403.
 - It never holds the sensitive powers: it cannot download a credential (`403 download_requires_service_token`), register
   or re-role a service token, or issue a management key (`403 management_key_forbidden`).
-- It is accepted on the management API only; proxy routes take proxy keys, and a `cfp_` key is never accepted on the
+- It is accepted on the management API only; client API routes take API keys, and a `cfp_` key is never accepted on the
   management API. Revocation applies at once in the isolate that revoked it and within 30 seconds everywhere.
-- On a self-hosted proxy the request must still pass Access, whose application covers the management API: send the
+- On a self-hosted Commissary the request must still pass Access, whose application covers the management API: send the
   key together with a service token, or put the management paths a script calls behind your own Access policy. On a
-  hosted proxy nothing sits in front of the Worker.
+  Commissary Cloud nothing sits in front of the Worker.
 
-**Access sign-ins for clients** (`GET`/`PATCH /membership`, `{"access_clients": true}`): clients set up before proxy keys
-signed in through Access on the proxy routes. While this org setting is on, a proxy route still takes an Access JWT,
+**Access sign-ins for clients** (`GET`/`PATCH /membership`, `{"access_clients": true}`): clients set up before API keys
+signed in through Access on the client API. While this org setting is on, a client API route still takes an Access JWT,
 which the Worker verifies itself from `Cf-Access-Jwt-Assertion` or from the `cf-access-token` header `cloudflared access`
 sends (Access no longer adds the former there); the sign-in is admitted like on the management API. An Access sign-in
-names no org, so on a proxy route it always reaches `global`: the setting exists there only (on by default, so an
+names no org, so on a client API route it always reaches `global`: the setting exists there only (on by default, so an
 upgraded deployment's `cloudflared` clients keep working), `GET /membership` of another org has no `access_clients`, and
-setting it there answers `422 access_clients_global_only`. Every other org takes proxy keys only. A proxy key always wins: a request with a key is judged by the key alone. Moving clients:
-[MIGRATION.md](MIGRATION.md#5-move-clients-to-proxy-keys).
+setting it there answers `422 access_clients_global_only`. Every other org takes API keys only. An API key always wins: a request with a key is judged by the key alone. Moving clients:
+[MIGRATION.md](MIGRATION.md#5-move-clients-to-api-keys).
 
 **Upgrading from config admin lists.** Before members, `global` was also managed by the config document's
 `access.admin-emails` and `access.admin-service-tokens`. The first time an org's ControlPlane is used after the upgrade, those
@@ -272,17 +272,17 @@ characters; a missing key is refused everywhere.
 ## 4. How the Worker validates requests
 
 1. The path is classified (`src/access/routes.ts`): `/v1*` (incl. `/v1beta`, `/v1internal`), `/openai/v1*`, `/backend-api/codex*` and the unprefixed
-   aliases `/chat/completions`, `/completions`, `/responses` are the proxy routes and need a
-   principal; `/v9/management*` (also `/v9/management/orgs/<slug>/...`), the control panel (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/members`, `/proxy-keys`, `/limits`, `/settings` with their
+   aliases `/chat/completions`, `/completions`, `/responses` are the client API and need a
+   principal; `/v9/management*` (also `/v9/management/orgs/<slug>/...`), the control panel (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/members`, `/api-keys`, `/limits`, `/settings` with their
    sub-paths, the same pages under `/o/<slug>/`, `/assets/*`) and `/management.html` (the upstream panel's old address, a redirect to `/`) form the management zone;
    everything else (`/healthz`, the OAuth browser callbacks `/anthropic/callback`, `/codex/callback`,
    `/antigravity/callback`, `/callback`, `/devin/callback`) is public to the Worker.
    Matching is case-, slash- and percent-encoding-insensitive, so odd spellings cannot dodge the gate.
-2. On a proxy route, a proxy key wins (`src/access/proxy-key.ts`): the first credential starting with `cfp_` in
+2. On a client API route, an API key wins (`src/access/api-key.ts`): the first credential starting with `cfp_` in
    `Authorization: Bearer`, `x-goog-api-key`, `x-api-key`, `?key=` or `?auth_token=` (the Go server's order) is checked
-   against its org's ControlPlane ("Proxy keys" above), and the request runs as its member in its org. A malformed, unknown,
+   against its org's ControlPlane ("API keys" above), and the request runs as its member in its org. A malformed, unknown,
    wrong, revoked or expired key answers 401 `Invalid API key`, whatever else the request carries. Without a key, the
-   proxy route takes an Access JWT (from `Cf-Access-Jwt-Assertion` or `cf-access-token`) only while the org's `access_clients`
+   client API route takes an Access JWT (from `Cf-Access-Jwt-Assertion` or `cf-access-token`) only while the org's `access_clients`
    setting is on; other credentials (a dummy provider key) are ignored.
 3. `Cf-Access-Jwt-Assertion` is verified with `jose`: RS256 signature against the JWKS at
    `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs` (cached per isolate, refetched on an unknown `kid` at most every
@@ -290,15 +290,15 @@ characters; a missing key is refused everywhere.
 4. The principal is the `email` claim (users) or `common_name` (service token Client ID). It is recorded in usage records and
    scopes session state per caller.
 5. The org's ControlPlane admits the principal (`src/members/admission.ts`, auto-joining it where that is on) and the route's
-   policy (`src/access/policy.ts`) names the role it needs: a member role for the proxy endpoints, the org's panel pages and the
+   policy (`src/access/policy.ts`) names the role it needs: a member role for the client API endpoints, the org's panel pages and the
    usage reads, org admin for every other management route. Who the caller is (`/v9/management/me`), the org list
    (`/v9/management/orgs*`, whose handlers ask for a platform admin), the panel pages without an org, `/assets/*` and
    `/management.html` need no role. A principal without the role gets 403 `Forbidden`.
 6. A missing header answers 401 `Missing API key`; an invalid token 401 `Invalid API key` (Go wording, so existing clients
-   show familiar errors). On a proxy route of an org that takes proxy keys only, an Access sign-in alone answers 401
+   show familiar errors). On a client API route of an org that takes API keys only, an Access sign-in alone answers 401
    `Missing API key` too (`Invalid API key` when another credential came with it).
 
-Outside the proxy routes the Worker trusts only the signed JWT, so requests that skip Access (e.g. a `workers.dev` URL enabled
+Outside the client API the Worker trusts only the signed JWT, so requests that skip Access (e.g. a `workers.dev` URL enabled
 by hand) are rejected.
 
 ### Browser sessions (CSRF and WebSocket hijacking)
@@ -311,7 +311,7 @@ admin's session. Before authentication the gate (`src/access/csrf.ts`) refuses, 
   management zone when `Sec-Fetch-Site` is `cross-site`/`same-site` or `Origin` names another host;
 - any management request (`/v9/management*`, the panel paths) with a foreign `Origin` or a cross-site `Sec-Fetch-Site`,
   except a top-level document navigation (`GET`/`HEAD` with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document`)
-  to a panel page (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/members`, `/proxy-keys`, `/limits`, `/settings` and their sub-paths) or
+  to a panel page (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/members`, `/api-keys`, `/limits`, `/settings` and their sub-paths) or
   `/management.html`: a link to a panel page still opens it, while frames (clickjacking), `/assets/*` and every
   `/v9/management*` request are refused (OAuth providers redirect to the public callback paths, never there);
 - WebSocket upgrades (`GET /v1/responses`, `/backend-api/codex/responses`) whose `Origin` is not the Worker's own host
@@ -319,23 +319,23 @@ admin's session. Before authentication the gate (`src/access/csrf.ts`) refuses, 
 
 Management writes must also carry `Content-Type: application/json` (`multipart/form-data` for `POST /credentials`,
 `application/yaml`/`text/yaml` for `POST /settings/import`) or have no body; other types answer 415. The management zone never sends
-CORS headers, so other origins cannot pass a preflight or read a management response. Proxy routes keep
+CORS headers, so other origins cannot pass a preflight or read a management response. Client API routes keep
 `Access-Control-Allow-Origin: *` for reads.
 
 Non-browser clients (curl, SDKs, Claude Code, Codex) send neither `Origin` nor `Sec-Fetch-*` and are not affected; the panel
-is served by the Worker itself and is same-origin. Browser applications on other origins cannot call the proxy's POST routes;
+is served by the Worker itself and is same-origin. Browser applications on other origins cannot call the client API's POST routes;
 put a server-side client in between.
 
 ### Management API security
 
 - Go's `POST /requests/api-call` (substitutes `$TOKEN$` into a request to any host the caller names, the upstream
   panel's quota probe) is not ported. Quota checks (`POST /credentials/quota`) call the auth file's own provider usage
-  endpoint. Key tests (`POST /api-keys/probe`) send a config key to the `base-url` stored with it, and an admin can
-  change that `base-url` while keeping the key (`PUT /api-keys/groups`, or a config import): an org admin can still direct a stored key to a host of their choice, and a plain member the same for their own private key groups
+  endpoint. Key tests (`POST /provider-keys/probe`) send a config key to the `base-url` stored with it, and an admin can
+  change that `base-url` while keeping the key (`PUT /provider-keys/groups`, or a config import): an org admin can still direct a stored key to a host of their choice, and a plain member the same for their own private key groups
   (only their own key can be sent there). The replies carry no
   token.
-- No route reads a secret back. Provider API keys, client keys, header values and URL credentials are stored as config
-  entries (ADR 0025) and never leave the Worker: `GET /api-keys` shows a `[redacted]…abcd` preview, `GET /settings` carries
+- No route reads a secret back. Provider keys, API keys, header values and URL credentials are stored as config
+  entries (ADR 0025) and never leave the Worker: `GET /provider-keys` shows a `[redacted]…abcd` preview, `GET /settings` carries
   no secret, and the routes that returned the whole document (`/config*`, `/config.yaml`, `/settings/config`) and the raw
   editor are gone. So there are no masked placeholders to restore and nothing to refuse on write. A secret is replaced by
   typing a new one into its key group, or by importing a Go config document (`POST /settings/import`). Config error messages
@@ -346,7 +346,7 @@ put a server-side client in between.
   the auth file verbatim, refresh token included, for moving an account to another deployment. Only a **service
   token** that is an owner of the org (§3 "Members, roles and teams") or a platform admin may call it; any other org admin or
   owner, and every management key, gets `403 {"error":"download_requires_service_token","message":…}` before the file is
-  looked up, and a plain member the gate's `403 Forbidden`. A hosted proxy has no service tokens: there only platform
+  looked up, and a plain member the gate's `403 Forbidden`. Commissary Cloud has no service tokens: there only platform
   admins download (`403 download_requires_platform_admin` for everyone else, a private credential's owner included). A person's browser session is the credential most
   exposed to theft, so the tokens are handed only to a client that was set up for automation (curl with
   `CF-Access-Client-Id`/`-Secret`, [MIGRATION.md](MIGRATION.md) §2). The panel never calls it. A private credential is downloaded
@@ -356,13 +356,13 @@ put a server-side client in between.
 - No response publishes a hash of a stored key. The handle of a credential (`auth_index`, also in panel URLs
   `/accounts/<auth_index>` and usage exports) is an HMAC under the per-deployment secret `AUTH_INDEX_KEY`, so it reveals
   nothing about the key (Go's unsalted index of a config key's id, itself an unsalted hash of the key, let anyone holding
-  it test guesses offline). Config credential ids (`claude:apikey:<hash>`) are never sent: not in `GET /api-keys`, usage
-  summaries and series (`group_by=auth` keys are `auth_index` values), `routing/models` or proxy responses, whose
+  it test guesses offline). Config credential ids (`claude:apikey:<hash>`) are never sent: not in `GET /provider-keys`, usage
+  summaries and series (`group_by=auth` keys are `auth_index` values), `routing/models` or client API responses, whose
   `X-CPA-TRACE-ID` is a random request id for every client. Lookups by `name` match auth files only, so a guessed id is
   not confirmed either; address a config key by its `auth_index`.
-- Writes never confirm a guessed secret: the reply does not confirm a guess, the next read does. A typed API key
+- Writes never confirm a guessed secret: the reply does not confirm a guess, the next read does. A typed provider key
   equal to a key stored in another group of its family (gemini, interactions, vertex: the families whose keys are unique
-  across groups) is answered like any other new key: `PUT /api-keys/groups` drops the typed copy silently and still
+  across groups) is answered like any other new key: `PUT /provider-keys/groups` drops the typed copy silently and still
   advances the version. The same goes for header values, a `proxy-url` or a `base-url` written for a key kept by
   `auth_index`: they are typed too, so trying them never produces a different reply. The stored key always wins, so a typed
   copy never deletes a stored key (or its group); a group left with no key is stored but not shown. The config import
@@ -372,27 +372,27 @@ put a server-side client in between.
 
 ### Zero data retention (ADR 0027)
 
-The proxy keeps as little as it can and deletes at once; there is no grace period, no soft delete and no restore.
+Commissary keeps as little as it can and deletes at once; there is no grace period, no soft delete and no restore.
 
 - **Usage records** keep an upstream failure's status, type and code but not its body, and are pruned after the org's
   **retention period** (`usage_retention_days`, in days; `null` keeps them). A new org starts at 90 days; `global` and
   every org that existed before keep records until an org admin sets a period, so upgrading deletes no history. The cron
   task `usage-retention` applies each org's period.
-- **Removing a member** (`DELETE /members/<id>`) deletes their proxy keys, private accounts and API key groups, the
-  OAuth logins they started in that org, and their Spend limits and counters and those of their proxy keys.
-- **Proxy keys** are deleted when revoked and when they expire (an expired key is purged when keys are listed or created,
+- **Removing a member** (`DELETE /members/<id>`) deletes their API keys, private accounts and provider key groups, the
+  OAuth logins they started in that org, and their Spend limits and counters and those of their API keys.
+- **API keys** are deleted when revoked and when they expire (an expired key is purged when keys are listed or created,
   when one is checked, and by the cron task `proxy-key-expiry`); a deleted key's Spend limits and counters go with it.
 - **Deleting an org** (`DELETE /org` with `{"name": "<the org's name>"}`; a person who is an org owner or a platform admin, never a service
   token: `403 person_required`) removes its usage
-  records, replay state, cached keys, credentials, config, members, proxy keys and registry entry at once and frees the
+  records, replay state, cached keys, credentials, config, members, API keys and registry entry at once and frees the
   slug. `global` is never deleted. A big org may answer `503 deletion_incomplete`: send the request again. Download the
   export first (`GET /export`: settings, shared config, price overrides, credential summaries, grants, members, teams and
   service tokens, every secret as a preview; usage records come from the usage routes).
 - **Deleting an account** (`DELETE /me` with the caller's own email; people only) removes the person from every org with
   their data there, deletes the orgs they were the only member of, and keeps no removal note, so the address can start
   over. It is refused with `409 sole_owner` (and the org slugs) while they are the only owner of an org with other members:
-  hand it over first. On a self-hosted proxy Access signs the person in again on their next request, which creates a new,
-  empty membership. On a hosted proxy the sign-in account goes too (Better Auth's user, its sessions and its linked
+  hand it over first. On a self-hosted Commissary Access signs the person in again on their next request, which creates a new,
+  empty membership. On Commissary Cloud the sign-in account goes too (Better Auth's user, its sessions and its linked
   GitHub/Google accounts): the person is signed out at once, and signing in again is a new sign-up with a new Personal org.
 - **Replay state** that thinking and continuity depend on stays, bounded by its expiry of at most seven days; stale state of
   a deleted org that was not registered expires on its own within that time.
@@ -400,10 +400,10 @@ The proxy keeps as little as it can and deletes at once; there is no grace perio
 ### Logs and personal data
 
 Every proxied request produces one structured log line (Workers Logs) whose `principal` field is the caller:
-`key:<key id>` for a proxy key, `mkey:<key id>` for a management key, `user:<email>` for people, `service:<client id>` for
+`key:<key id>` for an API key, `mkey:<key id>` for a management key, `user:<email>` for people, `service:<client id>` for
 service tokens. Usage records in D1 store the same id. Emails are
 personal data: restrict who can read Workers Logs and the D1 database, and set the retention you need (each org's usage
-retention period, `PATCH /org` with `usage_retention_days`, and Workers Logs retention). Tokens, API keys, JWTs, request bodies, headers and query strings are never
+retention period, `PATCH /org` with `usage_retention_days`, and Workers Logs retention). Tokens, API keys, provider keys, JWTs, request bodies, headers and query strings are never
 logged; scheduled-job failures are logged as a one-line summary with URL queries removed.
 
 ## 5. Optional: single-header service token
@@ -417,9 +417,9 @@ x-api-key: {"cf-access-client-id": "<CLIENT_ID>", "cf-access-client-secret": "<C
 ```
 
 This is handled entirely by Access; the Worker still only sees the resulting JWT. It applies where Access sits, so to the
-management API, not to the proxy routes (clients send a proxy key there). The header name is your choice
+management API, not to the client API (clients send an API key there). The header name is your choice
 (`Authorization` is the Cloudflare docs' example, but then the client's own bearer token cannot carry anything else); `x-api-key`
-suits the Anthropic SDK, where the API key is that header. The two-header form keeps working alongside it. If your organisation
+suits the Anthropic SDK, where the key is that header. The two-header form keeps working alongside it. If your organisation
 enables _strict service token authentication_, only Service Auth policies authorise token requests. With a bring-your-own
 application (`ACCESS_AUD`), configure the setting on that application with the Cloudflare API.
 
@@ -427,13 +427,13 @@ application (`ACCESS_AUD`), configure the setting on that application with the C
 
 The panel and the management API need the Access JWT regardless of how the client reaches the hostname. A WARP-enrolled
 device still passes through Access; satisfy it with an Allow policy that matches the user's identity (or device posture)
-or, for scripts, use a service token, which does not depend on the device. Proxy clients send a proxy key and are not
+or, for scripts, use a service token, which does not depend on the device. Clients of Commissary send an API key and are not
 affected. Check the Cloudflare WARP/Access docs for the current options.
 
-## Hosted proxy
+## Commissary Cloud
 
-A hosted proxy (`PROXY_MODE=hosted`, ADR 0026; deploy settings in [DEPLOY.md](DEPLOY.md#hosted-proxy)) has no Access
-application. Everything in §1-§2 and the service tokens of §3 do not apply; members, roles, teams, grants, proxy keys and
+Commissary Cloud (`PROXY_MODE=hosted`, ADR 0026; deploy settings in [DEPLOY.md](DEPLOY.md#commissary-cloud)) has no Access
+application. Everything in §1-§2 and the service tokens of §3 do not apply; members, roles, teams, grants, API keys and
 management keys work as above. What changes:
 
 - **Sign-in.** People sign in at `/sign-in` with GitHub or Google (Better Auth, `src/hosted/`), behind a Cloudflare
@@ -451,33 +451,33 @@ management keys work as above. What changes:
   {"org_limit": 10}` (`null` restores the default), or on the panel's **People** page.
 - **Suspension.** A platform admin suspends a person (`PATCH /people/<email> {"suspended": true}`) or an org (`PATCH
   /v9/management/orgs/<slug> {"suspended": true}`, or the org chooser). A suspended person is signed out and their
-  sessions, proxy keys and management keys are refused; in a suspended org every member, proxy key and management key
+  sessions, API keys and management keys are refused; in a suspended org every member, API key and management key
   is, except platform admins, who lift it. A suspension applies at once in the isolate that made it and within 30
   seconds everywhere.
-- **Rate limit.** Each org's requests on the proxy routes are counted by a Workers rate limit (`ORG_RATE_LIMIT` per
+- **Rate limit.** Each org's requests on the client API are counted by a Workers rate limit (`ORG_RATE_LIMIT` per
   minute, keyed by org); past it they answer `429` with `Retry-After: 60`.
 - **Scripts** use management keys; credential downloads are for platform admins only (§4 "Management API security").
 - **Browser protections.** The cross-site checks of §4 apply unchanged, Better Auth checks the origin of its own
-  requests, and the sign-in routes (`/api/auth/*`, `/api/sign-in-options`, `/sign-in`) exist only on a hosted proxy.
+  requests, and the sign-in routes (`/api/auth/*`, `/api/sign-in-options`, `/sign-in`) exist only on Commissary Cloud.
 
 ### Single sign-on for an org
 
-On a hosted proxy an org can sign its people in with its own identity provider (OIDC or SAML), on the panel's
+On Commissary Cloud an org can sign its people in with its own identity provider (OIDC or SAML), on the panel's
 **Single sign-on** page or under `/v9/management/orgs/<slug>/sso`. Org admins see the settings; only the org owner
-changes them. A self-hosted proxy has none of this: Access is where its identity providers are configured.
+changes them. A self-hosted Commissary has none of this: Access is where its identity providers are configured.
 
-1. **Prove a domain.** The owner adds an email domain (`example.com`); the proxy shows a TXT record to publish:
-   `_cf-llm-proxy-challenge.example.com` holding `cf-llm-proxy-domain-verification=<token>`. **Verify** looks it up
+1. **Prove a domain.** The owner adds an email domain (`example.com`); Commissary shows a TXT record to publish:
+   `_commissary-challenge.example.com` holding `commissary-domain-verification=<token>`. **Verify** looks it up
    through Cloudflare's DNS over HTTPS resolver. Only that exact domain is proved (a subdomain is a domain of its own),
    and one org holds a domain at a time: another org can verify it once the first removes it.
 2. **Set the identity provider.** One per org:
    - **OIDC**: the issuer URL, and a client registered there with the redirect URI the page shows
-     (`https://<host>/api/auth/sso/callback/sso-<org id>`), its client id and secret. The proxy reads the issuer's
+     (`https://<host>/api/auth/sso/callback/sso-<org id>`), its client id and secret. Commissary reads the issuer's
      discovery document when the provider is saved; the secret is sealed with the org's data key and never shown
      again (leave it blank to keep it). Sign-in uses PKCE and asks for `openid email profile`.
    - **SAML**: the identity provider's sign-in URL (HTTP-Redirect binding), its entity id and its signing
-     certificate (PEM). Register the proxy as a service provider with the entity id, assertion consumer service URL
-     (HTTP-POST) and metadata URL the page shows. Assertions must be signed, answer a request the proxy made, and are
+     certificate (PEM). Register Commissary as a service provider with the entity id, assertion consumer service URL
+     (HTTP-POST) and metadata URL the page shows. Assertions must be signed, answer a request Commissary made, and are
      accepted once.
 
    **Test** asks the identity provider again (discovery document and signing keys, or the certificate's validity) without
@@ -498,10 +498,10 @@ changes them. A self-hosted proxy has none of this: Access is where its identity
 | 302 to `cloudflareaccess.com` in a CLI | Service token headers missing/wrong, or no Service Auth policy for the token                             |
 | 403 from Access (before the Worker)    | Token not in the Service Auth policy (name missing from `ACCESS_SERVICE_TOKENS`)                         |
 | 500 `Authentication service error`     | `ACCESS_TEAM_DOMAIN` wrong (check the team name) or `ACCESS_AUD` empty                                   |
-| 401 `Missing API key`                  | No proxy key (proxy routes), or the request reached the Worker without Access (management)               |
-| 401 `Invalid API key`                  | Wrong, revoked or expired proxy key; AUD/issuer mismatch, expired JWT                                    |
-| 401 with a working `cloudflared` token | `global` takes proxy keys only (`access_clients` off): create a proxy key                                |
-| 403 `member_required`                  | Proxy keys are issued to members of the org: add yourself as a member                                    |
+| 401 `Missing API key`                  | No API key (client API routes), or the request reached the Worker without Access (management)            |
+| 401 `Invalid API key`                  | Wrong, revoked or expired API key; AUD/issuer mismatch, expired JWT                                      |
+| 401 with a working `cloudflared` token | `global` takes API keys only (`access_clients` off): create an API key                                   |
+| 403 `member_required`                  | API keys are issued to members of the org: add yourself as a member                                      |
 | 403 `Forbidden`                        | No role in the org (add the member, or turn auto-join on), or a plain member on a route for org admins   |
 | 403 `owner_required`                   | Adding or removing an org admin or owner, changing a role, or changing single sign-on needs an org owner |
 | 403 `service_token_owner_required`     | A service token role above member needs an owner service token of the org, or a platform admin           |
@@ -509,9 +509,9 @@ changes them. A self-hosted proxy has none of this: Access is where its identity
 | 403 `platform_admin_required`          | Listing, creating or renaming orgs needs a platform admin                                                |
 | 404 on `/o/<slug>/...`                 | No org has that slug (a platform admin sees 404; others 403)                                             |
 | 403 `private_credential`               | Download of a member's private credential by anyone but its owner                                        |
-| 403 `private_credentials_unavailable`  | Adding a private API key group where the org does not let members hold private credentials               |
+| 403 `private_credentials_unavailable`  | Adding a private provider key group where the org does not let members hold private credentials          |
 | 403 `download_requires_service_token`  | Credential download called by a person: use a service token that is an owner of the org                  |
-| 403 `Cross-site request rejected`      | Browser request from another origin (or a proxy POST from a web app)                                     |
+| 403 `Cross-site request rejected`      | Browser request from another origin (or a client API POST from a web app)                                |
 | 415 `Unsupported Content-Type`         | Management write without `content-type: application/json` (or YAML/multipart)                            |
 | 422 `record_not_found`                 | Single sign-on: the domain's TXT record is not published yet (or not visible to DNS yet): retry later    |
 | 409 `domain_taken`                     | Single sign-on: another org verified the domain; it must remove it first                                 |

@@ -1,4 +1,4 @@
-// API keys: every configured provider key by provider and group, with its state and recent requests, and per key a
+// Provider keys: every configured provider key by provider and group, with its state and recent requests, and per key a
 // connection test, clearing its cooldowns, and Disable. Editing a group (and adding or removing keys) is on its own
 // page (KeyGroup.tsx). Keys show only as their last characters: the secrets never reach the browser.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
@@ -6,10 +6,10 @@ import { Link } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
 import { Plug, Plus, Power, Search, Timer } from "lucide-react";
 import { useDeferredValue, useId, useState } from "react";
-import type { ApiKeysList, ProbeResult } from "#contract/api-keys.ts";
+import type { ProviderKeysList, ProbeResult } from "#contract/provider-keys.ts";
 import {
-  API_KEYS,
-  apiKeysAtom,
+  PROVIDER_KEYS,
+  providerKeysAtom,
   nowAtom,
   probeKeyAtom,
   resetCooldownAtom,
@@ -170,7 +170,7 @@ const KeyRow = ({
                 onClick={async () => {
                   const outcome = await reset.run({
                     payload: { auth_index: runtime.auth_index },
-                    reactivityKeys: API_KEYS,
+                    reactivityKeys: PROVIDER_KEYS,
                   });
 
                   setNote(
@@ -198,7 +198,7 @@ const KeyRow = ({
 
                   const outcome = await toggle.run({
                     payload: { auth_index: runtime.auth_index, disabled },
-                    reactivityKeys: API_KEYS,
+                    reactivityKeys: PROVIDER_KEYS,
                   });
 
                   setNote(
@@ -322,7 +322,7 @@ const FILTERS: ReadonlyArray<{ readonly id: Filter; readonly label: string }> = 
   { id: "disabled", label: "Disabled" },
 ];
 
-const List = ({ list }: { readonly list: ApiKeysList }) => {
+const List = ({ list }: { readonly list: ProviderKeysList }) => {
   const now = useAtomValue(nowAtom);
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
@@ -441,41 +441,43 @@ const OwnLead = () => {
 
   return (
     <p className={styles["empty"]}>
-      Your private API keys: only your own requests use them. Org admins see that each group exists,
-      its provider and its label, and nothing more.
+      Your private provider keys: only your own requests use them. Org admins see that each group
+      exists, its provider and its label, and nothing more.
     </p>
   );
 };
 
 export const KeysPage = () => {
-  usePageTitle("API keys");
-  const result = useAtomValue(apiKeysAtom);
-  const retry = useAtomRefresh(apiKeysAtom);
+  usePageTitle("Provider keys");
+  const result = useAtomValue(providerKeysAtom);
+  const retry = useAtomRefresh(providerKeysAtom);
 
   return (
     <div className={styles["page"]}>
       <header className={styles["head"]}>
-        <h1 className={styles["title"]}>API keys</h1>
+        <h1 className={styles["title"]}>Provider keys</h1>
         <Link to="/keys/new" className={kit["primary"]}>
           <Plus aria-hidden="true" size={18} strokeWidth={2.5} />
-          Add API key
+          Add provider key
         </Link>
       </header>
       {AsyncResult.match(result, {
         onInitial: () => (
           <p className={kit["muted"]} aria-busy="true">
-            Loading API keys…
+            Loading provider keys…
           </p>
         ),
         onFailure: (failure) => (
-          <Problem onRetry={retry}>Could not load the API keys. {failureMessage(failure)}</Problem>
+          <Problem onRetry={retry}>
+            Could not load the provider keys. {failureMessage(failure)}
+          </Problem>
         ),
         onSuccess: ({ value }) => (
           <>
             <OwnLead />
             {keySections(value).length === 0 ? (
               <p className={styles["empty"]}>
-                No API keys yet. Add a provider key to let the proxy answer requests with it.
+                No provider keys yet. Add a provider key to let the proxy answer requests with it.
               </p>
             ) : (
               <List list={value} />

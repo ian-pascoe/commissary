@@ -798,7 +798,7 @@ describe("system placement reconciler", () => {
 });
 
 describe("experimental-cch-signing", () => {
-  it("is accepted as a no-op key on Claude API keys (CCH signing is automatic)", async () => {
+  it("is accepted as a no-op key on Claude provider keys (CCH signing is automatic)", async () => {
     const config = await loadConfig(claudeKeyConfig("experimental-cch-signing: true"));
     expect(config["api-keys"].claude[0]?.keys[0]?.["experimental-cch-signing"]).toBe(true);
 

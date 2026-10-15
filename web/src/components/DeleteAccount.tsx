@@ -73,9 +73,9 @@ export const DeleteAccount = ({
     >
       <p>
         You leave every org you belong to, and everything of yours in them is deleted: your proxy
-        keys and your private accounts and API keys. An org where you are the only member is deleted
-        with all its data. This is immediate and permanent; there is no grace period and nothing can
-        be restored.
+        keys and your private accounts and provider keys. An org where you are the only member is
+        deleted with all its data. This is immediate and permanent; there is no grace period and
+        nothing can be restored.
       </p>
       <p>The first org is never deleted: if you are alone there, you only leave it.</p>
       <p>Type the email address you are signed in with to confirm.</p>

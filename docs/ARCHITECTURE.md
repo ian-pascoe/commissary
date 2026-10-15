@@ -2,7 +2,7 @@
 
 This document records the binding decisions for the TypeScript/Effect rewrite of CLIProxyAPI that runs on plain
 Cloudflare Workers behind Cloudflare Zero Trust Access. Behavioural references for the Go implementation live in
-`docs/research/*.md`. The Go code is a reference, not the authority (ADR 0019): the proxy copies its behaviour where that
+`docs/research/*.md`. The Go code is a reference, not the authority (ADR 0019): Commissary copies its behaviour where that
 is the better design and differs where it is not. It is the read-only reference checkout in `.repos/CLIProxyAPI` (upstream [router-for-me/CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI), cloned by
 `pnpm install`); Go paths cited here (`internal/...`, `sdk/...`) are relative to it.
 
@@ -11,10 +11,10 @@ is the better design and differs where it is not. It is the read-only reference 
 Goals:
 
 - Serve the OpenAI (chat/completions, completions, Responses), Claude (messages, count_tokens), Gemini (`/v1beta`) and
-  Interactions APIs from a Worker, backed by the same provider credentials (OAuth and API key) as the Go server.
+  Interactions APIs from a Worker, backed by the same provider credentials (OAuth and provider key) as the Go server.
 - Faithful port of model resolution, credential selection/cooldowns/refresh, translators, the thinking pipeline and
   user payload rules.
-- Cloudflare Access is the only client authentication mechanism (legacy proxy API keys are imported but never enforced).
+- Cloudflare Access is the only client authentication mechanism (the Go server's client keys are imported but never enforced).
 
 Non-goals (not ported): plugins (`internal/pluginhost`), CLIProxyAPIHome mode, TUI, mDNS discovery, pprof, git/Postgres/
 object stores, request-log files, per-credential outbound proxies (`proxy-url`), uTLS TLS fingerprinting, Codex live /
@@ -54,14 +54,14 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
 - **Worker** (stateless): routing, Access verification, request handling, translation, upstream `fetch`, streaming.
 - **Hosts** (ADR 0028, `src/http/hosts.ts`): with `API_DOMAIN` set (deploy setting `CF_LLM_PROXY_API_DOMAIN`), the
   Worker answers on two custom domains and the default export decides by hostname before the router: the API host
-  serves the proxy routes (the Access zone `protected` of `classifyPath`) and `/healthz`, every other host (the app host
+  serves the client API (the Access zone `protected` of `classifyPath`) and `/healthz`, every other host (the app host
   `APP_DOMAIN`) everything else; a request on the wrong host answers `404 {"error": "Not found: …"}` naming the right
   one. Without `API_DOMAIN` nothing is decided there. `GET /me` reports the API host as `api_url` for the panel.
 - **Orgs** (ADR 0021, `src/platform/org.ts`): one deployment serves many orgs, and every request and scheduled job
   belongs to exactly one. The per-request `CurrentOrg` service carries its id (`OrgId`: lowercase letters, digits and
   inner hyphens); `requestContext` provides it next to `WorkerEnv` as `global`, the org of the
   deployment that existed before orgs, and the Access gate replaces it with the org an org-scoped management URL
-  addresses or the org a proxy key names. `CurrentOrg`
+  addresses or the org an API key names. `CurrentOrg`
   is a required service, not a default: code that reaches org state without an org does not compile, and where a type
   cannot require it (the SessionState backends and the Antigravity executor also run outside a request in unit tests)
   a request without an org is a defect (`optionalRequestOrg`), never a silent read of `global`'s state.
@@ -145,7 +145,7 @@ client -> Cloudflare Access -> Worker
 - Tests: `vitest` + `@effect/vitest`; Worker/Durable Object integration tests with `@cloudflare/vitest-plugin` (successor of `@cloudflare/vitest-pool-workers`).
   Translators and the thinking pipeline are verified against golden fixtures produced by `tools/fixturegen`
   from the Go implementation (`go run ./tools/fixturegen`), checked in under `test/fixtures/`.
-- Never log tokens, API keys or JWTs.
+- Never log tokens, provider keys or JWTs.
 
 ## JSON values, config and payload rules
 
@@ -169,7 +169,7 @@ client -> Cloudflare Access -> Worker
   view carries no such list. `requests.proxy-url` is accepted but ignored. Unknown/inapplicable keys are dropped on import.
 - **Storage** (ADR 0025): the `ControlPlane` DO (`src/credentials/control-plane.ts`) keeps the org's configuration as
   config entries in SQLite (`ConfigStore`, `src/config/store.ts`; the pure mapping between a `Config` and its rows is
-  `src/config/entries.ts`). Every setting (by dotted path, e.g. `routing.strategy`), every API key group, every API key
+  `src/config/entries.ts`). Every setting (by dotted path, e.g. `routing.strategy`), every provider key group, every provider key
   (its id is its credential id), every channel's model aliases, every channel's model exclusions and every payload rule
   is a row of its own with a `revision`, `updated_at` and `updated_by`. One change counter per org (`config_changes`)
   moves on every write and is the config `version`; each entry a write changes takes the counter's new value as its
@@ -194,7 +194,7 @@ client -> Cloudflare Access -> Worker
   are dropped, as on import.
 - **Stored secrets** (`src/secrets/`): every value the ControlPlane stores that can hold a secret is a _sealed value_:
   the JSON of each auth file (`credentials.metadata`) and the value of every config entry (settings, key groups with
-  their headers, API keys, model rules, payload rules; and the legacy `config` document). Ids, positions, revisions,
+  their headers, provider keys, model rules, payload rules; and the legacy `config` document). Ids, positions, revisions,
   writers, `credential_state`, price overrides (`config_price_overrides`, prices only) and the usage tables stay
   readable. A sealed value is `enc:v1:` + base64url of a 96-bit
   random nonce, the AES-256-GCM ciphertext and its 128-bit tag, with `enc:v1\0<table>/<row id>` as additional data, so
@@ -250,7 +250,7 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
   from `WorkerEnv` and `CurrentOrg` on every call, so the same credential name in two orgs is two credentials with
   separate cooldowns, and its `auth_index` differs between them (`orgAuthIndexer`).
 - **Sources** (`src/credentials/`): auth JSON files imported through `importAuthFile`/`upsertCredential` (stored verbatim, sealed
-  with the org's data key (_Stored secrets_ above), in the DO's SQLite `credentials` table; the file _is_ the metadata) and API keys synthesised from `api-keys` config with
+  with the org's data key (_Stored secrets_ above), in the DO's SQLite `credentials` table; the file _is_ the metadata) and provider keys synthesised from `api-keys` config with
   the Go content-hash ids (`synthesize.ts`, verified against the Go synthesizer via `tools/fixturegen/credentials`).
   `derive.ts` turns a stored file into the immutable `Credential` (priority, weight, prefix, headers, exclusions,
   aliases, plan/domain attributes); global exclusions and aliases are applied at selection time, so config edits take
@@ -304,7 +304,7 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
   ADR 0025, no Go counterpart): a credential belongs to the org (a _shared credential_, `owner` unset) or to one member (a
   _private credential_, `owner` the member's id). A stored account carries `owner` (nullable `credentials.owner`, also on
   `oauth_sessions.owner` so a login finished later stays the member's); every credential that existed before is shared. A
-  private API key group is one sealed row of its own in `private_key_groups` (value sealed with the org data key,
+  private provider key group is one sealed row of its own in `private_key_groups` (value sealed with the org data key,
   `private_key_changes` is its change counter) and never enters the org's config entries, so the config, its snapshot and
   every export stay what an org admin may see; `CredentialPool` derives the private groups of every owner and stamps their
   credentials with the owner. `membership.private_credentials` is the org setting "members may connect private
@@ -323,18 +323,18 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
     `accessTo` answers `full`, `limited` or `none`): the owner reads and changes everything of their private credential.
     An org admin gets `limited`: `GET /credentials` lists it in `others` (`LimitedCredentialEntry`: provider, label, owner,
     `disabled`; no file fields, quota, models or state) and `PATCH /credentials/status` (disable, enable) and `DELETE`
-    work, nothing else; anybody else, and an org admin for any other operation, gets `404`. `GET /api-keys` likewise lists
+    work, nothing else; anybody else, and an org admin for any other operation, gets `404`. `GET /provider-keys` likewise lists
     other members' private groups in `others` (`LimitedKeyGroup`: family, label, owner); an org admin can only remove one
-    (`DELETE /api-keys/groups` with `private`) from the Keys page, since a private group is not in the config they edit; a
+    (`DELETE /provider-keys/groups` with `private`) from the Keys page, since a private group is not in the config they edit; a
     private key listed among the accounts (OpenCode Go) can also be disabled and enabled there (`PrivateKeyStore.setKeyExcludedAll`,
     the `*` exclusion, like a shared key). A shared credential
     stays admin-only. A plain member reaches only their own private credentials through the same routes (`/credentials*`,
-    `/oauth/*`, `/api-keys*`: `MEMBER_CREDENTIAL_ROUTES` in `access/policy.ts`); what they upload, log in or add is private
+    `/oauth/*`, `/provider-keys*`: `MEMBER_CREDENTIAL_ROUTES` in `access/policy.ts`); what they upload, log in or add is private
     whatever they send, an org admin's is shared unless `?private=true` (`private: true` for a key group) asks otherwise.
     Where the org setting is off creating one answers `403` (`forbidden` for an account, `private_credentials_unavailable`
     for a key group). The download is the owner's alone (`403 private_credential` for an org admin, a service-token owner
     included); an owner downloads their own with their session, a shared credential keeps ADR 0006.
-  - **Usage and registry**: usage records carry `private` (`migrations/0006_usage_private.sql`), set by the proxy handlers
+  - **Usage and registry**: usage records carry `private` (`migrations/0006_usage_private.sql`), set by the client API handlers
     from the credential that served the request; every org-wide read, export and the export queue leave private records
     out, and a member's reads add their own (`UsageFilter.privateOf`), see _Usage accounting and observability_. The model
     registry lists a private credential's models to its owner only (`RegistrySnapshot.visibleTo(member)` for `/v1/models`,
@@ -480,7 +480,7 @@ Core contracts every provider slice implements (Go references in each module hea
   edits}` (`handlers/openai/images.ts`) serve the Codex `gpt-image-*` models (multipart edits become JSON in the handler;
   free-plan credentials are excluded through `ExecutionInput.disallowFreeAuth`). `/v1/alpha/search` and
   `/backend-api/codex/alpha/search` (`handlers/codex/alpha-search.ts`) forward the sanitised body to
-  `.../alpha/search`, selecting only OAuth credentials or API keys with `alpha-search` (`executor/policy-picker.ts`).
+  `.../alpha/search`, selecting only OAuth credentials or provider keys with `alpha-search` (`executor/policy-picker.ts`).
 - **Multi-agent v2, orphan delegation, `is-compat`** (slice #26, see "Codex client rewriting and compat variants"): the executor
   optimises collaboration tools/namespace (`optimizeCodexMultiAgentV2RequestForAuth`, restored in stream, non-stream and WebSocket
   events) and compat models use the `claude -> codex` compat transform.
@@ -661,14 +661,14 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
   `upstream.claude.disable-cloaking-model-list`).
 - **Catalogs** (ADR 0019, ADR 0020): every provider's models come from **models.dev** plus the **catalog additions**, not
   from the Go server's embedded JSON.
-  - _Document_ (`models-dev.ts`): the models.dev `api.json` (≈5.4 MB) trimmed to the nine providers the proxy reads
+  - _Document_ (`models-dev.ts`): the models.dev `api.json` (≈5.4 MB) trimmed to the nine providers Commissary reads
     (`anthropic`, `google`, `google-vertex`, `xai`, `meta`, `kimi-code-plan-global`, `openai`, `opencode`, `opencode-go`)
     and to the fields it uses: no prices (only a `free` flag where the OpenCode gateways list a model at 0/0), no
     knowledge cut-off or other metadata. A document missing a provider or with a provider without models is invalid
     (the one-document rule: it feeds every provider, so it is all or nothing); a single malformed model is skipped and
     counted (the refresh reports and logs the number). `reasoning_options: null` (models.dev's way to say a model reasons
     without settings) is kept as an empty list.
-  - _Additions_ (`catalog-additions.ts`, `catalog/additions.json`): what the proxy owns on top, versioned data that is
+  - _Additions_ (`catalog-additions.ts`, `catalog/additions.json`): what Commissary owns on top, versioned data that is
     never fetched: full records for models models.dev does not list (Antigravity and Devin entirely, models models.dev
     dropped), per-model `facts` models.dev lacks (thinking `dynamicAllowed`, web search, ...), per-provider `defaults`,
     `include`/`exclude` patterns and the Codex `plans` (which model ids each plan offers). Seeded once from the Go
@@ -816,7 +816,7 @@ Port of `auto_refresh_loop.go` + `conductor_refresh.go` + the per-provider `Refr
   tests). Each HTTP call is bounded to 30 s, a whole refresh to 120 s. Claude retries only HTTP >= 500 and blocks the
   credential for `Retry-After` on 429; Codex retries three times except `refresh_token_reused`.
 - **Request-time preparation** (`ensureFresh(id)`): returns a snapshot with a usable `metadata.access_token`: Meta mints
-  the API key from the DCA token (persisted first), OAuth providers refresh when the token is missing/expired/rejected
+  the provider key from the DCA token (persisted first), OAuth providers refresh when the token is missing/expired/rejected
   (Antigravity: within 5 min), **Vertex** mints a service-account token. `patchCredentialMetadata(id, patch)` persists
   preparation results (Antigravity `project_id`, Claude profile fields) without touching token material.
 - **Vertex** (`vertex.ts`): no auth-file refresh. RS256 JWT-bearer grant with WebCrypto (PEM repaired like
@@ -836,7 +836,7 @@ login); Claude device-profile preparation is the executor's `stabilize-device-pr
 
 Ported from `internal/runtime/executor/claude_executor*.go`, `internal/translator/claude/*` and the helpers they use.
 
-- **Credentials**: OAuth access tokens (`metadata.access_token`) and API keys (`api-keys.claude[]`, synthesised by
+- **Credentials**: OAuth access tokens (`metadata.access_token`) and provider keys (`api-keys.claude[]`, synthesised by
   `claude/config-credentials.ts`); base URL defaults to `https://api.anthropic.com`. OAuth credentials get the Claude
   Code treatment (cloaking); API-key credentials to first-party hosts keep caller-owned mode (caller betas verbatim,
   body `betas` appended). Custom `base-url` gateways skip upstream `count_tokens` and estimate locally.
@@ -899,8 +899,8 @@ Deviations from Go (all deliberate, documented in code headers):
 ## Gemini, Vertex and Interactions (`src/executor/gemini/`, `src/translator/gemini/`, `src/handlers/gemini/`)
 
 - **Providers**: one engine (`executor/gemini/google.ts`) parameterised by a `GoogleVariant` (`targets.ts`): `gemini`
-  (API key, `x-goog-api-key`), `gemini-interactions` (same key, native `POST /v1beta/interactions` with the
-  `Api-Revision` header) and `vertex` (API key against the project-less host, or a service account against the regional
+  (provider key, `x-goog-api-key`), `gemini-interactions` (same key, native `POST /v1beta/interactions` with the
+  `Api-Revision` header) and `vertex` (provider key against the project-less host, or a service account against the regional
   `projects/<id>/locations/<loc>` endpoint; Imagen models go through `:predict` with the request/response converters).
   Request shaping (`shaping.ts`: model/suffix handling, `maxOutputTokens` cap, content-turn splitting) and usage parsing
   (`usage.ts`: `usageMetadata`/Interactions usage with the v2 token breakdown - re-exported from `usage/parsers.ts` - and intermediate-usage filtering) follow the Go executors. Payload rules
@@ -912,7 +912,7 @@ Deviations from Go (all deliberate, documented in code headers):
 - **Vertex tokens**: service-account access tokens are minted by the ControlPlane (`ensureFresh`) before the attempt by
   the conductor's credential preparation (`needsPreparation` for `vertex` without `metadata.access_token`); the executor
   only reads `metadata.access_token` (401 `credentialScoped` when missing). API-key vs service-account is decided by the
-  `api_key` attribute (a minted `access_token` next to a `service_account` is a bearer token, not an API key).
+  `api_key` attribute (a minted `access_token` next to a `service_account` is a bearer token, not a provider key).
 - **Translators** (all golden-fixture tested against Go, `tools/fixturegen/translator/corpus/*-gemini.json`,
   `gemini-interactions.json`, `interactions-*.json`): gemini->gemini, claude->gemini, openai->gemini,
   openai-response->gemini, interactions<->gemini, interactions->interactions (passthrough). Shared Gemini pieces live
@@ -998,13 +998,13 @@ control panel at `/` (`web/`, through `contract/`) and may change incompatibly: 
 that is cheap, but scripts written for the Go server are not guaranteed to keep working. The upstream panel (`Cli-Proxy-API-Management-Center`) is not served:
 its address redirects to `/` (_Legacy panel address_ below), and the routes only it needed are gone (`requests/api-call`,
 the operational and log routes listed under _Also not ported_) or replaced by the config entry routes (_Config entries_). Auth is the Access admin gate only (`access/routes.ts` classifies `/v9/management*`, the
-panel paths and `/management.html` as `management`), or a hosted proxy's sign-in (_Hosted proxy_ below); Go's single
+panel paths and `/management.html` as `management`), or Commissary Cloud's sign-in (_Commissary Cloud_ below); Go's single
 management key is not ported, and the port's per-org management keys (_Management keys_ below) are its own design.
 
-- **Config entries** (`settings-routes.ts`, `api-keys-routes.ts`, `model-rules-routes.ts`, contract `config.ts`): Go's
+- **Config entries** (`settings-routes.ts`, `provider-keys-routes.ts`, `model-rules-routes.ts`, contract `config.ts`): Go's
   management API reads and edits the whole configuration as one document (`GET|PUT|PATCH /config`, `GET|PUT /config.yaml`,
   `GET|PUT|PATCH|DELETE /config/*path`) and writes without a version. Dropping those routes is a deliberate difference
-  (ADR 0025, ADR 0019): the Workers port stores every setting, key group, API key, channel rule list and payload rule as a
+  (ADR 0025, ADR 0019): the Workers port stores every setting, key group, provider key, channel rule list and payload rule as a
   config entry with a revision (_Storage_ above), and each route below edits its own kind of entry and names the revision
   it read. A stale revision, or a group that vanished, answers `409 conflict` and stores nothing; a write of another
   entry never conflicts. Answers carry the new change counter as `version` (`Saved`, `EntrySaved` in `contract/config.ts`).
@@ -1013,7 +1013,7 @@ management key is not ported, and the port's per-org management keys (_Managemen
     `PUT|DELETE /config/oauth/model-alias|excluded-models/:channel` answer `404` now (still behind the admin gate). With
     them go the raw configuration editor and its masking and placeholder machinery (`config-secrets.ts`,
     `settings-raw.ts`, `config-document.ts`): no route reads the whole document back, and no route reads a secret back
-    at all (the API keys page shows previews, the settings view carries no secret), so there is nothing to mask and
+    at all (the provider keys page shows previews, the settings view carries no secret), so there is nothing to mask and
     nothing to restore. The one whole-configuration write is the import (_Settings_ below).
   - Config errors never quote a value (`config/codec.ts`: a YAML syntax error is a fixed sentence per `yaml` error code
     from `config/yaml-message.ts`, never the library's text, plus `line`/`column`; an unresolvable alias
@@ -1034,8 +1034,8 @@ management key is not ported, and the port's per-org management keys (_Managemen
   - Price overrides (`price-routes.ts`, contract `prices.ts`; Workers addition): an org's price for a provider and model,
     one entry each, see _Usage accounting and observability_ (Cost). They are not part of the config document, so
     `GET /settings` and the import never carry them.
-- **Private credentials in the API** (ADR 0023): every credential and API key route takes the caller as a `Viewer`; plain
-  members reach the credential, OAuth and API key routes for their own private credentials only (the policy opens those
+- **Private credentials in the API** (ADR 0023): every credential and provider key route takes the caller as a `Viewer`; plain
+  members reach the credential, OAuth and provider key routes for their own private credentials only (the policy opens those
   routes to members, the handlers narrow them), org admins get existence-only rows (`others`) for the rest. See _Credentials
   and selection_ for the rules; `docs/ACCESS.md` for the matrix.
 - **Credentials** (`credentials-routes.ts`, `credential-entry.ts`, `credentials/field-patch.ts`): list (filters,
@@ -1043,9 +1043,9 @@ management key is not ported, and the port's per-org management keys (_Managemen
   tokens included; deviation from Go: only a service-token admin may call it, an email admin gets
   `403 download_requires_service_token`: the response is the one place a stored refresh token leaves the Worker, and
   a service token is the credential meant for scripts, see `ACCESS.md`), `models`, `status`, `fields`, `refresh`, `routing/cooldown/reset`. Credential id = file name; the
-  list holds the auth files plus the config API keys whose provider reports quota with the key itself (`source:
+  list holds the auth files plus the config provider keys whose provider reports quota with the key itself (`source:
   "config"`, `quota/report.ts` `CONFIG_QUOTA_PROVIDERS`: OpenCode Go only; `status` toggles any config key through its
-  `excluded-models`, see _API keys_ below). Deviation from Go, which lists no config API keys in `/auth-files` (its
+  `excluded-models`, see _Provider keys_ below). Deviation from Go, which lists no config provider keys in `/auth-files` (its
   panel shows them on the providers page only): the panel's Accounts page needs them for the OpenCode Go usage windows
   (see _Quota check_). Such an entry is named by its `auth_index` (`id` and `name`; the content-addressed credential id
   is never sent), `account` is the masked key (`[redacted]…abcd`), `supports_quota` is true, `key_group` (`{family,
@@ -1057,18 +1057,18 @@ management key is not ported, and the port's per-org management keys (_Managemen
   Other config keys stay off the list (OpenCode Zen and the rest have no usage endpoint that takes the key). `auth_index` = `hex(HMAC-SHA256(AUTH_INDEX_KEY, "auth-index:" + id))[:16]` (`auth-index.ts`).
   Deviation from Go (security): Go's index is the unsalted `sha256(seed)[:16 hex]`, and a config credential id is
   itself `kind:sha256(kind␀key␀base␀proxy␀prefix␀headers)[:12]` (`credentials/synthesize.ts`), so anyone holding
-  either could confirm guessed API keys offline and brute-force low-entropy ones (self-hosted or compat endpoints),
+  either could confirm guessed provider keys offline and brute-force low-entropy ones (self-hosted or compat endpoints),
   narrowed further by the `…abcd` preview. The index is keyed with a per-deployment secret (`AUTH_INDEX_KEY`, an
   Alchemy `Random` minted on a stage's first deploy and kept in the stack state, `alchemy.run.ts`; fixed keys in
   `alchemy dev` and the tests), and config credential ids never leave the Worker: no management response, usage
-  export or proxy header carries them, `name` lookups (`PATCH /credentials/status`, `GET /credentials/models`) match
+  export or client API header carries them, `name` lookups (`PATCH /credentials/status`, `GET /credentials/models`) match
   auth files only, and a config key is addressed by its `auth_index`. The index is never stored (D1 keeps the
   credential id, the ControlPlane recomputes indexes for lookups), so setting or rotating the key changes every index
   once (panel links `/accounts/<auth_index>` included). The key fails closed: a missing, non-string or < 16-character
   key throws instead of hashing (node:crypto accepts a 0-byte HMAC key), and once `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD`
   is set (the condition that refuses `ACCESS_DEV_BYPASS`) the `alchemy dev` key and keys under 64 characters are
   refused too (`deploymentAuthIndexer`, logged once per isolate; the ControlPlane resolves the key per call, so a
-  refusal fails the management calls that need an index, not the Durable Object; proxying is unaffected, its log
+  refusal fails the management calls that need an index, not the Durable Object; model traffic is unaffected, its log
   line then omits `authIndex`). `auth_index` inputs match case-insensitively. The key is a node:crypto `KeyObject` imported once per isolate
   and the indexes are memoised (`subtle.sign` is async-only; DO lookups and the views are synchronous). The ControlPlane builds the redacted panel
   entries (`listCredentialEntries`) and owns the mutations (`patchCredentialFields`, `refreshCredential`,
@@ -1078,7 +1078,7 @@ management key is not ported, and the port's per-org management keys (_Managemen
   skipped?, error?, message?, status?}` per distinct name (names are exact file names, not trimmed), so a partial
   failure names who failed and why: `not_found` for unknown names and config credential ids (a delete of a name
   already gone counts as done, as the single delete would leave it; so does a config id, which must read like any
-  unknown name or the reply would confirm a guessed API key), `config_credential` for a listed config account named by
+  unknown name or the reply would confirm a guessed provider key), `config_credential` for a listed config account named by
   its `auth_index` (indexes are public, so this confirms nothing), `refresh_failed` with a fixed message and the upstream status
   (never the token endpoint's body, which can echo the refresh token), and `skipped` + `not_refreshable` for an account
   without a refresh token. At most `MAX_BATCH_NAMES` (100) names, `MAX_BATCH_REFRESH_NAMES` (20) for a refresh (each
@@ -1090,7 +1090,7 @@ management key is not ported, and the port's per-org management keys (_Managemen
   object four at a time. Entries
   also carry the
   account's own routing fields for the panel (Workers addition): `prefix` (the effective one selection uses, not the
-  raw metadata), `disable_cooling`, `headers` (masked like the API keys page, `maskHeaders`: every non-empty value
+  raw metadata), `disable_cooling`, `headers` (masked like the provider keys page, `maskHeaders`: every non-empty value
   except the safe-header allow-list `SAFE_HEADER_NAMES` and pure client copies `$Name` / `$CPA-SESSION-ID`, since a
   secret can sit under any name), `excluded_models` and `model_aliases` (its own lists, without the channel rules).
   `PATCH /credentials/fields` type-checks the fields the panel edits (`prefix` with outer slashes dropped like Go's
@@ -1103,16 +1103,16 @@ management key is not ported, and the port's per-org management keys (_Managemen
   `[redacted` or `[new secret` is refused, so a masked value is never stored or copied to another header. This does
   not make stored secrets immovable: a PATCH of `base_url` (stored as sent, as in Go) still sends the account's token
   to the new address.
-- **API keys** (`api-keys-routes.ts`, `api-keys-view.ts`, `api-keys-write.ts`, `api-keys-probe.ts`, contract `api-keys.ts`):
+- **Provider keys** (`provider-keys-routes.ts`, `provider-keys-view.ts`, `provider-keys-write.ts`, `provider-keys-probe.ts`, contract `provider-keys.ts`):
   the control panel's keys page. Workers addition, no Go counterpart (Go's panel edits whole family arrays with raw keys).
-  - `GET /api-keys`: every `api-keys` group (all families, compat endpoints included) with the config `version`, the
+  - `GET /provider-keys`: every `api-keys` group (all families, compat endpoints included) with the config `version`, the
     group's `id` and `revision` (its config entry, see _Config entries_), the effective base URL and, per key, `auth_index`, a `[redacted]…abcd` preview, `disabled` (effective `excluded-models`
     holds `*`) and the runtime of its credential (`auth_index`, counters, cooldowns, last error; not its id). Built in the ControlPlane
     (`apiKeysView`) from one snapshot of config and credential pool. **Secrets never leave**: keys are previews, every
     header value is masked (`[redacted]…`) except safe headers and pure client copies (`maskHeaders`), `proxy-url` and `experimental-cch-signing` (no effect
     on Workers) are left out and only reported as group `warnings`.
-  - `PUT /api-keys/groups` (`{family, id?, revision, group}`: replace the group `id` at `revision`, or add one after the
-    family's last, with no `id` and `revision` 0) and `DELETE /api-keys/groups` (`{family, id, revision}`): a group and its
+  - `PUT /provider-keys/groups` (`{family, id?, revision, group}`: replace the group `id` at `revision`, or add one after the
+    family's last, with no `id` and `revision` 0) and `DELETE /provider-keys/groups` (`{family, id, revision}`): a group and its
     keys are config entries (ADR 0025). The Worker reads the entries, answers `409 conflict` when the group changed since
     `revision` or vanished (a write of another group never conflicts), applies the edit to the assembled document,
     dry-runs it through the config decoder and writes the group alone (`writeKeyGroup`) **without retry** (the panel
@@ -1133,7 +1133,7 @@ management key is not ported, and the port's per-org management keys (_Managemen
     first of a family's duplicates, which would let a typed key in an earlier group delete the stored key, or the
     whole group, of a later one): for the families Go deduplicates across groups (gemini, interactions, vertex;
     `keyIdentities` in `config/normalize.ts` is the normaliser's own uniqueness id) `settleDuplicates`
-    (`api-keys-write.ts`, `key-duplicates.ts`) drops from the written group every typed key (`api-key`) equal to a
+    (`provider-keys-write.ts`, `key-duplicates.ts`) drops from the written group every typed key (`api-key`) equal to a
     key of another group, to a key the group keeps by `auth_index`, or to an earlier typed key, before the
     normaliser runs. A key counts as typed when the request writes its secret, header values (other than
     masked placeholders), a `proxy-url` or, for its group, another `base-url`: these feed the uniqueness id, so a
@@ -1143,14 +1143,14 @@ management key is not ported, and the port's per-org management keys (_Managemen
     left without keys (a new group, or a replaced one, made only of copies) is stored but not shown, as the list leaves
     out a group without keys, and the reply is the same. The assembled document is canonical (the store decodes it on every
     write), so list positions are document positions.
-  - `POST /api-keys/probe {auth_index}`: one connection test, made by the **Worker** with the credential's own base URL
+  - `POST /provider-keys/probe {auth_index}`: one connection test, made by the **Worker** with the credential's own base URL
     and headers (the ControlPlane only hands over the target, `apiKeyProbeTarget`, like `quotaProbeTarget`): a model
     listing (gemini/interactions `/v1beta/models` paged, claude `/v1/models` with `x-api-key` on api.anthropic.com
     else Bearer, codex/xai/meta `/models` or `/v1/models`, compat `/models`) or, for Vertex (no listing), a one-token
     `countTokens` on the first configured model. 30 s bound, not reported to the credential pool (no counters or
     cooldown), `200` always (`ok: false` with `status_code` and a fixed message; bodies and keys are never copied).
     Meta `/models` and Vertex `countTokens` are unverified against the live services.
-  - `PATCH /credentials/status` (`auth_index`; `name` addresses auth files only) on a config API key adds or removes `*` in its
+  - `PATCH /credentials/status` (`auth_index`; `name` addresses auth files only) on a config provider key adds or removes `*` in its
     `excluded-models` (Go `toggleConfigAPIKeyExcludedAll`; answers `via: "config:excluded-models"`, `excluded_pattern: "*"`);
     the id and `auth_index` do not change. A compat key answers `409`: disable the endpoint (its group's `disabled`). The
     toggle names no revision: it sets one flag to the state asked for, so the last toggle wins; it moves the group's
@@ -1167,7 +1167,7 @@ management key is not ported, and the port's per-org management keys (_Managemen
     `null`), the `defaults`, the config `version` and `updated_at`, `revisions` (the revision of every stored setting by
     dotted path; a setting at its default is not stored and is not listed, revision 0),
     `payload` rule counts per kind, `prefixed_credentials` and the read-only `request_scoped_errors` map. There is no
-    `not_applied` list: not-applied keys are never stored, only the import names them. **No secrets**: API keys, proxy
+    `not_applied` list: not-applied keys are never stored, only the import names them. **No secrets**: provider keys, proxy
     URLs and client keys are never in the view.
   - `PATCH /settings {revisions, patch}`: `patch` is a deep partial of the values; `null` resets a setting to its default
     (its entry is deleted). `revisions` names the revision of each setting the patch changes (absent = 0): a setting
@@ -1202,12 +1202,12 @@ management key is not ported, and the port's per-org management keys (_Managemen
   (GitHub release lookup), the file-log routes (`GET|DELETE /observability/logs`, `/observability/logs/errors/*`,
   `/observability/logs/requests/*`; Workers have no log files), `routing/model-definitions/:channel` (static catalogs;
   the panel reads `routing/models` and `credentials/models`), `GET /observability/usage/api-keys` (per-key counters;
-  `GET /api-keys` carries them) and `GET /oauth/callback` (the local callback forwarder's target; `POST` is the panel's).
+  `GET /provider-keys` carries them) and `GET /oauth/callback` (the local callback forwarder's target; `POST` is the panel's).
   The upstream panel's `X-CPA-Version` and `X-CPA-Support-Plugin` response headers are not sent either (deviation from Go).
 - **Not here**: `/oauth/*` (`oauth-routes.ts`, see _Provider OAuth logins_), `/observability/usage/*` (`usage-routes.ts`, see
   "Usage accounting and observability"), plugins, Home, `/v0/management`, and (deviation from Go) `POST /requests/api-call`:
   Go substitutes a credential's token into a request to any host the caller names, for the upstream panel's browser-side
-  quota and key probes; here those probes run server-side (`credentials/quota`, `api-keys/probe`), so the route is not
+  quota and key probes; here those probes run server-side (`credentials/quota`, `provider-keys/probe`), so the route is not
   ported and answers `404` (still behind the admin gate).
 - **Control panel** (`web-panel.ts`, `web/`): `GET /`, the panel's page paths (`/accounts`, `/keys`, `/models`, `/usage`,
   `/settings` and their sub-paths; `access/routes.ts` `PANEL_SECTIONS`) and `/assets/*` (hashed bundle files) are in the
@@ -1219,7 +1219,7 @@ management key is not ported, and the port's per-org management keys (_Managemen
   from Go: `/` was a public JSON banner there.
 - **Panel theme** (`web/src/lib/theme.ts`, `web/src/theme-boot.ts`, `web/src/styles/tokens.css`): light and dark through
   semantic `light-dark()` tokens. The theme follows `prefers-color-scheme` until the operator picks Light or Dark in the
-  shell's theme menu (kept in `localStorage` as `cf-llm-proxy.theme`). The CSP allows no inline script, so a Vite plugin
+  shell's theme menu (kept in `localStorage` as `commissary.theme`). The CSP allows no inline script, so a Vite plugin
   builds `theme-boot.ts` into a hashed same-origin classic script (`/assets/theme-<hash>.js`) placed in `<head>`; it sets
   `data-theme`, `color-scheme` and the `theme-color` metas before the first paint, so a stored choice never flashes.
 - **Panel pages** (`web/src/pages/`): Overview (`/`); Accounts (`/accounts`: every account ordered by urgency, filters
@@ -1239,11 +1239,11 @@ management key is not ported, and the port's per-org management keys (_Managemen
   and links its key group on the Keys page in place of routing, enable/disable and delete); Connect (`/accounts/connect`: OAuth sign-in by pasted callback address or device
   code, Vertex service-account import, auth-file upload); Usage (`/usage`: totals, tokens per hour or day, a breakdown
   by model, account, provider, user or endpoint whose rows narrow the page, and the request log with each request's
-  details and failure body); API keys (`/keys`: every `api-keys` group by provider, each OpenAI-compatible endpoint
+  details and failure body); provider keys (`/keys`: every `api-keys` group by provider, each OpenAI-compatible endpoint
   its own section, keys by their last characters with state, recent requests, a connection test, clear cooldowns and
   enable/disable; `/keys/$family/$index` and `/keys/new?family=` edit or add one group: endpoint, keys typed in once,
-  models with discovery through the probe, exclusions, delete; reads `GET /api-keys` and writes one group with
-  `PUT /api-keys/groups` carrying the group's `id` and `revision`, existing keys by `auth_index`, everything the form
+  models with discovery through the probe, exclusions, delete; reads `GET /provider-keys` and writes one group with
+  `PUT /provider-keys/groups` carrying the group's `id` and `revision`, existing keys by `auth_index`, everything the form
   does not show kept as stored; delete sends `id` and `revision` too; a `409` shows a Reload button and no automatic
   refetch, so the draft stays); Models (`/models`: every model clients can call, plus the hidden ones
   no account serves now, ordered by standing, filters All / Needs attention / Hidden, search over names, aliases and
@@ -1304,11 +1304,11 @@ management key is not ported, and the port's per-org management keys (_Managemen
   limited to the quota reason / last error code; `GET /credentials` always returns JSON timestamps as RFC 3339 strings;
   `POST /credentials/quota`, `POST /credentials/quota/all`, `POST /credentials/batch` and the entries' `quota_report`
   are Workers additions (see _Quota check_), as are `/credentials/reset-grants` and the entries' `reset_grants` (see
-  _Claude reset grants_). The API keys,
+  _Claude reset grants_). The provider keys,
   Settings (with the import) and model rule routes are Workers additions (secrets never in their responses and never read
   back; every write names the revision of the entry it changes and a stale one is `409`; values the normaliser would
   rewrite refused with `422` instead of silently changed). Go's whole-document `/config*` routes are not ported
-  (_Config entries_ above). Config API keys can be toggled
+  (_Config entries_ above). Config provider keys can be toggled
   (Go answers the same through `excluded-models`); compat keys cannot, only their endpoint.
 
 ## Quota check (`src/quota/`, `src/management/quota-routes.ts`)
@@ -1319,7 +1319,7 @@ result is stored.
 
 - **Flow** (`check.ts`): the ControlPlane resolves the account and its token (`quotaProbeTarget`: `ensureFresh`, then
   `target.ts`; the token Go's api-call substitutes for `$TOKEN$`, the Meta `dca_token`, the Devin session token; for a
-  listed config API key, named by its `auth_index`, the key itself without a refresh). The
+  listed config provider key, named by its `auth_index`, the key itself without a refresh). The
   **Worker** then calls the usage endpoint with its `HttpClient` (`probe.ts`, 15 s per call), so the single-writer
   object is never held by a slow provider. Finally the ControlPlane merges the outcome into the stored report
   (`recordQuotaReport`, `report.ts`).
@@ -1427,7 +1427,7 @@ resets, each of which empties the usage windows it `clears` (`five_hour`, `seven
   `outcome`; `429` is `rate_limited`, `401`/`403` `auth_error`; any other status or body, a timeout or a transport
   error is `unknown` (a reset may have been spent; "HTTP 200 alone is not a reset"); so is a `3xx`, since Anthropic
   calls never follow redirects (`redirect: "manual"`; a redirected status read is a failed read). Only `reset` (or
-  `already_used` on a resend) counts as spent: the proxy then clears the account's cooldowns (as
+  `already_used` on a resend) counts as spent: Commissary then clears the account's cooldowns (as
   `POST /routing/cooldown/reset`) and checks its quota again. When the answer cannot be recorded in the ControlPlane
   the `outcome` is still returned, with a `warning`.
 - **Double spends**: the claim journal lives in the ControlPlane (single writer, so serialized across tabs and admins):
@@ -1450,7 +1450,7 @@ resets, each of which empties the usage windows it `clears` (`five_hour`, `seven
   Claude Code client, not verified against Anthropic): the `request_id` is an idempotency key, so a resend with it
   does not spend a second reset; `already_used` answering a resend means the first request spent the reset; a reset
   is the only thing that lowers a grant's `resets_left` or starts a `cooldown_until`; `skip_spend=1` makes the status
-  read free of side effects; the Claude CLI headers (`CLAUDE_HEADERS`) are required. Clearing the proxy's cooldowns
+  read free of side effects; the Claude CLI headers (`CLAUDE_HEADERS`) are required. Clearing Commissary's cooldowns
   after a reset follows the Go maintainers' advice in issue #6507, not upstream code.
 - **Differences from the upstream panel**: the journal is server-side and shared instead of per tab, with the in-flight
   lease; an open claim past its 10 minutes is dropped and the next claim starts fresh (the panel blocks the tab until
@@ -1510,7 +1510,7 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   without a trailing `-YYYYMMDD`). `PRICE_PROVIDERS` maps a provider key to the models.dev providers whose prices
   apply (`claude` → `anthropic`, `codex` → `openai`, `gemini`/`gemini-interactions` → `google`, `vertex` →
   `google-vertex`+`google`, `antigravity` → `google`+`anthropic`, `xai`, `meta`, `opencode-zen` → `opencode`,
-  `opencode-go`); subscription accounts cost the same as API keys (API-equivalent). Devin, Kimi (models.dev lists only
+  `opencode-go`); subscription accounts cost the same as provider keys (API-equivalent). Devin, Kimi (models.dev lists only
   its zero-priced subscription plan) and OpenAI-compatible endpoints have no catalog price: their models are unpriced
   until an override names them. Rates are US dollars per million tokens
   and one token at $1 per million is one micro-dollar, so the cost is the sum of tokens × rate rounded once; a missing
@@ -1625,7 +1625,7 @@ the registry snapshot (`modelLookup`, ids `devin/<id>`) before the embedded cata
 
 No Go counterpart: CLIProxyAPI reaches OpenCode only through an `openai-compatibility` entry (chat only). The Workers port has two
 API-key providers, `opencode-zen` (`https://opencode.ai/zen/v1`) and `opencode-go` (`https://opencode.ai/zen/go/v1`), configured
-under `api-keys.opencode-zen` / `api-keys.opencode-go` (same group/key shape as the other API-key families; `models[].protocol`
+under `api-keys.opencode-zen` / `api-keys.opencode-go` (same group/key shape as the other provider key families; `models[].protocol`
 is `chat`, `responses`, `messages` or `gemini`). One executor (`executor.ts`) serves both keys. `models[].protocol` decodes as
 any string: the normaliser drops it in every other provider section (a stray value never breaks a document), and
 `decodeRawConfig` rejects an unknown value in the OpenCode sections, naming its path. The panel's OpenCode model rows offer it as a
@@ -1646,8 +1646,8 @@ select ("Auto (catalog)" when unset).
   `openai`, `openai-response`, `claude` or the Gemini engine's). Token counting is local for every protocol (Gemini bodies are counted
   as chat). Images/video/speech entry formats and `/responses/compact` answer 501.
 - **Headers** (`headers.ts`): each protocol's native auth (`Authorization: Bearer` for chat/Responses, `x-api-key` +
-  `anthropic-version: 2023-06-01` for Messages, `x-goog-api-key` for Gemini); `User-Agent: cf-llm-proxy`,
-  `x-opencode-client: cf-llm-proxy`; `x-opencode-session` = the client's own `x-opencode-session` unchanged, else a UUIDv5
+  `anthropic-version: 2023-06-01` for Messages, `x-goog-api-key` for Gemini); `User-Agent: commissary`,
+  `x-opencode-client: commissary`; `x-opencode-session` = the client's own `x-opencode-session` unchanged, else a UUIDv5
   (`providerSessionUuid("opencode", …)`) of the explicit session identity, the WebSocket execution session or the derived
   conversation identity (stable across turns, distinct across conversations), else a random UUID (OpenCode Go answers 400
   `MissingSessionID` without the header). Another client's raw session id is never forwarded. Custom headers apply last and win.
@@ -1675,8 +1675,8 @@ select ("Auto (catalog)" when unset).
 - **Quota** (`src/quota/opencode-go.ts`): OpenCode Go keys are listed on the Accounts page as config accounts with the
   5-hour, weekly and monthly windows of `GET {base}/usage` (see _Quota check_ and _Management API_ "Credentials").
   OpenCode Zen has no usage endpoint.
-- **Key test** (`management/api-keys-probe.ts`): the gateways list models without authentication, so the panel's key test
-  POSTs `{base}/chat/completions` with the key, the gateway headers and the model `cf-llm-proxy-key-check` (`max_tokens: 1`); any
+- **Key test** (`management/provider-keys-probe.ts`): the gateways list models without authentication, so the panel's key test
+  POSTs `{base}/chat/completions` with the key, the gateway headers and the model `commissary-key-check` (`max_tokens: 1`); any
   2xx or 400 ("Model is unavailable": the key was accepted, nothing is billed) passes, 401 and other statuses fail.
 - **Catalog** (`opencode-catalog.ts`): the gateways read the same models.dev document as every other provider (`opencode` and
   `opencode-go`, ADR 0020), bundled in `catalog/models-dev.json` and refreshed into KV by the one `model-catalog-refresh` task
@@ -1695,12 +1695,12 @@ endpoint.
 
 ## Zero data retention (`src/platform/org-deletion.ts`, `src/management/{org-routes,export-view}.ts`)
 
-ADR 0027: deleting something deletes it at once, and the proxy keeps no content it does not need. The pieces:
+ADR 0027: deleting something deletes it at once, and Commissary keeps no content it does not need. The pieces:
 
 - **Retention** per org, `usage_retention_days` in the Platform registry (see "Usage accounting"). **Usage failures** keep
   status, type and code, not the body (same section).
 - **Member removal** deletes the member's private data in the ControlPlane (`#deleteMemberData`), and their Spend limits and
-  counters; **proxy keys** are deleted when revoked or expired ("Proxy keys"), and `ProxyKeyStore` reports every key it
+  counters; **API keys** are deleted when revoked or expired ("API keys"), and `ApiKeyStore` reports every key it
   deletes so the key's Spend limits and counters go with it.
 - **Org deletion** (`deleteOrg`, called by `DELETE /org` and by account deletion) runs, in this order: the org's usage rows in
   D1 (`deleteOrgUsage`, batched), the `SessionState` instances it registered, its `org.<id>.…` keys in the `CACHE` KV
@@ -1724,7 +1724,7 @@ ADR 0027: deleting something deletes it at once, and the proxy keeps no content 
   only owner of an org that has other members), then deletes the orgs the person is alone in (never `global`), leaves the
   others (`ControlPlane.leaveOrg`: removes the member and their data and clears the removal note that blocks a removed
   member from auto-joining again, which only an admin removal keeps), re-syncs the registry index and drops the person's
-  index rows. On a hosted proxy the sign-in account is deleted after the last org step and before the registry forgets the
+  index rows. On Commissary Cloud the sign-in account is deleted after the last org step and before the registry forgets the
   person (`hosted/session.ts` `deleteSignInAccount`: Better Auth's user with its sessions and linked accounts, in one D1
   batch; the registry's `people` row goes with `removePerson`, so a later sign-in is a new sign-up).
 
@@ -1938,13 +1938,13 @@ Grok/GPT/recognised checks, Gemini replay, ~500 sanitiser runs over synthetic hi
 ## Orgs in addresses (`src/access/org-address.ts`, `src/management/org-routes.ts`)
 
 An org is addressed by its slug (ADR 0021), in two places, and the address is the only thing that names an org to the
-management API and the panel (the proxy endpoints still name it with the caller's key):
+management API and the panel (the client API endpoints still name it with the caller's key):
 
 - **`/v9/management/orgs/<slug>/<route>`** and **`/o/<slug>/<page>`** (`parseOrgAddress`, `routes.ts`). `orgAddressing` is a
   router middleware around the whole application: it takes the org prefix out of the URL before routing, so every
   management handler and the panel page handler are written once, for an unscoped path, and run against the org the address
   names (the `CurrentOrg` they read). The unscoped path means `global`. Matching is case-, slash- and
-  percent-encoding-insensitive like the rest of the classification (`/V8/Management//Orgs/Acme/settings`), and
+  percent-encoding-insensitive like the rest of the classification (`/V9/Management//Orgs/Acme/settings`), and
   `/v9/management/orgs` and `/v9/management/orgs/<slug>` (no route after the slug) are not prefixes: they are the
   platform-level routes below. The CSRF guards and the admin gate see the original URL, so every rule that applies to
   `/v9/management*` and to the panel pages applies to the scoped spellings too.
@@ -1956,12 +1956,12 @@ management API and the panel (the proxy endpoints still name it with the caller'
 
 Platform-level routes (`org-routes.ts`, contract group `orgs`, `src/management/contract/orgs.ts`):
 
-| Route                              | Who            | Does                                                                                                                                                                                                                                      |
-| ---------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /v9/management/me`            | anyone         | `{platform_admin, role, orgs: [{slug, name}]}`: `role` in the addressed org (`null` without one); every org for a platform admin, the orgs the caller belongs to otherwise; on a hosted proxy also `hosted`, `org_limit` and `owned_orgs` |
-| `GET /v9/management/orgs`          | platform admin | every org, `global` first (`suspended` on a suspended one)                                                                                                                                                                                |
-| `POST /v9/management/orgs`         | platform admin | creates `{slug, name}`; `201`, `409 slug_taken`, `422 invalid_slug`/`invalid_name`; on a hosted proxy anyone signed in, up to their owned-org limit (`409 org_limit_reached`), becoming its owner                                         |
-| `PATCH /v9/management/orgs/<slug>` | platform admin | changes `slug` and/or `name`; the id never changes, so stored data stays where it is; on a hosted proxy also `suspended`                                                                                                                  |
+| Route                              | Who            | Does                                                                                                                                                                                                                                        |
+| ---------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /v9/management/me`            | anyone         | `{platform_admin, role, orgs: [{slug, name}]}`: `role` in the addressed org (`null` without one); every org for a platform admin, the orgs the caller belongs to otherwise; on Commissary Cloud also `hosted`, `org_limit` and `owned_orgs` |
+| `GET /v9/management/orgs`          | platform admin | every org, `global` first (`suspended` on a suspended one)                                                                                                                                                                                  |
+| `POST /v9/management/orgs`         | platform admin | creates `{slug, name}`; `201`, `409 slug_taken`, `422 invalid_slug`/`invalid_name`; on Commissary Cloud anyone signed in, up to their owned-org limit (`409 org_limit_reached`), becoming its owner                                         |
+| `PATCH /v9/management/orgs/<slug>` | platform admin | changes `slug` and/or `name`; the id never changes, so stored data stays where it is; on Commissary Cloud also `suspended`                                                                                                                  |
 
 Anyone else gets `403 platform_admin_required` on the org routes it may not use. The panel reads `/me` for its org switcher.
 
@@ -2008,14 +2008,14 @@ error codes are in `docs/ACCESS.md` "Members, roles and teams".
   answers the principal's role and member id (`admit`), joining a person as a plain member when auto-join is on; a
   platform admin is an owner without joining. The ControlPlane is asked on every request, so removing a member or lowering
   a role applies on the next one. An unreachable ControlPlane fails the request (500) unless the caller is a platform admin
-  or the route is platform-level. `AccessIdentity` carries `role` and `memberId`; proxy handlers write the member id into
+  or the route is platform-level. `AccessIdentity` carries `role` and `memberId`; client API handlers write the member id into
   usage records (`member_id`, `migrations/0005_usage_member.sql`).
 - **Policy** (`access/policy.ts` `routeAccess`): platform-level (no role: `/v9/management/me`, `/v9/management/orgs*`, panel
-  pages without an org, `/assets`, `/management.html`), member (the proxy endpoints, the org's panel pages, `GET` usage
+  pages without an org, `/assets`, `/management.html`), member (the client API endpoints, the org's panel pages, `GET` usage
   records/summary/series, where a plain member is narrowed to their own records: by member id, or by Access principal for
   records from before members), admin (every other management route). Owner-only and ADR 0006 checks live in the handlers
   (role changes, auto-join, service token roles above member, the credential download). A plain member also reaches the
-  credential, OAuth and API key routes of `MEMBER_CREDENTIAL_ROUTES` (their own private credentials, ADR 0023); the handlers
+  credential, OAuth and provider key routes of `MEMBER_CREDENTIAL_ROUTES` (their own private credentials, ADR 0023); the handlers
   narrow every operation to what the caller's `Viewer` reaches (_Shared and private credentials_ above).
 - **Registry index**: the Platform registry lists which orgs each person and service token belong to, for `/me` and the
   panel's org switcher. Each member or token change bumps the ControlPlane's counter; the Worker then pushes the org's lists
@@ -2064,12 +2064,12 @@ credentials a subject may use; selection and the model registry read it (_Creden
   selection on the next request. Model lists lag by the registry's 5 s snapshot TTL. Grants never apply to private
   credentials, and Spend limits are separate (ADR 0024, _Spend limits_).
 
-## Proxy keys (`src/proxy-keys/`, `src/access/proxy-key.ts`, `src/management/proxy-key-routes.ts`)
+## API keys (`src/api-keys/`, `src/access/api-key.ts`, `src/management/api-key-routes.ts`)
 
-Workers addition replacing the Go client API keys (`access.api-keys`, imported but never enforced); ADR 0022. User docs:
-`docs/ACCESS.md` "Proxy keys", `docs/CLIENTS.md`.
+Workers addition replacing the Go server's client keys (`access.api-keys`, imported but never enforced); ADR 0022. User docs:
+`docs/ACCESS.md` "API keys", `docs/CLIENTS.md`.
 
-- **Format** (`proxy-keys/key.ts`): `cfp_<org id>_<key id>_<secret>`, key id 20 hex characters, secret 36 random bytes in
+- **Format** (`api-keys/key.ts`): `cfp_<org id>_<key id>_<secret>`, key id 20 hex characters, secret 36 random bytes in
   base64url. The org id is the permanent id, not the slug, so renaming an org keeps its keys working. Only the SHA-256 of
   the whole key is stored, with a display prefix (`cfp_<org>_<key id>_` and 4 characters of the secret).
 - **Store**: table `proxy_keys` in each org's ControlPlane (`CREATE IF NOT EXISTS`, next to the members tables): member id,
@@ -2081,7 +2081,7 @@ Workers addition replacing the Go client API keys (`access.api-keys`, imported b
   ControlPlane starts (the `revoked_at` column stays, never written). A member holds at most 100 keys (`409
   too_many_keys`). Removing a member deletes their keys, private accounts, private key groups and OAuth logins in the
   same Durable Object call.
-- **Gate** (`access/proxy-key.ts`): on a proxy route the first `cfp_…` credential in the Go config access provider's order
+- **Gate** (`access/api-key.ts`): on a client API route the first `cfp_…` credential in the Go config access provider's order
   wins over everything else, including an Access JWT. Verification asks the Platform registry whether the org exists (the
   answer is trusted for 30 s per isolate) (so a made-up org id never creates a ControlPlane), then the org's ControlPlane, which compares
   hashes in constant time and answers the member's id, email and role. The answer is cached per isolate for 30 s (never
@@ -2091,15 +2091,15 @@ Workers addition replacing the Go client API keys (`access.api-keys`, imported b
 - **Principal** `{kind: "key", keyId, memberId, email}`: usage records and logs store `key:<key id>` and the member id; the
   caller scope of session state is the member's (`user:<email>`), so a member's keys and their Access-era sessions share
   state. A key is never a platform admin, and the management zone never reads keys.
-- **Access sign-ins for clients** (`membership.access_clients`, `PATCH /membership`, owner only): ADR 0022 says proxy routes
+- **Access sign-ins for clients** (`membership.access_clients`, `PATCH /membership`, owner only): ADR 0022 says client API routes
   stop accepting Access sign-ins. The port keeps them in `global` behind this setting (on by default), so a deployment's
-  existing `cloudflared access` clients survive the move of the proxy routes out of Access; an owner turns it off once
+  existing `cloudflared access` clients survive the move of the client API out of Access; an owner turns it off once
   every client has a key. A sign-in names no org, so it never reaches another org, where the setting does not exist
   (`422 access_clients_global_only`). Without the
   Access edge the Worker reads the JWT from `cf-access-token` too (Access only sets `Cf-Access-Jwt-Assertion` on paths
   it guards). Service token headers cannot be honoured there: only Access turns them into a JWT, and the bypass
   application skips it.
-- **Infra** (`infra/access.ts` `provisionProxyBypass`): a second self-hosted Access application on the proxy paths of the
+- **Infra** (`infra/access.ts` `provisionProxyBypass`): a second self-hosted Access application on the client API paths of the
   Worker's hostname (custom domain, or the preview's `workers.dev` URL) with a Bypass/everyone policy; Access matches the
   most specific application, so the main application keeps every other path. It is derived from the Worker's output, so
   a deploy applies it only after the new Worker, which reads `cf-access-token`, is live. `tools/check-deploy.sh` verifies
@@ -2114,13 +2114,13 @@ prices each attempt, the ControlPlane counts and decides.
 - **Entries** (`spend/store.ts` `SpendStore`, in each org's ControlPlane, SQLite tables `spend_limits`, `spend_counters`
   and `spend_settings`, `CREATE IF NOT EXISTS`, so there is no D1 migration and a ControlPlane that predates the feature
   upgrades in place with no limits): a subject (`member`, `team`, `org`, `credential` (a shared one, named by its
-  `auth_index`) or `key` (a proxy key id)), a period and an amount in micro-USD, written by an org admin or, on their own
-  proxy key, by a member. Each limit has a revision and `updated_at/by`; an edit or delete names the revision in `If-Match`
+  `auth_index`) or `key` (an API key id)), a period and an amount in micro-USD, written by an org admin or, on their own
+  API key, by a member. Each limit has a revision and `updated_at/by`; an edit or delete names the revision in `If-Match`
   (`409 conflict` when stale). There is one limit per subject, period and writer, and the limits on one subject and period
   are enforced together, so the smaller amount binds. A member may not write a limit above an admin's on the same key and
   period (`422 exceeds_admin_limit`). A credential limit stores the credential's id and is named by its `auth_index` at the
-  edge. Removing a member (with their proxy keys), deleting a team and removing a credential delete the limits and
-  counters that name them in the same call; revoking a proxy key leaves its limit, which no request meets any more.
+  edge. Removing a member (with their API keys), deleting a team and removing a credential delete the limits and
+  counters that name them in the same call; revoking an API key leaves its limit, which no request meets any more.
 - **Calendar** (`spend_settings`, `PATCH /spend/settings`, org admins): an IANA time zone and the first day of the week;
   `UTC` and Monday until set. A day runs from local midnight to the next local midnight (`spend/period.ts`, through
   `Intl`, so a DST day has 23 or 25 hours), a week from the first day of the week, a month from the 1st. A counter is
@@ -2130,7 +2130,7 @@ prices each attempt, the ControlPlane counts and decides.
   without limits stores nothing and its check returns at once. A new limit counts from its creation (it does not look back
   at earlier usage), and the last limit of a subject and period drops its counter.
 - **Check** (`spend/ledger.ts` `SpendLedger`, the pool's `SpendPolicy`; `credentials/selection/pick.ts`): before a credential
-  is chosen the pool asks the ledger for the `SpendGate` of the caller (member, teams, proxy key): a **key** limit with no
+  is chosen the pool asks the ledger for the `SpendGate` of the caller (member, teams, API key): a **key** limit with no
   room refuses the request; a **member, team or org** limit with no room keeps the shared credentials away, so only the
   member's own private credentials may serve it, and when none can the request is refused; a **credential** limit with no
   room skips that credential like an unavailable one (the next credential serves, and with none left the answer is the usual
@@ -2150,27 +2150,27 @@ prices each attempt, the ControlPlane counts and decides.
   the first request of an org with no limits does no ledger work.
 - **Routes** (`spend-routes.ts`, contract `contract/spend.ts`; `access/policy.ts`): `GET /spend` answers the calendar and
   the limits the caller sees with `spent_micros`, `remaining_micros`, `period_start`, `resets_at` and `editable`
-  (org admins: every limit; a plain member: their own member limit, their teams', the org's and those on their proxy
+  (org admins: every limit; a plain member: their own member limit, their teams', the org's and those on their API
   keys); `POST /spend/limits` (201), `PUT|DELETE /spend/limits/:id` and `PATCH /spend/settings` (org admins only). Every
   other route above is open to members; the ControlPlane's `SpendService` decides what each may write
   (`403 forbidden` for a member on anything but their own keys, `404 subject_not_found`, `409 conflict` for a second
   limit on the subject and period, `422 invalid_limit`).
 - **Usage breakdowns** (`usage/d1.ts`): `GET /observability/usage/summary?group_by=team|key` adds the cost by team (each
   team's members' records summed apart, so a member on two teams counts in both and the groups can overlap) and by
-  proxy key (`key:<id>` principals; other sign-ins have the empty key). The private-traffic filter applies to both: a
+  API key (`key:<id>` principals; other sign-ins have the empty key). The private-traffic filter applies to both: a
   private-credential record is read by its owner alone.
 - **Panel** (`web/src/pages/Limits.tsx`, `LimitsForms.tsx`, model in `web/src/lib/spend.ts`): **Limits** (`/limits`, every
   member) lists the limits the caller sees with the Spend so far, what is left and when each starts over; org admins add,
-  edit and remove any limit and set the calendar, a plain member limits their own proxy keys. The Usage page offers Team and
-  Proxy key breakdowns beside Member.
+  edit and remove any limit and set the calendar, a plain member limits their own API keys. The Usage page offers Team and
+  API key breakdowns beside Member.
 
 ## Authentication (Cloudflare Access)
 
 - Access application on the Worker's custom domain, provisioned with the Worker by `alchemy.run.ts`/`infra/access.ts`
   (Allow policy for people, Service Auth policy for the stack's service tokens, SameSite=Lax cookie; its AUD tag feeds
-  `ACCESS_AUD`); `workersDev: false` so there are no `workers.dev`/preview URLs and Access cannot be bypassed. The proxy
-  routes are outside it ("Proxy keys" above): there the Worker is the only gate. With an API host ("Runtime topology")
-  the application covers the app host only and the API host has none; otherwise a bypass application takes the proxy
+  `ACCESS_AUD`); `workersDev: false` so there are no `workers.dev`/preview URLs and Access cannot be bypassed. The client
+  API are outside it ("API keys" above): there the Worker is the only gate. With an API host ("Runtime topology")
+  the application covers the app host only and the API host has none; otherwise a bypass application takes the client API
   paths of the one host out of Access.
 - The Worker verifies `Cf-Access-Jwt-Assertion` (RS256, JWKS from `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`,
   `iss` = team domain, `aud` contains the application AUD tag, `exp`/`nbf`). JWKS is cached per isolate.
@@ -2195,7 +2195,7 @@ prices each attempt, the ControlPlane counts and decides.
   JWKS keys are cached per isolate and refreshed on unknown `kid` at most once per 30 s (no cross-request locks, which
   workerd forbids). `ACCESS_DEV_BYPASS` only applies when the request host is loopback (i.e. `alchemy dev`) and is refused (warning logged once
   per isolate) whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set.
-- Clients of the proxy routes send proxy keys ("Proxy keys" above). Scripts on the management API use Access service
+- Clients of the client API send API keys ("API keys" above). Scripts on the management API use Access service
   tokens (`CF-Access-Client-Id`/`CF-Access-Client-Secret` headers, or Access single-header mode via `x-api-key`, set on
   the Access application with `read_service_tokens_from_header`; the Worker only sees the resulting JWT, so no Worker
   code is involved). User docs: `README.md` and `ACCESS.md`, `CLIENTS.md`, `MIGRATION.md`,
@@ -2206,43 +2206,43 @@ prices each attempt, the ControlPlane counts and decides.
 Workers addition, no Go counterpart (Go's single `remote-management.secret-key` is not ported); ADR 0026. User docs:
 `docs/ACCESS.md` "Management keys".
 
-- **Format** (`management-keys/key.ts`): `cfm_<org id>_<key id>_<secret>`, minted and parsed by the proxy keys' code
-  (`proxy-keys/key.ts` `mintOrgKey`/`parseOrgKey`) with its own prefix, so neither kind is ever taken for the other.
+- **Format** (`management-keys/key.ts`): `cfm_<org id>_<key id>_<secret>`, minted and parsed by the API keys' code
+  (`api-keys/key.ts` `mintOrgKey`/`parseOrgKey`) with its own prefix, so neither kind is ever taken for the other.
 - **Store** (`management-keys/store.ts`): table `management_keys` in each org's ControlPlane (`CREATE IF NOT EXISTS`):
   name, role, issuer, hash, prefix, created and last used (no expiry; revoking deletes the row); at most 100 rows per org
   (`409 too_many_keys`).
 - **Gate**: `Authorization: Bearer cfm_…` on the management zone of either mode, before the session or Access JWT. The
-  key is checked like a proxy key (registry `orgExists`, then the org's ControlPlane, cached 30 s per isolate, forgotten
+  key is checked like an API key (registry `orgExists`, then the org's ControlPlane, cached 30 s per isolate, forgotten
   at once in the isolate that revokes it) and becomes the principal `{kind: "mkey"}` (`mkey:<key id>` in logs), with the
   key's role in its org and never platform admin. `AdmissiblePrincipal` excludes it: a key is never admitted by the
-  member tables, and an org-scoped address of another org answers 403. On a self-hosted proxy the Access application
+  member tables, and an org-scoped address of another org answers 403. On a self-hosted Commissary the Access application
   still stands in front of the management zone, so the request must pass Access as well.
 - **Limits**: the role is at most the issuer's; a key never downloads a credential, registers or re-roles a service
-  token, or issues a key (`management_key_forbidden`); on a hosted proxy a key of a suspended org or issuer is refused.
+  token, or issues a key (`management_key_forbidden`); on Commissary Cloud a key of a suspended org or issuer is refused.
 
-## Hosted proxy (`src/hosted/`)
+## Commissary Cloud (`src/hosted/`)
 
 Workers addition, no Go counterpart; ADR 0026. `PROXY_MODE=hosted` (`hosted/mode.ts` `isHosted`) replaces Access with
 the Worker's own sign-in; unset, every hosted route answers like an unknown path (`hosted/only.ts`) and the gate is the
-Access one, unchanged. User docs: `docs/ACCESS.md` "Hosted proxy", `docs/DEPLOY.md` "Hosted proxy".
+Access one, unchanged. User docs: `docs/ACCESS.md` "Commissary Cloud", `docs/DEPLOY.md` "Commissary Cloud".
 
 - **Sign-in** (`auth.ts`, `routes.ts`, `session.ts`, `turnstile.ts`): Better Auth (core only, social providers GitHub and
   Google, account linking by verified email) over D1 (`auth_*` tables, migration `0008_hosted_auth.sql`), mounted at
   `/api/auth/*`, of which the Worker passes only social sign-in, the providers' callbacks, `get-session` and
   `sign-out` (the rest answers 404). An unverified email is refused; provider tokens, IP and user agent are never stored
-  (database hooks blank them). `POST /api/auth/sign-in/social` needs a Turnstile token (`x-captcha-response`) solved on the proxy's hostname, verified
+  (database hooks blank them). `POST /api/auth/sign-in/social` needs a Turnstile token (`x-captcha-response`) solved on the deployment's hostname, verified
   against `TURNSTILE_SECRET_KEY`. `/api/sign-in-options` tells the panel's `/sign-in` page the enabled providers and the
   Turnstile site key. The session cookie is read on every request, so a session ended by sign-out or suspension stops
   working at once.
-- **Gate** (`gate.ts` `authenticateHosted`, called by the access middleware when hosted): proxy routes take proxy keys
+- **Gate** (`gate.ts` `authenticateHosted`, called by the access middleware when hosted): client API routes take API keys
   only (rate-limited per org, `rate-limit.ts`, `429` with `Retry-After`); the management zone takes a management key,
   else the Better Auth session cookie, whose verified email becomes a `user` principal admitted like an Access email
   (platform admin when in `PLATFORM_ADMIN_EMAILS`). Access JWTs and service tokens are ignored. A panel page without a
   session redirects to `/sign-in?next=…`; the management API answers `401 Not signed in`. The cross-site checks
-  (`access/csrf.ts`) run first, as on a self-hosted proxy.
+  (`access/csrf.ts`) run first, as on a self-hosted Commissary.
 - **Standing** (`standing.ts`, Platform registry `signIn`/`standing`): the first request of a new person signs them up,
   creating a Personal org they own unless the person-to-orgs index already lists them (invited); `admitPrincipal` never
-  auto-joins anyone to `global` on a hosted proxy, whatever its stored setting. The registry records
+  auto-joins anyone to `global` on Commissary Cloud, whatever its stored setting. The registry records
   `people` (owned-org limit, suspension) and each org's `created_by` (owned orgs are counted by it) and `suspended_at`.
   Every request checks that neither the person nor the org is suspended, cached 30 s per isolate and forgotten at once
   where a suspension is made; suspending also deletes the person's (or the org members') sessions.
@@ -2259,7 +2259,7 @@ Access one, unchanged. User docs: `docs/ACCESS.md` "Hosted proxy", `docs/DEPLOY.
   Requiring SSO for a domain makes the social sign-in hook refuse that domain (`sso_required`) and deletes the D1
   sessions of everyone at it. Refusals redirect to `/sign-in?error=<code>`. Differences from Better Auth's own
   organization SSO: providers are not stored by the plugin, domain proof uses our own TXT record, and membership is the
-  proxy's, not the plugin's.
+  Commissary's, not the plugin's.
   The plugin's dependencies (samlify, xmldom, xpath) are imported lazily, but every module of the bundle is still
   compiled at Worker startup, which has a CPU time limit: `infra/bundle.ts` aliases `tldts` to a host-name stand-in
   (`sso/tldts.ts`) and `pnpm-workspace.yaml` keeps one copy of xpath.

@@ -191,12 +191,12 @@ const oauthPipeline = (
   return { pipeline, reports };
 };
 
-let apiKeyConfig: Config;
+let providerKeyConfig: Config;
 
 let oauthConfig: Config;
 
 beforeAll(async () => {
-  apiKeyConfig = await loadConfig(API_KEY_YAML);
+  providerKeyConfig = await loadConfig(API_KEY_YAML);
   oauthConfig = await loadConfig(OAUTH_YAML);
   // Adaptive/level capabilities for the translators come from the model registry in production.
   setModelInfoLookup((id) =>
@@ -209,9 +209,9 @@ beforeAll(async () => {
 const lastBody = (harness: Harness, index = 0): JsonObject =>
   JSON.parse(harness.pipeline.calls[index]!.body) as JsonObject;
 
-describe("API key credential (caller-owned mode)", () => {
+describe("Provider key credential (caller-owned mode)", () => {
   it("forwards a native Messages request with x-api-key and default cache breakpoints", async () => {
-    const p = makePipeline({ config: apiKeyConfig, respond: () => jsonResponse(message()) });
+    const p = makePipeline({ config: providerKeyConfig, respond: () => jsonResponse(message()) });
     afterAll(p.dispose);
 
     const response = await p.call(
@@ -270,7 +270,7 @@ describe("API key credential (caller-owned mode)", () => {
   });
 
   it("keeps explicit prompt-cache mode untouched and strips prompt_cache_options", async () => {
-    const p = makePipeline({ config: apiKeyConfig, respond: () => jsonResponse(message()) });
+    const p = makePipeline({ config: providerKeyConfig, respond: () => jsonResponse(message()) });
     afterAll(p.dispose);
     await p.call(
       "/v1/messages",
@@ -291,7 +291,7 @@ describe("API key credential (caller-owned mode)", () => {
 
   it("streams Claude events through unchanged and records usage", async () => {
     const p = makePipeline({
-      config: apiKeyConfig,
+      config: providerKeyConfig,
       respond: () => sseResponse(sse(streamEvents())),
     });
 
@@ -318,7 +318,7 @@ describe("API key credential (caller-owned mode)", () => {
 
   it("translates OpenAI chat requests to Claude (upstream always streams) and back", async () => {
     const p = makePipeline({
-      config: apiKeyConfig,
+      config: providerKeyConfig,
       respond: () => sseResponse(sse(streamEvents("get_weather"))),
     });
 
@@ -381,7 +381,7 @@ describe("API key credential (caller-owned mode)", () => {
 
   it("streams OpenAI chunks for chat requests", async () => {
     const p = makePipeline({
-      config: apiKeyConfig,
+      config: providerKeyConfig,
       respond: () => sseResponse(sse(streamEvents())),
     });
 
@@ -455,7 +455,7 @@ describe("API key credential (caller-owned mode)", () => {
       const json = JSON.stringify({ input: PATCH });
 
       const p = makePipeline({
-        config: apiKeyConfig,
+        config: providerKeyConfig,
         respond: () => sseResponse(sse(patchEvents([json.slice(0, 20), json.slice(20)]))),
       });
 
@@ -481,7 +481,7 @@ describe("API key credential (caller-owned mode)", () => {
 
     it("aggregates the patch for non-stream clients and fails malformed arguments with 502", async () => {
       const ok = makePipeline({
-        config: apiKeyConfig,
+        config: providerKeyConfig,
         respond: () => sseResponse(sse(patchEvents([JSON.stringify({ input: PATCH })]))),
       });
 
@@ -496,7 +496,7 @@ describe("API key credential (caller-owned mode)", () => {
       });
 
       const bad = makePipeline({
-        config: apiKeyConfig,
+        config: providerKeyConfig,
         respond: () => sseResponse(sse(patchEvents(['{"input":"x","extra":1}']))),
       });
 
@@ -508,7 +508,7 @@ describe("API key credential (caller-owned mode)", () => {
 
     it("terminates a stream that fails mid-way with the sanitised error and never leaks upstream arguments", async () => {
       const p = makePipeline({
-        config: apiKeyConfig,
+        config: providerKeyConfig,
         respond: () => sseResponse(sse(patchEvents(['{"input":"x","secret":"s3cret"}']))),
       });
 
@@ -522,7 +522,7 @@ describe("API key credential (caller-owned mode)", () => {
 
   it("answers upstream failures in Claude error format with the upstream status", async () => {
     const p = makePipeline({
-      config: apiKeyConfig,
+      config: providerKeyConfig,
       respond: () =>
         jsonResponse(
           { type: "error", error: { type: "overloaded_error", message: "Overloaded" } },
@@ -794,7 +794,7 @@ describe("OAuth credential (Claude Code cloaking)", () => {
 describe("POST /v1/messages/count_tokens", () => {
   it("counts upstream for first-party hosts with the token-counting beta", async () => {
     const p = makePipeline({
-      config: apiKeyConfig,
+      config: providerKeyConfig,
       respond: () => jsonResponse({ input_tokens: 42 }),
     });
 

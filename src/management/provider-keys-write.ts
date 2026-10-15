@@ -1,5 +1,5 @@
 /**
- * Pure edits of the assembled config document behind the API keys page writes (`PUT|DELETE /api-keys/groups`). They
+ * Pure edits of the assembled config document behind the provider keys page writes (`PUT|DELETE /provider-keys/groups`). They
  * work on a private copy of the JSON document and never see a secret the caller did not already hold:
  *
  * - a key in a written group is `auth_index` (keep the stored secret) and/or `api-key` (new secret). A key of the
@@ -17,14 +17,14 @@
  * typed one. Refusing it would let an admin confirm a guessed secret (`422` for a right guess, `200` for a wrong one),
  * so the reply is `{status, version}` either way and the next read shows the result. A key kept by `auth_index` that
  * the edit makes equal to a key of another group (by its prefix alone) is a plain `422`.
- * Workers deviation: documented in docs/ARCHITECTURE.md, "API keys".
+ * Workers deviation: documented in docs/ARCHITECTURE.md, "Provider keys".
  */
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { DEDUPED_FAMILIES, type DedupedFamily } from "../config/normalize.ts";
 import { typedDuplicates, withoutKeys } from "./key-duplicates.ts";
 import type { AuthIndexer } from "./auth-index.ts";
 import type { ConfigKeyIds, GroupKeyIds } from "../credentials/key-ids.ts";
-import { type ApiKeyFamily, REDACTED_PREFIX } from "./contract/api-keys.ts";
+import { type ProviderKeyFamily, REDACTED_PREFIX } from "./contract/provider-keys.ts";
 
 export interface EditFailure {
   readonly ok: false;
@@ -56,9 +56,9 @@ const HIDDEN_GROUP_FIELDS: Readonly<Record<"standard" | "compat", ReadonlyArray<
   compat: [],
 };
 
-const groupsOf = (document: JsonObject, family: ApiKeyFamily): JsonObject[] => {
-  const apiKeys = document["api-keys"];
-  const groups = isJsonObject(apiKeys) ? apiKeys[family] : undefined;
+const groupsOf = (document: JsonObject, family: ProviderKeyFamily): JsonObject[] => {
+  const providerKeys = document["api-keys"];
+  const groups = isJsonObject(providerKeys) ? providerKeys[family] : undefined;
 
   return Array.isArray(groups) ? groups.filter(isJsonObject) : [];
 };
@@ -163,7 +163,7 @@ const resolveKey = (
   if (typeof supplied !== "string" && stored === undefined)
     return fail(422, "every key needs an api-key or an auth_index");
 
-  const { auth_index: _authIndex, "api-key": _apiKey, id: _id, ...rest } = input;
+  const { auth_index: _authIndex, "api-key": _providerKey, id: _id, ...rest } = input;
   const secret = typeof supplied === "string" ? supplied : (stored?.key["api-key"] ?? "");
   // A key of the written group keeps its entry id (its credential id); one taken from another group gets a new one.
   const keptId = stored !== undefined && stored.group === existing ? stored.key.id : undefined;
@@ -200,7 +200,7 @@ const resolveGroup = (
   document: JsonObject,
   ids: ReadonlyArray<GroupKeyIds>,
   authIndexOf: AuthIndexer,
-  family: ApiKeyFamily,
+  family: ProviderKeyFamily,
   index: number | undefined,
   input: JsonObject,
 ): Edit<ResolvedGroup> => {
@@ -243,14 +243,14 @@ const resolveGroup = (
 /** Copy of `document` with `family`'s group list replaced by `groups`. */
 const withGroups = (
   document: JsonObject,
-  family: ApiKeyFamily,
+  family: ProviderKeyFamily,
   groups: ReadonlyArray<JsonObject>,
 ): JsonObject => {
   const out = structuredClone(document);
   const existing = out["api-keys"];
-  const apiKeys: JsonObject = isJsonObject(existing) ? existing : {};
-  apiKeys[family] = [...groups];
-  out["api-keys"] = apiKeys;
+  const providerKeys: JsonObject = isJsonObject(existing) ? existing : {};
+  providerKeys[family] = [...groups];
+  out["api-keys"] = providerKeys;
 
   return out;
 };
@@ -272,7 +272,11 @@ export const applyGroupWrite = (
   document: JsonObject,
   ids: ConfigKeyIds,
   authIndexOf: AuthIndexer,
-  request: { readonly family: ApiKeyFamily; readonly index?: number; readonly group: JsonObject },
+  request: {
+    readonly family: ProviderKeyFamily;
+    readonly index?: number;
+    readonly group: JsonObject;
+  },
 ): Edit<GroupWrite> => {
   const resolved = resolveGroup(
     document,
@@ -350,13 +354,13 @@ export const settleDuplicates = (
 };
 
 /** Whether the keys of `family` are unique across its groups (`config/normalize.ts`). */
-export const isDedupedFamily = (family: ApiKeyFamily): family is DedupedFamily =>
+export const isDedupedFamily = (family: ProviderKeyFamily): family is DedupedFamily =>
   DEDUPED_FAMILIES.some((deduped) => deduped === family);
 
 /** `document` without the group at `index`. */
 export const removeGroup = (
   document: JsonObject,
-  family: ApiKeyFamily,
+  family: ProviderKeyFamily,
   index: number,
 ): Edit<JsonObject> => {
   const groups = groupsOf(document, family);
@@ -377,7 +381,7 @@ export const removeGroup = (
  * `undefined` when the loss can only be a duplicate (never reported, see the module header).
  */
 export const structuralDropReason = (
-  family: ApiKeyFamily,
+  family: ProviderKeyFamily,
   group: JsonObject,
 ): string | undefined => {
   const keys = keysOf(group);
@@ -420,7 +424,7 @@ export const structuralDropReason = (
  *   that passes and is not reported, because the answer must not depend on whether a typed secret equals a stored one.
  */
 export const checkSurvival = (
-  family: ApiKeyFamily,
+  family: ProviderKeyFamily,
   before: ReadonlyArray<number>,
   after: ReadonlyArray<number>,
   index: number | undefined,
@@ -445,7 +449,7 @@ export const checkSurvival = (
 
 /** Where in the config a credential id sits: family, group index, key index. */
 export interface KeyPosition {
-  readonly family: ApiKeyFamily;
+  readonly family: ProviderKeyFamily;
   readonly group: number;
   readonly key: number;
 }
@@ -457,8 +461,8 @@ export const locateKey = (ids: ConfigKeyIds, id: string): KeyPosition | undefine
 
       if (key < 0) continue;
 
-      // SAFETY: the keys of `ConfigKeyIds` are exactly the `ApiKeyFamily` literals.
-      return { family: family as ApiKeyFamily, group, key };
+      // SAFETY: the keys of `ConfigKeyIds` are exactly the `ProviderKeyFamily` literals.
+      return { family: family as ProviderKeyFamily, group, key };
     }
   }
 

@@ -1,5 +1,5 @@
 /**
- * Claude (Anthropic Messages) provider executor: OAuth tokens and API keys, Messages and count_tokens.
+ * Claude (Anthropic Messages) provider executor: OAuth tokens and provider keys, Messages and count_tokens.
  *
  * Go source: internal/runtime/executor/claude_executor.go, claude_executor_execute.go, claude_executor_stream.go,
  * claude_executor_tokens.go, claude_executor_fast_error.go. The request is built by `pipeline.ts`; this module does
@@ -655,7 +655,7 @@ export const makeClaudeExecutor = (
     options: ExecutorOptions,
   ) {
     const responseFormat = responseFormatOf(options);
-    const { apiKey, baseURL } = claudeCreds(context.credential);
+    const { providerKey, baseURL } = claudeCreds(context.credential);
 
     const input = {
       services,
@@ -667,7 +667,7 @@ export const makeClaudeExecutor = (
     };
 
     if (
-      apiKey.trim() !== "" &&
+      providerKey.trim() !== "" &&
       (profile?.upstreamCountTokens === true ||
         isAnthropicUpstreamBase(baseURL === "" ? "https://api.anthropic.com" : baseURL))
     ) {

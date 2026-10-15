@@ -278,7 +278,7 @@ const attempt = <A>(run: () => A) => Effect.try({ try: run, catch: toExecutionEr
 
 interface Common {
   readonly baseModel: string;
-  readonly apiKey: string;
+  readonly providerKey: string;
   readonly baseURL: string;
   readonly parsedUrl: URL;
   readonly firstParty: boolean;
@@ -291,10 +291,10 @@ interface Common {
 const commonContext = (input: PrepareInput, path: string, countTokens: boolean): Common => {
   const { config, credential, request, options } = input;
   const baseModel = parseSuffix(request.model).modelName;
-  const { apiKey, baseURL: rawBase } = claudeCreds(credential);
+  const { providerKey, baseURL: rawBase } = claudeCreds(credential);
   const baseURL = rawBase === "" ? DEFAULT_BASE_URL : rawBase;
   const parsedUrl = new URL(`${baseURL}${path}?beta=true`);
-  const fingerprint = resolveFingerprintPolicy(config, credential, apiKey);
+  const fingerprint = resolveFingerprintPolicy(config, credential, providerKey);
   const originalPayload = options.originalRequest ?? request.payload;
 
   const confirmed = detectClaudeCodeRequest(
@@ -315,7 +315,7 @@ const commonContext = (input: PrepareInput, path: string, countTokens: boolean):
 
   return {
     baseModel,
-    apiKey,
+    providerKey,
     baseURL,
     parsedUrl,
     firstParty: isAnthropicUpstreamBase(baseURL),
@@ -339,7 +339,7 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
 
   const {
     baseModel,
-    apiKey,
+    providerKey,
     firstParty,
     fingerprint,
     confirmed,
@@ -352,7 +352,7 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
   const to = Formats.Claude;
 
   const cchSigning = cchSigningEnabled(
-    apiKey,
+    providerKey,
     fingerprint.profileClaudeCodeCLI,
     parsedUrl.toString(),
   );
@@ -364,15 +364,15 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
     credential.provider === "claude" &&
     credential.kind === "apikey" &&
     isCompat &&
-    apiKey.trim() !== "" &&
-    !apiKey.includes("sk-ant-oat");
+    providerKey.trim() !== "" &&
+    !providerKey.includes("sk-ant-oat");
 
   // Thinking replay: restore cached thinking blocks into the client payload.
   let payload: Json = request.payload;
   let replay: ReplayScope | undefined;
 
   if (replayEnabled) {
-    const family = replayModelFamily(credential.id, c.baseURL, apiKey, baseModel);
+    const family = replayModelFamily(credential.id, c.baseURL, providerKey, baseModel);
 
     const sessionKey =
       (options.metadata.sessionId ?? "").trim() === ""
@@ -462,11 +462,11 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
 
   const stabilizedProfile =
     stabilizeProfile && confirmed
-      ? yield* services.deviceProfiles.resolve(credential, apiKey, options.headers, config)
+      ? yield* services.deviceProfiles.resolve(credential, providerKey, options.headers, config)
       : undefined;
 
   // Session continuity is started (one store round trip) before the synchronous request shaping.
-  const wire = yield* attempt(() => resolveWirePolicy(config, credential, apiKey, confirmed));
+  const wire = yield* attempt(() => resolveWirePolicy(config, credential, providerKey, confirmed));
   const now = services.now();
 
   const plan = yield* attempt(() =>
@@ -493,7 +493,7 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
       config,
       credential,
       body,
-      apiKey,
+      providerKey,
       policy,
       settings,
       cchSigning,
@@ -574,7 +574,7 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
     sanitizeForClaudeUpstream(body, baseModel, isCompat);
 
     if (fingerprint.applyCLIIdentity)
-      applyCLIIdentity(body, credential, apiKey, sessionId, fingerprint.synthesizeIdentity);
+      applyCLIIdentity(body, credential, providerKey, sessionId, fingerprint.synthesizeIdentity);
 
     if (cloaked && settings.sensitiveWords.length > 0)
       obfuscateSensitiveWords(body, settings.sensitiveWords);
@@ -636,7 +636,7 @@ export const prepareMessagesRequest = Effect.fnUntraced(function* (input: Prepar
     const headers = buildClaudeHeaders({
       config,
       credential,
-      apiKey,
+      providerKey,
       url: parsedUrl,
       stream: upstreamStream,
       countTokens: false,
@@ -684,7 +684,7 @@ export const prepareCountTokensRequest = Effect.fnUntraced(function* (input: Pre
 
   const {
     baseModel,
-    apiKey,
+    providerKey,
     firstParty,
     fingerprint,
     confirmed,
@@ -742,11 +742,11 @@ export const prepareCountTokensRequest = Effect.fnUntraced(function* (input: Pre
 
   const stabilizedProfile =
     stabilizeProfile && confirmed
-      ? yield* services.deviceProfiles.resolve(credential, apiKey, options.headers, config)
+      ? yield* services.deviceProfiles.resolve(credential, providerKey, options.headers, config)
       : undefined;
 
   return yield* attempt(() => {
-    const { policy, settings } = resolveWirePolicy(config, credential, apiKey, confirmed);
+    const { policy, settings } = resolveWirePolicy(config, credential, providerKey, confirmed);
     const cloaked = policy.cloak;
     const explicitCacheMode = isExplicitPromptCacheMode(originalPayload, request.payload, body);
 
@@ -814,7 +814,7 @@ export const prepareCountTokensRequest = Effect.fnUntraced(function* (input: Pre
     const headers = buildClaudeHeaders({
       config,
       credential,
-      apiKey,
+      providerKey,
       url: parsedUrl,
       stream: false,
       countTokens: true,

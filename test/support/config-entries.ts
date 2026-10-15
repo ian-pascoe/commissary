@@ -30,7 +30,7 @@ export const importedConfig = (config: Config): Config => {
 
 /**
  * `config` as an import keeps it: without entry ids, every not-applied key at its default (the import drops them)
- * and no `experimental-cch-signing` on API keys.
+ * and no `experimental-cch-signing` on provider keys.
  */
 export const comparable = (config: Config): Config => {
   // SAFETY: the config schema encodes to a plain JSON object.
@@ -45,9 +45,9 @@ export const comparable = (config: Config): Config => {
     if (path !== undefined && value !== undefined) document = set(document, path, value);
   }
 
-  const apiKeys = isJsonObject(document) ? document["api-keys"] : undefined;
+  const providerKeys = isJsonObject(document) ? document["api-keys"] : undefined;
 
-  for (const groups of isJsonObject(apiKeys) ? Object.values(apiKeys) : [])
+  for (const groups of isJsonObject(providerKeys) ? Object.values(providerKeys) : [])
     for (const group of isJsonArray(groups) ? groups : [])
       for (const key of isJsonObject(group) && isJsonArray(group.keys) ? group.keys : [])
         if (isJsonObject(key)) delete key["experimental-cch-signing"];

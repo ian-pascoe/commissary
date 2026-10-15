@@ -11,10 +11,10 @@
  * rule per org, ADR 0022): the file carries the access and refresh tokens, and a service token is the credential
  * meant for automation (`docs/ACCESS.md`).
  *
- * The list also carries the config API keys whose provider reports quota with the key (OpenCode Go, `source:
+ * The list also carries the config provider keys whose provider reports quota with the key (OpenCode Go, `source:
  * "config"`, named by their `auth_index`; `credential-entry.ts`). File-only operations naming one of them (delete,
  * download, field edits, token refresh) answer `409 config_credential`: the key lives in the config and is edited on
- * the API keys page. Its models are listed by the same name.
+ * the provider keys page. Its models are listed by the same name.
  */
 import { Clock, Effect } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
@@ -80,7 +80,7 @@ const parsePagination = (
 const entryName = (entry: JsonObject): string => text(entry.name);
 
 /**
- * Fails with `409 config_credential` when `name` is a config API key's `auth_index` (the name the list gives it), so a
+ * Fails with `409 config_credential` when `name` is a config provider key's `auth_index` (the name the list gives it), so a
  * file-only operation says why it does not apply instead of answering "not found". Indexes are public: answering for
  * one confirms no key guess.
  */
@@ -91,7 +91,8 @@ const refuseConfigKey = (name: string) =>
 
     if (config) {
       return yield* replyError(409, "config_credential", {
-        message: "this account is a config API key: edit or remove it on the API keys page",
+        message:
+          "this account is a config provider key: edit or remove it on the provider keys page",
       });
     }
   });
@@ -506,7 +507,7 @@ const patchStatus = Effect.gen(function* () {
     stub.setCredentialDisabledByRef(refOf(body), body.disabled as boolean, principalId, viewer),
   );
 
-  // A config API key is disabled through its excluded-models (`*`), like Go answers.
+  // A config provider key is disabled through its excluded-models (`*`), like Go answers.
   if (result.ok) {
     return jsonReply(
       200,
@@ -519,7 +520,7 @@ const patchStatus = Effect.gen(function* () {
   if (result.error === "config_credential") {
     return yield* replyError(
       409,
-      'config API keys are disabled by adding "*" to their excluded-models in the config',
+      'config provider keys are disabled by adding "*" to their excluded-models in the config',
     );
   }
 
