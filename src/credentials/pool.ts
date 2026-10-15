@@ -286,10 +286,10 @@ export class CredentialPool {
     for (const credential of view.credentials.values())
       entries.push({ credential, state: this.#state(credential.id) });
 
-    const caller = { memberId: request.memberId, proxyKeyId: request.proxyKeyId };
+    const caller = { memberId: request.memberId, apiKeyId: request.apiKeyId };
     const gate = this.#spend?.gate(caller, now);
 
-    // A limit of the request's proxy key without room refuses it whatever credential would serve: no cooldown, no failover.
+    // A limit of the request's API key without room refuses it whatever credential would serve: no cooldown, no failover.
     if (gate?.refuse !== undefined)
       return { ok: false, failure: spendLimitReached(gate.refuse, now) };
 

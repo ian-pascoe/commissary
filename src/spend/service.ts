@@ -4,9 +4,9 @@
  * `auth_index` clients know. New in the Workers port, no Go counterpart.
  *
  * - An **org admin** writes any limit (source `admin`) and the org's calendar, and sees every limit.
- * - A **plain member** writes limits on their own proxy keys only (source `member`, never above an admin's limit on
+ * - A **plain member** writes limits on their own API keys only (source `member`, never above an admin's limit on
  *   that key, which the store keeps), and sees the limits that bind them: their own, their teams', the org's and those
- *   on their proxy keys, each with what is left.
+ *   on their API keys, each with what is left.
  *
  * Plain data in and out, so the ControlPlane can hand it across Durable Object RPC. The ControlPlane supplies the
  * {@link SpendDirectory} (members, teams, keys, shared credentials) and the clock.
@@ -34,7 +34,7 @@ export interface SpendDirectory {
   teams(): ReadonlyArray<{ readonly id: string; readonly name: string }>;
   /** The ids of the teams a member is on (asked on every request while the org has limits). */
   teamsOf(memberId: string): ReadonlyArray<string>;
-  /** Every proxy key, revoked ones included. */
+  /** Every API key, revoked ones included. */
   keys(): ReadonlyArray<{
     readonly id: string;
     readonly memberId: string;
@@ -65,9 +65,9 @@ export type SpendServiceResult<A> = { readonly ok: true; readonly value: A } | S
 export interface SpendEntry {
   readonly id: string;
   readonly kind: SubjectKind;
-  /** Member, team and proxy key ids; the `auth_index` of a credential; empty for the org. */
+  /** Member, team and API key ids; the `auth_index` of a credential; empty for the org. */
   readonly subject: string;
-  /** What to show for the subject: an email, a team name, a proxy key's name, a credential's label. */
+  /** What to show for the subject: an email, a team name, an API key's name, a credential's label. */
   readonly label: string;
   readonly period: Period;
   readonly amountMicros: number;
@@ -184,12 +184,12 @@ export class SpendService {
     let subject = input.subject;
 
     // Who may write comes before whether the subject exists, so a member cannot tell other ids apart by the answer:
-    // their own proxy keys are the only thing they may limit.
+    // their own API keys are the only thing they may limit.
     if (!viewer.admin) {
       const key = input.kind === "key" ? keys.get(subject) : undefined;
 
       if (key === undefined || key.memberId !== viewer.member)
-        return refuse("forbidden", "members may limit their own proxy keys only");
+        return refuse("forbidden", "members may limit their own API keys only");
     }
 
     if (input.kind === "credential") {
@@ -210,7 +210,7 @@ export class SpendService {
       const key = keys.get(subject);
 
       if (key === undefined || key.revokedAt !== undefined)
-        return refuse("subject_not_found", "no live proxy key has this id");
+        return refuse("subject_not_found", "no live API key has this id");
     } else if (subject !== ORG_SUBJECT) {
       return refuse("invalid", "the org limit has no subject");
     }
@@ -285,7 +285,7 @@ export class SpendService {
     return this.#store.setSettings(settings);
   }
 
-  /** A gone member, team, proxy key or credential: its limits and counters go. */
+  /** A gone member, team, API key or credential: its limits and counters go. */
   forget(kind: SubjectKind, subject: string): void {
     this.#store.forget(kind, subject);
   }

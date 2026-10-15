@@ -12,8 +12,8 @@
 import type { OrgRole } from "../members/roles.ts";
 import type { OrgId } from "../platform/org.ts";
 import { cleanName, MAX_NAME_LENGTH } from "../platform/registry-store.ts";
-import { isKeyId } from "../proxy-keys/key.ts";
-import { LAST_USED_RESOLUTION_MS } from "../proxy-keys/store.ts";
+import { isKeyId } from "../api-keys/key.ts";
+import { LAST_USED_RESOLUTION_MS } from "../api-keys/store.ts";
 import { mintManagementKey } from "./key.ts";
 
 export interface ManagementKeyRecord {

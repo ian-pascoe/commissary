@@ -1,9 +1,9 @@
 /**
- * Proxy keys on the proxy routes (ADR 0022): which credential a client sent, and whether it is a live key of a member.
+ * API keys on the proxy routes (ADR 0022): which credential a client sent, and whether it is a live key of a member.
  * The credential sources follow the Go config access provider (`internal/access/config_access/provider.go`
  * `Authenticate`): `Authorization` (`Bearer` stripped), `x-goog-api-key`, `x-api-key`, `?key=` and `?auth_token=`.
  *
- * A key names its org (`proxy-keys/key.ts`), so verification asks that org's ControlPlane only, never another org's.
+ * A key names its org (`api-keys/key.ts`), so verification asks that org's ControlPlane only, never another org's.
  * Before that, the Platform registry confirms that the org exists (at most every {@link VERIFIED_KEY_TTL_MS} per org
  * and isolate), so a made-up org id never instantiates a ControlPlane. Verified keys are cached per isolate for {@link VERIFIED_KEY_TTL_MS} (never past
  * the key's expiry), so a revocation applies within that time everywhere, and at once in the isolate that revoked it.
@@ -14,7 +14,7 @@ import type { OrgRole } from "../members/roles.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import { controlPlaneOf, type OrgId } from "../platform/org.ts";
 import { platform } from "../platform/registry.ts";
-import { looksLikeProxyKey, parseProxyKey } from "../proxy-keys/key.ts";
+import { looksLikeApiKey, parseApiKey } from "../api-keys/key.ts";
 
 /** How long a verified key is trusted without asking its ControlPlane again; revocation applies within this time. */
 export const VERIFIED_KEY_TTL_MS = 30_000;
@@ -23,8 +23,8 @@ export const VERIFIED_KEY_TTL_MS = 30_000;
 const MAX_CACHED_KEYS = 1024;
 
 export interface PresentedCredentials {
-  /** The first credential that is meant as a proxy key (`cfp_…`), well formed or not. */
-  readonly proxyKey?: string;
+  /** The first credential that is meant as an API key (`cfp_…`), well formed or not. */
+  readonly apiKey?: string;
   /** Whether the client sent any credential at all (an old shared key such as `sk-dummy` counts). */
   readonly any: boolean;
 }
@@ -54,13 +54,13 @@ export const presentedCredentials = (
     return trimmed === "" ? [] : [trimmed];
   });
 
-  const proxyKey = candidates.find(looksLikeProxyKey);
+  const apiKey = candidates.find(looksLikeApiKey);
 
-  return { ...(proxyKey === undefined ? {} : { proxyKey }), any: candidates.length > 0 };
+  return { ...(apiKey === undefined ? {} : { apiKey }), any: candidates.length > 0 };
 };
 
 /** A live key and what the gate needs of its member. */
-export interface VerifiedProxyKey {
+export interface VerifiedApiKey {
   readonly org: OrgId;
   readonly keyId: string;
   readonly memberId: string;
@@ -69,7 +69,7 @@ export interface VerifiedProxyKey {
 }
 
 interface CachedKey {
-  readonly key: VerifiedProxyKey;
+  readonly key: VerifiedApiKey;
   /** Epoch ms after which the ControlPlane is asked again. */
   readonly until: number;
 }
@@ -81,25 +81,25 @@ const verified = new Map<string, CachedKey>();
 const knownOrgs = new Map<OrgId, number>();
 
 /** Forgets a revoked key of `org` in this isolate, so it is refused here at once. */
-export const forgetVerifiedProxyKey = (org: OrgId, keyId: string): void => {
+export const forgetVerifiedApiKey = (org: OrgId, keyId: string): void => {
   for (const [hash, cached] of verified)
     if (cached.key.org === org && cached.key.keyId === keyId) verified.delete(hash);
 };
 
 /** Forgets the keys of a member who left the org, so this isolate refuses them at once. */
-export const forgetVerifiedProxyKeysOf = (org: OrgId, memberId: string): void => {
+export const forgetVerifiedApiKeysOf = (org: OrgId, memberId: string): void => {
   for (const [hash, cached] of verified)
     if (cached.key.org === org && cached.key.memberId === memberId) verified.delete(hash);
 };
 
 /** Forgets every key and the existence of `org` in this isolate (the org was deleted), so it refuses them at once. */
-export const forgetOrgProxyKeys = (org: OrgId): void => {
+export const forgetOrgApiKeys = (org: OrgId): void => {
   for (const [hash, cached] of verified) if (cached.key.org === org) verified.delete(hash);
   knownOrgs.delete(org);
 };
 
 /** Empties the caches, for tests. */
-export const resetProxyKeyCaches = (): void => {
+export const resetApiKeyCaches = (): void => {
   verified.clear();
   knownOrgs.clear();
 };
@@ -108,7 +108,7 @@ const invalid = new UnauthorizedError({ message: "Invalid API key" });
 
 const unavailable = (cause: unknown) =>
   new InternalError({
-    message: `proxy key verification: ${cause instanceof Error ? cause.message : "unknown error"}`,
+    message: `API key verification: ${cause instanceof Error ? cause.message : "unknown error"}`,
   });
 
 export const orgExists = Effect.fnUntraced(function* (org: OrgId, now: number) {
@@ -133,11 +133,11 @@ export const orgExists = Effect.fnUntraced(function* (org: OrgId, now: number) {
  * The live key behind `text`, or `Invalid API key` (401) for a malformed key, a key of an org that does not exist, an
  * unknown id, a wrong secret, a revoked or expired key and a key whose member left; the client cannot tell which.
  */
-export const verifyProxyKey: (
+export const verifyApiKey: (
   text: string,
-) => Effect.Effect<VerifiedProxyKey, UnauthorizedError | InternalError, WorkerEnv> =
+) => Effect.Effect<VerifiedApiKey, UnauthorizedError | InternalError, WorkerEnv> =
   Effect.fnUntraced(function* (text: string) {
-    const parsed = parseProxyKey(text);
+    const parsed = parseApiKey(text);
 
     if (parsed === undefined) return yield* invalid;
     const now = yield* Clock.currentTimeMillis;
@@ -151,13 +151,13 @@ export const verifyProxyKey: (
 
     const verdict = yield* Effect.tryPromise({
       try: async () =>
-        await controlPlaneOf(env, parsed.org).verifyProxyKey(parsed.keyId, parsed.hash, now),
+        await controlPlaneOf(env, parsed.org).verifyApiKey(parsed.keyId, parsed.hash, now),
       catch: unavailable,
     });
 
     if (!verdict.ok) return yield* invalid;
 
-    const key: VerifiedProxyKey = {
+    const key: VerifiedApiKey = {
       org: parsed.org,
       keyId: parsed.keyId,
       memberId: verdict.memberId,

@@ -1,4 +1,4 @@
-// Authentication of one request: proxy key or Access JWT -> principal -> the org the request is for and the caller's role in it.
+// Authentication of one request: API key or Access JWT -> principal -> the org the request is for and the caller's role in it.
 // New in the Workers port.
 import { Effect, Result } from "effect";
 import {
@@ -18,7 +18,7 @@ import { deprecatedAdminVariables, devBypass, isAdmin, loadAccessConfig } from "
 import { managementKeyIdentity, presentedManagementKey } from "./management-key.ts";
 import type { AccessIdentity, AdmissiblePrincipal } from "./principal.ts";
 import { makeIdentity } from "./principal.ts";
-import { presentedCredentials, verifyProxyKey } from "./proxy-key.ts";
+import { presentedCredentials, verifyApiKey } from "./api-key.ts";
 import type { AccessJwks } from "./jwks.ts";
 import { routeAccess, type RouteAccess } from "./policy.ts";
 import { type AccessZone, scopedUrl } from "./routes.ts";
@@ -100,7 +100,7 @@ export const targetOrg = (slug: OrgSlug | undefined, platformAdmin: boolean) =>
  * member, without joining); anyone else needs the role the route asks for (`policy.ts`), a platform-level route none.
  * The org's ControlPlane is asked on every request, so a removed member loses access at once. On a proxy route
  * (`needs` is `member` in the protected zone) the org must still accept Access sign-ins from clients (its
- * `access_clients` setting); otherwise the client is asked for a proxy key, like a request without credentials, and
+ * `access_clients` setting); otherwise the client is asked for an API key, like a request without credentials, and
  * `Invalid API key` when it sent another credential (`credentialSent`).
  */
 export const admitted = (
@@ -126,7 +126,7 @@ export const admitted = (
 
     const answer = admission.success;
 
-    if (answer !== undefined && "proxyKeysOnly" in answer)
+    if (answer !== undefined && "apiKeysOnly" in answer)
       return yield* new UnauthorizedError({
         message: client?.credentialSent === true ? "Invalid API key" : "Missing API key",
       });
@@ -137,9 +137,9 @@ export const admitted = (
     return yield* makeIdentity(principal, org, platformAdmin, answer);
   });
 
-/** The identity of a live proxy key: its member, in the org the key names (ADR 0022). Never a platform admin. */
+/** The identity of a live API key: its member, in the org the key names (ADR 0022). Never a platform admin. */
 export const keyIdentity = Effect.fnUntraced(function* (text: string) {
-  const key = yield* verifyProxyKey(text);
+  const key = yield* verifyApiKey(text);
 
   return yield* makeIdentity(
     { kind: "key", keyId: key.keyId, memberId: key.memberId, email: key.email },
@@ -161,12 +161,12 @@ export const keyIdentity = Effect.fnUntraced(function* (text: string) {
  * it. A platform admin is an owner of every org; anyone else needs a role in the org (`403` otherwise), except on a
  * platform-level route.
  *
- * On a proxy route (the protected zone) a proxy key (`cfp_…`, `proxy-key.ts`) wins: the request is for the key's org,
+ * On a proxy route (the protected zone) an API key (`cfp_…`, `api-key.ts`) wins: the request is for the key's org,
  * as its member; a bad key is refused even when the request also carries an Access sign-in. Without a key, the Access
  * JWT comes from `Cf-Access-Jwt-Assertion` or, since Access no longer sits in front of the proxy routes, from the
  * `cf-access-token` header `cloudflared` sends; it is accepted only while the org's `access_clients` setting is on.
- * Management routes never take proxy keys: they stay behind Access, which sets `Cf-Access-Jwt-Assertion`. A management
- * key (`Authorization: Bearer cfm_…`, `management-key.ts`) wins there the way a proxy key wins on a proxy route.
+ * Management routes never take API keys: they stay behind Access, which sets `Cf-Access-Jwt-Assertion`. A management
+ * key (`Authorization: Bearer cfm_…`, `management-key.ts`) wins there the way an API key wins on a proxy route.
  */
 export const authenticateRequest = (
   headers: Readonly<Record<string, string | undefined>>,
@@ -181,7 +181,7 @@ export const authenticateRequest = (
     const credentials =
       zone === "protected" ? presentedCredentials(headers, requestUrl) : undefined;
 
-    if (credentials?.proxyKey !== undefined) return yield* keyIdentity(credentials.proxyKey);
+    if (credentials?.apiKey !== undefined) return yield* keyIdentity(credentials.apiKey);
     const managementKey = zone === "management" ? presentedManagementKey(headers) : undefined;
 
     if (managementKey !== undefined) {

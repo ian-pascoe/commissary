@@ -4,7 +4,7 @@
  * A person who signs in for the first time without a membership gets a Personal org with them as its org owner; one
  * the index lists in some org was invited and gets none (the Platform registry decides, `PlatformStore.signIn`). A
  * suspended org or person is refused everywhere. Answers are cached per isolate for {@link STANDING_TTL_MS}, like
- * verified proxy keys (`access/proxy-key.ts`): a suspension applies within that time everywhere, and at once in the
+ * verified API keys (`access/api-key.ts`): a suspension applies within that time everywhere, and at once in the
  * isolate that made it (`forgetStanding`). New in the Workers port.
  */
 import { Clock, Effect } from "effect";

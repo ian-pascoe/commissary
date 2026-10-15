@@ -203,7 +203,7 @@ const prepare = Effect.fnUntraced(function* (input: ExecutionInput, stream: bool
     principalId: identity.principalId,
     orgId: org,
     ...(identity.memberId === undefined ? {} : { memberId: identity.memberId }),
-    ...(identity.principal.kind === "key" ? { proxyKeyId: identity.principal.keyId } : {}),
+    ...(identity.principal.kind === "key" ? { apiKeyId: identity.principal.keyId } : {}),
     callerScope: identity.callerScope,
     endpoint: `${input.request.method} ${url.pathname}`,
     session:

@@ -49,7 +49,7 @@ import { peopleRoutes } from "./people-routes.ts";
 import { managementKeyRoutes } from "./management-key-routes.ts";
 import { ssoRoutes } from "./sso-routes.ts";
 import { priceRoutes } from "./price-routes.ts";
-import { proxyKeyRoutes } from "./proxy-key-routes.ts";
+import { apiKeyRoutes } from "./api-key-routes.ts";
 import { spendRoutes } from "./spend-routes.ts";
 import { quotaCheckHandler, quotaSweepHandler } from "./quota-routes.ts";
 import { claimResetGrantHandler, resetGrantsHandler } from "./reset-grant-routes.ts";
@@ -97,7 +97,7 @@ export const ManagementRoutes = HttpRouter.addAll(
       ...priceRoutes,
       ...grantRoutes,
       ...memberRoutes,
-      ...proxyKeyRoutes,
+      ...apiKeyRoutes,
       ...spendRoutes,
       ...managementKeyRoutes,
       ...ssoRoutes,

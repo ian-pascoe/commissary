@@ -34,7 +34,7 @@ const freshOrg = async () => {
   const bobViewer: Viewer = { member: bob.id, admin: false };
 
   const key = async (owner: { readonly id: string }, name: string) => {
-    const made = await stub.createProxyKey({ memberId: owner.id, name }, Date.now());
+    const made = await stub.createApiKey({ memberId: owner.id, name }, Date.now());
 
     if (!made.ok) throw new Error(made.message);
 
@@ -143,7 +143,7 @@ describe("Spend limits of the ControlPlane", () => {
     expect((await stub.pick({ ...REQUEST, memberId: bob.id })).ok).toBe(true);
   });
 
-  it("keeps a plain member to their own proxy keys and below an admin's limit on them", async () => {
+  it("keeps a plain member to their own API keys and below an admin's limit on them", async () => {
     const { stub, adminViewer, aliceViewer, bobViewer, alice, bob, key, create } = await freshOrg();
     const aliceKey = await key(alice, "laptop");
     const bobKey = await key(bob, "ci");
@@ -350,7 +350,7 @@ describe("Spend limits of the ControlPlane", () => {
       ).toMatchObject({ ok: false, error: "invalid" });
   });
 
-  it("refuses by a proxy key's limit whatever serves the request, and charges the key for private traffic", async () => {
+  it("refuses by an API key's limit whatever serves the request, and charges the key for private traffic", async () => {
     const { stub, adminViewer, alice, key, create } = await freshOrg();
     const aliceKey = await key(alice, "laptop");
 
@@ -379,14 +379,14 @@ describe("Spend limits of the ControlPlane", () => {
     });
 
     // The member's own limit does not touch their private credential; the key's limit counts it.
-    const picked = await stub.pick({ ...REQUEST, memberId: alice.id, proxyKeyId: aliceKey.id });
+    const picked = await stub.pick({ ...REQUEST, memberId: alice.id, apiKeyId: aliceKey.id });
 
     if (!picked.ok) throw new Error(picked.failure.code);
     expect(picked.lease.spend).toEqual([{ kind: "key", subject: aliceKey.id }]);
     await stub.report(picked.lease, { success: true, httpStatus: 200, costMicros: 3 * USD });
 
     expect(
-      await stub.pick({ ...REQUEST, memberId: alice.id, proxyKeyId: aliceKey.id }),
+      await stub.pick({ ...REQUEST, memberId: alice.id, apiKeyId: aliceKey.id }),
     ).toMatchObject({
       ok: false,
       failure: { code: "spend_limit_reached", httpStatus: 429 },

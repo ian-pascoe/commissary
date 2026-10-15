@@ -173,7 +173,7 @@ const OrgList = ({ me }: { readonly me: Me }) => {
     setConfirm({
       title: `${suspended ? "Unsuspend" : "Suspend"} ${name}?`,
       body: suspended ? (
-        <p>Its members can use the org and its proxy keys work again. Nothing was deleted.</p>
+        <p>Its members can use the org and its API keys work again. Nothing was deleted.</p>
       ) : (
         <p>
           Everyone in {name} is signed out of it and its proxy and management keys are refused until

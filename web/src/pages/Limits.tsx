@@ -1,6 +1,6 @@
-// Limits (/limits): what a member, team, the org, a shared credential or a proxy key may spend in a day, week or month of
+// Limits (/limits): what a member, team, the org, a shared credential or an API key may spend in a day, week or month of
 // the org's time zone, with the Spend so far. Org admins set any limit and the calendar; a plain member sees the limits
-// that bind them, how much is left, and limits their own proxy keys.
+// that bind them, how much is left, and limits their own API keys.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import { type FormEvent, useId, useState } from "react";
@@ -210,7 +210,7 @@ const LimitTable = ({ spend, admin }: { readonly spend: SpendView; readonly admi
       <p className={styles["empty"]}>
         {admin
           ? "No limits yet: nothing is capped. Add one below."
-          : "No limit applies to you. You can limit your own proxy keys below."}
+          : "No limit applies to you. You can limit your own API keys below."}
       </p>
     );
   }
@@ -312,12 +312,12 @@ export const LimitsPage = () => {
       <header className={styles["head"]}>
         <h1 className={styles["title"]}>Limits</h1>
         <p className={styles["intro"]}>
-          A Spend limit caps what a member, a team, the whole org, a shared credential or a proxy
-          key may spend in a day, week or month. When a limit is reached the proxy refuses what it
+          A Spend limit caps what a member, a team, the whole org, a shared credential or an API key
+          may spend in a day, week or month. When a limit is reached the proxy refuses what it
           covers with a 429 until the period starts over; other limits and credentials keep working.{" "}
           {admin
             ? "You are an org admin, so you set any limit and the calendar."
-            : "You see the limits that bind you, and set limits on your own proxy keys."}
+            : "You see the limits that bind you, and set limits on your own API keys."}
         </p>
       </header>
       <Loaded caller={caller} />

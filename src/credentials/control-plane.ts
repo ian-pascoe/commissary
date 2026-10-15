@@ -158,14 +158,14 @@ import {
   type TeamRecord,
 } from "../members/store.ts";
 import {
-  type ClientsUseProxyKeys,
+  type ClientsUseApiKeys,
   type MemberNotFound,
-  type ProxyKeyListing,
-  type ProxyKeyRecord,
-  type ProxyKeyResult,
-  ProxyKeyStore,
-  type ProxyKeyVerdict,
-} from "../proxy-keys/store.ts";
+  type ApiKeyListing,
+  type ApiKeyRecord,
+  type ApiKeyResult,
+  ApiKeyStore,
+  type ApiKeyVerdict,
+} from "../api-keys/store.ts";
 
 const decodePickRequest = Schema.decodeUnknownSync(PickRequest);
 
@@ -333,7 +333,7 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #modelGrants: GrantStore;
   /** The members' private provider key groups (sealed rows of their own, never config entries). */
   readonly #privateKeys: PrivateKeyStore;
-  readonly #proxyKeys: ProxyKeyStore;
+  readonly #apiKeys: ApiKeyStore;
   /** The org's Spend limits (issue #71): what the management API does with them and the ledger the pool checks. */
   readonly #spend: SpendService;
   /** The `SessionState` instances of the org, so deleting the org can wipe them (`session-state/instances.ts`). */
@@ -374,7 +374,7 @@ export class ControlPlane extends DurableObject<Env> {
     );
     this.#modelGrants = new GrantStore(ctx.storage.sql, transaction);
     this.#privateKeys = new PrivateKeyStore(ctx.storage.sql, transaction, this.#secrets);
-    this.#proxyKeys = new ProxyKeyStore(ctx.storage.sql, this.#org, (ids) => {
+    this.#apiKeys = new ApiKeyStore(ctx.storage.sql, this.#org, (ids) => {
       for (const id of ids) this.#spend.forget("key", id);
     });
     this.#sessionInstances = new SessionInstanceStore(ctx.storage.sql);
@@ -387,7 +387,7 @@ export class ControlPlane extends DurableObject<Env> {
       members: () => this.#members.members(),
       teams: () => this.#members.teams(),
       teamsOf: (memberId) => this.#members.member(memberId)?.teams ?? [],
-      keys: () => this.#proxyKeys.list(undefined, Date.now()),
+      keys: () => this.#apiKeys.list(undefined, Date.now()),
       credentials: () =>
         this.#pool.entries().flatMap(({ credential }) =>
           credential.owner === undefined
@@ -582,16 +582,16 @@ export class ControlPlane extends DurableObject<Env> {
   /**
    * The role of a principal in the org (`MemberStore.admit`); `autoJoin` lets a person join when the org allows it.
    * `client`: the request is for a proxy route, where an Access sign-in is accepted only while the org's
-   * `accessClients` setting is on; otherwise the answer is {@link ClientsUseProxyKeys} and nobody joins.
+   * `accessClients` setting is on; otherwise the answer is {@link ClientsUseApiKeys} and nobody joins.
    */
   admit(
     principal: PrincipalRef,
     autoJoin: boolean,
     client = false,
-  ): Admission | ClientsUseProxyKeys | undefined {
+  ): Admission | ClientsUseApiKeys | undefined {
     this.#ensureMembership();
 
-    if (client && !this.#proxyKeys.accessClients()) return { proxyKeysOnly: true };
+    if (client && !this.#apiKeys.accessClients()) return { apiKeysOnly: true };
 
     return this.#members.admit(principal, autoJoin);
   }
@@ -653,14 +653,14 @@ export class ControlPlane extends DurableObject<Env> {
   }
 
   /**
-   * Zero data retention (ADR 0027): a member who leaves the org takes with them everything of theirs here: proxy keys,
+   * Zero data retention (ADR 0027): a member who leaves the org takes with them everything of theirs here: API keys,
    * private accounts (with their cooldown and quota state), private provider key groups and the OAuth logins they started.
    * Shared credentials and other members' data stay.
    */
   async #deleteMemberData(member: string): Promise<void> {
     // The member's keys take their Spend limits and counters along (the store reports each key it deletes).
     this.#spend.forget("member", member);
-    this.#proxyKeys.removeMemberKeys(member);
+    this.#apiKeys.removeMemberKeys(member);
 
     const accounts = this.#pool
       .entries()
@@ -682,7 +682,7 @@ export class ControlPlane extends DurableObject<Env> {
     return {
       autoJoin: this.#members.autoJoin(),
       privateCredentials: this.#members.privateCredentials(),
-      accessClients: this.#proxyKeys.accessClients(),
+      accessClients: this.#apiKeys.accessClients(),
     };
   }
 
@@ -704,7 +704,7 @@ export class ControlPlane extends DurableObject<Env> {
     }
 
     if (settings.accessClients !== undefined)
-      this.#proxyKeys.setAccessClients(settings.accessClients);
+      this.#apiKeys.setAccessClients(settings.accessClients);
 
     return this.membershipSettings();
   }
@@ -740,54 +740,54 @@ export class ControlPlane extends DurableObject<Env> {
     await this.ctx.storage.sync();
   }
 
-  // --- proxy keys (ADR 0022, `proxy-keys/store.ts`) -----------------------------------------------------------------
+  // --- API keys (ADR 0022, `api-keys/store.ts`) -----------------------------------------------------------------
 
-  /** The org's proxy keys, or one member's, with the email of the member each belongs to. */
-  listProxyKeys(memberId: string | undefined, now: number): ReadonlyArray<ProxyKeyListing> {
+  /** The org's API keys, or one member's, with the email of the member each belongs to. */
+  listApiKeys(memberId: string | undefined, now: number): ReadonlyArray<ApiKeyListing> {
     this.#ensureMembership();
     const emails = new Map(this.#members.members().map((member) => [member.id, member.email]));
 
-    return this.#proxyKeys.list(memberId, now).map((key) => ({
+    return this.#apiKeys.list(memberId, now).map((key) => ({
       ...key,
       ...(emails.has(key.memberId) ? { memberEmail: emails.get(key.memberId) } : {}),
     }));
   }
 
   /** Issues a key to a member of the org; the answer carries the whole key, shown this once. `now`: epoch ms. */
-  createProxyKey(
+  createApiKey(
     input: { readonly memberId: string; readonly name: string; readonly expiresAt?: number },
     now: number,
-  ): ProxyKeyResult<{ readonly record: ProxyKeyRecord; readonly key: string }> | MemberNotFound {
+  ): ApiKeyResult<{ readonly record: ApiKeyRecord; readonly key: string }> | MemberNotFound {
     this.#ensureMembership();
 
     if (this.#members.member(input.memberId) === undefined)
       return { ok: false, error: "member_not_found", message: "no member has this id" };
 
-    return this.#proxyKeys.create(input, now);
+    return this.#apiKeys.create(input, now);
   }
 
   /** Deletes the keys that have expired at `now` in every member's name (the cron sweep); answers how many. */
-  purgeExpiredProxyKeys(now: number): number {
+  purgeExpiredApiKeys(now: number): number {
     this.#ensureMembership();
 
-    return this.#proxyKeys.purgeExpired(now);
+    return this.#apiKeys.purgeExpired(now);
   }
 
-  /** Revokes a key by deleting it; `memberId` limits the call to that member's keys (`ProxyKeyStore.revoke`). */
-  revokeProxyKey(id: string, now: number, memberId?: string): ProxyKeyResult<ProxyKeyRecord> {
+  /** Revokes a key by deleting it; `memberId` limits the call to that member's keys (`ApiKeyStore.revoke`). */
+  revokeApiKey(id: string, now: number, memberId?: string): ApiKeyResult<ApiKeyRecord> {
     this.#ensureMembership();
 
-    return this.#proxyKeys.revoke(id, now, memberId);
+    return this.#apiKeys.revoke(id, now, memberId);
   }
 
   /**
-   * Checks a presented proxy key (its id and the SHA-256 of the whole key) at `now`: the key must be live and its
+   * Checks a presented API key (its id and the SHA-256 of the whole key) at `now`: the key must be live and its
    * member still in the org, whose role the answer carries. Asked on every request the Worker has not verified
    * within its cache's short lifetime.
    */
-  verifyProxyKey(keyId: string, hash: string, now: number): ProxyKeyVerdict {
+  verifyApiKey(keyId: string, hash: string, now: number): ApiKeyVerdict {
     this.#ensureMembership();
-    const checked = this.#proxyKeys.check(keyId, hash, now);
+    const checked = this.#apiKeys.check(keyId, hash, now);
 
     if (!checked.ok) return checked;
     const member = this.#members.member(checked.memberId);

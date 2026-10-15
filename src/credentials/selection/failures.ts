@@ -103,7 +103,7 @@ export const modelCooldown = (model: string, provider: string, resetInMs: number
 const ADJECTIVE = { day: "daily", week: "weekly", month: "monthly" } as const;
 
 const SUBJECT: Readonly<Record<SubjectKind, string>> = {
-  key: "this proxy key",
+  key: "this API key",
   member: "your membership",
   team: "your team",
   org: "your org",

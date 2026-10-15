@@ -17,7 +17,7 @@ import { OverviewPage } from "./pages/Overview.tsx";
 import { MyModelsPage } from "./pages/MyModels.tsx";
 import { NotFound } from "./pages/NotFound.tsx";
 import { PricesPage } from "./pages/Prices.tsx";
-import { ProxyKeysPage } from "./pages/ProxyKeys.tsx";
+import { ApiKeysPage } from "./pages/ApiKeys.tsx";
 import { SettingsPage } from "./pages/Settings.tsx";
 import { SsoPage } from "./pages/Sso.tsx";
 import { UsagePage } from "./pages/Usage.tsx";
@@ -80,7 +80,7 @@ const routeTree = rootRoute.addChildren([
   createRoute({ getParentRoute: () => rootRoute, path: "/members", component: MembersPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/grants", component: GrantsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/my-models", component: MyModelsPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/proxy-keys", component: ProxyKeysPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/api-keys", component: ApiKeysPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/limits", component: LimitsPage }),
   createRoute({
     getParentRoute: () => rootRoute,

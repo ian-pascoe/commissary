@@ -2077,7 +2077,7 @@ Workers addition replacing the Go server's client keys (`access.api-keys`, impor
   are narrowed to the caller's own keys unless the gate admitted an org admin; creating checks in the ControlPlane that
   the member exists. Nothing dead is kept (ADR 0027): revoking deletes the row (the answer still carries `revoked_at`),
   an expired key's row is deleted by the next listing, issue or presentation of it (`purgeExpired`, also the org cron
-  task `proxy-key-expiry` for an org nobody opens), and the rows the first version kept as revoked are deleted when the
+  task `api-key-expiry` for an org nobody opens), and the rows the first version kept as revoked are deleted when the
   ControlPlane starts (the `revoked_at` column stays, never written). A member holds at most 100 keys (`409
   too_many_keys`). Removing a member deletes their keys, private accounts, private key groups and OAuth logins in the
   same Durable Object call.

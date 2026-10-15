@@ -13,13 +13,13 @@ afterAll(restoreFetch);
 
 const LIMIT = 5;
 
-/** A proxy key in the Personal org of a new person. */
+/** An API key in the Personal org of a new person. */
 const keyOf = async (email: string): Promise<string> => {
   const cookie = await signIn({ email });
   const me = await call("/v9/management/me", { headers: panelHeaders(cookie) });
   const { orgs } = await me.json<{ orgs: ReadonlyArray<{ slug: string }> }>();
 
-  const created = await call(`/v9/management/orgs/${orgs[0]?.slug}/proxy-keys`, {
+  const created = await call(`/v9/management/orgs/${orgs[0]?.slug}/api-keys`, {
     method: "POST",
     headers: panelHeaders(cookie, { "content-type": "application/json" }),
     body: JSON.stringify({ name: "load" }),

@@ -16,7 +16,7 @@ describe("legacyHashTarget", () => {
       ["#/quick-start", "/keys"],
       ["#/config", "/settings"],
       ["#/settings", "/settings"],
-      ["#/api-keys", "/settings"],
+      ["#/api-keys", "/api-keys"],
       ["#/system", "/settings"],
     ];
 

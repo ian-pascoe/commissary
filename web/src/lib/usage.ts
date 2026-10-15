@@ -127,7 +127,7 @@ export const BREAKDOWNS: ReadonlyArray<Breakdown> = [
   { id: "provider", label: "Provider", noun: "Provider", filter: "provider", adminOnly: false },
   { id: "member", label: "Member", noun: "Member", filter: "member", adminOnly: true },
   { id: "team", label: "Team", noun: "Team", filter: "team", adminOnly: true },
-  { id: "key", label: "Proxy key", noun: "Proxy key", filter: undefined, adminOnly: false },
+  { id: "key", label: "API key", noun: "API key", filter: undefined, adminOnly: false },
   { id: "principal", label: "User", noun: "User", filter: "user", adminOnly: true },
   { id: "endpoint", label: "Endpoint", noun: "Endpoint", filter: undefined, adminOnly: false },
 ];

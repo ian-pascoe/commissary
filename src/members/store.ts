@@ -72,8 +72,8 @@ export interface MembershipSettingsWire {
   /** Members may connect private credentials, and the private credentials they connected are used (ADR 0023). */
   readonly privateCredentials: boolean;
   /**
-   * The proxy routes still accept an Access sign-in instead of a proxy key, for the clients of the time before proxy
-   * keys (`proxy-keys/store.ts`). Only `global` uses it: an Access sign-in names no org.
+   * The proxy routes still accept an Access sign-in instead of an API key, for the clients of the time before API
+   * keys (`api-keys/store.ts`). Only `global` uses it: an Access sign-in names no org.
    */
   readonly accessClients: boolean;
 }

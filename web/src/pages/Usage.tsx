@@ -20,7 +20,7 @@ import {
   usageSeriesAtom,
   usageSummaryAtom,
   usageUnpricedAtom,
-  proxyKeysAtom,
+  apiKeysAtom,
 } from "../api/client.ts";
 import { HistoryChart } from "../components/HistoryChart.tsx";
 import { kit, Problem, Section } from "../components/Kit.tsx";
@@ -69,13 +69,13 @@ interface Names {
   readonly members: ReadonlyMap<string, string>;
   /** Team names by team id. */
   readonly teams: ReadonlyMap<string, string>;
-  /** Proxy key names by key id. */
+  /** API key names by key id. */
   readonly keys: ReadonlyMap<string, string>;
 }
 
-/** Proxy keys by id: a plain member lists their own, an org admin every key. */
+/** API keys by id: a plain member lists their own, an org admin every key. */
 const useKeyNames = (): ReadonlyMap<string, string> => {
-  const result = useAtomValue(proxyKeysAtom);
+  const result = useAtomValue(apiKeysAtom);
   const keys = AsyncResult.isSuccess(result) ? result.value.keys : [];
 
   return new Map(keys.map((key) => [key.id, key.name]));
@@ -98,7 +98,7 @@ const useNames = (): Names => {
   };
 };
 
-/** A plain member may not read the accounts, members or teams: only their own proxy keys are named. */
+/** A plain member may not read the accounts, members or teams: only their own API keys are named. */
 const NO_NAMES: Omit<Names, "keys"> = { byIndex: new Map(), members: new Map(), teams: new Map() };
 
 /** A breakdown row's or filter's value as the operator knows it. */
@@ -120,7 +120,7 @@ const valueName = (key: FilterKey | Breakdown["id"], value: string, names: Names
     case "team":
       return names.teams.get(value) ?? value;
     case "key":
-      return value === "" ? "No proxy key" : (names.keys.get(value) ?? value);
+      return value === "" ? "No API key" : (names.keys.get(value) ?? value);
     case "user":
     case "principal":
       return value === "" ? "Unknown user" : value;

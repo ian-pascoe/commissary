@@ -44,7 +44,7 @@ const decodeView = Schema.decodeUnknownSync(SpendView);
 
 const decodeLimit = Schema.decodeUnknownSync(SpendLimitView);
 
-/** An org of its own with an admin, two plain members, a team with alice in it and a proxy key each. */
+/** An org of its own with an admin, two plain members, a team with alice in it and an API key each. */
 const staffedOrg = async () => {
   const slug = `spend-${crypto.randomUUID().slice(0, 8)}`;
   const platformAdmin = await as(ADMIN);
@@ -75,7 +75,7 @@ const staffedOrg = async () => {
   ).toBe(200);
 
   const key = async (who: typeof alice) => {
-    const reply = await send(slug, "/proxy-keys", who, "POST", { name: "laptop" });
+    const reply = await send(slug, "/api-keys", who, "POST", { name: "laptop" });
 
     expect(reply.status).toBe(201);
 
@@ -161,7 +161,7 @@ describe("Spend limit routes", () => {
     expect(bobs.limits.find((limit) => limit.kind === "member")?.label).toBe(o.bob.email);
   });
 
-  it("lets a member limit their own proxy keys, below an admin's limit and not others' keys", async () => {
+  it("lets a member limit their own API keys, below an admin's limit and not others' keys", async () => {
     const o = await staffedOrg();
 
     expect(

@@ -119,7 +119,7 @@ export const loadAccessConfig = (
 export type AdminLists = Pick<AccessConfig, "adminEmails" | "adminServiceTokens">;
 
 /**
- * Whether `principal` is a platform admin; a proxy key or a management key never is (their rights stay in their org).
+ * Whether `principal` is a platform admin; an API key or a management key never is (their rights stay in their org).
  */
 export const isAdmin = (lists: AdminLists, principal: Principal): boolean => {
   switch (principal.kind) {

@@ -6,7 +6,7 @@
  * Pure over a {@link SpendBook}, the storage of limits and counters (`store.ts` in the ControlPlane, a map in tests), so
  * the boundaries of periods are driven by the `now` of the caller.
  *
- * - A proxy key's limits count everything the key spends, whatever credential served it.
+ * - An API key's limits count everything the key spends, whatever credential served it.
  * - Member, team, org and credential limits count traffic served by a **shared** credential only: what a private
  *   credential serves is the member's own account with the provider, so only a key limit sees it.
  * - A limit with no room refuses (key), keeps the shared credentials away (member, team, org) or skips one credential
@@ -138,7 +138,7 @@ export class SpendLedger implements SpendPolicy {
   }
 
   #keyScopes(caller: SpendCaller): ReadonlyArray<SpendScope> {
-    return caller.proxyKeyId === undefined ? [] : [{ kind: "key", subject: caller.proxyKeyId }];
+    return caller.apiKeyId === undefined ? [] : [{ kind: "key", subject: caller.apiKeyId }];
   }
 
   /** The member, their teams and the org: the limits that shared credentials answer to. */

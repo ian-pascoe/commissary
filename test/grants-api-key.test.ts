@@ -1,4 +1,4 @@
-// Grants apply to a proxy key like to an Access sign-in (ADR 0022, ADR 0023): the key resolves to its member, and the
+// Grants apply to an API key like to an Access sign-in (ADR 0022, ADR 0023): the key resolves to its member, and the
 // member's reach decides what the request may pick. An ungranted model answers like an unknown one (same 400 body),
 // and a request without a member (a service token) is served by the default grant only, so upgrading changes nothing.
 import { env } from "cloudflare:workers";
@@ -76,7 +76,7 @@ const SONNET = "claude-sonnet-4-5";
 
 const OPUS = "claude-opus-4-1";
 
-/** An org with a shared Claude subscription, an admin and two plain members each holding a proxy key. */
+/** An org with a shared Claude subscription, an admin and two plain members each holding an API key. */
 const org = async () => {
   const slug = `grants-key-${crypto.randomUUID().slice(0, 8)}`;
   const platform = await as(ADMIN);
@@ -91,7 +91,7 @@ const org = async () => {
 
     expect(reply.status).toBe(201);
     const who = await as(email);
-    const created = await send(slug, "/proxy-keys", who, "POST", { name: "laptop" });
+    const created = await send(slug, "/api-keys", who, "POST", { name: "laptop" });
 
     expect(created.status).toBe(201);
 
@@ -122,7 +122,7 @@ const pick = async (key: string, model: string) =>
     })
   ).body;
 
-describe("grants and proxy keys", () => {
+describe("grants and API keys", () => {
   it("serves any model to every key under the default grant", async () => {
     const { alice, bob } = await org();
 

@@ -1,5 +1,5 @@
 // The gate of a hosted proxy (ADR 0026, src/hosted/gate.ts): session cookies for the panel and the management API,
-// proxy keys for the proxy routes, no Access credentials anywhere, sign-up with a Personal org, the owned-org limit, and
+// API keys for the proxy routes, no Access credentials anywhere, sign-up with a Personal org, the owned-org limit, and
 // suspension of people and orgs by platform admins.
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -54,10 +54,10 @@ const me = async (cookie: string): Promise<Me> => {
 const createOrg = (cookie: string, slug: string) =>
   call("/v9/management/orgs", json(cookie, "POST", { slug, name: slug }));
 
-/** A new proxy key of the signed-in person in `org`. */
-const proxyKey = async (cookie: string, org: string): Promise<string> => {
+/** A new API key of the signed-in person in `org`. */
+const apiKey = async (cookie: string, org: string): Promise<string> => {
   const response = await call(
-    `/v9/management/orgs/${org}/proxy-keys`,
+    `/v9/management/orgs/${org}/api-keys`,
     json(cookie, "POST", { name: "laptop" }),
   );
 
@@ -180,7 +180,7 @@ describe("authentication", () => {
     }
   });
 
-  it("takes only proxy keys on the proxy routes", async () => {
+  it("takes only API keys on the proxy routes", async () => {
     expect((await call("/v1/models")).status).toBe(401);
 
     const cookie = await signIn({ email: "ada@example.com" });
@@ -188,7 +188,7 @@ describe("authentication", () => {
     expect(proxied.status).toBe(401);
 
     const org = (await me(cookie)).orgs[0]?.slug ?? "";
-    expect((await models(await proxyKey(cookie, org))).status).toBe(200);
+    expect((await models(await apiKey(cookie, org))).status).toBe(200);
   });
 
   it("refuses cross-site management requests and form posts", async () => {
@@ -280,10 +280,10 @@ describe("the owned-org limit", () => {
 });
 
 describe("suspension", () => {
-  it("signs a suspended person out and refuses their sessions and proxy keys until it is lifted", async () => {
+  it("signs a suspended person out and refuses their sessions and API keys until it is lifted", async () => {
     const cookie = await signIn({ email: "mallory@example.com" });
     const org = (await me(cookie)).orgs[0]?.slug ?? "";
-    const key = await proxyKey(cookie, org);
+    const key = await apiKey(cookie, org);
     const root = await signIn({ email: ROOT });
 
     const suspended = await call(
@@ -314,7 +314,7 @@ describe("suspension", () => {
   it("refuses everyone in a suspended org, signs its members out, and lets platform admins unsuspend it", async () => {
     const owner = await signIn({ email: "owner@example.com" });
     expect((await createOrg(owner, "shady")).status).toBe(201);
-    const key = await proxyKey(owner, "shady");
+    const key = await apiKey(owner, "shady");
     const root = await signIn({ email: ROOT });
 
     const suspended = await call(
@@ -366,7 +366,7 @@ describe("suspension", () => {
 });
 
 describe("management keys and downloads", () => {
-  it("takes management keys on the management API, refuses them while their org is suspended, and never takes a proxy key there", async () => {
+  it("takes management keys on the management API, refuses them while their org is suspended, and never takes an API key there", async () => {
     const owner = await signIn({ email: "dora@example.com" });
 
     expect((await createOrg(owner, "keyed")).status).toBe(201);
@@ -384,11 +384,11 @@ describe("management keys and downloads", () => {
 
     expect((await members()).status).toBe(200);
 
-    const proxyKeyThere = await call("/v9/management/orgs/keyed/members", {
-      headers: { authorization: `Bearer ${await proxyKey(owner, "keyed")}` },
+    const apiKeyThere = await call("/v9/management/orgs/keyed/members", {
+      headers: { authorization: `Bearer ${await apiKey(owner, "keyed")}` },
     });
 
-    expect(proxyKeyThere.status).toBe(401);
+    expect(apiKeyThere.status).toBe(401);
 
     const root = await signIn({ email: ROOT });
 

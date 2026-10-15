@@ -13,7 +13,7 @@ const hostName = (value: string | undefined): string => (value ?? "").trim().toL
 
 /**
  * The API host of a deployment, as an `https://` origin; `undefined` when the deployment serves everything on one host.
- * The panel shows it as the address proxy keys are sent to (`GET /me` `api_url`).
+ * The panel shows it as the address API keys are sent to (`GET /me` `api_url`).
  */
 export const apiOrigin = (env: HostEnv): string | undefined => {
   const host = hostName(env.API_DOMAIN);

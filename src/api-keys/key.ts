@@ -1,17 +1,17 @@
 /**
- * The text of a proxy key (ADR 0022): `cfp_<orgId>_<keyId>_<secret>`. New in the Workers port, no Go counterpart.
+ * The text of an API key (ADR 0022): `cfp_<orgId>_<keyId>_<secret>`. New in the Workers port, no Go counterpart.
  *
  * The key names its org (the permanent org id, not the renamable slug), so the Worker reaches the org's ControlPlane
  * without a global lookup, and its id, so the ControlPlane finds the stored entry without searching by hash. The
  * secret is 36 random bytes (288 bits, base64url). Only the SHA-256 of the whole key is stored; a key is shown once,
- * when it is created. Pure functions only: the Worker's gate (`access/proxy-key.ts`) and the ControlPlane's store
+ * when it is created. Pure functions only: the Worker's gate (`access/api-key.ts`) and the ControlPlane's store
  * (`store.ts`) share them.
  */
 import { Schema } from "effect";
 import { sha256Hex } from "../hash.ts";
 import { OrgId } from "../platform/org.ts";
 
-export const PROXY_KEY_PREFIX = "cfp_";
+export const API_KEY_PREFIX = "cfp_";
 
 /** A key id: 20 lowercase hex characters (80 random bits); never contains the `_` that separates the key's parts. */
 const KEY_ID = /^[0-9a-f]{20}$/;
@@ -26,14 +26,14 @@ const SHOWN_SECRET_CHARACTERS = 4;
 
 const isOrgId = Schema.is(OrgId);
 
-export interface ParsedProxyKey {
+export interface ParsedApiKey {
   readonly org: OrgId;
   readonly keyId: string;
   /** Lowercase hex SHA-256 of the whole key: what the ControlPlane compares with the stored hash. */
   readonly hash: string;
 }
 
-export interface MintedProxyKey extends ParsedProxyKey {
+export interface MintedApiKey extends ParsedApiKey {
   /** The whole key: returned to its member once, never stored. */
   readonly key: string;
   /** What lists show of the key, so its member recognises it: `cfp_<orgId>_<keyId>_<first 4 secret characters>`. */
@@ -42,11 +42,11 @@ export interface MintedProxyKey extends ParsedProxyKey {
 
 export const isKeyId = (value: string): boolean => KEY_ID.test(value);
 
-/** Whether a client credential is meant as a proxy key (it may still be malformed). */
-export const looksLikeProxyKey = (value: string): boolean => value.startsWith(PROXY_KEY_PREFIX);
+/** Whether a client credential is meant as an API key (it may still be malformed). */
+export const looksLikeApiKey = (value: string): boolean => value.startsWith(API_KEY_PREFIX);
 
 /** The SHA-256 of a whole key, as stored. */
-export const hashProxyKey = (key: string): string => sha256Hex(key);
+export const hashApiKey = (key: string): string => sha256Hex(key);
 
 const base64Url = (bytes: Uint8Array): string => Buffer.from(bytes).toString("base64url");
 
@@ -56,10 +56,10 @@ const randomHex = (bytes: number): string =>
   ).join("");
 
 /**
- * A new key of `org` with a fresh id and secret, its text starting with `prefix`: `cfp_` for a proxy key, `cfm_` for a
+ * A new key of `org` with a fresh id and secret, its text starting with `prefix`: `cfp_` for an API key, `cfm_` for a
  * management key (`management-keys/key.ts`), which has the same shape.
  */
-export const mintOrgKey = (prefix: string, org: OrgId): MintedProxyKey => {
+export const mintOrgKey = (prefix: string, org: OrgId): MintedApiKey => {
   const keyId = randomHex(10);
   const secret = base64Url(crypto.getRandomValues(new Uint8Array(SECRET_BYTES)));
   const key = `${prefix}${org}_${keyId}_${secret}`;
@@ -68,13 +68,13 @@ export const mintOrgKey = (prefix: string, org: OrgId): MintedProxyKey => {
     key,
     org,
     keyId,
-    hash: hashProxyKey(key),
+    hash: hashApiKey(key),
     prefix: `${prefix}${org}_${keyId}_${secret.slice(0, SHOWN_SECRET_CHARACTERS)}`,
   };
 };
 
 /** The org, id and hash of a key starting with `prefix`, `undefined` when the text is not one well formed. */
-export const parseOrgKey = (prefix: string, text: string): ParsedProxyKey | undefined => {
+export const parseOrgKey = (prefix: string, text: string): ParsedApiKey | undefined => {
   if (!text.startsWith(prefix)) return undefined;
   const parts = text.slice(prefix.length).split("_");
 
@@ -85,12 +85,12 @@ export const parseOrgKey = (prefix: string, text: string): ParsedProxyKey | unde
   if (org === undefined || keyId === undefined || !isOrgId(org) || !isKeyId(keyId))
     return undefined;
 
-  return SECRET.test(secret) ? { org, keyId, hash: hashProxyKey(text) } : undefined;
+  return SECRET.test(secret) ? { org, keyId, hash: hashApiKey(text) } : undefined;
 };
 
-/** A new proxy key of `org` with a fresh id and secret. */
-export const mintProxyKey = (org: OrgId): MintedProxyKey => mintOrgKey(PROXY_KEY_PREFIX, org);
+/** A new API key of `org` with a fresh id and secret. */
+export const mintApiKey = (org: OrgId): MintedApiKey => mintOrgKey(API_KEY_PREFIX, org);
 
-/** The org, id and hash of a key, `undefined` when the text is not a well-formed proxy key. */
-export const parseProxyKey = (text: string): ParsedProxyKey | undefined =>
-  parseOrgKey(PROXY_KEY_PREFIX, text);
+/** The org, id and hash of a key, `undefined` when the text is not a well-formed API key. */
+export const parseApiKey = (text: string): ParsedApiKey | undefined =>
+  parseOrgKey(API_KEY_PREFIX, text);

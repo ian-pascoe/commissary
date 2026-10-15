@@ -586,7 +586,7 @@ export type GroupBy = (typeof GROUP_BY)[number];
  * separately (`UsageSummaryQuery.teams`) and the groups can overlap.
  */
 const GROUP_EXPRESSIONS: Readonly<Record<Exclude<GroupBy, "team">, string>> = {
-  /** The proxy key's id: its `key:<id>` principal; records of any other sign-in have the empty key. */
+  /** The API key's id: its `key:<id>` principal; records of any other sign-in have the empty key. */
   key: "CASE WHEN principal_id LIKE 'key:%' THEN substr(principal_id, 5) END",
   model: "model",
   provider: "provider",

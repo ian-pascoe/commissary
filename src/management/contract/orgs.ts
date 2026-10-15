@@ -142,7 +142,7 @@ export const Me = Schema.Struct({
   org_limit: Schema.optionalKey(Schema.Number),
   owned_orgs: Schema.optionalKey(Schema.Number),
   /**
-   * Where clients send proxy keys (`https://<API_DOMAIN>`, ADR 0028) when the deployment serves its proxy routes on an
+   * Where clients send API keys (`https://<API_DOMAIN>`, ADR 0028) when the deployment serves its proxy routes on an
    * API host of their own; absent when the panel's own origin serves them.
    */
   api_url: Schema.optionalKey(Schema.String),
@@ -189,7 +189,7 @@ export class OrgsGroup extends HttpApiGroup.make("orgs").add(
   /** Downloads what the org keeps, secrets as previews, before it is deleted. Org admins. */
   HttpApiEndpoint.get("export", "/export", { success: OrgExport, error: managementErrors }),
   /**
-   * Deletes the addressed org with all its data at once (ADR 0027): usage records, credentials, config, members, proxy
+   * Deletes the addressed org with all its data at once (ADR 0027): usage records, credentials, config, members, API
    * keys, session state and its registry entry; the slug is free to take again. Org owners and platform admins; the
    * body repeats the org's name. `422 name_mismatch`, `409 global_org` (the first org is never deleted), `503
    * deletion_incomplete` (a big org: send the request again until it succeeds).

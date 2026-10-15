@@ -161,14 +161,14 @@ describe("pick with a Spend limit", () => {
     const book = new MemorySpendBook([limit("key", "k1", "day", 1 * USD)]);
     const h = await makePool(config("a", "b"), { spend: ledgerOf(book) });
     h.pool.report(
-      picked(h.pool.pick({ ...request, memberId: "m1", proxyKeyId: "k1" })).lease,
+      picked(h.pool.pick({ ...request, memberId: "m1", apiKeyId: "k1" })).lease,
       success(1 * USD),
     );
 
     const refused = h.pool.pick({
       ...request,
       memberId: "m1",
-      proxyKeyId: "k1",
+      apiKeyId: "k1",
     });
 
     expect(refused).toMatchObject({
@@ -241,7 +241,7 @@ describe("pick with a Spend limit", () => {
       privateConfigs: { m1: config("p") },
     });
 
-    const caller = { ...request, memberId: "m1", proxyKeyId: "k1" };
+    const caller = { ...request, memberId: "m1", apiKeyId: "k1" };
     // Spend the member limit on a shared credential (pin it so the private one is not chosen).
     const shared = picked(h.pool.pick({ ...caller, pinnedAuthId: idOf(h, "a") }));
     h.pool.report(shared.lease, success(1 * USD));
@@ -297,11 +297,11 @@ describe("pick with a Spend limit", () => {
       spend: ledgerOf(new MemorySpendBook()),
     });
 
-    const first = picked(h.pool.pick({ ...request, memberId: "m1", proxyKeyId: "k1" }));
+    const first = picked(h.pool.pick({ ...request, memberId: "m1", apiKeyId: "k1" }));
 
     expect(first.lease.spend).toBeUndefined();
     h.pool.report(first.lease, success(1_000_000 * USD));
-    expect(h.pool.pick({ ...request, memberId: "m1", proxyKeyId: "k1" }).ok).toBe(true);
+    expect(h.pool.pick({ ...request, memberId: "m1", apiKeyId: "k1" }).ok).toBe(true);
   });
 });
 

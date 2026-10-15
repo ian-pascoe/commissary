@@ -58,6 +58,15 @@ describe("control panel in the application", () => {
     expect((await get("/v9/management/settings")).status).toBe(200);
   });
 
+  it("answers the old /v8 prefix with 404: no aliases", async () => {
+    for (const path of [
+      "/v8/management/credentials",
+      "/v8/management/settings",
+      "/v8/management/orgs/default/credentials",
+    ])
+      expect((await get(path)).status, path).toBe(404);
+  });
+
   it("does not apply the dev bypass to non-loopback hosts", async () => {
     // No Access settings in these bindings: the gate fails closed (500 Authentication service error) instead of
     // redirecting or bypassing.

@@ -12,7 +12,7 @@ const ledgerOf = (book: MemorySpendBook, teams: Record<string, ReadonlyArray<str
 /** Charges a request of `caller` served by a shared credential, as the pool does at report time. */
 const spend = (
   ledger: SpendLedger,
-  caller: { memberId?: string; proxyKeyId?: string },
+  caller: { memberId?: string; apiKeyId?: string },
   micros: number,
   now: number,
   credential = { id: "cred-a", shared: true },
@@ -24,7 +24,7 @@ describe("SpendLedger.gate", () => {
 
     spend(ledger, { memberId: "m1" }, 50 * USD, 0);
 
-    expect(ledger.gate({ memberId: "m1", proxyKeyId: "k1" }, 0)).toBeUndefined();
+    expect(ledger.gate({ memberId: "m1", apiKeyId: "k1" }, 0)).toBeUndefined();
     expect(ledger.scopes({ memberId: "m1" }, { id: "c", shared: true })).toEqual([]);
   });
 
@@ -155,20 +155,20 @@ describe("SpendLedger.gate", () => {
 
     const ledger = ledgerOf(book);
     const now = at("2026-03-10T12:00:00Z");
-    spend(ledger, { memberId: "m1", proxyKeyId: "k1" }, 2 * USD, now);
+    spend(ledger, { memberId: "m1", apiKeyId: "k1" }, 2 * USD, now);
 
-    expect(ledger.gate({ memberId: "m1", proxyKeyId: "k1" }, now)?.refuse?.kind).toBe("key");
+    expect(ledger.gate({ memberId: "m1", apiKeyId: "k1" }, now)?.refuse?.kind).toBe("key");
   });
 
   it("a key limit refuses whatever credential would serve", () => {
     const book = new MemorySpendBook([limit("key", "k1", "day", 1 * USD)]);
     const ledger = ledgerOf(book);
     const now = at("2026-03-10T12:00:00Z");
-    spend(ledger, { memberId: "m1", proxyKeyId: "k1" }, 1 * USD, now, {
+    spend(ledger, { memberId: "m1", apiKeyId: "k1" }, 1 * USD, now, {
       id: "p",
       shared: false,
     });
-    const gate = ledger.gate({ memberId: "m1", proxyKeyId: "k1" }, now);
+    const gate = ledger.gate({ memberId: "m1", apiKeyId: "k1" }, now);
 
     expect(gate?.refuse).toEqual({
       kind: "key",
@@ -215,7 +215,7 @@ describe("SpendLedger.scopes", () => {
     const ledger = ledgerOf(book(), { m1: ["t1", "t2"] });
 
     expect(
-      ledger.scopes({ memberId: "m1", proxyKeyId: "k1" }, { id: "shared-1", shared: true }),
+      ledger.scopes({ memberId: "m1", apiKeyId: "k1" }, { id: "shared-1", shared: true }),
     ).toEqual([
       { kind: "key", subject: "k1" },
       { kind: "member", subject: "m1" },
@@ -225,11 +225,11 @@ describe("SpendLedger.scopes", () => {
     ]);
   });
 
-  it("charges a private credential's traffic to the proxy key only", () => {
+  it("charges a private credential's traffic to the API key only", () => {
     const ledger = ledgerOf(book(), { m1: ["t1"] });
 
     expect(
-      ledger.scopes({ memberId: "m1", proxyKeyId: "k1" }, { id: "mine", shared: false }),
+      ledger.scopes({ memberId: "m1", apiKeyId: "k1" }, { id: "mine", shared: false }),
     ).toEqual([{ kind: "key", subject: "k1" }]);
     expect(ledger.scopes({ memberId: "m1" }, { id: "mine", shared: false })).toEqual([]);
   });
@@ -238,7 +238,7 @@ describe("SpendLedger.scopes", () => {
     const b = book();
     const ledger = ledgerOf(b, { m1: ["t1"] });
     const now = at("2026-03-10T12:00:00Z");
-    const caller = { memberId: "m1", proxyKeyId: "k1" };
+    const caller = { memberId: "m1", apiKeyId: "k1" };
     spend(ledger, caller, 5 * USD, now, { id: "mine", shared: false });
 
     // The key is used up; the member's, team's and org's limits saw nothing.

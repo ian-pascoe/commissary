@@ -17,7 +17,7 @@ import { ManagementKeysGroup } from "./management-keys.ts";
 import { OrgsGroup } from "./orgs.ts";
 import { PeopleGroup } from "./people.ts";
 import { PricesGroup } from "./prices.ts";
-import { ProxyKeysGroup } from "./proxy-keys.ts";
+import { ApiKeysGroup } from "./api-keys.ts";
 import { RoutingGroup } from "./routing.ts";
 import { SettingsGroup } from "./settings.ts";
 import { SpendGroup } from "./spend.ts";
@@ -37,7 +37,7 @@ export class ManagementApi extends HttpApi.make("management")
   .add(OrgsGroup)
   .add(PricesGroup)
   .add(MembersGroup)
-  .add(ProxyKeysGroup)
+  .add(ApiKeysGroup)
   .add(GrantsGroup)
   .add(SpendGroup)
   .add(PeopleGroup)

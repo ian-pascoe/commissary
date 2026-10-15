@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ProxyKeyView } from "../src/management/contract/proxy-keys.ts";
+import type { ApiKeyView } from "../src/management/contract/api-keys.ts";
 import {
   canRevoke,
   createdText,
@@ -21,11 +21,11 @@ import {
   sortKeys,
   statusLabel,
   todayInput,
-} from "../web/src/lib/proxy-keys.ts";
+} from "../web/src/lib/api-keys.ts";
 
 const NOW = Date.parse("2026-10-13T12:00:00Z");
 
-const view = (id: string, overrides: Partial<ProxyKeyView> = {}): ProxyKeyView => ({
+const view = (id: string, overrides: Partial<ApiKeyView> = {}): ApiKeyView => ({
   id,
   name: `key ${id}`,
   prefix: `cfp_org_${id}_abcd`,
@@ -190,7 +190,7 @@ describe("keyProblem", () => {
     expect(keyProblem("invalid_name", "x")).toMatch(/1 to 100 characters/);
     expect(keyProblem("invalid_expiry", "x")).toMatch(/future/);
     expect(keyProblem("too_many_keys", "x")).toContain(String(KEYS_PER_MEMBER));
-    expect(keyProblem("proxy_key_not_found", "x")).toMatch(/no longer exists/);
+    expect(keyProblem("api_key_not_found", "x")).toMatch(/no longer exists/);
   });
 
   it("falls back to the server's explanation, then to the message", () => {

@@ -5,7 +5,7 @@
  * 1. its usage records in D1 (`deleteOrgUsage`),
  * 2. the `SessionState` instances it registered (`session-state/instances.ts`), each wiped,
  * 3. its keys in the `CACHE` KV namespace (the names `org.<org>.…` of `orgScopedName`),
- * 4. its ControlPlane's whole storage: credentials, config entries, members, proxy keys, private data, OAuth logins and
+ * 4. its ControlPlane's whole storage: credentials, config entries, members, API keys, private data, OAuth logins and
  *    the refresh alarm (`ControlPlane.wipeOrg`),
  * 5. and last its Platform registry entry (the org, its people's index and its service tokens), which frees the slug.
  *

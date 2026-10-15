@@ -68,8 +68,8 @@ export interface PickRequest {
   readonly callerScope: string;
   /** The member the request is for: their private credentials are candidates, no one else's (ADR 0023). */
   readonly memberId?: string;
-  /** The proxy key the request came with: its Spend limits apply to whatever credential serves it (issue #71). */
-  readonly proxyKeyId?: string;
+  /** The API key the request came with: its Spend limits apply to whatever credential serves it (issue #71). */
+  readonly apiKeyId?: string;
   /** Session identity for affinity/stickiness, when the request carries one. */
   readonly session?: PickSession;
   /** Conversation fingerprints for the LCP matcher (requests without an explicit `session`). */

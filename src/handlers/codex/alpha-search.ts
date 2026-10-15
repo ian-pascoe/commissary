@@ -114,7 +114,7 @@ const handle = Effect.gen(function* () {
       model,
       callerScope: identity.callerScope,
       ...(identity.memberId === undefined ? {} : { memberId: identity.memberId }),
-      ...(identity.principal.kind === "key" ? { proxyKeyId: identity.principal.keyId } : {}),
+      ...(identity.principal.kind === "key" ? { apiKeyId: identity.principal.keyId } : {}),
       ...(sessionId !== "" ? { session: { id: sessionId } } : {}),
     }),
   );

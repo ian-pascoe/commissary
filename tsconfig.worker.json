@@ -44,7 +44,7 @@
     "web/src/lib/models.ts",
     "web/src/lib/org.ts",
     "web/src/lib/prices.ts",
-    "web/src/lib/proxy-keys.ts",
+    "web/src/lib/api-keys.ts",
     "web/src/lib/providers.ts",
     "web/src/lib/quota.ts",
     "web/src/lib/raw-config.ts",

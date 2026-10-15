@@ -1,17 +1,17 @@
-// Proxy keys (/proxy-keys): the keys clients send on the proxy routes instead of an Access sign-in (ADR 0022). Every
+// API keys (/api-keys): the keys clients send on the proxy routes instead of an Access sign-in (ADR 0022). Every
 // member creates, lists and revokes their own; org admins see and revoke every key of the org. A key is shown whole
 // once, in the answer to its creation: the page keeps it in memory until it is dismissed and never asks for it again.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Check, Copy, KeyRound } from "lucide-react";
 import { AsyncResult } from "effect/reactivity";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
-import type { CreatedProxyKey, ProxyKeyView } from "#contract/proxy-keys.ts";
+import type { CreatedApiKey, ApiKeyView } from "#contract/api-keys.ts";
 import {
-  createProxyKeyAtom,
+  createApiKeyAtom,
   meAtom,
-  PROXY_KEYS,
-  proxyKeysAtom,
-  revokeProxyKeyAtom,
+  API_KEYS,
+  apiKeysAtom,
+  revokeApiKeyAtom,
 } from "../api/client.ts";
 import { ConfirmDialog, type ConfirmRequest } from "../components/Confirm.tsx";
 import { kit, Problem, Section } from "../components/Kit.tsx";
@@ -38,12 +38,12 @@ import {
   sortKeys,
   statusLabel,
   todayInput,
-} from "../lib/proxy-keys.ts";
-import { type Caller, roleAs, seesEveryProxyKey } from "../lib/role.ts";
+} from "../lib/api-keys.ts";
+import { type Caller, roleAs, seesEveryApiKey } from "../lib/role.ts";
 import { useAction } from "../lib/use-action.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
 import { useRole } from "../lib/use-role.ts";
-import styles from "./ProxyKeys.module.css";
+import styles from "./ApiKeys.module.css";
 
 /** What the last write said: a result to announce, or why it was refused. */
 type Note = { readonly tone: "done" | "problem"; readonly text: string };
@@ -65,7 +65,7 @@ const NoteLine = ({ note, what }: { readonly note: Note | undefined; readonly wh
 export const Reveal = ({
   created,
   onDismiss,
-  label = "Proxy key",
+  label = "API key",
 }: {
   readonly created: { readonly id: string; readonly name: string; readonly key: string };
   readonly onDismiss: () => void;
@@ -145,10 +145,10 @@ const NewKey = ({
 }: {
   /** Why the form is closed to the caller, when it is. */
   readonly closedBecause: string | undefined;
-  readonly onCreated: (created: CreatedProxyKey) => void;
+  readonly onCreated: (created: CreatedApiKey) => void;
 }) => {
   const ids = useId();
-  const create = useAction(createProxyKeyAtom);
+  const create = useAction(createApiKeyAtom);
   const [name, setName] = useState("");
   const [expires, setExpires] = useState("");
   const [tried, setTried] = useState(false);
@@ -171,7 +171,7 @@ const NewKey = ({
         expiresAt === undefined
           ? { name: name.trim() }
           : { name: name.trim(), expires_at: expiresAt },
-      reactivityKeys: PROXY_KEYS,
+      reactivityKeys: API_KEYS,
     });
 
     if (outcome.ok) {
@@ -189,7 +189,7 @@ const NewKey = ({
 
   return (
     <>
-      <form className={styles["form"]} onSubmit={submit} noValidate aria-label="Create a proxy key">
+      <form className={styles["form"]} onSubmit={submit} noValidate aria-label="Create an API key">
         <div className={styles["formRow"]}>
           <div className={kit["field"]}>
             <label className={kit["fieldLabel"]} htmlFor={`${ids}-name`}>
@@ -250,7 +250,7 @@ const NewKey = ({
   );
 };
 
-const Status = ({ keyView, now }: { readonly keyView: ProxyKeyView; readonly now: number }) => {
+const Status = ({ keyView, now }: { readonly keyView: ApiKeyView; readonly now: number }) => {
   const status = keyStatus(keyView, now);
   const revoked = status === "revoked" ? revokedText(keyView) : undefined;
 
@@ -269,13 +269,13 @@ const KeyTable = ({
   busy,
   onRevoke,
 }: {
-  readonly keys: ReadonlyArray<ProxyKeyView>;
+  readonly keys: ReadonlyArray<ApiKeyView>;
   readonly now: number;
   readonly withMember: boolean;
   readonly busy: boolean;
-  readonly onRevoke: (key: ProxyKeyView) => void;
+  readonly onRevoke: (key: ApiKeyView) => void;
 }) => (
-  <div className={styles["scroll"]} role="region" aria-label="Proxy keys" tabIndex={0}>
+  <div className={styles["scroll"]} role="region" aria-label="API keys" tabIndex={0}>
     <table className={styles["table"]}>
       <thead>
         <tr>
@@ -333,13 +333,13 @@ const KeyTable = ({
 );
 
 const Keys = ({ caller }: { readonly caller: Caller }) => {
-  const result = useAtomValue(proxyKeysAtom);
-  const retry = useAtomRefresh(proxyKeysAtom);
-  const revoke = useAction(revokeProxyKeyAtom);
+  const result = useAtomValue(apiKeysAtom);
+  const retry = useAtomRefresh(apiKeysAtom);
+  const revoke = useAction(revokeApiKeyAtom);
   const [filter, setFilter] = useState<KeyFilter>("active");
   const [confirm, setConfirm] = useState<ConfirmRequest | undefined>(undefined);
   const [note, setNote] = useState<Note | undefined>(undefined);
-  const every = seesEveryProxyKey(caller);
+  const every = seesEveryApiKey(caller);
 
   if (!AsyncResult.isSuccess(result)) {
     return AsyncResult.isFailure(result) ? (
@@ -356,7 +356,7 @@ const Keys = ({ caller }: { readonly caller: Caller }) => {
   const shown = filterKeys(all, filter, now);
   const hasGone = filterKeys(all, "active", now).length < all.length;
 
-  const askRevoke = (key: ProxyKeyView) => {
+  const askRevoke = (key: ApiKeyView) => {
     setNote(undefined);
 
     setConfirm({
@@ -371,7 +371,7 @@ const Keys = ({ caller }: { readonly caller: Caller }) => {
       action: "Revoke key",
       busyAction: "Revoking…",
       run: async () => {
-        const outcome = await revoke.run({ params: { id: key.id }, reactivityKeys: PROXY_KEYS });
+        const outcome = await revoke.run({ params: { id: key.id }, reactivityKeys: API_KEYS });
 
         setNote(
           outcome.ok
@@ -410,8 +410,8 @@ const Keys = ({ caller }: { readonly caller: Caller }) => {
         <p className={styles["empty"]}>
           {all.length === 0
             ? every
-              ? "No one has created a proxy key in this org yet."
-              : "You have no proxy keys yet. Create one above to use the proxy from a coding agent."
+              ? "No one has created an API key in this org yet."
+              : "You have no API keys yet. Create one above to use the proxy from a coding agent."
             : "No key works any more. Create one above, or choose All to see the old ones."}
         </p>
       ) : (
@@ -445,15 +445,15 @@ const Usage = ({ apiUrl }: { readonly apiUrl: string }) => (
   </>
 );
 
-export const ProxyKeysPage = () => {
-  usePageTitle("Proxy keys");
+export const ApiKeysPage = () => {
+  usePageTitle("API keys");
   const role = useRole();
   const me = useAtomValue(meAtom);
-  const [created, setCreated] = useState<CreatedProxyKey | undefined>(undefined);
+  const [created, setCreated] = useState<CreatedApiKey | undefined>(undefined);
 
   if (role.kind !== "ready") return null;
   const { caller } = role;
-  const every = seesEveryProxyKey(caller);
+  const every = seesEveryApiKey(caller);
   const closedBecause = AsyncResult.isSuccess(me) ? notMemberNote(me.value) : undefined;
 
   // A deployment with an API host (ADR 0028) serves the proxy routes there, not on the panel's origin.
@@ -463,9 +463,9 @@ export const ProxyKeysPage = () => {
   return (
     <div className={kit["page"]}>
       <header className={styles["head"]}>
-        <h1 className={styles["title"]}>Proxy keys</h1>
+        <h1 className={styles["title"]}>API keys</h1>
         <p className={styles["intro"]}>
-          A proxy key lets a coding agent or script use this org&rsquo;s proxy without an Access
+          An API key lets a coding agent or script use this org&rsquo;s proxy without an Access
           sign-in. Each key belongs to the member who created it, and anything holding it can use
           the proxy as that member.{" "}
           {every

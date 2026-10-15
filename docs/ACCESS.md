@@ -381,7 +381,7 @@ Commissary keeps as little as it can and deletes at once; there is no grace peri
 - **Removing a member** (`DELETE /members/<id>`) deletes their API keys, private accounts and provider key groups, the
   OAuth logins they started in that org, and their Spend limits and counters and those of their API keys.
 - **API keys** are deleted when revoked and when they expire (an expired key is purged when keys are listed or created,
-  when one is checked, and by the cron task `proxy-key-expiry`); a deleted key's Spend limits and counters go with it.
+  when one is checked, and by the cron task `api-key-expiry`); a deleted key's Spend limits and counters go with it.
 - **Deleting an org** (`DELETE /org` with `{"name": "<the org's name>"}`; a person who is an org owner or a platform admin, never a service
   token: `403 person_required`) removes its usage
   records, replay state, cached keys, credentials, config, members, API keys and registry entry at once and frees the

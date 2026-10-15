@@ -25,7 +25,7 @@ export type PersonView = typeof PersonView.Type;
 
 /**
  * `PATCH /people/:email`: `org_limit` (0-1000, `null` for the deployment's default) and/or `suspended` (signs them out
- * and refuses their sessions, proxy keys and management keys until unsuspended).
+ * and refuses their sessions, API keys and management keys until unsuspended).
  */
 export const UpdatePerson = Schema.Struct({
   org_limit: Schema.optionalKey(Schema.NullOr(Schema.Number)),

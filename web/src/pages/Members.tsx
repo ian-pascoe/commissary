@@ -208,13 +208,13 @@ const AccessClients = ({ caller }: { readonly caller: Caller }) => (
     what="the proxy sign-in setting"
     describe={(on) =>
       on
-        ? "On: the proxy routes still accept an Access sign-in (cloudflared's cf-access-token) instead of a proxy key, for clients set up before proxy keys. Turn it off once every client sends a proxy key, so only keys open the proxy."
-        : "Off: the proxy routes accept proxy keys only. A client that still signs in through Access is asked for a proxy key until its member creates one on the Proxy keys page."
+        ? "On: the proxy routes still accept an Access sign-in (cloudflared's cf-access-token) instead of an API key, for clients set up before API keys. Turn it off once every client sends an API key, so only keys open the proxy."
+        : "Off: the proxy routes accept API keys only. A client that still signs in through Access is asked for an API key until its member creates one on the API keys page."
     }
     said={(on) =>
       on
         ? "The proxy routes accept an Access sign-in again."
-        : "The proxy routes accept proxy keys only now."
+        : "The proxy routes accept API keys only now."
     }
   />
 );
@@ -314,7 +314,7 @@ export const MembersPage = () => {
             ? "a platform admin, an org owner of every org"
             : roleAs(role.caller.role)}
           . Org owners can do everything here. Org admins add and remove plain members and manage
-          teams; adding or promoting org admins and owners, changing roles and the joining and proxy
+          teams; adding or promoting org admins and owners, changing roles and the joining and API
           sign-in settings are for org owners.
         </p>
       </header>

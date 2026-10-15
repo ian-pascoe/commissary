@@ -62,8 +62,8 @@ export const PickRequest = Schema.Struct({
    * without one (a service token) is served by shared credentials only.
    */
   memberId: optional(Schema.String),
-  /** The proxy key the request came with: its Spend limits apply to whatever credential serves it. */
-  proxyKeyId: optional(Schema.String),
+  /** The API key the request came with: its Spend limits apply to whatever credential serves it. */
+  apiKeyId: optional(Schema.String),
   requireAuthKind: optional(AuthKind),
   /** Skip Codex credentials on the free plan. */
   disallowFreeCodex: optional(Schema.Boolean),

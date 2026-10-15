@@ -1,4 +1,4 @@
-/* Limits: one 60rem column like Proxy keys. Forms sit on the sunk ground; the list is ruled rows with a thin meter of
+/* Limits: one 60rem column like API keys. Forms sit on the sunk ground; the list is ruled rows with a thin meter of
    how much of each limit is spent, and a limit that is reached reads in ink, not in a colour alone. */
 .head {
   display: grid;

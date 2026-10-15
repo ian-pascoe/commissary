@@ -138,8 +138,8 @@ export interface Prepared {
   readonly orgId: OrgId;
   /** The caller's member id in the org (usage `member_id`), when they have one. */
   readonly memberId?: string;
-  /** The proxy key the request came with (Spend limits of a key apply to everything it spends; issue #71). */
-  readonly proxyKeyId?: string;
+  /** The API key the request came with (Spend limits of a key apply to everything it spends; issue #71). */
+  readonly apiKeyId?: string;
   readonly callerScope: string;
   readonly endpoint: string;
   readonly session: PickSession | undefined;
@@ -458,7 +458,7 @@ export const conduct = <T, R>(
               ...(credits ? { ignoreCooldown: true } : {}),
               callerScope: prepared.callerScope,
               ...(prepared.memberId === undefined ? {} : { memberId: prepared.memberId }),
-              ...(prepared.proxyKeyId === undefined ? {} : { proxyKeyId: prepared.proxyKeyId }),
+              ...(prepared.apiKeyId === undefined ? {} : { apiKeyId: prepared.apiKeyId }),
               excludedIds,
               retryRound: round,
               requestRetry: settings.requestRetry,

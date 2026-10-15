@@ -12,7 +12,7 @@ import { managementKeyForbidden } from "./management-key-routes.ts";
 import { Effect, Schema } from "effect";
 import { HttpRouter, type HttpServerResponse } from "effect/http";
 import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
-import { forgetVerifiedProxyKeysOf } from "../access/proxy-key.ts";
+import { forgetVerifiedApiKeysOf } from "../access/api-key.ts";
 import { syncOrgIndex } from "../members/admission.ts";
 import { type Actor, holdsSensitivePowers, roleAtLeast } from "../members/roles.ts";
 import type {
@@ -174,8 +174,8 @@ const removeMember = Effect.gen(function* () {
   const result = yield* controlPlane("removeMember", (stub) => stub.removeMember(id, actor));
 
   yield* orRefuse(result);
-  // Their proxy keys went with them (ADR 0027); this isolate stops trusting the keys it verified at once.
-  forgetVerifiedProxyKeysOf((yield* AccessPrincipal).org, id);
+  // Their API keys went with them (ADR 0027); this isolate stops trusting the keys it verified at once.
+  forgetVerifiedApiKeysOf((yield* AccessPrincipal).org, id);
   yield* reindex;
 
   return jsonReply(200, { status: "ok" });
@@ -217,7 +217,7 @@ const updateMembershipSettings = Effect.gen(function* () {
   if (input.access_clients !== undefined && identity.org !== GLOBAL_ORG)
     return yield* replyError(422, "access_clients_global_only", {
       message:
-        "only the first org takes Access sign-ins on the proxy routes; this org takes proxy keys only",
+        "only the first org takes Access sign-ins on the proxy routes; this org takes API keys only",
     });
 
   const settings = yield* controlPlane("setMembershipSettings", (stub) =>

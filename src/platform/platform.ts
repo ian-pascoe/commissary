@@ -2,7 +2,7 @@
  * `Platform` Durable Object: the Platform registry (ADR 0021), one object per deployment (`platformOf`, registry.ts).
  * It holds what spans orgs: the list of orgs, an index of which orgs each person and each Access service token belong to
  * (the orgs' ControlPlanes stay authoritative for membership), and the lease that keeps one refresh of the shared model
- * catalog at a time. It stays out of the request path for clients, which name their org with their proxy key. New in the
+ * catalog at a time. It stays out of the request path for clients, which name their org with their API key. New in the
  * Workers port.
  *
  * The platform admins are not stored here: the deployment's variables name them, so they can always repair this

@@ -4,7 +4,7 @@
  * counterpart. Shared with the browser: imports `effect` only.
  *
  * Org admins issue, list and revoke them. A key holds a role in its org (at most the issuer's role), is stored hashed,
- * is shown whole once (in the answer to its creation) and names its org like a proxy key: `cfm_<orgId>_<keyId>_<secret>`,
+ * is shown whole once (in the answer to its creation) and names its org like an API key: `cfm_<orgId>_<keyId>_<secret>`,
  * sent as `Authorization: Bearer cfm_…`. It is accepted on the management API only, never on the proxy routes, and it
  * can never download a stored credential, register a service token, change a service token's role or issue a key.
  */

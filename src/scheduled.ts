@@ -65,16 +65,16 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
       return yield* Effect.promise(() => plane.refreshDevinStatus());
     }),
   },
-  // Expired proxy keys are deleted, not kept marked (ADR 0027): a listing or issue deletes them too, this covers an org
+  // Expired API keys are deleted, not kept marked (ADR 0027): a listing or issue deletes them too, this covers an org
   // nobody opens.
   {
-    name: "proxy-key-expiry",
+    name: "api-key-expiry",
     scope: "org",
     run: Effect.gen(function* () {
       const plane = yield* currentControlPlane;
       const now = yield* Clock.currentTimeMillis;
 
-      return yield* Effect.promise(() => plane.purgeExpiredProxyKeys(now));
+      return yield* Effect.promise(() => plane.purgeExpiredApiKeys(now));
     }),
   },
   // Credential refresh safety sweep: re-arms the ControlPlane refresh alarm. Before the quota

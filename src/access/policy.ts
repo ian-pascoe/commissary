@@ -8,8 +8,8 @@
  *   without an org (they redirect to an org of the caller or show the org chooser), its bundle files and the old
  *   panel's address.
  * - **member**: any role in the org: the proxy routes, the panel's pages of the org, reading usage (a plain member
- *   sees only their own requests, `management/usage-routes.ts`) and their own proxy keys
- *   (`management/proxy-key-routes.ts`).
+ *   sees only their own requests, `management/usage-routes.ts`) and their own API keys
+ *   (`management/api-key-routes.ts`).
  * - **admin**: everything else of the management API. Some routes need more and say so in their handler: changing a
  *   role (org owner), downloading a credential or giving a service token a role above member (ADR 0006's rule per
  *   org, `members/roles.ts` `holdsSensitivePowers`).
@@ -71,11 +71,11 @@ const MEMBER_CREDENTIAL_ROUTES: ReadonlyArray<{
   { methods: ["POST"], path: `${PROVIDER_KEYS}/probe` },
 ];
 
-/** A member's own proxy keys (`management/proxy-key-routes.ts`, which limits a plain member to their keys). */
-const PROXY_KEYS = `${MANAGEMENT_PREFIX}/proxy-keys`;
+/** A member's own API keys (`management/api-key-routes.ts`, which limits a plain member to their keys). */
+const API_KEYS = `${MANAGEMENT_PREFIX}/api-keys`;
 
 /**
- * Spend limits (`management/spend-routes.ts`): a plain member reads the limits that bind them and limits their own proxy
+ * Spend limits (`management/spend-routes.ts`): a plain member reads the limits that bind them and limits their own API
  * keys, so those routes are for members; the calendar (`/spend/settings`) stays for org admins.
  */
 const SPEND = `${MANAGEMENT_PREFIX}/spend`;
@@ -122,7 +122,7 @@ export const routeAccess = (
     if (isPanelPagePath(route)) return "platform";
   } else if (isPanelPagePath(route)) return "member";
 
-  if (route === PROXY_KEYS || route.startsWith(`${PROXY_KEYS}/`)) return "member";
+  if (route === API_KEYS || route.startsWith(`${API_KEYS}/`)) return "member";
 
   if ((route === SPEND || route.startsWith(`${SPEND}/`)) && route !== SPEND_SETTINGS)
     return "member";

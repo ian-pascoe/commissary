@@ -83,7 +83,7 @@ const newOrg = async (): Promise<Org> => {
   expect(
     (await send(slug, "/credentials?name=shared.json", platform, "POST", claudeFile())).status,
   ).toBe(200);
-  expect((await send(slug, "/proxy-keys", org.alice.auth, "POST", { name: "laptop" })).status).toBe(
+  expect((await send(slug, "/api-keys", org.alice.auth, "POST", { name: "laptop" })).status).toBe(
     201,
   );
 

@@ -3,7 +3,7 @@
  * port, no Go counterpart.
  *
  * A key names its org (`management-keys/key.ts`), so verification asks that org's ControlPlane only, after the Platform
- * registry confirmed the org exists (`orgExists`, shared with proxy keys). A request with a key is for the key's org:
+ * registry confirmed the org exists (`orgExists`, shared with API keys). A request with a key is for the key's org:
  * an unscoped management URL means it, an org-scoped one must name it (403 otherwise). The key holds a role in its org
  * and is never a platform admin. Verified keys are cached per isolate for {@link VERIFIED_KEY_TTL_MS}, so a revocation
  * applies within that time everywhere, and at once in the isolate that revoked it.
@@ -17,7 +17,7 @@ import { controlPlaneOf, type OrgId } from "../platform/org.ts";
 import { platform } from "../platform/registry.ts";
 import type { RouteAccess } from "./policy.ts";
 import { type AccessIdentity, makeIdentity } from "./principal.ts";
-import { orgExists, VERIFIED_KEY_TTL_MS } from "./proxy-key.ts";
+import { orgExists, VERIFIED_KEY_TTL_MS } from "./api-key.ts";
 
 export interface VerifiedManagementKey {
   readonly org: OrgId;

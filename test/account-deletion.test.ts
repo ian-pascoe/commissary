@@ -90,9 +90,7 @@ const newPerson = async () => {
   await addMember(solo, email, "owner");
   const auth = await token(email);
 
-  expect((await send(shared.slug, "/proxy-keys", auth, "POST", { name: "laptop" })).status).toBe(
-    201,
-  );
+  expect((await send(shared.slug, "/api-keys", auth, "POST", { name: "laptop" })).status).toBe(201);
   expect(
     (
       await send(shared.slug, "/provider-keys/groups", auth, "PUT", {
@@ -131,7 +129,7 @@ describe("DELETE /me", () => {
     expect((await plane.listMembers()).map((member) => member.email)).toEqual([
       `owner-${shared.slug}@example.com`,
     ]);
-    expect(await plane.listProxyKeys(undefined, Date.now())).toEqual([]);
+    expect(await plane.listApiKeys(undefined, Date.now())).toEqual([]);
 
     // Nothing is kept about them, not even the note that blocks a removed member from joining again.
     expect(await tombstones(shared)).toBe(0);

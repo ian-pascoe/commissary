@@ -6,8 +6,8 @@ import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 
 /**
  * The authenticated caller: a person (an Access user, or on a hosted proxy a person signed in with Better Auth: their
- * verified email), an Access service token (client id), a proxy key a member presented on a proxy route (ADR 0022,
- * `proxy-key.ts`; never on a management route), or a management key a script presented on the management API (ADR
+ * verified email), an Access service token (client id), an API key a member presented on a proxy route (ADR 0022,
+ * `api-key.ts`; never on a management route), or a management key a script presented on the management API (ADR
  * 0026, `management-key.ts`; never on a proxy route).
  */
 export type Principal =
@@ -40,7 +40,7 @@ export interface AccessIdentity {
    */
   readonly principalId: string;
   /**
-   * Irreversible namespace used to isolate session state between callers (`callerScope(principalId, org)`). A proxy
+   * Irreversible namespace used to isolate session state between callers (`callerScope(principalId, org)`). An API
    * key takes its member's scope (`user:<email>`), so one member's tools share session state.
    */
   readonly callerScope: string;
@@ -80,7 +80,7 @@ export const principalId = (principal: Principal): string => {
   }
 };
 
-/** What the caller scope is derived from: the principal, or the member a proxy key belongs to. */
+/** What the caller scope is derived from: the principal, or the member an API key belongs to. */
 const scopeSource = (principal: Principal): string =>
   principal.kind === "key" ? `user:${principal.email.toLowerCase()}` : principalId(principal);
 

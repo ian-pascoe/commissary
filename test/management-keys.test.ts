@@ -4,7 +4,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { parseManagementKey } from "../src/management-keys/key.ts";
 import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
-import { parseProxyKey } from "../src/proxy-keys/key.ts";
+import { parseApiKey } from "../src/api-keys/key.ts";
 import {
   ADMIN,
   isolatedPlatform,
@@ -88,13 +88,13 @@ const errorOf = (reply: { readonly body: unknown }) =>
   (reply.body as { error?: string }).error;
 
 describe("the key text", () => {
-  it("names its org like a proxy key, and is never taken for one", async () => {
+  it("names its org like an API key, and is never taken for one", async () => {
     const { org, slug, admin } = await staffedOrg("text");
     const created = await issue(slug, admin, "deploy", "admin");
 
     expect(created.key).toMatch(/^cfm_org-[0-9a-f]{16}_[0-9a-f]{20}_[A-Za-z0-9_-]{48}$/);
     expect(parseManagementKey(created.key)).toMatchObject({ org, keyId: created.id });
-    expect(parseProxyKey(created.key)).toBeUndefined();
+    expect(parseApiKey(created.key)).toBeUndefined();
     expect(created.prefix).toBe(created.key.slice(0, created.prefix.length));
     expect(created.prefix.length).toBeLessThan(created.key.length);
   });
@@ -218,7 +218,7 @@ describe("the gate on the management API", () => {
     const { slug, admin } = await staffedOrg("member-key");
     const { key } = await issue(slug, admin, "reader", "member");
 
-    expect((await withKey(key, api(slug, "/proxy-keys"))).status).toBe(200);
+    expect((await withKey(key, api(slug, "/api-keys"))).status).toBe(200);
     expect((await withKey(key, api(slug, "/members"))).status).toBe(403);
   });
 

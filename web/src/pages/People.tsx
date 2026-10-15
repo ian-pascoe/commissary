@@ -69,11 +69,11 @@ const Person = ({
       title: `${suspend ? "Suspend" : "Unsuspend"} ${person.email}?`,
       body: suspend ? (
         <p>
-          They are signed out and their sessions, proxy keys and management keys are refused until
-          you unsuspend them. Nothing is deleted: their orgs and keys stay as they are.
+          They are signed out and their sessions, API keys and management keys are refused until you
+          unsuspend them. Nothing is deleted: their orgs and keys stay as they are.
         </p>
       ) : (
-        <p>They can sign in again, and their proxy keys and management keys work again.</p>
+        <p>They can sign in again, and their API keys and management keys work again.</p>
       ),
       action: suspend ? "Suspend person" : "Unsuspend person",
       busyAction: suspend ? "Suspending…" : "Unsuspending…",

@@ -2,7 +2,7 @@
  * Authentication on a hosted proxy (ADR 0026), the counterpart of `access/authenticate.ts`: no Access application sits
  * in front of the Worker, so Access JWTs and Access service tokens are accepted nowhere. New in the Workers port.
  *
- * - Proxy routes take proxy keys only. A key of a suspended org or person is refused, and each org's requests are
+ * - Proxy routes take API keys only. A key of a suspended org or person is refused, and each org's requests are
  *   rate-limited (`rate-limit.ts`).
  * - The management API takes management keys (`access/management-key.ts`, refused for a suspended org or issuer), like
  *   a self-hosted proxy.
@@ -17,7 +17,7 @@ import { platformAdminLists } from "../access/config.ts";
 import { managementKeyIdentity, presentedManagementKey } from "../access/management-key.ts";
 import { routeAccess } from "../access/policy.ts";
 import type { AccessIdentity, Principal } from "../access/principal.ts";
-import { presentedCredentials } from "../access/proxy-key.ts";
+import { presentedCredentials } from "../access/api-key.ts";
 import { type AccessZone, scopedUrl } from "../access/routes.ts";
 import { UnauthorizedError } from "../errors.ts";
 import { WorkerEnv } from "../platform/env.ts";
@@ -50,11 +50,11 @@ export const authenticateHosted = (
     if (zone === "protected") {
       const credentials = presentedCredentials(headers, requestUrl);
 
-      if (credentials.proxyKey === undefined)
+      if (credentials.apiKey === undefined)
         return yield* new UnauthorizedError({
           message: credentials.any ? "Invalid API key" : "Missing API key",
         });
-      const identity = yield* keyIdentity(credentials.proxyKey);
+      const identity = yield* keyIdentity(credentials.apiKey);
 
       yield* requireStanding(
         identity.org,

@@ -3,9 +3,9 @@
  * counterpart.
  *
  * A **Spend limit** caps the Cost (micro-USD) that one subject may spend in one period. The subject is a member, a team,
- * the org, a shared credential or a proxy key; the periods are a day, a week and a month in the org's time zone
+ * the org, a shared credential or an API key; the periods are a day, a week and a month in the org's time zone
  * (`period.ts`). Spend is counted per **scope** (a subject) and period, not per limit: an admin's and a member's limit
- * on one proxy key share a counter. A counter starts when the first limit of its scope and period is written, and goes
+ * on one API key share a counter. A counter starts when the first limit of its scope and period is written, and goes
  * when the last one is deleted.
  */
 import { Schema } from "effect";
@@ -26,7 +26,7 @@ export const SpendScope = Schema.Struct({
 
 export type SpendScope = typeof SpendScope.Type;
 
-/** Who wrote a limit: an org admin (any subject) or a member (their own proxy keys only). */
+/** Who wrote a limit: an org admin (any subject) or a member (their own API keys only). */
 export const LIMIT_SOURCES = ["admin", "member"] as const;
 
 export type LimitSource = (typeof LIMIT_SOURCES)[number];
@@ -34,7 +34,7 @@ export type LimitSource = (typeof LIMIT_SOURCES)[number];
 export interface SpendLimit {
   readonly id: string;
   readonly kind: SubjectKind;
-  /** A member, team, credential or proxy key id; empty for the org. */
+  /** A member, team, credential or API key id; empty for the org. */
   readonly subject: string;
   readonly period: Period;
   /** Micro-USD (1 USD = 1,000,000), at least 0 (nothing may be spent). */
@@ -64,7 +64,7 @@ export interface Refusal {
 
 /**
  * What the Spend limits say about a request before a credential is chosen:
- * - `refuse`: a limit of the request's proxy key has no room, so nothing may serve it;
+ * - `refuse`: a limit of the request's API key has no room, so nothing may serve it;
  * - `sharedBlocked`: a member, team or org limit has no room, so only the member's private credentials may serve it;
  * - `credentials`: the shared credentials whose own limit has no room, skipped like unavailable ones.
  */
@@ -77,5 +77,5 @@ export interface SpendGate {
 /** Who a request is for, as the limits see it. */
 export interface SpendCaller {
   readonly memberId?: string | undefined;
-  readonly proxyKeyId?: string | undefined;
+  readonly apiKeyId?: string | undefined;
 }

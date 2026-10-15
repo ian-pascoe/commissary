@@ -1,14 +1,9 @@
 /**
- * The text of a management key (ADR 0026): `cfm_<orgId>_<keyId>_<secret>`, shaped like a proxy key
- * (`proxy-keys/key.ts`: the org id, a 20-hex-character id and a 288-bit secret; only the SHA-256 of the whole key is
+ * The text of a management key (ADR 0026): `cfm_<orgId>_<keyId>_<secret>`, shaped like an API key
+ * (`api-keys/key.ts`: the org id, a 20-hex-character id and a 288-bit secret; only the SHA-256 of the whole key is
  * stored). The prefix tells the two apart, so neither is ever taken for the other. New in the Workers port.
  */
-import {
-  mintOrgKey,
-  type MintedProxyKey,
-  type ParsedProxyKey,
-  parseOrgKey,
-} from "../proxy-keys/key.ts";
+import { mintOrgKey, type MintedApiKey, type ParsedApiKey, parseOrgKey } from "../api-keys/key.ts";
 import type { OrgId } from "../platform/org.ts";
 
 export const MANAGEMENT_KEY_PREFIX = "cfm_";
@@ -18,9 +13,9 @@ export const looksLikeManagementKey = (value: string): boolean =>
   value.startsWith(MANAGEMENT_KEY_PREFIX);
 
 /** A new management key of `org`. */
-export const mintManagementKey = (org: OrgId): MintedProxyKey =>
+export const mintManagementKey = (org: OrgId): MintedApiKey =>
   mintOrgKey(MANAGEMENT_KEY_PREFIX, org);
 
 /** The org, id and hash of a management key, `undefined` when the text is not one well formed. */
-export const parseManagementKey = (text: string): ParsedProxyKey | undefined =>
+export const parseManagementKey = (text: string): ParsedApiKey | undefined =>
   parseOrgKey(MANAGEMENT_KEY_PREFIX, text);

@@ -5,7 +5,7 @@
 # - the management API answers 200 through Access with a service token (which proves the Worker accepts the Access
 #   JWT, i.e. ACCESS_AUD and the team domain are wired);
 # - a proxy route without credentials reaches the Worker, which answers 401 `Missing API key` itself (the proxy routes
-#   are out of Access: clients send proxy keys);
+#   are out of Access: clients send API keys);
 # - a client the way `cloudflared access` clients (pi) send it, an Access JWT in `cf-access-token` and a dummy key in
 #   `Authorization`, is served on a proxy route (200): the first deploy with the bypass must not break them, since
 #   `global` keeps Access sign-ins for clients on by default. The JWT is the `CF_Authorization` cookie Access sets for

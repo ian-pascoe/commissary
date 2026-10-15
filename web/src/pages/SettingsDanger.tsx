@@ -91,8 +91,8 @@ const DeleteRow = ({ org, owner }: { readonly org: OrgView; readonly owner: bool
     <div className={styles["row"]}>
       <h3 className={styles["rowTitle"]}>Delete this org</h3>
       <p className={styles["body"]}>
-        Deleting the org removes its usage records, accounts, provider keys, settings, members,
-        proxy keys and sessions.{" "}
+        Deleting the org removes its usage records, accounts, provider keys, settings, members, API
+        keys and sessions.{" "}
         <strong>
           It is immediate and permanent: there is no grace period and nothing can be restored.
         </strong>{" "}
