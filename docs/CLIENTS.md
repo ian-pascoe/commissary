@@ -78,13 +78,13 @@ Define a custom provider in `~/.codex/config.toml` (see the
 
 ```toml
 model_provider = "cf-llm-proxy"
-model = "gpt-5-codex"            # any model id from /v1/models
+model = "gpt-5-codex" # any model id from /v1/models
 
 [model_providers.cf-llm-proxy]
 name = "cf-llm-proxy"
 base_url = "https://proxy.example.com/v1"
-wire_api = "responses"           # the only supported value
-env_key = "PROXY_KEY"            # sent as "Authorization: Bearer <key>"
+wire_api = "responses" # the only supported value
+env_key = "PROXY_KEY" # sent as "Authorization: Bearer <key>"
 # supports_websockets = true     # optional: Responses over WebSocket (see the CPU-limit caveat in the README)
 ```
 

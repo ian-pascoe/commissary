@@ -3,7 +3,8 @@
  * for dependencies of dependencies whose full code the Worker does not need. Every module of the bundle is compiled
  * when the Worker starts, also those only imported lazily, and startup has a CPU time limit.
  */
-import { fileURLToPath } from "node:url";
+// Node's `URL`, not the global one: this module is also type-checked in the Worker project, where the global is workerd's.
+import { URL, fileURLToPath } from "node:url";
 
 export const BUNDLE_ALIASES = {
   // Better Auth's SSO plugin reads host names only (src/sso/tldts.ts).
