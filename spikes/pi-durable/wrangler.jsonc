@@ -1,0 +1,9 @@
+{
+  // Only for measuring the bundle: `wrangler deploy --dry-run --outdir dist` builds locally and uploads nothing.
+  "name": "spike-pi-durable",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": { "bindings": [{ "name": "AGENT", "class_name": "AgentDO" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AgentDO"] }],
+}
