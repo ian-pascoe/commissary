@@ -48,7 +48,7 @@ const ApplicationSettings = Alchemy.Action(
       readonly appLauncherVisible?: boolean;
       readonly tags?: Array<string>;
       readonly policies?: ReadonlyArray<{ readonly id?: string; readonly precedence?: number }>;
-      readonly destinations?: zeroTrust.AccessApplicationsUpdateRequestDestinationsList;
+      readonly destinations?: zeroTrust.AccessApplicationsUpdateRequestDestinations;
     };
 
     yield* zeroTrust.updateAccessApplicationForAccount({
