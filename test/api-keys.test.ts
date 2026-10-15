@@ -194,23 +194,23 @@ describe("the key text", () => {
   it("names its org and id, carries at least 256 bits of secret, and parses back", () => {
     const org = OrgId.make("acme-1");
     const minted = mintApiKey(org);
-    const [, orgPart, id, secret] = /^cfp_([a-z0-9-]+)_([0-9a-f]{20})_(.+)$/.exec(minted.key) ?? [];
+    const [, orgPart, id, secret] = /^cms_([a-z0-9-]+)_([0-9a-f]{20})_(.+)$/.exec(minted.key) ?? [];
 
     expect(orgPart).toBe("acme-1");
     expect(id).toBe(minted.keyId);
     // base64url: 6 bits per character.
     expect((secret ?? "").length * 6).toBeGreaterThanOrEqual(256);
-    expect(minted.prefix).toBe(`cfp_acme-1_${minted.keyId}_${(secret ?? "").slice(0, 4)}`);
+    expect(minted.prefix).toBe(`cms_acme-1_${minted.keyId}_${(secret ?? "").slice(0, 4)}`);
     expect(parseApiKey(minted.key)).toEqual({ org, keyId: minted.keyId, hash: minted.hash });
     expect(mintApiKey(org).key).not.toBe(minted.key);
 
     for (const malformed of [
-      "cfp_",
-      "cfp_acme-1",
-      `cfp_acme-1_${minted.keyId}`,
-      `cfp_Acme_${minted.keyId}_${secret}`,
-      `cfp_acme-1_${minted.keyId.slice(1)}_${secret}`,
-      `cfp_acme-1_${minted.keyId}_${(secret ?? "").slice(1)}`,
+      "cms_",
+      "cms_acme-1",
+      `cms_acme-1_${minted.keyId}`,
+      `cms_Acme_${minted.keyId}_${secret}`,
+      `cms_acme-1_${minted.keyId.slice(1)}_${secret}`,
+      `cms_acme-1_${minted.keyId}_${(secret ?? "").slice(1)}`,
       `sk-${minted.key}`,
     ])
       expect(parseApiKey(malformed), malformed).toBeUndefined();
@@ -222,7 +222,7 @@ describe("issuing keys", () => {
     const { org, slug, alice } = await staffedOrg("issue");
     const created = await createKey(slug, alice, "  laptop  ");
 
-    expect(wholeKey(created).startsWith(`cfp_${org}_${created.id}_`)).toBe(true);
+    expect(wholeKey(created).startsWith(`cms_${org}_${created.id}_`)).toBe(true);
     expect(created).toMatchObject({ name: "laptop", member_id: alice.id, mine: true });
     expect(wholeKey(created).startsWith(created.prefix)).toBe(true);
 
@@ -348,7 +348,7 @@ describe("issuing keys", () => {
     const rows = async () =>
       await runInDurableObject(stub, (_instance, state) =>
         state.storage.sql
-          .exec<{ name: string }>("SELECT name FROM proxy_keys ORDER BY name")
+          .exec<{ name: string }>("SELECT name FROM api_keys ORDER BY name")
           .toArray()
           .map((row) => row.name),
       );
@@ -409,8 +409,8 @@ describe("issuing keys", () => {
 
     await runInDurableObject(stub, (_instance, state) => {
       state.storage.sql.exec(
-        `INSERT INTO proxy_keys (id, member_id, name, hash, prefix, created_at, revoked_at)
-         VALUES ('legacykey', ?, 'legacy', 'x', 'cfp_x', 1, 2)`,
+        `INSERT INTO api_keys (id, member_id, name, hash, prefix, created_at, revoked_at)
+         VALUES ('legacykey', ?, 'legacy', 'x', 'cms_x', 1, 2)`,
         alice.id,
       );
     });
@@ -499,7 +499,7 @@ describe("the gate on the client API", () => {
     const parsed = parseApiKey(key);
 
     if (parsed === undefined) throw new Error("the issued key does not parse");
-    const secret = key.slice(`cfp_${org}_${parsed.keyId}_`.length);
+    const secret = key.slice(`cms_${org}_${parsed.keyId}_`.length);
     const flipped = `${secret.slice(0, -1)}${secret.endsWith("A") ? "B" : "A"}`;
 
     const revoked = await createKey(slug, alice, "revoked");
@@ -516,13 +516,13 @@ describe("the gate on the client API", () => {
     if (!expired.ok) throw new Error(expired.message);
 
     const refused = {
-      "wrong org prefix": `cfp_${other.org}_${parsed.keyId}_${secret}`,
-      "org that does not exist": `cfp_no-such-org_${parsed.keyId}_${secret}`,
+      "wrong org prefix": `cms_${other.org}_${parsed.keyId}_${secret}`,
+      "org that does not exist": `cms_no-such-org_${parsed.keyId}_${secret}`,
       "unknown key": mintApiKey(org).key,
-      "wrong secret": `cfp_${org}_${parsed.keyId}_${flipped}`,
+      "wrong secret": `cms_${org}_${parsed.keyId}_${flipped}`,
       revoked: wholeKey(revoked),
       expired: expired.value.key,
-      malformed: "cfp_definitely-not-a-key",
+      malformed: "cms_definitely-not-a-key",
     };
 
     for (const [why, presented] of Object.entries(refused)) {
@@ -545,6 +545,18 @@ describe("the gate on the client API", () => {
     });
   });
 
+  it("refuses a key under the old cfp_ prefix", async () => {
+    const { slug, alice } = await staffedOrg("gate-old-prefix");
+    const key = wholeKey(await createKey(slug, alice));
+    const old = key.replace(/^cms_/, "cfp_");
+
+    expect((await clientApi("/v1/models", { "x-api-key": key })).status).toBe(200);
+    expect(parseApiKey(old)).toBeUndefined();
+
+    for (const headers of [{ authorization: `Bearer ${old}` }, { "x-api-key": old }])
+      expect((await clientApi("/v1/models", headers)).status).toBe(401);
+  });
+
   it("never takes a key of one org to another org's ControlPlane", async () => {
     const a = await staffedOrg("gate-org-a");
     const b = await staffedOrg("gate-org-b");
@@ -563,7 +575,7 @@ describe("the gate on the client API", () => {
     ).toEqual({ ok: false, reason: "unknown" });
 
     // Asked through the gate with B's org in front of A's key: refused, and B records no use of any key.
-    const relabelled = keyA.replace(`cfp_${a.org}_`, `cfp_${b.org}_`);
+    const relabelled = keyA.replace(`cms_${a.org}_`, `cms_${b.org}_`);
     expect((await clientApi("/v1/models", { "x-api-key": relabelled })).status).toBe(401);
 
     const bKeys = (await send(b.slug, "/api-keys", b.admin)).body as { keys: Array<KeyBody> };

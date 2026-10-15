@@ -136,7 +136,7 @@ export const isAdmin = (lists: AdminLists, principal: Principal): boolean => {
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 type DevBypassEnv = Pick<Env, "ACCESS_DEV_BYPASS"> &
-  Partial<Pick<Env, "ACCESS_TEAM_DOMAIN" | "ACCESS_AUD" | "PROXY_MODE">>;
+  Partial<Pick<Env, "ACCESS_TEAM_DOMAIN" | "ACCESS_AUD" | "COMMISSARY_MODE">>;
 
 /** Outcome of the dev bypass check: `undefined` when `ACCESS_DEV_BYPASS` is unset or the host is not loopback. */
 export type DevBypass = DevBypassOutcome | undefined;
@@ -150,13 +150,13 @@ const { Active, Refused } = Data.taggedEnum<DevBypassOutcome>();
 
 /**
  * Whether the Worker is wired to Access (`ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` set) or is Commissary Cloud
- * (`PROXY_MODE=hosted`, ADR 0026, which signs people in itself): a deployed stage. Such a Worker refuses the dev bypass
+ * (`COMMISSARY_MODE=cloud`, ADR 0026, which signs people in itself): a deployed stage. Such a Worker refuses the dev bypass
  * and the fixed development keys (`AUTH_INDEX_KEY`, `SECRETS_KEY`).
  */
 export const isDeployedStage = (env: {
   readonly ACCESS_TEAM_DOMAIN?: string | undefined;
   readonly ACCESS_AUD?: string | undefined;
-  readonly PROXY_MODE?: string | undefined;
+  readonly COMMISSARY_MODE?: string | undefined;
 }): boolean =>
   (env.ACCESS_TEAM_DOMAIN ?? "").trim() !== "" ||
   (env.ACCESS_AUD ?? "").trim() !== "" ||

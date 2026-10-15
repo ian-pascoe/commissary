@@ -14,7 +14,7 @@ const SEALED: ReadonlyArray<{ readonly table: string; readonly column: string }>
   { table: "credentials", column: "metadata" },
   { table: "config_settings", column: "value" },
   { table: "config_key_groups", column: "value" },
-  { table: "config_api_keys", column: "value" },
+  { table: "config_provider_keys", column: "value" },
   { table: "config_model_aliases", column: "value" },
   { table: "config_model_exclusions", column: "value" },
   { table: "config_payload_rules", column: "value" },

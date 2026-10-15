@@ -1,4 +1,4 @@
-// Management keys (/management-keys): keys for scripts that call the management API (`Authorization: Bearer cfm_…`)
+// Management keys (/management-keys): keys for scripts that call the management API (`Authorization: Bearer cmsm_…`)
 // instead of a browser session (ADR 0026). Org admins issue, list and revoke them; a key holds a role no higher than
 // its issuer's. Like an API key it is shown whole once, in the answer to its creation.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
@@ -267,7 +267,7 @@ export const ManagementKeysPage = () => {
         <h1 className={styles["title"]}>Management keys</h1>
         <p className={styles["intro"]}>
           A management key is for scripts that call this org&rsquo;s management API: send it as{" "}
-          <code>Authorization: Bearer cfm_…</code>. It holds the role you give it and works on the
+          <code>Authorization: Bearer cmsm_…</code>. It holds the role you give it and works on the
           management API only, never on the client API.
         </p>
       </header>

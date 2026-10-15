@@ -4,14 +4,14 @@
 
 | Event                                    | Stage         | Where                                                        |
 | ---------------------------------------- | ------------- | ------------------------------------------------------------ |
-| Push to `main`                           | `prod`        | `CF_LLM_PROXY_DOMAIN`, GitHub environment `production`       |
-| Push to `main`                           | `hosted`      | its own domain, GitHub environment `hosted` (once set up)    |
+| Push to `main`                           | `prod`        | `COMMISSARY_DOMAIN`, GitHub environment `production`         |
+| Push to `main`                           | `cloud`       | its own domain, GitHub environment `cloud` (once set up)     |
 | Pull request from a branch of this repo  | `pr-<number>` | the Worker's `workers.dev` URL, GitHub environment `preview` |
 | That pull request closed (merged or not) | `pr-<number>` | destroyed                                                    |
 
-A preview is a Commissary Cloud deploy (`PROXY_MODE=hosted`) while its pull request has the label `hosted-preview` (adding or removing the label
-redeploys it in the other mode); production is one when the `production` environment sets `PROXY_MODE=hosted`
-([Commissary Cloud](#commissary-cloud)); the `hosted` stage always is ([The Commissary Cloud stage](#the-commissary-cloud-stage)). Everything
+A preview is a Commissary Cloud deploy (`COMMISSARY_MODE=cloud`) while its pull request has the label `cloud-preview` (adding or removing the label
+redeploys it in the other mode); production is one when the `production` environment sets `COMMISSARY_MODE=cloud`
+([Commissary Cloud](#commissary-cloud)); the `cloud` stage always is ([The Commissary Cloud stage](#the-commissary-cloud-stage)). Everything
 else in this file describes a self-hosted Commissary, the default.
 
 Deploys run only after typecheck, lint, workflow lint (actionlint, zizmor), the test shards and the smoke test pass.
@@ -24,7 +24,7 @@ domain and AUD wired); `/v1/models` and `/v1beta/models` without credentials rea
 `401 Missing API key` itself (the client API is outside Access, behind API keys); `/v1/models` with an Access JWT
 in `cf-access-token` and a dummy `Authorization` key, the way `cloudflared access` clients call it, answers 200 (the
 JWT is the `CF_Authorization` cookie Access set for the service token); and `/` without credentials is stopped by
-Access. A Commissary Cloud deploy is checked by `tools/check-hosted-deploy.sh` instead: `/healthz` answers 200,
+Access. A Commissary Cloud deploy is checked by `tools/check-cloud-deploy.sh` instead: `/healthz` answers 200,
 `/api/sign-in-options` offers a provider, `/v9/management/me` answers `401 Not signed in` from the Worker, `/` redirects
 to `/sign-in`, and the client API answers `401 Missing API key`. With an API host ([API host](#api-host)) both
 scripts send the client API to it and also check that each host refuses the other's paths with the Worker's `404`.
@@ -41,7 +41,7 @@ A stage named `pr-<number>` is a preview (`infra/settings.ts`):
   platform admins (`PLATFORM_ADMIN_EMAILS`).
 - Empty KV, D1 and Durable Objects, and no cron trigger. A preview has no provider credentials, so it serves the panel,
   the management API and the routes but cannot serve real requests. Add credentials through its panel if you need to.
-- `CF_LLM_PROXY_DOMAIN`, `CF_LLM_PROXY_API_DOMAIN`, `ACCESS_AUD` and `ACCESS_SERVICE_TOKENS` are ignored: one URL serves
+- `COMMISSARY_DOMAIN`, `COMMISSARY_API_DOMAIN`, `ACCESS_AUD` and `ACCESS_SERVICE_TOKENS` are ignored: one URL serves
   everything.
 
 Any machine with the deploy settings can deploy a preview by hand: `pnpm run deploy --stage pr-123`, and remove it with
@@ -49,9 +49,9 @@ Any machine with the deploy settings can deploy a preview by hand: `pnpm run dep
 
 ## API host
 
-`CF_LLM_PROXY_API_DOMAIN` (optional, ADR 0028) gives a deployment a second hostname, the **API host**, that serves the
+`COMMISSARY_API_DOMAIN` (optional, ADR 0028) gives a deployment a second hostname, the **API host**, that serves the
 client API (`/v1`, `/v1beta`, `/v1internal`, `/openai/v1`, `/backend-api/codex`, `/chat/completions`, `/completions`,
-`/responses`) and `/healthz`, and nothing else. `CF_LLM_PROXY_DOMAIN` becomes the **app host**: the control panel, sign-in
+`/responses`) and `/healthz`, and nothing else. `COMMISSARY_DOMAIN` becomes the **app host**: the control panel, sign-in
 and the management API, and no client API route. One Worker answers on both custom domains and decides by hostname
 (`src/http/hosts.ts`); a path on the wrong host answers `404` with the host that serves it. The panel's API keys page
 tells clients the API host (`GET /me` `api_url`).
@@ -68,14 +68,14 @@ tells clients the API host (`GET /me` `api_url`).
 
 ## Commissary Cloud
 
-Commissary Cloud (ADR 0029; the mode of ADR 0026, `PROXY_MODE=hosted`) has no Access application: the Worker signs people in with GitHub and/or
+Commissary Cloud (ADR 0029; the mode of ADR 0026, `COMMISSARY_MODE=cloud`) has no Access application: the Worker signs people in with GitHub and/or
 Google (Better Auth), anyone may sign up, and each new person gets a Personal org they own. Platform admins are the
 people in `PLATFORM_ADMIN_EMAILS` signed in with that email verified by the provider; `PLATFORM_ADMIN_SERVICE_TOKENS`
 and every `ACCESS_*` setting are ignored, and scripts use management keys ([ACCESS.md](ACCESS.md#commissary-cloud)).
 
 | Setting                                                    | Kind        | Meaning                                                               |
 | ---------------------------------------------------------- | ----------- | --------------------------------------------------------------------- |
-| `PROXY_MODE`                                               | variable    | `hosted`; unset or `self-hosted` for a self-hosted Commissary         |
+| `COMMISSARY_MODE`                                          | variable    | `cloud`; unset or `self-hosted` for a self-hosted Commissary          |
 | `SIGN_IN_GITHUB_CLIENT_ID`, `SIGN_IN_GITHUB_CLIENT_SECRET` | var, secret | a GitHub OAuth app (or GitHub App); offered when both are set         |
 | `SIGN_IN_GOOGLE_CLIENT_ID`, `SIGN_IN_GOOGLE_CLIENT_SECRET` | var, secret | a Google OAuth client (web application); offered when both are set    |
 | `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`               | var, secret | a Cloudflare Turnstile widget for the deploy's hostname (required)    |
@@ -89,13 +89,13 @@ set. Replacing it signs everyone out.
 
 1. **OAuth apps.** Register the callback `https://<host>/api/auth/callback/github` (GitHub) and
    `https://<host>/api/auth/callback/google` (Google, "Authorized redirect URIs"), where `<host>` is
-   `CF_LLM_PROXY_DOMAIN` (the app host when there is an API host). The Worker reads the verified email and stores no provider token. A
+   `COMMISSARY_DOMAIN` (the app host when there is an API host). The Worker reads the verified email and stores no provider token. A
    GitHub OAuth app takes a single callback host, so use one app per hostname; a GitHub App takes up to ten callback
    URLs and Google any number.
 2. **Turnstile.** Create a widget (Cloudflare dashboard, Turnstile) for the hostname, managed mode.
 3. **Settings.** Put them in `.env` (`.env.example` lists them) for local deploys. For CI, `pnpm ci:setup` writes the
    ones `.env` sets into both GitHub environments (the ids and limits as variables, the client secrets and the
-   Turnstile secret as secrets), and `PROXY_MODE=hosted` into `production` when `.env` sets it. Set them by hand in
+   Turnstile secret as secrets), and `COMMISSARY_MODE=cloud` into `production` when `.env` sets it. Set them by hand in
    the GitHub environments otherwise.
 4. **Deploy.** The D1 migration `0008_hosted_auth.sql` adds Better Auth's tables (`auth_user`, `auth_session`,
    `auth_account`, `auth_verification`); every deploy applies it, also on a self-hosted Commissary, where they stay empty.
@@ -106,7 +106,7 @@ the deploy needs nothing for it: no setting, binding or D1 migration (the provid
 ControlPlane and the domain index in the Platform registry, created on first use). The Worker reaches the identity
 providers and `cloudflare-dns.com` (domain proof) with `fetch`.
 
-**Commissary Cloud previews.** A preview with the `hosted-preview` label uses the `preview` environment's sign-in settings and
+**Commissary Cloud previews.** A preview with the `cloud-preview` label uses the `preview` environment's sign-in settings and
 serves its `workers.dev` URL, so a sign-in completes only after that URL's callback is registered with the provider
 (and its hostname added to the Turnstile widget). Previews share the rate-limit namespace with each other, and with
 production when the environments set the same `ORG_RATE_LIMIT_NAMESPACE_ID`: the org `global` exists on every stage
@@ -114,28 +114,28 @@ under the same id, so give `preview` its own namespace.
 
 ### The Commissary Cloud stage
 
-Next to `prod`, which stays self-hosted behind Access, CI deploys Commissary Cloud from `main`: the stage `hosted` (the Commissary Cloud stage; its identifier changes in the next rebrand step), with
+Next to `prod`, which stays self-hosted behind Access, CI deploys Commissary Cloud from `main`: the stage `cloud` (the Commissary Cloud stage), with
 its own hostname, Worker, storage and users. The two share nothing but the code: an org, account or API key of one
-does not exist on the other. The stage is always Commissary Cloud; the deploy refuses it without `PROXY_MODE=hosted`, so it can
+does not exist on the other. The stage is always Commissary Cloud; the deploy refuses it without `COMMISSARY_MODE=cloud`, so it can
 never take the self-hosted Commissary's hostname from `.env`.
 
-Its settings live in `.env.hosted` (copy `.env.hosted.example`), never in `.env`, which keeps the self-hosted Commissary's
+Its settings live in `.env.cloud` (copy `.env.cloud.example`), never in `.env`, which keeps the self-hosted Commissary's
 and the Commissary Cloud previews'. Set them up once:
 
-1. **Hostname.** Pick one in a zone of the account, other than `CF_LLM_PROXY_DOMAIN` of `.env`, and optionally an API
-   host (`CF_LLM_PROXY_API_DOMAIN`, [API host](#api-host)). The other steps use the app host.
+1. **Hostname.** Pick one in a zone of the account, other than `COMMISSARY_DOMAIN` of `.env`, and optionally an API
+   host (`COMMISSARY_API_DOMAIN`, [API host](#api-host)). The other steps use the app host.
 2. **OAuth apps.** A GitHub OAuth app for that hostname (a GitHub OAuth app takes one callback host, so not the
    previews' app) with the callback `https://<host>/api/auth/callback/github`; for Google, add
    `https://<host>/api/auth/callback/google` to the client's redirect URIs.
-3. **Turnstile.** Add the hostname to a widget (or create one) and put its keys in `.env.hosted`.
+3. **Turnstile.** Add the hostname to a widget (or create one) and put its keys in `.env.cloud`.
 4. **Rate-limit namespace.** An `ORG_RATE_LIMIT_NAMESPACE_ID` that the previews' environment does not use.
-5. **CI.** `pnpm ci:setup` creates the GitHub environment `hosted` (deployments from `main` only) with the settings of
-   `.env.hosted`, and extends the deploy token to the hostname's zone. Until then the `deploy hosted` job of a push to
+5. **CI.** `pnpm ci:setup` creates the GitHub environment `cloud` (deployments from `main` only) with the settings of
+   `.env.cloud`, and extends the deploy token to the hostname's zone. Until then the `deploy cloud` job of a push to
    `main` only notes that it is not set up.
 
-The next push to `main` (or a manual run) deploys it and checks it with `tools/check-hosted-deploy.sh`. Whoever signs in with an
-email of `PLATFORM_ADMIN_EMAILS` (verified by the provider) is a platform admin. By hand, `pnpm deploy:hosted`
-deploys the stage from `.env.hosted` alone (`alchemy deploy --stage hosted --env-file .env.hosted`).
+The next push to `main` (or a manual run) deploys it and checks it with `tools/check-cloud-deploy.sh`. Whoever signs in with an
+email of `PLATFORM_ADMIN_EMAILS` (verified by the provider) is a platform admin. By hand, `pnpm deploy:cloud`
+deploys the stage from `.env.cloud` alone (`alchemy deploy --stage cloud --env-file .env.cloud`).
 
 **Switching a stage.** Turning a self-hosted stage into a Commissary Cloud one deletes its Access applications, policies and
 service tokens on the next deploy, and scripts with Access service tokens stop working: issue management keys first.
@@ -145,21 +145,23 @@ who should stay in it as members first.
 
 ## Setup
 
-CI's credentials are code: `stacks/github.ts` is a second Alchemy stack that creates them and writes them into GitHub.
+There are two Alchemy stacks. `commissary` (`alchemy.run.ts`) is Commissary itself, with the stages `prod`, `cloud` and
+`pr-<number>`; its Worker's logical ID is `Commissary`. CI's credentials are code: `commissary-github`
+(`stacks/github.ts`, stage `ci`) is the second stack, which creates them and writes them into GitHub.
 It manages:
 
 - the GitHub environments `production` (deployments from `main` only, no reviewers: a green push deploys) and
-  `preview`, and `hosted` (like `production`) when `.env.hosted` exists ([The Commissary Cloud stage](#the-commissary-cloud-stage));
-- `cf-llm-proxy-ci-deploy`, an account-owned Cloudflare API token limited to what `alchemy.run.ts` deploys: Workers Scripts,
+  `preview`, and `cloud` (like `production`) when `.env.cloud` exists ([The Commissary Cloud stage](#the-commissary-cloud-stage));
+- `commissary-ci-deploy`, an account-owned Cloudflare API token limited to what `alchemy.run.ts` deploys: Workers Scripts,
   Workers KV Storage, D1, Secrets Store (Alchemy's state store) and Access: Apps and Policies (Write), Account Settings
-  (Read), and Zone Read, DNS Write and Workers Routes Write on the zones of `CF_LLM_PROXY_DOMAIN` and
-  `CF_LLM_PROXY_API_DOMAIN` (and of the hosted stage's);
-- `cf-llm-proxy-ci-check`, the Access service token of the post-deploy check;
+  (Read), and Zone Read, DNS Write and Workers Routes Write on the zones of `COMMISSARY_DOMAIN` and
+  `COMMISSARY_API_DOMAIN` (and of the `cloud` stage's);
+- `commissary-ci-check`, the Access service token of the post-deploy check;
 - in both environments, the secrets `CLOUDFLARE_API_TOKEN`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` and the
   variables `CLOUDFLARE_ACCOUNT_ID`, `ACCESS_*` (from `.env`) and `ACCESS_ALLOW_SERVICE_TOKEN_IDS` (the check token's
-  ID); in `production` also `CF_LLM_PROXY_DOMAIN` and `CF_LLM_PROXY_API_DOMAIN`; and Commissary Cloud's settings where `.env` sets them
+  ID); in `production` also `COMMISSARY_DOMAIN` and `COMMISSARY_API_DOMAIN`; and Commissary Cloud's settings where `.env` sets them
   ([Commissary Cloud](#commissary-cloud));
-- in `hosted`, the secret `CLOUDFLARE_API_TOKEN` and the settings of `.env.hosted` (no Access settings or check token).
+- in `cloud`, the secret `CLOUDFLARE_API_TOKEN` and the settings of `.env.cloud` (no Access settings or check token).
 
 Raw secrets never leave Alchemy: Cloudflare returns them once, they go to the encrypted state store and are encrypted
 again for GitHub.
@@ -256,3 +258,24 @@ the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --pro
   addresses and `auth_index` values saved by usage collectors from earlier exports stop matching; open the account
   from the Accounts page again. Clients that filtered usage with `auth_id` must switch to `auth_index` (the old
   parameter answers 400).
+
+## Cutover to the Commissary stacks
+
+The rename to Commissary (issue #122) changes every deployed and stored name: the stacks (`commissary`,
+`commissary-github`), the Worker's logical ID (`Commissary`), the Commissary Cloud stage (`cloud`, settings in
+`.env.cloud`), the settings (`COMMISSARY_*`, `COMMISSARY_MODE=self-hosted|cloud`), the preview label
+(`cloud-preview`), the key prefixes (`cms_` for API keys, `cmsm_` for management keys), the ControlPlane tables and the
+secrets-key salt. Nothing migrates: every stage starts fresh with empty storage, old keys stop working, and the old
+stacks are destroyed first. A person with the `admin` profile runs it (issue #123):
+
+1. **Save what you will re-create**, from `main` before the merge: each org's Go config (`GET /v9/management/export`),
+   its members, teams, grants, spend limits and SSO settings, and the OAuth credentials to log in to again.
+2. **Destroy the old stacks**, still on the code before the rename: let every open pull request with a live preview
+   close, then `pnpm run destroy --stage prod`, `pnpm run destroy --stage hosted --env-file .env.hosted` and the CI stack
+   (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --profile admin`). The old and new CI stacks manage
+   the same GitHub environments and secrets, so the old one goes before `pnpm ci:setup` runs from the new code.
+3. **Bring up the new stacks**: rename `.env.hosted` to `.env.cloud` and the settings to their `COMMISSARY_*` names
+   (`.env.example`, `.env.cloud.example`), rename the label (`gh label edit hosted-preview --name cloud-preview`), run
+   `pnpm ci:setup` (environments `production`, `preview` and `cloud`), then merge: CI deploys `prod` and `cloud`.
+4. **Re-create and reconnect**: sign in, re-create the orgs and import their configs, log in to the OAuth credentials
+   again, mint new API keys and management keys, and update every client.

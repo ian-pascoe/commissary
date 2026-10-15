@@ -2,12 +2,12 @@
 
 All examples use `https://commissary.example.com` as the Worker's hostname and an **API key**: a key Commissary issues to a
 member of an org (ADR 0022). Create one in the control panel under **API keys** (any member can); it is shown once, so
-copy it then. A key looks like `cfp_<org id>_<key id>_<secret>`: it names its org, so Commissary serves the request from
+copy it then. A key looks like `cms_<org id>_<key id>_<secret>`: it names its org, so Commissary serves the request from
 that org's accounts, and it acts as the member who created it (usage is recorded against the key and its member, and
 one member's keys share session state). Export it once; never commit it:
 
 ```bash
-export COMMISSARY_API_KEY='cfp_…'
+export COMMISSARY_API_KEY='cms_…'
 ```
 
 Send the key wherever the client sends a provider key: `Authorization: Bearer <key>` (OpenAI, Codex, Claude Code's
@@ -66,7 +66,7 @@ Persistent alternative, `~/.claude/settings.json`:
 {
   "env": {
     "ANTHROPIC_BASE_URL": "https://commissary.example.com",
-    "ANTHROPIC_AUTH_TOKEN": "cfp_…"
+    "ANTHROPIC_AUTH_TOKEN": "cms_…"
   }
 }
 ```

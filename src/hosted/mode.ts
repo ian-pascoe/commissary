@@ -4,11 +4,13 @@
  * port, no Go counterpart.
  */
 
-export type ProxyMode = "self-hosted" | "hosted";
+export type CommissaryMode = "self-hosted" | "cloud";
 
-/** `PROXY_MODE=hosted` (any case); anything else, unset included, is a self-hosted Commissary. */
-export const proxyMode = (env: { readonly PROXY_MODE?: string | undefined }): ProxyMode =>
-  (env.PROXY_MODE ?? "").trim().toLowerCase() === "hosted" ? "hosted" : "self-hosted";
+/** `COMMISSARY_MODE=cloud` (any case); anything else, unset included, is a self-hosted Commissary. */
+export const commissaryMode = (env: {
+  readonly COMMISSARY_MODE?: string | undefined;
+}): CommissaryMode =>
+  (env.COMMISSARY_MODE ?? "").trim().toLowerCase() === "cloud" ? "cloud" : "self-hosted";
 
-export const isHosted = (env: { readonly PROXY_MODE?: string | undefined }): boolean =>
-  proxyMode(env) === "hosted";
+export const isHosted = (env: { readonly COMMISSARY_MODE?: string | undefined }): boolean =>
+  commissaryMode(env) === "cloud";

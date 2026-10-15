@@ -28,7 +28,7 @@ const NOW = Date.parse("2026-10-13T12:00:00Z");
 const view = (id: string, overrides: Partial<ApiKeyView> = {}): ApiKeyView => ({
   id,
   name: `key ${id}`,
-  prefix: `cfp_org_${id}_abcd`,
+  prefix: `cms_org_${id}_abcd`,
   member_id: "m1",
   mine: true,
   created_at: "2026-10-10T00:00:00Z",

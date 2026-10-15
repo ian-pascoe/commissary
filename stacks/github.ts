@@ -1,15 +1,15 @@
 /**
- * CI credentials as code (docs/DEPLOY.md): the GitHub Actions environments `production`, `preview` and `hosted`, a scoped
+ * CI credentials as code (docs/DEPLOY.md): the GitHub Actions environments `production`, `preview` and `cloud`, a scoped
  * Cloudflare API token for deploys, the Access service token of the post-deploy check, and the secrets and variables
  * that hand them to .github/workflows/ci.yml. Deployed once from a workstation with a profile that may create API
  * tokens, and again to rotate or change permissions:
  *
  *   pnpm ci:setup        # alchemy deploy --config stacks/github.ts --profile admin --stage ci
  *
- * The deploy settings (CF_LLM_PROXY_DOMAIN, ACCESS_*) come from `.env`, like `alchemy.run.ts`, and so do Commissary
- * Cloud's (SIGN_IN_*, TURNSTILE_*, …), written whenever `.env` sets them: previews labeled `hosted-preview` need them
- * even while production is self-hosted. The `hosted` environment (Commissary Cloud, which CI deploys next to production,
- * stage `hosted`) takes its settings from `.env.hosted` instead, and is left alone while that file does not exist.
+ * The deploy settings (COMMISSARY_DOMAIN, ACCESS_*) come from `.env`, like `alchemy.run.ts`, and so do Commissary
+ * Cloud's (SIGN_IN_*, TURNSTILE_*, …), written whenever `.env` sets them: previews labeled `cloud-preview` need them
+ * even while production is self-hosted. The `cloud` environment (Commissary Cloud, which CI deploys next to production,
+ * stage `cloud`) takes its settings from `.env.cloud` instead, and is left alone while that file does not exist.
  */
 import * as zones from "@distilled.cloud/cloudflare/zones";
 import * as Alchemy from "alchemy";
@@ -23,10 +23,10 @@ import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Stream from "effect/Stream";
 import { existsSync, readFileSync } from "node:fs";
-import { HOSTED_STAGE, readSettings } from "../infra/settings.ts";
+import { CLOUD_STAGE, readSettings } from "../infra/settings.ts";
 
-/** The hosted stage's deploy settings, next to `.env` (docs/DEPLOY.md "The Commissary Cloud stage"). */
-const HOSTED_ENV_FILE = ".env.hosted";
+/** The `cloud` stage's deploy settings, next to `.env` (docs/DEPLOY.md "The Commissary Cloud stage"). */
+const CLOUD_ENV_FILE = ".env.cloud";
 
 /** Commissary Cloud's settings (docs/DEPLOY.md "Commissary Cloud"): GitHub variables, then GitHub secrets. */
 const HOSTED_VARIABLES = [
@@ -88,7 +88,7 @@ const zoneFor = (accountId: string, domain: string) =>
   );
 
 export default Alchemy.Stack(
-  "cf-llm-proxy-github",
+  "commissary-github",
   {
     providers: Layer.mergeAll(Cloudflare.providers(), GitHub.providers()),
     state: Cloudflare.state(),
@@ -97,28 +97,28 @@ export default Alchemy.Stack(
     const { accountId } = yield* yield* Cloudflare.CloudflareEnvironment;
     const settings = yield* readSettings(false, "prod");
 
-    // The hosted stage reads only `.env.hosted` (not `.env`, whose sign-in settings are the previews').
-    const hostedFile = existsSync(HOSTED_ENV_FILE)
-      ? ConfigProvider.fromDotEnvContents(readFileSync(HOSTED_ENV_FILE, "utf8"))
+    // The `cloud` stage reads only `.env.cloud` (not `.env`, whose sign-in settings are the previews').
+    const cloudFile = existsSync(CLOUD_ENV_FILE)
+      ? ConfigProvider.fromDotEnvContents(readFileSync(CLOUD_ENV_FILE, "utf8"))
       : undefined;
 
-    const hostedStage =
-      hostedFile === undefined
+    const cloudStage =
+      cloudFile === undefined
         ? undefined
         : yield* Effect.all({
-            settings: readSettings(false, HOSTED_STAGE),
+            settings: readSettings(false, CLOUD_STAGE),
             config: hostedConfig,
-          }).pipe(Effect.provideService(ConfigProvider.ConfigProvider, hostedFile));
+          }).pipe(Effect.provideService(ConfigProvider.ConfigProvider, cloudFile));
 
     const [owner = "", repository = ""] = (yield* Config.String("GITHUB_REPOSITORY").pipe(
-      Config.withDefault("ian-pascoe/cf-llm-proxy"),
+      Config.withDefault("ian-pascoe/commissary"),
     )).split("/");
 
     const repo = { owner, repository };
     const zone = yield* zoneFor(accountId, settings.domain);
 
-    // Every hostname CI deploys: production's and the hosted stage's, each with its API host (ADR 0028) when set.
-    const hostnames = [settings, ...(hostedStage === undefined ? [] : [hostedStage.settings])]
+    // Every hostname CI deploys: production's and the `cloud` stage's, each with its API host (ADR 0028) when set.
+    const hostnames = [settings, ...(cloudStage === undefined ? [] : [cloudStage.settings])]
       .flatMap(({ domain, apiDomain }) => [domain, apiDomain])
       .filter((name) => name !== "");
 
@@ -136,19 +136,19 @@ export default Alchemy.Stack(
 
     const preview = yield* GitHub.Environment("Preview", { ...repo, name: "preview" });
 
-    const hosted =
-      hostedStage === undefined
+    const cloud =
+      cloudStage === undefined
         ? undefined
-        : yield* GitHub.Environment("Hosted", {
+        : yield* GitHub.Environment("Cloud", {
             ...repo,
-            name: "hosted",
+            name: "cloud",
             deploymentBranchPolicy: { customBranchPolicies: ["main"] },
           });
 
     // Everything `alchemy deploy`/`destroy` of alchemy.run.ts touches, for any stage. Alchemy's state store needs
     // Secrets Store Write (it binds its token secret to a short-lived preview Worker on every run).
     const deployToken = yield* Cloudflare.ApiToken.AccountApiToken("DeployToken", {
-      name: "cf-llm-proxy-ci-deploy",
+      name: "commissary-ci-deploy",
       accountId,
       policies: [
         {
@@ -164,7 +164,7 @@ export default Alchemy.Stack(
           resources: { [`com.cloudflare.api.account.${accountId}`]: "*" },
         },
         {
-          // The custom domains of production and the hosted stage, API hosts included (their DNS records and Workers
+          // The custom domains of production and the `cloud` stage, API hosts included (their DNS records and Workers
           // routes).
           effect: "allow",
           permissionGroups: ["Zone Read", "DNS Write", "Workers Routes Write"],
@@ -180,7 +180,7 @@ export default Alchemy.Stack(
     // The post-deploy check (tools/check-deploy.sh) authenticates with this token; ACCESS_ALLOW_SERVICE_TOKEN_IDS
     // admits it on every stage's Access application.
     const checkToken = yield* Cloudflare.Access.ServiceToken("CheckToken", {
-      name: "cf-llm-proxy-ci-check",
+      name: "commissary-ci-check",
     });
 
     const checkSecret = checkToken.clientSecret.pipe(
@@ -215,14 +215,14 @@ export default Alchemy.Stack(
       ["Production", production],
       ["Preview", preview],
     ] as const) {
-      // Production's mode follows `.env`; a preview's follows its `hosted-preview` label (ci.yml).
+      // Production's mode follows `.env`; a preview's follows its `cloud-preview` label (ci.yml).
       const scoped =
         label === "Production"
           ? {
               ...variables,
-              CF_LLM_PROXY_DOMAIN: settings.domain,
-              CF_LLM_PROXY_API_DOMAIN: settings.apiDomain,
-              PROXY_MODE: settings.hosted === undefined ? "" : "hosted",
+              COMMISSARY_DOMAIN: settings.domain,
+              COMMISSARY_API_DOMAIN: settings.apiDomain,
+              COMMISSARY_MODE: settings.hosted === undefined ? "" : "cloud",
             }
           : variables;
 
@@ -238,28 +238,28 @@ export default Alchemy.Stack(
       }
     }
 
-    // The hosted stage: no Access, so no Access settings and no check token.
-    if (hosted !== undefined && hostedStage !== undefined) {
+    // The `cloud` stage: no Access, so no Access settings and no check token.
+    if (cloud !== undefined && cloudStage !== undefined) {
       const scoped = {
-        ...hostedStage.config.variables,
+        ...cloudStage.config.variables,
         CLOUDFLARE_ACCOUNT_ID: accountId,
-        CF_LLM_PROXY_DOMAIN: hostedStage.settings.domain,
-        CF_LLM_PROXY_API_DOMAIN: hostedStage.settings.apiDomain,
-        PLATFORM_ADMIN_EMAILS: hostedStage.settings.adminEmails.join(","),
-        PROXY_MODE: "hosted",
+        COMMISSARY_DOMAIN: cloudStage.settings.domain,
+        COMMISSARY_API_DOMAIN: cloudStage.settings.apiDomain,
+        PLATFORM_ADMIN_EMAILS: cloudStage.settings.adminEmails.join(","),
+        COMMISSARY_MODE: "cloud",
       };
 
       for (const [name, value] of Object.entries(scoped)) {
         if (value === "") continue;
 
-        yield* GitHub.Variable(`Hosted-${name}`, { ...repo, environment: hosted, name, value });
+        yield* GitHub.Variable(`Cloud-${name}`, { ...repo, environment: cloud, name, value });
       }
 
       for (const [name, value] of Object.entries({
         CLOUDFLARE_API_TOKEN: deployToken.value,
-        ...hostedStage.config.secrets,
+        ...cloudStage.config.secrets,
       })) {
-        yield* GitHub.Secret(`Hosted-${name}`, { ...repo, environment: hosted, name, value });
+        yield* GitHub.Secret(`Cloud-${name}`, { ...repo, environment: cloud, name, value });
       }
     }
 
@@ -267,8 +267,8 @@ export default Alchemy.Stack(
       // Put this into ACCESS_ALLOW_SERVICE_TOKEN_IDS in .env too, so local deploys keep the CI token admitted.
       checkServiceTokenId: checkToken.serviceTokenId,
       zone: zone.name,
-      hostedDomain: hostedStage?.settings.domain ?? "(no .env.hosted)",
-      hostedApiDomain: hostedStage?.settings.apiDomain ?? "",
+      cloudDomain: cloudStage?.settings.domain ?? "(no .env.cloud)",
+      cloudApiDomain: cloudStage?.settings.apiDomain ?? "",
     };
   }),
 );

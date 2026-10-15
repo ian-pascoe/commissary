@@ -14,7 +14,7 @@ import { managementErrors } from "./errors.ts";
 export const ApiKeyView = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
-  /** `cfp_<orgId>_<keyId>_<first 4 secret characters>`, so its member recognises it. */
+  /** `cms_<orgId>_<keyId>_<first 4 secret characters>`, so its member recognises it. */
   prefix: Schema.String,
   member_id: Schema.String,
   /** The email of the member it belongs to. */

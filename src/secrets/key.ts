@@ -4,7 +4,7 @@
  */
 
 /** Secrets key of `alchemy dev`; public, so the Worker refuses it on a deployed stage. */
-export const DEV_SECRETS_KEY = "cf-llm-proxy-dev-secrets-key-not-secret-0123456789abcdef0123456789";
+export const DEV_SECRETS_KEY = "commissary-dev-secrets-key-not-secret-0123456789abcdef0123456789";
 
 /** Shortest secrets key accepted anywhere (tests and `alchemy dev` included). */
 export const MIN_SECRETS_KEY_LENGTH = 32;

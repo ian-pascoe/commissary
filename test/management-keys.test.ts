@@ -92,7 +92,7 @@ describe("the key text", () => {
     const { org, slug, admin } = await staffedOrg("text");
     const created = await issue(slug, admin, "deploy", "admin");
 
-    expect(created.key).toMatch(/^cfm_org-[0-9a-f]{16}_[0-9a-f]{20}_[A-Za-z0-9_-]{48}$/);
+    expect(created.key).toMatch(/^cmsm_org-[0-9a-f]{16}_[0-9a-f]{20}_[A-Za-z0-9_-]{48}$/);
     expect(parseManagementKey(created.key)).toMatchObject({ org, keyId: created.id });
     expect(parseApiKey(created.key)).toBeUndefined();
     expect(created.prefix).toBe(created.key.slice(0, created.prefix.length));
@@ -239,11 +239,20 @@ describe("the gate on the management API", () => {
 
     await asPerson(admin, api(slug, `/management-keys/${created.id}`), { method: "DELETE" });
 
-    for (const key of [created.key, `${created.key.slice(0, -4)}AAAA`, "cfm_nonsense"]) {
+    for (const key of [created.key, `${created.key.slice(0, -4)}AAAA`, "cmsm_nonsense"]) {
       const reply = await withKey(key, api(slug, "/members"));
 
       expect([reply.status, reply.body]).toEqual([401, { error: "Invalid API key" }]);
     }
+  });
+
+  it("refuses a key under the old cfm_ prefix", async () => {
+    const { slug, admin } = await staffedOrg("old-prefix");
+    const created = await issue(slug, admin, "ci", "admin");
+    const old = created.key.replace(/^cmsm_/, "cfm_");
+
+    expect(parseManagementKey(old)).toBeUndefined();
+    expect((await withKey(old, api(slug, "/members"))).status).toBe(401);
   });
 
   it("is not accepted on the client API", async () => {

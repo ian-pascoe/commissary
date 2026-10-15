@@ -162,7 +162,7 @@ describe("authentication", () => {
     for (const path of ["/sign-in", "/assets/missing.js"])
       expect([200, 404]).toContain((await call(path)).status);
 
-    // What tools/check-hosted-deploy.sh probes after a deploy.
+    // What tools/check-cloud-deploy.sh probes after a deploy.
     expect((await call("/healthz")).status).toBe(200);
   });
 

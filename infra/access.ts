@@ -26,7 +26,7 @@ export interface AccessWiring {
  * application's `updatedAt` is part of the input so this runs again after each such update.
  */
 const ApplicationSettings = Alchemy.Action(
-  "CfLlmProxyAccessApplicationSettings",
+  "CommissaryAccessApplicationSettings",
   Effect.fn(function* (input: {
     readonly accountId: string;
     readonly applicationId: string;
@@ -128,8 +128,7 @@ export const provisionClientApiBypass = (
     const uri = (path: string) =>
       Output.asOutput(host).pipe(Output.map((name) => `${name}${path}`));
 
-    // The logical ID keeps its deployed name until the stacks are renamed (#122).
-    yield* Cloudflare.Access.Application("ProxyRoutes", {
+    yield* Cloudflare.Access.Application("ClientApi", {
       type: "self_hosted",
       // The first destination, as Cloudflare records it. Declared because an update without a `domain` resends the
       // recorded one, which Cloudflare refuses once the host changes ("domain not included in destinations").
@@ -141,7 +140,7 @@ export const provisionClientApiBypass = (
 
 /** Writes the client credentials of the stack's service tokens to {@link SERVICE_TOKENS_FILE} on the deploying machine. */
 const WriteServiceTokens = Alchemy.Action(
-  "CfLlmProxyWriteServiceTokens",
+  "CommissaryWriteServiceTokens",
   Effect.fn(function* (input: {
     readonly tokens: ReadonlyArray<{
       readonly name: string;

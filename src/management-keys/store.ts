@@ -20,7 +20,7 @@ export interface ManagementKeyRecord {
   readonly id: string;
   readonly name: string;
   readonly role: OrgRole;
-  /** `cfm_<orgId>_<keyId>_<first 4 secret characters>`. */
+  /** `cmsm_<orgId>_<keyId>_<first 4 secret characters>`. */
   readonly prefix: string;
   readonly createdBy: string;
   readonly ownerEmail?: string;

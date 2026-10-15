@@ -22,7 +22,7 @@ import { SecretsKeyError, type SecretsKeys } from "./deployment-keys.ts";
 
 const WRAPPED_PREFIX = "wk:v1:";
 
-const WRAPPING_KEY_SALT = "cf-llm-proxy/secrets-key";
+const WRAPPING_KEY_SALT = "commissary/secrets-key";
 
 const WRAPPING_KEY_INFO = "org-data-key-wrap/v1";
 

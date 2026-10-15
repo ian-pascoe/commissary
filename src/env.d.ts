@@ -22,11 +22,11 @@ interface __BaseEnv_Env {
   /** Local development only: treats loopback requests as this admin. Never set when deployed. */
   ACCESS_DEV_BYPASS: string;
   /**
-   * The app host (`CF_LLM_PROXY_DOMAIN`): panel, sign-in and management API. Set together with `API_DOMAIN`; unset,
+   * The app host (`COMMISSARY_DOMAIN`): panel, sign-in and management API. Set together with `API_DOMAIN`; unset,
    * like `API_DOMAIN`, on a deployment that serves everything on one host (src/http/hosts.ts, ADR 0028).
    */
   APP_DOMAIN?: string;
-  /** The API host (`CF_LLM_PROXY_API_DOMAIN`): the only host of the client API. Unset: one host serves everything. */
+  /** The API host (`COMMISSARY_API_DOMAIN`): the only host of the client API. Unset: one host serves everything. */
   API_DOMAIN?: string;
   /** Overrides the Meta key-mint endpoint (empty: default). */
   META_MINT_URL: string;
@@ -44,10 +44,10 @@ interface __BaseEnv_Env {
   /** During a rotation, the secrets key `SECRETS_KEY` replaces: data keys still wrapped by it are wrapped again. */
   SECRETS_KEY_PREVIOUS?: string;
   /**
-   * `hosted`: Commissary Cloud (ADR 0026, src/hosted/): the Worker signs people in with Better Auth and Access is not
+   * `cloud`: Commissary Cloud (ADR 0026, src/hosted/): the Worker signs people in with Better Auth and Access is not
    * used; unset or `self-hosted`: Cloudflare Access in front of the panel and the management API (ADR 0022).
    */
-  PROXY_MODE?: string;
+  COMMISSARY_MODE?: string;
   /** Hosted: Better Auth's signing secret. Deployed: an Alchemy `Random` (alchemy.run.ts). */
   BETTER_AUTH_SECRET?: string;
   /** Hosted: the GitHub OAuth app; GitHub sign-in is offered when both are set. */

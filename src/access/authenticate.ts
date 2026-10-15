@@ -161,12 +161,12 @@ export const keyIdentity = Effect.fnUntraced(function* (text: string) {
  * it. A platform admin is an owner of every org; anyone else needs a role in the org (`403` otherwise), except on a
  * platform-level route.
  *
- * On a client API route (the protected zone) an API key (`cfp_…`, `api-key.ts`) wins: the request is for the key's org,
+ * On a client API route (the protected zone) an API key (`cms_…`, `api-key.ts`) wins: the request is for the key's org,
  * as its member; a bad key is refused even when the request also carries an Access sign-in. Without a key, the Access
  * JWT comes from `Cf-Access-Jwt-Assertion` or, since Access no longer sits in front of the client API, from the
  * `cf-access-token` header `cloudflared` sends; it is accepted only while the org's `access_clients` setting is on.
  * Management routes never take API keys: they stay behind Access, which sets `Cf-Access-Jwt-Assertion`. A management
- * key (`Authorization: Bearer cfm_…`, `management-key.ts`) wins there the way an API key wins on a client API route.
+ * key (`Authorization: Bearer cmsm_…`, `management-key.ts`) wins there the way an API key wins on a client API route.
  */
 export const authenticateRequest = (
   headers: Readonly<Record<string, string | undefined>>,

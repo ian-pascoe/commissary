@@ -9,7 +9,7 @@ import { build, defineConfig, type Plugin } from "vite";
 const outDir = fileURLToPath(new URL("../public", import.meta.url));
 
 /** `pnpm dev` Worker the dev server forwards API calls to. */
-const workerUrl = process.env["CF_LLM_PROXY_DEV_URL"] ?? "http://localhost:1337";
+const workerUrl = process.env["COMMISSARY_DEV_URL"] ?? "http://localhost:1337";
 
 /**
  * `public/` also holds the tracked `.gitkeep` (and whatever else is put there), so the build cannot empty its output

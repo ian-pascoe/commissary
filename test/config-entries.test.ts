@@ -212,7 +212,7 @@ describe("migration of a stored config document", () => {
       ]);
 
       const writers = state.storage.sql
-        .exec("SELECT DISTINCT updated_by FROM config_api_keys")
+        .exec("SELECT DISTINCT updated_by FROM config_provider_keys")
         .toArray();
 
       expect(writers).toEqual([{ updated_by: MIGRATION_PRINCIPAL }]);

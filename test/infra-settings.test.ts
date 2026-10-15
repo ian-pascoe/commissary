@@ -114,8 +114,8 @@ describe("secrets key generations", () => {
 
 describe("Commissary Cloud settings", () => {
   const hosted = {
-    PROXY_MODE: "hosted",
-    CF_LLM_PROXY_DOMAIN: "proxy.example.com",
+    COMMISSARY_MODE: "cloud",
+    COMMISSARY_DOMAIN: "commissary.example.com",
     SIGN_IN_GITHUB_CLIENT_ID: "gh-id",
     SIGN_IN_GITHUB_CLIENT_SECRET: "gh-secret",
     TURNSTILE_SITE_KEY: "site",
@@ -146,18 +146,21 @@ describe("Commissary Cloud settings", () => {
 
   it.effect("are not read on a self-hosted Commissary or in `alchemy dev`", () =>
     Effect.gen(function* () {
-      assert.strictEqual((yield* read({ ...hosted, PROXY_MODE: "" })).settings.hosted, undefined);
+      assert.strictEqual(
+        (yield* read({ ...hosted, COMMISSARY_MODE: "" })).settings.hosted,
+        undefined,
+      );
       assert.strictEqual((yield* read(hosted)).settings.hosted, undefined);
       assert.include(
-        yield* refusal({ ...hosted, PROXY_MODE: "self-hosted" }),
+        yield* refusal({ ...hosted, COMMISSARY_MODE: "self-hosted" }),
         "ACCESS_TEAM_DOMAIN is required",
       );
     }),
   );
 
-  it.effect("are required on the hosted stage, which never deploys a self-hosted Commissary", () =>
+  it.effect("are required on the cloud stage, which never deploys a self-hosted Commissary", () =>
     Effect.gen(function* () {
-      const { settings } = yield* read(hosted, { stage: "hosted" });
+      const { settings } = yield* read(hosted, { stage: "cloud" });
 
       assert.strictEqual(settings.hosted?.githubClientId, "gh-id");
 
@@ -165,17 +168,17 @@ describe("Commissary Cloud settings", () => {
         const refused = yield* read(
           {
             ...hosted,
-            PROXY_MODE: mode,
+            COMMISSARY_MODE: mode,
             ACCESS_TEAM_DOMAIN: "team",
             ACCESS_ALLOW_EMAILS: "a@x.com",
           },
-          { stage: "hosted" },
+          { stage: "cloud" },
         ).pipe(
           Effect.as("accepted"),
           Effect.catchDefect((defect) => Effect.succeed(String(defect))),
         );
 
-        assert.include(refused, "the hosted stage is Commissary Cloud: set PROXY_MODE=hosted");
+        assert.include(refused, "the cloud stage is Commissary Cloud: set COMMISSARY_MODE=cloud");
       }
     }),
   );
@@ -183,7 +186,8 @@ describe("Commissary Cloud settings", () => {
   it.effect("refuse Commissary Cloud without a sign-in provider, Turnstile or valid limits", () =>
     Effect.gen(function* () {
       for (const [variables, message] of [
-        [{ PROXY_MODE: "managed" }, "PROXY_MODE must be self-hosted or hosted"],
+        [{ COMMISSARY_MODE: "managed" }, "COMMISSARY_MODE must be self-hosted or cloud"],
+        [{ COMMISSARY_MODE: "hosted" }, "COMMISSARY_MODE must be self-hosted or cloud"],
         [{ SIGN_IN_GITHUB_CLIENT_SECRET: "" }, "Commissary Cloud needs a sign-in provider"],
         [
           { TURNSTILE_SECRET_KEY: "" },
@@ -195,7 +199,7 @@ describe("Commissary Cloud settings", () => {
           { ORG_RATE_LIMIT_NAMESPACE_ID: "x" },
           "ORG_RATE_LIMIT_NAMESPACE_ID must be a positive integer",
         ],
-        [{ CF_LLM_PROXY_DOMAIN: "" }, "CF_LLM_PROXY_DOMAIN is required"],
+        [{ COMMISSARY_DOMAIN: "" }, "COMMISSARY_DOMAIN is required"],
       ] as const)
         assert.include(yield* refusal({ ...hosted, ...variables }), message);
     }),
@@ -204,7 +208,7 @@ describe("Commissary Cloud settings", () => {
 
 describe("API host settings", () => {
   const selfHosted = {
-    CF_LLM_PROXY_DOMAIN: "proxy.example.com",
+    COMMISSARY_DOMAIN: "commissary.example.com",
     ACCESS_TEAM_DOMAIN: "team",
     ACCESS_ALLOW_EMAILS: "a@x.com",
   };
@@ -221,9 +225,9 @@ describe("API host settings", () => {
     }),
   );
 
-  it.effect("read CF_LLM_PROXY_API_DOMAIN, except on a preview and in `alchemy dev`", () =>
+  it.effect("read COMMISSARY_API_DOMAIN, except on a preview and in `alchemy dev`", () =>
     Effect.gen(function* () {
-      const split = { ...selfHosted, CF_LLM_PROXY_API_DOMAIN: " api.example.com " };
+      const split = { ...selfHosted, COMMISSARY_API_DOMAIN: " api.example.com " };
 
       assert.strictEqual(
         (yield* read(split, { stage: "prod" })).settings.apiDomain,
@@ -237,14 +241,14 @@ describe("API host settings", () => {
   it.effect("refuse an API host that is the app host or no hostname", () =>
     Effect.gen(function* () {
       for (const [apiDomain, message] of [
-        ["proxy.example.com", "CF_LLM_PROXY_API_DOMAIN must differ from CF_LLM_PROXY_DOMAIN"],
-        ["https://api.example.com", "CF_LLM_PROXY_API_DOMAIN must be a lowercase hostname"],
-        ["api.example.com/v1", "CF_LLM_PROXY_API_DOMAIN must be a lowercase hostname"],
-        ["API.example.com", "CF_LLM_PROXY_API_DOMAIN must be a lowercase hostname"],
-        ["localhost", "CF_LLM_PROXY_API_DOMAIN must be a lowercase hostname"],
+        ["commissary.example.com", "COMMISSARY_API_DOMAIN must differ from COMMISSARY_DOMAIN"],
+        ["https://api.example.com", "COMMISSARY_API_DOMAIN must be a lowercase hostname"],
+        ["api.example.com/v1", "COMMISSARY_API_DOMAIN must be a lowercase hostname"],
+        ["API.example.com", "COMMISSARY_API_DOMAIN must be a lowercase hostname"],
+        ["localhost", "COMMISSARY_API_DOMAIN must be a lowercase hostname"],
       ] as const)
         assert.include(
-          yield* refusal({ ...selfHosted, CF_LLM_PROXY_API_DOMAIN: apiDomain }),
+          yield* refusal({ ...selfHosted, COMMISSARY_API_DOMAIN: apiDomain }),
           message,
         );
     }),
