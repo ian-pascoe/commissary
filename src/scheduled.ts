@@ -44,7 +44,7 @@ export type ScheduledTask =
     };
 
 export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
-  // The model catalog (3 h): the models.dev document, trimmed to the providers the proxy reads, into KV. One document
+  // The model catalog (3 h): the models.dev document, trimmed to the providers Commissary reads, into KV. One document
   // feeds every provider's models and the OpenCode gateways (ADR 0020).
   { name: "model-catalog-refresh", scope: "deployment", run: refreshCatalogs },
   // Antigravity client version (Hub updater manifest, KV `antigravity:version`) and per-credential model entitlements
@@ -65,16 +65,16 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
       return yield* Effect.promise(() => plane.refreshDevinStatus());
     }),
   },
-  // Expired proxy keys are deleted, not kept marked (ADR 0027): a listing or issue deletes them too, this covers an org
+  // Expired API keys are deleted, not kept marked (ADR 0027): a listing or issue deletes them too, this covers an org
   // nobody opens.
   {
-    name: "proxy-key-expiry",
+    name: "api-key-expiry",
     scope: "org",
     run: Effect.gen(function* () {
       const plane = yield* currentControlPlane;
       const now = yield* Clock.currentTimeMillis;
 
-      return yield* Effect.promise(() => plane.purgeExpiredProxyKeys(now));
+      return yield* Effect.promise(() => plane.purgeExpiredApiKeys(now));
     }),
   },
   // Credential refresh safety sweep: re-arms the ControlPlane refresh alarm. Before the quota
@@ -88,7 +88,7 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
     }),
   },
   // Quota check (Workers addition, src/quota): provider usage windows of every enabled account that has a usage
-  // endpoint (auth files, and the listed config API keys: OpenCode Go), stored as the credential's `quota_report`.
+  // endpoint (auth files, and the listed provider keys: OpenCode Go), stored as the credential's `quota_report`.
   // Skipped while the panel's "Check all quotas" holds the sweep lease (src/quota/sweep-lease.ts).
   { name: "quota-check", scope: "org", run: runQuotaSweep },
 ];

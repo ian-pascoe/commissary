@@ -360,7 +360,7 @@ const SignIn = ({
     case "done":
       return (
         <Connected
-          text={`${option.name} is connected. The proxy can send it requests now.`}
+          text={`${option.name} is connected. Commissary can send it requests now.`}
           again={() => setFlow({ step: "idle" })}
         />
       );
@@ -415,7 +415,7 @@ const importVertex = async (
   try {
     response = await fetch(
       scopedApiUrl(
-        `/v8/management/oauth/import?provider=vertex${privately ? "&private=true" : ""}`,
+        `/v9/management/oauth/import?provider=vertex${privately ? "&private=true" : ""}`,
         panelOrgSlug,
       ),
       {
@@ -475,7 +475,7 @@ const Vertex = ({ privately }: { readonly privately: boolean }) => {
   if (result?.ok === true) {
     return (
       <Connected
-        text={`Imported ${result.project || "the project"}${result.email === "" ? "" : ` (${result.email})`}. The proxy can send it Vertex AI requests now.`}
+        text={`Imported ${result.project || "the project"}${result.email === "" ? "" : ` (${result.email})`}. Commissary can send it Vertex AI requests now.`}
         again={() => {
           setResult(undefined);
           setFile(undefined);

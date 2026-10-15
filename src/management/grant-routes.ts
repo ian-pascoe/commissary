@@ -1,5 +1,5 @@
 /**
- * `GET|POST /v8/management/grants` and `PUT|DELETE /grants/:id` (`GrantsGroup` in contract/grants.ts): which upstream
+ * `GET|POST /v9/management/grants` and `PUT|DELETE /grants/:id` (`GrantsGroup` in contract/grants.ts): which upstream
  * models of which shared credentials a member, a team or everyone may use (ADR 0023), and `GET /models/mine`, the
  * models the caller may use. Workers addition, no Go counterpart.
  *
@@ -19,7 +19,7 @@ import { isJsonObject, type Json } from "../json/index.ts";
 import { ModelRegistry } from "../registry/service.ts";
 import { bodyJson, controlPlane, handled, ifMatch, jsonReply, replyError } from "./http.ts";
 
-const BASE = "/v8/management/grants";
+const BASE = "/v9/management/grants";
 
 const parseSubject = (value: Json | undefined): GrantSubject | undefined => {
   if (!isJsonObject(value)) return undefined;

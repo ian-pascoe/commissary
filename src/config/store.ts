@@ -1,9 +1,9 @@
 /**
  * An org's config entries inside its ControlPlane Durable Object (SQLite; ADR 0025). New in the Workers port.
  *
- * Every setting, key group, API key, model alias, model exclusion and payload rule is a row of its own kind's table
- * (`entries.ts`), with an id, a revision, `updated_at` and the principal that wrote it (`updated_by`). API keys leave
- * room for an owner (`owner`, `NULL` = the org); private API keys come with credential ownership.
+ * Every setting, key group, provider key, model alias, model exclusion and payload rule is a row of its own kind's table
+ * (`entries.ts`), with an id, a revision, `updated_at` and the principal that wrote it (`updated_by`). Provider keys leave
+ * room for an owner (`owner`, `NULL` = the org); private provider keys come with credential ownership.
  *
  * Revisions come from one counter of changes per org (`config_changes`): every write takes the next value, and the
  * entries it changes take that value as their revision. A missing entry has revision 0. A write names the revision of
@@ -26,7 +26,7 @@
  * no prices). The table is created when missing, so a ControlPlane that predates it gains it on its next start.
  *
  * Every entry's value is a sealed value (`secrets/cipher.ts`): encrypted with the org's data key before it is written and
- * opened on read, so API keys, headers and any other secret an entry holds are never stored in plain text. Ids,
+ * opened on read, so provider keys, headers and any other secret an entry holds are never stored in plain text. Ids,
  * positions, revisions and writers stay readable. `sealPlaintext` seals what was written before encryption (the legacy
  * document included). Price overrides hold no secret and stay readable.
  *
@@ -61,7 +61,7 @@ import {
   type SettingRow,
 } from "./entries.ts";
 import { notAppliedSettings } from "./not-applied.ts";
-import type { ApiKeyFamily, Config } from "./schema.ts";
+import type { ProviderKeyFamily, Config } from "./schema.ts";
 
 /**
  * Settings that only the `global` org's config may set, with the value read from it: `models.catalog`, the source of
@@ -173,7 +173,7 @@ export interface SettingChange {
 
 /** A key group write: `group` (with its keys; a kept key carries its `id`) or `null` to delete the group. */
 export interface KeyGroupChange {
-  readonly family: ApiKeyFamily;
+  readonly family: ProviderKeyFamily;
   /** Absent: a new group (`revision` 0). */
   readonly id?: string;
   readonly revision: number;
@@ -756,7 +756,7 @@ export class ConfigStore {
         const { id: keyId, ...keyValue } =
           typeof raw === "object" && raw !== null && !Array.isArray(raw) ? raw : {};
 
-        if (typeof keyId !== "string") throw new Error("an API key was written without an id");
+        if (typeof keyId !== "string") throw new Error("a provider key was written without an id");
         kept.add(keyId);
         this.#upsertKey(
           { id: keyId, groupId: id, position: keyPosition, value: keyValue },
@@ -773,7 +773,7 @@ export class ConfigStore {
   }
 
   /**
-   * Adds or removes `*` in the `excluded-models` of the API key `credentialId` (disables it without changing its id).
+   * Adds or removes `*` in the `excluded-models` of the provider key `credentialId` (disables it without changing its id).
    * A key's own list replaces its group's, so a key without one starts from the group's. The key and its group take
    * the write's revision. It names no revision: it sets one flag to the state asked for (the last toggle wins), and
    * moving the group's revision makes a group write based on the older group a `conflict` instead of undoing it.
@@ -798,7 +798,7 @@ export class ConfigStore {
               .toArray()[0];
 
       if (key === undefined || group === undefined)
-        throw new Refusal(refuse("not_found", "API key not found"));
+        throw new Refusal(refuse("not_found", "Provider key not found"));
       const value = objectOf(this.#open(TABLES.keys, key.id, key.value));
 
       const inherited = patterns(
@@ -837,7 +837,7 @@ export class ConfigStore {
 
   /**
    * Replaces every entry with a Go config document (`text`, YAML or JSON, v8 or legacy layout) in one transaction. Key
-   * ids in the document are ignored: an API key whose secret a stored key of its family has keeps that key's id
+   * ids in the document are ignored: a provider key whose secret a stored key of its family has keeps that key's id
    * (`withStoredKeyIds`), any other takes the id of the credential it produces (`assignEntryIds`). The not-applied
    * keys are named in the answer and not stored. `basedOn` is the change counter the caller's checks read: the import
    * is refused (`conflict`) when another write landed since.
@@ -1041,7 +1041,7 @@ export class ConfigStore {
    * keys), and a key without one gets the id of the credential it produces, unique among every stored key.
    */
   #withKeyIds(
-    family: ApiKeyFamily,
+    family: ProviderKeyFamily,
     groupId: string,
     group: JsonObject,
     stored: ReadonlyMap<string, KeySqlRow>,
@@ -1053,7 +1053,9 @@ export class ConfigStore {
         typeof key === "object" && key !== null && !Array.isArray(key) ? key.id : undefined;
 
       if (id !== undefined && (typeof id !== "string" || !stored.has(id)))
-        throw new Refusal(refuse("conflict", "an API key of this group changed since it was read"));
+        throw new Refusal(
+          refuse("conflict", "a provider key of this group changed since it was read"),
+        );
     }
 
     const decoded = Effect.runSync(
@@ -1082,7 +1084,7 @@ export class ConfigStore {
     return first;
   }
 
-  #nextGroupPosition(family: ApiKeyFamily): number {
+  #nextGroupPosition(family: ProviderKeyFamily): number {
     const row = this.#sql
       .exec<{ position: number | null; [column: string]: SqlStorageValue }>(
         `SELECT MAX(position) AS position FROM ${TABLES.groups} WHERE family = ?`,
@@ -1139,8 +1141,8 @@ export class ConfigStore {
       .toArray()
       .map((row): GroupRow => ({
         id: row.id,
-        // SAFETY: only `writeKeyGroup` and `#replace` write this column, with an `ApiKeyFamily`.
-        family: row.family as ApiKeyFamily,
+        // SAFETY: only `writeKeyGroup` and `#replace` write this column, with a `ProviderKeyFamily`.
+        family: row.family as ProviderKeyFamily,
         position: row.position,
         value: objectOf(this.#open(TABLES.groups, row.id, row.value)),
       }));

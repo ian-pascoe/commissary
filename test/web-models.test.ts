@@ -4,7 +4,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Exit } from "effect";
 import { ManagementError } from "#contract/errors.ts";
-import type { ApiKeysList } from "#contract/api-keys.ts";
+import type { ProviderKeysList } from "#contract/provider-keys.ts";
 import type { ModelRoute, RoutedModel, RoutingModels } from "#contract/routing.ts";
 import {
   aliasEntry,
@@ -257,7 +257,7 @@ describe("routes", () => {
 });
 
 describe("channel rules", () => {
-  // An API key route: no channel.
+  // A provider key route: no channel.
   const { channel: _channel, ...keyRoute } = route({ source: "config", upstream: "k1" });
 
   const routed = view({
@@ -649,7 +649,7 @@ describe("saveRuleChange", () => {
 });
 
 describe("who serves a route", () => {
-  const keys: ApiKeysList = {
+  const keys: ProviderKeysList = {
     version: 3,
     families: {
       gemini: [],
@@ -723,10 +723,10 @@ describe("who serves a route", () => {
     expect(who.detail).toBe("team");
   });
 
-  it("falls back to the API keys page for a key the list does not know", () => {
+  it("falls back to the provider keys page for a key the list does not know", () => {
     expect(
       routeWho(route({ source: "config", auth_index: "zz", provider: "claude" }), homes),
-    ).toEqual({ name: "Claude API key", detail: undefined, home: { kind: "keys" } });
+    ).toEqual({ name: "Claude provider key", detail: undefined, home: { kind: "keys" } });
     expect(
       routeWho(
         route({

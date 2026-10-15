@@ -9,25 +9,25 @@
 | Pull request from a branch of this repo  | `pr-<number>` | the Worker's `workers.dev` URL, GitHub environment `preview` |
 | That pull request closed (merged or not) | `pr-<number>` | destroyed                                                    |
 
-A preview is a hosted proxy while its pull request has the label `hosted-preview` (adding or removing the label
+A preview is a Commissary Cloud deploy (`PROXY_MODE=hosted`) while its pull request has the label `hosted-preview` (adding or removing the label
 redeploys it in the other mode); production is one when the `production` environment sets `PROXY_MODE=hosted`
-([Hosted proxy](#hosted-proxy)); the `hosted` stage always is ([Hosted production](#hosted-production)). Everything
-else in this file describes a self-hosted proxy, the default.
+([Commissary Cloud](#commissary-cloud)); the `hosted` stage always is ([The Commissary Cloud stage](#the-commissary-cloud-stage)). Everything
+else in this file describes a self-hosted Commissary, the default.
 
 Deploys run only after typecheck, lint, workflow lint (actionlint, zizmor), the test shards and the smoke test pass.
 Fork and Dependabot pull requests get the checks but no preview (they receive no deploy secrets). A manual run
 (`workflow_dispatch`) on `main` redeploys production.
 
-After each deploy, `tools/check-deploy.sh` checks where Access sits (ADR 0022): `/healthz` and `/v8/management/me`
+After each deploy, `tools/check-deploy.sh` checks where Access sits (ADR 0022): `/healthz` and `/v9/management/me`
 answer 200 through Access with the CI service token (the second proves that the Worker accepts the Access JWT: team
 domain and AUD wired); `/v1/models` and `/v1beta/models` without credentials reach the Worker, which answers
-`401 Missing API key` itself (the proxy routes are outside Access, behind proxy keys); `/v1/models` with an Access JWT
+`401 Missing API key` itself (the client API is outside Access, behind API keys); `/v1/models` with an Access JWT
 in `cf-access-token` and a dummy `Authorization` key, the way `cloudflared access` clients call it, answers 200 (the
 JWT is the `CF_Authorization` cookie Access set for the service token); and `/` without credentials is stopped by
-Access. A hosted deploy is checked by `tools/check-hosted-deploy.sh` instead: `/healthz` answers 200,
-`/api/sign-in-options` offers a provider, `/v8/management/me` answers `401 Not signed in` from the Worker, `/` redirects
-to `/sign-in`, and the proxy routes answer `401 Missing API key`. With an API host ([API host](#api-host)) both
-scripts send the proxy routes to it and also check that each host refuses the other's paths with the Worker's `404`.
+Access. A Commissary Cloud deploy is checked by `tools/check-hosted-deploy.sh` instead: `/healthz` answers 200,
+`/api/sign-in-options` offers a provider, `/v9/management/me` answers `401 Not signed in` from the Worker, `/` redirects
+to `/sign-in`, and the client API answers `401 Missing API key`. With an API host ([API host](#api-host)) both
+scripts send the client API to it and also check that each host refuses the other's paths with the Worker's `404`.
 The deploy job then shows the URL on the run, and previews get a pull request comment (`tools/preview-comment.sh`) that is updated on every push.
 
 ## Preview stages
@@ -35,12 +35,12 @@ The deploy job then shows the URL on the run, and previews get a pull request co
 A stage named `pr-<number>` is a preview (`infra/settings.ts`):
 
 - Its own Worker on `workers.dev`, protected by its own Access application. The Worker enrolls into it (Alchemy's
-  Worker `access` prop), so Access covers the `workers.dev` URL; no custom hostname is needed. The proxy paths of that
+  Worker `access` prop), so Access covers the `workers.dev` URL; no custom hostname is needed. The client API paths of that
   URL get the same bypass application as production ([ACCESS.md](ACCESS.md#1-what-the-deploy-creates)).
 - Same policies as production: `ACCESS_ALLOW_*` for people, `ACCESS_ALLOW_SERVICE_TOKEN_IDS` for the CI token. Same
   platform admins (`PLATFORM_ADMIN_EMAILS`).
 - Empty KV, D1 and Durable Objects, and no cron trigger. A preview has no provider credentials, so it serves the panel,
-  the management API and the routes but cannot proxy real requests. Add credentials through its panel if you need to.
+  the management API and the routes but cannot serve real requests. Add credentials through its panel if you need to.
 - `CF_LLM_PROXY_DOMAIN`, `CF_LLM_PROXY_API_DOMAIN`, `ACCESS_AUD` and `ACCESS_SERVICE_TOKENS` are ignored: one URL serves
   everything.
 
@@ -50,40 +50,40 @@ Any machine with the deploy settings can deploy a preview by hand: `pnpm run dep
 ## API host
 
 `CF_LLM_PROXY_API_DOMAIN` (optional, ADR 0028) gives a deployment a second hostname, the **API host**, that serves the
-proxy routes (`/v1`, `/v1beta`, `/v1internal`, `/openai/v1`, `/backend-api/codex`, `/chat/completions`, `/completions`,
+client API (`/v1`, `/v1beta`, `/v1internal`, `/openai/v1`, `/backend-api/codex`, `/chat/completions`, `/completions`,
 `/responses`) and `/healthz`, and nothing else. `CF_LLM_PROXY_DOMAIN` becomes the **app host**: the control panel, sign-in
-and the management API, and no proxy route. One Worker answers on both custom domains and decides by hostname
-(`src/http/hosts.ts`); a path on the wrong host answers `404` with the host that serves it. The panel's Proxy keys page
+and the management API, and no client API route. One Worker answers on both custom domains and decides by hostname
+(`src/http/hosts.ts`); a path on the wrong host answers `404` with the host that serves it. The panel's API keys page
 tells clients the API host (`GET /me` `api_url`).
 
 - **Self-hosted:** Access covers the app host only; the API host has no Access application and the bypass application
-  of the proxy paths is not created (an existing one is deleted). Clients that sign in through Access send the app
+  of the client API paths is not created (an existing one is deleted). Clients that sign in through Access send the app
   application's token (`cloudflared access token -app=https://<app host>`) to the API host in `cf-access-token`.
-- **Hosted:** register the OAuth callbacks and the Turnstile hostname for the app host, where sign-in happens.
+- **Commissary Cloud:** register the OAuth callbacks and the Turnstile hostname for the app host, where sign-in happens.
 - **Moving to an API host** changes the address of every client: point them at the API host when the deploy finishes
-  (their old base URL answers `404`). On a hosted proxy people sign in again: the session cookie belongs to the old
+  (their old base URL answers `404`). On Commissary Cloud people sign in again: the session cookie belongs to the old
   hostname. Unsetting the variable moves everything back to one host.
 - Both hostnames must be in zones of the account; `pnpm ci:setup` writes the variable into the environment and extends
   the deploy token to the API host's zone.
 
-## Hosted proxy
+## Commissary Cloud
 
-A hosted proxy (ADR 0026, `PROXY_MODE=hosted`) has no Access application: the Worker signs people in with GitHub and/or
+Commissary Cloud (ADR 0029; the mode of ADR 0026, `PROXY_MODE=hosted`) has no Access application: the Worker signs people in with GitHub and/or
 Google (Better Auth), anyone may sign up, and each new person gets a Personal org they own. Platform admins are the
 people in `PLATFORM_ADMIN_EMAILS` signed in with that email verified by the provider; `PLATFORM_ADMIN_SERVICE_TOKENS`
-and every `ACCESS_*` setting are ignored, and scripts use management keys ([ACCESS.md](ACCESS.md#hosted-proxy)).
+and every `ACCESS_*` setting are ignored, and scripts use management keys ([ACCESS.md](ACCESS.md#commissary-cloud)).
 
-| Setting                                                    | Kind        | Meaning                                                                 |
-| ---------------------------------------------------------- | ----------- | ----------------------------------------------------------------------- |
-| `PROXY_MODE`                                               | variable    | `hosted`; unset or `self-hosted` for a self-hosted proxy                |
-| `SIGN_IN_GITHUB_CLIENT_ID`, `SIGN_IN_GITHUB_CLIENT_SECRET` | var, secret | a GitHub OAuth app (or GitHub App); offered when both are set           |
-| `SIGN_IN_GOOGLE_CLIENT_ID`, `SIGN_IN_GOOGLE_CLIENT_SECRET` | var, secret | a Google OAuth client (web application); offered when both are set      |
-| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`               | var, secret | a Cloudflare Turnstile widget for the proxy's hostname (required)       |
-| `OWNED_ORG_LIMIT`                                          | variable    | orgs a person may own unless a platform admin raises it (default 3)     |
-| `ORG_RATE_LIMIT`                                           | variable    | requests per minute each org may send on the proxy routes (default 600) |
-| `ORG_RATE_LIMIT_NAMESPACE_ID`                              | variable    | the Workers rate-limit namespace, a positive integer (default 7201)     |
+| Setting                                                    | Kind        | Meaning                                                               |
+| ---------------------------------------------------------- | ----------- | --------------------------------------------------------------------- |
+| `PROXY_MODE`                                               | variable    | `hosted`; unset or `self-hosted` for a self-hosted Commissary         |
+| `SIGN_IN_GITHUB_CLIENT_ID`, `SIGN_IN_GITHUB_CLIENT_SECRET` | var, secret | a GitHub OAuth app (or GitHub App); offered when both are set         |
+| `SIGN_IN_GOOGLE_CLIENT_ID`, `SIGN_IN_GOOGLE_CLIENT_SECRET` | var, secret | a Google OAuth client (web application); offered when both are set    |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`               | var, secret | a Cloudflare Turnstile widget for the deploy's hostname (required)    |
+| `OWNED_ORG_LIMIT`                                          | variable    | orgs a person may own unless a platform admin raises it (default 3)   |
+| `ORG_RATE_LIMIT`                                           | variable    | requests per minute each org may send on the client API (default 600) |
+| `ORG_RATE_LIMIT_NAMESPACE_ID`                              | variable    | the Workers rate-limit namespace, a positive integer (default 7201)   |
 
-At least one provider and the Turnstile keys are required: the deploy refuses a hosted stage without them.
+At least one provider and the Turnstile keys are required: the deploy refuses a Commissary Cloud stage without them.
 `BETTER_AUTH_SECRET` is minted like the `auth_index` key (an Alchemy `Random`, resource `BetterAuthSecret`); nothing to
 set. Replacing it signs everyone out.
 
@@ -98,7 +98,7 @@ set. Replacing it signs everyone out.
    Turnstile secret as secrets), and `PROXY_MODE=hosted` into `production` when `.env` sets it. Set them by hand in
    the GitHub environments otherwise.
 4. **Deploy.** The D1 migration `0008_hosted_auth.sql` adds Better Auth's tables (`auth_user`, `auth_session`,
-   `auth_account`, `auth_verification`); every deploy applies it, also on a self-hosted proxy, where they stay empty.
+   `auth_account`, `auth_verification`); every deploy applies it, also on a self-hosted Commissary, where they stay empty.
    The Platform registry and each ControlPlane add their new tables and columns on first use.
 
 **Single sign-on.** Orgs set up their own identity providers on the panel ([ACCESS.md](ACCESS.md#single-sign-on-for-an-org));
@@ -106,21 +106,21 @@ the deploy needs nothing for it: no setting, binding or D1 migration (the provid
 ControlPlane and the domain index in the Platform registry, created on first use). The Worker reaches the identity
 providers and `cloudflare-dns.com` (domain proof) with `fetch`.
 
-**Hosted previews.** A preview with the `hosted-preview` label uses the `preview` environment's sign-in settings and
+**Commissary Cloud previews.** A preview with the `hosted-preview` label uses the `preview` environment's sign-in settings and
 serves its `workers.dev` URL, so a sign-in completes only after that URL's callback is registered with the provider
 (and its hostname added to the Turnstile widget). Previews share the rate-limit namespace with each other, and with
 production when the environments set the same `ORG_RATE_LIMIT_NAMESPACE_ID`: the org `global` exists on every stage
 under the same id, so give `preview` its own namespace.
 
-### Hosted production
+### The Commissary Cloud stage
 
-Next to `prod`, which stays self-hosted behind Access, CI deploys a hosted proxy from `main`: the stage `hosted`, with
-its own hostname, Worker, storage and users. The two share nothing but the code: an org, account or proxy key of one
-does not exist on the other. The stage is always hosted; the deploy refuses it without `PROXY_MODE=hosted`, so it can
-never take the self-hosted proxy's hostname from `.env`.
+Next to `prod`, which stays self-hosted behind Access, CI deploys Commissary Cloud from `main`: the stage `hosted` (the Commissary Cloud stage; its identifier changes in the next rebrand step), with
+its own hostname, Worker, storage and users. The two share nothing but the code: an org, account or API key of one
+does not exist on the other. The stage is always Commissary Cloud; the deploy refuses it without `PROXY_MODE=hosted`, so it can
+never take the self-hosted Commissary's hostname from `.env`.
 
-Its settings live in `.env.hosted` (copy `.env.hosted.example`), never in `.env`, which keeps the self-hosted proxy's
-and the hosted previews'. Set them up once:
+Its settings live in `.env.hosted` (copy `.env.hosted.example`), never in `.env`, which keeps the self-hosted Commissary's
+and the Commissary Cloud previews'. Set them up once:
 
 1. **Hostname.** Pick one in a zone of the account, other than `CF_LLM_PROXY_DOMAIN` of `.env`, and optionally an API
    host (`CF_LLM_PROXY_API_DOMAIN`, [API host](#api-host)). The other steps use the app host.
@@ -137,10 +137,10 @@ The next push to `main` (or a manual run) deploys it and checks it with `tools/c
 email of `PLATFORM_ADMIN_EMAILS` (verified by the provider) is a platform admin. By hand, `pnpm deploy:hosted`
 deploys the stage from `.env.hosted` alone (`alchemy deploy --stage hosted --env-file .env.hosted`).
 
-**Switching a stage.** Turning a self-hosted stage into a hosted one deletes its Access applications, policies and
+**Switching a stage.** Turning a self-hosted stage into a Commissary Cloud one deletes its Access applications, policies and
 service tokens on the next deploy, and scripts with Access service tokens stop working: issue management keys first.
 Members keep their orgs and roles, and sign in with a provider account whose verified email is their membership email.
-`global`'s auto-join stops admitting anyone (on a hosted proxy nobody joins `global` by signing in), so add the people
+`global`'s auto-join stops admitting anyone (on Commissary Cloud nobody joins `global` by signing in), so add the people
 who should stay in it as members first.
 
 ## Setup
@@ -149,7 +149,7 @@ CI's credentials are code: `stacks/github.ts` is a second Alchemy stack that cre
 It manages:
 
 - the GitHub environments `production` (deployments from `main` only, no reviewers: a green push deploys) and
-  `preview`, and `hosted` (like `production`) when `.env.hosted` exists ([Hosted production](#hosted-production));
+  `preview`, and `hosted` (like `production`) when `.env.hosted` exists ([The Commissary Cloud stage](#the-commissary-cloud-stage));
 - `cf-llm-proxy-ci-deploy`, an account-owned Cloudflare API token limited to what `alchemy.run.ts` deploys: Workers Scripts,
   Workers KV Storage, D1, Secrets Store (Alchemy's state store) and Access: Apps and Policies (Write), Account Settings
   (Read), and Zone Read, DNS Write and Workers Routes Write on the zones of `CF_LLM_PROXY_DOMAIN` and
@@ -157,8 +157,8 @@ It manages:
 - `cf-llm-proxy-ci-check`, the Access service token of the post-deploy check;
 - in both environments, the secrets `CLOUDFLARE_API_TOKEN`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` and the
   variables `CLOUDFLARE_ACCOUNT_ID`, `ACCESS_*` (from `.env`) and `ACCESS_ALLOW_SERVICE_TOKEN_IDS` (the check token's
-  ID); in `production` also `CF_LLM_PROXY_DOMAIN` and `CF_LLM_PROXY_API_DOMAIN`; and a hosted proxy's settings where `.env` sets them
-  ([Hosted proxy](#hosted-proxy));
+  ID); in `production` also `CF_LLM_PROXY_DOMAIN` and `CF_LLM_PROXY_API_DOMAIN`; and Commissary Cloud's settings where `.env` sets them
+  ([Commissary Cloud](#commissary-cloud));
 - in `hosted`, the secret `CLOUDFLARE_API_TOKEN` and the settings of `.env.hosted` (no Access settings or check token).
 
 Raw secrets never leave Alchemy: Cloudflare returns them once, they go to the encrypted state store and are encrypted
@@ -194,12 +194,12 @@ the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --pro
 
 - **Control panel.** CI builds the control panel from `web/` (`pnpm web:build`) before each deploy; nothing else is
   installed into `public/`.
-- **Proxy keys.** The deploy adds, after the Worker (the bypass depends on the Worker's output, so the old Worker
-  never serves the proxy routes without Access in front), an Access application with a Bypass policy on the proxy paths (`/v1*`,
+- **API keys.** The deploy adds, after the Worker (the bypass depends on the Worker's output, so the old Worker
+  never serves the client API without Access in front), an Access application with a Bypass policy on the client API paths (`/v1*`,
   `/openai/v1*`, `/backend-api/codex*`, `/chat/completions`, `/completions`, `/responses`), so clients reach the
-  Worker with a proxy key and no Access sign-in ([ACCESS.md](ACCESS.md#proxy-keys)). From that deploy on, clients that
-  send Access service token headers to those paths are refused: move them to proxy keys first
-  ([MIGRATION.md](MIGRATION.md#5-move-clients-to-proxy-keys)). `cloudflared access` tokens (`cf-access-token`) keep
+  Worker with an API key and no Access sign-in ([ACCESS.md](ACCESS.md#api-keys)). From that deploy on, clients that
+  send Access service token headers to those paths are refused: move them to API keys first
+  ([MIGRATION.md](MIGRATION.md#5-move-clients-to-api-keys)). `cloudflared access` tokens (`cf-access-token`) keep
   working in `global` while its `access_clients` setting is on. The keys live in each org's ControlPlane (tables
   created on first use): no migration to run. With your own application (`ACCESS_AUD`) the deploy creates no bypass;
   add one yourself.
@@ -222,13 +222,13 @@ the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --pro
   the (encrypted) state store and bound as a Worker secret on every deploy. No GitHub secret or manual step is needed.
   `alchemy dev` uses a fixed key (`DEV_AUTH_INDEX_KEY`), the tests the one in `vitest.config.ts`. A Worker with Access
   configured refuses that dev key and any key shorter than 64 characters, and logs the refusal: management calls that
-  need an index fail (500), while proxying keeps working (its request log lines then carry no `authIndex`).
+  need an index fail (500), while serving requests keeps working (its request log lines then carry no `authIndex`).
 - **Secrets key.** Every org's stored secrets (auth files and config entries, see ARCHITECTURE.md _Stored secrets_) are
   encrypted with the org's data key, which is stored wrapped by the stage's `SECRETS_KEY`. Like the `auth_index` key it
   is an Alchemy `Random` in `alchemy.run.ts` (resource `SecretsKey`, one per generation), minted on the stage's first
   deploy and bound as a Worker secret; no GitHub secret or manual step is needed. `alchemy dev` uses
   `DEV_SECRETS_KEY`, the tests the keys in `vitest.config.ts`; a Worker with Access configured refuses that dev key and
-  any key shorter than 64 characters. Without a working key no ControlPlane starts: proxying and management calls of
+  any key shorter than 64 characters. Without a working key no ControlPlane starts: model traffic and management calls of
   every org fail (500) and the Worker logs `the ControlPlane cannot open the org's data key` with the reason, until a
   deploy binds the right key. **Losing the key loses every stored secret**: do not destroy the stage's state or its
   `SecretsKey` resource while the stage is in use.

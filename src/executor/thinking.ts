@@ -44,7 +44,7 @@ export interface ThinkingRequest {
   /** Whether request translation changed Responses `configuration_update` items. */
   readonly configurationUpdatesChanged?: boolean;
   /**
-   * Credential-resolved model capabilities (API-key models may override the registry), `null` = resolved but unknown.
+   * Credential-resolved model capabilities (provider-key models may override the registry), `null` = resolved but unknown.
    * Without it the model is treated as unknown (user-defined, no validation).
    */
   readonly modelInfo?: ThinkingModelInfo | null | undefined;
@@ -109,7 +109,7 @@ export class Thinking extends Context.Service<
     /** Reasoning-summary hooks applied by the translator registry around request transforms. */
     readonly summary: SummaryHooks;
   }
->()("cf-llm-proxy/executor/Thinking") {
+>()("commissary/executor/Thinking") {
   /** Passthrough implementation (tests that do not exercise thinking). */
   static readonly noop = Layer.succeed(
     Thinking,

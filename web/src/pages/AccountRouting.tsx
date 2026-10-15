@@ -353,8 +353,8 @@ const HeaderRows = ({
   const hidden = rows.some((row) => row.hidden !== undefined);
 
   const hint = hidden
-    ? "Sent with every request to the provider. Hidden values stay as they are unless you replace them. Empty: only what the proxy sends."
-    : "Sent with every request to the provider, on top of what the proxy sends. Empty: only what the proxy sends.";
+    ? "Sent with every request to the provider. Hidden values stay as they are unless you replace them. Empty: only what Commissary sends."
+    : "Sent with every request to the provider, on top of what Commissary sends. Empty: only what Commissary sends.";
 
   const update = (row: HeaderRow, change: Partial<HeaderRow>) =>
     onChange(rows.map((known) => (known.id === row.id ? { ...known, ...change } : known)));
@@ -650,7 +650,7 @@ export const Routing = ({ entry }: { readonly entry: CredentialEntry }) => {
           </span>
         </header>
         <p className={styles["lead"]}>
-          How the proxy picks this account and what it sends to {providerName(entry.provider)}.
+          How Commissary picks this account and what it sends to {providerName(entry.provider)}.
           Empty fields use the default shown under them.
         </p>
 
@@ -788,7 +788,7 @@ export const Routing = ({ entry }: { readonly entry: CredentialEntry }) => {
             <TextField
               field="note"
               label="Note"
-              hint="Shown under the account's name; the proxy does not read it. Empty: no note."
+              hint="Shown under the account's name; Commissary does not read it. Empty: no note."
               width="long"
               value={draft.note}
               error={errors.note?.message}

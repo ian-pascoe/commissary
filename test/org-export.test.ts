@@ -20,7 +20,7 @@ afterAll(harness.dispose);
 type Payload = Parameters<typeof jsonInit>[1];
 
 const send = async (slug: string, path: string, auth: string, method = "GET", body?: Payload) =>
-  await harness.json(`/v8/management/orgs/${slug}${path}`, {
+  await harness.json(`/v9/management/orgs/${slug}${path}`, {
     ...(body === undefined ? { method } : jsonInit(method, body)),
     auth,
   });
@@ -40,7 +40,7 @@ const newOrg = async () => {
   const platform = await token(ADMIN);
 
   const created = await harness.json(
-    "/v8/management/orgs",
+    "/v9/management/orgs",
     jsonInit("POST", { slug, name: `Export ${slug}`, private_credentials: true }),
   );
 
@@ -59,7 +59,7 @@ const newOrg = async () => {
 
   expect(
     (
-      await send(slug, "/api-keys/groups", platform, "PUT", {
+      await send(slug, "/provider-keys/groups", platform, "PUT", {
         family: "claude",
         revision: 0,
         group: {
@@ -75,7 +75,7 @@ const newOrg = async () => {
   ).toBe(200);
   expect(
     (
-      await send(slug, "/api-keys/groups", alice.auth, "PUT", {
+      await send(slug, "/provider-keys/groups", alice.auth, "PUT", {
         family: "claude",
         revision: 0,
         group: { "base-url": "https://alice.example.test/v1", keys: [{ "api-key": PRIVATE_KEY }] },

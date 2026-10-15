@@ -60,7 +60,7 @@ const caller =
   (handler: ReturnType<typeof makeHandler>) =>
   async (path: string, headers: Record<string, string> = {}, auth = true) =>
     await handler.handler(
-      new Request(`https://proxy.test${path}`, {
+      new Request(`https://commissary.test${path}`, {
         headers: { ...(auth ? { "Cf-Access-Jwt-Assertion": await token() } : {}), ...headers },
       }),
       requestContext(accessEnv, ctx),

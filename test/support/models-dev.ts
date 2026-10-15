@@ -1,6 +1,6 @@
-/** A synthetic models.dev document for catalog tests: every provider the proxy reads, a few models each. */
+/** A synthetic models.dev document for catalog tests: every provider Commissary reads, a few models each. */
 
-/** One models.dev model entry as models.dev sends it (with the fields the proxy drops). */
+/** One models.dev model entry as models.dev sends it (with the fields Commissary drops). */
 export const mdModel = (id: string, extra: Record<string, unknown> = {}) => ({
   id,
   name: id.toUpperCase(),
@@ -74,7 +74,7 @@ export const documentObject = (models: Partial<Record<string, Record<string, unk
     },
     { npm: "@ai-sdk/openai-compatible", api: "https://opencode.ai/zen/go/v1" },
   ),
-  // Providers the proxy does not read.
+  // Providers Commissary does not read.
   mistral: provider("mistral", { "mistral-x": mdModel("mistral-x") }),
 });
 

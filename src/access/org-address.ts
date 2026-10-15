@@ -1,4 +1,4 @@
-// Org addressing of a request (ADR 0021), new in the Workers port: `/v8/management/orgs/<slug>/...` and `/o/<slug>/...`
+// Org addressing of a request (ADR 0021), new in the Workers port: `/v9/management/orgs/<slug>/...` and `/o/<slug>/...`
 // name the org a management request is for. The router matches the same routes without the org, so the web handler wraps
 // the whole application in {@link orgAddressing}: the request the router and the handlers see has the org taken out of
 // its `url`, while `originalUrl` keeps the address the client used, which the Access gate classifies and reads the org

@@ -1,4 +1,4 @@
-// Model routing per credential: prefixes (force-model-prefix), exclusions, OAuth aliases, API-key model aliases,
+// Model routing per credential: prefixes (force-model-prefix), exclusions, OAuth aliases, provider-key model aliases,
 // force-mapping and alias pools. Semantics from sdk/cliproxy/auth/{oauth_model_alias,conductor_models}.go and
 // sdk/cliproxy/service_models.go.
 import { describe, expect, it } from "vitest";
@@ -162,7 +162,7 @@ describe("OAuth aliases", () => {
     expect(resolveModelRoute(credential, "fast(8192)", ctx)?.upstreamModel).toBe("m(1000)");
   });
 
-  it("per-account aliases take precedence over the global table; API-key credentials have no alias channel", () => {
+  it("per-account aliases take precedence over the global table; provider-key credentials have no alias channel", () => {
     const account = cred("a", {
       provider: "claude",
       modelAliases: [{ name: "mine", alias: "sonnet" }],
@@ -228,7 +228,7 @@ describe("OAuth aliases", () => {
   });
 });
 
-describe("API-key model aliases and pools", () => {
+describe("Provider-key model aliases and pools", () => {
   const compat = cred("k", {
     provider: "openai-compatible-x",
     authKind: "apikey",

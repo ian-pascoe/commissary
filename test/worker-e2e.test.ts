@@ -71,7 +71,7 @@ const CONFIG_KEY_ID = "openai-compatibility:mock:";
 
 const controlPlane = () => env.CONTROL_PLANE.getByName("global");
 
-/** Counters the ControlPlane keeps for the config API key (written by `report`). */
+/** Counters the ControlPlane keeps for the provider key (written by `report`). */
 const reportedCounts = async () => {
   const entry = (await controlPlane().listCredentials(FULL_ACCESS)).find((summary) =>
     summary.id.startsWith(CONFIG_KEY_ID),
@@ -93,7 +93,7 @@ const chatRequest = (body: Record<string, unknown>, init: RequestInit = {}) =>
   });
 
 /**
- * An upstream SSE stream that produces chunks on demand (bounded) until the proxy cancels it. Chunks are produced in
+ * An upstream SSE stream that produces chunks on demand (bounded) until Commissary cancels it. Chunks are produced in
  * `pull` (inside the Worker's request context): workerd only notices a client disconnect when it writes the next
  * bytes to the client, so the upstream must keep producing.
  */

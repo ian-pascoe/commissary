@@ -295,7 +295,7 @@ export class RefreshManager {
   /**
    * Makes sure the credential can be used right now (`RequestAuthPreparer` for tokens):
    *  - Vertex: returns a cached or freshly minted service-account access token;
-   *  - Meta: mints the API key when only a DCA token is stored;
+   *  - Meta: mints the provider key when only a DCA token is stored;
    *  - OAuth providers: refreshes when the access token is missing, expired, rejected, or (Antigravity) within 5 min.
    * The snapshot's `metadata.access_token` is then usable as is.
    */

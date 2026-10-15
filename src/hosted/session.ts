@@ -1,5 +1,5 @@
 /**
- * The person a hosted proxy's request comes from (ADR 0026): Better Auth's session cookie, read on every request, so a
+ * The person Commissary Cloud's request comes from (ADR 0026): Better Auth's session cookie, read on every request, so a
  * session ended by sign-out or suspension stops working at once. New in the Workers port.
  */
 import { Effect } from "effect";

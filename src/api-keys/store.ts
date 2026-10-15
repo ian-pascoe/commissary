@@ -1,5 +1,5 @@
 /**
- * An org's proxy keys inside its ControlPlane Durable Object (SQLite; ADR 0022). New in the Workers port, no Go
+ * An org's API keys inside its ControlPlane Durable Object (SQLite; ADR 0022). New in the Workers port, no Go
  * counterpart.
  *
  * - **proxy_keys**: one row per key: its id, the member it belongs to, a name, the SHA-256 of the whole key (never the
@@ -9,18 +9,18 @@
  *   `revoked_at` column of the first version stays in the table, never written; rows a previous version revoked are
  *   deleted when the ControlPlane starts.
  * - **proxy_key_settings**: one row of org-wide state: whether the org still accepts Access sign-ins (the clients of
- *   the time before proxy keys) on the proxy routes. On for `global`, where clients signed in through Access before,
+ *   the time before API keys) on the client API. On for `global`, where clients signed in through Access before,
  *   off for every other org.
  *
- * All methods are synchronous; refusals are plain data (`ProxyKeyRefused`). Times are the caller's clock (epoch
+ * All methods are synchronous; refusals are plain data (`ApiKeyRefused`). Times are the caller's clock (epoch
  * milliseconds), so the Worker's `Clock` drives them.
  */
 import type { OrgRole } from "../members/roles.ts";
 import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 import { cleanName, MAX_NAME_LENGTH } from "../platform/registry-store.ts";
-import { isKeyId, mintProxyKey } from "./key.ts";
+import { isKeyId, mintApiKey } from "./key.ts";
 
-export interface ProxyKeyRecord {
+export interface ApiKeyRecord {
   readonly id: string;
   readonly memberId: string;
   readonly name: string;
@@ -33,30 +33,30 @@ export interface ProxyKeyRecord {
   readonly revokedAt?: number;
 }
 
-export type ProxyKeyErrorCode =
+export type ApiKeyErrorCode =
   | "invalid_name"
   | "invalid_expiry"
   | "too_many_keys"
-  | "proxy_key_not_found";
+  | "api_key_not_found";
 
 /** A refused write; `message` is fixed text, safe to show. */
-export interface ProxyKeyRefused {
+export interface ApiKeyRefused {
   readonly ok: false;
-  readonly error: ProxyKeyErrorCode;
+  readonly error: ApiKeyErrorCode;
   readonly message: string;
 }
 
-export type ProxyKeyResult<A> = { readonly ok: true; readonly value: A } | ProxyKeyRefused;
+export type ApiKeyResult<A> = { readonly ok: true; readonly value: A } | ApiKeyRefused;
 
 /** Why a presented key was refused; the client sees the same `Invalid API key` for each. */
-export type ProxyKeyRejection = "unknown" | "expired";
+export type ApiKeyRejection = "unknown" | "expired";
 
-export type ProxyKeyCheck =
+export type ApiKeyCheck =
   | { readonly ok: true; readonly memberId: string; readonly expiresAt?: number }
-  | { readonly ok: false; readonly reason: ProxyKeyRejection };
+  | { readonly ok: false; readonly reason: ApiKeyRejection };
 
 /** A key as the org's lists show it: with the email of its member, while they are one. */
-export interface ProxyKeyListing extends ProxyKeyRecord {
+export interface ApiKeyListing extends ApiKeyRecord {
   readonly memberEmail?: string | undefined;
 }
 
@@ -68,7 +68,7 @@ export interface MemberNotFound {
 }
 
 /** The ControlPlane's answer to a presented key: its live member and their role, or why it is refused. */
-export type ProxyKeyVerdict =
+export type ApiKeyVerdict =
   | {
       readonly ok: true;
       readonly memberId: string;
@@ -77,11 +77,11 @@ export type ProxyKeyVerdict =
       /** When the key expires (epoch ms), so a cache of verified keys never keeps it longer. */
       readonly expiresAt?: number;
     }
-  | { readonly ok: false; readonly reason: ProxyKeyRejection };
+  | { readonly ok: false; readonly reason: ApiKeyRejection };
 
-/** The org accepts only proxy keys on its proxy routes: an Access sign-in is not admitted there. */
-export interface ClientsUseProxyKeys {
-  readonly proxyKeysOnly: true;
+/** The org accepts only API keys on its client API routes: an Access sign-in is not admitted there. */
+export interface ClientsUseApiKeys {
+  readonly apiKeysOnly: true;
 }
 
 /** At most this many keys per member, so a member cannot fill the org's storage. */
@@ -133,11 +133,11 @@ const HASH = /^[0-9a-f]{64}$/;
 const MESSAGES = {
   invalidName: `a name is 1 to ${MAX_NAME_LENGTH} characters without control characters`,
   invalidExpiry: "a key expires at a time in the future",
-  tooManyKeys: `a member holds at most ${MAX_KEYS_PER_MEMBER} proxy keys`,
-  notFound: "no proxy key has this id",
+  tooManyKeys: `a member holds at most ${MAX_KEYS_PER_MEMBER} API keys`,
+  notFound: "no API key has this id",
 } as const;
 
-const refuse = (error: ProxyKeyErrorCode, message: string): ProxyKeyRefused => ({
+const refuse = (error: ApiKeyErrorCode, message: string): ApiKeyRefused => ({
   ok: false,
   error,
   message,
@@ -152,7 +152,7 @@ const sameHash = (stored: string, presented: string): boolean => {
   return crypto.subtle.timingSafeEqual(encoder.encode(stored), encoder.encode(presented));
 };
 
-const record = (row: KeyRow): ProxyKeyRecord => ({
+const record = (row: KeyRow): ApiKeyRecord => ({
   id: row.id,
   memberId: row.member_id,
   name: row.name,
@@ -163,13 +163,13 @@ const record = (row: KeyRow): ProxyKeyRecord => ({
   ...(row.revoked_at === null ? {} : { revokedAt: row.revoked_at }),
 });
 
-export class ProxyKeyStore {
+export class ApiKeyStore {
   readonly #sql: SqlStorage;
   readonly #org: OrgId;
   readonly #removed: (ids: ReadonlyArray<string>) => void;
 
   /**
-   * `org`: the org the keys name; Access sign-ins stay accepted on the proxy routes of `global` until turned off.
+   * `org`: the org the keys name; Access sign-ins stay accepted on the client API of `global` until turned off.
    * `removed` is told the ids of the keys deleted from now on (revoked, expired or their member gone), so what hangs on
    * a key (its Spend limits and counters) is deleted with it.
    */
@@ -195,7 +195,7 @@ export class ProxyKeyStore {
 
   // --- settings -----------------------------------------------------------------------------------------------
 
-  /** Whether the proxy routes still accept an Access sign-in instead of a proxy key. */
+  /** Whether the client API still accepts an Access sign-in instead of an API key. */
   accessClients(): boolean {
     return (
       this.#sql
@@ -211,7 +211,7 @@ export class ProxyKeyStore {
   // --- keys ---------------------------------------------------------------------------------------------------
 
   /** The org's keys, or one member's, newest first; keys that have expired at `now` are deleted first. */
-  list(memberId: string | undefined, now: number): ReadonlyArray<ProxyKeyRecord> {
+  list(memberId: string | undefined, now: number): ReadonlyArray<ApiKeyRecord> {
     this.purgeExpired(now);
 
     const rows =
@@ -225,7 +225,7 @@ export class ProxyKeyStore {
     return rows.toArray().map(record);
   }
 
-  get(id: string): ProxyKeyRecord | undefined {
+  get(id: string): ApiKeyRecord | undefined {
     const row = this.#row(id);
 
     return row === undefined ? undefined : record(row);
@@ -238,7 +238,7 @@ export class ProxyKeyStore {
   create(
     input: { readonly memberId: string; readonly name: string; readonly expiresAt?: number },
     now: number,
-  ): ProxyKeyResult<{ readonly record: ProxyKeyRecord; readonly key: string }> {
+  ): ApiKeyResult<{ readonly record: ApiKeyRecord; readonly key: string }> {
     const name = cleanName(input.name);
 
     if (name === undefined) return refuse("invalid_name", MESSAGES.invalidName);
@@ -257,9 +257,9 @@ export class ProxyKeyStore {
     )
       return refuse("too_many_keys", MESSAGES.tooManyKeys);
 
-    let minted = mintProxyKey(this.#org);
+    let minted = mintApiKey(this.#org);
 
-    while (this.#row(minted.keyId) !== undefined) minted = mintProxyKey(this.#org);
+    while (this.#row(minted.keyId) !== undefined) minted = mintApiKey(this.#org);
 
     this.#sql.exec(
       `INSERT INTO proxy_keys (id, member_id, name, hash, prefix, created_at, expires_at)
@@ -275,22 +275,22 @@ export class ProxyKeyStore {
 
     const created = this.get(minted.keyId);
 
-    if (created === undefined) throw new Error("the proxy key just written is missing");
+    if (created === undefined) throw new Error("the API key just written is missing");
 
     return { ok: true, value: { record: created, key: minted.key } };
   }
 
   /**
    * Revokes a key at once by deleting it: the next request with it is refused (the Worker's cache of verified keys
-   * keeps it for at most its short lifetime, `access/proxy-key.ts`). `memberId` limits the call to that member's keys:
+   * keeps it for at most its short lifetime, `access/api-key.ts`). `memberId` limits the call to that member's keys:
    * another member's key answers as unknown. The answer is the key as it was, marked revoked at `now`; revoking it
    * again finds nothing.
    */
-  revoke(id: string, now: number, memberId?: string): ProxyKeyResult<ProxyKeyRecord> {
+  revoke(id: string, now: number, memberId?: string): ApiKeyResult<ApiKeyRecord> {
     const row = this.#row(id);
 
     if (row === undefined || (memberId !== undefined && row.member_id !== memberId))
-      return refuse("proxy_key_not_found", MESSAGES.notFound);
+      return refuse("api_key_not_found", MESSAGES.notFound);
 
     this.#sql.exec(`DELETE FROM proxy_keys WHERE id = ?`, id);
     this.#removed([id]);
@@ -330,7 +330,7 @@ export class ProxyKeyStore {
    * Checks a presented key: its id must be stored with the same hash (compared in constant time) and not expired at
    * `now`; an expired key is deleted. Records when the key was last used, at most once per {@link LAST_USED_RESOLUTION_MS}.
    */
-  check(keyId: string, hash: string, now: number): ProxyKeyCheck {
+  check(keyId: string, hash: string, now: number): ApiKeyCheck {
     const row = isKeyId(keyId) ? this.#row(keyId) : undefined;
 
     if (row === undefined || !sameHash(row.hash, hash)) return { ok: false, reason: "unknown" };

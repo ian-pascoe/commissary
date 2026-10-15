@@ -3,7 +3,7 @@
  * port, no Go counterpart.
  *
  * - **spend_limits**: one row per limit: its subject (kind and id; empty id for the org), period, amount in micro-USD,
- *   who wrote it (an org admin, or a member on their own proxy key), a revision and when/by whom it was last written. One
+ *   who wrote it (an org admin, or a member on their own API key), a revision and when/by whom it was last written. One
  *   limit per subject, period and source.
  * - **spend_counters**: the Cost spent so far per subject, period and period start. Only subjects with a limit have
  *   rows, and only the current period of each is kept, so an org without limits stores nothing.
@@ -229,7 +229,7 @@ export class SpendStore implements SpendBook {
 
   /**
    * Writes a limit. The caller checked that the subject exists and who may write it; the store keeps the amount valid, one
-   * limit per subject, period and source, and a member's limit on a proxy key within the admin's on it.
+   * limit per subject, period and source, and a member's limit on an API key within the admin's on it.
    */
   create(input: NewLimit, by: string): SpendResult<SpendLimit> {
     if (!isKind(input.kind) || !isPeriod(input.period) || !isSource(input.source))
@@ -343,7 +343,7 @@ export class SpendStore implements SpendBook {
     return { ok: true, value: existing };
   }
 
-  /** Drops the limits and counters of a subject that is gone (a removed member, team, credential or proxy key). */
+  /** Drops the limits and counters of a subject that is gone (a removed member, team, credential or API key). */
   forget(kind: SubjectKind, subject: string): void {
     this.#sql.exec(
       `DELETE FROM spend_limits WHERE subject_kind = ? AND subject_id = ?`,
@@ -398,7 +398,7 @@ export class SpendStore implements SpendBook {
     );
   }
 
-  /** A member's limit on a proxy key may not exceed the admin's limit on that key and period. */
+  /** A member's limit on an API key may not exceed the admin's limit on that key and period. */
   #aboveAdmin(
     input: Pick<NewLimit, "kind" | "subject" | "period" | "amountMicros" | "source">,
   ): SpendRefused | undefined {
@@ -415,7 +415,7 @@ export class SpendStore implements SpendBook {
     return admin !== undefined && input.amountMicros > admin.amountMicros
       ? refuse(
           "exceeds_admin_limit",
-          `an org admin limited this proxy key to ${admin.amountMicros} micro-USD a ${input.period}`,
+          `an org admin limited this API key to ${admin.amountMicros} micro-USD a ${input.period}`,
         )
       : undefined;
   }

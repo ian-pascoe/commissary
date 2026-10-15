@@ -12,10 +12,11 @@ const TARGETS: ReadonlyArray<readonly [prefix: string, target: string]> = [
   ["/oauth", "/accounts/connect"],
   ["/ai-providers", "/keys"],
   ["/quick-start", "/keys"],
-  // Upstream sends `/settings` and `/api-keys` (client keys) to its config page.
+  // Upstream sends `/settings` to its config page, and `/api-keys` (the keys clients send) to the config page too; the
+  // panel's own API keys page replaces that one.
   ["/config", "/settings"],
   ["/settings", "/settings"],
-  ["/api-keys", "/settings"],
+  ["/api-keys", "/api-keys"],
   // Version and runtime facts live on Settings.
   ["/system", "/settings"],
 ];

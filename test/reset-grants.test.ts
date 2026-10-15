@@ -1,5 +1,5 @@
 // Claude reset grants: the pure status parsing, grant choice and claim journal (src/quota/reset-grants.ts), then
-// `GET /v8/management/credentials/reset-grants` and `POST .../claim` through the router with the real ControlPlane and
+// `GET /v9/management/credentials/reset-grants` and `POST .../claim` through the router with the real ControlPlane and
 // mocked Anthropic endpoints, the quota check's tolerated grant read, the contract and the Access/CSRF gates.
 import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { assert, describe, it } from "@effect/vitest";
@@ -412,7 +412,7 @@ const ORGANIZATION = "abcdef01-2345-6789-abcd-ef0123456789";
 
 const CLAIM_URL = resetGrantClaimUrl(ORGANIZATION);
 
-const GRANTS = "/v8/management/credentials/reset-grants";
+const GRANTS = "/v9/management/credentials/reset-grants";
 
 const CLAIM = `${GRANTS}/claim`;
 
@@ -497,7 +497,7 @@ const decodeListed = Schema.decodeUnknownSync(
 );
 
 const listed = async (name = "claude-a.json") => {
-  const { body } = await harness.json("/v8/management/credentials");
+  const { body } = await harness.json("/v9/management/credentials");
 
   return decodeListed(body).files.find((file) => file.name === name);
 };
@@ -1116,7 +1116,7 @@ describe("claim races and failures", () => {
     expect(sent(CLAIM_URL)).toHaveLength(0);
   });
 
-  it("returns Anthropic's answer with a warning when the proxy cannot record it", async () => {
+  it("returns Anthropic's answer with a warning when Commissary cannot record it", async () => {
     await seed();
 
     const rename = (from: string, to: string) =>
@@ -1186,7 +1186,7 @@ describe("quota check", () => {
     await seed();
 
     const checked = await harness.json(
-      "/v8/management/credentials/quota",
+      "/v9/management/credentials/quota",
       jsonInit("POST", { name: "claude-a.json" }),
     );
 
@@ -1196,7 +1196,7 @@ describe("quota check", () => {
     statusReply = { status: 500 };
 
     const failed = await harness.json(
-      "/v8/management/credentials/quota",
+      "/v9/management/credentials/quota",
       jsonInit("POST", { name: "claude-a.json" }),
     );
 
@@ -1283,7 +1283,7 @@ describe("quota check", () => {
         outbound.requests.length = 0;
         yield* Effect.promise(() =>
           harness.json(
-            "/v8/management/credentials/quota",
+            "/v9/management/credentials/quota",
             jsonInit("POST", { name: "claude-a.json" }),
           ),
         );
@@ -1307,7 +1307,7 @@ const fetchVia =
     });
   };
 
-const client = HttpApiClient.make(ManagementApi, { baseUrl: "https://proxy.test" });
+const client = HttpApiClient.make(ManagementApi, { baseUrl: "https://commissary.test" });
 
 const through = (target: Harness) =>
   Effect.provide(

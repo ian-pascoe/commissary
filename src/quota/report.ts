@@ -38,9 +38,9 @@ export const isQuotaProvider = (provider: string): provider is QuotaProvider =>
   SUPPORTED.has(provider);
 
 /**
- * Executor keys whose config API keys (`api-keys.<family>`) can be checked with the key itself: they are listed on the
+ * Executor keys whose provider keys (`api-keys.<family>`) can be checked with the key itself: they are listed on the
  * Accounts page as config-sourced accounts and swept by the `quota-check` cron task. Other config keys (Codex, Claude,
- * OpenCode Zen, …) have no usage endpoint that takes an API key and stay off the list. A later kind is one entry here
+ * OpenCode Zen, …) have no usage endpoint that takes a provider key and stay off the list. A later kind is one entry here
  * (plus its target and probe).
  */
 export const CONFIG_QUOTA_PROVIDERS = [

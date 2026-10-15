@@ -109,7 +109,7 @@ const transportError = (error: HttpClientError.HttpClientError) =>
 /** `resolveCredentials`: trimmed `base_url` and `api_key` attributes. */
 const credentialEndpoint = (context: ExecutionContext) => ({
   baseURL: (context.credential.attributes["base_url"] ?? "").trim(),
-  apiKey: (context.credential.attributes["api_key"] ?? "").trim(),
+  providerKey: (context.credential.attributes["api_key"] ?? "").trim(),
 });
 
 /**
@@ -201,13 +201,13 @@ const responseContext = (
 const upstreamHeaders = (
   context: ExecutionContext,
   options: ExecutorOptions,
-  apiKey: string,
+  providerKey: string,
   stream: boolean,
   jsonContentType: boolean,
 ) => {
   const base = {
     ...(jsonContentType ? { "content-type": "application/json" } : {}),
-    ...(apiKey !== "" ? { authorization: `Bearer ${apiKey}` } : {}),
+    ...(providerKey !== "" ? { authorization: `Bearer ${providerKey}` } : {}),
     "user-agent": USER_AGENT,
   };
 
@@ -237,7 +237,7 @@ export const makeOpenAICompatExecutor = (
   ) {
     const thinking = yield* Thinking;
     const baseModel = parseSuffix(request.model).modelName;
-    const { baseURL, apiKey } = credentialEndpoint(context);
+    const { baseURL, providerKey } = credentialEndpoint(context);
 
     if (baseURL === "")
       return yield* new ExecutionError({ status: 401, message: "missing provider baseURL" });
@@ -334,7 +334,7 @@ export const makeOpenAICompatExecutor = (
       body,
     );
 
-    const headers = upstreamHeaders(context, options, apiKey, stream, true);
+    const headers = upstreamHeaders(context, options, providerKey, stream, true);
 
     const url =
       (baseURL.endsWith("/") ? baseURL.slice(0, -1) : baseURL) +
@@ -351,7 +351,7 @@ export const makeOpenAICompatExecutor = (
     stream: boolean,
   ) {
     const baseModel = parseSuffix(request.model).modelName;
-    const { baseURL, apiKey } = credentialEndpoint(context);
+    const { baseURL, providerKey } = credentialEndpoint(context);
 
     if (baseURL === "")
       return yield* new ExecutionError({ status: 401, message: "missing provider baseURL" });
@@ -387,7 +387,7 @@ export const makeOpenAICompatExecutor = (
       body,
     );
     const multipart = wantsMultipartEdit(endpoint, options.headers.get("content-type") ?? "");
-    const headers = upstreamHeaders(context, options, apiKey, stream, !multipart);
+    const headers = upstreamHeaders(context, options, providerKey, stream, !multipart);
 
     const url = (baseURL.endsWith("/") ? baseURL.slice(0, -1) : baseURL) + endpoint;
 

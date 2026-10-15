@@ -1,7 +1,7 @@
-// The Proxy keys page's model: a key's status, how its columns read, the order of the list, the checks that mirror the
-// server's (src/proxy-keys/store.ts) and what a refused write tells the caller. Pure: no DOM, tested in
-// test/web-proxy-keys.test.ts.
-import type { ProxyKeyView } from "#contract/proxy-keys.ts";
+// The API keys page's model: a key's status, how its columns read, the order of the list, the checks that mirror the
+// server's (src/api-keys/store.ts) and what a refused write tells the caller. Pure: no DOM, tested in
+// test/web-api-keys.test.ts.
+import type { ApiKeyView } from "#contract/api-keys.ts";
 import { asSentence } from "./failure.ts";
 import { formatAgo, formatDate } from "./format.ts";
 
@@ -25,7 +25,7 @@ const instant = (iso: string | undefined): number | undefined => {
  * instant, as the server reads it, and the page may show one for the moment between that instant and the next reload.
  * Revoked wins over expired for the answer of a revocation.
  */
-export const keyStatus = (key: ProxyKeyView, now: number): KeyStatus => {
+export const keyStatus = (key: ApiKeyView, now: number): KeyStatus => {
   if (key.revoked_at !== undefined) return "revoked";
   const expires = instant(key.expires_at);
 
@@ -41,16 +41,13 @@ const STATUS_LABELS: Readonly<Record<KeyStatus, string>> = {
 export const statusLabel = (status: KeyStatus): string => STATUS_LABELS[status];
 
 /** Only a key that still works needs revoking. */
-export const canRevoke = (key: ProxyKeyView, now: number): boolean =>
+export const canRevoke = (key: ApiKeyView, now: number): boolean =>
   keyStatus(key, now) !== "revoked";
 
 const RANK: Readonly<Record<KeyStatus, number>> = { active: 0, expired: 1, revoked: 2 };
 
 /** Keys that work first, then expired, then revoked; each group newest first. */
-export const sortKeys = (
-  keys: ReadonlyArray<ProxyKeyView>,
-  now: number,
-): ReadonlyArray<ProxyKeyView> =>
+export const sortKeys = (keys: ReadonlyArray<ApiKeyView>, now: number): ReadonlyArray<ApiKeyView> =>
   keys.toSorted(
     (a, b) =>
       RANK[keyStatus(a, now)] - RANK[keyStatus(b, now)] ||
@@ -66,33 +63,33 @@ export const KEY_FILTERS: ReadonlyArray<{ readonly id: KeyFilter; readonly label
 ];
 
 export const filterKeys = (
-  keys: ReadonlyArray<ProxyKeyView>,
+  keys: ReadonlyArray<ApiKeyView>,
   filter: KeyFilter,
   now: number,
-): ReadonlyArray<ProxyKeyView> =>
+): ReadonlyArray<ApiKeyView> =>
   filter === "all" ? keys : keys.filter((key) => keyStatus(key, now) === "active");
 
 /** The member column shows for org admins (who see every key) and whenever a key is someone else's. */
-export const showMemberColumn = (keys: ReadonlyArray<ProxyKeyView>, admin: boolean): boolean =>
+export const showMemberColumn = (keys: ReadonlyArray<ApiKeyView>, admin: boolean): boolean =>
   admin || keys.some((key) => !key.mine);
 
 /** Whose key it is: their email, their member id when the server sent no email. */
-export const memberName = (key: ProxyKeyView): string => key.member_email ?? key.member_id;
+export const memberName = (key: ApiKeyView): string => key.member_email ?? key.member_id;
 
 /** When the key last authenticated a request: "never" until its first, then how long ago. */
-export const lastUsedText = (key: ProxyKeyView, now: number): string => {
+export const lastUsedText = (key: ApiKeyView, now: number): string => {
   const used = instant(key.last_used_at);
 
   return used === undefined ? "Never" : formatAgo(Math.max(0, now - used));
 };
 
-export const createdText = (key: ProxyKeyView): string => {
+export const createdText = (key: ApiKeyView): string => {
   const created = instant(key.created_at);
 
   return created === undefined ? key.created_at : formatDate(created);
 };
 
-export const expiresText = (key: ProxyKeyView): string => {
+export const expiresText = (key: ApiKeyView): string => {
   if (key.expires_at === undefined) return "No expiry";
   const expires = instant(key.expires_at);
 
@@ -100,7 +97,7 @@ export const expiresText = (key: ProxyKeyView): string => {
 };
 
 /** When a revoked key was revoked ("Oct 10, 2026"), for the caption under its status. */
-export const revokedText = (key: ProxyKeyView): string | undefined => {
+export const revokedText = (key: ApiKeyView): string | undefined => {
   const revoked = instant(key.revoked_at);
 
   return revoked === undefined ? undefined : formatDate(revoked);
@@ -179,20 +176,20 @@ export const todayInput = (now: number): string => {
 // Refused writes
 
 /**
- * What a refused proxy key write says, by the server's error code. Codes without copy fall back to the server's own
+ * What a refused API key write says, by the server's error code. Codes without copy fall back to the server's own
  * explanation, then to the code.
  */
 export const keyProblem = (error: string | undefined, message: string, detail?: string): string => {
   switch (error) {
     case "member_required":
-      return "Proxy keys are issued to members of the org, and you are not one. Add yourself as a member on the Members page first (platform admins and org owners can), or ask an org owner to.";
+      return "API keys are issued to members of the org, and you are not one. Add yourself as a member on the Members page first (platform admins and org owners can), or ask an org owner to.";
     case "invalid_name":
       return `A name is 1 to ${KEY_NAME_MAX} characters without control characters.`;
     case "invalid_expiry":
       return "An expiry has to be a time in the future.";
     case "too_many_keys":
-      return `A member holds at most ${KEYS_PER_MEMBER} proxy keys. Revoke keys you no longer use, and ask an org admin if none is left to revoke.`;
-    case "proxy_key_not_found":
+      return `A member holds at most ${KEYS_PER_MEMBER} API keys. Revoke keys you no longer use, and ask an org admin if none is left to revoke.`;
+    case "api_key_not_found":
       return "That key no longer exists. Reload to see the current list.";
     default:
       return detail === undefined ? message : asSentence(detail);
@@ -206,7 +203,7 @@ export const notMemberNote = (me: { readonly role: string | null }): string | un
 // ---------------------------------------------------------------------------------------------------------------
 // Using a key
 
-/** How each family of clients sends a proxy key. */
+/** How each family of clients sends an API key. */
 export const KEY_HEADERS: ReadonlyArray<{
   readonly clients: string;
   readonly send: string;

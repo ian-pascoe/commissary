@@ -4,7 +4,7 @@
  *
  * One row per key: its id, a name, the role it holds in the org, the SHA-256 of the whole key (never the key itself),
  * the visible prefix, who issued it (`created_by`: an email or `service:<client id>`), the email of the person it
- * belongs to (the issuer, when a person issued it: their suspension on a hosted proxy refuses it), and when it was
+ * belongs to (the issuer, when a person issued it: their suspension on Commissary Cloud refuses it), and when it was
  * created and last used. Revoking a key deletes its row: it is refused from then on and no longer listed.
  *
  * All methods are synchronous; refusals are plain data. Times are the caller's clock (epoch milliseconds).
@@ -12,8 +12,8 @@
 import type { OrgRole } from "../members/roles.ts";
 import type { OrgId } from "../platform/org.ts";
 import { cleanName, MAX_NAME_LENGTH } from "../platform/registry-store.ts";
-import { isKeyId } from "../proxy-keys/key.ts";
-import { LAST_USED_RESOLUTION_MS } from "../proxy-keys/store.ts";
+import { isKeyId } from "../api-keys/key.ts";
+import { LAST_USED_RESOLUTION_MS } from "../api-keys/store.ts";
 import { mintManagementKey } from "./key.ts";
 
 export interface ManagementKeyRecord {

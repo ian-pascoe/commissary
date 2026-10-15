@@ -25,11 +25,11 @@ export class CchSigningError extends Error {
 
 /** `claudeCCHSigningEnabled` (kind: anthropic for the Messages API; Vertex always signs). */
 export const cchSigningEnabled = (
-  apiKey: string,
+  providerKey: string,
   cliFingerprint: boolean,
   origin: string,
 ): boolean => {
-  if (isClaudeOAuthToken(apiKey)) return true;
+  if (isClaudeOAuthToken(providerKey)) return true;
 
   if (!cliFingerprint) return false;
 

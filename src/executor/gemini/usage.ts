@@ -70,7 +70,7 @@ export const stripUsageMetadataFromJson = (raw: string): StrippedUsage => {
 };
 
 /**
- * `FilterSSEUsageMetadata` for one stream line (Gemini API keys carry no `traceId`, so the Antigravity stop-chunk
+ * `FilterSSEUsageMetadata` for one stream line (Gemini provider keys carry no `traceId`, so the Antigravity stop-chunk
  * bookkeeping does not apply): a `data:` line, or a raw JSON line.
  */
 export const filterSseUsageMetadata = (line: string): string => {

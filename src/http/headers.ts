@@ -9,7 +9,7 @@ const GATEWAY_HEADER_PREFIXES = [
   "x-bt-",
 ] as const;
 
-/** RFC 7230 hop-by-hop headers plus headers the proxy manages itself. */
+/** RFC 7230 hop-by-hop headers plus headers Commissary manages itself. */
 const BLOCKED_HEADERS = new Set([
   "connection",
   "keep-alive",
@@ -34,7 +34,7 @@ const CPA_RESERVED_HEADERS = new Set([
   "x-cpa-trace-id",
 ]);
 
-/** Whether a downstream response header is owned by the proxy (CORS, trace id). */
+/** Whether a downstream response header is owned by Commissary (CORS, trace id). */
 export const isCPAReservedResponseHeader = (name: string): boolean =>
   CPA_RESERVED_HEADERS.has(name.toLowerCase());
 

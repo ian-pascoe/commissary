@@ -1,5 +1,5 @@
 // The Limits page's forms: the org's calendar (time zone and first day of the week, org admins) and a new Spend limit
-// (org admins on anything, a plain member on their own proxy keys).
+// (org admins on anything, a plain member on their own API keys).
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import { type FormEvent, useId, useState } from "react";
@@ -8,7 +8,7 @@ import {
   createSpendLimitAtom,
   credentialsAtom,
   membersAtom,
-  proxyKeysAtom,
+  apiKeysAtom,
   SPEND,
   teamsAtom,
   updateSpendSettingsAtom,
@@ -155,7 +155,7 @@ const useSubjects = (): Readonly<Record<SpendSubjectKind, ReadonlyArray<Subject>
   const people = useAtomValue(membersAtom);
   const groups = useAtomValue(teamsAtom);
   const files = useAtomValue(credentialsAtom);
-  const keys = useAtomValue(proxyKeysAtom);
+  const keys = useAtomValue(apiKeysAtom);
 
   return {
     org: [],
@@ -328,8 +328,8 @@ export const NewLimit = ({ admin }: { readonly admin: boolean }) => {
           {amountIssue ??
             subjectIssue ??
             (admin
-              ? "Spend is what the proxy has counted at its prices. A request that would start over the limit is refused with a 429 until the period ends; one already running finishes."
-              : "Limit one of your own proxy keys. It counts everything the key does, and may not exceed a limit an org admin set on it.")}
+              ? "Spend is what Commissary has counted at its prices. A request that would start over the limit is refused with a 429 until the period ends; one already running finishes."
+              : "Limit one of your own API keys. It counts everything the key does, and may not exceed a limit an org admin set on it.")}
         </p>
       </form>
       <NoteLine note={note} what="add the limit" />

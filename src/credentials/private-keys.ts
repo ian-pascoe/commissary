@@ -1,5 +1,5 @@
 /**
- * Private API key groups (ADR 0023, ADR 0025): the key groups a member keeps for themselves.
+ * Private provider key groups (ADR 0023, ADR 0025): the key groups a member keeps for themselves.
  *
  * New in the Workers port, no Go counterpart. A private group is a key group with its keys, stored as one sealed row
  * of its own (`private_key_groups`, sealed with the org data key like every secret) and owned by one member. It never
@@ -13,7 +13,7 @@
 import { Effect } from "effect";
 import { decodeConfig } from "../config/codec.ts";
 import { documentOfEntries, type GroupRow, type KeyRow } from "../config/entries.ts";
-import { API_KEY_FAMILIES, type ApiKeyFamily, type Config } from "../config/schema.ts";
+import { PROVIDER_KEY_FAMILIES, type ProviderKeyFamily, type Config } from "../config/schema.ts";
 import type { KeyGroupChange, WriteResult } from "../config/store.ts";
 import {
   isJsonArray,
@@ -24,7 +24,7 @@ import {
 } from "../json/index.ts";
 import type { Sealer } from "../secrets/cipher.ts";
 import { freshEntryId, GROUP_ID_KIND } from "./key-ids.ts";
-import { apiKeyIdKind } from "./synthesize.ts";
+import { providerKeyIdKind } from "./synthesize.ts";
 
 const TABLE = "private_key_groups";
 
@@ -55,7 +55,7 @@ interface GroupSqlRow {
 interface StoredGroup {
   readonly id: string;
   readonly owner: string;
-  readonly family: ApiKeyFamily;
+  readonly family: ProviderKeyFamily;
   readonly position: number;
   readonly revision: number;
   readonly group: JsonObject;
@@ -87,8 +87,8 @@ class Refusal extends Error {
   }
 }
 
-const isFamily = (value: string): value is ApiKeyFamily =>
-  API_KEY_FAMILIES.some((family) => family === value);
+const isFamily = (value: string): value is ProviderKeyFamily =>
+  PROVIDER_KEY_FAMILIES.some((family) => family === value);
 
 /** The private groups of every owner with the change counter they were assembled at. */
 export interface PrivateKeyOwners {
@@ -338,7 +338,7 @@ export class PrivateKeyStore {
 
   /** `group` with an id on every key: a kept key's id must be one of the stored group's keys. */
   #withKeyIds(
-    family: ApiKeyFamily,
+    family: ProviderKeyFamily,
     id: string,
     group: JsonObject,
     stored: StoredGroup | undefined,
@@ -349,7 +349,10 @@ export class PrivateKeyStore {
       ),
     );
 
-    const kind = apiKeyIdKind(family, typeof group.name === "string" ? { name: group.name } : {});
+    const kind = providerKeyIdKind(
+      family,
+      typeof group.name === "string" ? { name: group.name } : {},
+    );
 
     const keys = (isJsonArray(group.keys) ? group.keys : []).map((raw): JsonObject => {
       const key = isJsonObject(raw) ? raw : {};
@@ -358,7 +361,7 @@ export class PrivateKeyStore {
 
       if (typeof key.id !== "string" || !known.has(key.id))
         throw new Refusal(
-          refused("conflict", "an API key of this group changed since it was read"),
+          refused("conflict", "a provider key of this group changed since it was read"),
         );
 
       return key;

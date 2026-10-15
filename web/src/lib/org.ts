@@ -1,5 +1,5 @@
 // Which org the panel is showing (ADR 0021). The panel of an org lives under `/o/<slug>/...` and calls the org's
-// management routes `/v8/management/orgs/<slug>/...`; the address without an org (`/`, `/accounts`) is the chooser, or
+// management routes `/v9/management/orgs/<slug>/...`; the address without an org (`/`, `/accounts`) is the chooser, or
 // a redirect to the caller's only org (src/management/web-panel.ts). Pure helpers, shared by the router and the client.
 
 import { MANAGEMENT_API_PREFIX } from "#contract/api.ts";
@@ -38,8 +38,8 @@ export const orgPanelPath = (slug: string, page = "/"): string =>
 const isPlatformLevel = (rest: string): boolean => /^\/orgs(?=[/?#]|$)/.test(rest);
 
 /**
- * `url` (an absolute URL or a path of the management API) addressed to the org `slug`: `/v8/management/credentials`
- * becomes `/v8/management/orgs/acme/credentials`.
+ * `url` (an absolute URL or a path of the management API) addressed to the org `slug`: `/v9/management/credentials`
+ * becomes `/v9/management/orgs/acme/credentials`.
  * `/me` is scoped too (it then answers the caller's role in the org). The platform-level routes (`/orgs`,
  * `/orgs/:slug`) and any other URL stay as they are.
  */

@@ -2,12 +2,12 @@
  * `auth_index`: the stable credential handle the management API, the usage export and the control panel pass around.
  *
  * Go source: sdk/cliproxy/auth/types.go (`EnsureIndex`, `stableAuthIndex`): first 8 bytes of a SHA-256 as 16 hex
- * characters. The Go seed is path/API-key based; on Workers every credential has a stable `id` (auth file name or the
+ * characters. The Go seed is path/provider-key based; on Workers every credential has a stable `id` (auth file name or the
  * content-addressed config id `kind:sha256(kind␀key␀…)[:12]` of `credentials/synthesize.ts`).
  *
  * Deviation from Go (security): the index is keyed, `hex(HMAC-SHA256(K, "auth-index:" + id))[:16]`, with `K` the
  * per-deployment secret `AUTH_INDEX_KEY` (an Alchemy `Random` kept in the stack state, `alchemy.run.ts`). Go's unsalted
- * hash of a value derived from the API key lets anyone holding an index (or a config id) confirm key guesses offline;
+ * hash of a value derived from the provider key lets anyone holding an index (or a config id) confirm key guesses offline;
  * under a secret key an index reveals nothing about the id. 16 hex characters (64 bits) stay: with a secret key they
  * only need to be unique among one deployment's credentials (a collision is a 2^-32 event for 2^16 of them), and the
  * contract, panel URLs and usage exports keep their shape. Indexes are never persisted (D1 stores the credential id,
@@ -17,7 +17,7 @@
  * or guessable key (node:crypto accepts a 0-byte HMAC key). On a deployed stage (`ACCESS_TEAM_DOMAIN` or `ACCESS_AUD`
  * set, the condition that also refuses `ACCESS_DEV_BYPASS`, `access/config.ts`) the fixed `alchemy dev` key and any
  * key shorter than 64 characters (the deploy mints 32 random bytes as 64 hex characters) are refused too
- * (`deploymentAuthIndexer`): every index then fails (management calls answer 500; the proxy's request log, which
+ * (`deploymentAuthIndexer`): every index then fails (management calls answer 500; Commissary's request log, which
  * only annotates with the index, leaves it out, `observability/trace.ts`), and the refusal is logged once per isolate.
  *
  * Each org has its own key (ADR 0021): `global` uses `AUTH_INDEX_KEY` itself, so the indexes from before orgs existed

@@ -1,5 +1,5 @@
 /**
- * "Stored wins" for API keys that duplicate another one, for the group write (`api-keys-write.ts`).
+ * "Stored wins" for provider keys that duplicate another one, for the group write (`provider-keys-write.ts`).
  *
  * Workers deviation, no Go counterpart: Go's `Sanitize*Keys` keeps the first of a family's duplicates (gemini,
  * interactions and vertex keys are unique across groups, `config/normalize.ts`). Left to the normaliser, a typed key
@@ -51,8 +51,8 @@ export const withoutKeys = (
 ): JsonObject => {
   if (drops.every((group) => group.every((drop) => !drop))) return document;
   const out = structuredClone(document);
-  const apiKeys = out["api-keys"];
-  const groups = isJsonObject(apiKeys) ? apiKeys[family] : undefined;
+  const providerKeys = out["api-keys"];
+  const groups = isJsonObject(providerKeys) ? providerKeys[family] : undefined;
 
   if (!Array.isArray(groups)) return out;
 

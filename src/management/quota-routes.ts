@@ -1,9 +1,9 @@
 /**
- * `POST /v8/management/credentials/quota` (`checkQuota` in contract/credentials.ts): checks one account's allowance
+ * `POST /v9/management/credentials/quota` (`checkQuota` in contract/credentials.ts): checks one account's allowance
  * at the provider's usage endpoint now and answers with the stored report. The account is an auth file (by file name)
- * or a listed config API key (OpenCode Go, by the `auth_index` the list names it with).
+ * or a listed provider key (OpenCode Go, by the `auth_index` the list names it with).
  *
- * `POST /v8/management/credentials/quota/all` (`checkAllQuotas`): the panel's "Check all quotas", the cron task's
+ * `POST /v9/management/credentials/quota/all` (`checkAllQuotas`): the panel's "Check all quotas", the cron task's
  * sweep run now (`sweepQuotas`: every enabled auth file and listed config key of a supported provider,
  * `SWEEP_CONCURRENCY` accounts at a time, recent Claude reset grant reads skipped).
  * Answers `200 {started_at, finished_at, results, checked, failed}` with each account's outcome (a failed check is

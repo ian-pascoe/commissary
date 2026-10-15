@@ -72,8 +72,8 @@ export interface MembershipSettingsWire {
   /** Members may connect private credentials, and the private credentials they connected are used (ADR 0023). */
   readonly privateCredentials: boolean;
   /**
-   * The proxy routes still accept an Access sign-in instead of a proxy key, for the clients of the time before proxy
-   * keys (`proxy-keys/store.ts`). Only `global` uses it: an Access sign-in names no org.
+   * The client API routes still accept an Access sign-in instead of an API key, for the clients of the time before API
+   * keys (`api-keys/store.ts`). Only `global` uses it: an Access sign-in names no org.
    */
   readonly accessClients: boolean;
 }
@@ -267,7 +267,7 @@ export class MemberStore {
   /**
    * `org`: auto-join starts on for `global` (self-hosted deployments keep admitting everyone Access admits) and off
    * for every other org; `transaction` runs a body in one storage transaction (`ctx.storage.transactionSync`).
-   * `globalAutoJoin: false` (a hosted proxy, ADR 0026, where anyone may sign in) starts `global` with auto-join off too:
+   * `globalAutoJoin: false` (Commissary Cloud, ADR 0026, where anyone may sign in) starts `global` with auto-join off too:
    * people join it only by invitation.
    */
   constructor(

@@ -8,7 +8,7 @@ import { HttpApiClient } from "effect/http-api";
 import { env } from "cloudflare:workers";
 import { afterAll, afterEach, beforeAll, beforeEach } from "vitest";
 import { ManagementApi } from "../src/management/contract/api.ts";
-import type { ApiKeysList, GroupView } from "../src/management/contract/api-keys.ts";
+import type { ProviderKeysList, GroupView } from "../src/management/contract/provider-keys.ts";
 import { ManagementError } from "../src/management/contract/errors.ts";
 import { UsageGroupBy } from "../src/management/contract/usage.ts";
 import { CATALOG_KEYS } from "../src/registry/catalog-store.ts";
@@ -84,7 +84,7 @@ const fetchVia =
   };
 
 /** The generated client; `Fetch` is read per request, so it is provided around the whole test (`through`). */
-const client = HttpApiClient.make(ManagementApi, { baseUrl: "https://proxy.test" });
+const client = HttpApiClient.make(ManagementApi, { baseUrl: "https://commissary.test" });
 
 const through = (target: Harness) =>
   Effect.provide(
@@ -711,7 +711,7 @@ describe("management contract", () => {
   describe("routing", () => {
     const aliases = [{ name: "claude-sonnet-4-6", alias: "s46" }];
 
-    it.effect("models decodes accounts and API keys with their routes", () =>
+    it.effect("models decodes accounts and provider keys with their routes", () =>
       Effect.gen(function* () {
         yield* seed("claude-a.json");
         yield* Effect.promise(async () => {
@@ -1022,7 +1022,7 @@ describe("management contract", () => {
         );
       });
 
-    const claudeGroup = (list: ApiKeysList): GroupView => {
+    const claudeGroup = (list: ProviderKeysList): GroupView => {
       const group = list.families.claude[0];
 
       assert.isDefined(group);
@@ -1048,7 +1048,7 @@ describe("management contract", () => {
       Effect.gen(function* () {
         yield* seedKeys();
         const api = yield* client;
-        const list = yield* api.apiKeys.list();
+        const list = yield* api.providerKeys.list();
         const claude = claudeGroup(list);
 
         assert.strictEqual(claude.group.keys.length, 2);
@@ -1078,7 +1078,7 @@ describe("management contract", () => {
         assert.strictEqual(list.families["openai-compatibility"][0]?.group.keys.length, 1);
 
         const raw = yield* Effect.promise(async () =>
-          (await harness.call("/v8/management/api-keys")).text(),
+          (await harness.call("/v9/management/provider-keys")).text(),
         );
 
         for (const secret of SECRETS) assert.notInclude(raw, secret);
@@ -1090,11 +1090,11 @@ describe("management contract", () => {
       Effect.gen(function* () {
         yield* seedKeys();
         const api = yield* client;
-        const before = yield* api.apiKeys.list();
+        const before = yield* api.providerKeys.list();
         const view = claudeGroup(before);
         const [kept, replaced] = view.group.keys;
 
-        const written = yield* api.apiKeys.putGroup({
+        const written = yield* api.providerKeys.putGroup({
           payload: {
             family: "claude",
             id: view.id,
@@ -1113,7 +1113,7 @@ describe("management contract", () => {
         assert.strictEqual(written.id, view.id);
         assert.isAbove(written.revision, view.revision);
 
-        const after = yield* api.apiKeys.list();
+        const after = yield* api.providerKeys.list();
         const keys = claudeGroup(after).group.keys;
 
         assert.strictEqual(after.version, written.version);
@@ -1140,10 +1140,10 @@ describe("management contract", () => {
         Effect.gen(function* () {
           yield* seedKeys();
           const api = yield* client;
-          const before = yield* api.apiKeys.list();
+          const before = yield* api.providerKeys.list();
           const view = claudeGroup(before);
 
-          const first = yield* api.apiKeys.putGroup({
+          const first = yield* api.providerKeys.putGroup({
             payload: {
               family: "claude",
               id: view.id,
@@ -1153,7 +1153,7 @@ describe("management contract", () => {
           });
 
           const stale = yield* Effect.flip(
-            api.apiKeys.putGroup({
+            api.providerKeys.putGroup({
               payload: {
                 family: "claude",
                 id: view.id,
@@ -1166,10 +1166,10 @@ describe("management contract", () => {
           assert.instanceOf(stale, ManagementError);
           assert.strictEqual(stale.error, "conflict");
 
-          const current = (yield* api.apiKeys.list()).version;
+          const current = (yield* api.providerKeys.list()).version;
 
           const unknown = yield* Effect.flip(
-            api.apiKeys.putGroup({
+            api.providerKeys.putGroup({
               payload: {
                 family: "claude",
                 id: view.id,
@@ -1183,7 +1183,7 @@ describe("management contract", () => {
           assert.strictEqual(unknown.error, "unknown_auth_index");
 
           const noBase = yield* Effect.flip(
-            api.apiKeys.putGroup({
+            api.providerKeys.putGroup({
               payload: {
                 family: "codex",
                 revision: 0,
@@ -1197,7 +1197,7 @@ describe("management contract", () => {
 
           // A group that is gone (or never was) is a conflict: the caller's view is out of date.
           const missing = yield* Effect.flip(
-            api.apiKeys.deleteGroup({
+            api.providerKeys.deleteGroup({
               payload: { family: "claude", id: "group:missing", revision: 1 },
             }),
           );
@@ -1206,7 +1206,7 @@ describe("management contract", () => {
           assert.strictEqual(missing.error, "conflict");
 
           // Nothing was stored by the refused writes.
-          assert.strictEqual((yield* api.apiKeys.list()).version, current);
+          assert.strictEqual((yield* api.providerKeys.list()).version, current);
         }).pipe(through(harness)),
     );
 
@@ -1214,10 +1214,10 @@ describe("management contract", () => {
       Effect.gen(function* () {
         yield* seedKeys({ gemini: [{ keys: [{ "api-key": "gm-one" }] }] });
         const api = yield* client;
-        const list = yield* api.apiKeys.list();
+        const list = yield* api.providerKeys.list();
 
         // Silent: a duplicate of a stored key is accepted (and dropped), so the reply never confirms a guess.
-        const duplicate = yield* api.apiKeys.putGroup({
+        const duplicate = yield* api.providerKeys.putGroup({
           payload: {
             family: "gemini",
             revision: 0,
@@ -1231,16 +1231,16 @@ describe("management contract", () => {
           id: duplicate.id,
           revision: list.version + 1,
         });
-        const groups = (yield* api.apiKeys.list()).families.gemini;
+        const groups = (yield* api.providerKeys.list()).families.gemini;
 
         assert.strictEqual(groups.length, 1);
         const [only] = groups;
 
-        const deleted = yield* api.apiKeys.deleteGroup({
+        const deleted = yield* api.providerKeys.deleteGroup({
           payload: { family: "gemini", id: only!.id, revision: only!.revision },
         });
 
-        const after = yield* api.apiKeys.list();
+        const after = yield* api.providerKeys.list();
 
         assert.strictEqual(after.version, deleted.version);
         assert.strictEqual(after.families.gemini.length, 0);
@@ -1254,7 +1254,7 @@ describe("management contract", () => {
         Effect.gen(function* () {
           yield* seedKeys();
           const api = yield* client;
-          const view = claudeGroup(yield* api.apiKeys.list());
+          const view = claudeGroup(yield* api.providerKeys.list());
           const key = view.group.keys[0]!;
 
           const off = yield* api.credentials.setDisabled({
@@ -1268,7 +1268,7 @@ describe("management contract", () => {
             excluded_pattern: "*",
           });
 
-          const disabled = claudeGroup(yield* api.apiKeys.list()).group.keys[0]!;
+          const disabled = claudeGroup(yield* api.providerKeys.list()).group.keys[0]!;
 
           assert.strictEqual(disabled.disabled, true);
           assert.strictEqual(disabled.auth_index, key.auth_index);
@@ -1277,9 +1277,12 @@ describe("management contract", () => {
           yield* api.credentials.setDisabled({
             payload: { auth_index: key.auth_index!, disabled: false },
           });
-          assert.strictEqual(claudeGroup(yield* api.apiKeys.list()).group.keys[0]?.disabled, false);
+          assert.strictEqual(
+            claudeGroup(yield* api.providerKeys.list()).group.keys[0]?.disabled,
+            false,
+          );
 
-          const compat = (yield* api.apiKeys.list()).families["openai-compatibility"][0]!.group
+          const compat = (yield* api.providerKeys.list()).families["openai-compatibility"][0]!.group
             .keys[0]!;
 
           const refused = yield* Effect.flip(
@@ -1300,7 +1303,7 @@ describe("management contract", () => {
       });
 
       const authIndexOfFirst = (
-        list: ApiKeysList,
+        list: ProviderKeysList,
         family: "claude" | "codex" | "gemini" | "vertex",
       ) => list.families[family][0]!.group.keys[0]!.auth_index!;
 
@@ -1308,7 +1311,7 @@ describe("management contract", () => {
         Effect.gen(function* () {
           const api = yield* client;
 
-          return yield* api.apiKeys.probe({ payload: { auth_index: authIndex } });
+          return yield* api.providerKeys.probe({ payload: { auth_index: authIndex } });
         });
 
       it.effect("lists the models of each family with the family's authentication", () =>
@@ -1325,7 +1328,7 @@ describe("management contract", () => {
           });
 
           const api = yield* client;
-          const list = yield* api.apiKeys.list();
+          const list = yield* api.providerKeys.list();
           const seen = probing.requests;
 
           probeReply = (request: RecordedRequest) => {
@@ -1400,7 +1403,7 @@ describe("management contract", () => {
           assert.strictEqual(count?.headers["x-goog-api-key"], "vx-key-1234");
 
           // A probe is not a request: the credential pool's counters stay untouched.
-          const after = yield* api.apiKeys.list();
+          const after = yield* api.providerKeys.list();
 
           for (const group of after.families.claude)
             for (const key of group.group.keys) {
@@ -1414,7 +1417,7 @@ describe("management contract", () => {
         Effect.gen(function* () {
           yield* seedKeys();
           const api = yield* client;
-          const list = yield* api.apiKeys.list();
+          const list = yield* api.providerKeys.list();
 
           probeReply = () => ({ status: 401, body: { error: `invalid key ${SECRETS[0]}` } });
 
@@ -1499,7 +1502,7 @@ describe("management contract", () => {
 
         // The panel's client addresses its org this way (web/src/api/client.ts).
         const scoped = HttpApiClient.make(ManagementApi, {
-          baseUrl: "https://proxy.test",
+          baseUrl: "https://commissary.test",
           transformClient: HttpClient.mapRequest(
             HttpClientRequest.updateUrl((url) => scopedApiUrl(url, "contract-scoped")),
           ),
@@ -1626,7 +1629,7 @@ describe("management contract", () => {
 
         assert.strictEqual(view.version, imported.version);
         assert.strictEqual(view.values.routing.strategy, "fill-first");
-        assert.strictEqual((yield* api.apiKeys.list()).families.claude.length, 1);
+        assert.strictEqual((yield* api.providerKeys.list()).families.claude.length, 1);
 
         const syntax = yield* Effect.flip(
           api.settings.importConfig({ payload: "routing:\n  strategy: [a\n" }),

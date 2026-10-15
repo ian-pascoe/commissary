@@ -600,7 +600,7 @@ describe("access classification of the panel page", () => {
     expect(classifyPath("https://x.test/other.html")).toBe("public");
   });
 
-  it("protects the unprefixed proxy aliases like their /v1 routes", () => {
+  it("protects the unprefixed client API aliases like their /v1 routes", () => {
     for (const path of [
       "/chat/completions",
       "/completions",
@@ -617,7 +617,7 @@ describe("access classification of the panel page", () => {
       expect(isPanelPagePath(path), path).toBe(true);
 
     for (const path of [
-      "/v8/management/config",
+      "/v9/management/config",
       "/assets/index.js",
       "/assets",
       "/management.htm",

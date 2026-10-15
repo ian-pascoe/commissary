@@ -1,4 +1,4 @@
-// Cost breakdowns by member, team and proxy key (issue #71, deferred from #70): GET /observability/usage/summary
+// Cost breakdowns by member, team and API key (issue #71, deferred from #70): GET /observability/usage/summary
 // grouped by `member`, `team` and `key`, with private-credential traffic left to its owner (ADR 0023).
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -30,7 +30,7 @@ const send = async (
   method = "GET",
   body?: Parameters<typeof jsonInit>[1],
 ) =>
-  await harness.json(`/v8/management/orgs/${slug}${path}`, {
+  await harness.json(`/v9/management/orgs/${slug}${path}`, {
     ...(body === undefined ? { method } : jsonInit(method, body)),
     ...who,
   });
@@ -59,7 +59,7 @@ const setup = async () => {
   const platform = await as(ADMIN);
 
   const created = await harness.json(
-    "/v8/management/orgs",
+    "/v9/management/orgs",
     jsonInit("POST", { slug, name: slug, private_credentials: true }),
   );
 
@@ -116,7 +116,7 @@ const setup = async () => {
 };
 
 describe("usage cost breakdowns", () => {
-  it("groups the cost by member, by team and by proxy key", async () => {
+  it("groups the cost by member, by team and by API key", async () => {
     const o = await setup();
 
     await o.record("a1", o.alice, 1_000_000, { principalId: `key:key-alice` });

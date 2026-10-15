@@ -207,8 +207,8 @@ const samlIdp = samlify.IdentityProvider({
 });
 
 /**
- * The identity provider's answer to the sign-in request `redirect` (the URL the proxy sent the browser to): the form
- * fields its page would post to the proxy's assertion consumer service, signing `email` in.
+ * The identity provider's answer to the sign-in request `redirect` (the URL Commissary sent the browser to): the form
+ * fields its page would post to Commissary's assertion consumer service, signing `email` in.
  */
 export const samlAnswer = async (
   redirect: string,

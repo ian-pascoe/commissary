@@ -1,4 +1,4 @@
-// One API key group, or a new one: its endpoint (name, base URL, prefix, priority), its keys (new ones are typed in
+// One provider key group, or a new one: its endpoint (name, base URL, prefix, priority), its keys (new ones are typed in
 // once and never shown again), the models it offers and the ones it excludes, saved in one write; and deleting it.
 // Settings the form does not show are kept as they are (the server restores them).
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
@@ -6,10 +6,10 @@ import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
 import { ArrowLeft, Plus, Search, Trash2, X } from "lucide-react";
 import { type FormEvent, type ReactNode, useId, useRef, useState } from "react";
-import type { ApiKeyFamily, ApiKeysList, ProbeResult } from "#contract/api-keys.ts";
+import type { ProviderKeyFamily, ProviderKeysList, ProbeResult } from "#contract/provider-keys.ts";
 import {
-  API_KEYS,
-  apiKeysAtom,
+  PROVIDER_KEYS,
+  providerKeysAtom,
   deleteKeyGroupAtom,
   probeKeyAtom,
   putKeyGroupAtom,
@@ -53,14 +53,14 @@ const ownRoute = getRouteApi("/keys/private/$family/$index");
 
 const newRoute = getRouteApi("/keys/new");
 
-const FAMILY_NOTES: Readonly<Record<ApiKeyFamily, string>> = {
-  claude: "Anthropic API keys, or a Claude-compatible endpoint.",
+const FAMILY_NOTES: Readonly<Record<ProviderKeyFamily, string>> = {
+  claude: "Anthropic provider keys, or a Claude-compatible endpoint.",
   codex: "OpenAI keys for the Responses API; the endpoint needs a base URL.",
   gemini: "Google AI Studio keys for the Gemini API.",
   interactions: "Gemini keys used only for the native Interactions API.",
   vertex: "Vertex AI express-mode keys; every model needs an alias.",
   xai: "xAI keys for Grok; the endpoint needs a base URL.",
-  meta: "Meta Llama API keys.",
+  meta: "Meta Llama provider keys.",
   "opencode-zen":
     "OpenCode Zen keys; models come from the OpenCode catalog unless listed. A listed model can pin its protocol.",
   "opencode-go":
@@ -220,7 +220,7 @@ const GroupForm = ({
   privately,
   onReload,
 }: {
-  readonly family: ApiKeyFamily;
+  readonly family: ProviderKeyFamily;
   readonly view: AnyGroupView | undefined;
   /** The group is the caller's private one (ADR 0023). */
   readonly privately: boolean;
@@ -265,8 +265,8 @@ const GroupForm = ({
     // One branch per request shape: the mutation takes a union of argument objects, not a union payload.
     const outcome = await save.run(
       request.family === "openai-compatibility"
-        ? { payload: request, reactivityKeys: API_KEYS }
-        : { payload: request, reactivityKeys: API_KEYS },
+        ? { payload: request, reactivityKeys: PROVIDER_KEYS }
+        : { payload: request, reactivityKeys: PROVIDER_KEYS },
     );
 
     if (outcome.ok) {
@@ -309,7 +309,7 @@ const GroupForm = ({
             label="Base URL"
             hint={
               defaultBaseUrl(family) === undefined
-                ? "Required: where the proxy sends this group's requests."
+                ? "Required: where Commissary sends this group's requests."
                 : "Leave empty for the provider's own API."
             }
             error={shown.baseUrl}
@@ -348,7 +348,7 @@ const GroupForm = ({
           <Field
             id={`${ids}-priority`}
             label="Priority"
-            hint="The proxy uses the highest priority first; empty counts as 0."
+            hint="Commissary uses the highest priority first; empty counts as 0."
             error={shown.priority}
           >
             <input
@@ -371,7 +371,7 @@ const GroupForm = ({
                 checked={draft.disabled}
                 onChange={(event) => set("disabled", event.target.checked)}
               />
-              <span>Disable this endpoint: the proxy sends it no requests</span>
+              <span>Disable this endpoint: Commissary sends it no requests</span>
             </label>
             <label className={styles["check"]}>
               <input
@@ -387,7 +387,7 @@ const GroupForm = ({
 
       <Section title="Keys">
         <p className={styles["lead"]}>
-          A key is shown only by its last characters. Type a new one to replace it; the proxy keeps
+          A key is shown only by its last characters. Type a new one to replace it; Commissary keeps
           it and never sends it back to this page.
         </p>
         {shown.keys === undefined ? null : <p className={kit["fieldError"]}>{shown.keys}</p>}
@@ -413,7 +413,7 @@ const GroupForm = ({
                 {asking ? (
                   <div className={kit["field"]}>
                     <label className={kit["fieldLabel"]} htmlFor={`${ids}-secret-${key.id}`}>
-                      {key.stored === undefined ? "API key" : "New API key"}
+                      {key.stored === undefined ? "Provider key" : "New provider key"}
                     </label>
                     <input
                       id={`${ids}-secret-${key.id}`}
@@ -674,7 +674,7 @@ const DeleteGroup = ({
   privately,
   onReload,
 }: {
-  readonly family: ApiKeyFamily;
+  readonly family: ProviderKeyFamily;
   readonly view: AnyGroupView;
   readonly privately: boolean;
   readonly onReload: () => void;
@@ -690,7 +690,7 @@ const DeleteGroup = ({
   return (
     <Section title="Delete" className={styles["delete"]}>
       <p className={styles["lead"]}>
-        The proxy stops using {count === 1 ? "this key" : `these ${formatCount(count)} keys`} and
+        Commissary stops using {count === 1 ? "this key" : `these ${formatCount(count)} keys`} and
         forgets {count === 1 ? "it" : "them"}. Their usage history stays.
       </p>
       {problem === undefined ? null : (
@@ -716,7 +716,7 @@ const DeleteGroup = ({
                 revision: view.revision,
                 ...(privately ? { private: true } : {}),
               },
-              reactivityKeys: API_KEYS,
+              reactivityKeys: PROVIDER_KEYS,
             });
 
             dialog.current?.close();
@@ -734,7 +734,7 @@ const DeleteGroup = ({
           </h2>
           <p>
             Requests stop going to {count === 1 ? "its key" : `its ${formatCount(count)} keys`}, and
-            the keys are removed from the proxy&rsquo;s configuration.
+            the keys are removed from Commissary&rsquo;s configuration.
           </p>
           <div className={kit["dialogActions"]}>
             <button type="submit" className={kit["danger"]} disabled={remove.busy}>
@@ -760,22 +760,22 @@ const DeleteGroup = ({
 const Back = () => (
   <Link to="/keys" className={styles["back"]}>
     <ArrowLeft aria-hidden="true" size={16} strokeWidth={2.25} />
-    API keys
+    Provider keys
   </Link>
 );
 
-const Loaded = ({ children }: { readonly children: (list: ApiKeysList) => ReactNode }) => {
-  const result = useAtomValue(apiKeysAtom);
-  const retry = useAtomRefresh(apiKeysAtom);
+const Loaded = ({ children }: { readonly children: (list: ProviderKeysList) => ReactNode }) => {
+  const result = useAtomValue(providerKeysAtom);
+  const retry = useAtomRefresh(providerKeysAtom);
 
   return AsyncResult.match(result, {
     onInitial: () => (
       <p className={kit["muted"]} aria-busy="true">
-        Loading API keys…
+        Loading provider keys…
       </p>
     ),
     onFailure: (failure) => (
-      <Problem onRetry={retry}>Could not load the API keys. {failureMessage(failure)}</Problem>
+      <Problem onRetry={retry}>Could not load the provider keys. {failureMessage(failure)}</Problem>
     ),
     onSuccess: ({ value }) => children(value),
   });
@@ -795,7 +795,7 @@ const ExistingGroup = ({
   readonly index: string;
   readonly privately: boolean;
 }) => {
-  const retry = useAtomRefresh(apiKeysAtom);
+  const retry = useAtomRefresh(providerKeysAtom);
   const known = isFamily(family) ? family : undefined;
   const position = /^\d+$/.test(index) ? Number(index) : -1;
 
@@ -832,13 +832,13 @@ const GroupPage = ({
   privately,
   onReload,
 }: {
-  readonly family: ApiKeyFamily;
+  readonly family: ProviderKeyFamily;
   readonly view: AnyGroupView;
   readonly privately: boolean;
   readonly onReload: () => void;
 }) => {
   const title = groupTitle(family, view);
-  usePageTitle(`${title} · API keys`);
+  usePageTitle(`${title} · Provider keys`);
 
   return (
     <div className={styles["page"]}>
@@ -868,7 +868,7 @@ const MissingGroup = () => {
         <h1 className={styles["name"]}>Group not found</h1>
       </header>
       <p className={kit["muted"]}>
-        No API key group is stored here. It may have been deleted, or the configuration changed
+        No provider key group is stored here. It may have been deleted, or the configuration changed
         since the link was made. <Link to="/keys">See every key</Link>.
       </p>
     </div>
@@ -877,11 +877,11 @@ const MissingGroup = () => {
 
 export const NewKeyGroupPage = () => {
   const { family } = newRoute.useSearch();
-  const retry = useAtomRefresh(apiKeysAtom);
+  const retry = useAtomRefresh(providerKeysAtom);
   const role = useRole();
   const caller = role.kind === "ready" ? role.caller : undefined;
   const [mine, setMine] = useState(false);
-  usePageTitle(family === undefined ? "Add API key" : `Add ${familyName(family)} key`);
+  usePageTitle(family === undefined ? "Add provider key" : `Add ${familyName(family)} key`);
 
   return (
     <div className={styles["page"]}>
@@ -890,7 +890,7 @@ export const NewKeyGroupPage = () => {
         <div>
           {family === undefined ? null : <p className={styles["provider"]}>{familyName(family)}</p>}
           <h1 className={styles["name"]}>
-            {family === undefined ? "Add an API key" : "New key group"}
+            {family === undefined ? "Add a provider key" : "New key group"}
           </h1>
         </div>
       </header>
@@ -911,7 +911,12 @@ export const NewKeyGroupPage = () => {
         <Loaded>
           {(list) => (
             <>
-              <Ownership caller={caller} noun="API key group" chosen={mine} onChange={setMine} />
+              <Ownership
+                caller={caller}
+                noun="Provider key group"
+                chosen={mine}
+                onChange={setMine}
+              />
               <GroupForm
                 key={`${family}:${list.version}`}
                 family={family}

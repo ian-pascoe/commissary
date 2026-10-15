@@ -1,4 +1,4 @@
-// Zero data retention (ADR 0027) and Spend limits (issue #71): what a member's or a proxy key's Spend limits and counters
+// Zero data retention (ADR 0027) and Spend limits (issue #71): what a member's or an API key's Spend limits and counters
 // are is deleted with them, and an org's go with the org. Through the real ControlPlane and org deletion.
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
@@ -18,7 +18,7 @@ beforeAll(async () => {
   await resetUsageDb();
 });
 
-/** An org with an admin, two members with a proxy key each, a shared account, and Spend that was used by every one. */
+/** An org with an admin, two members with an API key each, a shared account, and Spend that was used by every one. */
 const spendingOrg = async () => {
   const org = OrgId.make(`spend-zdr-${crypto.randomUUID().slice(0, 8)}`);
   const stub = controlPlaneOf(env, org);
@@ -37,7 +37,7 @@ const spendingOrg = async () => {
   const viewer: Viewer = { member: admin.id, admin: true };
 
   const key = async (owner: { readonly id: string }, name: string, expiresAt?: number) => {
-    const made = await stub.createProxyKey(
+    const made = await stub.createApiKey(
       { memberId: owner.id, name, ...(expiresAt === undefined ? {} : { expiresAt }) },
       Date.now(),
     );
@@ -57,8 +57,8 @@ const spendingOrg = async () => {
     if (!made.ok) throw new Error(`${made.error}: ${made.message}`);
   };
 
-  const spend = async (memberId: string, proxyKeyId: string) => {
-    const picked = await stub.pick({ ...REQUEST, memberId, proxyKeyId });
+  const spend = async (memberId: string, apiKeyId: string) => {
+    const picked = await stub.pick({ ...REQUEST, memberId, apiKeyId });
 
     if (!picked.ok) throw new Error(picked.failure.code);
     await stub.report(picked.lease, { success: true, httpStatus: 200, costMicros: USD });
@@ -71,13 +71,13 @@ const spendingOrg = async () => {
   const aliceKey = await key(alice, "alice laptop");
   const bobKey = await key(bob, "bob laptop");
 
-  for (const [who, proxyKey] of [
+  for (const [who, apiKey] of [
     [alice, aliceKey],
     [bob, bobKey],
   ] as const) {
     await limit("member", who.id);
-    await limit("key", proxyKey.id);
-    await spend(who.id, proxyKey.id);
+    await limit("key", apiKey.id);
+    await spend(who.id, apiKey.id);
   }
 
   await limit("org", "");
@@ -107,7 +107,7 @@ const HELD = { limits: 1, counters: 1 };
 const GONE = { limits: 0, counters: 0 };
 
 describe("Spend data of a member who leaves", () => {
-  it("is deleted with the member and with their proxy keys, and nothing of anyone else is", async () => {
+  it("is deleted with the member and with their API keys, and nothing of anyone else is", async () => {
     const org = await spendingOrg();
 
     expect(await spendRows(org, "member", org.alice.id)).toEqual(HELD);
@@ -131,11 +131,11 @@ describe("Spend data of a member who leaves", () => {
   });
 });
 
-describe("Spend data of a proxy key that is deleted", () => {
+describe("Spend data of an API key that is deleted", () => {
   it("goes with the key when it is revoked", async () => {
     const org = await spendingOrg();
 
-    expect((await org.stub.revokeProxyKey(org.aliceKey.id, Date.now())).ok).toBe(true);
+    expect((await org.stub.revokeApiKey(org.aliceKey.id, Date.now())).ok).toBe(true);
     expect(await spendRows(org, "key", org.aliceKey.id)).toEqual(GONE);
     expect(await spendRows(org, "key", org.bobKey.id)).toEqual(HELD);
     expect(await spendRows(org, "member", org.alice.id)).toEqual(HELD);
@@ -149,7 +149,7 @@ describe("Spend data of a proxy key that is deleted", () => {
     await org.spend(org.alice.id, expiring.id);
     expect(await spendRows(org, "key", expiring.id)).toEqual(HELD);
 
-    expect(await org.stub.purgeExpiredProxyKeys(Date.now() + 120_000)).toBe(1);
+    expect(await org.stub.purgeExpiredApiKeys(Date.now() + 120_000)).toBe(1);
     expect(await spendRows(org, "key", expiring.id)).toEqual(GONE);
     expect(await spendRows(org, "key", org.aliceKey.id)).toEqual(HELD);
   });

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { CORS_EXPOSED_RESPONSE_HEADERS } from "../src/http/cors.ts";
 
 const fetchWorker = (path: string, init?: RequestInit) =>
-  exports.default.fetch(new Request(`https://proxy.test${path}`, init));
+  exports.default.fetch(new Request(`https://commissary.test${path}`, init));
 
 const expectCors = (response: Response) => {
   expect(response.headers.get("access-control-allow-origin")).toBe("*");
@@ -35,7 +35,7 @@ describe("GET /healthz", () => {
 
 describe("GET /", () => {
   it("is the control panel, gated like the management API (no public banner)", async () => {
-    // proxy.test has no Access settings, so the management zone fails closed.
+    // commissary.test has no Access settings, so the management zone fails closed.
     const response = await fetchWorker("/");
     expect(response.status).toBeGreaterThanOrEqual(401);
     expect(response.headers.get("access-control-allow-origin")).toBeNull();

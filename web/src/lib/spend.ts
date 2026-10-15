@@ -27,7 +27,7 @@ export const SUBJECT_KINDS: ReadonlyArray<{
   { id: "team", label: "Team" },
   { id: "member", label: "Member" },
   { id: "credential", label: "Shared credential" },
-  { id: "key", label: "Proxy key" },
+  { id: "key", label: "API key" },
 ];
 
 export const kindLabel = (kind: SpendSubjectKind): string =>
@@ -68,7 +68,7 @@ export const spentShare = (
   limit: Pick<SpendLimitView, "spent_micros" | "amount_micros">,
 ): number => (limit.amount_micros <= 0 ? 1 : Math.min(1, limit.spent_micros / limit.amount_micros));
 
-/** Whether the limit has no room left: the proxy refuses what it covers until the period ends. */
+/** Whether the limit has no room left: Commissary refuses what it covers until the period ends. */
 export const reached = (limit: Pick<SpendLimitView, "spent_micros" | "amount_micros">): boolean =>
   limit.spent_micros >= limit.amount_micros;
 
@@ -173,11 +173,11 @@ export const limitProblem = (
     case "exceeds_admin_limit":
       return "An org admin has limited this key to less than that. Choose an amount at or below their limit.";
     case "forbidden":
-      return "You can limit your own proxy keys, and org admins can limit anything.";
+      return "You can limit your own API keys, and org admins can limit anything.";
     case "not_found":
       return "That limit no longer exists. Reload to see the current list.";
     case "subject_not_found":
-      return "That member, team, shared credential or proxy key no longer exists.";
+      return "That member, team, shared credential or API key no longer exists.";
     default:
       return detail === undefined ? message : asSentence(detail);
   }

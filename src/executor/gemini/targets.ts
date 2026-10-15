@@ -1,5 +1,5 @@
 /**
- * Endpoint and credential resolution of the Gemini API-key and Vertex executors.
+ * Endpoint and credential resolution of the Gemini provider-key and Vertex executors.
  *
  * Go source: internal/runtime/executor/gemini_executor.go (geminiAPIKey, resolveGeminiBaseURL, shouldExecuteNativeInteractions,
  * nativeInteractionsSourceFormat), internal/runtime/executor/gemini_vertex_executor.go (vertexCreds, vertexAPICreds,
@@ -23,7 +23,7 @@ export const VERTEX_DEFAULT_BASE_URL = "https://aiplatform.googleapis.com";
 
 const trimSlash = (value: string): string => value.replace(/\/+$/, "");
 
-// --- Gemini API key ---------------------------------------------------------------------------------------------------
+// --- Gemini provider key ---------------------------------------------------------------------------------------------------
 
 const NATIVE_INTERACTIONS_SOURCES: ReadonlySet<string> = new Set([
   Formats.Interactions,
@@ -46,12 +46,12 @@ export const geminiVariant = (identifier: "gemini" | "gemini-interactions"): Goo
   resolveTarget: (context) =>
     Effect.sync((): GoogleTarget => {
       const base = geminiBaseUrl(context);
-      const apiKey = context.credential.attributes["api_key"] ?? "";
+      const providerKey = context.credential.attributes["api_key"] ?? "";
 
       return {
         url: (action, model) => `${base}/${GEMINI_API_VERSION}/models/${model}:${action}`,
         interactionsUrl: () => `${base}/${GEMINI_API_VERSION}/interactions`,
-        authHeaders: apiKey === "" ? {} : { "x-goog-api-key": apiKey },
+        authHeaders: providerKey === "" ? {} : { "x-goog-api-key": providerKey },
       };
     }),
   nativeInteractions: (context, options) =>
@@ -106,19 +106,20 @@ const metadataString = (metadata: JsonObject, key: string): string => {
 };
 
 interface VertexApiCreds {
-  readonly apiKey: string;
+  readonly providerKey: string;
   readonly baseUrl: string;
 }
 
-/** `vertexAPICreds`: the `api_key` attribute, else an access token stored on an API-key style credential. */
-const vertexApiKey = (context: ExecutionContext): VertexApiCreds => {
+/** `vertexAPICreds`: the `api_key` attribute, else an access token stored on a provider-key style credential. */
+const vertexProviderKey = (context: ExecutionContext): VertexApiCreds => {
   const { attributes, metadata } = context.credential;
-  let apiKey = attributes["api_key"] ?? "";
+  let providerKey = attributes["api_key"] ?? "";
 
-  // Service-account credentials carry a minted `access_token` too; that is a bearer token, not an API key.
-  if (apiKey === "" && metadata["service_account"] === undefined) apiKey = accessTokenOf(metadata);
+  // Service-account credentials carry a minted `access_token` too; that is a bearer token, not a provider key.
+  if (providerKey === "" && metadata["service_account"] === undefined)
+    providerKey = accessTokenOf(metadata);
 
-  return { apiKey, baseUrl: attributes["base_url"] ?? "" };
+  return { providerKey, baseUrl: attributes["base_url"] ?? "" };
 };
 
 /** Service-account access token: minted by the ControlPlane before the attempt (`withCredentialRefresh`). */
@@ -141,10 +142,10 @@ export const vertexVariant: GoogleVariant = {
   vertex: true,
   resolveTarget: (context: ExecutionContext) =>
     Effect.gen(function* () {
-      const { apiKey, baseUrl } = vertexApiKey(context);
+      const { providerKey, baseUrl } = vertexProviderKey(context);
       const { metadata } = context.credential;
 
-      if (apiKey !== "") {
+      if (providerKey !== "") {
         const base = trimSlash(baseUrl.trim() === "" ? VERTEX_DEFAULT_BASE_URL : baseUrl.trim());
         const project = metadataString(metadata, "project_id");
 
@@ -152,7 +153,7 @@ export const vertexVariant: GoogleVariant = {
           url: (action, model) =>
             `${base}/${VERTEX_API_VERSION}/publishers/google/models/${model}:${action}`,
           interactionsUrl: (stream) => vertexInteractionsUrl(baseUrl, project, stream),
-          authHeaders: { "x-goog-api-key": apiKey },
+          authHeaders: { "x-goog-api-key": providerKey },
         } satisfies GoogleTarget;
       }
 

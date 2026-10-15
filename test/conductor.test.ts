@@ -107,9 +107,9 @@ interface SetupOptions {
   readonly store?: MemoryPoolStore;
   /** The org's Spend limits (issue #71). */
   readonly spend?: PoolOptions["spend"];
-  /** Members' private API key groups: YAML configs by member id. */
+  /** Members' private provider key groups: YAML configs by member id. */
   readonly privateConfigs?: Readonly<Record<string, string>>;
-  /** Who asks (a member, a proxy key); a user without a member by default. */
+  /** Who asks (a member, an API key); a user without a member by default. */
   readonly identity?: AccessIdentity;
   /** What the usage sink says an attempt cost, for the Spend limits (nothing by default). */
   readonly cost?: (record: UsageRecord) => UsageCost | undefined;
@@ -1063,7 +1063,7 @@ describe("Spend limits (issue #71)", () => {
   );
 
   it.effect(
-    "refuses before any credential is tried when the proxy key has no room, and never charges a failed attempt",
+    "refuses before any credential is tried when the API key has no room, and never charges a failed attempt",
     () =>
       Effect.gen(function* () {
         const book = new MemorySpendBook([limit("key", "k1", "day", 0)]);
@@ -1113,7 +1113,7 @@ describe("Spend limits (issue #71)", () => {
     }),
   );
 
-  it.effect("counts a member's private credential traffic toward the proxy key's limit only", () =>
+  it.effect("counts a member's private credential traffic toward the API key's limit only", () =>
     Effect.gen(function* () {
       const book = new MemorySpendBook([
         limit("member", "m1", "day", 0),

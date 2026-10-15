@@ -6,7 +6,7 @@
  * claude_fingerprint_policy.go (resolveClaudeFingerprintPolicy), claude_executor_cloaking.go (getCloakConfigFromAuth,
  * resolveClaudeWirePolicy), claude_signing.go (resolveClaudeKeyConfig).
  */
-import type { ApiKeyEntry, ApiKeyGroup, Config } from "../../config/schema.ts";
+import type { ProviderKeyEntry, ProviderKeyGroup, Config } from "../../config/schema.ts";
 import type { CredentialSnapshot } from "../picker.ts";
 
 export const DEFAULT_BASE_URL = "https://api.anthropic.com";
@@ -14,7 +14,8 @@ export const DEFAULT_BASE_URL = "https://api.anthropic.com";
 export const FINGERPRINT_PROFILE_CLAUDE_CODE_CLI = "claude-code-cli";
 
 /** `isClaudeOAuthToken`. */
-export const isClaudeOAuthToken = (apiKey: string): boolean => apiKey.includes("sk-ant-oat");
+export const isClaudeOAuthToken = (providerKey: string): boolean =>
+  providerKey.includes("sk-ant-oat");
 
 /** `IsAnthropicUpstreamURL`: https, `api.anthropic.com`, no userinfo, default port. */
 export const isAnthropicUpstreamURL = (url: URL): boolean =>
@@ -40,20 +41,20 @@ const metadataString = (credential: CredentialSnapshot, key: string): string => 
 
 /** `claudeCreds`: attributes first (`api_key`, `base_url`), then the OAuth access token. */
 export const claudeCreds = (credential: CredentialSnapshot) => {
-  const apiKey = credential.attributes["api_key"] ?? "";
+  const providerKey = credential.attributes["api_key"] ?? "";
 
   return {
-    apiKey: apiKey !== "" ? apiKey : metadataString(credential, "access_token"),
+    providerKey: providerKey !== "" ? providerKey : metadataString(credential, "access_token"),
     baseURL: credential.attributes["base_url"] ?? "",
   };
 };
 
-/** `claudeCredentialUsesOAuth`: OAuth token -> Bearer; API-key credentials use `x-api-key` on first-party hosts. */
+/** `claudeCredentialUsesOAuth`: OAuth token -> Bearer; provider-key credentials use `x-api-key` on first-party hosts. */
 export const claudeCredentialUsesOAuth = (
   credential: CredentialSnapshot,
-  apiKey: string,
+  providerKey: string,
 ): boolean => {
-  if (isClaudeOAuthToken(apiKey)) return true;
+  if (isClaudeOAuthToken(providerKey)) return true;
 
   if (credential.kind === "apikey") return false;
 
@@ -65,17 +66,17 @@ export const resolveClaudeKeyConfig = (
   config: Config,
   credential: CredentialSnapshot,
 ):
-  | { readonly entry: ApiKeyEntry; readonly group: ApiKeyGroup; readonly baseUrl: string }
+  | { readonly entry: ProviderKeyEntry; readonly group: ProviderKeyGroup; readonly baseUrl: string }
   | undefined => {
-  const { apiKey, baseURL } = claudeCreds(credential);
+  const { providerKey, baseURL } = claudeCreds(credential);
 
-  if (apiKey === "") return undefined;
+  if (providerKey === "") return undefined;
 
   for (const group of config["api-keys"].claude) {
     const groupBase = (group["base-url"] ?? "").trim();
 
     for (const entry of group.keys) {
-      if (entry["api-key"].trim().toLowerCase() !== apiKey.toLowerCase()) continue;
+      if (entry["api-key"].trim().toLowerCase() !== providerKey.toLowerCase()) continue;
 
       if (baseURL !== "" && groupBase !== "" && groupBase.toLowerCase() !== baseURL.toLowerCase())
         continue;
@@ -108,9 +109,9 @@ export interface FingerprintPolicy {
 export const resolveFingerprintPolicy = (
   config: Config,
   credential: CredentialSnapshot,
-  apiKey: string,
+  providerKey: string,
 ): FingerprintPolicy => {
-  const authIsOAuth = isClaudeOAuthToken(apiKey);
+  const authIsOAuth = isClaudeOAuthToken(providerKey);
 
   let profile =
     lookupAttr(credential, "fingerprint_profile") || lookupAttr(credential, "fingerprint-profile");
@@ -152,7 +153,7 @@ export interface WireResolution {
 export const resolveWirePolicy = (
   config: Config,
   credential: CredentialSnapshot,
-  apiKey: string,
+  providerKey: string,
   confirmedClaudeCode: boolean,
 ): WireResolution => {
   const cloakCfg = resolveClaudeKeyConfig(config, credential)?.entry.cloak;
@@ -182,7 +183,7 @@ export const resolveWirePolicy = (
     if (cloakCfg["cache-user-id"] !== undefined) cacheUserID = cloakCfg["cache-user-id"];
   }
 
-  const fp = resolveFingerprintPolicy(config, credential, apiKey);
+  const fp = resolveFingerprintPolicy(config, credential, providerKey);
 
   const cloakConfigured =
     cloakCfg !== undefined || attrMode !== "" || attrStrict || attrWords.length > 0 || attrCache;

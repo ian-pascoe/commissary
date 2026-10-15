@@ -67,7 +67,7 @@ const firstString = (meta: JsonObject, ...keys: string[]): string => {
   return "";
 };
 
-/** `CredentialsChanged`: token or API-key material differs (bumps the credential version). */
+/** `CredentialsChanged`: token or provider-key material differs (bumps the credential version). */
 export const credentialsChanged = (before: JsonObject, after: JsonObject): boolean =>
   (
     [

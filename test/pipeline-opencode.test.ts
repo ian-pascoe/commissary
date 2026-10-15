@@ -257,7 +257,7 @@ for (const gw of ["opencode-zen", "opencode-go"] as const) {
       expect(call?.headers["authorization"]).toBe(`Bearer ${key}`);
       expect(call?.headers["x-api-key"]).toBeUndefined();
       expect(call?.headers["user-agent"]).toBe(OPENCODE_USER_AGENT);
-      expect(call?.headers["x-opencode-client"]).toBe("cf-llm-proxy");
+      expect(call?.headers["x-opencode-client"]).toBe("commissary");
       expect(call?.headers["x-opencode-session"]).toMatch(UUID);
       expect(bodyOf(call)).toMatchObject({ model: models.chat, messages: [{ role: "user" }] });
       expect(p.records[0]).toMatchObject({

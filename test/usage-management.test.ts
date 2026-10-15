@@ -1,4 +1,4 @@
-// /v8/management/observability/usage/*: queue, records and summary (D1).
+// /v9/management/observability/usage/*: queue, records and summary (D1).
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { insertUsageRecord } from "../src/usage/d1.ts";
 import { makeHarness, resetControlPlane, token } from "./support/management.ts";
@@ -10,7 +10,7 @@ afterAll(harness.dispose);
 
 const { json } = harness;
 
-const BASE = "/v8/management/observability/usage";
+const BASE = "/v9/management/observability/usage";
 
 let db: D1Database;
 

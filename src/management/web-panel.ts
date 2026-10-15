@@ -7,7 +7,7 @@
  * `/management.html` is a legacy redirect to `/` (`LEGACY_PANEL_REDIRECT`, deviation from Go). Every page path
  * answers the same `index.html`; the panel's router picks the page in the browser. Both pages and files are gated like
  * the management API (Access, `access/policy.ts`: a page of an org needs a role in it) because the Worker runs before
- * static assets. The page talks to `/v8/management`
+ * static assets. The page talks to `/v9/management`
  * on its own origin and sends no credentials of its own: Access authenticates those calls.
  */
 import { Effect } from "effect";
@@ -40,11 +40,11 @@ export const PANEL_CSP = [
   "frame-ancestors 'none'",
 ].join("; ");
 
-/** Where the Turnstile widget of a hosted proxy's sign-in page (`src/hosted/turnstile.ts`) loads from. */
+/** Where the Turnstile widget of Commissary Cloud's sign-in page (`src/hosted/turnstile.ts`) loads from. */
 export const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
 
 /**
- * The panel's policy on a hosted proxy: {@link PANEL_CSP} plus the Turnstile widget (its script and its frame) on the
+ * The panel's policy on Commissary Cloud: {@link PANEL_CSP} plus the Turnstile widget (its script and its frame) on the
  * sign-in page. Every page gets it, since the panel moves between pages without a reload.
  */
 export const HOSTED_PANEL_CSP = PANEL_CSP.replace(

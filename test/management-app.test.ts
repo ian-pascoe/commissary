@@ -12,7 +12,7 @@ const app = makeWebHandler();
 afterAll(app.dispose);
 
 const PANEL_HTML =
-  "<!doctype html><html><head><title>cf-llm-proxy panel</title></head><body></body></html>";
+  "<!doctype html><html><head><title>Commissary panel</title></head><body></body></html>";
 
 const bindings = {
   ...env,
@@ -51,17 +51,26 @@ describe("control panel in the application", () => {
     expect(legacy.status).toBe(302);
     expect(legacy.headers.get("location")).toBe("/");
 
-    const list = await get("/v8/management/credentials");
+    const list = await get("/v9/management/credentials");
     expect(list.status).toBe(200);
     const body = (await list.json()) as { files: Array<{ name: string; type: string }> };
     expect(body.files).toMatchObject([{ name: "claude-a.json", type: "claude" }]);
-    expect((await get("/v8/management/settings")).status).toBe(200);
+    expect((await get("/v9/management/settings")).status).toBe(200);
+  });
+
+  it("answers the old /v8 prefix with 404: no aliases", async () => {
+    for (const path of [
+      "/v8/management/credentials",
+      "/v8/management/settings",
+      "/v8/management/orgs/default/credentials",
+    ])
+      expect((await get(path)).status, path).toBe(404);
   });
 
   it("does not apply the dev bypass to non-loopback hosts", async () => {
     // No Access settings in these bindings: the gate fails closed (500 Authentication service error) instead of
     // redirecting or bypassing.
-    for (const path of ["/", "/management.html", "/v8/management/credentials"]) {
+    for (const path of ["/", "/management.html", "/v9/management/credentials"]) {
       const response = await get(path, "https://proxy.example.com");
 
       expect(response.status, path).toBe(500);

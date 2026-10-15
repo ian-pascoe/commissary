@@ -6,9 +6,9 @@
  *
  *   pnpm ci:setup        # alchemy deploy --config stacks/github.ts --profile admin --stage ci
  *
- * The deploy settings (CF_LLM_PROXY_DOMAIN, ACCESS_*) come from `.env`, like `alchemy.run.ts`, and so do a hosted
- * proxy's (SIGN_IN_*, TURNSTILE_*, …), written whenever `.env` sets them: previews labeled `hosted-preview` need them
- * even while production is self-hosted. The `hosted` environment (the hosted proxy CI deploys next to production,
+ * The deploy settings (CF_LLM_PROXY_DOMAIN, ACCESS_*) come from `.env`, like `alchemy.run.ts`, and so do Commissary
+ * Cloud's (SIGN_IN_*, TURNSTILE_*, …), written whenever `.env` sets them: previews labeled `hosted-preview` need them
+ * even while production is self-hosted. The `hosted` environment (Commissary Cloud, which CI deploys next to production,
  * stage `hosted`) takes its settings from `.env.hosted` instead, and is left alone while that file does not exist.
  */
 import * as zones from "@distilled.cloud/cloudflare/zones";
@@ -25,10 +25,10 @@ import * as Stream from "effect/Stream";
 import { existsSync, readFileSync } from "node:fs";
 import { HOSTED_STAGE, readSettings } from "../infra/settings.ts";
 
-/** The hosted stage's deploy settings, next to `.env` (docs/DEPLOY.md "Hosted production"). */
+/** The hosted stage's deploy settings, next to `.env` (docs/DEPLOY.md "The Commissary Cloud stage"). */
 const HOSTED_ENV_FILE = ".env.hosted";
 
-/** A hosted proxy's settings (docs/DEPLOY.md "Hosted proxy"): GitHub variables, then GitHub secrets. */
+/** Commissary Cloud's settings (docs/DEPLOY.md "Commissary Cloud"): GitHub variables, then GitHub secrets. */
 const HOSTED_VARIABLES = [
   "SIGN_IN_GITHUB_CLIENT_ID",
   "SIGN_IN_GOOGLE_CLIENT_ID",
@@ -54,7 +54,7 @@ const optional = (name: string) =>
 /** Account-scoped "Access: Apps and Policies Write" (the catalog name is shared with a zone-scoped group). */
 const ACCESS_APPS_AND_POLICIES_WRITE = { id: "1e13c5124ca64b72b1969a67e8829049" };
 
-/** A hosted proxy's GitHub variables and secrets, as set by the active config provider (unset ones left out). */
+/** Commissary Cloud's GitHub variables and secrets, as set by the active config provider (unset ones left out). */
 const hostedConfig = Effect.gen(function* () {
   const variables: Record<string, string> = {};
   const secrets: Record<string, Redacted.Redacted> = {};

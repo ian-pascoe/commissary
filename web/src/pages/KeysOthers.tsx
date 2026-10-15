@@ -1,6 +1,6 @@
-// The other members' private API key groups, as an org admin sees them: existence only (ADR 0023).
-import type { LimitedKeyGroup } from "#contract/api-keys.ts";
-import { API_KEYS, deleteKeyGroupAtom } from "../api/client.ts";
+// The other members' private provider key groups, as an org admin sees them: existence only (ADR 0023).
+import type { LimitedKeyGroup } from "#contract/provider-keys.ts";
+import { PROVIDER_KEYS, deleteKeyGroupAtom } from "../api/client.ts";
 import { PrivateRows } from "../components/PrivateRows.tsx";
 import { familyName } from "../lib/keys.ts";
 import { useAction } from "../lib/use-action.ts";
@@ -14,8 +14,8 @@ export const OtherPrivateKeyGroups = ({
 
   return (
     <PrivateRows
-      title="Members' private API keys"
-      noun="API key group"
+      title="Members' private provider keys"
+      noun="Provider key group"
       rows={others.map((other) => ({
         key: other.id,
         provider: familyName(other.family),
@@ -34,7 +34,7 @@ export const OtherPrivateKeyGroups = ({
             revision: target.revision,
             private: true,
           },
-          reactivityKeys: API_KEYS,
+          reactivityKeys: PROVIDER_KEYS,
         });
 
         return outcome.ok ? { ok: true } : { ok: false, message: outcome.message };

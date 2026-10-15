@@ -1,4 +1,4 @@
-// Which hostname serves what (src/http/hosts.ts, ADR 0028): with an API host the proxy routes are served there only and
+// Which hostname serves what (src/http/hosts.ts, ADR 0028): with an API host the client API is served there only and
 // everything else on the app host; without one, one host serves everything. Unit tests of the decision, and end to end
 // through the Worker's default export with the host settings bound (dev bypass on `localhost`, see vitest.config.ts).
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
@@ -21,7 +21,7 @@ describe("host routing", () => {
   it("passes every request through without an API host", async () => {
     for (const url of [
       "https://proxy.example.com/v1/models",
-      "https://proxy.example.com/v8/management/me",
+      "https://proxy.example.com/v9/management/me",
       "https://proxy.example.com/",
     ]) {
       expect(misdirected(url, {})).toBeUndefined();
@@ -33,7 +33,7 @@ describe("host routing", () => {
     expect(apiOrigin({})).toBeUndefined();
   });
 
-  it("serves the proxy routes and /healthz on the API host, and nothing else", async () => {
+  it("serves the client API and /healthz on the API host, and nothing else", async () => {
     for (const path of [
       "/v1/models",
       "/v1beta/models",
@@ -53,8 +53,8 @@ describe("host routing", () => {
       "/accounts",
       "/o/acme/accounts",
       "/assets/index.js",
-      "/v8/management/me",
-      "/v8/management/orgs/acme/config",
+      "/v9/management/me",
+      "/v9/management/orgs/acme/config",
       "/sign-in",
       "/api/auth/get-session",
       "/management.html",
@@ -64,20 +64,20 @@ describe("host routing", () => {
         status: 404,
         body: {
           error:
-            "Not found: api.example.com serves the proxy routes only; the control panel and the management API are at https://app.example.com",
+            "Not found: api.example.com serves the client API only; the control panel and the management API are at https://app.example.com",
         },
       });
   });
 
-  it("serves everything but the proxy routes on the app host (and any other host)", async () => {
+  it("serves everything but the client API on the app host (and any other host)", async () => {
     for (const host of ["app.example.com", "other.example.com"]) {
-      for (const path of ["/", "/accounts", "/v8/management/me", "/sign-in", "/healthz", "/nope"])
+      for (const path of ["/", "/accounts", "/v9/management/me", "/sign-in", "/healthz", "/nope"])
         expect(misdirected(`https://${host}${path}`, SPLIT), `${host}${path}`).toBeUndefined();
 
       for (const path of ["/v1/models", "/v1beta/models", "/responses", "/%76%31/models"])
         expect(await refusal(`https://${host}${path}`, SPLIT), `${host}${path}`).toEqual({
           status: 404,
-          body: { error: "Not found: the proxy routes are served at https://api.example.com" },
+          body: { error: "Not found: the client API is served at https://api.example.com" },
         });
     }
   });
@@ -106,45 +106,45 @@ const send = async (url: string, hosts: Partial<Env>, init?: RequestInit) => {
 describe("a Worker with an API host", () => {
   it("serves the panel and the management API on the app host and tells the panel the API host", async () => {
     const hosts = { APP_DOMAIN: "localhost", API_DOMAIN: "api.example.com" };
-    const me = await send("http://localhost/v8/management/me", hosts);
+    const me = await send("http://localhost/v9/management/me", hosts);
 
     expect(me.status).toBe(200);
     expect(await me.json()).toMatchObject({ api_url: "https://api.example.com" });
 
-    const proxy = await send("http://localhost/v1/models", hosts);
+    const clientApi = await send("http://localhost/v1/models", hosts);
 
-    expect(proxy.status).toBe(404);
-    expect(await proxy.json()).toEqual({
-      error: "Not found: the proxy routes are served at https://api.example.com",
+    expect(clientApi.status).toBe(404);
+    expect(await clientApi.json()).toEqual({
+      error: "Not found: the client API is served at https://api.example.com",
     });
 
-    // On the API host the proxy routes reach the Access gate, which fails closed off loopback without Access settings.
+    // On the API host the client API reaches the Access gate, which fails closed off loopback without Access settings.
     const api = await send("https://api.example.com/v1/models", hosts);
 
     expect(api.status).toBe(500);
     expect(await api.text()).not.toContain("Not found");
   });
 
-  it("serves the proxy routes on the API host only", async () => {
+  it("serves the client API on the API host only", async () => {
     const hosts = { APP_DOMAIN: "app.example.com", API_DOMAIN: "localhost" };
     const models = await send("http://localhost/v1/models", hosts);
 
     expect(models.status).toBe(200);
     expect((await send("http://localhost/healthz", hosts)).status).toBe(200);
 
-    for (const path of ["/", "/v8/management/me"]) {
+    for (const path of ["/", "/v9/management/me"]) {
       const response = await send(`http://localhost${path}`, hosts);
 
       expect(response.status, path).toBe(404);
       expect(await response.json(), path).toEqual({
         error:
-          "Not found: localhost serves the proxy routes only; the control panel and the management API are at https://app.example.com",
+          "Not found: localhost serves the client API only; the control panel and the management API are at https://app.example.com",
       });
     }
   });
 
   it("says nothing of an API host without one", async () => {
-    const me = await send("http://localhost/v8/management/me", {});
+    const me = await send("http://localhost/v9/management/me", {});
 
     expect(me.status).toBe(200);
     expect(await me.json()).not.toHaveProperty("api_url");

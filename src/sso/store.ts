@@ -15,7 +15,7 @@
 import type { Sealer } from "../secrets/cipher.ts";
 import { normalizeDomain } from "./domain.ts";
 
-/** An OpenID Connect provider: its issuer, the proxy's client there, and the endpoints its discovery document named. */
+/** An OpenID Connect provider: its issuer, Commissary's client there, and the endpoints its discovery document named. */
 export interface OidcSettings {
   readonly kind: "oidc";
   readonly issuer: string;

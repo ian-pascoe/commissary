@@ -3,7 +3,7 @@
  *
  * Go source: internal/runtime/executor/meta_executor.go, meta_executor_execute.go (Execute, `translateMetaCompleted`,
  * `applyMetaAPIHeaders`, `wrapMetaUpstreamError`, `metaAsCompletedEvent`), meta_executor_stream.go (ExecuteStream).
- * The upstream always streams (non-stream callers get the aggregated terminal event). The lazy DCA -> API-key mint is
+ * The upstream always streams (non-stream callers get the aggregated terminal event). The lazy DCA -> provider-key mint is
  * done by the conductor through `ControlPlane.ensureFresh` before the attempt (`withCredentialRefresh`).
  *
  * `CountTokens` counts the prepared body locally with `o200k_base`. The apply_patch Responses bridge wraps the event

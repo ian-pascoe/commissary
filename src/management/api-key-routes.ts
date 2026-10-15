@@ -1,34 +1,34 @@
 /**
- * `/v8/management/proxy-keys` (`ProxyKeysGroup` in contract/proxy-keys.ts): the proxy keys clients send instead of an
+ * `/v9/management/api-keys` (`ApiKeysGroup` in contract/api-keys.ts): the API keys clients send instead of an
  * Access sign-in (ADR 0022). Workers addition, no Go counterpart.
  *
  * Any member of the org may use these routes (`access/policy.ts`): a member creates keys for themselves and lists and
  * revokes their own; an org admin (or a platform admin) lists and revokes every key of the org. Keys are issued to
  * members only, so a caller without a member id in the org (a service token, a platform admin from outside) cannot
- * create one. A revoked key is forgotten by this isolate's cache at once (`access/proxy-key.ts`).
+ * create one. A revoked key is forgotten by this isolate's cache at once (`access/api-key.ts`).
  */
 import { Clock, Effect, Schema } from "effect";
 import { HttpRouter, type HttpServerResponse } from "effect/http";
 import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
-import { forgetVerifiedProxyKey } from "../access/proxy-key.ts";
+import { forgetVerifiedApiKey } from "../access/api-key.ts";
 import { roleAtLeast } from "../members/roles.ts";
-import type { ProxyKeyErrorCode, ProxyKeyListing, ProxyKeyResult } from "../proxy-keys/store.ts";
-import { CreateProxyKey, type ProxyKeyView } from "./contract/proxy-keys.ts";
+import type { ApiKeyErrorCode, ApiKeyListing, ApiKeyResult } from "../api-keys/store.ts";
+import { CreateApiKey, type ApiKeyView } from "./contract/api-keys.ts";
 import { bodyJson, controlPlane, handled, jsonReply, type Reply, replyError } from "./http.ts";
 
-const BASE = "/v8/management";
+const BASE = "/v9/management";
 
-const STATUS: Readonly<Record<ProxyKeyErrorCode | "member_not_found", number>> = {
+const STATUS: Readonly<Record<ApiKeyErrorCode | "member_not_found", number>> = {
   invalid_name: 422,
   invalid_expiry: 422,
   too_many_keys: 409,
-  proxy_key_not_found: 404,
+  api_key_not_found: 404,
   member_not_found: 403,
 };
 
 const iso = (ms: number): string => new Date(ms).toISOString();
 
-const view = (key: ProxyKeyListing, caller: AccessIdentity): ProxyKeyView => ({
+const view = (key: ApiKeyListing, caller: AccessIdentity): ApiKeyView => ({
   id: key.id,
   name: key.name,
   prefix: key.prefix,
@@ -43,7 +43,7 @@ const view = (key: ProxyKeyListing, caller: AccessIdentity): ProxyKeyView => ({
 
 const orRefuse = <A>(
   result:
-    | ProxyKeyResult<A>
+    | ApiKeyResult<A>
     | { readonly ok: false; readonly error: "member_not_found"; readonly message: string },
 ): Effect.Effect<A, Reply> =>
   result.ok
@@ -56,10 +56,10 @@ const managesEveryKey = (identity: AccessIdentity): boolean =>
 
 const memberRequired = () =>
   replyError(403, "member_required", {
-    message: "proxy keys are issued to members of the org; add yourself as a member first",
+    message: "API keys are issued to members of the org; add yourself as a member first",
   });
 
-const listProxyKeys = Effect.gen(function* () {
+const listApiKeys = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
   const every = managesEveryKey(identity);
 
@@ -67,14 +67,14 @@ const listProxyKeys = Effect.gen(function* () {
 
   const now = yield* Clock.currentTimeMillis;
 
-  const keys = yield* controlPlane("listProxyKeys", (stub) =>
-    stub.listProxyKeys(every ? undefined : identity.memberId, now),
+  const keys = yield* controlPlane("listApiKeys", (stub) =>
+    stub.listApiKeys(every ? undefined : identity.memberId, now),
   );
 
   return jsonReply(200, { keys: keys.map((key) => view(key, identity)) });
 });
 
-const createProxyKey = Effect.gen(function* () {
+const createApiKey = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
   const memberId = identity.memberId;
 
@@ -82,7 +82,7 @@ const createProxyKey = Effect.gen(function* () {
 
   const input = yield* bodyJson.pipe(
     Effect.flatMap((json) =>
-      Schema.decodeUnknownEffect(CreateProxyKey)(json).pipe(
+      Schema.decodeUnknownEffect(CreateApiKey)(json).pipe(
         Effect.mapError(() => replyError(400, "invalid body")),
       ),
     ),
@@ -94,8 +94,8 @@ const createProxyKey = Effect.gen(function* () {
     return yield* replyError(422, "invalid_expiry", { message: "expires_at is an ISO 8601 time" });
   const now = yield* Clock.currentTimeMillis;
 
-  const result = yield* controlPlane("createProxyKey", (stub) =>
-    stub.createProxyKey(
+  const result = yield* controlPlane("createApiKey", (stub) =>
+    stub.createApiKey(
       { memberId, name: input.name, ...(expiresAt === undefined ? {} : { expiresAt }) },
       now,
     ),
@@ -106,22 +106,22 @@ const createProxyKey = Effect.gen(function* () {
   return jsonReply(201, { ...view(created.record, identity), key: created.key });
 });
 
-const revokeProxyKey = Effect.gen(function* () {
+const revokeApiKey = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
   const params = yield* HttpRouter.params;
   const id = params["id"] ?? "";
   const every = managesEveryKey(identity);
 
   if (!every && identity.memberId === undefined)
-    return yield* replyError(404, "proxy_key_not_found", { message: "no proxy key has this id" });
+    return yield* replyError(404, "api_key_not_found", { message: "no API key has this id" });
   const now = yield* Clock.currentTimeMillis;
 
-  const result = yield* controlPlane("revokeProxyKey", (stub) =>
-    stub.revokeProxyKey(id, now, every ? undefined : identity.memberId),
+  const result = yield* controlPlane("revokeApiKey", (stub) =>
+    stub.revokeApiKey(id, now, every ? undefined : identity.memberId),
   );
 
   const revoked = yield* orRefuse(result);
-  forgetVerifiedProxyKey(identity.org, revoked.id);
+  forgetVerifiedApiKey(identity.org, revoked.id);
 
   return jsonReply(200, view(revoked, identity));
 });
@@ -132,8 +132,8 @@ const route = <R>(
   handler: Effect.Effect<HttpServerResponse.HttpServerResponse, Reply, R>,
 ) => HttpRouter.route(method, `${BASE}${path}`, handled(handler));
 
-export const proxyKeyRoutes = [
-  route("GET", "/proxy-keys", listProxyKeys),
-  route("POST", "/proxy-keys", createProxyKey),
-  route("DELETE", "/proxy-keys/:id", revokeProxyKey),
+export const apiKeyRoutes = [
+  route("GET", "/api-keys", listApiKeys),
+  route("POST", "/api-keys", createApiKey),
+  route("DELETE", "/api-keys/:id", revokeApiKey),
 ];

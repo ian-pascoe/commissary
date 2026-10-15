@@ -1,7 +1,7 @@
 /**
  * `ModelSource`: the slice of a credential (and its runtime state) that model registration reads.
  *
- * The ControlPlane Durable Object returns these from `listModelSources()`; they never contain tokens, API keys or
+ * The ControlPlane Durable Object returns these from `listModelSources()`; they never contain tokens, provider keys or
  * headers. Go counterpart: the `coreauth.Auth` fields read by `registerModelsForAuth`
  * (sdk/cliproxy/service_models.go) and `clientModelProjectionForAuth` (sdk/cliproxy/auth/conductor_models.go).
  */
@@ -28,7 +28,7 @@ export interface ModelSource {
   readonly compat: boolean;
   readonly excludedModels: ReadonlyArray<string>;
   readonly modelAliases: ReadonlyArray<OAuthModelAlias>;
-  /** Config API keys: the `models` list of the owning entry/group. */
+  /** Config provider keys: the `models` list of the owning entry/group. */
   readonly models?: ReadonlyArray<ModelEntry>;
   /** Antigravity credentials: the entitlements of the last `fetchAvailableModels` probe (KV), when known. */
   readonly antigravityHints?: AntigravityModelHints;

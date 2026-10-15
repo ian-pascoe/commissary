@@ -18,7 +18,7 @@ import { builtinTranslators } from "../../translator/builtin.ts";
 import { Formats } from "../../translator/formats.ts";
 import { executeNonStream, executeStream, type ExecutionInput } from "../execute.ts";
 import { openAIFramer, type StreamFramer } from "../framing.ts";
-import { altOf, currentConfig, type ProxyServices, readRequestBody } from "../request.ts";
+import { altOf, currentConfig, type ClientApiServices, readRequestBody } from "../request.ts";
 import { errorResponse, jsonResponse, streamResponse, withNonStreamKeepAlive } from "../respond.ts";
 import {
   chatResponseToCompletions,
@@ -155,10 +155,10 @@ const completions = handle({
   framer: completionsFramer,
 });
 
-/** Route layer; requires the {@link ProxyServices} (see `handlers/layer.ts`) and `AccessPrincipal` (`withAccess`). */
+/** Route layer; requires the {@link ClientApiServices} (see `handlers/layer.ts`) and `AccessPrincipal` (`withAccess`). */
 export const OpenAIRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const services = yield* routeServices<ProxyServices>();
+    const services = yield* routeServices<ClientApiServices>();
 
     for (const path of ["/v1/chat/completions", "/chat/completions"] as const)
       yield* router.add("POST", path, Effect.provide(chatCompletions, services));

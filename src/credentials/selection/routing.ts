@@ -151,7 +151,7 @@ export const resolveModelPool = (
   return [];
 };
 
-/** `OAuthModelAliasChannel`: API-key credentials and Gemini API keys have no OAuth alias channel. */
+/** `OAuthModelAliasChannel`: provider-key credentials and Gemini provider keys have no OAuth alias channel. */
 export const oauthAliasChannel = (
   credential: Pick<Credential, "provider" | "authKind">,
 ): string => {
@@ -255,7 +255,7 @@ export const resolveModelRoute = (
   const excluded = (...models: string[]): boolean =>
     models.some((model) => isModelExcluded(credential.excludedModels, model));
 
-  // Configured API-key models replace the provider catalogue.
+  // Configured provider-key models replace the provider catalogue.
   if (credential.models !== undefined && credential.models.length > 0) {
     const pool = resolveModelPool(credential.models, routeModel);
 

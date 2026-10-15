@@ -2,7 +2,7 @@
  * Meta (Muse, `api.meta.ai`) credential resolution.
  *
  * Go source: internal/runtime/executor/meta_executor.go (`metaCreds`, `extractDCAToken`, `ensureAuth`). The DCA ->
- * API-key mint itself runs in the ControlPlane (`ensureFresh`, credentials/refresh/meta.ts); the conductor wraps every
+ * Provider-key mint itself runs in the ControlPlane (`ensureFresh`, credentials/refresh/meta.ts); the conductor wraps every
  * attempt with it, so the executor only reads the minted key. A `dca:` value is never used as a bearer token.
  */
 import type { Json } from "../../json/index.ts";
@@ -53,8 +53,8 @@ export const requireMetaToken = (credential: CredentialSnapshot): MetaCreds => {
 
   const message =
     credential.kind === "apikey"
-      ? "meta executor: meta-api-key requires a valid API key (DCA tokens require OAuth storage)"
-      : "meta executor: missing API key or access token";
+      ? "meta executor: meta-api-key requires a valid provider key (DCA tokens require OAuth storage)"
+      : "meta executor: missing provider key or access token";
 
   throw new ExecutionError({ status: 401, message });
 };

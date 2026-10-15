@@ -1,5 +1,5 @@
 /**
- * In-memory credential pool: credentials (stored files + config API keys), runtime state, rotation cursors and
+ * In-memory credential pool: credentials (stored files + provider keys), runtime state, rotation cursors and
  * session affinity behind the `pick` / `report` operations of the ControlPlane Durable Object.
  *
  * Go counterpart: the `Manager` parts that register credentials and select them (sdk/cliproxy/auth/conductor*.go).
@@ -93,7 +93,7 @@ export interface PoolOptions {
    */
   readonly privateCredentials?: () => boolean;
   /**
-   * The private API key groups of every member (`private-keys.ts`) with the counter that moves when they change; each
+   * The private provider key groups of every member (`private-keys.ts`) with the counter that moves when they change; each
    * owner's config yields credentials that carry the owner. Called on every operation, so it must be cheap.
    */
   readonly privateKeys?: () => {
@@ -202,7 +202,7 @@ export class CredentialPool {
     for (const credential of synthesizeConfigCredentials(config, now))
       credentials.set(credential.id, credential);
 
-    // A member's private API keys: their credentials carry the owner, and are disabled like private accounts.
+    // A member's private provider keys: their credentials carry the owner, and are disabled like private accounts.
     for (const { owner, config: ownerConfig } of privateKeys.configs)
       for (const credential of synthesizeConfigCredentials(ownerConfig, now))
         credentials.set(credential.id, {
@@ -286,10 +286,10 @@ export class CredentialPool {
     for (const credential of view.credentials.values())
       entries.push({ credential, state: this.#state(credential.id) });
 
-    const caller = { memberId: request.memberId, proxyKeyId: request.proxyKeyId };
+    const caller = { memberId: request.memberId, apiKeyId: request.apiKeyId };
     const gate = this.#spend?.gate(caller, now);
 
-    // A limit of the request's proxy key without room refuses it whatever credential would serve: no cooldown, no failover.
+    // A limit of the request's API key without room refuses it whatever credential would serve: no cooldown, no failover.
     if (gate?.refuse !== undefined)
       return { ok: false, failure: spendLimitReached(gate.refuse, now) };
 
@@ -417,7 +417,7 @@ export class CredentialPool {
     return { ok: true, applied: true };
   }
 
-  /** Stored credentials (never config API keys: they have no tokens) with their runtime state. */
+  /** Stored credentials (never provider keys: they have no tokens) with their runtime state. */
   refreshTargets(): RefreshTarget[] {
     const targets: RefreshTarget[] = [];
 
@@ -491,7 +491,7 @@ export class CredentialPool {
     });
   }
 
-  /** Every credential (stored files and config API keys) with its runtime state, ordered by id (management views). */
+  /** Every credential (stored files and provider keys) with its runtime state, ordered by id (management views). */
   entries(): RefreshTarget[] {
     return [...this.#current().credentials.values()]
       .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
@@ -604,7 +604,7 @@ export class CredentialPool {
     return applied;
   }
 
-  /** Disables/enables a stored credential. Config API keys are disabled by removing them from the config. */
+  /** Disables/enables a stored credential. Provider keys are disabled by removing them from the config. */
   setDisabled(id: string, disabled: boolean): "ok" | "not_found" | "config_credential" {
     if (this.#store.get(id) === undefined) {
       return this.#current().credentials.has(id) ? "config_credential" : "not_found";

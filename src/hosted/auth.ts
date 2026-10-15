@@ -1,10 +1,10 @@
 /**
- * Sign-in on a hosted proxy (ADR 0026): Better Auth's core with GitHub and Google as social providers, its people and
+ * Sign-in on Commissary Cloud (ADR 0026): Better Auth's core with GitHub and Google as social providers, its people and
  * sessions in D1 (`USAGE`, tables `auth_*` from `migrations/0008_hosted_auth.sql`). Orgs, members and teams stay in the
  * org's ControlPlane, and a session only says which verified email signed in. New in the Workers port.
  *
  * Only an email the provider reports as verified becomes an identity (`validateUserInfo`); the provider's tokens are
- * not kept (the proxy never calls GitHub or Google on the person's behalf), nor the browser's address or user agent.
+ * not kept (Commissary never calls GitHub or Google on the person's behalf), nor the browser's address or user agent.
  *
  * An org can add its own identity provider (issue #76, `src/sso/`) through Better Auth's SSO plugin, whose providers
  * come from the orgs' ControlPlanes (`sso-adapter.ts`), never from D1. Such a sign-in is accepted only for an email of
@@ -12,7 +12,7 @@
  * counts as verified: the org proved it controls the domain. GitHub and Google are refused for an email of a domain
  * whose org requires single sign-on.
  *
- * Better Auth is imported on first use: a self-hosted proxy never loads it.
+ * Better Auth is imported on first use: a self-hosted Commissary never loads it.
  */
 import type { betterAuth, BetterAuthOptions } from "better-auth";
 import { SIGN_IN_PAGE_PATH } from "../management/contract/sign-in.ts";
@@ -21,7 +21,7 @@ import { type ProviderLookup, ssoAwareAdapter } from "./sso-adapter.ts";
 /** Where Better Auth's routes live; `routes.ts` lets through only {@link AUTH_PATHS}. */
 export const AUTH_BASE_PATH = "/api/auth";
 
-/** The social providers a hosted proxy can offer, in the order the sign-in page lists them. */
+/** The social providers Commissary Cloud can offer, in the order the sign-in page lists them. */
 export const SIGN_IN_PROVIDERS = ["github", "google"] as const;
 
 export type SignInProvider = (typeof SIGN_IN_PROVIDERS)[number];
@@ -118,7 +118,7 @@ const SSO_METHODS = new Set(["sso-oidc", "sso-saml"]);
 /** Better Auth's options for the deployment at `origin` (`https://<host>`). */
 export const authOptions = (env: AuthEnv, origin: string, hooks: AuthHooks = {}) =>
   ({
-    appName: "cf-llm-proxy",
+    appName: "commissary",
     baseURL: origin,
     basePath: AUTH_BASE_PATH,
     trustedOrigins: [origin],
@@ -246,7 +246,7 @@ export interface HostedAuth {
 
 /**
  * Better Auth with the SSO plugin: identity providers from `hooks.ssoProvider` (none without it), domains the orgs
- * verified themselves (`sso-routes.ts`), SAML only signed, timed and in answer to the proxy's own request.
+ * verified themselves (`sso-routes.ts`), SAML only signed, timed and in answer to Commissary's own request.
  */
 const buildAuth = async (env: AuthEnv, origin: string, hooks: AuthHooks): Promise<HostedAuth> => {
   const [{ betterAuth: make }, { sso }, { getAdapter }] = await Promise.all([

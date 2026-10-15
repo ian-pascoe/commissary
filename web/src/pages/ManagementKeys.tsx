@@ -1,6 +1,6 @@
 // Management keys (/management-keys): keys for scripts that call the management API (`Authorization: Bearer cfm_…`)
 // instead of a browser session (ADR 0026). Org admins issue, list and revoke them; a key holds a role no higher than
-// its issuer's. Like a proxy key it is shown whole once, in the answer to its creation.
+// its issuer's. Like an API key it is shown whole once, in the answer to its creation.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { KeyRound } from "lucide-react";
 import { AsyncResult } from "effect/reactivity";
@@ -23,13 +23,13 @@ import {
   managementKeyProblem,
   sortManagementKeys,
 } from "../lib/management-keys.ts";
-import { keyNameProblem } from "../lib/proxy-keys.ts";
+import { keyNameProblem } from "../lib/api-keys.ts";
 import { type Caller, roleLabel, roleOf, roleSummary } from "../lib/role.ts";
 import { useAction } from "../lib/use-action.ts";
 import { usePageTitle } from "../lib/use-page-title.ts";
 import { useRole } from "../lib/use-role.ts";
-import { Reveal } from "./ProxyKeys.tsx";
-import styles from "./ProxyKeys.module.css";
+import { Reveal } from "./ApiKeys.tsx";
+import styles from "./ApiKeys.module.css";
 
 type Note = { readonly tone: "done" | "problem"; readonly text: string };
 
@@ -268,7 +268,7 @@ export const ManagementKeysPage = () => {
         <p className={styles["intro"]}>
           A management key is for scripts that call this org&rsquo;s management API: send it as{" "}
           <code>Authorization: Bearer cfm_…</code>. It holds the role you give it and works on the
-          management API only, never on the proxy routes.
+          management API only, never on the client API.
         </p>
       </header>
       {created === undefined ? null : (

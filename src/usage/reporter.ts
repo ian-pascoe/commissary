@@ -160,7 +160,7 @@ export class UsageReporter {
   /**
    * Marks the attempt failed; the first failure is kept. `body` is the upstream's error text: it is read for the
    * error's type and code and dropped, so the record keeps the status and those two identifiers only (ADR 0027).
-   * `code` is the proxy's own code for the error, which wins over the upstream's.
+   * `code` is Commissary's own code for the error, which wins over the upstream's.
    */
   fail(statusCode: number, body: string, code?: string): void {
     this.#failure ??= {

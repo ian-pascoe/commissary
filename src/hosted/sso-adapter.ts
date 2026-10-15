@@ -1,5 +1,5 @@
 /**
- * Better Auth's database for a hosted proxy with per-org single sign-on (issue #76): D1 for people, sessions and
+ * Better Auth's database for Commissary Cloud with per-org single sign-on (issue #76): D1 for people, sessions and
  * verification records, while the SSO plugin's `ssoProvider` model is answered from the orgs' ControlPlanes (an
  * identity provider lives with its org, its secret sealed there: `sso/store.ts`). New in the Workers port.
  *

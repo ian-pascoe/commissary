@@ -4,7 +4,7 @@ import { resolveCodexModelIsCompat } from "../src/executor/codex/compat.ts";
 import { makeCodexExecutor } from "../src/executor/codex/executor.ts";
 import { modelOverrideHeaders } from "../src/executor/helps/model-headers.ts";
 import type { ThinkingModelInfo } from "../src/thinking/index.ts";
-import { apiKeyCredential } from "./support/codex.ts";
+import { providerKeyCredential } from "./support/codex.ts";
 import { execute, harness, json, loadConfig, options } from "./support/executor-run.ts";
 import type { Json } from "../src/json/index.ts";
 
@@ -24,7 +24,7 @@ api-keys:
 describe("resolveCodexModelIsCompat", () => {
   it("prefers the resolved model info", async () => {
     const config = await loadConfig(compatYaml);
-    const credential = apiKeyCredential();
+    const credential = providerKeyCredential();
     const info: ThinkingModelInfo = { id: "gpt-5.4", isCompat: false };
     expect(
       resolveCodexModelIsCompat(
@@ -46,7 +46,7 @@ describe("resolveCodexModelIsCompat", () => {
 
   it("falls back to the credential's config entry by name or alias when no model info is bound", async () => {
     const config = await loadConfig(compatYaml);
-    const credential = apiKeyCredential();
+    const credential = providerKeyCredential();
     expect(resolveCodexModelIsCompat(config, credential, { model: "team-gpt" }, "team-gpt")).toBe(
       true,
     );
@@ -63,7 +63,7 @@ describe("resolveCodexModelIsCompat", () => {
     expect(
       resolveCodexModelIsCompat(
         config,
-        apiKeyCredential({ attributes: { api_key: "sk-unknown" } }),
+        providerKeyCredential({ attributes: { api_key: "sk-unknown" } }),
         { model: "team-gpt" },
         "team-gpt",
       ),
@@ -71,7 +71,7 @@ describe("resolveCodexModelIsCompat", () => {
     expect(
       resolveCodexModelIsCompat(
         config,
-        apiKeyCredential({
+        providerKeyCredential({
           attributes: { config_index: "0", base_url: "https://codex.example.test/v1" },
         }),
         { model: "team-gpt" },
@@ -98,7 +98,7 @@ describe("models.json override_header", () => {
         : undefined;
 
     const h = await harness(
-      apiKeyCredential(),
+      providerKeyCredential(),
       () =>
         new Response(
           `data: ${JSON.stringify({ type: "response.completed", response: { id: "r", status: "completed", output: [], usage: {} } })}\n\n`,
@@ -135,7 +135,7 @@ describe("image tool usage (PublishAdditionalModel)", () => {
 
   const run = async (toolUsage: Json | undefined, tools: Json[]) => {
     const h = await harness(
-      apiKeyCredential(),
+      providerKeyCredential(),
       () => new Response(completed(toolUsage), { status: 200 }),
     );
 

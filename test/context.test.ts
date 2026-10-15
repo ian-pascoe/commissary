@@ -40,7 +40,10 @@ it.effect("web handler routes see per-request env/ctx services", () =>
     });
 
     const response = yield* Effect.promise(() =>
-      handler(new Request("https://proxy.test/binding"), requestContext(env, executionContext)),
+      handler(
+        new Request("https://commissary.test/binding"),
+        requestContext(env, executionContext),
+      ),
     );
 
     expect(yield* Effect.promise(() => response.text())).toBe("function:true");

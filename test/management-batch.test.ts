@@ -39,9 +39,9 @@ import { makePool, MemoryPoolStore } from "./support/pool.ts";
 import { type MockReply, mockHttp, routes } from "./support/refresh.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 
-const BATCH = "/v8/management/credentials/batch";
+const BATCH = "/v9/management/credentials/batch";
 
-const QUOTA_ALL = "/v8/management/credentials/quota/all";
+const QUOTA_ALL = "/v9/management/credentials/quota/all";
 
 const USAGE = {
   five_hour: { utilization: 12, resets_at: "2026-10-10T15:00:00Z" },
@@ -132,7 +132,7 @@ interface Listed {
 }
 
 const files = async (): Promise<ReadonlyArray<Listed>> => {
-  const { body } = await harness.json("/v8/management/credentials");
+  const { body } = await harness.json("/v9/management/credentials");
 
   // SAFETY: `GET /credentials` answers `{files: [...]}` (decoded with the contract in the contract tests below).
   return (body as { files: ReadonlyArray<Listed> }).files;
@@ -170,7 +170,7 @@ describe("POST /credentials/batch", () => {
     expect((await files()).find((file) => file.name === "a.json")?.disabled).toBe(false);
   });
 
-  it("reports unknown names and config API keys as not_found next to the ones that succeeded", async () => {
+  it("reports unknown names and provider keys as not_found next to the ones that succeeded", async () => {
     await seed("a.json");
     await controlPlane().importConfig(
       "api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-x }]\n",
@@ -282,7 +282,7 @@ describe("POST /credentials/batch", () => {
 
     // A re-import under the same name starts clean: no report of the deleted account shows up.
     await seed("a.json");
-    const { body } = await harness.json("/v8/management/credentials");
+    const { body } = await harness.json("/v9/management/credentials");
 
     expect(body).toMatchObject({ files: [{ name: "a.json" }] });
     expect(body).not.toHaveProperty(["files", 0, "quota_report"]);
@@ -474,7 +474,7 @@ describe("POST /credentials/batch", () => {
     const same = await harness.call(BATCH, {
       method: "POST",
       headers: {
-        origin: "https://proxy.test",
+        origin: "https://commissary.test",
         "sec-fetch-site": "same-origin",
         "content-type": "application/json",
       },
@@ -1024,7 +1024,7 @@ const fetchVia =
     });
   };
 
-const client = HttpApiClient.make(ManagementApi, { baseUrl: "https://proxy.test" });
+const client = HttpApiClient.make(ManagementApi, { baseUrl: "https://commissary.test" });
 
 const through = (target: Harness) =>
   Effect.provide(

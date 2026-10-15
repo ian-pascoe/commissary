@@ -1,6 +1,6 @@
 // Members (/members): who belongs to the org and with which role, the teams they are on, the service tokens that may
 // call the management API, and whether people join by themselves. Org admins manage plain members and teams; org
-// owners also change roles, add org admins and org owners, and decide on auto-join and on whether the proxy routes
+// owners also change roles, add org admins and org owners, and decide on auto-join and on whether the client API
 // accept an Access sign-in. The server enforces every rule again: the page only offers what the caller's role allows,
 // and says why when a choice is missing.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
@@ -137,7 +137,7 @@ const MembershipToggle = ({
   );
 };
 
-/** Whether plain members may connect private accounts and API keys (ADR 0023); org admins decide. */
+/** Whether plain members may connect private accounts and provider keys (ADR 0023); org admins decide. */
 const PrivateCredentials = () => {
   const result = useAtomValue(membershipAtom);
   const retry = useAtomRefresh(membershipAtom);
@@ -163,16 +163,16 @@ const PrivateCredentials = () => {
                     reactivityKeys: [...MEMBERS, ...ORGS],
                   }),
                   event.target.checked
-                    ? "Members can connect private accounts and API keys now."
-                    : "Private accounts and API keys are switched off, not deleted.",
+                    ? "Members can connect private accounts and provider keys now."
+                    : "Private accounts and provider keys are switched off, not deleted.",
                 );
               }}
             />
-            <span>Let members connect private accounts and API keys</span>
+            <span>Let members connect private accounts and provider keys</span>
           </label>
           <p className={kit["muted"]}>
             {on
-              ? "On: a member's private account or API key is used only for their own requests. Org admins see that it exists, its provider, owner and label, and can disable or remove it, but not how it is used."
+              ? "On: a member's private account or provider key is used only for their own requests. Org admins see that it exists, its provider, owner and label, and can disable or remove it, but not how it is used."
               : "Off: members cannot connect private credentials, and the ones they connected stay in place but are not used. Turning it on again brings them back."}
           </p>
           <NoteLine note={note} />
@@ -204,29 +204,29 @@ const AccessClients = ({ caller }: { readonly caller: Caller }) => (
   <MembershipToggle
     caller={caller}
     setting="access_clients"
-    label="Accept an Access sign-in on the proxy routes"
-    what="the proxy sign-in setting"
+    label="Accept an Access sign-in on the client API"
+    what="the client API sign-in setting"
     describe={(on) =>
       on
-        ? "On: the proxy routes still accept an Access sign-in (cloudflared's cf-access-token) instead of a proxy key, for clients set up before proxy keys. Turn it off once every client sends a proxy key, so only keys open the proxy."
-        : "Off: the proxy routes accept proxy keys only. A client that still signs in through Access is asked for a proxy key until its member creates one on the Proxy keys page."
+        ? "On: the client API still accepts an Access sign-in (cloudflared's cf-access-token) instead of an API key, for clients set up before API keys. Turn it off once every client sends an API key, so only keys open Commissary."
+        : "Off: the client API accepts API keys only. A client that still signs in through Access is asked for an API key until its member creates one on the API keys page."
     }
     said={(on) =>
       on
-        ? "The proxy routes accept an Access sign-in again."
-        : "The proxy routes accept proxy keys only now."
+        ? "The client API accepts an Access sign-in again."
+        : "The client API accepts API keys only now."
     }
   />
 );
 
 /** The `access_clients` setting, shown in the org that has it (the first org). */
-const ProxySignIn = ({ caller }: { readonly caller: Caller }) => {
+const ClientApiSignIn = ({ caller }: { readonly caller: Caller }) => {
   const result = useAtomValue(membershipAtom);
 
   if (!AsyncResult.isSuccess(result) || result.value.access_clients === undefined) return null;
 
   return (
-    <Section title="Proxy sign-in">
+    <Section title="Client API sign-in">
       <AccessClients caller={caller} />
     </Section>
   );
@@ -291,7 +291,7 @@ const Lists = ({ caller }: { readonly caller: Caller }) => {
       <Section title="Private credentials">
         <PrivateCredentials />
       </Section>
-      <ProxySignIn caller={caller} />
+      <ClientApiSignIn caller={caller} />
     </>
   );
 };
@@ -314,7 +314,7 @@ export const MembersPage = () => {
             ? "a platform admin, an org owner of every org"
             : roleAs(role.caller.role)}
           . Org owners can do everything here. Org admins add and remove plain members and manage
-          teams; adding or promoting org admins and owners, changing roles and the joining and proxy
+          teams; adding or promoting org admins and owners, changing roles and the joining and API
           sign-in settings are for org owners.
         </p>
       </header>

@@ -1,5 +1,5 @@
 // The identity provider of the org (Single sign-on page): what is saved (never its client secret: the server sends
-// none), the proxy's addresses the provider must be told, and, for org owners, the form that sets or replaces it, a
+// none), Commissary's addresses the provider must be told, and, for org owners, the form that sets or replaces it, a
 // test and removal. Org admins read.
 import { Plug, Save, Trash2 } from "lucide-react";
 import { type FormEvent, type ReactNode, useId, useState } from "react";
@@ -33,7 +33,7 @@ import { useAction } from "../lib/use-action.ts";
 import styles from "./Sso.module.css";
 import { SsoNoteLine, useSsoNote } from "./SsoNote.tsx";
 
-/** What the identity provider has to be told about this proxy, each with its Copy button. */
+/** What the identity provider has to be told about Commissary, each with its Copy button. */
 const ServiceProviderValues = ({
   service,
   kinds,
@@ -223,7 +223,7 @@ const ProviderForm = ({
             label="Client ID"
             value={draft.clientId}
             problem={problems.clientId}
-            hint="The client ID of the app you registered for this proxy."
+            hint="The client ID of the app you registered for Commissary."
             onChange={set("clientId")}
           />
           <FormField
@@ -383,16 +383,16 @@ export const ProviderSection = ({
         <p className={styles["lead"]}>
           No identity provider yet.{" "}
           {owner
-            ? "Register this proxy as an app with your provider, then enter its details here."
+            ? "Register Commissary as an app with your provider, then enter its details here."
             : "An org owner sets one up."}
         </p>
       ) : (
         <SavedProvider settings={settings} provider={provider} owner={owner} />
       )}
       <div className={styles["stack"]}>
-        <h3 className={styles["subtitle"]}>Register this proxy with your provider</h3>
+        <h3 className={styles["subtitle"]}>Register Commissary with your provider</h3>
         <p className={styles["lead"]}>
-          Your identity provider asks for these when you add this proxy as an app.
+          Your identity provider asks for these when you add Commissary as an app.
         </p>
         <ServiceProviderValues service={settings.service_provider} kinds={kinds} />
       </div>

@@ -2,7 +2,7 @@
  * Shared engine of the Google executors (`gemini`, `gemini-interactions`, `vertex`).
  *
  * Go source: internal/runtime/executor/gemini_executor.go (Execute, ExecuteStream, CountTokens, executeInteractions,
- * executeInteractionsStream), internal/runtime/executor/gemini_vertex_executor.go (the service-account and API-key
+ * executeInteractionsStream), internal/runtime/executor/gemini_vertex_executor.go (the service-account and provider-key
  * variants), internal/runtime/executor/helps/gemini_interactions.go. The two Go executors share one pipeline per
  * attempt, in the canonical order of ARCHITECTURE.md: translate -> Thinking hook -> provider shaping -> payload rules
  * (always last) -> HttpClient -> response translation.

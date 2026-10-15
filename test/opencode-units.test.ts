@@ -95,7 +95,7 @@ describe("protocol resolution", () => {
       "opencode-zen",
     );
 
-    expect(stale?.apiKey).toBe("k2");
+    expect(stale?.providerKey).toBe("k2");
   });
 
   it("matches model entries by name (suffix stripped) and then by alias", () => {
@@ -185,19 +185,19 @@ describe("gateway headers", () => {
       }),
       options: options(),
       protocol: "chat",
-      apiKey: "k",
+      providerKey: "k",
       stream: true,
     });
 
     expect(headers).toMatchObject({
       authorization: "Bearer k",
-      "x-opencode-client": "cf-llm-proxy",
+      "x-opencode-client": "commissary",
       accept: "text/event-stream",
       "User-Agent": "mine/1",
       "X-Opencode-Session": "fixed",
     });
     expect(headers["user-agent"]).toBeUndefined();
-    expect(OPENCODE_USER_AGENT).toBe("cf-llm-proxy");
+    expect(OPENCODE_USER_AGENT).toBe("commissary");
   });
 });
 

@@ -13,7 +13,7 @@ export const GRANTS_VIEWS: ReadonlyArray<{ readonly view: GrantsView; readonly l
   { view: "credential", label: "By credential" },
 ];
 
-/** Provider keys of accounts and keys the proxy serves: suggestions for a provider scope. */
+/** Provider keys of accounts and keys Commissary serves: suggestions for a provider scope. */
 export const GRANT_PROVIDERS: ReadonlyArray<string> = [
   "antigravity",
   "claude",

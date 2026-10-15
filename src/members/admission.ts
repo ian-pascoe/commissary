@@ -14,7 +14,7 @@ import { isHosted } from "../hosted/mode.ts";
 import { WorkerEnv } from "../platform/env.ts";
 import { controlPlaneOf, GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 import { platformOf } from "../platform/registry.ts";
-import type { ClientsUseProxyKeys } from "../proxy-keys/store.ts";
+import type { ClientsUseApiKeys } from "../api-keys/store.ts";
 import type { Admission, PrincipalRef } from "./store.ts";
 
 /** The org's ControlPlane could not be asked; the message names the call. */
@@ -81,16 +81,16 @@ export const syncOrgIndex = (org: OrgId): Effect.Effect<void, never, WorkerEnv> 
 
 /**
  * The role of `principal` in `org`, `undefined` when it has none. With `autoJoin`, a person joins an org that has
- * auto-join on (on for `global`) as a plain member on their first request; on a hosted proxy (ADR 0026) nobody joins
- * `global` that way, even where its setting is still on from a self-hosted past. `client`: the request is for a proxy
- * route, which takes an Access sign-in only while the org accepts them there (`ClientsUseProxyKeys` otherwise).
+ * auto-join on (on for `global`) as a plain member on their first request; on Commissary Cloud (ADR 0026) nobody joins
+ * `global` that way, even where its setting is still on from a self-hosted past. `client`: the request is for the client
+ * API, which takes an Access sign-in only while the org accepts them there (`ClientsUseApiKeys` otherwise).
  */
 export const admitPrincipal = (
   org: OrgId,
   principal: AdmissiblePrincipal,
   autoJoin = true,
   client = false,
-): Effect.Effect<Admission | ClientsUseProxyKeys | undefined, MembershipUnavailable, WorkerEnv> =>
+): Effect.Effect<Admission | ClientsUseApiKeys | undefined, MembershipUnavailable, WorkerEnv> =>
   Effect.gen(function* () {
     const env = yield* WorkerEnv;
     const joins = autoJoin && !(org === GLOBAL_ORG && isHosted(env));

@@ -33,7 +33,7 @@ const TestRoutes = Layer.mergeAll(
   HttpRouter.add("GET", "/v1beta/models", whoami),
   HttpRouter.add("GET", "/openai/v1/videos", whoami),
   HttpRouter.add("POST", "/backend-api/codex/responses", whoami),
-  HttpRouter.add("GET", "/v8/management/config", whoami),
+  HttpRouter.add("GET", "/v9/management/config", whoami),
 );
 
 const accessEnv = {
@@ -74,7 +74,7 @@ describe("Access gate through the router", () => {
     path: string,
     init: RequestInit = {},
     bindings: Env = accessEnv,
-    base = "https://proxy.test",
+    base = "https://commissary.test",
   ) => handler(new Request(`${base}${path}`, init), requestContext(bindings, ctx));
 
   it("keeps /healthz public and gates / (the control panel)", async () => {
@@ -106,20 +106,20 @@ describe("Access gate through the router", () => {
   );
 
   it("rejects management routes without a token and never adds CORS headers there", async () => {
-    const response = await call("/v8/management/config");
+    const response = await call("/v9/management/config");
     expect(response.status).toBe(401);
     expect(await response.text()).toBe('{"error":"Missing API key"}');
     expect(response.headers.get("access-control-allow-origin")).toBeNull();
 
     const admin = await call(
-      "/v8/management/config",
+      "/v9/management/config",
       await withToken(userClaims("admin@example.com")),
     );
 
     expect(admin.status).toBe(200);
     expect(admin.headers.get("access-control-allow-origin")).toBeNull();
 
-    const preflight = await call("/v8/management/config", {
+    const preflight = await call("/v9/management/config", {
       method: "OPTIONS",
       headers: { origin: "https://evil.test", "access-control-request-method": "POST" },
     });
@@ -172,7 +172,7 @@ describe("Access gate through the router", () => {
     expect(scope).toBe("21cd36b0");
   });
 
-  it("accepts service tokens on proxy routes", async () => {
+  it("accepts service tokens on the client API", async () => {
     const response = await call("/v1/chat/completions", {
       method: "POST",
       ...(await withToken(serviceClaims("some.access"))),
@@ -210,7 +210,7 @@ describe("Access gate through the router", () => {
 
   it("enforces the admin allow-list on management routes", async () => {
     const alice = await call(
-      "/v8/management/config",
+      "/v9/management/config",
       await withToken(userClaims("alice@example.com")),
     );
 
@@ -218,21 +218,21 @@ describe("Access gate through the router", () => {
     expect(await alice.text()).toBe('{"error":"Forbidden"}');
 
     const admin = await call(
-      "/v8/management/config",
+      "/v9/management/config",
       await withToken(userClaims("Admin@Example.com")),
     );
 
     expect(admin.status).toBe(200);
 
     const adminService = await call(
-      "/v8/management/config",
+      "/v9/management/config",
       await withToken(serviceClaims("admin.access")),
     );
 
     expect(adminService.status).toBe(200);
 
     const otherService = await call(
-      "/v8/management/config",
+      "/v9/management/config",
       await withToken(serviceClaims("other.access")),
     );
 
@@ -253,10 +253,10 @@ describe("Access gate through the router", () => {
 
   it("dev bypass works for loopback hosts only", async () => {
     const dev = { ...accessEnv, ACCESS_TEAM_DOMAIN: "", ACCESS_AUD: "", ACCESS_DEV_BYPASS: "true" };
-    const local = await call("/v8/management/config", {}, dev, "http://localhost:8787");
+    const local = await call("/v9/management/config", {}, dev, "http://localhost:8787");
     expect(local.status).toBe(200);
     expect(await local.text()).toContain('"email":"dev@localhost"');
-    const remote = await call("/v8/management/config", {}, dev);
+    const remote = await call("/v9/management/config", {}, dev);
     expect(remote.status).toBe(500);
   });
 
@@ -266,14 +266,14 @@ describe("Access gate through the router", () => {
       { ...accessEnv, ACCESS_AUD: "", ACCESS_DEV_BYPASS: "true" },
       { ...accessEnv, ACCESS_TEAM_DOMAIN: "", ACCESS_DEV_BYPASS: "true" },
     ]) {
-      const response = await call("/v8/management/config", {}, bindings, "http://localhost:8787");
+      const response = await call("/v9/management/config", {}, bindings, "http://localhost:8787");
       expect(response.status).not.toBe(200);
       expect(await response.text()).not.toContain("dev@localhost");
     }
 
     // With full Access settings the request is authenticated normally.
     const refused = await call(
-      "/v8/management/config",
+      "/v9/management/config",
       {},
       { ...accessEnv, ACCESS_DEV_BYPASS: "true" },
       "http://localhost:8787",
@@ -282,7 +282,7 @@ describe("Access gate through the router", () => {
     expect(refused.status).toBe(401);
 
     const token = await call(
-      "/v8/management/config",
+      "/v9/management/config",
       await withToken(userClaims("admin@example.com")),
       { ...accessEnv, ACCESS_DEV_BYPASS: "true" },
       "http://localhost:8787",
@@ -293,7 +293,7 @@ describe("Access gate through the router", () => {
 });
 
 const fetchWorker = (path: string) =>
-  exports.default.fetch(new Request(`https://proxy.test${path}`));
+  exports.default.fetch(new Request(`https://commissary.test${path}`));
 
 describe("Worker entry point", () => {
   it("serves public routes and gates protected ones (unconfigured defaults fail closed)", async () => {

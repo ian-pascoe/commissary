@@ -1,6 +1,6 @@
 /**
  * Reading and claiming Claude reset grants end to end, from the Worker (`GET`/`POST
- * /v8/management/credentials/reset-grants`): the ControlPlane resolves the account, its fresh token and the grant
+ * /v9/management/credentials/reset-grants`): the ControlPlane resolves the account, its fresh token and the grant
  * `mark` (`resetGrantTarget`) and serializes claims (`beginResetGrantClaim`/`settleResetGrantClaim`); the Worker makes
  * the upstream calls (src/quota/reset-grants.ts) with its injected `HttpClient`, like the quota check (`check.ts`).
  *
@@ -143,7 +143,7 @@ const CONFLICTS = {
 } as const;
 
 const SETTLE_FAILED =
-  "Anthropic answered, but the proxy could not record the answer; check resets before trying again";
+  "Anthropic answered, but Commissary could not record the answer; check resets before trying again";
 
 const target = (ref: Ref, viewer: Scope) =>
   Effect.map(

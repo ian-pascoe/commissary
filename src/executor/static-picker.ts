@@ -1,5 +1,5 @@
 /**
- * Config-only {@link CredentialPicker}: round-robin over the API keys configured in `api-keys.openai-compatibility`.
+ * Config-only {@link CredentialPicker}: round-robin over the provider keys configured in `api-keys.openai-compatibility`.
  *
  * Test stand-in for the ControlPlane picker (no cooldowns, quota, affinity or weights). Cursors live per isolate;
  * `report` only logs failures. Only the highest-priority available credentials are used, as in Go.

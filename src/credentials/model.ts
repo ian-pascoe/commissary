@@ -3,7 +3,7 @@
  *
  * Two shapes are used:
  *  - `Credential`: the immutable, derived record that selection and executors work with. It is built from the stored
- *    auth-file JSON (`derive.ts`) or synthesised from config API keys (`synthesize.ts`); it is never persisted itself.
+ *    auth-file JSON (`derive.ts`) or synthesised from provider keys (`synthesize.ts`); it is never persisted itself.
  *  - `CredentialState`: mutable runtime state (status, cooldowns, quota, counters) kept per credential id. The Go
  *    `Auth.Status/Unavailable/NextRetryAfter/Quota/ModelStates/LastError` fields live here. The cooldown state
  *    machine itself belongs to the retry/cooldown slice; selection only reads it (`selection/availability.ts`).
@@ -57,7 +57,7 @@ export const Credential = Schema.Struct({
   excludedModels: Schema.Array(Schema.String),
   /** Per-account OAuth model aliases (sanitised). Global aliases come from the config at selection time. */
   modelAliases: Schema.Array(OAuthModelAlias),
-  /** Config API keys only: the `models:` list of the owning entry (replaces the provider catalogue). */
+  /** Provider keys only: the `models:` list of the owning entry (replaces the provider catalogue). */
   models: optional(Schema.Array(ModelEntry)),
   /** Bumped whenever token/api-key material changes; stale results are ignored by `report`. */
   credentialVersion: Schema.Int,

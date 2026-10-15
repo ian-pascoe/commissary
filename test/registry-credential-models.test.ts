@@ -119,7 +119,7 @@ describe("applyExcludedModels", () => {
 });
 
 describe("oauthModelAliasChannel", () => {
-  it("is empty for API keys and gemini", () => {
+  it("is empty for provider keys and gemini", () => {
     expect(oauthModelAliasChannel("claude", "oauth")).toBe("claude");
     expect(oauthModelAliasChannel("claude", "apikey")).toBe("");
     expect(oauthModelAliasChannel("claude", "api-key")).toBe("");
@@ -222,7 +222,7 @@ oauth:
     expect(ids(gemini?.models)).not.toContain("pro");
   });
 
-  it("oauth.settings max-context-length overrides the context length by name or alias, API keys are exempt", () => {
+  it("oauth.settings max-context-length overrides the context length by name or alias, provider keys are exempt", () => {
     const yaml = `
 oauth:
   model-alias:
@@ -274,7 +274,7 @@ oauth:
   });
 });
 
-describe("assembleCredentialModels: config API keys", () => {
+describe("assembleCredentialModels: provider keys", () => {
   it("replaces the catalog with the configured models (owner/type per family, static thinking inherited)", () => {
     const assembled = assembleCredentialModels(
       source("k", "claude", {
@@ -314,7 +314,7 @@ describe("assembleCredentialModels: config API keys", () => {
     expect(custom?.explicitThinking).toBe(true);
   });
 
-  it("API-key credentials without models use the provider catalog", () => {
+  it("Provider-key credentials without models use the provider catalog", () => {
     const assembled = assembleCredentialModels(
       source("k", "gemini", { authKind: "apikey", source: "config" }),
       options(),
@@ -323,7 +323,7 @@ describe("assembleCredentialModels: config API keys", () => {
     expect(ids(assembled?.models)).toEqual(ids(sectionModels(catalogs, "gemini")));
   });
 
-  it("codex API key without models serves all codex-pro models without configuration updates", () => {
+  it("codex provider key without models serves all codex-pro models without configuration updates", () => {
     const assembled = assembleCredentialModels(
       source("k", "codex", { authKind: "apikey", source: "config" }),
       options(),
@@ -335,7 +335,7 @@ describe("assembleCredentialModels: config API keys", () => {
     );
   });
 
-  it("codex API key models keep display names and configuration-update flags per alias", () => {
+  it("codex provider key models keep display names and configuration-update flags per alias", () => {
     const assembled = assembleCredentialModels(
       source("k", "codex", {
         authKind: "apikey",

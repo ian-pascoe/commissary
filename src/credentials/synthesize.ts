@@ -1,5 +1,5 @@
 /**
- * Config API keys -> credentials (including the stable IDs).
+ * Config provider keys -> credentials (including the stable IDs).
  *
  * Go source: internal/watcher/synthesizer/config.go (`ConfigSynthesizer`), helpers.go (`StableIDGenerator`,
  * `ApplyAuthExcludedModelsMeta`, `addConfigHeadersToAttrs`), internal/config/config_normalization.go
@@ -7,14 +7,14 @@
  *
  * The Workers config groups keys under a shared endpoint (`api-keys.<family>[].keys[]`). Go works on flat entries,
  * so every key is flattened into one entry: settings on the key override the group's (as in `expandV8Groups`).
- * A stored API key carries its config entry id (`id`, ADR 0025), which is its credential id: editing the key keeps
+ * A stored provider key carries its config entry id (`id`, ADR 0025), which is its credential id: editing the key keeps
  * the identity. A key without one (a decoded Go document before the import stores it) gets Go's content hash, so
  * changing key, base URL, proxy, prefix or headers changes the identity; the import stores exactly those ids.
  */
 import { createHash } from "node:crypto";
 import type {
-  ApiKeyEntry,
-  ApiKeyGroup,
+  ProviderKeyEntry,
+  ProviderKeyGroup,
   Config,
   OpenAICompatGroup,
   RequestScopedErrorRule,
@@ -135,7 +135,7 @@ const SPECS: Readonly<Record<Family, FamilySpec>> = {
 };
 
 /** The `<kind>` of the credential ids of `family`'s keys (`group`: an OpenAI-compatible endpoint's name). */
-export const apiKeyIdKind = (
+export const providerKeyIdKind = (
   family: Family | "openai-compatibility",
   group: { readonly name?: string | undefined },
 ): string =>
@@ -157,9 +157,9 @@ const FAMILY_ORDER: ReadonlyArray<Family> = [
 ];
 
 /** Flattened key entry: the group's settings overlaid with the key's own. */
-type Flat = ApiKeyEntry & { readonly "base-url"?: string };
+type Flat = ProviderKeyEntry & { readonly "base-url"?: string };
 
-const flatten = (group: ApiKeyGroup, key: ApiKeyEntry): Flat => {
+const flatten = (group: ProviderKeyGroup, key: ProviderKeyEntry): Flat => {
   const merged = Object.fromEntries(
     (
       [
@@ -349,7 +349,7 @@ const synthesizeCompat = (
   const providerName = group.name.trim().toLowerCase() || "openai-compatibility";
   const providerKey = openAICompatibleProviderKey(providerName);
   const baseUrl = group["base-url"].trim();
-  const idKind = apiKeyIdKind("openai-compatibility", group);
+  const idKind = providerKeyIdKind("openai-compatibility", group);
   const headers = normalizeHeaders(group.headers) ?? {};
   const priority = group.priority ?? 0;
   const models = group.models !== undefined && group.models.length > 0 ? group.models : undefined;
@@ -404,7 +404,7 @@ const synthesizeCompat = (
     );
   };
 
-  // A key-less endpoint has no API key entry: its credential keeps Go's content hash.
+  // A key-less endpoint has no provider key entry: its credential keeps Go's content hash.
   if (group.keys.length === 0) return [build(undefined, ids.next(idKind, baseUrl))];
 
   return group.keys.map((keyEntry) =>
@@ -422,7 +422,7 @@ const synthesizeCompat = (
   );
 };
 
-/** Synthesises every config API-key credential in Go's family order. `now` stamps created/updated times. */
+/** Synthesises every config provider-key credential in Go's family order. `now` stamps created/updated times. */
 export const synthesizeConfigCredentials = (
   config: Pick<Config, "api-keys">,
   now: number,

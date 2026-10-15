@@ -1,10 +1,10 @@
 /**
- * `/v8/management/spend` (`SpendGroup` in contract/spend.ts): Spend limits and the org's calendar (issue #71).
+ * `/v9/management/spend` (`SpendGroup` in contract/spend.ts): Spend limits and the org's calendar (issue #71).
  * Workers addition, no Go counterpart.
  *
  * Any member of the org may use `GET /spend` and the limit routes (`access/policy.ts`); the ControlPlane's
  * `SpendService` decides what the caller sees and writes: an org admin (or a platform admin) every limit, a plain
- * member the limits that bind them and limits on their own proxy keys. The calendar (`PATCH /spend/settings`) is
+ * member the limits that bind them and limits on their own API keys. The calendar (`PATCH /spend/settings`) is
  * for org admins. An edit names the limit's revision in `If-Match`; a stale one is `409 conflict`.
  */
 import { Effect, Schema } from "effect";
@@ -28,7 +28,7 @@ import {
 } from "./http.ts";
 import { currentViewer } from "./viewer.ts";
 
-const BASE = "/v8/management";
+const BASE = "/v9/management";
 
 const STATUS: Readonly<Record<SpendServiceErrorCode, readonly [number, string]>> = {
   invalid: [422, "invalid_limit"],

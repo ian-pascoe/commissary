@@ -1,4 +1,4 @@
-// Whose a new account or API key will be (ADR 0023). A plain member's is always private: only their own requests use
+// Whose a new account or provider key will be (ADR 0023). A plain member's is always private: only their own requests use
 // it. An org admin chooses, where the org lets members connect private credentials; a shared one serves everyone.
 import { useId } from "react";
 import { type Caller, holdsOnlyPrivate } from "../lib/role.ts";
@@ -16,7 +16,7 @@ export const Ownership = ({
   onChange,
 }: {
   readonly caller: Caller | undefined;
-  /** What is being added: "account" or "API key". */
+  /** What is being added: "account" or "Provider key". */
   readonly noun: string;
   readonly chosen: boolean;
   readonly onChange: (chosen: boolean) => void;

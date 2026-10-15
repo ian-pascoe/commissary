@@ -1,4 +1,4 @@
-// POST /v8/management/oauth/import?provider=vertex through the router with the real ControlPlane, and the private-key
+// POST /v9/management/oauth/import?provider=vertex through the router with the real ControlPlane, and the private-key
 // normalisation against the Go `NormalizeServiceAccountMap` (test/fixtures/session.json, tools/fixturegen/session).
 import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -26,7 +26,7 @@ beforeEach(async () => {
   await resetControlPlane();
 });
 
-const IMPORT = "/v8/management/oauth/import";
+const IMPORT = "/v9/management/oauth/import";
 
 const upload = (account: Json, fields: Record<string, string> = {}, name = "sa.json") => {
   const body = new FormData();
@@ -55,7 +55,7 @@ describe("Vertex private key normalisation (Go parity)", () => {
   }
 });
 
-describe("POST /v8/management/oauth/import", () => {
+describe("POST /v9/management/oauth/import", () => {
   it("requires a known provider", async () => {
     expect(await json(IMPORT, { method: "POST" })).toMatchObject({
       status: 400,

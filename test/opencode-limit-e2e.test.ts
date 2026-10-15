@@ -104,9 +104,9 @@ interface Account {
   }>;
 }
 
-/** The listed account of a key (`GET /v8/management/credentials`). */
+/** The listed account of a key (`GET /v9/management/credentials`). */
 const accountOf = async (key: string): Promise<Account | undefined> => {
-  const response = await exports.default.fetch("http://localhost/v8/management/credentials");
+  const response = await exports.default.fetch("http://localhost/v9/management/credentials");
   expect(response.status).toBe(200);
   // SAFETY: the credential list contract (`contract/credentials.ts` CredentialEntry).
   const { files } = (await response.json()) as { files: ReadonlyArray<Account> };

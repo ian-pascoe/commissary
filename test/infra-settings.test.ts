@@ -1,5 +1,5 @@
 // Deploy settings (infra/settings.ts): the platform admins (PLATFORM_ADMIN_* and the deprecated ACCESS_ADMIN_* names
-// they replace, which a deployment may still set), the secrets key generations and a hosted proxy's settings.
+// they replace, which a deployment may still set), the secrets key generations and Commissary Cloud's settings.
 import { assert, describe, it } from "@effect/vitest";
 import { ConfigProvider, Effect, Logger, Redacted } from "effect";
 import { readSettings } from "../infra/settings.ts";
@@ -112,7 +112,7 @@ describe("secrets key generations", () => {
   );
 });
 
-describe("hosted proxy settings", () => {
+describe("Commissary Cloud settings", () => {
   const hosted = {
     PROXY_MODE: "hosted",
     CF_LLM_PROXY_DOMAIN: "proxy.example.com",
@@ -144,7 +144,7 @@ describe("hosted proxy settings", () => {
     }),
   );
 
-  it.effect("are not read on a self-hosted proxy or in `alchemy dev`", () =>
+  it.effect("are not read on a self-hosted Commissary or in `alchemy dev`", () =>
     Effect.gen(function* () {
       assert.strictEqual((yield* read({ ...hosted, PROXY_MODE: "" })).settings.hosted, undefined);
       assert.strictEqual((yield* read(hosted)).settings.hosted, undefined);
@@ -155,7 +155,7 @@ describe("hosted proxy settings", () => {
     }),
   );
 
-  it.effect("are required on the hosted stage, which never deploys a self-hosted proxy", () =>
+  it.effect("are required on the hosted stage, which never deploys a self-hosted Commissary", () =>
     Effect.gen(function* () {
       const { settings } = yield* read(hosted, { stage: "hosted" });
 
@@ -175,19 +175,19 @@ describe("hosted proxy settings", () => {
           Effect.catchDefect((defect) => Effect.succeed(String(defect))),
         );
 
-        assert.include(refused, "the hosted stage is a hosted proxy: set PROXY_MODE=hosted");
+        assert.include(refused, "the hosted stage is Commissary Cloud: set PROXY_MODE=hosted");
       }
     }),
   );
 
-  it.effect("refuse a hosted proxy without a sign-in provider, Turnstile or valid limits", () =>
+  it.effect("refuse Commissary Cloud without a sign-in provider, Turnstile or valid limits", () =>
     Effect.gen(function* () {
       for (const [variables, message] of [
         [{ PROXY_MODE: "managed" }, "PROXY_MODE must be self-hosted or hosted"],
-        [{ SIGN_IN_GITHUB_CLIENT_SECRET: "" }, "a hosted proxy needs a sign-in provider"],
+        [{ SIGN_IN_GITHUB_CLIENT_SECRET: "" }, "Commissary Cloud needs a sign-in provider"],
         [
           { TURNSTILE_SECRET_KEY: "" },
-          "a hosted proxy needs TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY",
+          "Commissary Cloud needs TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY",
         ],
         [{ OWNED_ORG_LIMIT: "-1" }, "OWNED_ORG_LIMIT must be a whole number from 0"],
         [{ ORG_RATE_LIMIT: "0" }, "ORG_RATE_LIMIT must be a whole number from 1"],

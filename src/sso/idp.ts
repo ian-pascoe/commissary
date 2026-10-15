@@ -1,7 +1,7 @@
 /**
  * Setting up and testing an org's identity provider (issue #76). New in the Workers port.
  *
- * An OIDC provider is given by its issuer and the proxy's client there: the proxy reads the issuer's discovery
+ * An OIDC provider is given by its issuer and Commissary's client there: Commissary reads the issuer's discovery
  * document once, when the provider is saved, and keeps the endpoints it names (Better Auth's SSO plugin does the
  * discovery, `discoverOIDCConfig`, with its checks: the document's issuer must be the one given, and every endpoint an
  * https URL of a public host). A SAML provider is given by its sign-in URL, its entity id and its signing certificate.

@@ -1,13 +1,13 @@
 /**
- * Management API routes (`/v8/management/*`), the control panel (`web/`, at `/`) and the old panel's address
+ * Management API routes (`/v9/management/*`), the control panel (`web/`, at `/`) and the old panel's address
  * (`/management.html`, a redirect to `/`).
  *
  * Go source: internal/api/server_management_v8.go (route table). Authorization is the Access admin gate
- * (`access/routes.ts`: the whole `/v8/management` prefix, the panel paths and `/management.html`), which replaces the
+ * (`access/routes.ts`: the whole `/v9/management` prefix, the panel paths and `/management.html`), which replaces the
  * Go management key, IP ban and `allow-remote` logic. Routes that are not ported: plugins, Home, the file-log routes,
  * `GET /server/latest-version`, the static `routing/model-definitions/:channel` catalog, `GET /oauth/callback` and
  * `GET /observability/usage/api-keys` (all four only fed the upstream panel; the control panel reads
- * `routing/models`, `credentials/models`, `POST /oauth/callback` and `api-keys`), the deprecated `/v0/management`
+ * `routing/models`, `credentials/models`, `POST /oauth/callback` and `provider-keys`), the deprecated `/v0/management`
  * tree, `POST /requests/api-call` (the upstream panel's token-substituting upstream probe; quota and key checks and
  * Claude reset grants run server-side, so tokens never leave the Worker), and the upstream panel page itself (Go serves it at
  * `/management.html`; here that path redirects to `/`). The upstream panel's `X-CPA-Version` and
@@ -19,7 +19,7 @@
  * `settings-routes.ts`; Claude reset
  * grants (`/credentials/reset-grants`) in `reset-grant-routes.ts`; the model catalog's status and on-demand refresh (`/models/catalog`) in
  * `catalog-routes.ts`; the org's members, teams and service tokens (`/members`, `/membership`, `/teams`,
- * `/service-tokens`) in `member-routes.ts`; a hosted proxy's per-org single sign-on (`/sso*`) in `sso-routes.ts`.
+ * `/service-tokens`) in `member-routes.ts`; Commissary Cloud's per-org single sign-on (`/sso*`) in `sso-routes.ts`.
  */
 import { Effect, Layer } from "effect";
 import {
@@ -37,7 +37,7 @@ import type { CurrentOrg } from "../platform/org.ts";
 import { CatalogStore } from "../registry/catalog-store.ts";
 import { ModelRegistryLive } from "../registry/live.ts";
 import type { ModelRegistry } from "../registry/service.ts";
-import { apiKeyProbeHandler, apiKeysRoutes } from "./api-keys-routes.ts";
+import { providerKeyProbeHandler, providerKeysRoutes } from "./provider-keys-routes.ts";
 import { catalogRefreshHandler, catalogStatusHandler } from "./catalog-routes.ts";
 import { credentialsBatchHandler } from "./credentials-batch.ts";
 import { credentialModelsHandler, credentialRoutes } from "./credentials-routes.ts";
@@ -49,7 +49,7 @@ import { peopleRoutes } from "./people-routes.ts";
 import { managementKeyRoutes } from "./management-key-routes.ts";
 import { ssoRoutes } from "./sso-routes.ts";
 import { priceRoutes } from "./price-routes.ts";
-import { proxyKeyRoutes } from "./proxy-key-routes.ts";
+import { apiKeyRoutes } from "./api-key-routes.ts";
 import { spendRoutes } from "./spend-routes.ts";
 import { quotaCheckHandler, quotaSweepHandler } from "./quota-routes.ts";
 import { claimResetGrantHandler, resetGrantsHandler } from "./reset-grant-routes.ts";
@@ -64,7 +64,7 @@ import {
 } from "./web-panel.ts";
 import { usageRoutes } from "./usage-routes.ts";
 
-const BASE = "/v8/management";
+const BASE = "/v9/management";
 
 /** All management routes; needs `ModelRegistry`, the `CatalogStore` and an `HttpClient`. */
 export const ManagementRoutes = HttpRouter.addAll(
@@ -87,7 +87,7 @@ export const ManagementRoutes = HttpRouter.addAll(
 
     return [
       ...modelRuleRoutes,
-      ...apiKeysRoutes,
+      ...providerKeysRoutes,
       ...settingsRoutes,
       ...credentialRoutes,
       ...usageRoutes,
@@ -97,7 +97,7 @@ export const ManagementRoutes = HttpRouter.addAll(
       ...priceRoutes,
       ...grantRoutes,
       ...memberRoutes,
-      ...proxyKeyRoutes,
+      ...apiKeyRoutes,
       ...spendRoutes,
       ...managementKeyRoutes,
       ...ssoRoutes,
@@ -111,7 +111,7 @@ export const ManagementRoutes = HttpRouter.addAll(
         `${BASE}/credentials/reset-grants/claim`,
         bound(claimResetGrantHandler),
       ),
-      HttpRouter.route("POST", `${BASE}/api-keys/probe`, bound(apiKeyProbeHandler)),
+      HttpRouter.route("POST", `${BASE}/provider-keys/probe`, bound(providerKeyProbeHandler)),
       HttpRouter.route("GET", `${BASE}/routing/models`, bound(routingModelsHandler)),
       HttpRouter.route("GET", `${BASE}/models/mine`, bound(myModelsHandler)),
       HttpRouter.route("GET", `${BASE}/models/catalog`, bound(catalogStatusHandler)),

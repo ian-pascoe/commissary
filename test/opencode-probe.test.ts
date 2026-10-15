@@ -1,13 +1,13 @@
-// Key test of OpenCode Zen/Go config keys (`management/api-keys-probe.ts`): an authenticated chat call, since the
+// Key test of OpenCode Zen/Go config keys (`management/provider-keys-probe.ts`): an authenticated chat call, since the
 // gateways' model listing is public.
 import { Effect, Layer, Predicate } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { describe, expect, it } from "vitest";
 import {
-  type ApiKeyProbeTarget,
+  type ProviderKeyProbeTarget,
   OPENCODE_PROBE_MODEL,
-  probeApiKey,
-} from "../src/management/api-keys-probe.ts";
+  probeProviderKey,
+} from "../src/management/provider-keys-probe.ts";
 
 interface Seen {
   readonly method: string;
@@ -37,12 +37,12 @@ const gateway = (status: number, body: string, seen: Seen[]) =>
     ),
   );
 
-const target = (family: "opencode-zen" | "opencode-go"): ApiKeyProbeTarget => ({
+const target = (family: "opencode-zen" | "opencode-go"): ProviderKeyProbeTarget => ({
   id: `${family}:apikey:1`,
   family,
   baseUrl:
     family === "opencode-zen" ? "https://opencode.ai/zen/v1" : "https://opencode.ai/zen/go/v1",
-  apiKey: "sk-probe",
+  providerKey: "sk-probe",
   headers: { "x-team": "a" },
   models: [],
 });
@@ -51,7 +51,7 @@ const probe = (family: "opencode-zen" | "opencode-go", status: number, body = "{
   const seen: Seen[] = [];
 
   return Effect.runPromise(
-    probeApiKey(target(family)).pipe(Effect.provide(gateway(status, body, seen))),
+    probeProviderKey(target(family)).pipe(Effect.provide(gateway(status, body, seen))),
   ).then((result) => ({ result, seen }));
 };
 
@@ -73,7 +73,7 @@ describe("OpenCode key test", () => {
       expect(call?.url).toBe(`${target(family).baseUrl}/chat/completions`);
       expect(call?.headers).toMatchObject({
         authorization: "Bearer sk-probe",
-        "x-opencode-client": "cf-llm-proxy",
+        "x-opencode-client": "commissary",
         "x-team": "a",
       });
       expect(call?.headers["x-opencode-session"]).toMatch(/^[0-9a-f-]{36}$/);

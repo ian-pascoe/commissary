@@ -83,7 +83,7 @@ const decodeListed = Schema.decodeUnknownSync(
 );
 
 const listed = async () => {
-  const response = await harness.call("/v8/management/credentials");
+  const response = await harness.call("/v9/management/credentials");
   const text = await response.text();
 
   expect(response.status).toBe(200);
@@ -106,7 +106,7 @@ const reportRows = () =>
   );
 
 const checkQuota = (name: string) =>
-  harness.json("/v8/management/credentials/quota", jsonInit("POST", { name }));
+  harness.json("/v9/management/credentials/quota", jsonInit("POST", { name }));
 
 /** The listed OpenCode Go accounts: the enabled key first (config order). */
 const goAccounts = async () =>
@@ -144,7 +144,7 @@ describe("POST /credentials/quota for an OpenCode Go key", () => {
     const [account] = await goAccounts();
 
     const { status, body } = await harness.json(
-      "/v8/management/credentials/quota",
+      "/v9/management/credentials/quota",
       jsonInit("POST", { name: account?.auth_index ?? "" }),
     );
 
@@ -183,7 +183,7 @@ describe("POST /credentials/quota for an OpenCode Go key", () => {
     const [account] = await goAccounts();
 
     const { status, body } = await harness.json(
-      "/v8/management/credentials/quota",
+      "/v9/management/credentials/quota",
       jsonInit("POST", { name: account?.auth_index ?? "" }),
     );
 
@@ -198,7 +198,7 @@ describe("POST /credentials/quota for an OpenCode Go key", () => {
 
     for (const name of ids) {
       const { status } = await harness.json(
-        "/v8/management/credentials/quota",
+        "/v9/management/credentials/quota",
         jsonInit("POST", { name }),
       );
 
@@ -214,7 +214,7 @@ describe("POST /credentials/quota/all with OpenCode Go keys", () => {
     const [on] = await goAccounts();
 
     const { status, body } = await harness.json(
-      "/v8/management/credentials/quota/all",
+      "/v9/management/credentials/quota/all",
       jsonInit("POST", {}),
     );
 
@@ -276,17 +276,17 @@ describe("file-only operations on an OpenCode Go key", () => {
     const query = `name=${encodeURIComponent(name)}`;
 
     const answers = [
-      await harness.json(`/v8/management/credentials?${query}`, { method: "DELETE" }),
-      await harness.json(`/v8/management/credentials/download?${query}`, {
+      await harness.json(`/v9/management/credentials?${query}`, { method: "DELETE" }),
+      await harness.json(`/v9/management/credentials/download?${query}`, {
         auth: await serviceToken(SERVICE_ADMIN),
       }),
       await harness.json(
-        "/v8/management/credentials/fields",
+        "/v9/management/credentials/fields",
         jsonInit("PATCH", { name, note: "hello" }),
       ),
-      await harness.json("/v8/management/credentials/refresh", jsonInit("POST", { name })),
+      await harness.json("/v9/management/credentials/refresh", jsonInit("POST", { name })),
       await harness.json(
-        "/v8/management/credentials/status",
+        "/v9/management/credentials/status",
         jsonInit("PATCH", { name, disabled: true }),
       ),
     ];
@@ -296,7 +296,7 @@ describe("file-only operations on an OpenCode Go key", () => {
 
     for (const action of ["enable", "disable", "refresh", "delete"]) {
       const { status, body } = await harness.json(
-        "/v8/management/credentials/batch",
+        "/v9/management/credentials/batch",
         jsonInit("POST", { action, names: [name] }),
       );
 
@@ -304,7 +304,7 @@ describe("file-only operations on an OpenCode Go key", () => {
       expect(JSON.stringify(body)).toContain('"error":"config_credential"');
     }
 
-    const several = await harness.json(`/v8/management/credentials?${query}&name=missing.json`, {
+    const several = await harness.json(`/v9/management/credentials?${query}&name=missing.json`, {
       method: "DELETE",
     });
 

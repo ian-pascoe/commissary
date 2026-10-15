@@ -2,7 +2,7 @@
  * Infrastructure of the Workers port, deployed with Alchemy (`pnpm deploy`, `pnpm dev`, `pnpm destroy`): the Worker
  * with its Durable Objects, static assets and cron trigger, the KV namespace, the D1 usage database (migrations
  * applied on every deploy), the `auth_index` HMAC key and the Cloudflare Access application, policies and service tokens
- * in front of it (except the proxy routes, where clients send proxy keys). A hosted proxy (`PROXY_MODE=hosted`, ADR
+ * in front of it (except the client API, where clients send API keys). Commissary Cloud (`PROXY_MODE=hosted`, ADR
  * 0026) creates no Access resources: the Worker signs people in itself, and gets its sign-in settings, Better Auth's
  * secret and the per-org rate limit instead.
  * Deploy-time settings are read from the environment / `.env` (see `.env.example` and infra/settings.ts).
@@ -11,7 +11,7 @@ import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
 import * as Effect from "effect/Effect";
 import * as Output from "alchemy/Output";
-import { type AccessWiring, provisionAccess, provisionProxyBypass } from "./infra/access.ts";
+import { type AccessWiring, provisionAccess, provisionClientApiBypass } from "./infra/access.ts";
 import { BUNDLE_ALIASES } from "./infra/bundle.ts";
 import { readSettings } from "./infra/settings.ts";
 import { DEV_AUTH_INDEX_KEY } from "./src/management/auth-index-key.ts";
@@ -67,8 +67,8 @@ export default Alchemy.Stack(
         : secretsKeys.get(settings.secretsKeyPreviousGeneration);
 
     // `alchemy dev` serves the Worker on localhost without Access: the dev bypass (src/access/config.ts) makes every
-    // loopback request an admin. Deployed Workers never get it and require the Access JWT (or a proxy key on the proxy
-    // routes).
+    // loopback request an admin. Deployed Workers never get it and require the Access JWT (or an API key on the client
+    // API).
     const { hosted } = settings;
 
     const access: AccessWiring =
@@ -76,7 +76,7 @@ export default Alchemy.Stack(
         ? { aud: "", adminServiceTokens: "", serviceTokenClientIds: {} }
         : yield* provisionAccess(settings);
 
-    // A hosted proxy (ADR 0026): Better Auth's signing secret, minted like the keys above, and its settings.
+    // Commissary Cloud (ADR 0026): Better Auth's signing secret, minted like the keys above, and its settings.
     const hostedEnv =
       hosted === undefined
         ? {}
@@ -104,8 +104,8 @@ export default Alchemy.Stack(
             }),
           };
 
-    // With an API host (ADR 0028) the Worker answers on both hostnames and serves the proxy routes on the API host only
-    // (src/http/hosts.ts). The API host has no Access application: clients authenticate there with proxy keys.
+    // With an API host (ADR 0028) the Worker answers on both hostnames and serves the client API on the API host only
+    // (src/http/hosts.ts). The API host has no Access application: clients authenticate there with API keys.
     const split = settings.apiDomain !== "";
 
     const domain = split
@@ -116,14 +116,14 @@ export default Alchemy.Stack(
       main: "./src/index.ts",
       compatibility: COMPATIBILITY,
       // Production serves only its Access-protected domain; pull-request previews serve their workers.dev URL,
-      // protected by enrolling the Worker into the preview's Access application. The proxy routes leave Access on both
-      // (`provisionProxyBypass` below, or the API host): clients authenticate there with proxy keys (ADR 0022).
+      // protected by enrolling the Worker into the preview's Access application. The client API leaves Access on both
+      // (`provisionClientApiBypass` below, or the API host): clients authenticate there with API keys (ADR 0022).
       workersDev: settings.preview,
       ...(dev || settings.preview ? {} : { domain }),
       ...(access.application === undefined ? {} : { access: access.application }),
       limits: { cpuMs: settings.cpuMs },
       build: { input: { resolve: { alias: { ...BUNDLE_ALIASES } } } },
-      // The control panel (`pnpm web:build`). The Worker runs first so proxy routes are never shadowed by assets and
+      // The control panel (`pnpm web:build`). The Worker runs first so the client API is never shadowed by assets and
       // Access gates the panel (src/management/web-panel.ts serves it).
       assets: { directory: "./public", runWorkerFirst: true },
       // Previews have no credentials to refresh or catalog worth keeping fresh.
@@ -150,11 +150,11 @@ export default Alchemy.Stack(
     });
 
     // The bypass is derived from the Worker's output on every stage, so it is applied only after the Worker: the first
-    // deploy must not take the proxy routes out of Access while the old Worker, which only reads the Access edge's
+    // deploy must not take the client API out of Access while the old Worker, which only reads the Access edge's
     // `Cf-Access-Jwt-Assertion`, still serves them (clients sending `cf-access-token` would get 401 in between).
     // An API host needs none: Access covers the app host only.
     if (!dev && hosted === undefined && !split)
-      yield* provisionProxyBypass(
+      yield* provisionClientApiBypass(
         settings,
         Output.asOutput(worker.url).pipe(
           Output.map((url) => {
@@ -170,7 +170,7 @@ export default Alchemy.Stack(
 
     return {
       url: worker.url,
-      // Where clients send proxy keys: the API host, or the Worker's one URL (tools/deploy-stage.sh).
+      // Where clients send API keys: the API host, or the Worker's one URL (tools/deploy-stage.sh).
       apiUrl: split ? `https://${settings.apiDomain}` : worker.url,
       accessAud: access.aud,
       serviceTokens: access.serviceTokenClientIds,

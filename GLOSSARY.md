@@ -71,7 +71,7 @@ On Commissary Cloud they also set owned-org limits and suspend people and orgs.
 _Avoid_: operator, superuser, admin (on its own)
 
 **Org slug**:
-The short name that addresses an org in URLs (`/o/acme/accounts`, `/v8/management/orgs/acme/...`): lowercase letters,
+The short name that addresses an org in URLs (`/o/acme/accounts`, `/v9/management/orgs/acme/...`): lowercase letters,
 digits and inner hyphens, unique across the deployment, and renamable. It is not the org's id, which never changes and names
 its stored data.
 _Avoid_: org name (a free-text display name), handle, subdomain
@@ -511,7 +511,9 @@ A one-off check that a stored provider key is accepted by its provider.
 _Avoid_: probe, connection test
 
 **Stage**:
-One deployment of Commissary: production, or a pull request's preview with empty storage.
+One deployment of Commissary with its own storage: production, which is a self-hosted Commissary behind Cloudflare Access;
+the Commissary Cloud stage, run from `main` on its own hostname (deployed as `hosted` until it is renamed); or a pull
+request's preview, which has empty storage.
 _Avoid_: environment
 
 ### Usage

@@ -282,7 +282,7 @@ describe("authenticateRequest", () => {
       makeFakeJwks([keyA]),
       Effect.gen(function* () {
         const error = yield* Effect.flip(
-          authenticateRequest({}, "https://proxy.test/v1/models", "protected"),
+          authenticateRequest({}, "https://commissary.test/v1/models", "protected"),
         );
 
         assert.strictEqual(error._tag, "UnauthorizedError");
@@ -295,7 +295,7 @@ describe("authenticateRequest", () => {
     run(
       makeFakeJwks([keyA]),
       Effect.gen(function* () {
-        const url = "https://proxy.test/v8/management/config";
+        const url = "https://commissary.test/v9/management/config";
         const alice = { "cf-access-jwt-assertion": yield* token(keyA) };
         const identity = yield* authenticateRequest(alice, url, "protected");
         assert.strictEqual(identity.principalId, "user:alice@example.com");
@@ -344,8 +344,8 @@ describe("authenticateRequest", () => {
     run(
       makeFakeJwks([keyA]),
       Effect.gen(function* () {
-        const config = "https://proxy.test/v8/management/config";
-        const usage = "https://proxy.test/v8/management/observability/usage/records";
+        const config = "https://commissary.test/v9/management/config";
+        const usage = "https://commissary.test/v9/management/observability/usage/records";
         const stub = controlPlaneOf(env, GLOBAL_ORG);
         const carol = yield* addMember(GLOBAL_ORG, "carol@example.com", "admin");
         const dan = yield* addMember(GLOBAL_ORG, "dan@example.com", "member");
@@ -361,7 +361,7 @@ describe("authenticateRequest", () => {
         assert.strictEqual(identity.memberId, carol.id);
         assert.isFalse(identity.platformAdmin);
 
-        // A plain member reads usage and uses the proxy, but no admin route.
+        // A plain member reads usage and uses Commissary, but no admin route.
         const asDan = yield* as("dan@example.com");
         assert.strictEqual((yield* authenticateRequest(asDan, usage, "management")).role, "member");
         assert.strictEqual(
@@ -373,7 +373,8 @@ describe("authenticateRequest", () => {
           "ForbiddenError",
         );
         assert.strictEqual(
-          (yield* authenticateRequest(asDan, "https://proxy.test/v1/models", "protected")).memberId,
+          (yield* authenticateRequest(asDan, "https://commissary.test/v1/models", "protected"))
+            .memberId,
           dan.id,
         );
 
@@ -388,7 +389,7 @@ describe("authenticateRequest", () => {
           );
           assert.strictEqual(
             (yield* Effect.flip(
-              authenticateRequest(asCarol, "https://proxy.test/v1/models", "protected"),
+              authenticateRequest(asCarol, "https://commissary.test/v1/models", "protected"),
             ))._tag,
             "ForbiddenError",
           );
@@ -403,7 +404,7 @@ describe("authenticateRequest", () => {
   it.effect("fails closed with a configuration error when Access is not configured", () =>
     withJwks(
       makeFakeJwks([keyA]),
-      authenticateRequest({}, "https://proxy.test/v1/models", "protected").pipe(
+      authenticateRequest({}, "https://commissary.test/v1/models", "protected").pipe(
         Effect.provideContext(
           requestContext(
             { ...env, ACCESS_TEAM_DOMAIN: "", ACCESS_AUD: "" },
@@ -464,7 +465,7 @@ describe("authenticateRequest and orgs", () => {
 
         const scoped = yield* authenticateRequest(
           admin,
-          "https://proxy.test/v8/management/orgs/acme-access/config",
+          "https://commissary.test/v9/management/orgs/acme-access/config",
           "management",
         );
 
@@ -478,7 +479,7 @@ describe("authenticateRequest and orgs", () => {
 
         const panel = yield* authenticateRequest(
           admin,
-          "https://proxy.test/o/acme-access/accounts",
+          "https://commissary.test/o/acme-access/accounts",
           "management",
         );
 
@@ -486,7 +487,7 @@ describe("authenticateRequest and orgs", () => {
 
         const unscoped = yield* authenticateRequest(
           admin,
-          "https://proxy.test/v8/management/config",
+          "https://commissary.test/v9/management/config",
           "management",
         );
 
@@ -496,7 +497,7 @@ describe("authenticateRequest and orgs", () => {
         // Platform-level routes address no org.
         const platformLevel = yield* authenticateRequest(
           admin,
-          "https://proxy.test/v8/management/orgs/acme-access",
+          "https://commissary.test/v9/management/orgs/acme-access",
           "management",
         );
 
@@ -508,7 +509,7 @@ describe("authenticateRequest and orgs", () => {
   it.effect("answers an unknown slug with 404 to a platform admin and 403 to anyone else", () =>
     run(
       Effect.gen(function* () {
-        const url = "https://proxy.test/v8/management/orgs/nobody-here/config";
+        const url = "https://commissary.test/v9/management/orgs/nobody-here/config";
 
         assert.strictEqual(
           (yield* Effect.flip(
@@ -546,7 +547,7 @@ describe("authenticateRequest and orgs", () => {
 
         const own = yield* authenticateRequest(
           carol,
-          "https://proxy.test/v8/management/orgs/default/config",
+          "https://commissary.test/v9/management/orgs/default/config",
           "management",
         );
 
@@ -556,15 +557,15 @@ describe("authenticateRequest and orgs", () => {
         assert.strictEqual(
           (yield* authenticateRequest(
             carol,
-            "https://proxy.test/v8/management/config",
+            "https://commissary.test/v9/management/config",
             "management",
           )).org,
           GLOBAL_ORG,
         );
 
         for (const url of [
-          "https://proxy.test/v8/management/orgs/acme-limits/config",
-          "https://proxy.test/o/acme-limits/accounts",
+          "https://commissary.test/v9/management/orgs/acme-limits/config",
+          "https://commissary.test/o/acme-limits/accounts",
         ]) {
           assert.strictEqual(
             (yield* Effect.flip(authenticateRequest(carol, url, "management")))._tag,
@@ -580,13 +581,13 @@ describe("authenticateRequest and orgs", () => {
       Effect.gen(function* () {
         const alice = yield* authenticateRequest(
           yield* as("alice@example.com"),
-          "https://proxy.test/v1/models",
+          "https://commissary.test/v1/models",
           "protected",
         );
 
         const admin = yield* authenticateRequest(
           yield* as("admin@example.com"),
-          "https://proxy.test/v1/models",
+          "https://commissary.test/v1/models",
           "protected",
         );
 
@@ -637,7 +638,7 @@ describe("ACCESS_ADMIN_* aliases", () => {
 
         const identity = yield* authenticateRequest(
           headers,
-          "https://proxy.test/v8/management/config",
+          "https://commissary.test/v9/management/config",
           "management",
         );
 
@@ -821,7 +822,7 @@ describe("classifyPath", () => {
       expect(classifyPath(`https://x.test${path}?q=1`)).toBe("protected");
     }
 
-    expect(classifyPath("https://x.test/v8/management/config")).toBe("management");
+    expect(classifyPath("https://x.test/v9/management/config")).toBe("management");
   });
 
   it("is not fooled by alternative spellings", () => {
@@ -829,7 +830,7 @@ describe("classifyPath", () => {
     expect(classifyPath("https://x.test/V1/models")).toBe("protected");
     expect(classifyPath("https://x.test/%76%31/models")).toBe("protected");
     expect(classifyPath("https://x.test/a/../v1/models")).toBe("protected");
-    expect(classifyPath("https://x.test/V8/Management/x")).toBe("management");
+    expect(classifyPath("https://x.test/V9/Management/x")).toBe("management");
     expect(classifyPath("https://x.test/%2576%31/models")).toBe("public");
   });
 });

@@ -1,10 +1,10 @@
 /**
- * `GET|PATCH /v8/management/settings` (`../settings-routes.ts`, `../settings.ts`): the Settings page's typed view of
+ * `GET|PATCH /v9/management/settings` (`../settings-routes.ts`, `../settings.ts`): the Settings page's typed view of
  * the config settings that apply on Workers, and its writes; `POST /settings/import`: the Go config import.
  * Shared with the browser: imports `effect` and sibling contract modules only.
  *
  * Values keep the config's kebab-case spelling and nesting, so a patch maps 1:1 to config paths. The view never
- * carries a secret (PRODUCT.md): API keys have their own page.
+ * carries a secret (PRODUCT.md): provider keys have their own page.
  *
  * Every setting is a config entry of its own (ADR 0025), named by its dotted path (`routing.strategy`). The view's
  * `revisions` holds the revision of every stored setting; a setting at its default is not stored (revision 0). A save
@@ -24,7 +24,7 @@
  */
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api";
-import { RequestScopedErrorRule } from "./api-keys.ts";
+import { RequestScopedErrorRule } from "./provider-keys.ts";
 import { ConfigVersion, Revisions } from "./config.ts";
 import { managementErrors } from "./errors.ts";
 
@@ -233,7 +233,7 @@ export const SettingsView = Schema.Struct({
   defaults: SettingsValues,
   /** `requests.payload` rule counts per kind (set by the config import). */
   payload: PayloadCounts,
-  /** Accounts and API keys with a model prefix (what `routing.force-model-prefix` acts on). */
+  /** Accounts and provider keys with a model prefix (what `routing.force-model-prefix` acts on). */
   prefixed_credentials: Schema.Int,
   /** `oauth.request-scoped-errors`: per account provider, read-only here (set by the config import). */
   request_scoped_errors: Schema.Record(Schema.String, Schema.Array(RequestScopedErrorRule)),

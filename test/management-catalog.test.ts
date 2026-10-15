@@ -15,9 +15,9 @@ import {
   token,
 } from "./support/management.ts";
 
-const STATUS = "/v8/management/models/catalog";
+const STATUS = "/v9/management/models/catalog";
 
-const REFRESH = "/v8/management/models/catalog/refresh";
+const REFRESH = "/v9/management/models/catalog/refresh";
 
 interface Reply {
   readonly status: number;

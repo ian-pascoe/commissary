@@ -562,7 +562,7 @@ describe("ensureFresh (request-time preparation)", () => {
     expect(ok(await fixture.manager.ensureFresh("antigravity-b.json")).refreshed).toBe(false);
   });
 
-  it("mints a Meta API key from the DCA token, persisted before use, and re-mints after a 401", async () => {
+  it("mints a Meta provider key from the DCA token, persisted before use, and re-mints after a 401", async () => {
     let minted = 0;
 
     const fixture = makeFixture(() => {

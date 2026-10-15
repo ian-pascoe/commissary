@@ -95,14 +95,14 @@ export interface Harness {
 }
 
 /**
- * `org`: the org every request of the harness belongs to (the Worker resolves `global` for now). `proxyRoutes`: stand-in
- * proxy routes behind the same gate, for tests of what reaches them.
+ * `org`: the org every request of the harness belongs to (the Worker resolves `global` for now). `clientApiRoutes`: stand-in
+ * client API behind the same gate, for tests of what reaches them.
  */
 export const makeHarness = (
   http: MockHandler = () => ({ status: 404 }),
   bindings: Partial<Env> = {},
   org: OrgId = GLOBAL_ORG,
-  proxyRoutes: Layer.Layer<
+  clientApiRoutes: Layer.Layer<
     never,
     never,
     HttpRouter.HttpRouter | HttpRouter.Request<"Requires", AccessPrincipal>
@@ -120,7 +120,7 @@ export const makeHarness = (
       RootRoutes,
       OAuthCallbackRoutes,
       access,
-      makeWithAccess(access)(Layer.mergeAll(routes, proxyRoutes)),
+      makeWithAccess(access)(Layer.mergeAll(routes, clientApiRoutes)),
     ),
     { disableLogger: true, middleware: orgAddressing },
   );
@@ -132,7 +132,7 @@ export const makeHarness = (
     if (auth !== false) headers.set("Cf-Access-Jwt-Assertion", auth ?? (await token()));
 
     return await web.handler(
-      new Request(`https://proxy.test${path}`, { ...rest, headers }),
+      new Request(`https://commissary.test${path}`, { ...rest, headers }),
       Context.add(requestContext({ ...baseEnv, ...bindings }, ctx), CurrentOrg, org),
     );
   };

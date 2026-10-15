@@ -30,12 +30,12 @@ import {
 export const panelOrgSlug = orgSlugOfPath(window.location.pathname);
 
 export class ManagementClient extends AtomHttpApi.Service<ManagementClient>()(
-  "cf-llm-proxy/ManagementClient",
+  "commissary/ManagementClient",
   {
     api: ManagementApi,
     httpClient: FetchHttpClient.layer,
     baseUrl: window.location.origin,
-    // The pages call the routes of their org (`/v8/management/orgs/<slug>/...`); `/me` and `/orgs` are the platform's.
+    // The pages call the routes of their org (`/v9/management/orgs/<slug>/...`); `/me` and `/orgs` are the platform's.
     transformClient: HttpClient.mapRequest(
       HttpClientRequest.updateUrl((url) => scopedApiUrl(url, panelOrgSlug)),
     ),
@@ -90,13 +90,13 @@ export const orgListAtom = ManagementClient.query("orgs", "list", {
   timeToLive: Duration.seconds(30),
 });
 
-/** Suspends or unsuspends an org on a hosted proxy (platform admins; call with `reactivityKeys: ORGS`). */
+/** Suspends or unsuspends an org on Commissary Cloud (platform admins; call with `reactivityKeys: ORGS`). */
 export const updateOrgAtom = ManagementClient.mutation("orgs", "update");
 
-/** Looks a person up (hosted proxy, platform admins). */
+/** Looks a person up (Commissary Cloud, platform admins). */
 export const getPersonAtom = ManagementClient.mutation("people", "get");
 
-/** Changes a person's org limit or suspension (hosted proxy, platform admins). */
+/** Changes a person's org limit or suspension (Commissary Cloud, platform admins). */
 export const updatePersonAtom = ManagementClient.mutation("people", "update");
 
 /** The Management keys page refetches after a mutation tagged with this key. */
@@ -166,20 +166,20 @@ export const updateServiceTokenAtom = ManagementClient.mutation("members", "upda
 
 export const removeServiceTokenAtom = ManagementClient.mutation("members", "removeServiceToken");
 
-/** The Proxy keys page refetches after a mutation tagged with this key. */
-export const PROXY_KEYS = ["proxy-keys"] as const;
+/** The API keys page refetches after a mutation tagged with this key. */
+export const API_KEYS = ["api-keys"] as const;
 
-/** The caller's proxy keys, or every key of the org for an org admin. Short-lived: "last used" moves while they work. */
-export const proxyKeysAtom = ManagementClient.query("proxyKeys", "list", {
-  reactivityKeys: PROXY_KEYS,
+/** The caller's API keys, or every key of the org for an org admin. Short-lived: "last used" moves while they work. */
+export const apiKeysAtom = ManagementClient.query("apiKeys", "list", {
+  reactivityKeys: API_KEYS,
   timeToLive: Duration.seconds(30),
 });
 
-// Proxy key writes: call with `reactivityKeys: PROXY_KEYS` so the list refetches afterwards. A creation answers the
+// API key writes: call with `reactivityKeys: API_KEYS` so the list refetches afterwards. A creation answers the
 // whole key, once.
-export const createProxyKeyAtom = ManagementClient.mutation("proxyKeys", "create");
+export const createApiKeyAtom = ManagementClient.mutation("apiKeys", "create");
 
-export const revokeProxyKeyAtom = ManagementClient.mutation("proxyKeys", "revoke");
+export const revokeApiKeyAtom = ManagementClient.mutation("apiKeys", "revoke");
 
 /** The Limits page refetches after a mutation tagged with this key. */
 export const SPEND = ["spend"] as const;
@@ -362,19 +362,19 @@ export const accountModelsAtom = Atom.family((name: string) =>
   }),
 );
 
-/** The API keys page refetches after a mutation tagged with this key. */
-export const API_KEYS = ["api-keys"] as const;
+/** The provider keys page refetches after a mutation tagged with this key. */
+export const PROVIDER_KEYS = ["provider-keys"] as const;
 
-/** Every configured API key group with its id, revision and its keys' state (writes name the group by both). */
-export const apiKeysAtom = ManagementClient.query("apiKeys", "list", {
-  reactivityKeys: API_KEYS,
+/** Every configured provider key group with its id, revision and its keys' state (writes name the group by both). */
+export const providerKeysAtom = ManagementClient.query("providerKeys", "list", {
+  reactivityKeys: PROVIDER_KEYS,
   timeToLive: KEEP,
 });
 
-// Group writes: call with `reactivityKeys: API_KEYS`.
-export const putKeyGroupAtom = ManagementClient.mutation("apiKeys", "putGroup");
+// Group writes: call with `reactivityKeys: PROVIDER_KEYS`.
+export const putKeyGroupAtom = ManagementClient.mutation("providerKeys", "putGroup");
 
-export const deleteKeyGroupAtom = ManagementClient.mutation("apiKeys", "deleteGroup");
+export const deleteKeyGroupAtom = ManagementClient.mutation("providerKeys", "deleteGroup");
 
 /**
  * One connection test per key (`auth_index`; call it with no argument). `mutation` atoms are shared per endpoint and
@@ -385,7 +385,7 @@ export const probeKeyAtom = Atom.family((authIndex: string) =>
     Effect.gen(function* () {
       const client = yield* ManagementClient;
 
-      return yield* client.apiKeys.probe({ payload: { auth_index: authIndex } });
+      return yield* client.providerKeys.probe({ payload: { auth_index: authIndex } });
     }),
   ),
 );
@@ -591,7 +591,7 @@ export const saveGrantAtom = ManagementClient.runtime.fn((write: GrantWrite) =>
 /** The Single sign-on page refetches after a mutation tagged with this key. */
 export const SSO = ["sso"] as const;
 
-/** The org's identity provider and domains, with the proxy's side for the provider's settings (hosted proxy only). */
+/** The org's identity provider and domains, with Commissary's side for the provider's settings (Commissary Cloud only). */
 export const ssoAtom = ManagementClient.query("sso", "get", {
   reactivityKeys: SSO,
   timeToLive: Duration.seconds(30),
@@ -651,8 +651,8 @@ export const saveSettingsAtom = Atom.family((_section: string) =>
   ),
 );
 
-// Mutations: call with `reactivityKeys: CREDENTIALS` so the credential list refetches afterwards (`API_KEYS` for a
-// config API key).
+// Mutations: call with `reactivityKeys: CREDENTIALS` so the credential list refetches afterwards (`PROVIDER_KEYS` for a
+// provider key).
 export const setDisabledAtom = ManagementClient.mutation("credentials", "setDisabled");
 
 export const patchFieldsAtom = ManagementClient.mutation("credentials", "patchFields");

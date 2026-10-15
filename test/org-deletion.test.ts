@@ -33,7 +33,7 @@ beforeAll(async () => {
 type Payload = Parameters<typeof jsonInit>[1];
 
 const send = async (slug: string, path: string, auth: string, method = "GET", body?: Payload) =>
-  await harness.json(`/v8/management/orgs/${slug}${path}`, {
+  await harness.json(`/v9/management/orgs/${slug}${path}`, {
     ...(body === undefined ? { method } : jsonInit(method, body)),
     auth,
   });
@@ -55,7 +55,7 @@ const newOrg = async (): Promise<Org> => {
   const platform = await token(ADMIN);
 
   const created = await harness.json(
-    "/v8/management/orgs",
+    "/v9/management/orgs",
     jsonInit("POST", { slug, name, private_credentials: true }),
   );
 
@@ -83,11 +83,11 @@ const newOrg = async (): Promise<Org> => {
   expect(
     (await send(slug, "/credentials?name=shared.json", platform, "POST", claudeFile())).status,
   ).toBe(200);
-  expect((await send(slug, "/proxy-keys", org.alice.auth, "POST", { name: "laptop" })).status).toBe(
+  expect((await send(slug, "/api-keys", org.alice.auth, "POST", { name: "laptop" })).status).toBe(
     201,
   );
 
-  const group = await send(slug, "/api-keys/groups", org.alice.auth, "PUT", {
+  const group = await send(slug, "/provider-keys/groups", org.alice.auth, "PUT", {
     family: "claude",
     revision: 0,
     group: { "base-url": "https://api.example.test/v1", keys: [{ "api-key": "sk-alice-0001" }] },
@@ -201,7 +201,7 @@ describe("deleting an org", () => {
     });
 
     const again = await harness.json(
-      "/v8/management/orgs",
+      "/v9/management/orgs",
       jsonInit("POST", { slug: doomed.slug, name: "Reborn" }),
     );
 
@@ -227,7 +227,7 @@ describe("deleting an org", () => {
   });
 
   it("never deletes the first org, whoever asks", async () => {
-    const reply = await harness.json("/v8/management/org", jsonInit("DELETE", { name: "Default" }));
+    const reply = await harness.json("/v9/management/org", jsonInit("DELETE", { name: "Default" }));
 
     expect(reply).toMatchObject({ status: 409, body: { error: "global_org" } });
     expect((await registry.platform.getOrgById("global"))?.slug).toBe("default");
@@ -271,7 +271,7 @@ describe("deleting an org", () => {
     });
 
     try {
-      const reply = await machines.json(`/v8/management/orgs/${org.slug}/org`, {
+      const reply = await machines.json(`/v9/management/orgs/${org.slug}/org`, {
         ...jsonInit("DELETE", { name: org.name }),
         auth: await serviceToken(SERVICE_ADMIN),
       });

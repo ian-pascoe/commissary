@@ -287,7 +287,7 @@ describe("summaries", () => {
       "Could not disable. It is no longer connected.",
     );
     expect(failureReason({ error: "unavailable" })).toBe(
-      "The proxy could not reach its account store. Try again.",
+      "Commissary could not reach its account store. Try again.",
     );
     expect(failureReason({ error: "check_failed", message: "usage request failed" })).toBe(
       "Usage request failed.",
@@ -383,7 +383,7 @@ describe("config accounts (OpenCode Go keys)", () => {
     const refused = { error: "check_failed", message: "unauthorized", status: 401 } as const;
 
     expect(failureReason(refused, "OpenCode Go", true)).toBe(
-      "OpenCode Go refused the API key. Check it on the Keys page.",
+      "OpenCode Go refused the provider key. Check it on the Provider keys page.",
     );
     expect(failureReason(refused, "Claude")).toBe(
       "Claude refused the saved sign-in. Refresh the tokens or reconnect.",

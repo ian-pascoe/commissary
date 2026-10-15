@@ -1,5 +1,5 @@
 /**
- * Catalog additions (ADR 0020): what the proxy owns on top of models.dev. Shipped with the Worker as versioned data
+ * Catalog additions (ADR 0020): what Commissary owns on top of models.dev. Shipped with the Worker as versioned data
  * (`catalog/additions.json`), never fetched. Seeded once from the Go server's catalog and maintained here from then on.
  *
  * An addition only fills gaps (`catalog-build.ts`): where models.dev has a value for a model it lists, that value
@@ -11,7 +11,7 @@
  * - `facts`: per model id, what models.dev does not carry (`thinking.dynamicAllowed`, web search, ...). Only used for
  *   a model models.dev lists, and only where models.dev has no value.
  * - `defaults`: facts of every models.dev model of the provider (lowest priority).
- * - `models`: the proxy's own full records: models models.dev does not list (or no longer lists), served as they are.
+ * - `models`: Commissary's own full records: models models.dev does not list (or no longer lists), served as they are.
  *   When models.dev lists the id, the record fills its gaps like `facts` do.
  * - `plans` (`codex` only): which model ids each plan offers (`free`, `team`, `plus`, `pro`), in listing order;
  *   models.dev only supplies their details.

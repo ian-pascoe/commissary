@@ -1,4 +1,4 @@
-// Ends the session of a hosted proxy and goes to the sign-in page. Rendered only where `me.hosted` is true: a button
+// Ends the session of Commissary Cloud and goes to the sign-in page. Rendered only where `me.hosted` is true: a button
 // on the org chooser and the People page, an item of the account menu in the shell.
 import { LogOut } from "lucide-react";
 import { type Ref, useState } from "react";

@@ -1,10 +1,12 @@
-// A self-hosted proxy (PROXY_MODE unset) has none of a hosted proxy's sign-in routes (src/hosted/routes.ts): Better
+// A self-hosted Commissary (PROXY_MODE unset) has none of Commissary Cloud's sign-in routes (src/hosted/routes.ts): Better
 // Auth's API, the sign-in options and the sign-in page answer exactly like an unknown path.
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
 const fetchWorker = (path: string, init?: RequestInit) =>
-  exports.default.fetch(new Request(`https://proxy.test${path}`, { redirect: "manual", ...init }));
+  exports.default.fetch(
+    new Request(`https://commissary.test${path}`, { redirect: "manual", ...init }),
+  );
 
 const snapshot = async (response: Response) => ({
   status: response.status,
@@ -12,7 +14,7 @@ const snapshot = async (response: Response) => ({
   body: await response.text(),
 });
 
-describe("self-hosted proxy", () => {
+describe("self-hosted Commissary", () => {
   it("reaches no Better Auth route, sign-in options or sign-in page", async () => {
     const unknown = await snapshot(await fetchWorker("/nope"));
     expect(unknown.status).toBe(404);
@@ -32,7 +34,7 @@ describe("self-hosted proxy", () => {
     ] as const) {
       const response = await fetchWorker(path, {
         method,
-        headers: { "content-type": "application/json", origin: "https://proxy.test" },
+        headers: { "content-type": "application/json", origin: "https://commissary.test" },
         ...(method === "POST" ? { body: JSON.stringify({ provider: "github" }) } : {}),
       });
 
@@ -42,7 +44,7 @@ describe("self-hosted proxy", () => {
 
   it("has no per-org single sign-on settings: Access configures the identity providers", async () => {
     const response = await exports.default.fetch(
-      new Request("http://localhost/v8/management/sso", { redirect: "manual" }),
+      new Request("http://localhost/v9/management/sso", { redirect: "manual" }),
     );
 
     expect(response.status).toBe(404);

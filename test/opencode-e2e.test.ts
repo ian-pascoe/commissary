@@ -76,11 +76,11 @@ interface Listed {
   >;
 }
 
-/** Runtime cooldowns of the single key of a family, as `GET /v8/management/api-keys` shows them. */
+/** Runtime cooldowns of the single key of a family, as `GET /v9/management/provider-keys` shows them. */
 const cooldowns = async (family: string): Promise<ReadonlyArray<Cooldown>> => {
-  const response = await exports.default.fetch("http://localhost/v8/management/api-keys");
+  const response = await exports.default.fetch("http://localhost/v9/management/provider-keys");
   expect(response.status).toBe(200);
-  // SAFETY: the api-keys list contract (`contract/api-keys.ts` ApiKeysList).
+  // SAFETY: the api-keys list contract (`contract/provider-keys.ts` ProviderKeysList).
   const listed = (await response.json()) as Listed;
 
   return listed.families[family]?.[0]?.group.keys[0]?.runtime?.cooldowns ?? [];

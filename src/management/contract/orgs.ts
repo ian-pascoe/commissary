@@ -4,9 +4,9 @@
  * Workers addition, no Go counterpart. Shared with the browser: imports `effect` only.
  *
  * `/orgs` and `/orgs/:slug` are platform-level. Every other management route also exists once per org, as
- * `/v8/management/orgs/<slug>/<route>`; the unscoped spelling means the deployment's first org, `global` (ADR 0021).
+ * `/v9/management/orgs/<slug>/<route>`; the unscoped spelling means the deployment's first org, `global` (ADR 0021).
  * Only platform admins (`PLATFORM_ADMIN_*`) may list, create and rename orgs: anyone else gets
- * `403 platform_admin_required`. On a hosted proxy (ADR 0026) anyone signed in may create orgs, up to their owned-org
+ * `403 platform_admin_required`. On Commissary Cloud (ADR 0026) anyone signed in may create orgs, up to their owned-org
  * limit (`409 org_limit_reached`), and becomes the new org's owner.
  */
 import { Schema } from "effect";
@@ -25,7 +25,7 @@ export const OrgView = Schema.Struct({
   created_at: Schema.String,
   /** How many days the org's usage records are kept; `null`: forever (ADR 0027). */
   usage_retention_days: Schema.NullOr(Schema.Int),
-  /** Hosted proxy: a platform admin suspended it (refused everywhere, nothing deleted). Absent otherwise. */
+  /** Commissary Cloud: a platform admin suspended it (refused everywhere, nothing deleted). Absent otherwise. */
   suspended: Schema.optionalKey(Schema.Boolean),
 });
 
@@ -49,7 +49,7 @@ export type CreateOrg = typeof CreateOrg.Type;
 
 /**
  * `PATCH /orgs/:slug`: the fields to change. Renaming the slug breaks the old address; the id stays. `suspended` (a
- * hosted proxy only) suspends the org, signing its members out, or unsuspends it.
+ * Commissary Cloud only) suspends the org, signing its members out, or unsuspends it.
  */
 export const UpdateOrg = Schema.Struct({
   slug: Schema.optionalKey(Schema.String),
@@ -120,7 +120,7 @@ export type MyOrg = typeof MyOrg.Type;
 
 /**
  * `GET /me`: who the caller is for the panel, which orgs they may open, and their role in the org the request
- * addresses (`/v8/management/orgs/<slug>/me`; `global` for the unscoped spelling).
+ * addresses (`/v9/management/orgs/<slug>/me`; `global` for the unscoped spelling).
  */
 export const Me = Schema.Struct({
   /** A platform admin is an owner of every org and may create orgs. */
@@ -135,14 +135,14 @@ export const Me = Schema.Struct({
    */
   private_credentials: Schema.optionalKey(Schema.Boolean),
   /**
-   * Present on a hosted proxy only (ADR 0026): anyone signed in may create orgs, up to `org_limit` orgs of their own
+   * Present on Commissary Cloud only (ADR 0026): anyone signed in may create orgs, up to `org_limit` orgs of their own
    * (`owned_orgs` so far). A platform admin has no limit (both absent then).
    */
   hosted: Schema.optionalKey(Schema.Boolean),
   org_limit: Schema.optionalKey(Schema.Number),
   owned_orgs: Schema.optionalKey(Schema.Number),
   /**
-   * Where clients send proxy keys (`https://<API_DOMAIN>`, ADR 0028) when the deployment serves its proxy routes on an
+   * Where clients send API keys (`https://<API_DOMAIN>`, ADR 0028) when the deployment serves its client API routes on an
    * API host of their own; absent when the panel's own origin serves them.
    */
   api_url: Schema.optionalKey(Schema.String),
@@ -189,7 +189,7 @@ export class OrgsGroup extends HttpApiGroup.make("orgs").add(
   /** Downloads what the org keeps, secrets as previews, before it is deleted. Org admins. */
   HttpApiEndpoint.get("export", "/export", { success: OrgExport, error: managementErrors }),
   /**
-   * Deletes the addressed org with all its data at once (ADR 0027): usage records, credentials, config, members, proxy
+   * Deletes the addressed org with all its data at once (ADR 0027): usage records, credentials, config, members, API
    * keys, session state and its registry entry; the slug is free to take again. Org owners and platform admins; the
    * body repeats the org's name. `422 name_mismatch`, `409 global_org` (the first org is never deleted), `503
    * deletion_incomplete` (a big org: send the request again until it succeeds).

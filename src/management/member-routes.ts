@@ -1,5 +1,5 @@
 /**
- * `/v8/management/members`, `/membership`, `/teams` and `/service-tokens` (`MembersGroup` in contract/members.ts): an
+ * `/v9/management/members`, `/membership`, `/teams` and `/service-tokens` (`MembersGroup` in contract/members.ts): an
  * org's members, teams and service tokens (ADR 0022). Workers addition, no Go counterpart.
  *
  * The Access gate lets only org admins in (`access/policy.ts`); the ControlPlane checks each write against the actor's
@@ -12,7 +12,7 @@ import { managementKeyForbidden } from "./management-key-routes.ts";
 import { Effect, Schema } from "effect";
 import { HttpRouter, type HttpServerResponse } from "effect/http";
 import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
-import { forgetVerifiedProxyKeysOf } from "../access/proxy-key.ts";
+import { forgetVerifiedApiKeysOf } from "../access/api-key.ts";
 import { syncOrgIndex } from "../members/admission.ts";
 import { type Actor, holdsSensitivePowers, roleAtLeast } from "../members/roles.ts";
 import type {
@@ -41,7 +41,7 @@ import {
 import { bodyJson, controlPlane, handled, jsonReply, type Reply, replyError } from "./http.ts";
 import { registry } from "./org-routes.ts";
 
-const BASE = "/v8/management";
+const BASE = "/v9/management";
 
 const STATUS: Readonly<Record<MemberErrorCode, number>> = {
   invalid_email: 422,
@@ -174,14 +174,14 @@ const removeMember = Effect.gen(function* () {
   const result = yield* controlPlane("removeMember", (stub) => stub.removeMember(id, actor));
 
   yield* orRefuse(result);
-  // Their proxy keys went with them (ADR 0027); this isolate stops trusting the keys it verified at once.
-  forgetVerifiedProxyKeysOf((yield* AccessPrincipal).org, id);
+  // Their API keys went with them (ADR 0027); this isolate stops trusting the keys it verified at once.
+  forgetVerifiedApiKeysOf((yield* AccessPrincipal).org, id);
   yield* reindex;
 
   return jsonReply(200, { status: "ok" });
 });
 
-/** `access_clients` exists in `global` only: an Access sign-in on a proxy route names no org, so it reaches no other. */
+/** `access_clients` exists in `global` only: an Access sign-in on a client API route names no org, so it reaches no other. */
 const settingsView = (settings: MembershipSettingsWire, org: OrgId): MembershipSettings => ({
   auto_join: settings.autoJoin,
   private_credentials: settings.privateCredentials,
@@ -217,7 +217,7 @@ const updateMembershipSettings = Effect.gen(function* () {
   if (input.access_clients !== undefined && identity.org !== GLOBAL_ORG)
     return yield* replyError(422, "access_clients_global_only", {
       message:
-        "only the first org takes Access sign-ins on the proxy routes; this org takes proxy keys only",
+        "only the first org takes Access sign-ins on the client API; this org takes API keys only",
     });
 
   const settings = yield* controlPlane("setMembershipSettings", (stub) =>

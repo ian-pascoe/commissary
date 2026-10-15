@@ -5,8 +5,8 @@ import { Schema } from "effect";
 import { OrgSlug } from "../platform/org.ts";
 
 /**
- * Paths under these prefixes require a caller: a proxy key or, where the org still accepts them, an Access sign-in on
- * the proxy routes (`authenticate.ts`), an Access sign-in on `/v8/management`. `/v1` also covers `/v1beta*` and
+ * Paths under these prefixes require a caller: an API key or, where the org still accepts them, an Access sign-in on
+ * the client API (`authenticate.ts`), an Access sign-in on `/v9/management`. `/v1` also covers `/v1beta*` and
  * `/v1internal`;
  * `/chat/completions`, `/completions` and `/responses` are the unprefixed aliases of the `/v1` routes (not in Go, see
  * handlers/openai/routes.ts).
@@ -18,11 +18,11 @@ export const PROTECTED_PREFIXES = [
   "/chat/completions",
   "/completions",
   "/responses",
-  "/v8/management",
+  "/v9/management",
 ] as const;
 
 /** Paths under this prefix additionally require the principal to be on the admin allow-list. */
-export const MANAGEMENT_PREFIX = "/v8/management";
+export const MANAGEMENT_PREFIX = "/v9/management";
 
 /**
  * Where Go serves the upstream panel. Here it redirects to `/` (`management/web-panel.ts`), and stays in the
@@ -44,7 +44,7 @@ export const PANEL_SECTIONS = [
   "members",
   "grants",
   "my-models",
-  "proxy-keys",
+  "api-keys",
   "limits",
   "management-keys",
   "people",
@@ -57,7 +57,7 @@ const inSection = (path: string, section: string): boolean =>
 /** Where the org of a panel page comes from: `/o/<slug>/accounts` is the page `/accounts` of the org `<slug>`. */
 export const PANEL_ORG_PREFIX = "/o";
 
-/** The segment after `/v8/management` that is followed by an org slug: `/v8/management/orgs/<slug>/config`. */
+/** The segment after `/v9/management` that is followed by an org slug: `/v9/management/orgs/<slug>/config`. */
 export const ORGS_SEGMENT = "orgs";
 
 const isPanelPath = (path: string): boolean =>
@@ -78,13 +78,13 @@ const decodedLowercase = (segment: string): string => {
 /** An org addressed by the path of a management request, and the path the request has once the org is taken out. */
 export interface OrgAddress {
   readonly slug: OrgSlug;
-  /** `/v8/management/<rest>` for `/v8/management/orgs/<slug>/<rest>`, `/<page>` for `/o/<slug>/<page>` (`/` for none). */
+  /** `/v9/management/<rest>` for `/v9/management/orgs/<slug>/<rest>`, `/<page>` for `/o/<slug>/<page>` (`/` for none). */
   readonly path: string;
 }
 
 /**
- * The org a path addresses, `undefined` for a path of no org: `/v8/management/orgs/<slug>/<rest>` (the management API
- * of the org; `/v8/management/orgs` and `/v8/management/orgs/<slug>` themselves are platform-level routes and address
+ * The org a path addresses, `undefined` for a path of no org: `/v9/management/orgs/<slug>/<rest>` (the management API
+ * of the org; `/v9/management/orgs` and `/v9/management/orgs/<slug>` themselves are platform-level routes and address
  * none) and `/o/<slug>[/<page>]` (a page of the panel, not `/assets`). Like the router, it skips duplicate slashes and
  * compares the fixed segments case-insensitively and percent-decoded; the rest of the path stays as sent.
  */
@@ -111,7 +111,7 @@ export const parseOrgAddress = (pathname: string): OrgAddress | undefined => {
 
   const first = next();
 
-  if (first === "v8") {
+  if (first === "v9") {
     if (next() !== "management" || next() !== ORGS_SEGMENT) return undefined;
     const slug = next();
     const path = rest();
@@ -170,7 +170,7 @@ export const unscopedPath = (path: string): string => parseOrgAddress(path)?.pat
 /**
  * Whether a normalised path (`normalizedPath`) is a page a browser may open from another site: the panel's pages
  * (not `/assets`), also those of an org (`/o/<slug>/accounts`), and the legacy panel address. The management API
- * (`/v8/management*`) never is.
+ * (`/v9/management*`) never is.
  */
 export const isPanelPagePath = (path: string): boolean => {
   const page = unscopedPath(path);

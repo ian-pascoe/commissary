@@ -2,9 +2,9 @@
 // functions keep the panel from offering a control that would be refused. Pure: no DOM, tested in
 // test/web-role.test.ts.
 //
-// Roles: org owner > org admin > member. A plain member may only read their own usage, manage their own proxy keys
+// Roles: org owner > org admin > member. A plain member may only read their own usage, manage their own API keys
 // and, where the org lets members connect private credentials (ADR 0023), manage their own private accounts and API
-// keys; org admins manage the org's configuration, plain members and teams, and see every proxy key; org owners also
+// keys; org admins manage the org's configuration, plain members and teams, and see every API key; org owners also
 // change roles, add org admins and org owners, and decide who may join by themselves. A platform admin is an org owner
 // of every org.
 import type { Me } from "#contract/orgs.ts";
@@ -43,7 +43,7 @@ export const roleSummary = (role: OrgRole): string => {
     case "admin":
       return "Manages accounts, keys, models, settings, plain members and teams.";
     case "member":
-      return "Sees their own usage and limits, and manages their own proxy keys.";
+      return "Sees their own usage and limits, and manages their own API keys.";
   }
 };
 
@@ -81,7 +81,7 @@ export interface PanelPage {
   readonly privateMembers?: boolean;
   /** The link is active on this exact path only: another page of the nav lives below it (`/settings/sso`). */
   readonly exact?: boolean;
-  /** The page exists on a hosted proxy only (ADR 0026). */
+  /** The page exists on Commissary Cloud only (ADR 0026). */
   readonly hosted?: boolean;
 }
 
@@ -90,12 +90,12 @@ export const PAGES: ReadonlyArray<PanelPage> = [
   { to: "/", label: "Overview", group: "glance", role: "admin" },
   { to: "/usage", label: "Usage", group: "glance", role: "member" },
   { to: "/accounts", label: "Accounts", group: "providers", role: "admin", privateMembers: true },
-  { to: "/keys", label: "API keys", group: "providers", role: "admin", privateMembers: true },
+  { to: "/keys", label: "Provider keys", group: "providers", role: "admin", privateMembers: true },
   { to: "/models", label: "Models", group: "providers", role: "admin" },
   { to: "/members", label: "Members", group: "people", role: "admin" },
   { to: "/grants", label: "Grants", group: "people", role: "admin" },
   { to: "/my-models", label: "My models", group: "people", role: "member" },
-  { to: "/proxy-keys", label: "Proxy keys", group: "people", role: "member" },
+  { to: "/api-keys", label: "API keys", group: "people", role: "member" },
   { to: "/management-keys", label: "Management keys", group: "people", role: "admin" },
   { to: "/limits", label: "Limits", group: "people", role: "member" },
   { to: "/settings", label: "Settings", group: "org", role: "admin", exact: true },
@@ -111,7 +111,7 @@ export const PAGES: ReadonlyArray<PanelPage> = [
 
 /**
  * The nav links a role sees; `privateCredentials`: the org lets members connect private credentials; `hosted`: the
- * proxy is a hosted one, which has the pages that exist there only.
+ * deployment is Commissary Cloud, which has the pages that exist there only.
  */
 export const pagesFor = (
   role: OrgRole,
@@ -157,15 +157,15 @@ const within = (pathname: string, page: string): boolean =>
 
 /**
  * Whether a role may open a page of the panel (`pathname` is relative to the org's base path). Sub-pages of a page
- * need an org admin, like `/usage/prices`, except the page itself. A plain member opens Usage, My models, Proxy keys and Limits, and the
- * pages of their own private accounts and API keys, with their sub-pages, where the org lets members connect private
+ * need an org admin, like `/usage/prices`, except the page itself. A plain member opens Usage, My models, API keys and Limits, and the
+ * pages of their own private accounts and provider keys, with their sub-pages, where the org lets members connect private
  * credentials.
  */
 export const pageAllowed = (role: OrgRole, pathname: string, privateCredentials = false): boolean =>
   atLeast(role, "admin") ||
   trimmed(pathname) === "/usage" ||
   trimmed(pathname) === "/my-models" ||
-  trimmed(pathname) === "/proxy-keys" ||
+  trimmed(pathname) === "/api-keys" ||
   trimmed(pathname) === "/limits" ||
   (privateCredentials && (within(pathname, "/accounts") || within(pathname, "/keys")));
 
@@ -208,13 +208,13 @@ export const canRemove = (caller: Caller, target: OrgRole): boolean =>
 /** Whether people Access admits may join by themselves is decided by org owners. */
 export const canSetAutoJoin = (caller: Caller): boolean => atLeast(caller.role, "owner");
 
-/** Whether the proxy routes still accept an Access sign-in instead of a proxy key is decided by org owners too. */
+/** Whether the client API still accepts an Access sign-in instead of an API key is decided by org owners too. */
 export const canSetAccessClients = canSetAutoJoin;
 
-/** Org admins list and revoke every proxy key of the org; every member their own. */
-export const seesEveryProxyKey = (caller: Caller): boolean => atLeast(caller.role, "admin");
+/** Org admins list and revoke every API key of the org; every member their own. */
+export const seesEveryApiKey = (caller: Caller): boolean => atLeast(caller.role, "admin");
 
-/** Org admins set any Spend limit and the calendar; a plain member limits their own proxy keys. */
+/** Org admins set any Spend limit and the calendar; a plain member limits their own API keys. */
 export const setsAnyLimit = (caller: Caller): boolean => atLeast(caller.role, "admin");
 
 export const canManageTeams = (caller: Caller): boolean => atLeast(caller.role, "admin");

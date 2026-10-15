@@ -1,4 +1,4 @@
-/** Gemini API-key, Gemini Interactions and Vertex executors. */
+/** Gemini provider-key, Gemini Interactions and Vertex executors. */
 import { makeGoogleExecutor } from "./google.ts";
 import { geminiVariant, vertexVariant } from "./targets.ts";
 

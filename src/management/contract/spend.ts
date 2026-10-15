@@ -1,11 +1,11 @@
 /**
- * Spend limits (`/v8/management/spend`, `../spend-routes.ts`; the rules live in `src/spend/`): what a member, team, the
- * org, a shared credential or a proxy key may spend in a day, week or month of the org's time zone. Workers addition,
+ * Spend limits (`/v9/management/spend`, `../spend-routes.ts`; the rules live in `src/spend/`): what a member, team, the
+ * org, a shared credential or an API key may spend in a day, week or month of the org's time zone. Workers addition,
  * no Go counterpart. Shared with the browser: imports `effect` and `./errors.ts` only.
  *
  * Amounts are micro-USD (1 USD = 1,000,000). An org admin sees and writes every limit and sets the calendar; a plain
- * member sees the limits that bind them (their own, their teams', the org's and those on their proxy keys) and writes
- * limits on their own proxy keys, never above an admin's limit on that key. A credential limit names the credential by
+ * member sees the limits that bind them (their own, their teams', the org's and those on their API keys) and writes
+ * limits on their own API keys, never above an admin's limit on that key. A credential limit names the credential by
  * its `auth_index`. Each limit has a revision: an edit names the one it was based on in `If-Match`.
  */
 import { Schema } from "effect";
@@ -38,13 +38,13 @@ export type SpendWeekStart = typeof SpendWeekStart.Type;
 export const SpendLimitView = Schema.Struct({
   id: Schema.String,
   kind: SpendSubjectKind,
-  /** Member, team and proxy key ids; the `auth_index` of a credential; empty for the org. */
+  /** Member, team and API key ids; the `auth_index` of a credential; empty for the org. */
   subject: Schema.String,
-  /** What to show for the subject: an email, a team name, a proxy key's name, a credential's label. */
+  /** What to show for the subject: an email, a team name, an API key's name, a credential's label. */
   label: Schema.String,
   period: SpendPeriod,
   amount_micros: Schema.Number,
-  /** Who wrote it: an org admin, or a member on their own proxy key. */
+  /** Who wrote it: an org admin, or a member on their own API key. */
   source: Schema.Literals(["admin", "member"]),
   revision: Schema.Int,
   /** Spent so far in the current period, and what is left of the amount (0 once it is reached). */
@@ -108,7 +108,7 @@ export class SpendGroup extends HttpApiGroup.make("spend").add(
   /**
    * `422 invalid_limit` (amount, subject), `422 exceeds_admin_limit` (a member above an admin's limit on their key),
    * `409 conflict` (the subject has a limit for the period), `404 subject_not_found`, `403 forbidden` (a member
-   * limits something but their own proxy keys).
+   * limits something but their own API keys).
    */
   HttpApiEndpoint.post("create", "/spend/limits", {
     payload: CreateSpendLimit,

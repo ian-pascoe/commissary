@@ -28,7 +28,7 @@ export const newOrgId = (): OrgId =>
 export const GLOBAL_ORG: OrgId = OrgId.make("global");
 
 /**
- * An org slug: what addresses the org in URLs (`/o/<slug>/accounts`, `/v8/management/orgs/<slug>/...`). The same
+ * An org slug: what addresses the org in URLs (`/o/<slug>/accounts`, `/v9/management/orgs/<slug>/...`). The same
  * characters as an {@link OrgId}, but a slug can be renamed while the id, which names the org's Durable Objects and
  * stored data, never changes.
  */
@@ -43,7 +43,7 @@ export const DEFAULT_ORG_SLUG: OrgSlug = OrgSlug.make("default");
 
 /** The org of the current request or scheduled job. */
 export class CurrentOrg extends Context.Service<CurrentOrg, OrgId>()(
-  "cf-llm-proxy/platform/CurrentOrg",
+  "commissary/platform/CurrentOrg",
 ) {}
 
 export type ControlPlaneStub = ReturnType<Env["CONTROL_PLANE"]["getByName"]>;

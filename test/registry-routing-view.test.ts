@@ -156,7 +156,7 @@ oauth:
     });
   });
 
-  it("an API key's excluded-models are key rules and the key has no channel", () => {
+  it("a provider key's excluded-models are key rules and the key has no channel", () => {
     const result = view([
       source("claude:abc", "claude", {
         source: "config",

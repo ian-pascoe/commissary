@@ -4,7 +4,7 @@
  * Go source: internal/api/server_routes.go (codexAlphaSearch, sanitizeCodexAlphaSearchBody,
  * rewriteCodexAlphaSearchModel), sdk/cliproxy/auth/credential_policy.go. The request body (<= 16 MiB) is forwarded
  * without translation after dropping `prompt_cache_key`/`prompt_cache_retention`; the upstream status, content type
- * and body come back unchanged. OAuth credentials call the ChatGPT backend, API keys need `alpha-search` enabled and
+ * and body come back unchanged. OAuth credentials call the ChatGPT backend, provider keys need `alpha-search` enabled and
  * a base URL.
  */
 import { Clock, Effect, Result } from "effect";
@@ -27,7 +27,7 @@ import type { ExecutionContext } from "../../executor/types.ts";
 import { UsageReporter } from "../../usage/reporter.ts";
 import { allowsCodexAlphaSearch, withCredentialPolicy } from "../../executor/policy-picker.ts";
 import { asString, get, isJsonObject, type Json, tryParseJson } from "../../json/index.ts";
-import { currentConfig, type ProxyServices, readRequestBody } from "../request.ts";
+import { currentConfig, type ClientApiServices, readRequestBody } from "../request.ts";
 import { CurrentOrg } from "../../platform/org.ts";
 
 const MAX_BODY_BYTES = 16 << 20;
@@ -76,9 +76,9 @@ const upstreamHeaders = (
 
   if (typeof accountId === "string" && accountId.trim() !== "")
     headers.set("chatgpt-account-id", accountId);
-  const { apiKey } = codexCreds(credential);
+  const { providerKey } = codexCreds(credential);
 
-  if (apiKey.trim() !== "") headers.set("authorization", `Bearer ${apiKey}`);
+  if (providerKey.trim() !== "") headers.set("authorization", `Bearer ${providerKey}`);
 
   return applyCustomHeaders(Object.fromEntries(headers), credential, clientHeaders, sessionId);
 };
@@ -114,7 +114,7 @@ const handle = Effect.gen(function* () {
       model,
       callerScope: identity.callerScope,
       ...(identity.memberId === undefined ? {} : { memberId: identity.memberId }),
-      ...(identity.principal.kind === "key" ? { proxyKeyId: identity.principal.keyId } : {}),
+      ...(identity.principal.kind === "key" ? { apiKeyId: identity.principal.keyId } : {}),
       ...(sessionId !== "" ? { session: { id: sessionId } } : {}),
     }),
   );
@@ -177,8 +177,8 @@ const handle = Effect.gen(function* () {
         }
 
         url = `${baseUrl.replace(/\/+$/, "")}/alpha/search`;
-        // API-key search reuses the credential-aware model resolution of the pick (prefixes, `oauth.model-alias`,
-        // API-key aliases) so routing names are not forwarded (`ResolveExecutionModel` + rewriteCodexAlphaSearchModel).
+        // Provider-key search reuses the credential-aware model resolution of the pick (prefixes, `oauth.model-alias`,
+        // Provider-key aliases) so routing names are not forwarded (`ResolveExecutionModel` + rewriteCodexAlphaSearchModel).
         const upstreamModel = (route.upstreamModels[0] ?? "").trim();
         const parsed = tryParseJson(upstreamBody);
 
@@ -266,10 +266,10 @@ const handle = Effect.gen(function* () {
   });
 });
 
-/** Route layer; requires the {@link ProxyServices} and `AccessPrincipal`. */
+/** Route layer; requires the {@link ClientApiServices} and `AccessPrincipal`. */
 export const AlphaSearchRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const services = yield* routeServices<ProxyServices>();
+    const services = yield* routeServices<ClientApiServices>();
     yield* router.add("POST", "/v1/alpha/search", Effect.provide(handle, services));
     yield* router.add("POST", "/backend-api/codex/alpha/search", Effect.provide(handle, services));
   }),

@@ -1,5 +1,5 @@
 /**
- * Cloudflare Turnstile on a hosted proxy (ADR 0026): a social sign-in starts only with a token the sign-in page's
+ * Cloudflare Turnstile on Commissary Cloud (ADR 0026): a social sign-in starts only with a token the sign-in page's
  * widget issued, checked with Turnstile's siteverify API. Signing in is also signing up (a first sign-in creates the
  * person), so every start is guarded. New in the Workers port, no Go counterpart.
  */
@@ -20,7 +20,7 @@ export type TurnstileOutcome = "passed" | "failed" | "unavailable";
 const SITEVERIFY_TIMEOUT_MS = 10_000;
 
 /**
- * Asks siteverify whether `token` is a fresh token of the deployment's widget, solved on `hostname` (the proxy's). `failed`
+ * Asks siteverify whether `token` is a fresh token of the deployment's widget, solved on `hostname` (Commissary's). `failed`
  * for a missing, malformed, used or expired token, or one solved on another site; `unavailable` when siteverify cannot be
  * reached in time (the sign-in is refused either way).
  */

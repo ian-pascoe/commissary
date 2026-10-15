@@ -149,7 +149,7 @@ describe("ControlPlane credentials (Workers pool)", () => {
     expect(new Set(ok.map((item) => item.lease.id)).size).toBe(30);
   });
 
-  it("synthesises config API keys, applies model aliases and follows config changes", async () => {
+  it("synthesises provider keys, applies model aliases and follows config changes", async () => {
     const stub = plane();
     await stub.importConfig(
       `

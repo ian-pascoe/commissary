@@ -23,7 +23,7 @@ import { normalizeDevinUuid } from "./interactions.ts";
 const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");
 
 export interface DevinCredentials {
-  readonly apiKey: string;
+  readonly providerKey: string;
   readonly baseUrl: string;
   readonly deviceSeed: string;
 }
@@ -32,7 +32,7 @@ export interface DevinCredentials {
 export const devinCredentials = (credential: CredentialSnapshot): DevinCredentials => {
   const { attributes, metadata } = credential;
 
-  const apiKey =
+  const providerKey =
     text(attributes["api_key"]) ||
     text(attributes["session_token"]) ||
     text(attributes["token"]) ||
@@ -44,7 +44,7 @@ export const devinCredentials = (credential: CredentialSnapshot): DevinCredentia
   if (baseUrl === DEVIN_DEFAULT_BASE_URL) baseUrl = text(metadata["base_url"]) || baseUrl;
 
   return {
-    apiKey,
+    providerKey,
     baseUrl,
     deviceSeed: text(attributes["device_seed"]) || text(metadata["device_seed"]),
   };

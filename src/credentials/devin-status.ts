@@ -162,7 +162,7 @@ export const refreshDevinStatuses = (
         continue;
       }
 
-      const { apiKey, baseUrl, deviceSeed } = devinCredentials({
+      const { providerKey, baseUrl, deviceSeed } = devinCredentials({
         id: credential.id,
         provider: credential.provider,
         kind: "oauth",
@@ -170,13 +170,13 @@ export const refreshDevinStatuses = (
         metadata: credential.metadata,
       });
 
-      if (apiKey === "") {
+      if (providerKey === "") {
         skipped += 1;
         continue;
       }
 
       const result = yield* Effect.result(
-        fetchDevinUserStatus({ sessionToken: apiKey, baseUrl, deviceSeed }),
+        fetchDevinUserStatus({ sessionToken: providerKey, baseUrl, deviceSeed }),
       );
 
       if (Result.isFailure(result)) {

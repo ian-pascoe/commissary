@@ -1,5 +1,5 @@
 // Vite config of the control panel (web/). `pnpm web:build` writes `public/index.html` and `public/assets/*`, which the
-// Worker serves at `/` (src/management/web-panel.ts). `pnpm web:dev` serves the panel with hot reload and forwards `/v8`
+// Worker serves at `/` (src/management/web-panel.ts). `pnpm web:dev` serves the panel with hot reload and forwards `/v9`
 // to a running `pnpm dev` Worker.
 import { rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -16,7 +16,7 @@ const workerUrl = process.env["CF_LLM_PROXY_DEV_URL"] ?? "http://localhost:1337"
  * directory: remove only the previous panel build (stale hashed bundles would otherwise be deployed).
  */
 const cleanPreviousBuild = (): Plugin => ({
-  name: "cf-llm-proxy:clean-previous-build",
+  name: "commissary:clean-previous-build",
   apply: "build",
   async buildStart() {
     await rm(`${outDir}/assets`, { recursive: true, force: true });
@@ -66,7 +66,7 @@ const themeBoot = (): Plugin => {
   let building = false;
 
   return {
-    name: "cf-llm-proxy:theme-boot",
+    name: "commissary:theme-boot",
     configResolved(config) {
       building = config.command === "build";
     },
@@ -120,7 +120,7 @@ export default defineConfig({
     proxy: {
       // The Worker refuses management calls whose Origin is another host (src/access/csrf.ts); present the Worker's
       // own origin, as the deployed panel does.
-      "/v8": {
+      "/v9": {
         target: workerUrl,
         changeOrigin: true,
         headers: { origin: workerUrl },

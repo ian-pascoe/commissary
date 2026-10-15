@@ -22,7 +22,7 @@ export const oauthCredential = (
   ...overrides,
 });
 
-export const apiKeyCredential = (
+export const providerKeyCredential = (
   overrides: Partial<CredentialSnapshot> = {},
 ): CredentialSnapshot => ({
   id: "codex-key-1",

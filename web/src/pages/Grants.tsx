@@ -522,7 +522,7 @@ const accountsOf = (
 ): ReadonlyArray<Account> =>
   AsyncResult.isSuccess(result)
     ? result.value.files
-        // A config API key is listed under its auth_index, which is not its credential id: a grant names it through its
+        // A provider key is listed under its auth_index, which is not its credential id: a grant names it through its
         // provider or all credentials.
         .filter((file) => file.private !== true && file.source === "file")
         .map((file) => ({

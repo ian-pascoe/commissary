@@ -1,5 +1,5 @@
 /**
- * `GET /v8/management/routing/models`: which credentials serve each model clients can call, and the channel rules
+ * `GET /v9/management/routing/models`: which credentials serve each model clients can call, and the channel rules
  * (aliases, exclusions) that shape it. No Go counterpart (the Go panel has no such view); see `routingView`.
  *
  * Built from a fresh registry snapshot (`ModelRegistry.fresh`: config re-read, no 5 s cache), so a rule edit shows on

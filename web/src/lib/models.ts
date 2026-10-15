@@ -12,7 +12,7 @@ import type {
   RoutingModels,
   RuleScope,
 } from "#contract/routing.ts";
-import type { ApiKeyFamily, ApiKeysList } from "#contract/api-keys.ts";
+import type { ProviderKeyFamily, ProviderKeysList } from "#contract/provider-keys.ts";
 import { cooldownReason } from "./accounts.ts";
 import { FAMILY_ORDER, familyName, groupTitle, keyTail } from "./keys.ts";
 import { providerName } from "./providers.ts";
@@ -246,9 +246,9 @@ export const routeStanding = (route: ModelRoute, now: number): RouteStanding => 
   }
 };
 
-/** Where a config API key lives on the API keys page. */
+/** Where a provider key lives on the provider keys page. */
 export interface KeyHome {
-  readonly family: ApiKeyFamily;
+  readonly family: ProviderKeyFamily;
   readonly index: number;
   /** "Claude key …Qx7a", or the endpoint name of an OpenAI-compatible group. */
   readonly name: string;
@@ -257,7 +257,7 @@ export interface KeyHome {
 }
 
 /** Every configured key by `auth_index`, so a route names the key it uses and links to its group. */
-export const keyHomes = (list: ApiKeysList): ReadonlyMap<string, KeyHome> => {
+export const keyHomes = (list: ProviderKeysList): ReadonlyMap<string, KeyHome> => {
   const homes = new Map<string, KeyHome>();
 
   for (const family of FAMILY_ORDER) {
@@ -288,7 +288,7 @@ export interface RouteWho {
   readonly detail: string | undefined;
   readonly home:
     | { readonly kind: "account"; readonly authIndex: string }
-    | { readonly kind: "key"; readonly family: ApiKeyFamily; readonly index: number }
+    | { readonly kind: "key"; readonly family: ProviderKeyFamily; readonly index: number }
     | { readonly kind: "keys" };
 }
 
@@ -315,7 +315,7 @@ export const routeWho = (route: ModelRoute, homes: ReadonlyMap<string, KeyHome>)
   const compat = route.provider.startsWith("openai-compatib");
 
   return {
-    name: compat ? route.label : `${providerName(route.provider)} API key`,
+    name: compat ? route.label : `${providerName(route.provider)} provider key`,
     detail: compat ? "OpenAI-compatible" : undefined,
     home: { kind: "keys" },
   };

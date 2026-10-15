@@ -21,21 +21,21 @@ export const CODEX_DEFAULT_BASE_URL = "https://chatgpt.com/backend-api/codex";
 
 const ROUTING_HINT_HEADER = "x-codex-routing-hint";
 
-/** `codexCreds`: API key (or OAuth access token) and the configured base URL. */
+/** `codexCreds`: provider key (or OAuth access token) and the configured base URL. */
 export const codexCreds = (credential: CredentialSnapshot) => {
-  let apiKey = credential.attributes["api_key"] ?? "";
+  let providerKey = credential.attributes["api_key"] ?? "";
 
-  if (apiKey === "") {
+  if (providerKey === "") {
     const token = credential.metadata["access_token"];
 
-    if (typeof token === "string") apiKey = token;
+    if (typeof token === "string") providerKey = token;
   }
 
-  return { apiKey, baseURL: credential.attributes["base_url"] ?? "" };
+  return { providerKey, baseURL: credential.attributes["base_url"] ?? "" };
 };
 
 /** `codexAuthUsesAPIKey`. */
-export const codexUsesApiKey = (credential: CredentialSnapshot): boolean =>
+export const codexUsesProviderKey = (credential: CredentialSnapshot): boolean =>
   credential.kind === "apikey" || (credential.attributes["api_key"] ?? "").trim() !== "";
 
 /** Base URL without a trailing slash, defaulting to the ChatGPT backend. */
@@ -112,12 +112,12 @@ export interface CodexHeaderInput {
 /** `applyCodexHeadersFromSources` + routing hint + model overrides. Names are lower case. */
 export const buildCodexHeaders = (input: CodexHeaderInput) => {
   const { credential, config, clientHeaders } = input;
-  const { apiKey } = codexCreds(credential);
-  const isApiKey = codexUsesApiKey(credential);
+  const { providerKey } = codexCreds(credential);
+  const isProviderKey = codexUsesProviderKey(credential);
   const headers: Record<string, string> = {};
   headers["content-type"] = "application/json";
 
-  if (apiKey.trim() !== "") headers["authorization"] = `Bearer ${apiKey}`;
+  if (providerKey.trim() !== "") headers["authorization"] = `Bearer ${providerKey}`;
 
   if (input.sessionHeader !== undefined && input.sessionHeader !== "")
     headers["session-id"] = input.sessionHeader;
@@ -143,7 +143,7 @@ export const buildCodexHeaders = (input: CodexHeaderInput) => {
   }
 
   // ensureHeaderWithConfigPrecedence: configured default (OAuth only), then the client's value, then the fixed one.
-  const configUserAgent = isApiKey
+  const configUserAgent = isProviderKey
     ? ""
     : config.oauth.providers.codex["header-defaults"]["user-agent"].trim();
 
@@ -163,9 +163,9 @@ export const buildCodexHeaders = (input: CodexHeaderInput) => {
   const originator = clientHeader(clientHeaders, "originator");
 
   if (originator !== "") headers["originator"] = originator;
-  else if (!isApiKey) headers["originator"] = CODEX_ORIGINATOR;
+  else if (!isProviderKey) headers["originator"] = CODEX_ORIGINATOR;
 
-  if (!isApiKey) {
+  if (!isProviderKey) {
     const accountId = credential.metadata["account_id"];
 
     if (typeof accountId === "string") headers["chatgpt-account-id"] = accountId;
@@ -178,7 +178,7 @@ export const buildCodexHeaders = (input: CodexHeaderInput) => {
     headers["originator"] = CODEX_ORIGINATOR;
   }
 
-  if (input.routingHint === true && !isApiKey) applyRoutingHint(headers, input, clientHeaders);
+  if (input.routingHint === true && !isProviderKey) applyRoutingHint(headers, input, clientHeaders);
 
   for (const [name, value] of Object.entries(input.modelHeaderOverrides ?? {}))
     headers[name.toLowerCase()] = value;
@@ -202,7 +202,7 @@ export const buildCodexHeaders = (input: CodexHeaderInput) => {
 
 /**
  * `applyCodexRoutingHint`: `model=<slug>[;tier=<service_tier>]`. An operator `header:` rule that resolves to a value
- * wins; API-key requests get no hint (native Codex sends none to API-key providers).
+ * wins; provider-key requests get no hint (native Codex sends none to provider-key providers).
  */
 const applyRoutingHint = (
   headers: Record<string, string>,
@@ -257,8 +257,8 @@ const SESSION_HEADERS = ["session-id", "session_id"];
  */
 export const buildCodexWebsocketHeaders = (input: CodexWebsocketHeaderInput) => {
   const { credential, config, clientHeaders } = input;
-  const { apiKey } = codexCreds(credential);
-  const isApiKey = codexUsesApiKey(credential);
+  const { providerKey } = codexCreds(credential);
+  const isProviderKey = codexUsesProviderKey(credential);
   const headers: Record<string, string> = {};
 
   if (input.cacheId !== "") {
@@ -266,12 +266,12 @@ export const buildCodexWebsocketHeaders = (input: CodexWebsocketHeaderInput) => 
     headers["conversation_id"] = input.cacheId;
   }
 
-  if (apiKey.trim() !== "") headers["authorization"] = `Bearer ${apiKey}`;
+  if (providerKey.trim() !== "") headers["authorization"] = `Bearer ${providerKey}`;
 
   // ensureHeaderWithPriority: what is set wins, then the client's value, then the configured default.
   const defaults = config.oauth.providers.codex["header-defaults"];
   const betaFeatures = clientHeader(clientHeaders, "x-codex-beta-features");
-  const configBeta = isApiKey ? "" : defaults["beta-features"].trim();
+  const configBeta = isProviderKey ? "" : defaults["beta-features"].trim();
 
   if (betaFeatures !== "") headers["x-codex-beta-features"] = betaFeatures;
   else if (configBeta !== "") headers["x-codex-beta-features"] = configBeta;
@@ -292,11 +292,11 @@ export const buildCodexWebsocketHeaders = (input: CodexWebsocketHeaderInput) => 
     if (value !== "") headers[name] = value;
   }
 
-  // API keys only forward the client's User-Agent; OAuth credentials: configured default, client, fixed Codex value.
+  // Provider keys only forward the client's User-Agent; OAuth credentials: configured default, client, fixed Codex value.
   const clientUserAgent = clientHeader(clientHeaders, "user-agent");
-  const configUserAgent = isApiKey ? "" : defaults["user-agent"].trim();
+  const configUserAgent = isProviderKey ? "" : defaults["user-agent"].trim();
 
-  if (isApiKey) {
+  if (isProviderKey) {
     if (clientUserAgent !== "") headers["user-agent"] = clientUserAgent;
   } else {
     headers["user-agent"] =
@@ -346,9 +346,9 @@ export const buildCodexWebsocketHeaders = (input: CodexWebsocketHeaderInput) => 
   const originator = clientHeader(clientHeaders, "originator");
 
   if (originator !== "") headers["originator"] = originator;
-  else if (!isApiKey) headers["originator"] = CODEX_ORIGINATOR;
+  else if (!isProviderKey) headers["originator"] = CODEX_ORIGINATOR;
 
-  if (!isApiKey) {
+  if (!isProviderKey) {
     const accountId = credential.metadata["account_id"];
 
     if (typeof accountId === "string" && accountId.trim() !== "")
@@ -362,7 +362,7 @@ export const buildCodexWebsocketHeaders = (input: CodexWebsocketHeaderInput) => 
     headers["originator"] = CODEX_ORIGINATOR;
   }
 
-  if (!isApiKey) {
+  if (!isProviderKey) {
     applyRoutingHint(
       headers,
       {

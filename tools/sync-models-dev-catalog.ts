@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Regenerates the bundled models.dev snapshot (`src/registry/catalog/models-dev.json`): the providers the proxy reads
+ * Regenerates the bundled models.dev snapshot (`src/registry/catalog/models-dev.json`): the providers Commissary reads
  * from the models.dev document, trimmed to the fields it uses (ADR 0020). The catalog additions
  * (`src/registry/catalog/additions.json`) are maintained by hand and untouched.
  *

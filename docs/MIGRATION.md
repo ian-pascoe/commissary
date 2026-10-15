@@ -8,17 +8,17 @@ The Workers port reads the Go `config.yaml` and the Go auth files (`*.json`), so
 The management API needs an **org admin** (or a platform admin). For scripts, add a service token name to
 `ACCESS_SERVICE_TOKENS` and to `PLATFORM_ADMIN_SERVICE_TOKENS` in `.env` and deploy (see [ACCESS.md](ACCESS.md); its
 credentials land in `.alchemy/access-service-tokens.json`), or register its Client ID to the org with a role
-(`POST /v8/management/service-tokens`, the Members page) once a platform admin has set it up, then:
+(`POST /v9/management/service-tokens`, the Members page) once a platform admin has set it up, then:
 
 ```bash
-M=https://proxy.example.com/v8/management
+M=https://commissary.example.com/v9/management
 H=(-H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
 ```
 
 The unscoped address is the `global` org's. To migrate into another org (ADR 0021), use
-`M=https://proxy.example.com/v8/management/orgs/<slug>`; every command below works the same there.
+`M=https://commissary.example.com/v9/management/orgs/<slug>`; every command below works the same there.
 
-Alternatively use the control panel (`/`) as an admin user: _Accounts_ → _Connect account_ uploads auth files, and Settings and the API keys
+Alternatively use the control panel (`/`) as an admin user: _Accounts_ → _Connect account_ uploads auth files, and Settings and the Provider keys
 page edit what the import stored. The panel has no UI for the config import yet, so that step is `curl`.
 
 ## 1. Config
@@ -30,7 +30,7 @@ curl "${H[@]}" -X POST "$M/settings/import" -H 'content-type: application/yaml' 
 # {"status":"ok","version":1,"not_applied":["requests.proxy-url","access.api-keys"]}
 ```
 
-- The import **replaces every config entry of the org** with the document (settings, API key groups and keys, model
+- The import **replaces every config entry of the org** with the document (settings, provider key groups and keys, model
   aliases and exclusions, payload rules): what the document does not set goes back to its default. It is the only
   whole-configuration write, and the body is at most 512 KiB. Run it once for the first deployment; afterwards edit single
   settings, key groups and model rules in the panel, or script `PATCH /settings`.
@@ -40,15 +40,15 @@ curl "${H[@]}" -X POST "$M/settings/import" -H 'content-type: application/yaml' 
   migrated to the v8 layout on import; unknown or inapplicable keys are dropped. A malformed document answers 422
   `invalid_config` with a message (`line` and `column` for invalid YAML, `path` for a value that does not fit the schema);
   nothing is stored.
-- **Secrets in `config.yaml`** (provider API keys) are stored in the `ControlPlane` Durable Object, not in your repo. Every
-  setting, API key group, API key, model alias or exclusion list and payload rule is stored as an entry of its own with a
+- **Secrets in `config.yaml`** (provider keys) are stored in the `ControlPlane` Durable Object, not in your repo. Every
+  setting, provider key group, provider key, model alias or exclusion list and payload rule is stored as an entry of its own with a
   revision, so later edits to different entries never conflict.
 - **Existing deployments** that stored a config document before entries (ADR 0025) need no step: the first time the
   `ControlPlane` starts it turns the stored document into entries in one transaction (same configuration, same credential
   ids and so the same `auth_index` values, so panel links and usage history keep working). The old document row is kept.
 - `PATCH $M/settings` takes `{"revisions": {…}, "patch": {…}}` for scripted edits of single settings: `revisions` names the
   revision of each setting you change (read it from `GET $M/settings`; absent means not stored, 0), and a stale one answers
-  409 `conflict`. API key groups and model rules have their own routes (see [ARCHITECTURE.md](ARCHITECTURE.md) "Management API").
+  409 `conflict`. Provider key groups and model rules have their own routes (see [ARCHITECTURE.md](ARCHITECTURE.md) "Management API").
 - Management writes need a `content-type` (`application/json`; `application/yaml` for the import; multipart for uploads):
   curl's default `application/x-www-form-urlencoded` answers 415 (cross-site request forgery protection, see ACCESS.md).
 - Dropped on import (no effect on Workers): `host`/`port`/`tls`, `remote-management.*` (Access replaces it), `auth-dir`, `pprof`,
@@ -156,33 +156,33 @@ account afterwards (or log in again on the target, §3, which needs no export). 
 
 ## 4. Switch clients
 
-Create a proxy key in the panel (**Proxy keys**) and point each tool at the Worker with it ([CLIENTS.md](CLIENTS.md));
+Create an API key in the panel (**API keys**) and point each tool at the Worker with it ([CLIENTS.md](CLIENTS.md));
 verify `GET /v1/models` lists the models you expect, then retire the Go server. The Go server's client keys
-(`access.api-keys`) are not imported as proxy keys: they are a different kind of key, so every client gets a new one.
+(`access.api-keys`) are not imported as API keys: they are a different kind of key, so every client gets a new one.
 Model aliases, prefixes, `excluded-models`, payload rules and routing settings from `config.yaml` carry over. Usage
 statistics are not migrated; new usage is recorded in D1 and shown in the panel.
 
-## 5. Move clients to proxy keys
+## 5. Move clients to API keys
 
-Before proxy keys (ADR 0022), clients of a Workers deployment authenticated through Cloudflare Access: with Access
+Before API keys (ADR 0022), clients of a Workers deployment authenticated through Cloudflare Access: with Access
 service token headers (`CF-Access-Client-Id`/`-Secret`), or with a `cloudflared access` token in the `cf-access-token`
-header. Since then the proxy routes (`/v1*`, `/openai/v1*`, `/backend-api/codex*`, `/chat/completions`, `/completions`,
+header. Since then the client API (`/v1*`, `/openai/v1*`, `/backend-api/codex*`, `/chat/completions`, `/completions`,
 `/responses`) are outside the Access application: the deploy adds a bypass application for those paths, so Access no
 longer turns a service token into a sign-in there, and the Worker answers them itself.
 
-- **Service token headers stop working on the proxy routes** with the deploy that adds the bypass. Move those clients
-  first: as a member of the org, create a proxy key in the panel and replace the two Access headers with the key
+- **Service token headers stop working on the client API** with the deploy that adds the bypass. Move those clients
+  first: as a member of the org, create an API key in the panel and replace the two Access headers with the key
   ([CLIENTS.md](CLIENTS.md)). Service tokens keep working on the management API.
 - **`cloudflared access` tokens keep working in the first org** (`global`, the org of a deployment from before orgs)
   while its **Access sign-ins for clients** setting is on, which is its default. The Worker verifies the token from the
   `cf-access-token` header itself (and from `Cf-Access-Jwt-Assertion`); a dummy API key sent next to it is ignored. A
   token is issued for the Access application of the whole domain, so renew it with
-  `cloudflared access login https://proxy.example.com` (the domain, not a proxy path, which Access no longer guards).
-- When every client uses a proxy key, an owner of `global` turns the setting off, on its Members page or with
+  `cloudflared access login https://commissary.example.com` (the domain, not a client API path, which Access no longer guards).
+- When every client uses an API key, an owner of `global` turns the setting off, on its Members page or with
   `curl "${H[@]}" -X PATCH "$M/membership" -H 'content-type: application/json' -d '{"access_clients":false}'` (`M`
-  unscoped). From then on a request to a proxy route with only an Access sign-in answers `401`. Other orgs have no such
-  setting: they take proxy keys only.
+  unscoped). From then on a request to the client API with only an Access sign-in answers `401`. Other orgs have no such
+  setting: they take API keys only.
 
 A deployment that brings its own Access application (`ACCESS_AUD`) gets no bypass from the deploy: add a self-hosted
-application for the proxy paths with a Bypass policy for everyone ([DEPLOY.md](DEPLOY.md)), or its clients keep needing
+application for the client API paths with a Bypass policy for everyone ([DEPLOY.md](DEPLOY.md)), or its clients keep needing
 Access in front of the key.

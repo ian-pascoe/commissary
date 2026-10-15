@@ -344,7 +344,7 @@ export const hasCodexMultiAgentV2NamespaceConflict = (payload: Json): boolean =>
   );
 };
 
-/** `removeCodexCollaborationMessageEncryption`: the proxy must be able to read the plaintext message. */
+/** `removeCodexCollaborationMessageEncryption`: Commissary must be able to read the plaintext message. */
 const removeMessageEncryption = (refs: ReadonlyArray<ToolRef>): void => {
   for (const { tool } of refs) {
     const message = get(tool, "parameters.properties.message");
@@ -781,7 +781,7 @@ export const optimizeCodexMultiAgentV2Request = (
 
 /**
  * `OptimizeCodexMultiAgentV2RequestForAuth`: orphan delegation rewrite, the optimisation and, for compat models, the
- * `agent_message` conversion. API-key credentials see the config without OAuth-only settings (the executor scope).
+ * `agent_message` conversion. Provider-key credentials see the config without OAuth-only settings (the executor scope).
  */
 export const optimizeCodexMultiAgentV2RequestForAuth = (
   headers: HeaderInput | undefined,

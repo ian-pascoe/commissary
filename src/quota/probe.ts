@@ -8,7 +8,7 @@
  * explicit exception to "no timeouts after connect": a probe that hangs must not hold the route or the cron).
  *
  * Failures become `{ ok: false, error }` with a fixed message and the upstream status only: response bodies are never
- * logged or copied into errors (the Meta endpoint can echo an API key), and tokens only travel in request headers
+ * logged or copied into errors (the Meta endpoint can echo a provider key), and tokens only travel in request headers
  * (Devin: in the request body, as `devin-user-status` does).
  */
 import { Clock, Effect, Result } from "effect";
@@ -255,7 +255,7 @@ const meta = Effect.fnUntraced(function* (target: QuotaProbeTarget) {
   return usage === undefined ? yield* Effect.fail(invalid) : (usage satisfies Usage);
 });
 
-/** OpenCode Go `{base}/usage` with the config API key; never followed to another host (the key is in the header). */
+/** OpenCode Go `{base}/usage` with the provider key; never followed to another host (the key is in the header). */
 const opencodeGo = Effect.fnUntraced(function* (target: QuotaProbeTarget) {
   const answer = yield* get(target.usageUrl ?? "", {
     authorization: bearer(target.token),

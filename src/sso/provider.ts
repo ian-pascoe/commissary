@@ -4,7 +4,7 @@
  * (`hosted/auth.ts` answers the plugin's `ssoProvider` reads with it). New in the Workers port.
  *
  * Its domains are the org's verified domains; the plugin refuses a provider without one (`domainVerified`). OIDC uses
- * PKCE besides the client secret, and SAML takes only signed assertions for this proxy (its entity id, the audience),
+ * PKCE besides the client secret, and SAML takes only signed assertions for this deployment (its entity id, the audience),
  * sent to its assertion consumer service in answer to a request it made.
  */
 import { Schema } from "effect";
@@ -24,7 +24,7 @@ export const orgOfProviderId = (providerId: string): OrgId | undefined => {
   return Schema.is(OrgId)(org) ? org : undefined;
 };
 
-/** The proxy's side of `org`'s provider at `origin` (`https://<host>`): what the identity provider is told. */
+/** Commissary's side of `org`'s provider at `origin` (`https://<host>`): what the identity provider is told. */
 export const serviceProviderOf = (origin: string, org: OrgId) => {
   const id = providerIdOf(org);
   const metadata = `${origin}${AUTH_BASE_PATH}/sso/saml2/sp/metadata?providerId=${id}`;

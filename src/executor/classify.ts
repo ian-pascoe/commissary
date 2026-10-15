@@ -86,7 +86,7 @@ const metadataRules = (value: Json | undefined): RequestScopedErrorRule[] => {
 };
 
 /**
- * Rules of one credential: its own metadata (config API keys synthesise `request_scoped_errors` there, auth files may
+ * Rules of one credential: its own metadata (provider keys synthesise `request_scoped_errors` there, auth files may
  * carry them), then `oauth.request-scoped-errors[provider]` for OAuth credentials.
  */
 export const requestScopedRules = (

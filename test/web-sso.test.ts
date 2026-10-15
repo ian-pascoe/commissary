@@ -54,8 +54,8 @@ const domain = (
   verified,
   require_sso: requireSso,
   record: {
-    name: `_cf-llm-proxy-challenge.${name}`,
-    value: "cf-llm-proxy-domain-verification=abc",
+    name: `_commissary-challenge.${name}`,
+    value: "commissary-domain-verification=abc",
   },
   ...(stamped && { verified_at: "2026-10-13T09:00:00Z" }),
 });
@@ -77,7 +77,7 @@ describe("who may change single sign-on", () => {
     expect(canChangeSso(callerOf({ role: "member", platform_admin: false }))).toBe(false);
   });
 
-  it("puts the page in the nav of org admins on a hosted proxy only", () => {
+  it("puts the page in the nav of org admins on Commissary Cloud only", () => {
     expect(navLinks(true)).toContain("/settings/sso");
     expect(navLinks(false)).not.toContain("/settings/sso");
     expect(pagesFor("member", true, true).map((page) => page.to)).not.toContain("/settings/sso");

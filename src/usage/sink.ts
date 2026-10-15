@@ -19,7 +19,7 @@ export class UsageSink extends Context.Service<
      */
     readonly cost: (record: UsageRecord) => Effect.Effect<UsageCost | undefined>;
   }
->()("cf-llm-proxy/usage/UsageSink") {
+>()("commissary/usage/UsageSink") {
   /** Drops records. */
   static readonly noop = Layer.succeed(
     UsageSink,

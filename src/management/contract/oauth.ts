@@ -1,5 +1,5 @@
 /**
- * `/v8/management/oauth/*`: connecting an account (`../oauth-routes.ts`, `src/oauth/service.ts`). Shared with the
+ * `/v9/management/oauth/*`: connecting an account (`../oauth-routes.ts`, `src/oauth/service.ts`). Shared with the
  * browser: imports `effect` only.
  *
  * Two flows. Callback flows (claude, codex, antigravity, devin) answer an authorize `url`; the provider redirects to

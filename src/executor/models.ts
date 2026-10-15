@@ -1,12 +1,12 @@
 /**
- * Per-credential model resolution: prefix stripping and API-key model aliases (incl. OpenAI-compatible pools).
+ * Per-credential model resolution: prefix stripping and provider-key model aliases (incl. OpenAI-compatible pools).
  *
  * Go source: sdk/cliproxy/auth/conductor_models.go (rewriteModelForAuth, executionModelCandidates,
  * resolveOpenAICompatUpstreamModelPool, resolveOpenAICompatConfig), sdk/cliproxy/auth/oauth_model_alias.go
  * (resolveModelAliasPoolFromConfigModels, modelAliasLookupCandidates), internal/runtime/executor/
  * openai_compat_executor.go (resolveCompatConfig), internal/util/provider.go (OpenAICompatibleProviderKey).
  *
- * Not yet ported: OAuth model aliases (`oauth.model-alias`), API-key aliases of the non-compat families, and the
+ * Not yet ported: OAuth model aliases (`oauth.model-alias`), provider-key aliases of the non-compat families, and the
  * round-robin rotation of model pools (the conductor slice owns the rotation cursor; candidates are returned in
  * configuration order).
  */

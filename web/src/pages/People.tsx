@@ -1,4 +1,4 @@
-// People (/people): a platform admin of a hosted proxy looks a person up by email, sets how many orgs they may own and
+// People (/people): a platform admin of Commissary Cloud looks a person up by email, sets how many orgs they may own and
 // suspends or unsuspends them (ADR 0026). Not scoped to an org, so it opens without the shell, like the org chooser.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
@@ -69,11 +69,11 @@ const Person = ({
       title: `${suspend ? "Suspend" : "Unsuspend"} ${person.email}?`,
       body: suspend ? (
         <p>
-          They are signed out and their sessions, proxy keys and management keys are refused until
-          you unsuspend them. Nothing is deleted: their orgs and keys stay as they are.
+          They are signed out and their sessions, API keys and management keys are refused until you
+          unsuspend them. Nothing is deleted: their orgs and keys stay as they are.
         </p>
       ) : (
-        <p>They can sign in again, and their proxy keys and management keys work again.</p>
+        <p>They can sign in again, and their API keys and management keys work again.</p>
       ),
       action: suspend ? "Suspend person" : "Unsuspend person",
       busyAction: suspend ? "Suspending…" : "Unsuspending…",
@@ -250,7 +250,7 @@ export const PeoplePage = () => {
               <SignOut className={kit["secondary"]} />
             </>
           ) : (
-            <p className={kit["muted"]}>Only platform admins of a hosted proxy manage people.</p>
+            <p className={kit["muted"]}>Only platform admins of Commissary Cloud manage people.</p>
           ),
       })}
     </main>

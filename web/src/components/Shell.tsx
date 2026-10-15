@@ -101,7 +101,7 @@ const Gate = ({ role }: { readonly role: RoleState }) => {
 export const Shell = () => {
   const role = useRole();
   const me = useAtomValue(meAtom);
-  // A hosted proxy adds a page (Single sign-on) and the account menu's Sign out.
+  // Commissary Cloud adds a page (Single sign-on) and the account menu's Sign out.
   const hosted = AsyncResult.isSuccess(me) && me.value.hosted === true;
 
   const groups =
@@ -123,7 +123,7 @@ export const Shell = () => {
             to={role.kind === "ready" ? homeFor(role.caller.role) : "/"}
             className={styles["brand"]}
           >
-            <span className={styles["name"]}>cf-llm-proxy</span>
+            <span className={styles["name"]}>Commissary</span>
             <span className={styles["host"]} title={window.location.host}>
               {window.location.host}
             </span>

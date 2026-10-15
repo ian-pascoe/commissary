@@ -11,7 +11,7 @@ import { issuableRoles, issuerText } from "../web/src/lib/management-keys.ts";
 import { callerOf } from "../web/src/lib/role.ts";
 
 describe("creating orgs", () => {
-  it("is for platform admins, and for everyone on a hosted proxy", () => {
+  it("is for platform admins, and for everyone on Commissary Cloud", () => {
     expect(canCreateOrg({ platform_admin: false })).toBe(false);
     expect(canCreateOrg({ platform_admin: true })).toBe(true);
     expect(canCreateOrg({ platform_admin: false, hosted: true })).toBe(true);
@@ -27,7 +27,7 @@ describe("creating orgs", () => {
     expect(orgCountText({ platform_admin: true, hosted: true })).toBeUndefined();
   });
 
-  it("suspends only for platform admins of a hosted proxy", () => {
+  it("suspends only for platform admins of Commissary Cloud", () => {
     expect(canSuspend({ platform_admin: true, hosted: true })).toBe(true);
     expect(canSuspend({ platform_admin: true })).toBe(false);
     expect(canSuspend({ platform_admin: false, hosted: true })).toBe(false);

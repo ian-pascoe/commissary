@@ -1,5 +1,5 @@
 // Config entries (ADR 0025): per-entry revisions, the Go config import, the migration of a stored document, and the
-// entry routes (`/settings`, `/api-keys/groups`, `/model-rules/*`) through the router and the real ControlPlane.
+// entry routes (`/settings`, `/provider-keys/groups`, `/model-rules/*`) through the router and the real ControlPlane.
 import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { runInDurableObject } from "cloudflare:test";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -8,7 +8,7 @@ import { decodeConfig, encodeConfig } from "../src/config/codec.ts";
 import { MIGRATION_PRINCIPAL } from "../src/config/store.ts";
 import { configKeyIds } from "../src/credentials/key-ids.ts";
 import type { Json } from "../src/json/index.ts";
-import type { ApiKeysList } from "../src/management/contract/api-keys.ts";
+import type { ProviderKeysList } from "../src/management/contract/provider-keys.ts";
 import type { RoutingModels } from "../src/management/contract/routing.ts";
 import type { SettingsView } from "../src/management/contract/settings.ts";
 import { OrgId } from "../src/platform/org.ts";
@@ -47,7 +47,7 @@ const DOCUMENT = {
   },
   access: { "api-keys": ["client-key"], "admin-emails": ["ops@example.com"] },
   requests: {
-    "proxy-url": "http://proxy.test:8080",
+    "proxy-url": "http://commissary.test:8080",
     payload: {
       default: [{ models: [{ name: "gpt-*" }], params: { "reasoning.effort": "high" } }],
       filter: [{ models: [{ name: "claude-*" }], params: ["metadata"] }],
@@ -98,7 +98,7 @@ describe("config import", () => {
 
     const after = await current();
     expect(comparable(after)).toEqual(comparable(before));
-    // Every API key keeps the id of the credential it produced (Go's content hash).
+    // Every provider key keeps the id of the credential it produced (Go's content hash).
     expect(configKeyIds(after)).toEqual(configKeyIds(before));
     expect(configKeyIds(after, { includeDisabledGroups: true })).toEqual(
       configKeyIds(before, { includeDisabledGroups: true }),
@@ -130,7 +130,7 @@ describe("config import", () => {
   });
 
   it("is served at POST /settings/import", async () => {
-    const response = await json("/v8/management/settings/import", {
+    const response = await json("/v9/management/settings/import", {
       method: "POST",
       headers: { "content-type": "application/yaml" },
       body: "routing:\n  strategy: fill-first\nrequest-log: true\nclaude-api-key:\n  - api-key: sk-ant-legacy\n",
@@ -147,7 +147,7 @@ describe("config import", () => {
   });
 
   it("answers 422 with the position of a YAML error", async () => {
-    const response = await json("/v8/management/settings/import", {
+    const response = await json("/v9/management/settings/import", {
       method: "POST",
       headers: { "content-type": "text/yaml" },
       body: "routing:\n  strategy: [\n",
@@ -309,7 +309,7 @@ describe("entry revisions", () => {
   });
 });
 
-const SETTINGS = "/v8/management/settings";
+const SETTINGS = "/v9/management/settings";
 
 const settingsView = async (): Promise<SettingsView> => {
   const response = await json(SETTINGS);
@@ -389,18 +389,18 @@ describe("PATCH /settings", () => {
   });
 });
 
-const API_KEYS = "/v8/management/api-keys";
+const PROVIDER_KEYS = "/v9/management/provider-keys";
 
-const keysList = async (): Promise<ApiKeysList> => {
-  const response = await json(API_KEYS);
+const keysList = async (): Promise<ProviderKeysList> => {
+  const response = await json(PROVIDER_KEYS);
 
   expect(response.status).toBe(200);
 
   // SAFETY: the shape is checked against the contract in management-contract.test.ts.
-  return response.body as ApiKeysList;
+  return response.body as ProviderKeysList;
 };
 
-describe("API key groups", () => {
+describe("Provider key groups", () => {
   beforeEach(async () => {
     await controlPlane().importConfig(
       JSON.stringify({
@@ -429,7 +429,7 @@ describe("API key groups", () => {
     expect(authIndex).toBeDefined();
 
     const written = await json(
-      `${API_KEYS}/groups`,
+      `${PROVIDER_KEYS}/groups`,
       jsonInit("PUT", {
         family: "claude",
         id: group.id,
@@ -453,7 +453,7 @@ describe("API key groups", () => {
     const otherIndex = must(other?.group.keys[0]?.auth_index);
 
     const rotated = await json(
-      `${API_KEYS}/groups`,
+      `${PROVIDER_KEYS}/groups`,
       jsonInit("PUT", {
         family: "claude",
         id: group.id,
@@ -464,7 +464,7 @@ describe("API key groups", () => {
 
     expect(rotated.status).toBe(200);
 
-    const imported = await json("/v8/management/settings/import", {
+    const imported = await json("/v9/management/settings/import", {
       method: "POST",
       headers: { "content-type": "application/yaml" },
       body: [
@@ -488,7 +488,7 @@ describe("API key groups", () => {
 
     const write = (group: NonNullable<typeof first>, secret: string) =>
       json(
-        `${API_KEYS}/groups`,
+        `${PROVIDER_KEYS}/groups`,
         jsonInit("PUT", {
           family: "claude",
           id: group.id,
@@ -542,14 +542,14 @@ describe("API key groups", () => {
     const first = must((await keysList()).families.claude[0]);
 
     const stale = await json(
-      `${API_KEYS}/groups`,
+      `${PROVIDER_KEYS}/groups`,
       jsonInit("DELETE", { family: "claude", id: first.id, revision: first.revision + 1 }),
     );
 
     expect(stale.status).toBe(409);
 
     const removed = await json(
-      `${API_KEYS}/groups`,
+      `${PROVIDER_KEYS}/groups`,
       jsonInit("DELETE", { family: "claude", id: first.id, revision: first.revision }),
     );
 
@@ -560,7 +560,7 @@ describe("API key groups", () => {
 
 describe("model rules", () => {
   const routing = async (): Promise<RoutingModels> => {
-    const response = await json("/v8/management/routing/models");
+    const response = await json("/v9/management/routing/models");
 
     expect(response.status).toBe(200);
 
@@ -569,7 +569,7 @@ describe("model rules", () => {
   };
 
   const put = (kind: string, channel: string, revision: number | string, body: Json) =>
-    json(`/v8/management/model-rules/${kind}/${channel}`, {
+    json(`/v9/management/model-rules/${kind}/${channel}`, {
       ...jsonInit("PUT", body),
       headers: { "content-type": "application/json", "if-match": String(revision) },
     });
@@ -595,11 +595,11 @@ describe("model rules", () => {
   });
 
   it("requires If-Match and answers 404 for a channel without rules", async () => {
-    const missing = await json("/v8/management/model-rules/aliases/claude", jsonInit("PUT", []));
+    const missing = await json("/v9/management/model-rules/aliases/claude", jsonInit("PUT", []));
     expect(missing.status).toBe(400);
     expect(missing.body).toMatchObject({ error: "invalid_if_match" });
 
-    const removed = await json("/v8/management/model-rules/exclusions/claude", {
+    const removed = await json("/v9/management/model-rules/exclusions/claude", {
       method: "DELETE",
       headers: { "if-match": "0" },
     });

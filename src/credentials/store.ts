@@ -2,7 +2,7 @@
  * SQLite persistence of credentials inside the ControlPlane Durable Object.
  *
  * Auth files are stored as one JSON row each (the Go file *is* `Auth.Metadata`), with `provider`/`disabled`
- * duplicated into indexed columns. Config API-key credentials are never stored: they are re-synthesised from config.
+ * duplicated into indexed columns. Config provider-key credentials are never stored: they are re-synthesised from config.
  * Runtime state (`credential_state`) is persisted only when it matters across restarts (failures and cooldowns);
  * round-robin cursors and session bindings stay in memory (credentials.md §10).
  *
@@ -49,7 +49,7 @@ export interface UpsertOptions {
 export interface UpsertOutcome {
   readonly record: StoredCredential;
   readonly created: boolean;
-  /** Token/API-key material changed (`credentialVersion` was bumped). */
+  /** Token/provider-key material changed (`credentialVersion` was bumped). */
   readonly credentialsChanged: boolean;
 }
 

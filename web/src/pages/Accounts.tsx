@@ -11,9 +11,9 @@
 // and on each failed row, and those stay selected. The delete confirmation stays open until the deletion settles.
 // Escape, the bar's Done or the toggle (then reading Done) leaves the selection, focus returning to the toggle.
 //
-// Config API keys whose provider reports quota (OpenCode Go) are listed too, marked "Config key": they take the quota
+// Config provider keys whose provider reports quota (OpenCode Go) are listed too, marked "Config key": they take the quota
 // check like any account but live in the config, so a selection leaves them out (their row keeps opening the account,
-// which links to the key's group on the Keys page).
+// which links to the key's group on the Provider keys page).
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
@@ -500,7 +500,7 @@ const ConfirmDelete = ({
         </ul>
         <p>
           Requests stop going to {count === 1 ? "it" : "them"} and {count === 1 ? "its" : "their"}{" "}
-          tokens are removed from the proxy. You can connect {count === 1 ? "it" : "them"} again
+          tokens are removed from Commissary. You can connect {count === 1 ? "it" : "them"} again
           later.
         </p>
         <div className={kit["dialogActions"]}>
@@ -657,7 +657,7 @@ const List = ({ accounts }: { readonly accounts: ReadonlyArray<Assessed> }) => {
   const query = useDeferredValue(search.trim().toLowerCase());
   const searchId = useId();
   const listed = shownAccounts(accounts, filter, query);
-  // What a selection and its actions see: the shown auth files (config keys are edited on the Keys page).
+  // What a selection and its actions see: the shown auth files (config keys are edited on the Provider keys page).
   const shown = selectable(listed);
 
   // Accounts deleted here or elsewhere leave the selection.
@@ -928,7 +928,7 @@ export const AccountsPage = () => {
                 <Head />
                 <OwnLead />
                 <p className={styles["empty"]}>
-                  No accounts yet. Connect one to let the proxy answer requests with it.
+                  No accounts yet. Connect one to let Commissary answer requests with it.
                 </p>
                 <OtherPrivateAccounts others={others} />
               </>

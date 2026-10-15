@@ -1,5 +1,5 @@
 // Zero data retention (ADR 0027): a member who leaves an org takes everything of theirs with them, at once and in that
-// org only: proxy keys, private accounts, private API key groups and their unfinished OAuth logins. What other members
+// org only: API keys, private accounts, private provider key groups and their unfinished OAuth logins. What other members
 // and the org share stays. Through the management API and the real ControlPlane.
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
@@ -28,7 +28,7 @@ interface Person {
 }
 
 const send = async (slug: string, path: string, auth: string, method = "GET", body?: Payload) =>
-  await harness.json(`/v8/management/orgs/${slug}${path}`, {
+  await harness.json(`/v9/management/orgs/${slug}${path}`, {
     ...(body === undefined ? { method } : jsonInit(method, body)),
     auth,
   });
@@ -38,7 +38,7 @@ const newOrg = async () => {
   const platform = await token(ADMIN);
 
   const created = await harness.json(
-    "/v8/management/orgs",
+    "/v9/management/orgs",
     jsonInit("POST", { slug, name: slug, private_credentials: true }),
   );
 
@@ -62,7 +62,7 @@ const newOrg = async () => {
   };
 };
 
-/** Everything `person` keeps in `org`: private accounts, private groups, proxy keys and owned OAuth logins. */
+/** Everything `person` keeps in `org`: private accounts, private groups, API keys and owned OAuth logins. */
 const holdings = async (org: Awaited<ReturnType<typeof newOrg>>, person: Person) => {
   const stub = env.CONTROL_PLANE.getByName(org.id);
 
@@ -91,19 +91,19 @@ const populate = async (org: Awaited<ReturnType<typeof newOrg>>, person: Person,
 
   expect(upload.status).toBe(200);
 
-  const group = await send(slug, "/api-keys/groups", person.auth, "PUT", {
+  const group = await send(slug, "/provider-keys/groups", person.auth, "PUT", {
     family: "claude",
     revision: 0,
     group: { "base-url": "https://api.example.test/v1", keys: [{ "api-key": `sk-${tag}-0001` }] },
   });
 
   expect(group.status).toBe(200);
-  expect((await send(slug, "/proxy-keys", person.auth, "POST", { name: tag })).status).toBe(201);
+  expect((await send(slug, "/api-keys", person.auth, "POST", { name: tag })).status).toBe(201);
   expect((await send(slug, "/oauth/auth-url?provider=claude", person.auth)).status).toBe(200);
 };
 
 describe("removing a member", () => {
-  it("deletes their proxy keys, private accounts, private key groups and unfinished logins", async () => {
+  it("deletes their API keys, private accounts, private key groups and unfinished logins", async () => {
     const org = await newOrg();
 
     await populate(org, org.alice, "alice");

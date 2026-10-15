@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Post-deploy check of a hosted proxy (PROXY_MODE=hosted, ADR 0026): no Access in front, the Worker signs people in.
+# Post-deploy check of Commissary Cloud (PROXY_MODE=hosted, ADR 0026): no Access in front, the Worker signs people in.
 # Retries while a new workers.dev hostname propagates.
 # - /healthz answers 200 with no credentials;
 # - /api/sign-in-options answers 200 and offers at least one provider (the sign-in settings reached the Worker);
 # - the management API without a session answers 401 from the Worker (not an Access sign-in page);
 # - the control panel without a session redirects to /sign-in;
-# - a proxy route without credentials answers 401 `Missing API key` from the Worker;
-# - with an API host (ADR 0028): the proxy routes answer 404 on the app host and the management API 404 on the API
+# - a client API route without credentials answers 401 `Missing API key` from the Worker;
+# - with an API host (ADR 0028): the client API answers 404 on the app host and the management API 404 on the API
 #   host, both from the Worker.
 # Usage: tools/check-hosted-deploy.sh <base-url> [<api-url>]
-# `<api-url>` is where the proxy routes are served (default: `<base-url>`).
+# `<api-url>` is where the client API is served (default: `<base-url>`).
 set -euo pipefail
 
 base="${1:?usage: check-hosted-deploy.sh <base-url> [<api-url>]}"
@@ -53,14 +53,14 @@ worker_404() { [ "$1" = 404 ] && grep -q '"Not found: ' "$body"; }
 
 expect "$base" /healthz "200 without credentials" ok
 expect "$base" /api/sign-in-options "200 with a sign-in provider" has_provider
-expect "$base" /v8/management/me "401 Not signed in from the Worker" not_signed_in
+expect "$base" /v9/management/me "401 Not signed in from the Worker" not_signed_in
 expect "$base" / "a redirect to /sign-in" to_sign_in
 expect "$api" /v1/models "401 Missing API key from the Worker" worker_401
 expect "$api" /v1beta/models "401 Missing API key from the Worker" worker_401
 
 if [ "$api" != "$base" ]; then
   expect "$api" /healthz "200 without credentials" ok
-  expect "$base" /v1/models "404 from the Worker: the proxy routes are on the API host" worker_404
-  expect "$api" /v8/management/me "404 from the Worker: the management API is on the app host" worker_404
+  expect "$base" /v1/models "404 from the Worker: the client API is on the API host" worker_404
+  expect "$api" /v9/management/me "404 from the Worker: the management API is on the app host" worker_404
   expect "$api" /sign-in "404 from the Worker: sign-in is on the app host" worker_404
 fi

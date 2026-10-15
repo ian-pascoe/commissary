@@ -161,7 +161,7 @@ describe("refreshCatalogs (cron)", () => {
         assert.strictEqual(outcome.status, "failed");
       }
 
-      // A provider the proxy reads without a single usable model rejects the whole document.
+      // A provider Commissary reads without a single usable model rejects the whole document.
       const noModels = JSON.parse(documentText()) as Record<string, { models: unknown }>;
       noModels["xai"] = { models: { bad: { id: 1 } } };
       const rejected = yield* runRefresh(kv, { [MODELS_DEV_URL]: JSON.stringify(noModels) });

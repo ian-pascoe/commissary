@@ -1,4 +1,4 @@
-// End-to-end tests (workerd) of the Vertex executor: service-account and API-key endpoints, token handling through the
+// End-to-end tests (workerd) of the Vertex executor: service-account and provider-key endpoints, token handling through the
 // ControlPlane stub, Imagen conversion, native Interactions and the payload-rules-last ordering.
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -212,7 +212,7 @@ describe("vertex service account", () => {
   });
 });
 
-describe("vertex API key", () => {
+describe("vertex provider key", () => {
   it("uses the project-less endpoint with x-goog-api-key", async () => {
     const cred = credential("vertex", "vertex:apikey", {
       attributes: { api_key: "vk-1", base_url: "https://vx.test/" },

@@ -73,7 +73,7 @@ export interface ApplyThinkingOptions {
   /** Go `normalizedUpdatesChanged`: a plugin/translator already rewrote the target's configuration updates. */
   readonly normalizedUpdatesChanged?: boolean;
   /**
-   * The exact model definition selected for this attempt (API-key models can override capabilities). `null` means
+   * The exact model definition selected for this attempt (provider-key models can override capabilities). `null` means
    * "resolved, but unknown" (user-defined path). When absent, `lookupModelInfo` is queried with the base model name.
    */
   readonly modelInfo?: ThinkingModelInfo | null;

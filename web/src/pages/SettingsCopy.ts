@@ -217,7 +217,7 @@ const COPY = {
   ),
   "oauth.providers.codex.header-defaults.user-agent": {
     label: "Account User-Agent",
-    hint: "Codex accounts only, not API keys.",
+    hint: "Codex accounts only, not provider keys.",
     size: "long",
   },
   "oauth.providers.codex.header-defaults.beta-features": {
@@ -231,7 +231,7 @@ const COPY = {
   ),
   "client.codex.optimize-multi-agent-v2": flag(
     "Rewrite multi-agent v2 messages for other providers",
-    "For every provider other than Codex, accounts and API keys alike.",
+    "For every provider other than Codex, accounts and provider keys alike.",
   ),
   "upstream.xai.inject-x-search": flag("Add the x_search tool when a request has none"),
   "oauth.providers.antigravity.sensitive-words": {

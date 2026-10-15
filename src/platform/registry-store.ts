@@ -13,7 +13,7 @@
  * on start when it is missing, so every org that existed before it starts with none and an upgrade deletes no history;
  * an org created afterwards gets {@link DEFAULT_USAGE_RETENTION_DAYS}. Removing an org or a person deletes their rows.
  *
- * A hosted proxy (ADR 0026) also keeps its people here: who signed up (and the Personal org they got), how many orgs
+ * Commissary Cloud (ADR 0026) also keeps its people here: who signed up (and the Personal org they got), how many orgs
  * each may own, and who a platform admin suspended; orgs record who created them and whether they are suspended.
  *
  * Its per-org single sign-on (issue #76) keeps the domain-to-org index here (`sso_domains`): which org verified each
@@ -35,7 +35,7 @@ export interface OrgRecord {
   readonly createdAt: number;
   /** How many days the org's usage records are kept; `null`: forever (ADR 0027). */
   readonly usageRetentionDays: number | null;
-  /** The (lowercased) email of the person who created it on a hosted proxy; absent otherwise. */
+  /** The (lowercased) email of the person who created it on Commissary Cloud; absent otherwise. */
   readonly createdBy?: string;
   /** Epoch milliseconds a platform admin suspended it; absent while it is not suspended. */
   readonly suspendedAt?: number;
@@ -53,7 +53,7 @@ export type OrgInput = {
   readonly name: string;
   readonly id?: OrgId;
   /**
-   * A person creating an org on a hosted proxy, and how many orgs a person may own unless a platform admin gave them
+   * A person creating an org on Commissary Cloud, and how many orgs a person may own unless a platform admin gave them
    * another limit: the org is refused (`org_limit_reached`) once they created that many.
    */
   readonly createdBy?: { readonly email: string; readonly defaultLimit: number };
@@ -102,7 +102,7 @@ export interface OrgIndex {
   readonly serviceTokens: ReadonlyArray<string>;
 }
 
-/** A person of a hosted proxy, as platform admins see them. */
+/** A person of Commissary Cloud, as platform admins see them. */
 export interface PersonRecord {
   /** Lowercased. */
   readonly email: string;
@@ -133,7 +133,7 @@ export type SignInState =
   | { readonly kind: "ready" }
   | { readonly kind: "personal"; readonly org: OrgRecord };
 
-/** Where an org and a person stand for a key or a session of a hosted proxy. */
+/** Where an org and a person stand for a key or a session of Commissary Cloud. */
 export interface Standing {
   readonly org: "active" | "suspended" | "missing";
   readonly person: "active" | "suspended";
@@ -443,7 +443,7 @@ export class PlatformStore {
   }
 
   /**
-   * Deletes the index rows of a person in every org (their account was deleted), and on a hosted proxy their record and
+   * Deletes the index rows of a person in every org (their account was deleted), and on Commissary Cloud their record and
    * their name on the orgs they created; answers how many orgs listed them.
    */
   removePerson(email: string): number {
@@ -525,7 +525,7 @@ export class PlatformStore {
     };
   }
 
-  // --- people of a hosted proxy (ADR 0026) ----------------------------------------------------------------------
+  // --- people of Commissary Cloud (ADR 0026) ----------------------------------------------------------------------
 
   #person(email: string): PersonRow | undefined {
     return this.#sql

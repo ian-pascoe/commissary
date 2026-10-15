@@ -1,6 +1,6 @@
 // The read-only parts of the Settings page: payload rule counts, and the account error rules. Payload and error rules are set by importing a Go config document.
 import type { ReactNode } from "react";
-import type { RequestScopedErrorRule } from "#contract/api-keys.ts";
+import type { RequestScopedErrorRule } from "#contract/provider-keys.ts";
 import type { SettingsView } from "#contract/settings.ts";
 import { formatCount } from "../lib/format.ts";
 import { providerName } from "../lib/providers.ts";

@@ -100,7 +100,7 @@ describe("refused writes", () => {
     expect(limitProblem("exceeds_admin_limit", "x")).toContain("org admin");
     expect(limitProblem("conflict", "x", "that subject already has a limit")).toContain("Edit it");
     expect(limitProblem("conflict", "x", "the limit is at revision 2, not 1")).toContain("Reload");
-    expect(limitProblem("forbidden", "x")).toContain("your own proxy keys");
+    expect(limitProblem("forbidden", "x")).toContain("your own API keys");
     expect(limitProblem("not_found", "x")).toContain("no longer exists");
     expect(limitProblem("invalid_limit", "fallback", "amount is bad")).toBe("Amount is bad.");
     expect(limitProblem(undefined, "fallback")).toBe("fallback");

@@ -41,7 +41,7 @@ const goHeaders = (attributes: Record<string, string>) =>
       .map(([key, value]) => [key.slice("header:".length), value]),
   );
 
-describe("config API keys -> credentials (parity with the Go synthesizer)", () => {
+describe("provider keys -> credentials (parity with the Go synthesizer)", () => {
   for (const fixture of fixtures.config) {
     it(fixture.name, () => {
       const credentials = synthesizeConfigCredentials(config(fixture.yaml), 0);

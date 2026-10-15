@@ -14,7 +14,7 @@ const { handler } = makeWebHandler();
 export { ControlPlane, Platform, SessionState };
 
 export default {
-  // A deployment with an API host serves the proxy routes there and the rest on its app host (src/http/hosts.ts).
+  // A deployment with an API host serves the client API there and the rest on its app host (src/http/hosts.ts).
   fetch: (request, env, ctx) =>
     misdirected(request.url, env) ?? handler(request, requestContext(env, ctx)),
   // Cron jobs (model catalog refresh, ...) are registered in `scheduledTasks` (src/scheduled.ts).

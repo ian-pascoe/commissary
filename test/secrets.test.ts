@@ -26,7 +26,7 @@ import {
 
 const newOrg = (): OrgId => OrgId.make(`secrets-${crypto.randomUUID().slice(0, 8)}`);
 
-// Secrets an org stores: an auth file's tokens, and API keys and a secret header in its config entries.
+// Secrets an org stores: an auth file's tokens, and provider keys and a secret header in its config entries.
 const ACCESS_TOKEN = "sk-ant-oat-plain-access-4f1d";
 
 const REFRESH_TOKEN = "plain-refresh-token-9c2e";
@@ -64,7 +64,7 @@ api-keys:
         - api-key: ${COMPAT_KEY}
 `;
 
-/** A ControlPlane of a new org holding an auth file and config API keys. */
+/** A ControlPlane of a new org holding an auth file and provider keys. */
 const orgWithSecrets = async () => {
   const org = newOrg();
   const stub = controlPlane(org);

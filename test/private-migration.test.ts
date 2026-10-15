@@ -159,7 +159,7 @@ describe("the org setting for private credentials", () => {
   });
 });
 
-describe("private API keys", () => {
+describe("private provider keys", () => {
   it("start from no private key tables, and keep a key sealed in storage", async () => {
     const org = freshOrg();
     const stub = controlPlane(org);

@@ -121,14 +121,14 @@ export const rebuildMetadataUserId = (
 export const applyCLIIdentity = (
   body: JsonObject,
   credential: CredentialSnapshot,
-  apiKey: string,
+  providerKey: string,
   sessionId: string,
   synthesize: boolean,
 ): void => {
   const seed = synthesize
-    ? apiKey.trim() === ""
+    ? providerKey.trim() === ""
       ? "anonymous"
-      : apiKey.trim()
+      : providerKey.trim()
     : `oauth|${credential.id}`;
 
   const pool = devicePool(credential);

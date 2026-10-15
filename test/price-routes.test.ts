@@ -1,4 +1,4 @@
-// The price override routes (`/v8/management/price-overrides`, ADR 0024) through the Access gate and the real
+// The price override routes (`/v9/management/price-overrides`, ADR 0024) through the Access gate and the real
 // ControlPlane: create, list, replace and delete with `If-Match` revisions, and the answers for stale or invalid edits.
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
@@ -23,7 +23,7 @@ afterAll(harness.dispose);
 
 beforeEach(resetControlPlane);
 
-const BASE = "/v8/management/price-overrides";
+const BASE = "/v9/management/price-overrides";
 
 const GPT = { provider: "codex", model: "gpt-5", input: 1.25, output: 10, cache_read: 0.125 };
 
@@ -187,7 +187,7 @@ describe("price override routes", () => {
 });
 
 /** The generated client of the management contract decodes the same routes. */
-const client = HttpApiClient.make(ManagementApi, { baseUrl: "https://proxy.test" });
+const client = HttpApiClient.make(ManagementApi, { baseUrl: "https://commissary.test" });
 
 const fetchVia =
   (target: Harness): typeof fetch =>

@@ -3,7 +3,7 @@
  * each speaks, and their limits, modalities and reasoning support (ADR 0020: one document feeds every provider).
  *
  * OpenCode's own client picks a model's protocol from the catalog's AI SDK package (`provider.npm`, else the
- * provider's `npm`; sst/opencode `packages/core/src/aisdk-native.ts`) and so does the proxy. The document is bundled
+ * provider's `npm`; sst/opencode `packages/core/src/aisdk-native.ts`) and so does Commissary. The document is bundled
  * (`catalog/models-dev.json`, `pnpm catalog:sync`) and refreshed into KV by the cron job (`refresh.ts`); readers use
  * the KV copy when it is valid, else the bundled one. Requests never fetch it. See docs/ARCHITECTURE.md "OpenCode Zen
  * and OpenCode Go".

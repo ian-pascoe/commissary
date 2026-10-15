@@ -11,10 +11,10 @@
  * rule per org, ADR 0022): the file carries the access and refresh tokens, and a service token is the credential
  * meant for automation (`docs/ACCESS.md`).
  *
- * The list also carries the config API keys whose provider reports quota with the key (OpenCode Go, `source:
+ * The list also carries the provider keys whose provider reports quota with the key (OpenCode Go, `source:
  * "config"`, named by their `auth_index`; `credential-entry.ts`). File-only operations naming one of them (delete,
  * download, field edits, token refresh) answer `409 config_credential`: the key lives in the config and is edited on
- * the API keys page. Its models are listed by the same name.
+ * the provider keys page. Its models are listed by the same name.
  */
 import { Clock, Effect } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
@@ -80,7 +80,7 @@ const parsePagination = (
 const entryName = (entry: JsonObject): string => text(entry.name);
 
 /**
- * Fails with `409 config_credential` when `name` is a config API key's `auth_index` (the name the list gives it), so a
+ * Fails with `409 config_credential` when `name` is a provider key's `auth_index` (the name the list gives it), so a
  * file-only operation says why it does not apply instead of answering "not found". Indexes are public: answering for
  * one confirms no key guess.
  */
@@ -91,7 +91,7 @@ const refuseConfigKey = (name: string) =>
 
     if (config) {
       return yield* replyError(409, "config_credential", {
-        message: "this account is a config API key: edit or remove it on the API keys page",
+        message: "this account is a provider key: edit or remove it on the provider keys page",
       });
     }
   });
@@ -384,16 +384,16 @@ const downloadCredential = Effect.gen(function* () {
   const viewer = yield* currentViewer;
   const name = (yield* queryParams).get("name")?.trim() ?? "";
 
-  // A management key never downloads a credential (ADR 0026), on any proxy.
+  // A management key never downloads a credential (ADR 0026), on any deployment.
   if (identity.principal.kind === "mkey")
     return yield* replyError(403, "download_requires_service_token", {
       message: "a management key cannot download a credential file",
     });
 
-  // On a hosted proxy only platform admins download stored credentials, their owners included (ADR 0026).
+  // On Commissary Cloud only platform admins download stored credentials, their owners included (ADR 0026).
   if (isHosted(yield* WorkerEnv) && !identity.platformAdmin)
     return yield* replyError(403, "download_requires_platform_admin", {
-      message: "on a hosted proxy only a platform admin can download a credential file",
+      message: "on Commissary Cloud only a platform admin can download a credential file",
     });
 
   // A private credential is its owner's alone: not even an org admin with the sensitive powers downloads it.
@@ -506,7 +506,7 @@ const patchStatus = Effect.gen(function* () {
     stub.setCredentialDisabledByRef(refOf(body), body.disabled as boolean, principalId, viewer),
   );
 
-  // A config API key is disabled through its excluded-models (`*`), like Go answers.
+  // A provider key is disabled through its excluded-models (`*`), like Go answers.
   if (result.ok) {
     return jsonReply(
       200,
@@ -519,7 +519,7 @@ const patchStatus = Effect.gen(function* () {
   if (result.error === "config_credential") {
     return yield* replyError(
       409,
-      'config API keys are disabled by adding "*" to their excluded-models in the config',
+      'provider keys are disabled by adding "*" to their excluded-models in the config',
     );
   }
 
@@ -626,7 +626,7 @@ const resetCooldown = Effect.gen(function* () {
   return jsonReply(200, { status: "ok", auth_index: result.authIndex, models: result.models });
 });
 
-const BASE = "/v8/management";
+const BASE = "/v9/management";
 
 export const credentialRoutes = [
   HttpRouter.route("GET", `${BASE}/credentials`, handled(listCredentials)),

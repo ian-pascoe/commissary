@@ -4,7 +4,7 @@
  * Go source: internal/api/server_routes.go (`/anthropic/callback`, `/codex/callback`, `/antigravity/callback`,
  * `/callback`, `/devin/callback`; `oauthCallbackSuccessHTML`). Provider client IDs only allow `localhost` redirect
  * URIs, so a browser reaches these routes only when the user rewrites the host of the redirected URL to the Worker.
- * They sit outside `/v8/management` and therefore outside the Access admin gate: a request is honoured only for the
+ * They sit outside `/v9/management` and therefore outside the Access admin gate: a request is honoured only for the
  * `state` of a pending login of the route's provider (an unguessable 128-bit value held in the ControlPlane), and the
  * answer is a static page that never contains tokens, codes, states or error details. The state names the org whose
  * ControlPlane started the login (`orgScopedName`; a bare state is `global`'s), and only that ControlPlane is asked.

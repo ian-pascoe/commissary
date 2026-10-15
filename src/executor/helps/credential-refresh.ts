@@ -43,7 +43,7 @@ export class CredentialRefresher extends Context.Service<
       credentialId: string,
     ) => Effect.Effect<RefreshResult, never, WorkerEnv | CurrentOrg>;
   }
->()("cf-llm-proxy/executor/CredentialRefresher") {
+>()("commissary/executor/CredentialRefresher") {
   /**
    * Calls the ControlPlane through `api(env, org)`; transport failures become structured `refresh_failed` results.
    */
@@ -77,7 +77,7 @@ export class CredentialRefresher extends Context.Service<
   /** Production: the ControlPlane Durable Object of the request's org. */
   static readonly controlPlane = CredentialRefresher.layerFor(controlPlaneOf);
 
-  /** No refresh support (tests with API keys only). */
+  /** No refresh support (tests with provider keys only). */
   static readonly none = Layer.succeed(
     CredentialRefresher,
     CredentialRefresher.of({
@@ -104,7 +104,7 @@ const accessTokenOf = (metadata: JsonObject): string => {
 };
 
 /**
- * Whether the picked snapshot may need preparation before use. Conservative: API-key credentials never do; OAuth
+ * Whether the picked snapshot may need preparation before use. Conservative: provider-key credentials never do; OAuth
  * credentials only when the token is unusable or the provider mints tokens/keys on demand.
  */
 export const needsPreparation = (credential: CredentialSnapshot, now: number): boolean => {

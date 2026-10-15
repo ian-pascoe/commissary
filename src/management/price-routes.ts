@@ -1,5 +1,5 @@
 /**
- * `GET|POST /v8/management/price-overrides` and `PUT|DELETE /price-overrides/:id` (`PricesGroup` in contract/prices.ts):
+ * `GET|POST /v9/management/price-overrides` and `PUT|DELETE /price-overrides/:id` (`PricesGroup` in contract/prices.ts):
  * an org's price overrides (ADR 0024). Workers addition, no Go counterpart.
  *
  * An override is a config entry (ADR 0025) of the request's org. `POST` creates one (`409 conflict` when the provider
@@ -16,7 +16,7 @@ import type { PriceOverrideValue, WriteResult } from "../config/store.ts";
 import { isJsonObject, type Json } from "../json/index.ts";
 import { bodyJson, controlPlane, handled, ifMatch, jsonReply, replyError } from "./http.ts";
 
-const BASE = "/v8/management/price-overrides";
+const BASE = "/v9/management/price-overrides";
 
 const isRate = (value: Json | undefined): value is number => typeof value === "number";
 

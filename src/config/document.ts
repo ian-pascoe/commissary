@@ -16,7 +16,7 @@ import {
   type JsonObject,
   set,
 } from "../json/index.ts";
-import { API_KEY_FAMILIES } from "./schema.ts";
+import { PROVIDER_KEY_FAMILIES } from "./schema.ts";
 import { ConfigValidationError } from "./errors.ts";
 
 type Move = readonly [from: string, to: string];
@@ -236,14 +236,14 @@ const normalizeDisableImageGeneration = (value: Json | undefined): Json | undefi
   }
 };
 
-const validateApiKeys = (apiKeys: Json | undefined): void => {
-  if (apiKeys === undefined) return;
+const validateProviderKeys = (providerKeys: Json | undefined): void => {
+  if (providerKeys === undefined) return;
 
-  if (!isJsonObject(apiKeys))
+  if (!isJsonObject(providerKeys))
     throw new ConfigValidationError({ message: "api-keys must be a mapping of provider groups" });
-  const allowed = new Set<string>(API_KEY_FAMILIES);
+  const allowed = new Set<string>(PROVIDER_KEY_FAMILIES);
 
-  for (const [family, groups] of Object.entries(apiKeys)) {
+  for (const [family, groups] of Object.entries(providerKeys)) {
     if (!allowed.has(family))
       throw new ConfigValidationError({ message: `api-keys.${family}: unknown provider` });
 
@@ -329,13 +329,13 @@ export const prepareDocument = (raw: Json): JsonObject => {
 
     if (!isJsonArray(entries)) continue;
     delete doc[legacy];
-    const apiKeys = isJsonObject(doc["api-keys"]) ? doc["api-keys"] : {};
-    doc["api-keys"] = apiKeys;
+    const providerKeys = isJsonObject(doc["api-keys"]) ? doc["api-keys"] : {};
+    doc["api-keys"] = providerKeys;
 
-    if (apiKeys[family] === undefined) apiKeys[family] = groupLegacyKeys(entries, family);
+    if (providerKeys[family] === undefined) providerKeys[family] = groupLegacyKeys(entries, family);
   }
 
-  validateApiKeys(doc["api-keys"]);
+  validateProviderKeys(doc["api-keys"]);
 
   const stripped = stripNulls(doc, "");
   const out = isJsonObject(stripped) ? stripped : {};

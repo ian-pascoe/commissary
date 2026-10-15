@@ -15,10 +15,10 @@ import type { CredentialSnapshot } from "../picker.ts";
 import type { ExecutorOptions } from "../types.ts";
 
 /** Stable client identity (OpenCode asks clients not to pose as a generic SDK). */
-export const OPENCODE_USER_AGENT = "cf-llm-proxy";
+export const OPENCODE_USER_AGENT = "commissary";
 
 /** `x-opencode-client` value. */
-export const OPENCODE_CLIENT = "cf-llm-proxy";
+export const OPENCODE_CLIENT = "commissary";
 
 /** Header carrying the conversation id. */
 export const OPENCODE_SESSION_HEADER = "x-opencode-session";
@@ -54,14 +54,14 @@ export const openCodeSessionId = (options: ExecutorOptions): string => {
 };
 
 /** Auth headers of a protocol. */
-export const openCodeAuthHeaders = (protocol: OpenCodeProtocol, apiKey: string) => {
+export const openCodeAuthHeaders = (protocol: OpenCodeProtocol, providerKey: string) => {
   switch (protocol) {
     case "messages":
-      return { "x-api-key": apiKey, "anthropic-version": ANTHROPIC_VERSION };
+      return { "x-api-key": providerKey, "anthropic-version": ANTHROPIC_VERSION };
     case "gemini":
-      return { "x-goog-api-key": apiKey };
+      return { "x-goog-api-key": providerKey };
     default:
-      return { authorization: `Bearer ${apiKey}` };
+      return { authorization: `Bearer ${providerKey}` };
   }
 };
 
@@ -77,12 +77,12 @@ export const openCodeHeaders = (input: {
   readonly credential: CredentialSnapshot;
   readonly options: ExecutorOptions;
   readonly protocol: OpenCodeProtocol;
-  readonly apiKey: string;
+  readonly providerKey: string;
   readonly stream: boolean;
 }): Record<string, string> => {
   const headers = {
     "content-type": "application/json",
-    ...openCodeAuthHeaders(input.protocol, input.apiKey),
+    ...openCodeAuthHeaders(input.protocol, input.providerKey),
     ...openCodeIdentityHeaders(input.options),
     ...(input.stream
       ? { accept: "text/event-stream", "cache-control": "no-cache" }

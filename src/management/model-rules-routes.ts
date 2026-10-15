@@ -1,5 +1,5 @@
 /**
- * `PUT|DELETE /v8/management/model-rules/aliases/:channel` and `/model-rules/exclusions/:channel` (`RoutingGroup` in
+ * `PUT|DELETE /v9/management/model-rules/aliases/:channel` and `/model-rules/exclusions/:channel` (`RoutingGroup` in
  * contract/routing.ts): the Models page's channel rule edits. Workers addition, no Go counterpart (Go's panel writes
  * `oauth.model-alias` and `oauth.excluded-models` through `/config` paths).
  *
@@ -18,7 +18,7 @@ import type { ChannelRuleKind, WriteResult } from "../config/store.ts";
 import { isJsonArray, type Json } from "../json/index.ts";
 import { bodyJson, controlPlane, handled, ifMatch, jsonReply, replyError } from "./http.ts";
 
-const BASE = "/v8/management/model-rules";
+const BASE = "/v9/management/model-rules";
 
 /** The config key of each kind's channel map. */
 const CONFIG_KEYS: Readonly<Record<ChannelRuleKind, "model-alias" | "excluded-models">> = {

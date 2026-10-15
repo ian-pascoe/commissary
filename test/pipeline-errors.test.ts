@@ -176,7 +176,7 @@ describe("upstream header filtering", () => {
     expect([...filtered.keys()]).toEqual(["x-request-id"]);
   });
 
-  it("does not overwrite proxy headers", () => {
+  it("does not overwrite Commissary's headers", () => {
     expect(
       mergeUpstreamHeaders(
         { "content-type": "application/json" },

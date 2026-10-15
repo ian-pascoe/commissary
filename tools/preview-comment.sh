@@ -4,7 +4,7 @@
 set -euo pipefail
 
 pr="${1:?usage: preview-comment.sh <pr-number> <markdown>}"
-marker="<!-- cf-llm-proxy-preview -->"
+marker="<!-- commissary-preview -->"
 body="$marker
 $2"
 repo="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"

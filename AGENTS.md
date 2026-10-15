@@ -5,12 +5,12 @@ TypeScript + Effect v4 (`effect@4.0.2`) port of [CLIProxyAPI](https://github.com
 ## Commands
 
 - Run before finishing: `pnpm typecheck && pnpm lint && pnpm test && pnpm smoke`; `pnpm format` formats.
-- Never run `pnpm run deploy`/`pnpm destroy` (Alchemy) against a real account unless asked. CI deploys previews (`pr-<number>`) and, from `main`, production (`prod`, self-hosted) and the hosted proxy (`hosted`): `docs/DEPLOY.md`.
+- Never run `pnpm run deploy`/`pnpm destroy` (Alchemy) against a real account unless asked. CI deploys previews (`pr-<number>`) and, from `main`, production (`prod`, self-hosted) and Commissary Cloud (`hosted`): `docs/DEPLOY.md`.
 - Commits follow Conventional Commits (`feat:`, `fix:`, `chore:`, …); Husky hooks format/lint staged files, check commit messages and run `pnpm typecheck && pnpm lint` before push. Fix hook failures instead of bypassing them.
 
 ## Go reference
 
-- The Go server is a reference, not the authority (ADR 0019): a source of ideas and tested behaviour that the proxy copies by choice. It lives in the read-only reference checkout `.repos/CLIProxyAPI`; Go paths in code and docs (`internal/...`, `sdk/...`) are relative to it. Read it there; change only this repository.
+- The Go server is a reference, not the authority (ADR 0019): a source of ideas and tested behaviour that Commissary copies by choice. It lives in the read-only reference checkout `.repos/CLIProxyAPI`; Go paths in code and docs (`internal/...`, `sdk/...`) are relative to it. Read it there; change only this repository.
 - Golden fixtures come from `tools/fixturegen` (Go programs run against the reference checkout, see `docs/DEVELOPMENT.md`). A fixture diff after a reference update shows an upstream change to consider, not one that must be ported.
 
 ## Learning more about Effect

@@ -6,7 +6,7 @@ import { MAX_OVERRIDE_PRICE } from "#contract/prices.ts";
 import type { PriceOverride, PriceOverrideBody } from "#contract/prices.ts";
 import { lenient } from "./usage.ts";
 
-/** Provider keys of accounts and keys the proxy serves: suggestions for the provider field. */
+/** Provider keys of accounts and keys Commissary serves: suggestions for the provider field. */
 export const KNOWN_PROVIDERS: ReadonlyArray<string> = [
   "antigravity",
   "claude",

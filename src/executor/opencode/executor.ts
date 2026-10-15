@@ -1,5 +1,5 @@
 /**
- * OpenCode Zen (`opencode-zen`) and OpenCode Go (`opencode-go`) executor: one gateway API key, several upstream
+ * OpenCode Zen (`opencode-zen`) and OpenCode Go (`opencode-go`) executor: one gateway provider key, several upstream
  * protocols chosen per model.
  *
  * Deliberate deviation from Go: CLIProxyAPI has no OpenCode provider (OpenCode is reachable there only as an
@@ -128,7 +128,7 @@ export const makeOpenCodeExecutor = (
       credential: context.credential,
       options,
       protocol: "responses",
-      apiKey: attempt.apiKey,
+      providerKey: attempt.providerKey,
       stream: true,
     });
 

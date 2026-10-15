@@ -188,7 +188,7 @@ const Accounts = () => {
               Connect your first account
             </h2>
             <p className={styles["firstRunText"]}>
-              The proxy answers requests with your provider subscriptions. Sign in to Claude, Codex
+              Commissary answers requests with your provider subscriptions. Sign in to Claude, Codex
               or another provider once from the Accounts page, and this page shows how much of each
               allowance is used and when it resets.
             </p>

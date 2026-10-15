@@ -1,14 +1,14 @@
-// The API keys page's model: provider sections, each key's standing, the facts of a group, and the group form (its
+// The provider keys page's model: provider sections, each key's standing, the facts of a group, and the group form (its
 // draft, validation and the write it becomes). Pure: no DOM, tested in test/web-keys.test.ts.
 //
 // Secrets never reach the browser: an existing key is written back by `auth_index` (the server keeps its secret and
 // the settings the panel never sees); only a new or replacing key carries `api-key`.
 import { flow, Option, Schema } from "effect";
 import {
-  ApiKeyFamily,
-  ApiKeyGroupBody,
-  ApiKeysList,
-  ApiKeyView,
+  ProviderKeyFamily,
+  ProviderKeyGroupBody,
+  ProviderKeysList,
+  ProviderKeyView,
   CompatGroupBody,
   CompatGroupInput,
   CompatGroupView,
@@ -19,14 +19,14 @@ import {
   KeyInput,
   ModelEntry,
   PutGroupRequest,
-} from "#contract/api-keys.ts";
+} from "#contract/provider-keys.ts";
 import { cooldownReason } from "./accounts.ts";
 
 export type AnyGroupView = GroupView | CompatGroupView;
 
-export type AnyKeyView = ApiKeyView | CompatKeyView;
+export type AnyKeyView = ProviderKeyView | CompatKeyView;
 
-export const FAMILY_ORDER: ReadonlyArray<ApiKeyFamily> = [
+export const FAMILY_ORDER: ReadonlyArray<ProviderKeyFamily> = [
   "claude",
   "codex",
   "gemini",
@@ -39,7 +39,7 @@ export const FAMILY_ORDER: ReadonlyArray<ApiKeyFamily> = [
   "openai-compatibility",
 ];
 
-const FAMILY_NAMES: Readonly<Record<ApiKeyFamily, string>> = {
+const FAMILY_NAMES: Readonly<Record<ProviderKeyFamily, string>> = {
   claude: "Claude",
   codex: "Codex",
   gemini: "Gemini",
@@ -52,13 +52,13 @@ const FAMILY_NAMES: Readonly<Record<ApiKeyFamily, string>> = {
   "openai-compatibility": "OpenAI-compatible",
 };
 
-export const familyName = (family: ApiKeyFamily): string => FAMILY_NAMES[family];
+export const familyName = (family: ProviderKeyFamily): string => FAMILY_NAMES[family];
 
-export const isFamily = (value: string): value is ApiKeyFamily =>
+export const isFamily = (value: string): value is ProviderKeyFamily =>
   FAMILY_ORDER.some((family) => family === value);
 
 /** The base URL the server uses when a group sets none; `undefined` where a group must set one. */
-const DEFAULT_BASE: Readonly<Record<ApiKeyFamily, string | undefined>> = {
+const DEFAULT_BASE: Readonly<Record<ProviderKeyFamily, string | undefined>> = {
   claude: "https://api.anthropic.com",
   codex: undefined,
   gemini: "https://generativelanguage.googleapis.com",
@@ -71,9 +71,10 @@ const DEFAULT_BASE: Readonly<Record<ApiKeyFamily, string | undefined>> = {
   "openai-compatibility": undefined,
 };
 
-export const defaultBaseUrl = (family: ApiKeyFamily): string | undefined => DEFAULT_BASE[family];
+export const defaultBaseUrl = (family: ProviderKeyFamily): string | undefined =>
+  DEFAULT_BASE[family];
 
-const NewKeySearch = Schema.Struct({ family: Schema.optionalKey(ApiKeyFamily) });
+const NewKeySearch = Schema.Struct({ family: Schema.optionalKey(ProviderKeyFamily) });
 
 /** `/keys/new?family=claude`: an unknown family reads as none (the provider list). */
 export const readNewKeySearch = flow(
@@ -82,7 +83,7 @@ export const readNewKeySearch = flow(
 );
 
 /** A placeholder for the base URL field: the default, or an example where one is required. */
-export const baseUrlPlaceholder = (family: ApiKeyFamily): string =>
+export const baseUrlPlaceholder = (family: ProviderKeyFamily): string =>
   DEFAULT_BASE[family] ?? (family === "xai" ? "https://api.x.ai/v1" : "https://api.example.com/v1");
 
 /** `https://api.anthropic.com/v1` → `api.anthropic.com`; anything unparsable stays as written. */
@@ -105,7 +106,7 @@ export const keyTail = (preview: string): string => {
 // Sections
 
 export interface GroupRef {
-  readonly family: ApiKeyFamily;
+  readonly family: ProviderKeyFamily;
   readonly index: number;
   readonly view: AnyGroupView;
   /** One of the caller's private groups (ADR 0023): `index` counts among those, not among the shared ones. */
@@ -120,7 +121,7 @@ export interface KeySection {
   readonly groups: ReadonlyArray<GroupRef>;
 }
 
-const sectionsOf = (families: ApiKeysList["families"], privately: boolean) =>
+const sectionsOf = (families: ProviderKeysList["families"], privately: boolean) =>
   FAMILY_ORDER.flatMap((family): ReadonlyArray<KeySection> => {
     const groups: ReadonlyArray<AnyGroupView> = families[family];
     const mark = privately ? { private: true } : {};
@@ -153,13 +154,13 @@ const sectionsOf = (families: ApiKeysList["families"], privately: boolean) =>
  * One section per provider in a fixed order; every OpenAI-compatible endpoint is a provider of its own. The org's
  * shared groups come first, then the caller's private ones (ADR 0023), each marked.
  */
-export const keySections = (list: ApiKeysList): ReadonlyArray<KeySection> => [
+export const keySections = (list: ProviderKeysList): ReadonlyArray<KeySection> => [
   ...sectionsOf(list.families, false),
   ...(list.own === undefined ? [] : sectionsOf(list.own, true)),
 ];
 
 /** A group's name, else its host, else its position. */
-export const groupTitle = (family: ApiKeyFamily, view: AnyGroupView): string => {
+export const groupTitle = (family: ProviderKeyFamily, view: AnyGroupView): string => {
   const name = view.group.name?.trim();
 
   if (name !== undefined && name !== "") return name;
@@ -175,7 +176,10 @@ const plural = (count: number, one: string, many = `${one}s`): string =>
   `${count} ${count === 1 ? one : many}`;
 
 /** The facts printed under a group's title: where it sends requests and how it routes them. */
-export const groupFacts = (family: ApiKeyFamily, view: AnyGroupView): ReadonlyArray<string> => {
+export const groupFacts = (
+  family: ProviderKeyFamily,
+  view: AnyGroupView,
+): ReadonlyArray<string> => {
   const { group } = view;
   const facts: Array<string> = [];
   const configured = (group["base-url"] ?? "") !== "";
@@ -332,7 +336,7 @@ export const newModelDraft = (name = ""): ModelDraft => ({
 });
 
 /** The families whose model rows choose an upstream protocol. */
-export const choosesProtocol = (family: ApiKeyFamily | undefined): boolean =>
+export const choosesProtocol = (family: ProviderKeyFamily | undefined): boolean =>
   family === "opencode-zen" || family === "opencode-go";
 
 /** The protocol choices of an OpenCode model row (`""`: what the OpenCode catalog says). */
@@ -465,14 +469,14 @@ export const hasErrors = (errors: DraftErrors): boolean =>
   );
 
 /** What the server would refuse or silently drop, caught before saving. */
-export const validateDraft = (family: ApiKeyFamily, draft: GroupDraft): DraftErrors => {
+export const validateDraft = (family: ProviderKeyFamily, draft: GroupDraft): DraftErrors => {
   const keyErrors: Record<string, KeyError> = {};
 
   for (const key of draft.keys) {
     const weight = key.weight.trim();
 
     if (key.stored === undefined && key.secret.trim() === "") {
-      keyErrors[key.id] = { field: "secret", text: "Enter the API key, or remove this row." };
+      keyErrors[key.id] = { field: "secret", text: "Enter the provider key, or remove this row." };
     } else if (weight !== "" && (!INTEGER.test(weight) || Number(weight) > MAX_WEIGHT)) {
       keyErrors[key.id] = { field: "weight", text: "Weight is a whole number up to 1,000,000." };
     }
@@ -517,7 +521,7 @@ export const validateDraft = (family: ApiKeyFamily, draft: GroupDraft): DraftErr
  * base URL or prefix, or the name of an OpenAI-compatible endpoint (its provider name).
  */
 export const changesIdentity = (
-  family: ApiKeyFamily,
+  family: ProviderKeyFamily,
   view: AnyGroupView | undefined,
   draft: GroupDraft,
 ): boolean =>
@@ -587,16 +591,16 @@ const keyInput = (key: KeyDraft): KeyInput & CompatKeyInput => {
   };
 };
 
-const EMPTY_GROUP: ApiKeyGroupBody = { keys: [] };
+const EMPTY_GROUP: ProviderKeyGroupBody = { keys: [] };
 
 const EMPTY_COMPAT: CompatGroupBody = { name: "", "base-url": "", keys: [] };
 
 /**
- * The `PUT /api-keys/groups` body for the form: every field the form does not show is kept as stored. A group that
+ * The `PUT /provider-keys/groups` body for the form: every field the form does not show is kept as stored. A group that
  * exists is named by its entry `id` and `revision`; a new one has neither (revision 0).
  */
 export const putGroupRequest = (
-  family: ApiKeyFamily,
+  family: ProviderKeyFamily,
   view: AnyGroupView | undefined,
   draft: GroupDraft,
   privately = false,
@@ -649,7 +653,7 @@ export const putGroupRequest = (
   }
 
   // SAFETY: every family but `openai-compatibility` lists key groups.
-  const stored = view?.group as ApiKeyGroupBody | undefined;
+  const stored = view?.group as ProviderKeyGroupBody | undefined;
 
   const {
     keys: _keys,

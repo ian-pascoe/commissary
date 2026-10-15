@@ -25,16 +25,16 @@ describe("api-call", () => {
       header: { Authorization: "Bearer $TOKEN$" },
     };
 
-    const admin = await call("/v8/management/requests/api-call", jsonInit("POST", body));
+    const admin = await call("/v9/management/requests/api-call", jsonInit("POST", body));
 
     expect(admin.status).toBe(404);
     expect(
-      (await call("/v8/management/requests/api-call", { ...jsonInit("POST", body), auth: false }))
+      (await call("/v9/management/requests/api-call", { ...jsonInit("POST", body), auth: false }))
         .status,
     ).toBe(401);
     expect(
       (
-        await call("/v8/management/requests/api-call", {
+        await call("/v9/management/requests/api-call", {
           ...jsonInit("POST", body),
           auth: await token("other@example.com"),
         })
@@ -46,17 +46,17 @@ describe("api-call", () => {
 
 describe("routes that only the upstream panel called", () => {
   const gone: ReadonlyArray<readonly [method: string, path: string]> = [
-    ["GET", "/v8/management/server/latest-version"],
-    ["GET", "/v8/management/observability/logs"],
-    ["DELETE", "/v8/management/observability/logs"],
-    ["GET", "/v8/management/observability/logs/errors"],
-    ["GET", "/v8/management/observability/logs/errors/error-1.log"],
-    ["GET", "/v8/management/observability/logs/requests/abc"],
-    ["GET", "/v8/management/routing/model-definitions/claude"],
-    ["GET", "/v8/management/routing/model-definitions?channel=claude"],
-    ["GET", "/v8/management/observability/usage/api-keys"],
-    ["GET", "/v8/management/oauth/callback?provider=codex&state=s&code=c"],
-    ["GET", "/v8/management/plugins"],
+    ["GET", "/v9/management/server/latest-version"],
+    ["GET", "/v9/management/observability/logs"],
+    ["DELETE", "/v9/management/observability/logs"],
+    ["GET", "/v9/management/observability/logs/errors"],
+    ["GET", "/v9/management/observability/logs/errors/error-1.log"],
+    ["GET", "/v9/management/observability/logs/requests/abc"],
+    ["GET", "/v9/management/routing/model-definitions/claude"],
+    ["GET", "/v9/management/routing/model-definitions?channel=claude"],
+    ["GET", "/v9/management/observability/usage/api-keys"],
+    ["GET", "/v9/management/oauth/callback?provider=codex&state=s&code=c"],
+    ["GET", "/v9/management/plugins"],
   ];
 
   it("answers 404 to administrators and still sits behind the admin gate", async () => {
@@ -70,7 +70,7 @@ describe("routes that only the upstream panel called", () => {
   });
 
   it("sends no X-CPA-* headers on management replies", async () => {
-    const { headers } = await call("/v8/management/settings");
+    const { headers } = await call("/v9/management/settings");
 
     expect(headers.get("cache-control")).toBe("no-store");
     expect(headers.get("x-cpa-version")).toBeNull();

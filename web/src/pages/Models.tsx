@@ -2,7 +2,7 @@
 // could serve it) take requests, its providers, where the id comes from and its context length. A row opens its
 // routes: who serves it under which upstream name, each route's state with the time it is back, and why a rule
 // takes it away. The channel rules themselves are edited on their own page (ModelRules.tsx); account and key rules
-// are shown here only, their homes are the Account page's Routing section (`#routing`) and the API keys pages.
+// are shown here only, their homes are the Account page's Routing section (`#routing`) and the provider keys pages.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
@@ -10,7 +10,7 @@ import { ChevronDown, ChevronRight, Search, Timer } from "lucide-react";
 import { useDeferredValue, useId, useState } from "react";
 import type { ModelRoute, RoutedModel, RoutingModels } from "#contract/routing.ts";
 import {
-  apiKeysAtom,
+  providerKeysAtom,
   CREDENTIALS,
   nowAtom,
   resetCooldownAtom,
@@ -133,7 +133,7 @@ const Provenance = ({ route }: { readonly route: ModelRoute }) => {
   );
 };
 
-/** A route's account or API key, linked to its page; a key the list does not know links to the API keys page. */
+/** A route's account or provider key, linked to its page; a key the list does not know links to the provider keys page. */
 const WhoLink = ({ home, name }: { readonly home: RouteWho["home"]; readonly name: string }) => {
   switch (home.kind) {
     case "account":
@@ -376,7 +376,7 @@ const EMPTY_FILTER: Readonly<Record<Filter, string>> = {
 
 const List = ({ view }: { readonly view: RoutingModels }) => {
   const now = useAtomValue(nowAtom);
-  const keys = useAtomValue(apiKeysAtom);
+  const keys = useAtomValue(providerKeysAtom);
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
   const query = useDeferredValue(search.trim().toLowerCase());
@@ -499,7 +499,7 @@ export const ModelsPage = () => {
           value.models.length === 0 ? (
             <p className={styles["empty"]}>
               No models yet. <Link to="/accounts/connect">Connect an account</Link> or{" "}
-              <Link to="/keys/new">add an API key</Link>, and the models it serves show here.
+              <Link to="/keys/new">add a provider key</Link>, and the models it serves show here.
             </p>
           ) : (
             <List view={value} />

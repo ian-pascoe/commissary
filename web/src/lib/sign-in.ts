@@ -1,4 +1,4 @@
-// The sign-in page's pure helpers (hosted proxy, ADR 0026): where to go after signing in and what a failed attempt
+// The sign-in page's pure helpers (Commissary Cloud, ADR 0026): where to go after signing in and what a failed attempt
 // says. Pure: no DOM, tested in test/web-sign-in.test.ts.
 import { SIGN_IN_PAGE_PATH, type SignInProvider } from "#contract/sign-in.ts";
 
@@ -49,9 +49,9 @@ export const signInProblem = (code: string | null | undefined): string | undefin
       return "An account with this email already exists through another provider. Sign in with the provider you used first.";
     case "banned":
     case "user_banned":
-      return "This account is suspended. Ask the person who runs this proxy.";
+      return "This account is suspended. Ask the person who runs this Commissary.";
     case "signup_disabled":
-      return "New accounts are not accepted on this proxy.";
+      return "New accounts are not accepted on this Commissary.";
     case "sso_required":
       return "Your organization requires you to sign in with your work email. Enter it below.";
     case "sso_removed":

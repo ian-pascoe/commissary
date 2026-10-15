@@ -3,7 +3,7 @@
  * Messages paths, and the HTTP exchange.
  *
  * Deliberate deviation from Go (no OpenCode provider there; see docs/ARCHITECTURE.md "OpenCode Zen and OpenCode
- * Go"). The shaping order follows the other API-key executors (openai_compat_executor.go, claude_executor.go):
+ * Go"). The shaping order follows the other provider-key executors (openai_compat_executor.go, claude_executor.go):
  * translate -> thinking -> protocol fields -> payload rules (final mutation).
  */
 import { Clock, Effect } from "effect";
@@ -44,15 +44,15 @@ export interface OpenCodeShaping {
 export interface OpenCodeAttempt extends OpenCodeShaping {
   /** Gateway base URL without a trailing slash. */
   readonly baseUrl: string;
-  readonly apiKey: string;
+  readonly providerKey: string;
 }
 
 /** The credential's endpoint (`base_url`, else the gateway default) and key; a key is required. */
 export const openCodeEndpoint = (
   context: ExecutionContext,
   provider: OpenCodeProvider,
-): Effect.Effect<{ readonly baseUrl: string; readonly apiKey: string }, ExecutionError> => {
-  const apiKey = (context.credential.attributes["api_key"] ?? "").trim();
+): Effect.Effect<{ readonly baseUrl: string; readonly providerKey: string }, ExecutionError> => {
+  const providerKey = (context.credential.attributes["api_key"] ?? "").trim();
   const configured = (context.credential.attributes["base_url"] ?? "").trim();
 
   const baseUrl = (configured === "" ? OPENCODE_SPECS[provider].baseUrl : configured).replace(
@@ -60,14 +60,14 @@ export const openCodeEndpoint = (
     "",
   );
 
-  return apiKey === ""
+  return providerKey === ""
     ? Effect.fail(
         new ExecutionError({
           status: 401,
           message: `${OPENCODE_SPECS[provider].displayName} credential has no api key`,
         }),
       )
-    : Effect.succeed({ baseUrl, apiKey });
+    : Effect.succeed({ baseUrl, providerKey });
 };
 
 export const makeShaping = (input: Omit<OpenCodeShaping, "baseModel">): OpenCodeShaping => ({

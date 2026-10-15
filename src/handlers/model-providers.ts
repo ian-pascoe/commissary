@@ -45,7 +45,7 @@ export class ModelProviders extends Context.Service<
       WorkerEnv | CurrentOrg
     >;
   }
->()("cf-llm-proxy/handlers/ModelProviders") {
+>()("commissary/handlers/ModelProviders") {
   /**
    * The model registry: every credential's catalog (prefixes, aliases, exclusions, cooling state) as of the current
    * snapshot (requires `ModelRegistry`).

@@ -1,4 +1,4 @@
-// What an org admin sees of other members' private accounts and API keys (ADR 0023): that each exists, its provider,
+// What an org admin sees of other members' private accounts and provider keys (ADR 0023): that each exists, its provider,
 // owner and label, nothing of its use. An org admin may disable (accounts) or remove it, never open it.
 import { useState } from "react";
 import { ConfirmDialog, type ConfirmRequest } from "./Confirm.tsx";
@@ -29,7 +29,7 @@ export const PrivateRows = ({
   onRemove,
 }: {
   readonly title: string;
-  /** What a row is, for the confirmation: "account" or "API key group". */
+  /** What a row is, for the confirmation: "account" or "Provider key group". */
   readonly noun: string;
   readonly rows: ReadonlyArray<PrivateRow>;
   /** Disables or enables a row; absent where a row cannot be disabled. */

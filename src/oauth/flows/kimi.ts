@@ -60,8 +60,8 @@ export const kimiDomain = (domain: string): KimiDomain =>
 const deviceHeaders = (deviceId: string) => ({
   accept: "application/json",
   "x-msh-platform": "CLIProxyAPI",
-  "x-msh-version": "cf-llm-proxy",
-  "x-msh-device-name": "cf-llm-proxy",
+  "x-msh-version": "commissary",
+  "x-msh-device-name": "commissary",
   "x-msh-device-model": "Cloudflare Workers",
   "x-msh-device-id": deviceId,
 });

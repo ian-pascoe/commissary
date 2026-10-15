@@ -41,8 +41,8 @@ export const refreshKimi = (context: RefreshContext): RefreshProtocolEffect =>
       HttpClientRequest.setHeaders({
         accept: "application/json",
         "x-msh-platform": "CLIProxyAPI",
-        "x-msh-version": "cf-llm-proxy",
-        "x-msh-device-name": "cf-llm-proxy",
+        "x-msh-version": "commissary",
+        "x-msh-device-name": "commissary",
         "x-msh-device-model": "Cloudflare Workers",
         "x-msh-device-id": str(metadata.device_id) || FALLBACK_DEVICE_ID,
       }),

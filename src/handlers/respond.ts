@@ -74,7 +74,7 @@ export const errorResponse = (
   return HttpServerResponse.text(body, { status, headers });
 };
 
-/** Successful non-stream body; upstream headers are added without overriding the proxy's own. */
+/** Successful non-stream body; upstream headers are added without overriding Commissary's own. */
 export const jsonResponse = (
   payload: string,
   upstream: Headers | undefined,

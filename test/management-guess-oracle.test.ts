@@ -1,5 +1,5 @@
 // A stored secret must not be confirmable by typing a guess, and a typed key must never delete a stored one: a write
-// answers the same whether the typed key equals a stored one or not (api-keys group writes), and stored keys win
+// answers the same whether the typed key equals a stored one or not (provider-keys group writes), and stored keys win
 // over typed ones. The state after the write is asserted, not only the reply, through
 // the router and the real ControlPlane.
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -80,7 +80,7 @@ interface Listed {
   >;
 }
 
-describe("api-keys writes: a typed key equal to a stored one", () => {
+describe("provider-keys writes: a typed key equal to a stored one", () => {
   const stored = {
     "api-keys": {
       gemini: [
@@ -98,7 +98,7 @@ describe("api-keys writes: a typed key equal to a stored one", () => {
     family = "gemini",
   ) => {
     const version = await seed(document);
-    const listed = (await json("/v8/management/api-keys")).body as Listed;
+    const listed = (await json("/v9/management/provider-keys")).body as Listed;
 
     const groups = listed.families[family] ?? [];
     const indexes = groups.map((entry) => entry.group.keys.map((key) => key.auth_index ?? ""));
@@ -110,7 +110,7 @@ describe("api-keys writes: a typed key equal to a stored one", () => {
     const target = typeof index === "number" ? groups[index] : undefined;
 
     const reply = await json(
-      "/v8/management/api-keys/groups",
+      "/v9/management/provider-keys/groups",
       jsonInit("PUT", {
         ...body,
         ...(target === undefined ? { revision: 0 } : { id: target.id, revision: target.revision }),
@@ -415,7 +415,7 @@ describe("api-keys writes: a typed key equal to a stored one", () => {
     await seed(stored);
 
     const reply = await json(
-      "/v8/management/api-keys/groups",
+      "/v9/management/provider-keys/groups",
       jsonInit("PUT", { revision: 0, family: "codex", group: { keys: [{ "api-key": KEY_A }] } }),
     );
 

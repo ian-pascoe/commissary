@@ -5,10 +5,10 @@ import type { OrgRole } from "../members/roles.ts";
 import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 
 /**
- * The authenticated caller: a person (an Access user, or on a hosted proxy a person signed in with Better Auth: their
- * verified email), an Access service token (client id), a proxy key a member presented on a proxy route (ADR 0022,
- * `proxy-key.ts`; never on a management route), or a management key a script presented on the management API (ADR
- * 0026, `management-key.ts`; never on a proxy route).
+ * The authenticated caller: a person (an Access user, or on Commissary Cloud a person signed in with Better Auth: their
+ * verified email), an Access service token (client id), an API key a member presented on a client API route (ADR 0022,
+ * `api-key.ts`; never on a management route), or a management key a script presented on the management API (ADR
+ * 0026, `management-key.ts`; never on a client API route).
  */
 export type Principal =
   | { readonly kind: "user"; readonly email: string; readonly sub: string }
@@ -24,7 +24,7 @@ export type Principal =
       readonly kind: "mkey";
       readonly keyId: string;
       readonly name: string;
-      /** The person who issued it, when a person did: their suspension refuses it on a hosted proxy. */
+      /** The person who issued it, when a person did: their suspension refuses it on Commissary Cloud. */
       readonly ownerEmail?: string;
     };
 
@@ -40,7 +40,7 @@ export interface AccessIdentity {
    */
   readonly principalId: string;
   /**
-   * Irreversible namespace used to isolate session state between callers (`callerScope(principalId, org)`). A proxy
+   * Irreversible namespace used to isolate session state between callers (`callerScope(principalId, org)`). An API
    * key takes its member's scope (`user:<email>`), so one member's tools share session state.
    */
   readonly callerScope: string;
@@ -61,10 +61,10 @@ export interface AccessIdentity {
  * The authenticated principal of the current request.
  *
  * Provided by the Access gate for every request under a protected prefix (see `access/routes.ts`); handlers for
- * `/v1*`, `/v1beta*`, `/openai/v1*`, `/backend-api/codex*` and `/v8/management*` can `yield* AccessPrincipal`.
+ * `/v1*`, `/v1beta*`, `/openai/v1*`, `/backend-api/codex*` and `/v9/management*` can `yield* AccessPrincipal`.
  */
 export class AccessPrincipal extends Context.Service<AccessPrincipal, AccessIdentity>()(
-  "cf-llm-proxy/access/AccessPrincipal",
+  "commissary/access/AccessPrincipal",
 ) {}
 
 export const principalId = (principal: Principal): string => {
@@ -80,7 +80,7 @@ export const principalId = (principal: Principal): string => {
   }
 };
 
-/** What the caller scope is derived from: the principal, or the member a proxy key belongs to. */
+/** What the caller scope is derived from: the principal, or the member an API key belongs to. */
 const scopeSource = (principal: Principal): string =>
   principal.kind === "key" ? `user:${principal.email.toLowerCase()}` : principalId(principal);
 

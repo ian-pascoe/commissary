@@ -1,14 +1,14 @@
 /**
- * Sign-in on a hosted proxy (ADR 0026, `src/hosted/`): what the panel's sign-in page needs before anyone is signed in.
- * Outside `/v8/management` (no caller yet), so not part of `ManagementApi`. Workers addition, no Go counterpart. Shared
+ * Sign-in on Commissary Cloud (ADR 0026, `src/hosted/`): what the panel's sign-in page needs before anyone is signed in.
+ * Outside `/v9/management` (no caller yet), so not part of `ManagementApi`. Workers addition, no Go counterpart. Shared
  * with the browser: imports `effect` only.
  */
 import { Schema } from "effect";
 
-/** The public address of {@link SignInOptions}; a self-hosted proxy answers it with 404. */
+/** The public address of {@link SignInOptions}; a self-hosted Commissary answers it with 404. */
 export const SIGN_IN_OPTIONS_PATH = "/api/sign-in-options";
 
-/** The panel's sign-in page on a hosted proxy. */
+/** The panel's sign-in page on Commissary Cloud. */
 export const SIGN_IN_PAGE_PATH = "/sign-in";
 
 /** Better Auth's routes the panel calls (the Worker refuses the rest of Better Auth's API). */

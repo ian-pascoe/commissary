@@ -1,6 +1,6 @@
 /**
- * `/v8/management/sso*` (`SsoGroup` in contract/sso.ts): an org's single sign-on on a hosted proxy (issue #76): its
- * identity provider and the email domains it proves with a DNS TXT record. A self-hosted proxy has no such routes.
+ * `/v9/management/sso*` (`SsoGroup` in contract/sso.ts): an org's single sign-on on Commissary Cloud (issue #76): its
+ * identity provider and the email domains it proves with a DNS TXT record. A self-hosted Commissary has no such routes.
  * Workers addition, no Go counterpart.
  *
  * Org admins read the settings (`access/policy.ts`); changing them takes the org owner role. A domain becomes the org's
@@ -33,7 +33,7 @@ import {
 import { bodyJson, controlPlane, handled, jsonReply, type Reply, replyError } from "./http.ts";
 import { registry } from "./org-routes.ts";
 
-const BASE = "/v8/management";
+const BASE = "/v9/management";
 
 const STATUS: Readonly<Record<SsoErrorCode, number>> = {
   invalid_domain: 422,

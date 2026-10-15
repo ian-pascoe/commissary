@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 
 /**
- * A hosted proxy's settings (ADR 0026, `PROXY_MODE=hosted`): the Worker signs people in itself, so no Access application
+ * Commissary Cloud's settings (ADR 0026, `PROXY_MODE=hosted`): the Worker signs people in itself, so no Access application
  * is created. Secrets come from the shell (CI: the GitHub environment's secrets) and are bound as secret text.
  */
 export interface HostedSettings {
@@ -15,7 +15,7 @@ export interface HostedSettings {
   readonly turnstileSecretKey: Redacted.Redacted<string>;
   /** How many orgs a person may own by default (`OWNED_ORG_LIMIT`, default 3). */
   readonly ownedOrgLimit: string;
-  /** Requests per minute an org may send on the proxy routes (`ORG_RATE_LIMIT`, default 600). */
+  /** Requests per minute an org may send on the client API (`ORG_RATE_LIMIT`, default 600). */
   readonly orgRateLimit: number;
   /** The rate-limit namespace (`ORG_RATE_LIMIT_NAMESPACE_ID`): a positive integer unique in the account. */
   readonly orgRateLimitNamespaceId: number;
@@ -26,11 +26,11 @@ export interface HostedSettings {
  * are inputs of `alchemy deploy` only; the Worker itself never reads this file.
  */
 export interface Settings {
-  /** `PROXY_MODE=hosted` (ADR 0026): set for a hosted proxy, `undefined` for a self-hosted one (the default). */
+  /** `PROXY_MODE=hosted` (ADR 0026): set for Commissary Cloud, `undefined` for a self-hosted one (the default). */
   readonly hosted: HostedSettings | undefined;
   /**
    * Pull-request preview stage (`pr-<number>`): served on its `workers.dev` URL behind its own Access application (none
-   * on a hosted proxy), with empty storage and no cron trigger. `domain`, `existingAud` and `serviceTokens` are ignored.
+   * on Commissary Cloud), with empty storage and no cron trigger. `domain`, `existingAud` and `serviceTokens` are ignored.
    */
   readonly preview: boolean;
   /**
@@ -39,7 +39,7 @@ export interface Settings {
    */
   readonly domain: string;
   /**
-   * The API host (`CF_LLM_PROXY_API_DOMAIN`, ADR 0028), e.g. `api.example.com`: the only host of the proxy routes, which
+   * The API host (`CF_LLM_PROXY_API_DOMAIN`, ADR 0028), e.g. `api.example.com`: the only host of the client API, which
    * leave `domain` then. Empty (the default, and always on a preview): `domain` serves everything.
    */
   readonly apiDomain: string;
@@ -168,7 +168,7 @@ const proxyMode = Effect.gen(function* () {
   );
 });
 
-/** The settings of a hosted proxy, and what is wrong with them. */
+/** The settings of Commissary Cloud, and what is wrong with them. */
 const hostedSettings = Effect.gen(function* () {
   const problems: Array<string> = [];
   const limit = wholeNumber(yield* text("OWNED_ORG_LIMIT"), 3, 0);
@@ -200,11 +200,11 @@ const hostedSettings = Effect.gen(function* () {
 
   if (!github && !google)
     problems.push(
-      "a hosted proxy needs a sign-in provider: SIGN_IN_GITHUB_CLIENT_ID and SIGN_IN_GITHUB_CLIENT_SECRET, and/or SIGN_IN_GOOGLE_CLIENT_ID and SIGN_IN_GOOGLE_CLIENT_SECRET",
+      "Commissary Cloud needs a sign-in provider: SIGN_IN_GITHUB_CLIENT_ID and SIGN_IN_GITHUB_CLIENT_SECRET, and/or SIGN_IN_GOOGLE_CLIENT_ID and SIGN_IN_GOOGLE_CLIENT_SECRET",
     );
 
   if (hosted.turnstileSiteKey === "" || Redacted.value(hosted.turnstileSecretKey) === "")
-    problems.push("a hosted proxy needs TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY");
+    problems.push("Commissary Cloud needs TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY");
 
   return { hosted, problems };
 });
@@ -213,7 +213,7 @@ const hostedSettings = Effect.gen(function* () {
 export const PREVIEW_STAGE = /^pr-\d+$/;
 
 /**
- * Stage of the hosted proxy CI deploys from `main` next to `prod` (docs/DEPLOY.md "Hosted production"). Its settings live
+ * Stage of Commissary Cloud, which CI deploys from `main` next to `prod` (docs/DEPLOY.md "The Commissary Cloud stage"). Its settings live
  * in `.env.hosted` (`pnpm deploy:hosted`) and the GitHub environment `hosted`.
  */
 export const HOSTED_STAGE = "hosted";
@@ -224,11 +224,11 @@ export const readSettings = (dev: boolean, stage: string) =>
     const secretsKey = yield* secretsKeyGenerations;
     const mode = yield* proxyMode;
 
-    // Deployed with `.env`'s self-hosted settings, the stage would claim the self-hosted proxy's hostname.
+    // Deployed with `.env`'s self-hosted settings, the stage would claim the self-hosted Commissary's hostname.
     if (!dev && stage === HOSTED_STAGE && mode !== "hosted")
       return yield* Effect.die(
         new Error(
-          `Invalid deploy settings:\n- the ${HOSTED_STAGE} stage is a hosted proxy: set PROXY_MODE=hosted (deploy it with \`pnpm deploy:hosted\`, which reads .env.hosted)`,
+          `Invalid deploy settings:\n- the ${HOSTED_STAGE} stage is Commissary Cloud: set PROXY_MODE=hosted (deploy it with \`pnpm deploy:hosted\`, which reads .env.hosted)`,
         ),
       );
 
@@ -281,13 +281,13 @@ export const readSettings = (dev: boolean, stage: string) =>
     if (hosted !== undefined) {
       if (settings.adminServiceTokens.length > 0)
         yield* Effect.logWarning(
-          "PLATFORM_ADMIN_SERVICE_TOKENS is ignored on a hosted proxy: platform admins sign in with PLATFORM_ADMIN_EMAILS",
+          "PLATFORM_ADMIN_SERVICE_TOKENS is ignored on Commissary Cloud: platform admins sign in with PLATFORM_ADMIN_EMAILS",
         );
 
       if (problems.length > 0)
         return yield* Effect.die(new Error(`Invalid deploy settings:\n- ${problems.join("\n- ")}`));
 
-      // A hosted proxy creates no Access resources and reads none of the Access settings.
+      // Commissary Cloud creates no Access resources and reads none of the Access settings.
       return settings;
     }
 

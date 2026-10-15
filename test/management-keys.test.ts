@@ -1,10 +1,10 @@
-// Management keys (ADR 0026, issue #72) on a self-hosted proxy: the key text, issuing, listing and revoking them, and
+// Management keys (ADR 0026, issue #72) on a self-hosted Commissary: the key text, issuing, listing and revoking them, and
 // the gate on the management API: a key works there with its role in its org only, never downloads a credential,
-// never gives a key or a service token a role, never reaches another org or a proxy route, and is refused once revoked.
+// never gives a key or a service token a role, never reaches another org or a client API route, and is refused once revoked.
 import { afterAll, describe, expect, it } from "vitest";
 import { parseManagementKey } from "../src/management-keys/key.ts";
 import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
-import { parseProxyKey } from "../src/proxy-keys/key.ts";
+import { parseApiKey } from "../src/api-keys/key.ts";
 import {
   ADMIN,
   isolatedPlatform,
@@ -29,7 +29,7 @@ interface Created {
   readonly key: string;
 }
 
-const api = (slug: string, path: string) => `/v8/management/orgs/${slug}${path}`;
+const api = (slug: string, path: string) => `/v9/management/orgs/${slug}${path}`;
 
 /** A request signed in through Access as `email`. */
 const asPerson = async (email: string, path: string, init: RequestInit = {}) =>
@@ -49,7 +49,7 @@ const staffedOrg = async (prefix: string) => {
 
   const created = await asPerson(
     ADMIN,
-    "/v8/management/orgs",
+    "/v9/management/orgs",
     jsonInit("POST", { slug, name: slug }),
   );
 
@@ -88,13 +88,13 @@ const errorOf = (reply: { readonly body: unknown }) =>
   (reply.body as { error?: string }).error;
 
 describe("the key text", () => {
-  it("names its org like a proxy key, and is never taken for one", async () => {
+  it("names its org like an API key, and is never taken for one", async () => {
     const { org, slug, admin } = await staffedOrg("text");
     const created = await issue(slug, admin, "deploy", "admin");
 
     expect(created.key).toMatch(/^cfm_org-[0-9a-f]{16}_[0-9a-f]{20}_[A-Za-z0-9_-]{48}$/);
     expect(parseManagementKey(created.key)).toMatchObject({ org, keyId: created.id });
-    expect(parseProxyKey(created.key)).toBeUndefined();
+    expect(parseApiKey(created.key)).toBeUndefined();
     expect(created.prefix).toBe(created.key.slice(0, created.prefix.length));
     expect(created.prefix.length).toBeLessThan(created.key.length);
   });
@@ -186,7 +186,7 @@ describe("the gate on the management API", () => {
     expect((await withKey(key, api(slug, "/credentials"))).status).toBe(200);
 
     // The unscoped address means the key's org.
-    expect((await withKey(key, "/v8/management/members")).status).toBe(200);
+    expect((await withKey(key, "/v9/management/members")).status).toBe(200);
 
     const download = await withKey(key, api(slug, "/credentials/download?name=claude-ci.json"));
 
@@ -218,7 +218,7 @@ describe("the gate on the management API", () => {
     const { slug, admin } = await staffedOrg("member-key");
     const { key } = await issue(slug, admin, "reader", "member");
 
-    expect((await withKey(key, api(slug, "/proxy-keys"))).status).toBe(200);
+    expect((await withKey(key, api(slug, "/api-keys"))).status).toBe(200);
     expect((await withKey(key, api(slug, "/members"))).status).toBe(403);
   });
 
@@ -246,7 +246,7 @@ describe("the gate on the management API", () => {
     }
   });
 
-  it("is not accepted on the proxy routes", async () => {
+  it("is not accepted on the client API", async () => {
     const { slug, admin } = await staffedOrg("proxy");
     const { key } = await issue(slug, admin, "ci", "admin");
 

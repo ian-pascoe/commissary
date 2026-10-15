@@ -1,5 +1,5 @@
 /**
- * `GET /v8/management/me` and `GET|POST /v8/management/orgs`, `PATCH /v8/management/orgs/:slug` (`OrgsGroup` in
+ * `GET /v9/management/me` and `GET|POST /v9/management/orgs`, `PATCH /v9/management/orgs/:slug` (`OrgsGroup` in
  * contract/orgs.ts): who the caller is, and the org list of the Platform registry (`src/platform`) with its creation and
  * rename. Workers addition, no Go counterpart.
  *
@@ -9,13 +9,13 @@
  * caller is a member of otherwise) and the caller's role in the addressed org. Creating an org only adds it to the
  * registry; its ControlPlane starts empty when first used.
  *
- * On a hosted proxy (ADR 0026) anyone signed in may create orgs, up to their owned-org limit, and becomes the new org's
+ * On Commissary Cloud (ADR 0026) anyone signed in may create orgs, up to their owned-org limit, and becomes the new org's
  * owner; platform admins suspend and unsuspend orgs through the rename route (`suspended`).
  */
 import { Clock, Data, Effect, Match } from "effect";
 import { HttpRouter } from "effect/http";
 import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
-import { forgetOrgProxyKeys } from "../access/proxy-key.ts";
+import { forgetOrgApiKeys } from "../access/api-key.ts";
 import { roleAtLeast } from "../members/roles.ts";
 import type { JsonObject } from "../json/index.ts";
 import { deleteSignInAccount, endSessions } from "../hosted/session.ts";
@@ -35,7 +35,7 @@ import { bodyObject, controlPlane, handled, jsonReply, replyError, type Reply } 
 import { storedConfig } from "./settings-routes.ts";
 import { currentViewer } from "./viewer.ts";
 
-const BASE = "/v8/management";
+const BASE = "/v9/management";
 
 /** Calls the Platform registry; a failed RPC is logged and answered with 502. */
 export const registry = <R>(
@@ -99,7 +99,7 @@ const requirePlatformAdmin = Effect.gen(function* () {
     });
 });
 
-/** On a hosted proxy, how many orgs a person (not a platform admin) owns and may own. */
+/** On Commissary Cloud, how many orgs a person (not a platform admin) owns and may own. */
 const ownedOrgs = (identity: AccessIdentity) =>
   Effect.gen(function* () {
     const env = yield* WorkerEnv;
@@ -180,7 +180,7 @@ const refused = (result: Extract<OrgWriteResult, { ok: false }>): Reply =>
   );
 
 /**
- * Who may create an org: a platform admin; on a hosted proxy also a person signed in, who becomes its owner and counts
+ * Who may create an org: a platform admin; on Commissary Cloud also a person signed in, who becomes its owner and counts
  * it against their owned-org limit. `undefined` for a platform admin.
  */
 const creator = Effect.gen(function* () {
@@ -248,7 +248,7 @@ const create = Effect.gen(function* () {
 });
 
 /**
- * Suspends or unsuspends an org of a hosted proxy: its members are signed out, its keys refused (`hosted/standing.ts`
+ * Suspends or unsuspends an org of Commissary Cloud: its members are signed out, its keys refused (`hosted/standing.ts`
  * forgets what this isolate knew at once; other isolates within `STANDING_TTL_MS`).
  */
 const suspendOrg = (slug: string, suspended: boolean) =>
@@ -283,7 +283,7 @@ const update = Effect.gen(function* () {
   const body = yield* bodyObject;
   const { suspended, ...renamed } = body;
 
-  // Suspension exists on a hosted proxy only; elsewhere the field is an unknown one.
+  // Suspension exists on Commissary Cloud only; elsewhere the field is an unknown one.
   if (suspended !== undefined && (!isHosted(env) || typeof suspended !== "boolean"))
     return yield* replyError(400, "invalid body");
   const patch = yield* stringFields(renamed, ["slug", "name"]);
@@ -475,7 +475,7 @@ const deleteOrgRoute = Effect.gen(function* () {
     catch: (cause) => new DeletionThrew({ cause }),
   }).pipe(Effect.catch(deletionFailed(org.id)));
 
-  forgetOrgProxyKeys(org.id);
+  forgetOrgApiKeys(org.id);
 
   if (outcome.state === "incomplete") {
     yield* Effect.logWarning("org deletion incomplete").pipe(
@@ -501,7 +501,7 @@ const deleteOrgRoute = Effect.gen(function* () {
  * others belong is not left ownerless: `409 sole_owner` names such orgs and nothing changes. The first org holds the
  * deployment's own settings and is never deleted: a person alone in it only leaves it.
  *
- * On a hosted proxy (ADR 0026) the sign-in account goes too, after the last org step and before the registry forgets the
+ * On Commissary Cloud (ADR 0026) the sign-in account goes too, after the last org step and before the registry forgets the
  * person: Better Auth's user, its sessions and linked accounts (`hosted/session.ts`). Signing in again later is a new
  * sign-up, with a new Personal org. A failed step answers an error and a repeated request picks up where it stopped.
  */
@@ -559,7 +559,7 @@ const deleteAccount = Effect.gen(function* () {
         catch: (cause) => new DeletionThrew({ cause }),
       }).pipe(Effect.catch(deletionFailed(org.id)));
 
-      forgetOrgProxyKeys(org.id);
+      forgetOrgApiKeys(org.id);
 
       if (outcome.state === "incomplete")
         return yield* replyError(503, "deletion_incomplete", {

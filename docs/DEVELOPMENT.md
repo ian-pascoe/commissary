@@ -25,7 +25,7 @@ Run from the repository root:
 | `pnpm repos:sync`   | Clone or fast-forward the reference repositories in `.repos/` (`tools/sync-reference-repos.sh`)                                                                              |
 | `pnpm dev`          | `alchemy dev`: local Worker in workerd with emulated DO/KV/D1, hot reload (`ALCHEMY_STATE=local` avoids a Cloudflare login)                                                  |
 | `pnpm web:build`    | Build the control panel (`web/`) into `public/index.html` and `public/assets/` (served at `/`)                                                                               |
-| `pnpm web:dev`      | Vite dev server for the panel on :5173 with hot reload, forwarding `/v8` to `pnpm dev` (`CF_LLM_PROXY_DEV_URL`, default :1337)                                               |
+| `pnpm web:dev`      | Vite dev server for the panel on :5173 with hot reload, forwarding `/v9` to `pnpm dev` (`CF_LLM_PROXY_DEV_URL`, default :1337)                                               |
 | `pnpm typecheck`    | `tsc -b`: Worker (`tsconfig.worker.json`), deploy code (`tsconfig.infra.json`), panel (`tsconfig.web.json`)                                                                  |
 | `pnpm lint`         | `oxlint` (type-aware, with type checking, Effect and anti-slop rules) + `oxfmt --check`                                                                                      |
 | `pnpm format`       | `oxfmt`                                                                                                                                                                      |
@@ -106,7 +106,7 @@ longer generated from Go (ADR 0020): `…/registry` only records the listing fix
 (the ids Go served when the catalog moved to models.dev) is pinned, it does not follow the reference checkout.
 
 The reference checkout follows upstream `main`, so regenerating after `pnpm repos:sync` shows what changed upstream: a
-fixture diff is a change to consider (port the Go change and commit the new fixtures, or keep the proxy's behaviour and
+fixture diff is a change to consider (port the Go change and commit the new fixtures, or keep Commissary's behaviour and
 leave the fixture as it is), not noise to commit blindly. Some
 fixtures contain generated ids or timestamps that differ on every run; the tests mask those.
 

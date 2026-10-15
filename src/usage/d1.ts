@@ -23,7 +23,7 @@
  *
  * Rows keep the credential id (`auth_id`); every read answers with the keyed `auth_index` instead
  * (`management/auth-index.ts`), computed on read under the deployment's key. A config credential id is an unsalted
- * hash of its API key, so it never leaves the database: the `auth` grouping keys are indexes, and the credential filter
+ * hash of its provider key, so it never leaves the database: the `auth` grouping keys are indexes, and the credential filter
  * takes an index, resolved to the live credential's id by the ControlPlane or, for a credential that no longer exists,
  * against the distinct ids of the filtered rows (`resolveAuthIds`).
  */
@@ -586,7 +586,7 @@ export type GroupBy = (typeof GROUP_BY)[number];
  * separately (`UsageSummaryQuery.teams`) and the groups can overlap.
  */
 const GROUP_EXPRESSIONS: Readonly<Record<Exclude<GroupBy, "team">, string>> = {
-  /** The proxy key's id: its `key:<id>` principal; records of any other sign-in have the empty key. */
+  /** The API key's id: its `key:<id>` principal; records of any other sign-in have the empty key. */
   key: "CASE WHEN principal_id LIKE 'key:%' THEN substr(principal_id, 5) END",
   model: "model",
   provider: "provider",

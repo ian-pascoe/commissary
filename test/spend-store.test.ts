@@ -1,5 +1,5 @@
 // The Spend store (src/spend/store.ts) over the SQLite of a ControlPlane Durable Object: limits with revisions and the
-// member-vs-admin rule on a proxy key, counters of the current period, the org's calendar, and the upgrade of a
+// member-vs-admin rule on an API key, counters of the current period, the org's calendar, and the upgrade of a
 // ControlPlane that predates Spend limits (it keeps working, with no limit).
 import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
@@ -127,7 +127,7 @@ describe("SpendStore limits", () => {
     });
   });
 
-  it("keeps a member's limit on their proxy key within the admin's limit on it", async () => {
+  it("keeps a member's limit on their API key within the admin's limit on it", async () => {
     await withStore((store) => {
       value(store.create({ ...KEY, amountMicros: 10 * USD, source: "admin" }, "a"));
 
@@ -218,7 +218,7 @@ describe("SpendStore counters", () => {
       const ledger = new SpendLedger(store, () => []);
       const now = Date.parse("2026-10-14T12:00:00Z");
 
-      expect(ledger.gate({ memberId: "m1", proxyKeyId: "key-1" }, now)).toBeUndefined();
+      expect(ledger.gate({ memberId: "m1", apiKeyId: "key-1" }, now)).toBeUndefined();
       expect(ledger.scopes({ memberId: "m1" }, { id: "c", shared: true })).toEqual([]);
 
       value(
@@ -318,7 +318,7 @@ describe("SpendStore upgrade", () => {
       // Nothing is limited: no gate, no scope to charge.
       const ledger = new SpendLedger(upgraded, () => []);
 
-      expect(ledger.gate({ memberId: "m1", proxyKeyId: "key-1" }, Date.now())).toBeUndefined();
+      expect(ledger.gate({ memberId: "m1", apiKeyId: "key-1" }, Date.now())).toBeUndefined();
     });
   });
 });

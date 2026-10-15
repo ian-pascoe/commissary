@@ -86,7 +86,7 @@ export class QuotaReportStore {
   }
 
   /**
-   * Drops the reports of every credential not in `ids`: a config API key's id is content-addressed, so editing the key
+   * Drops the reports of every credential not in `ids`: a provider key's id is content-addressed, so editing the key
    * leaves its old report behind (auth files drop theirs when deleted).
    */
   retain(ids: ReadonlySet<string>): void {

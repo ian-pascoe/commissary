@@ -25,7 +25,7 @@ import { parseSuffix } from "../suffix.ts";
 import { OPENCODE_SPECS, OPENCODE_ZEN, type OpenCodeProvider } from "./providers.ts";
 
 export interface OpenCodeKeyConfig {
-  readonly apiKey: string;
+  readonly providerKey: string;
   readonly models: ReadonlyArray<ModelEntry>;
 }
 
@@ -33,7 +33,7 @@ export interface OpenCodeKeyConfig {
 const flatKeys = (config: Config, provider: OpenCodeProvider): OpenCodeKeyConfig[] =>
   config["api-keys"][provider].flatMap((group) =>
     group.keys.map((key) => ({
-      apiKey: key["api-key"].trim(),
+      providerKey: key["api-key"].trim(),
       models: key.models ?? group.models ?? [],
     })),
   );
@@ -45,16 +45,17 @@ export const resolveOpenCodeKeyConfig = (
   provider: OpenCodeProvider,
 ): OpenCodeKeyConfig | undefined => {
   const keys = flatKeys(config, provider);
-  const apiKey = (credential.attributes["api_key"] ?? "").trim();
+  const providerKey = (credential.attributes["api_key"] ?? "").trim();
   const rawIndex = (credential.attributes["config_index"] ?? "").trim();
 
   if (/^\d+$/.test(rawIndex)) {
     const entry = keys[Number(rawIndex)];
 
-    if (entry !== undefined && (apiKey === "" || entry.apiKey === apiKey)) return entry;
+    if (entry !== undefined && (providerKey === "" || entry.providerKey === providerKey))
+      return entry;
   }
 
-  return apiKey === "" ? undefined : keys.find((entry) => entry.apiKey === apiKey);
+  return providerKey === "" ? undefined : keys.find((entry) => entry.providerKey === providerKey);
 };
 
 const eq = (left: string, right: string): boolean => left.toLowerCase() === right.toLowerCase();

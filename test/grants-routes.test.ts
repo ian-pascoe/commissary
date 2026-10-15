@@ -1,4 +1,4 @@
-// The grant routes (`/v8/management/grants`, ADR 0023) and `models/mine` through the Access gate and the real
+// The grant routes (`/v9/management/grants`, ADR 0023) and `models/mine` through the Access gate and the real
 // ControlPlane: admin-only CRUD with `If-Match` revisions, the default grant every org starts with, and the model
 // lists two members get from different grants (a team grant reaches the members of the team only).
 import { assert, describe as effectDescribe, it as effectIt } from "@effect/vitest";
@@ -51,7 +51,7 @@ const send = async (
   who: { readonly auth: string },
   init: RequestInit = {},
 ): Promise<{ status: number; body: unknown }> =>
-  await harness.json(`/v8/management/orgs/${org.slug}${path}`, { ...init, auth: who.auth });
+  await harness.json(`/v9/management/orgs/${org.slug}${path}`, { ...init, auth: who.auth });
 
 const write = (method: string, body?: Json, revision?: number): RequestInit => ({
   method,
@@ -66,7 +66,7 @@ const newOrg = async (): Promise<Org> => {
   const slug = `grants-${crypto.randomUUID().slice(0, 8)}`;
   const platform = { auth: await token(ADMIN) };
 
-  const created = await harness.json("/v8/management/orgs", jsonInit("POST", { slug, name: slug }));
+  const created = await harness.json("/v9/management/orgs", jsonInit("POST", { slug, name: slug }));
 
   expect(created.status).toBe(201);
 
@@ -371,7 +371,7 @@ const fetchVia =
   async (input, init) => {
     const request = new Request(input, init);
     const url = new URL(request.url);
-    const path = url.pathname.replace("/v8/management", `/v8/management/orgs/${org.slug}`);
+    const path = url.pathname.replace("/v9/management", `/v9/management/orgs/${org.slug}`);
 
     return await harness.call(`${path}${url.search}`, {
       method: request.method,
@@ -385,7 +385,9 @@ effectDescribe("grants contract", () => {
   effectIt.effect("decodes the list, the saves, the errors and models/mine", () =>
     Effect.flatMap(Effect.promise(newOrg), (org) =>
       Effect.gen(function* () {
-        const api = yield* HttpApiClient.make(ManagementApi, { baseUrl: "https://proxy.test" });
+        const api = yield* HttpApiClient.make(ManagementApi, {
+          baseUrl: "https://commissary.test",
+        });
 
         const body = { subject: subjectOf(org.alice.id), scope: ALL, models: ["claude-*"] };
         const saved = yield* api.grants.create({ payload: body });

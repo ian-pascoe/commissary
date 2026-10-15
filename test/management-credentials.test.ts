@@ -1,4 +1,4 @@
-// /v8/management/credentials* and /routing/cooldown/reset through the router with the real ControlPlane.
+// /v9/management/credentials* and /routing/cooldown/reset through the router with the real ControlPlane.
 import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { authIndexOf } from "./support/auth-index.ts";
@@ -47,12 +47,12 @@ const { call, json } = harness;
 
 /** Credential downloads answer service-token administrators only. */
 const download = async (name: string) =>
-  await json(`/v8/management/credentials/download?name=${encodeURIComponent(name)}`, {
+  await json(`/v9/management/credentials/download?name=${encodeURIComponent(name)}`, {
     auth: await serviceToken(SERVICE_ADMIN),
   });
 
 const upload = async (name: string, content: Json) =>
-  await json(`/v8/management/credentials?name=${encodeURIComponent(name)}`, {
+  await json(`/v9/management/credentials?name=${encodeURIComponent(name)}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: typeof content === "string" ? content : JSON.stringify(content),
@@ -65,7 +65,7 @@ interface Entry {
 }
 
 const list = async (query = ""): Promise<{ files: Entry[]; [key: string]: unknown }> =>
-  (await json(`/v8/management/credentials${query}`)).body as { files: Entry[] };
+  (await json(`/v9/management/credentials${query}`)).body as { files: Entry[] };
 
 const form = (files: Array<[string, string]>) => {
   const body = new FormData();
@@ -143,11 +143,11 @@ describe("management credentials: list and upload", () => {
     expect(page.files.map((file) => file.name)).toEqual(["c.json"]);
     expect(await list("?page=1&page_size=2")).toMatchObject({ has_more: true });
     expect((await list("?page_size=1")).files).toHaveLength(1);
-    expect(await json("/v8/management/credentials?page=0")).toMatchObject({
+    expect(await json("/v9/management/credentials?page=0")).toMatchObject({
       status: 400,
       body: { error: "page must be a positive integer" },
     });
-    expect(await json("/v8/management/credentials?page_size=x")).toMatchObject({
+    expect(await json("/v9/management/credentials?page_size=x")).toMatchObject({
       status: 400,
       body: { error: "page_size must be a positive integer" },
     });
@@ -171,14 +171,14 @@ describe("management credentials: list and upload", () => {
 
   it("accepts multipart uploads: single, several, and partial failures", async () => {
     expect(
-      await json("/v8/management/credentials", form([["one.json", JSON.stringify(claudeFile())]])),
+      await json("/v9/management/credentials", form([["one.json", JSON.stringify(claudeFile())]])),
     ).toMatchObject({
       status: 200,
       body: { status: "ok" },
     });
 
     const several = await json(
-      "/v8/management/credentials",
+      "/v9/management/credentials",
       form([
         ["two.json", JSON.stringify(claudeFile())],
         ["three.json", JSON.stringify(claudeFile())],
@@ -191,7 +191,7 @@ describe("management credentials: list and upload", () => {
     });
 
     const partial = await json(
-      "/v8/management/credentials",
+      "/v9/management/credentials",
       form([
         ["four.json", JSON.stringify(claudeFile())],
         ["bad.txt", "x"],
@@ -207,12 +207,12 @@ describe("management credentials: list and upload", () => {
         failed: [{ name: "bad.txt", error: "file must be .json" }],
       },
     });
-    expect(await json("/v8/management/credentials", form([["bad.txt", "x"]]))).toMatchObject({
+    expect(await json("/v9/management/credentials", form([["bad.txt", "x"]]))).toMatchObject({
       status: 400,
       body: { error: "file must be .json" },
     });
     expect(
-      await json("/v8/management/credentials", { method: "POST", body: new FormData() }),
+      await json("/v9/management/credentials", { method: "POST", body: new FormData() }),
     ).toMatchObject({
       status: 400,
       body: { error: "no files uploaded" },
@@ -230,7 +230,7 @@ describe("management credentials: download, delete, models", () => {
   it("downloads the stored file verbatim, including tokens, to a service-token admin", async () => {
     await upload("x.json", claudeFile({ "proxy-url": "http://p" }));
     const service = { auth: await serviceToken(SERVICE_ADMIN) };
-    const url = "/v8/management/credentials/download";
+    const url = "/v9/management/credentials/download";
     const response = await call(`${url}?name=x.json`, service);
     expect(response.status).toBe(200);
     expect(response.headers.get("content-disposition")).toBe('attachment; filename="x.json"');
@@ -267,11 +267,11 @@ describe("management credentials: download, delete, models", () => {
 
     // Same reply for a stored file, a missing one, an unsafe name and no name: it discloses nothing.
     for (const query of ["?name=x.json", "?name=nope.json", "?name=a/b.json", ""])
-      expect(await json(`/v8/management/credentials/download${query}`, owner)).toMatchObject(
+      expect(await json(`/v9/management/credentials/download${query}`, owner)).toMatchObject(
         refusal,
       );
 
-    const body = (await json("/v8/management/credentials/download?name=x.json", owner)).body;
+    const body = (await json("/v9/management/credentials/download?name=x.json", owner)).body;
     expect(JSON.stringify(body)).not.toContain("secret");
   });
 
@@ -279,7 +279,7 @@ describe("management credentials: download, delete, models", () => {
     await upload("x.json", claudeFile());
 
     for (const auth of [await token("stranger@example.com"), await serviceToken("other.access")]) {
-      const reply = await json("/v8/management/credentials/download?name=x.json", { auth });
+      const reply = await json("/v9/management/credentials/download?name=x.json", { auth });
       expect(reply).toMatchObject({
         status: 403,
         body: { error: "download_requires_service_token" },
@@ -291,22 +291,22 @@ describe("management credentials: download, delete, models", () => {
     for (const name of ["a.json", "b.json", "c.json", "d.json", "e.json"])
       await upload(name, claudeFile());
     expect(
-      await json("/v8/management/credentials?name=a.json", { method: "DELETE" }),
+      await json("/v9/management/credentials?name=a.json", { method: "DELETE" }),
     ).toMatchObject({
       status: 200,
       body: { status: "ok" },
     });
     expect(
-      (await json("/v8/management/credentials?name=a.json", { method: "DELETE" })).status,
+      (await json("/v9/management/credentials?name=a.json", { method: "DELETE" })).status,
     ).toBe(404);
     expect(
-      await json("/v8/management/credentials", jsonInit("DELETE", { names: ["b.json", "c.json"] })),
+      await json("/v9/management/credentials", jsonInit("DELETE", { names: ["b.json", "c.json"] })),
     ).toMatchObject({
       status: 200,
       body: { status: "ok", deleted: 2, files: ["b.json", "c.json"] },
     });
     expect(
-      await json("/v8/management/credentials", jsonInit("DELETE", ["d.json", "ghost.json"])),
+      await json("/v9/management/credentials", jsonInit("DELETE", ["d.json", "ghost.json"])),
     ).toMatchObject({
       status: 207,
       body: {
@@ -316,17 +316,17 @@ describe("management credentials: download, delete, models", () => {
       },
     });
     expect(
-      await json("/v8/management/credentials", jsonInit("DELETE", { name: "e.json" })),
+      await json("/v9/management/credentials", jsonInit("DELETE", { name: "e.json" })),
     ).toMatchObject({
       status: 200,
     });
-    expect(await json("/v8/management/credentials", { method: "DELETE" })).toMatchObject({
+    expect(await json("/v9/management/credentials", { method: "DELETE" })).toMatchObject({
       status: 400,
       body: { error: "invalid name" },
     });
     await upload("f.json", claudeFile());
     await upload("g.json", claudeFile());
-    expect(await json("/v8/management/credentials?all=true", { method: "DELETE" })).toMatchObject({
+    expect(await json("/v9/management/credentials?all=true", { method: "DELETE" })).toMatchObject({
       status: 200,
       body: { status: "ok", deleted: 2 },
     });
@@ -335,16 +335,16 @@ describe("management credentials: download, delete, models", () => {
 
   it("lists the models registered for a credential", async () => {
     await upload("claude-a.json", claudeFile());
-    const models = await json("/v8/management/credentials/models?name=claude-a.json");
+    const models = await json("/v9/management/credentials/models?name=claude-a.json");
     expect(models.status).toBe(200);
     const body = models.body as { models: Array<{ id: string; owned_by?: string }> };
     expect(body.models.length).toBeGreaterThan(0);
     expect(body.models.some((model) => model.id.startsWith("claude-"))).toBe(true);
-    expect(await json("/v8/management/credentials/models?name=ghost.json")).toMatchObject({
+    expect(await json("/v9/management/credentials/models?name=ghost.json")).toMatchObject({
       status: 200,
       body: { models: [] },
     });
-    expect(await json("/v8/management/credentials/models")).toMatchObject({
+    expect(await json("/v9/management/credentials/models")).toMatchObject({
       status: 400,
       body: { error: "name is required" },
     });
@@ -356,7 +356,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     await upload("x.json", claudeFile());
     expect(
       await json(
-        "/v8/management/credentials/status",
+        "/v9/management/credentials/status",
         jsonInit("PATCH", { name: "x.json", disabled: true }),
       ),
     ).toMatchObject({
@@ -365,25 +365,25 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     });
     expect((await list()).files[0]).toMatchObject({ disabled: true, status: "disabled" });
     await json(
-      "/v8/management/credentials/status",
+      "/v9/management/credentials/status",
       jsonInit("PATCH", { name: "x.json", auth_index: authIndexOf("x.json"), disabled: false }),
     );
     expect((await list()).files[0]).toMatchObject({ disabled: false, status: "active" });
 
     expect(
-      (await json("/v8/management/credentials/status", jsonInit("PATCH", { disabled: true }))).body,
+      (await json("/v9/management/credentials/status", jsonInit("PATCH", { disabled: true }))).body,
     ).toEqual({
       error: "name is required",
     });
     expect(
-      (await json("/v8/management/credentials/status", jsonInit("PATCH", { name: "x.json" }))).body,
+      (await json("/v9/management/credentials/status", jsonInit("PATCH", { name: "x.json" }))).body,
     ).toEqual({
       error: "disabled is required",
     });
     expect(
       (
         await json(
-          "/v8/management/credentials/status",
+          "/v9/management/credentials/status",
           jsonInit("PATCH", { name: "ghost.json", disabled: true }),
         )
       ).status,
@@ -392,14 +392,14 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     expect(
       (
         await json(
-          "/v8/management/credentials/status",
+          "/v9/management/credentials/status",
           jsonInit("PATCH", { name: "x.json", auth_index: "0000000000000000", disabled: true }),
         )
       ).status,
     ).toBe(404);
   });
 
-  it("toggles config API keys through excluded-models and refuses compat keys", async () => {
+  it("toggles provider keys through excluded-models and refuses compat keys", async () => {
     await controlPlane().importConfig(
       "api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-x }]\n",
       "test",
@@ -412,13 +412,13 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     // A config key is addressed by its auth_index only: its id (a hash of the key) is no lookup key.
     expect(
       await json(
-        "/v8/management/credentials/status",
+        "/v9/management/credentials/status",
         jsonInit("PATCH", { name: id, disabled: true }),
       ),
     ).toMatchObject({ status: 404 });
     expect(
       await json(
-        "/v8/management/credentials/status",
+        "/v9/management/credentials/status",
         jsonInit("PATCH", { auth_index: authIndex, disabled: true }),
       ),
     ).toMatchObject({
@@ -427,7 +427,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     });
 
     const claudeKeyDisabled = async () => {
-      const view = (await controlPlane().apiKeysView(FULL_ACCESS)) as unknown as {
+      const view = (await controlPlane().providerKeysView(FULL_ACCESS)) as unknown as {
         families: { claude: Array<{ group: { keys: Array<{ disabled: boolean }> } }> };
       };
 
@@ -455,7 +455,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
 
     expect(
       await json(
-        "/v8/management/credentials/status",
+        "/v9/management/credentials/status",
         jsonInit("PATCH", { auth_index: authIndex, disabled: false }),
       ),
     ).toMatchObject({ status: 200, body: { disabled: false } });
@@ -476,7 +476,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
 
     expect(
       await json(
-        "/v8/management/credentials/status",
+        "/v9/management/credentials/status",
         jsonInit("PATCH", { auth_index: authIndexOf(compat.id), disabled: true }),
       ),
     ).toMatchObject({ status: 409 });
@@ -486,7 +486,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     await upload("x.json", claudeFile({ headers: { "X-A": "1", "X-B": "2" } }));
 
     const patch = (fields: Record<string, unknown>) =>
-      json("/v8/management/credentials/fields", jsonInit("PATCH", { name: "x.json", ...fields }));
+      json("/v9/management/credentials/fields", jsonInit("PATCH", { name: "x.json", ...fields }));
 
     expect(
       await patch({
@@ -557,12 +557,12 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     expect((await patch({ "a..b": 1 })).status).toBe(400);
     expect(
       await json(
-        "/v8/management/credentials/fields",
+        "/v9/management/credentials/fields",
         jsonInit("PATCH", { name: "ghost.json", note: "x" }),
       ),
     ).toMatchObject({ status: 404, body: { error: "auth file not found" } });
     expect(
-      (await json("/v8/management/credentials/fields", jsonInit("PATCH", { note: "x" }))).body,
+      (await json("/v9/management/credentials/fields", jsonInit("PATCH", { note: "x" }))).body,
     ).toEqual({
       error: "name is required",
     });
@@ -581,7 +581,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
       }),
     );
 
-    const raw = await (await call("/v8/management/credentials")).text();
+    const raw = await (await call("/v9/management/credentials")).text();
 
     expect(raw).not.toContain("sk-ant-api-secret");
     expect(raw).not.toContain("sk-ant-oat-secret");
@@ -594,7 +594,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
 
     const patch = async (fields: Record<string, Json>) => {
       const response = await call(
-        "/v8/management/credentials/fields",
+        "/v9/management/credentials/fields",
         jsonInit("PATCH", { name: "r.json", ...fields }),
       );
 
@@ -688,7 +688,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     await upload("noref.json", { type: "claude", email: "n@x.com", access_token: "t" });
 
     const one = await json(
-      "/v8/management/credentials/refresh",
+      "/v9/management/credentials/refresh",
       jsonInit("POST", { name: "x.json" }),
     );
 
@@ -699,13 +699,13 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
       "new-access",
     );
 
-    const viaQuery = await json("/v8/management/credentials/refresh?name=y.json", {
+    const viaQuery = await json("/v9/management/credentials/refresh?name=y.json", {
       method: "POST",
     });
 
     expect(viaQuery.status).toBe(200);
 
-    const all = await json("/v8/management/credentials/refresh", jsonInit("POST", { all: true }));
+    const all = await json("/v9/management/credentials/refresh", jsonInit("POST", { all: true }));
     expect(all.status).toBe(200);
 
     const results = (all.body as { ok: boolean; results: Array<{ id: string; success: boolean }> })
@@ -714,20 +714,20 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     expect(results.map((result) => result.id).toSorted()).toEqual(["x.json", "y.json"]);
     expect(results.every((result) => result.success)).toBe(true);
     expect(
-      (await json("/v8/management/credentials/refresh?all=true", { method: "POST" })).status,
+      (await json("/v9/management/credentials/refresh?all=true", { method: "POST" })).status,
     ).toBe(200);
 
     // A credential without refresh token is not an error for a single refresh.
     expect(
-      (await json("/v8/management/credentials/refresh", jsonInit("POST", { name: "noref.json" })))
+      (await json("/v9/management/credentials/refresh", jsonInit("POST", { name: "noref.json" })))
         .status,
     ).toBe(200);
-    expect(await json("/v8/management/credentials/refresh", jsonInit("POST", {}))).toMatchObject({
+    expect(await json("/v9/management/credentials/refresh", jsonInit("POST", {}))).toMatchObject({
       status: 400,
       body: { error: "name or all=true is required" },
     });
     expect(
-      (await json("/v8/management/credentials/refresh", jsonInit("POST", { name: "ghost.json" })))
+      (await json("/v9/management/credentials/refresh", jsonInit("POST", { name: "ghost.json" })))
         .status,
     ).toBe(404);
   });
@@ -737,13 +737,13 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     upstream = () => Response.json({ error: "invalid_request" }, { status: 400 });
 
     const result = await json(
-      "/v8/management/credentials/refresh",
+      "/v9/management/credentials/refresh",
       jsonInit("POST", { name: "x.json" }),
     );
 
     expect(result.status).toBe(500);
     expect(JSON.stringify(result.body)).not.toContain("secret-refresh");
-    const all = await json("/v8/management/credentials/refresh", jsonInit("POST", { all: true }));
+    const all = await json("/v9/management/credentials/refresh", jsonInit("POST", { all: true }));
     expect(all.body).toMatchObject({ ok: true, results: [{ id: "x.json", success: false }] });
   });
 
@@ -765,7 +765,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
 
     expect(
       await json(
-        "/v8/management/routing/cooldown/reset",
+        "/v9/management/routing/cooldown/reset",
         jsonInit("POST", { auth_index: authIndexOf("x.json") }),
       ),
     ).toMatchObject({
@@ -774,21 +774,21 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     });
     expect(
       await json(
-        "/v8/management/routing/cooldown/reset",
+        "/v9/management/routing/cooldown/reset",
         jsonInit("POST", { auth_index: "ffffffffffffffff" }),
       ),
     ).toMatchObject({
       status: 404,
       body: { error: "auth not found" },
     });
-    expect(await json("/v8/management/routing/cooldown/reset", jsonInit("POST", {}))).toMatchObject(
+    expect(await json("/v9/management/routing/cooldown/reset", jsonInit("POST", {}))).toMatchObject(
       {
         status: 400,
         body: { error: "auth_index is required" },
       },
     );
     expect(
-      await json("/v8/management/routing/cooldown/reset", {
+      await json("/v9/management/routing/cooldown/reset", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: "x",

@@ -1,6 +1,6 @@
 /**
  * The admin view of the model registry: per client-visible model id, every credential that could serve it and why it
- * does or does not right now (`GET /v8/management/routing/models`). No Go counterpart: the Go panel only lists ids.
+ * does or does not right now (`GET /v9/management/routing/models`). No Go counterpart: the Go panel only lists ids.
  *
  * Pure over a `RegistrySnapshot`. Two assemblies per credential (`assembleCredentialModels`): the *served* list (what
  * the registry holds: disabled credentials contribute nothing, exclusions applied) and the *potential* list (same
@@ -113,7 +113,7 @@ interface Context {
   readonly authIndex: AuthIndexer;
 }
 
-/** The alias/exclusion channel of a credential; empty for API keys and OpenAI-compatible groups. */
+/** The alias/exclusion channel of a credential; empty for provider keys and OpenAI-compatible groups. */
 const channelOf = (source: ModelSource): string =>
   source.compat || source.source === "config"
     ? ""

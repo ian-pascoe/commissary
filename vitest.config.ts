@@ -10,22 +10,22 @@ const SELF_HOSTED_BINDINGS = {
   PLATFORM_ADMIN_SERVICE_TOKENS: "",
   // End-to-end tests through `exports.default.fetch` authenticate with the dev bypass, which only applies to
   // loopback hosts (`http://localhost/...`) while ACCESS_TEAM_DOMAIN/ACCESS_AUD stay empty; other hosts still
-  // fail closed (`https://proxy.test/...` answers 500 without Access settings).
+  // fail closed (`https://commissary.test/...` answers 500 without Access settings).
   ACCESS_DEV_BYPASS: "true",
   META_MINT_URL: "",
   // Fixed test key of the keyed `auth_index` (deployed: an Alchemy `Random`, alchemy.run.ts); 64 characters, so
   // tests that configure Access (where shorter keys are refused, src/management/auth-index.ts) can use it too.
-  AUTH_INDEX_KEY: "cf-llm-proxy-test-auth-index-key-0123456789abcdef0123456789abcdef012",
+  AUTH_INDEX_KEY: "commissary-test-auth-index-key-0123456789abcdef0123456789abcdef01234",
   // Fixed test secrets keys (deployed: an Alchemy `Random`, alchemy.run.ts), 64 characters like the minted ones. The
   // previous key lets tests start a ControlPlane whose data key is still wrapped by it (a rotation, src/secrets/).
-  SECRETS_KEY: "cf-llm-proxy-test-secrets-key-0123456789abcdef0123456789abcdef0123",
-  SECRETS_KEY_PREVIOUS: "cf-llm-proxy-test-previous-secrets-key-0123456789abcdef0123456789",
+  SECRETS_KEY: "commissary-test-secrets-key-0123456789abcdef0123456789abcdef012345",
+  SECRETS_KEY_PREVIOUS: "commissary-test-previous-secrets-key-0123456789abcdef012345678901",
 };
 
 /**
  * A hosted proxy (ADR 0026, `src/hosted/`): Better Auth signs people in with GitHub and Google (stubbed through the
  * global `fetch` in the tests), Turnstile guards sign-up, and the per-org rate limit is low enough to reach. No dev
- * bypass: requests go to `https://proxy.test`.
+ * bypass: requests go to `https://commissary.test`.
  */
 const HOSTED_BINDINGS = {
   ...SELF_HOSTED_BINDINGS,
@@ -33,7 +33,7 @@ const HOSTED_BINDINGS = {
   PROXY_MODE: "hosted",
   PLATFORM_ADMIN_EMAILS: "root@example.com",
   PLATFORM_ADMIN_SERVICE_TOKENS: "admin-token.access",
-  BETTER_AUTH_SECRET: "cf-llm-proxy-test-better-auth-secret-0123456789abcdef0123456789ab",
+  BETTER_AUTH_SECRET: "commissary-test-better-auth-secret-0123456789abcdef0123456789abcd",
   SIGN_IN_GITHUB_CLIENT_ID: "github-client-id",
   SIGN_IN_GITHUB_CLIENT_SECRET: "github-client-secret",
   SIGN_IN_GOOGLE_CLIENT_ID: "google-client-id",

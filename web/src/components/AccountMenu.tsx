@@ -1,4 +1,4 @@
-// The shell's account menu, the theme menu's twin on the bar: sign out (a hosted proxy only; a self-hosted panel has no
+// The shell's account menu, the theme menu's twin on the bar: sign out (Commissary Cloud only; a self-hosted panel has no
 // session of its own, Cloudflare Access holds it) and delete my account (ADR 0027), which asks in a dialog first.
 import { CircleUserRound, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -8,7 +8,7 @@ import { DeleteAccount } from "./DeleteAccount.tsx";
 import { SignOut } from "./SignOut.tsx";
 
 /**
- * `hosted`: the proxy is hosted, so Sign out is offered. `offersDelete`: the panel knows the caller's role, so Delete my
+ * `hosted`: Commissary is hosted, so Sign out is offered. `offersDelete`: the panel knows the caller's role, so Delete my
  * account is offered.
  */
 export const AccountMenu = ({

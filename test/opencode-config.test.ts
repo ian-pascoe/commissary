@@ -4,7 +4,7 @@ import { Effect, Schema } from "effect";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { decodeConfig, encodeConfig, parseConfigYaml } from "../src/config/codec.ts";
 import { Config } from "../src/config/schema.ts";
-import type { ApiKeysList } from "../src/management/contract/api-keys.ts";
+import type { ProviderKeysList } from "../src/management/contract/provider-keys.ts";
 import { jsonInit, makeHarness, resetControlPlane } from "./support/management.ts";
 
 const YAML = `api-keys:
@@ -118,10 +118,12 @@ describe("management import and key groups", () => {
   beforeEach(resetControlPlane);
 
   const groups = async (family: "opencode-zen" | "opencode-go") =>
-    ((await harness.json("/v8/management/api-keys")).body as ApiKeysList).families[family];
+    ((await harness.json("/v9/management/provider-keys")).body as ProviderKeysList).families[
+      family
+    ];
 
   it("imports the sections from YAML and edits them as key groups", async () => {
-    const stored = await harness.json("/v8/management/settings/import", {
+    const stored = await harness.json("/v9/management/settings/import", {
       method: "POST",
       headers: { "content-type": "application/yaml" },
       body: YAML,
@@ -137,7 +139,7 @@ describe("management import and key groups", () => {
 
     const write = (protocol: string) =>
       harness.json(
-        "/v8/management/api-keys/groups",
+        "/v9/management/provider-keys/groups",
         jsonInit("PUT", {
           family: "opencode-go",
           revision: 0,

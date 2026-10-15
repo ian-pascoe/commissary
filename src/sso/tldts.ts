@@ -3,7 +3,7 @@
  * (`infra/bundle.ts` aliases it): the plugin only reads the host name of a provider's domain, which needs no public
  * suffix list, and the list is a quarter of a megabyte the Worker would otherwise compile at every startup.
  *
- * The proxy hands the plugin verified domains only (`sso/provider.ts`), already DNS names.
+ * Commissary hands the plugin verified domains only (`sso/provider.ts`), already DNS names.
  */
 
 /** The host name of `input`, a URL or a bare host name; `null` when it has none. */

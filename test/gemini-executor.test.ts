@@ -1,4 +1,4 @@
-// End-to-end tests (workerd) of the Gemini API-key executor through the Access gate, the `/v1beta` routes, model
+// End-to-end tests (workerd) of the Gemini provider-key executor through the Access gate, the `/v1beta` routes, model
 // resolution and a mocked upstream: URLs, credentials, shaping, payload rules (final barrier), streaming and errors.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Config } from "../src/config/schema.ts";
@@ -53,7 +53,7 @@ const harness = (respond: UpstreamResponder, overrides: { config?: Config } = {}
   makeGeminiHarness({ config: overrides.config ?? config, respond, credential: cred, models });
 
 describe("POST /v1beta/models/{model}:generateContent", () => {
-  it("forwards to the Gemini API with the API key, custom headers and the shaped body", async () => {
+  it("forwards to the Gemini API with the provider key, custom headers and the shaped body", async () => {
     const h = harness(() => jsonResponse(GEMINI_RESPONSE));
     afterAll(h.dispose);
 
@@ -132,7 +132,7 @@ describe("POST /v1beta/models/{model}:generateContent", () => {
 
   it("answers upstream errors with the upstream status and classifies 401 as credential scoped", async () => {
     const h = harness(() =>
-      jsonResponse({ error: { code: 401, message: "API key not valid" } }, { status: 401 }),
+      jsonResponse({ error: { code: 401, message: "Provider key not valid" } }, { status: 401 }),
     );
 
     afterAll(h.dispose);
@@ -143,7 +143,7 @@ describe("POST /v1beta/models/{model}:generateContent", () => {
     );
 
     expect(response.status).toBe(401);
-    expect(await response.text()).toContain("API key not valid");
+    expect(await response.text()).toContain("Provider key not valid");
     expect(h.reports[0]).toMatchObject({ success: false, httpStatus: 401, credentialScoped: true });
     expect(h.records[0]?.failed).toBe(true);
   });

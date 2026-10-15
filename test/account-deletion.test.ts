@@ -29,13 +29,13 @@ beforeAll(async () => {
 type Payload = Parameters<typeof jsonInit>[1];
 
 const send = async (slug: string, path: string, auth: string, method = "GET", body?: Payload) =>
-  await harness.json(`/v8/management/orgs/${slug}${path}`, {
+  await harness.json(`/v9/management/orgs/${slug}${path}`, {
     ...(body === undefined ? { method } : jsonInit(method, body)),
     auth,
   });
 
 const deleteAccount = async (auth: string, body: Payload) =>
-  await harness.json("/v8/management/me", { ...jsonInit("DELETE", body), auth });
+  await harness.json("/v9/management/me", { ...jsonInit("DELETE", body), auth });
 
 interface Org {
   readonly slug: string;
@@ -46,7 +46,7 @@ const createOrg = async (label: string): Promise<Org> => {
   const slug = `${label}-${crypto.randomUUID().slice(0, 8)}`;
 
   const created = await harness.json(
-    "/v8/management/orgs",
+    "/v9/management/orgs",
     jsonInit("POST", { slug, name: `Org ${slug}`, private_credentials: true }),
   );
 
@@ -68,7 +68,7 @@ const orgsOf = async (email: string) =>
   (await registry.platform.orgsOfEmail(email)).map((org) => org.slug);
 
 const listed = async () =>
-  (await harness.json("/v8/management/orgs", { method: "GET", auth: await token(ADMIN) })).body as {
+  (await harness.json("/v9/management/orgs", { method: "GET", auth: await token(ADMIN) })).body as {
     orgs: ReadonlyArray<{ slug: string }>;
   };
 
@@ -90,12 +90,10 @@ const newPerson = async () => {
   await addMember(solo, email, "owner");
   const auth = await token(email);
 
-  expect((await send(shared.slug, "/proxy-keys", auth, "POST", { name: "laptop" })).status).toBe(
-    201,
-  );
+  expect((await send(shared.slug, "/api-keys", auth, "POST", { name: "laptop" })).status).toBe(201);
   expect(
     (
-      await send(shared.slug, "/api-keys/groups", auth, "PUT", {
+      await send(shared.slug, "/provider-keys/groups", auth, "PUT", {
         family: "claude",
         revision: 0,
         group: { "base-url": "https://api.example.test/v1", keys: [{ "api-key": "sk-gone-0001" }] },
@@ -131,7 +129,7 @@ describe("DELETE /me", () => {
     expect((await plane.listMembers()).map((member) => member.email)).toEqual([
       `owner-${shared.slug}@example.com`,
     ]);
-    expect(await plane.listProxyKeys(undefined, Date.now())).toEqual([]);
+    expect(await plane.listApiKeys(undefined, Date.now())).toEqual([]);
 
     // Nothing is kept about them, not even the note that blocks a removed member from joining again.
     expect(await tombstones(shared)).toBe(0);
