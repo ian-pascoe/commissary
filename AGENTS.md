@@ -48,7 +48,7 @@ Run `pnpm repos:sync` (`./tools/sync-reference-repos.sh`) to refresh them; `pnpm
 
 ### Issue tracker
 
-Issues live in GitHub Issues for `ian-pascoe/cf-llm-proxy`, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues live in this repo's GitHub Issues, managed with the `gh` CLI (it reads the repo from `git remote`). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
