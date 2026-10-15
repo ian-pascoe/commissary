@@ -1,4 +1,4 @@
-// API keys (/api-keys): the keys clients send on the proxy routes instead of an Access sign-in (ADR 0022). Every
+// API keys (/api-keys): the keys clients send on the client API instead of an Access sign-in (ADR 0022). Every
 // member creates, lists and revokes their own; org admins see and revoke every key of the org. A key is shown whole
 // once, in the answer to its creation: the page keeps it in memory until it is dismissed and never asks for it again.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
@@ -411,7 +411,7 @@ const Keys = ({ caller }: { readonly caller: Caller }) => {
           {all.length === 0
             ? every
               ? "No one has created an API key in this org yet."
-              : "You have no API keys yet. Create one above to use the proxy from a coding agent."
+              : "You have no API keys yet. Create one above to use Commissary from a coding agent."
             : "No key works any more. Create one above, or choose All to see the old ones."}
         </p>
       ) : (
@@ -456,7 +456,7 @@ export const ApiKeysPage = () => {
   const every = seesEveryApiKey(caller);
   const closedBecause = AsyncResult.isSuccess(me) ? notMemberNote(me.value) : undefined;
 
-  // A deployment with an API host (ADR 0028) serves the proxy routes there, not on the panel's origin.
+  // A deployment with an API host (ADR 0028) serves the client API there, not on the panel's origin.
   const apiUrl =
     (AsyncResult.isSuccess(me) ? me.value.api_url : undefined) ?? window.location.origin;
 
@@ -465,9 +465,9 @@ export const ApiKeysPage = () => {
       <header className={styles["head"]}>
         <h1 className={styles["title"]}>API keys</h1>
         <p className={styles["intro"]}>
-          An API key lets a coding agent or script use this org&rsquo;s proxy without an Access
+          An API key lets a coding agent or script use this org&rsquo;s Commissary without an Access
           sign-in. Each key belongs to the member who created it, and anything holding it can use
-          the proxy as that member.{" "}
+          Commissary as that member.{" "}
           {every
             ? `You are ${roleAs(caller.role)}, so you also see and revoke every member's keys.`
             : "You see and revoke your own keys."}

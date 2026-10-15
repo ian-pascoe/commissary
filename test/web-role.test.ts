@@ -76,7 +76,7 @@ describe("the sidebar's groups of pages", () => {
     expect(outline(pageGroupsFor("owner"))).toEqual(outline(pageGroupsFor("admin")));
   });
 
-  it("puts Single sign-on beside Settings on a hosted proxy only", () => {
+  it("puts Single sign-on beside Settings on Commissary Cloud only", () => {
     expect(outline(pageGroupsFor("admin", false, true)).at(-1)).toEqual([
       "Org",
       ["Settings", "Single sign-on"],

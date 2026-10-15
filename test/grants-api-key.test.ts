@@ -17,7 +17,7 @@ import {
   token,
 } from "./support/management.ts";
 
-/** Picks the model in `?model=` for the caller the way the proxy handlers do (the identity's org and member). */
+/** Picks the model in `?model=` for the caller the way Commissary handlers do (the identity's org and member). */
 const pickForCaller = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
   const request = yield* HttpServerRequest.HttpServerRequest;

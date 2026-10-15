@@ -173,10 +173,10 @@ export const ResetGrantsView = Schema.Struct({
 export type ResetGrantsView = typeof ResetGrantsView.Type;
 
 /**
- * `POST /credentials/reset-grants/claim`. `retried`: the claim resent an unanswered one. `cooldown_cleared`: the proxy
+ * `POST /credentials/reset-grants/claim`. `retried`: the claim resent an unanswered one. `cooldown_cleared`: Commissary
  * cleared the account's cooldowns after a reset. `report`: the quota check made after a reset (with fresh `grants`
  * in the entry); `grants`: the status the claim was decided on otherwise. `pending_claim` is set while an `unknown`
- * outcome can be retried. `warning`: Anthropic answered but the proxy could not record the answer (the outcome is
+ * outcome can be retried. `warning`: Anthropic answered but Commissary could not record the answer (the outcome is
  * still Anthropic's).
  */
 export const ResetGrantClaim = Schema.Struct({

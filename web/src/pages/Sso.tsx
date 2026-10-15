@@ -1,4 +1,4 @@
-// Single sign-on (/settings/sso, hosted proxy only): the org's own identity provider (OpenID Connect or SAML) and the
+// Single sign-on (/settings/sso, Commissary Cloud only): the org's own identity provider (OpenID Connect or SAML) and the
 // email domains whose people sign in through it, optionally refusing GitHub and Google for them. Org admins read;
 // org owners change (the server enforces it again). The settings never carry the client secret, and nothing here
 // shows one: a saved OpenID Connect provider says its secret is stored and takes a blank secret to keep it.
@@ -61,8 +61,8 @@ export const SsoPage = () => {
         <header className={styles["head"]}>
           <h1 className={styles["title"]}>Single sign-on</h1>
           <p className={styles["intro"]}>
-            Single sign-on is part of the hosted service. On a self-hosted proxy, Cloudflare Access
-            decides who may sign in.
+            Single sign-on is part of the hosted service. On a self-hosted Commissary, Cloudflare
+            Access decides who may sign in.
           </p>
         </header>
       </div>

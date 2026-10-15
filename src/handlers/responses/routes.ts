@@ -15,7 +15,7 @@ import { invalidRequestBody } from "../../http/errors.ts";
 import { asString, del, get, type Json } from "../../json/index.ts";
 import { Formats } from "../../translator/formats.ts";
 import { executeNonStream, executeStream, type ExecutionInput } from "../execute.ts";
-import { currentConfig, type ProxyServices, readRequestBody } from "../request.ts";
+import { currentConfig, type ClientApiServices, readRequestBody } from "../request.ts";
 import { errorResponse, jsonResponse, streamResponse } from "../respond.ts";
 import { prepareCodexResponsesRequest } from "./codex-prepare.ts";
 import { isCodexResponsesClient, responsesFramer } from "./framer.ts";
@@ -101,10 +101,10 @@ const ROUTES = [
 
 const SOCKET_ROUTES = ["/v1/responses", "/responses", "/backend-api/codex/responses"] as const;
 
-/** Route layer; requires the {@link ProxyServices} and `AccessPrincipal` (see `handlers/layer.ts`). */
+/** Route layer; requires the {@link ClientApiServices} and `AccessPrincipal` (see `handlers/layer.ts`). */
 export const ResponsesRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const services = yield* routeServices<ProxyServices>();
+    const services = yield* routeServices<ClientApiServices>();
 
     for (const [path, compact] of ROUTES)
       yield* router.add("POST", path, Effect.provide(handle(compact), services));

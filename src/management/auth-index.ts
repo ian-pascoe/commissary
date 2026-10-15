@@ -17,7 +17,7 @@
  * or guessable key (node:crypto accepts a 0-byte HMAC key). On a deployed stage (`ACCESS_TEAM_DOMAIN` or `ACCESS_AUD`
  * set, the condition that also refuses `ACCESS_DEV_BYPASS`, `access/config.ts`) the fixed `alchemy dev` key and any
  * key shorter than 64 characters (the deploy mints 32 random bytes as 64 hex characters) are refused too
- * (`deploymentAuthIndexer`): every index then fails (management calls answer 500; the proxy's request log, which
+ * (`deploymentAuthIndexer`): every index then fails (management calls answer 500; Commissary's request log, which
  * only annotates with the index, leaves it out, `observability/trace.ts`), and the refusal is logged once per isolate.
  *
  * Each org has its own key (ADR 0021): `global` uses `AUTH_INDEX_KEY` itself, so the indexes from before orgs existed

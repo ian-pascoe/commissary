@@ -1,5 +1,5 @@
 /**
- * Routes that exist on a hosted proxy only (ADR 0026): a self-hosted proxy answers them like any path the router does
+ * Routes that exist on Commissary Cloud only (ADR 0026): a self-hosted Commissary answers them like any path the router does
  * not know (`http/cors.ts` turns that into the plain 404), so nothing of them is reachable there.
  */
 import { Effect } from "effect";
@@ -16,7 +16,7 @@ export const routeNotFound = Effect.gen(function* () {
   });
 });
 
-/** Runs `handler` on a hosted proxy only. */
+/** Runs `handler` on Commissary Cloud only. */
 export const hostedOnly = <A, E, R>(handler: Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
     const env = yield* WorkerEnv;

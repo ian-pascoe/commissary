@@ -44,7 +44,7 @@ export type ScheduledTask =
     };
 
 export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
-  // The model catalog (3 h): the models.dev document, trimmed to the providers the proxy reads, into KV. One document
+  // The model catalog (3 h): the models.dev document, trimmed to the providers Commissary reads, into KV. One document
   // feeds every provider's models and the OpenCode gateways (ADR 0020).
   { name: "model-catalog-refresh", scope: "deployment", run: refreshCatalogs },
   // Antigravity client version (Hub updater manifest, KV `antigravity:version`) and per-credential model entitlements

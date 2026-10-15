@@ -344,7 +344,7 @@ export const hasCodexMultiAgentV2NamespaceConflict = (payload: Json): boolean =>
   );
 };
 
-/** `removeCodexCollaborationMessageEncryption`: the proxy must be able to read the plaintext message. */
+/** `removeCodexCollaborationMessageEncryption`: Commissary must be able to read the plaintext message. */
 const removeMessageEncryption = (refs: ReadonlyArray<ToolRef>): void => {
   for (const { tool } of refs) {
     const message = get(tool, "parameters.properties.message");

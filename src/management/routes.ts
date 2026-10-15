@@ -19,7 +19,7 @@
  * `settings-routes.ts`; Claude reset
  * grants (`/credentials/reset-grants`) in `reset-grant-routes.ts`; the model catalog's status and on-demand refresh (`/models/catalog`) in
  * `catalog-routes.ts`; the org's members, teams and service tokens (`/members`, `/membership`, `/teams`,
- * `/service-tokens`) in `member-routes.ts`; a hosted proxy's per-org single sign-on (`/sso*`) in `sso-routes.ts`.
+ * `/service-tokens`) in `member-routes.ts`; Commissary Cloud's per-org single sign-on (`/sso*`) in `sso-routes.ts`.
  */
 import { Effect, Layer } from "effect";
 import {

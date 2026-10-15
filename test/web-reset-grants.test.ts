@@ -204,7 +204,7 @@ describe("attemptNotice", () => {
   it("says whether anything was spent", () => {
     expect(attemptNotice({ outcome: "reset", retried: false, cooldownCleared: true })).toEqual({
       tone: "done",
-      text: "Reset used. Anthropic emptied the limits. The proxy cleared its cooldowns too.",
+      text: "Reset used. Anthropic emptied the limits. Commissary cleared its cooldowns too.",
     });
     expect(
       attemptNotice({ outcome: "already_used", retried: true, cooldownCleared: false }).tone,

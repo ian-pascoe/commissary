@@ -1,9 +1,9 @@
 /**
- * Wiring of the proxy routes and their services.
+ * Wiring of the client API routes and their services.
  *
  * Services are built once per isolate (the web handler's layer scope); per-request bindings (`WorkerEnv`) and the
  * Access principal are provided per request. Tests swap the upstream transport, config source, usage sink or
- * credential picker through {@link makeProxyLayer}.
+ * credential picker through {@link makeClientApiRoutes}.
  */
 import { Layer } from "effect";
 import { FetchHttpClient, type HttpClient } from "effect/http";
@@ -31,7 +31,7 @@ import { VideoRoutes } from "./openai/videos.ts";
 import { OpenAIRoutes } from "./openai/routes.ts";
 import { ResponsesRoutes } from "./responses/routes.ts";
 
-export interface ProxyLayerOptions {
+export interface ClientApiLayerOptions {
   readonly configReader?: Layer.Layer<ConfigReader>;
   /** Defaults to the ControlPlane Durable Object picker (`StaticCredentialPickerLayer` is for tests). */
   readonly credentialPicker?: Layer.Layer<CredentialPicker, never, ConfigReader>;
@@ -55,8 +55,8 @@ const usageSinkLayer = D1UsageSink.pipe(
   Layer.provide(CatalogStore.layer),
 );
 
-/** All proxy route layers (provider slices add theirs here). */
-export const ProxyRoutes = Layer.mergeAll(
+/** All client API route layers (provider slices add theirs here). */
+export const ClientApiRoutes = Layer.mergeAll(
   OpenAIRoutes,
   ResponsesRoutes,
   ImagesRoutes,
@@ -68,10 +68,10 @@ export const ProxyRoutes = Layer.mergeAll(
 );
 
 /**
- * Proxy routes with their services provided. Handlers still read `AccessPrincipal`: wrap the result with
+ * The client API routes with their services provided. Handlers still read `AccessPrincipal`: wrap the result with
  * `withAccess(...)` (tests use `makeWithAccess` with a fake JWKS).
  */
-export const makeProxyRoutes = (options: ProxyLayerOptions = {}) => {
+export const makeClientApiRoutes = (options: ClientApiLayerOptions = {}) => {
   const config = options.configReader ?? ConfigReader.layerControlPlane();
 
   const services = Layer.mergeAll(
@@ -87,8 +87,8 @@ export const makeProxyRoutes = (options: ProxyLayerOptions = {}) => {
     options.thinking ?? Thinking.live,
   ).pipe(Layer.provideMerge(config));
 
-  return ProxyRoutes.pipe(Layer.provide(services));
+  return ClientApiRoutes.pipe(Layer.provide(services));
 };
 
-/** Production proxy layer (Access-gated, ControlPlane config, global `fetch`). */
-export const ProxyLayer = withAccess(makeProxyRoutes());
+/** Production client API layer (Access-gated, ControlPlane config, global `fetch`). */
+export const ClientApiLayer = withAccess(makeClientApiRoutes());

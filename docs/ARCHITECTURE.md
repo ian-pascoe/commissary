@@ -384,7 +384,7 @@ Core contracts every provider slice implements (Go references in each module hea
   nothing is committed before the first interval, so a timely answer keeps its real status; afterwards a blank line is written per interval and
   the final body (errors included) follows under a committed `200 application/json`, like Go. Video content downloads and `/v1/responses` are
   not wrapped (Go does not either).
-  Route layers close over the services (`handlers/layer.ts`, `makeProxyRoutes` for tests) and are Access-gated.
+  Route layers close over the services (`handlers/layer.ts`, `makeClientApiRoutes` for tests) and are Access-gated.
   Deviation: `POST /chat/completions`, `/completions`, `/responses`, `/responses/compact` and the `GET /responses`
   WebSocket are unprefixed aliases of the `/v1` routes (Go serves only `/v1`). A client whose Anthropic models append
   `/v1/messages` and whose OpenAI models append `/chat/completions` to the same base URL (pi's `opencode-go` catalog)
@@ -619,7 +619,7 @@ upgrade request like any other (default-deny prefixes); the principal is capture
 - **Tool-call repair** (`tool-cache.ts`): orphaned `function_call(_output)` items of replayed input are re-attached from per-session
   caches (256 entries, per isolate, keyed by caller scope + the client's session key, released with the last socket).
 - **Upstream transport** (`executor/websocket/`): `UpstreamWebSocketConnector` dials with `fetch` + `Upgrade: websocket` (30 s handshake
-  timeout, `wss:` URLs are fetched as `https:`); tests substitute in-memory sockets through `makeProxyRoutes({ websocketConnector })`.
+  timeout, `wss:` URLs are fetched as `https:`); tests substitute in-memory sockets through `makeClientApiRoutes({ websocketConnector })`.
   `UpstreamSessionStore` keeps one retained socket per execution session (= downstream socket id), serialises requests with a
   semaphore, reuses the socket while the target `(credential id, URL)` is unchanged, redials once when a send fails, applies the 5 minute
   idle read deadline (`Effect.timeout`, testable with `TestClock`), maps binary frames, close codes and drops to errors, and
@@ -1496,7 +1496,7 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   which then adds that member's own private records), so an org admin's org-wide views never include a member's private
   traffic and a member reads their own private records with their other ones. The usage reporter's `finish()` now keeps the
   member id of the request (it was dropped before).
-  `D1UsageSink` (default in `makeProxyRoutes`) inserts through `ctx.waitUntil` (awaits when
+  `D1UsageSink` (default in `makeClientApiRoutes`) inserts through `ctx.waitUntil` (awaits when
   `waitUntil` throws), logs failures with request id and message only and never fails the request. The sink reads
   `WorkerEnv`/`WorkerExecutionContext` from the fiber context at publish time (not part of its type, so the conductor's
   attempt plumbing is unchanged). `migrations/` is applied by Alchemy on every deploy

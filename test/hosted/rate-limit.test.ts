@@ -1,4 +1,4 @@
-// The per-org rate limit of a hosted proxy's proxy routes (src/hosted/rate-limit.ts): the test Worker's binding allows
+// The per-org rate limit of Commissary Cloud's client API (src/hosted/rate-limit.ts): the test Worker's binding allows
 // 5 requests per minute and org (vitest.config.ts).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { RATE_LIMITED } from "../../src/hosted/rate-limit.ts";

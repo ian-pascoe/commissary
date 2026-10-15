@@ -143,7 +143,7 @@ const CONFLICTS = {
 } as const;
 
 const SETTLE_FAILED =
-  "Anthropic answered, but the proxy could not record the answer; check resets before trying again";
+  "Anthropic answered, but Commissary could not record the answer; check resets before trying again";
 
 const target = (ref: Ref, viewer: Scope) =>
   Effect.map(

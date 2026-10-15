@@ -207,7 +207,7 @@
   background: var(--text);
 }
 
-/* First run: what the proxy needs and the one action that provides it. */
+/* First run: what Commissary needs and the one action that provides it. */
 .firstRun {
   display: grid;
   justify-items: start;

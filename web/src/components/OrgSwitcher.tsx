@@ -17,7 +17,7 @@ export const OrgSwitcher = () => {
 
   if (!AsyncResult.isSuccess(me)) return null;
   const { orgs, platform_admin: platformAdmin } = me.value;
-  // Where the caller may create orgs (everyone on a hosted proxy) the chooser is worth a way in.
+  // Where the caller may create orgs (everyone on Commissary Cloud) the chooser is worth a way in.
   const creates = canCreateOrg(me.value);
 
   if (orgs.length < 2 && !creates) return null;

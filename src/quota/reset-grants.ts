@@ -23,7 +23,7 @@
  * Assumptions (from the panel and observed traffic, not from Anthropic documentation, which does not exist for these
  * endpoints): the `request_id` is an idempotency key (a resend with it does not spend a second reset); `already_used`
  * answering a resend means the first request spent the reset; `skip_spend=1` makes the status read free of side effects;
- * the Claude Code headers (`CLAUDE_HEADERS`) are required. Clearing the proxy's cooldowns after a reset follows the Go
+ * the Claude Code headers (`CLAUDE_HEADERS`) are required. Clearing Commissary's cooldowns after a reset follows the Go
  * maintainers' advice, not upstream code.
  */
 import { Option, Schema } from "effect";
@@ -450,7 +450,7 @@ export const claimLanded = (journal: ClaimJournal, status: ResetGrantStatus): bo
 /**
  * How a resend whose claim landed (`claimLanded`) is answered without sending: as spent (`already_used` on a resend)
  * only when the same read shows the account no longer at a limit, else `not_confirmed` (the hint alone does not prove
- * a reset, and clearing the proxy's cooldowns on it could send traffic to a still limited account). `undefined`: send
+ * a reset, and clearing Commissary's cooldowns on it could send traffic to a still limited account). `undefined`: send
  * the resend after all, since an earlier resend already answered `not_confirmed` (`unconfirmed`) and the operator
  * tries again; the same `request_id` cannot spend a second reset.
  */

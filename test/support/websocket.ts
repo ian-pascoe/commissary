@@ -12,11 +12,11 @@ import type { Json } from "../../src/json/index.ts";
 export interface UpstreamConnection {
   readonly url: string;
   readonly headers: Readonly<Record<string, string>>;
-  /** Text frames the proxy sent. */
+  /** Text frames Commissary sent. */
   readonly received: string[];
   readonly server: WebSocket;
   closed: { code: number; reason: string } | undefined;
-  /** Resolves the next frame the proxy sends (consumed in order). */
+  /** Resolves the next frame Commissary sends (consumed in order). */
   readonly next: () => Promise<string>;
 }
 
@@ -60,10 +60,10 @@ export const mockUpstream = (options: MockUpstreamOptions = {}): MockUpstream =>
           }
 
           const pair = new WebSocketPair();
-          const proxySide = pair[0];
+          const serverSide = pair[0];
           const server = pair[1];
           server.accept();
-          proxySide.accept();
+          serverSide.accept();
           const received: string[] = [];
           const queue: string[] = [];
           const waiting: Array<(frame: string) => void> = [];
@@ -97,7 +97,7 @@ export const mockUpstream = (options: MockUpstreamOptions = {}): MockUpstream =>
           connections.push(connection);
           options.onConnection?.(connection);
 
-          return Effect.succeed(wrapWebSocket(proxySide, new Headers({ "x-upstream": "mock" })));
+          return Effect.succeed(wrapWebSocket(serverSide, new Headers({ "x-upstream": "mock" })));
         }),
     }),
   );
@@ -105,7 +105,7 @@ export const mockUpstream = (options: MockUpstreamOptions = {}): MockUpstream =>
   return { connections, dials, layer };
 };
 
-/** A client-side socket (the `webSocket` of the proxy's 101 response) with queued messages. */
+/** A client-side socket (the `webSocket` of Commissary's 101 response) with queued messages. */
 export interface TestClient {
   readonly send: (value: Json) => void;
   readonly next: () => Promise<string>;

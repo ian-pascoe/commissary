@@ -1,11 +1,11 @@
-// What a hosted proxy (ADR 0026) adds to the panel: who may create orgs and how many, how a refused create reads, and
+// What Commissary Cloud (ADR 0026) adds to the panel: who may create orgs and how many, how a refused create reads, and
 // the platform admin's people page (an owned-org limit and suspension). Pure: no DOM, tested in test/web-hosted.test.ts.
 import type { Me } from "#contract/orgs.ts";
 import { asSentence } from "./failure.ts";
 
 type Hosting = Pick<Me, "platform_admin" | "hosted" | "org_limit" | "owned_orgs">;
 
-/** Anyone signed in creates orgs on a hosted proxy; on a self-hosted one only platform admins do. */
+/** Anyone signed in creates orgs on Commissary Cloud; on a self-hosted one only platform admins do. */
 export const canCreateOrg = (me: Hosting): boolean => me.platform_admin || me.hosted === true;
 
 /** A platform admin has no limit (the server sends neither number then). */
@@ -25,7 +25,7 @@ export const orgCountText = (me: Hosting): string | undefined =>
 export const orgLimitNote = (me: Hosting): string =>
   `You own ${orgCountText(me) ?? "as many orgs as you may"}. Ask a platform admin to raise your limit.`;
 
-/** Platform admins suspend and unsuspend orgs and people on a hosted proxy only. */
+/** Platform admins suspend and unsuspend orgs and people on Commissary Cloud only. */
 export const canSuspend = (me: Pick<Me, "platform_admin" | "hosted">): boolean =>
   me.platform_admin && me.hosted === true;
 

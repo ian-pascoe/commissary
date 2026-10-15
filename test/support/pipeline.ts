@@ -11,7 +11,7 @@ import type { CredentialPicker } from "../../src/executor/picker.ts";
 import { StaticCredentialPickerLayer } from "../../src/executor/static-picker.ts";
 import type { Thinking } from "../../src/executor/thinking.ts";
 import type { UpstreamWebSocketConnector } from "../../src/executor/websocket/connector.ts";
-import { makeProxyRoutes } from "../../src/handlers/layer.ts";
+import { makeClientApiRoutes } from "../../src/handlers/layer.ts";
 import { ModelCapabilities } from "../../src/handlers/model-capabilities.ts";
 import { ModelProviders } from "../../src/handlers/model-providers.ts";
 import { CredentialRefresher } from "../../src/executor/helps/credential-refresh.ts";
@@ -154,7 +154,7 @@ export const makePipeline = (options: PipelineOptions): PipelineHarness => {
   const records: Array<UsageRecord> = [];
   const access = makeAccessLayer(fakeJwksLayer(makeFakeJwks([key])));
 
-  const routes = makeProxyRoutes({
+  const routes = makeClientApiRoutes({
     configReader: staticConfigReader(options.config),
     httpClient: mockHttpClient(calls, options.respond),
     usageSink: UsageSink.memory(records),

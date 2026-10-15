@@ -110,12 +110,12 @@ describe("zones", () => {
 });
 
 describe("cross-site rules for scoped spellings", () => {
-  const PROXY = "https://proxy.test";
+  const ORIGIN = "https://proxy.test";
   const crossSite = { "sec-fetch-site": "cross-site" };
   const navigate = { ...crossSite, "sec-fetch-mode": "navigate", "sec-fetch-dest": "document" };
 
   const check = (method: string, path: string, headers: Record<string, string>) =>
-    crossSiteRejection(method, headers, `${PROXY}${path}`, "management");
+    crossSiteRejection(method, headers, `${ORIGIN}${path}`, "management");
 
   it("lets a link from another site open a scoped panel page, but not its API", () => {
     expect(check("GET", "/o/acme/accounts", navigate)).toBeUndefined();

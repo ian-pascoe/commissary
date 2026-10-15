@@ -1,5 +1,5 @@
-// The gate of a hosted proxy (ADR 0026, src/hosted/gate.ts): session cookies for the panel and the management API,
-// API keys for the proxy routes, no Access credentials anywhere, sign-up with a Personal org, the owned-org limit, and
+// The gate of Commissary Cloud (ADR 0026, src/hosted/gate.ts): session cookies for the panel and the management API,
+// API keys for the client API, no Access credentials anywhere, sign-up with a Personal org, the owned-org limit, and
 // suspension of people and orgs by platform admins.
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -180,7 +180,7 @@ describe("authentication", () => {
     }
   });
 
-  it("takes only API keys on the proxy routes", async () => {
+  it("takes only API keys on the client API", async () => {
     expect((await call("/v1/models")).status).toBe(401);
 
     const cookie = await signIn({ email: "ada@example.com" });

@@ -1,4 +1,4 @@
-// The sign-in page's work email form (issue #76): the person types their work email, the proxy finds the org that
+// The sign-in page's work email form (issue #76): the person types their work email, Commissary finds the org that
 // verified its domain and answers the address of that org's identity provider, where the browser goes next. The same
 // bot check as the GitHub and Google buttons guards it. An email no org has a domain for is answered inline.
 import { Option, Schema } from "effect";

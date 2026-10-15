@@ -1,4 +1,4 @@
-// Router middleware gating the proxy and management routes (mirrors AuthMiddleware in
+// Router middleware gating Commissary and management routes (mirrors AuthMiddleware in
 // internal/api/server_middleware.go: flat `{"error": "..."}` bodies).
 import { Effect, Match, Predicate, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
@@ -82,7 +82,7 @@ export const accessErrorResponse = (
 };
 
 /**
- * On a hosted proxy, a browser that opens a panel page without a session goes to the sign-in page, which brings it back
+ * On Commissary Cloud, a browser that opens a panel page without a session goes to the sign-in page, which brings it back
  * (`next`, a path of this origin) once signed in.
  */
 const signInRedirect = (
@@ -108,7 +108,7 @@ const signInRedirect = (
 
 /**
  * Global middleware: requests under the protected prefixes (see `routes.ts`) must carry a valid Access JWT, or on a
- * proxy route an API key (`api-key.ts`), and come from a member of the request's org with the role the route needs
+ * client API route an API key (`api-key.ts`), and come from a member of the request's org with the role the route needs
  * (`policy.ts`, ADR 0022): a platform admin
  * (`PLATFORM_ADMIN_*`) is an owner of every org, anyone else has the role their membership gives them. Cross-site
  * requests and cross-origin WebSocket upgrades are refused first (`csrf.ts`). Everything else (`/healthz`, unknown
@@ -130,7 +130,7 @@ export const AccessGate = HttpRouter.middleware<{ provides: AccessPrincipal }>()
 
         const hosted = isHosted(yield* WorkerEnv);
 
-        // A hosted proxy's sign-in page loads the panel's bundle before anyone is signed in; the bundle holds no data.
+        // Commissary Cloud's sign-in page loads the panel's bundle before anyone is signed in; the bundle holds no data.
         if (zone === "public" || (hosted && isPanelAssetPath(request.originalUrl))) {
           return yield* Effect.provideService(app, AccessPrincipal, PUBLIC_ROUTE_IDENTITY);
         }

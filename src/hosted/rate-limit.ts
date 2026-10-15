@@ -1,5 +1,5 @@
 /**
- * The per-org request rate limit of a hosted proxy's proxy routes (ADR 0026): the Workers rate-limiting binding
+ * The per-org request rate limit of Commissary Cloud's client API (ADR 0026): the Workers rate-limiting binding
  * `ORG_RATE_LIMIT`, keyed by the org of the API key, so one org's traffic never slows another's. The deployment sets
  * the limit (requests per {@link RATE_LIMIT_PERIOD_SECONDS}, `alchemy.run.ts`). The binding counts per Cloudflare
  * location and is eventually consistent: a ceiling against abuse, not exact accounting. New in the Workers port.

@@ -9,7 +9,7 @@
  *   `revoked_at` column of the first version stays in the table, never written; rows a previous version revoked are
  *   deleted when the ControlPlane starts.
  * - **proxy_key_settings**: one row of org-wide state: whether the org still accepts Access sign-ins (the clients of
- *   the time before API keys) on the proxy routes. On for `global`, where clients signed in through Access before,
+ *   the time before API keys) on the client API. On for `global`, where clients signed in through Access before,
  *   off for every other org.
  *
  * All methods are synchronous; refusals are plain data (`ApiKeyRefused`). Times are the caller's clock (epoch
@@ -79,7 +79,7 @@ export type ApiKeyVerdict =
     }
   | { readonly ok: false; readonly reason: ApiKeyRejection };
 
-/** The org accepts only API keys on its proxy routes: an Access sign-in is not admitted there. */
+/** The org accepts only API keys on its client API routes: an Access sign-in is not admitted there. */
 export interface ClientsUseApiKeys {
   readonly apiKeysOnly: true;
 }
@@ -169,7 +169,7 @@ export class ApiKeyStore {
   readonly #removed: (ids: ReadonlyArray<string>) => void;
 
   /**
-   * `org`: the org the keys name; Access sign-ins stay accepted on the proxy routes of `global` until turned off.
+   * `org`: the org the keys name; Access sign-ins stay accepted on the client API of `global` until turned off.
    * `removed` is told the ids of the keys deleted from now on (revoked, expired or their member gone), so what hangs on
    * a key (its Spend limits and counters) is deleted with it.
    */
@@ -195,7 +195,7 @@ export class ApiKeyStore {
 
   // --- settings -----------------------------------------------------------------------------------------------
 
-  /** Whether the proxy routes still accept an Access sign-in instead of an API key. */
+  /** Whether the client API still accept an Access sign-in instead of an API key. */
   accessClients(): boolean {
     return (
       this.#sql

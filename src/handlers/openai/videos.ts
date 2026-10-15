@@ -32,7 +32,7 @@ import {
   tryParseJson,
 } from "../../json/index.ts";
 import { executeNonStream, type ExecutionInput, type ExecutionOutput } from "../execute.ts";
-import { currentConfig, type ProxyServices, readRequestBody } from "../request.ts";
+import { currentConfig, type ClientApiServices, readRequestBody } from "../request.ts";
 import { errorResponse, withNonStreamKeepAlive } from "../respond.ts";
 import { loadVideoBinding, saveVideoBinding } from "./video-binding.ts";
 import {
@@ -433,10 +433,10 @@ const soraGet = Effect.gen(function* () {
   );
 });
 
-/** Route layer; requires the {@link ProxyServices} and `AccessPrincipal`. */
+/** Route layer; requires the {@link ClientApiServices} and `AccessPrincipal`. */
 export const VideoRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const context = yield* routeServices<ProxyServices>();
+    const context = yield* routeServices<ClientApiServices>();
     yield* router.add("POST", "/v1/videos", Effect.provide(nativePost, context));
     yield* router.add("POST", "/v1/videos/generations", Effect.provide(nativePost, context));
     yield* router.add("POST", "/v1/videos/edits", Effect.provide(nativePost, context));

@@ -1,5 +1,5 @@
 /**
- * The models.dev document (`https://models.dev/api.json`, ≈5 MB, every provider) trimmed to the providers the proxy
+ * The models.dev document (`https://models.dev/api.json`, ≈5 MB, every provider) trimmed to the providers Commissary
  * reads and the fields it uses (ADR 0020). One trimmed document feeds every provider's model catalog (`catalog.ts`)
  * and the OpenCode gateways (`opencode-catalog.ts`).
  *
@@ -16,7 +16,7 @@
  */
 import { Effect, Result, Schema, type Types } from "effect";
 
-/** models.dev provider ids the proxy reads; every one must be present in a document. */
+/** models.dev provider ids Commissary reads; every one must be present in a document. */
 export const MODELS_DEV_PROVIDERS = [
   "anthropic",
   "google",
@@ -215,7 +215,7 @@ const trimProvider = (
 };
 
 /**
- * The proxy's part of a models.dev document (JSON text, full or already trimmed). Fails when a provider is missing or
+ * Commissary's part of a models.dev document (JSON text, full or already trimmed). Fails when a provider is missing or
  * has no usable model.
  */
 export const trimModelsDev = (text: string): TrimResult => {

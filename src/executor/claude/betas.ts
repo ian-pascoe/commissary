@@ -63,7 +63,7 @@ const TRAILING_BETAS: readonly string[] = [
 
 const MANAGED = new Set<string>([...Object.values(BETA), ...CONSTANT_BETAS, ...TRAILING_BETAS]);
 
-/** `isManagedClaudeBeta`: betas the proxy assembles itself (dropped from callers on first-party upstreams). */
+/** `isManagedClaudeBeta`: betas Commissary assembles itself (dropped from callers on first-party upstreams). */
 export const isManagedBeta = (beta: string): boolean => MANAGED.has(beta.trim());
 
 /** `claudeRequestedBetas`: caller header betas plus body `betas`. */

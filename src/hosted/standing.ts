@@ -1,5 +1,5 @@
 /**
- * Sign-up and suspension on a hosted proxy (ADR 0026), as the gate (`gate.ts`) checks them on every request.
+ * Sign-up and suspension on Commissary Cloud (ADR 0026), as the gate (`gate.ts`) checks them on every request.
  *
  * A person who signs in for the first time without a membership gets a Personal org with them as its org owner; one
  * the index lists in some org was invited and gets none (the Platform registry decides, `PlatformStore.signIn`). A

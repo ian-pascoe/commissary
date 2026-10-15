@@ -276,7 +276,7 @@ export const attemptNotice = (attempt: {
   readonly retryUntil?: number | undefined;
   readonly blocked?: string | undefined;
 }): AttemptNotice => {
-  const cleared = attempt.cooldownCleared ? " The proxy cleared its cooldowns too." : "";
+  const cleared = attempt.cooldownCleared ? " Commissary cleared its cooldowns too." : "";
 
   switch (attempt.outcome) {
     case "reset":
@@ -334,7 +334,7 @@ export const attemptNotice = (attempt: {
         text:
           attempt.retryUntil === undefined
             ? "Anthropic did not answer, so a reset may have been spent. Check quota to see whether the limits were emptied."
-            : `Anthropic did not answer, so a reset may have been spent. Try again before ${formatClock(attempt.retryUntil)}: the proxy sends the same request again, which cannot spend a second reset.`,
+            : `Anthropic did not answer, so a reset may have been spent. Try again before ${formatClock(attempt.retryUntil)}: Commissary sends the same request again, which cannot spend a second reset.`,
       };
   }
 };

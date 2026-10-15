@@ -49,7 +49,7 @@ const firstIdentifier = (
 };
 
 /**
- * The type and code of an error: `code` is the one the proxy itself gave it (`auth_not_found`, ...), which wins over
+ * The type and code of an error: `code` is the one Commissary itself gave it (`auth_not_found`, ...), which wins over
  * the upstream's; `message` is the upstream body for an upstream HTTP error, read for its `error.type` and
  * `error.code` (OpenAI, Claude, Codex) or `error.status` (Gemini) and not kept.
  */

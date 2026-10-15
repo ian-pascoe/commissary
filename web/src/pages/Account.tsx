@@ -366,13 +366,13 @@ const Resets = ({ entry, now }: { readonly entry: CredentialEntry; readonly now:
           </h2>
           {resend ? (
             <p>
-              The proxy sends the same request again. Anthropic counts it once, so it cannot spend a
-              second reset.
+              Commissary sends the same request again. Anthropic counts it once, so it cannot spend
+              a second reset.
             </p>
           ) : (
             <p>
               Anthropic empties {windowList(next?.clears ?? [])} now. This spends one of the
-              account's {view?.left ?? 0} resets and cannot be undone. The proxy checks the resets
+              account's {view?.left ?? 0} resets and cannot be undone. Commissary checks the resets
               again first and spends nothing if none can be used.
             </p>
           )}
@@ -437,7 +437,7 @@ const Cooldowns = ({
       }
     >
       <p className={styles["lead"]}>
-        The provider turned requests away, so the proxy is resting this account until the times
+        The provider turned requests away, so Commissary is resting this account until the times
         below. Clear them to try it again now.
       </p>
       <table className={`${styles["table"]} ${styles["cooldowns"]}`}>
@@ -686,7 +686,7 @@ const Remove = ({
   return (
     <Section title="Delete">
       <p className={styles["lead"]}>
-        The proxy stops using this account and forgets its tokens. You can connect it again later.
+        Commissary stops using this account and forgets its tokens. You can connect it again later.
       </p>
       <button type="button" className={kit["danger"]} onClick={() => dialog.current?.showModal()}>
         <Trash2 aria-hidden="true" size={16} strokeWidth={2.25} />
@@ -721,7 +721,7 @@ const Remove = ({
           </h2>
           <p>
             Requests stop going to this {providerName(entry.provider)} account and its tokens are
-            removed from the proxy.
+            removed from Commissary.
           </p>
           <div className={kit["dialogActions"]}>
             <button type="submit" className={kit["danger"]} disabled={remove.busy}>
@@ -876,8 +876,8 @@ const Actions = ({
                 ? {
                     tone: "done",
                     text: disabled
-                      ? "Account disabled. The proxy sends it no requests."
-                      : "Account enabled. The proxy sends it requests again.",
+                      ? "Account disabled. Commissary sends it no requests."
+                      : "Account enabled. Commissary sends it requests again.",
                   }
                 : {
                     tone: "problem",

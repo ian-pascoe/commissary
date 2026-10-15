@@ -94,7 +94,7 @@ export class Platform extends DurableObject<Env> {
     return this.#store.replaceOrgIndex(org, index);
   }
 
-  // --- people of a hosted proxy (ADR 0026, `src/hosted/`) ---------------------------------------------------------
+  // --- people of Commissary Cloud (ADR 0026, `src/hosted/`) ---------------------------------------------------------
 
   /** A person signed in: suspended, signed up, or due the Personal org created for them here. `now`: epoch ms. */
   signIn(email: string, now: number): SignInState {
@@ -127,7 +127,7 @@ export class Platform extends DurableObject<Env> {
     return this.#store.emailsOfOrg(org);
   }
 
-  // --- single sign-on domains of a hosted proxy (issue #76, `src/sso/`) -------------------------------------------
+  // --- single sign-on domains of Commissary Cloud (issue #76, `src/sso/`) -------------------------------------------
 
   /** Gives a verified email domain (lowercased) to `org`; refused while another org holds it. */
   claimSsoDomain(domain: string, org: string): SsoDomainClaim {

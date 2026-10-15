@@ -1,7 +1,7 @@
 // API keys (ADR 0022, issue #67): the key text, the management routes that issue and revoke keys, and the gate on
-// the proxy routes: each header form a client sends keys in, the refusals (all `Invalid API key`), that a key only ever
+// the client API: each header form a client sends keys in, the refusals (all `Invalid API key`), that a key only ever
 // reaches its own org's ControlPlane and serves its member's private credentials, revocation within the cache window,
-// and the Access sign-ins a proxy route still takes while the org's `access_clients` setting is on. Through the router with the real ControlPlanes and a Platform
+// and the Access sign-ins a client API route still takes while the org's `access_clients` setting is on. Through the router with the real ControlPlanes and a Platform
 // registry of its own; the cache window through `authenticateRequest` with `TestClock`.
 import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
@@ -31,7 +31,7 @@ import {
   token,
 } from "./support/management.ts";
 
-/** What the stand-in proxy route saw of its caller. */
+/** What the stand-in client API route saw of its caller. */
 interface Seen {
   readonly principal_id: string;
   readonly org: string;
@@ -56,7 +56,7 @@ const whoami = Effect.gen(function* () {
 });
 
 /**
- * Picks a Claude credential for the caller the way the proxy handlers do (`handlers/execute.ts`: the identity's org and
+ * Picks a Claude credential for the caller the way Commissary handlers do (`handlers/execute.ts`: the identity's org and
  * member), and answers which one, or the refusal.
  */
 const pickForCaller = Effect.gen(function* () {
@@ -75,7 +75,7 @@ const pickForCaller = Effect.gen(function* () {
   return HttpServerResponse.text(JSON.stringify(picked), { contentType: "application/json" });
 });
 
-const ProxyRoutes = Layer.mergeAll(
+const ClientApiRoutes = Layer.mergeAll(
   HttpRouter.add("POST", "/v1/chat/completions", pickForCaller),
   HttpRouter.add("GET", "/v1/models", whoami),
   HttpRouter.add("POST", "/v1/messages", whoami),
@@ -89,7 +89,7 @@ const registry = isolatedPlatform();
 
 const accessKey = await makeKey("api-keys-kid");
 
-const harness = makeHarness(undefined, registry.bindings, GLOBAL_ORG, ProxyRoutes);
+const harness = makeHarness(undefined, registry.bindings, GLOBAL_ORG, ClientApiRoutes);
 
 afterAll(harness.dispose);
 
@@ -186,8 +186,8 @@ const createKeyDirect = async (
   return issued.value.record.name;
 };
 
-/** A proxy route called with `headers` only: no Access sign-in. */
-const proxy = async (path: string, headers: Record<string, string>, method = "GET") =>
+/** A client API route called with `headers` only: no Access sign-in. */
+const clientApi = async (path: string, headers: Record<string, string>, method = "GET") =>
   await harness.json(path, { method, headers, auth: false });
 
 describe("the key text", () => {
@@ -422,7 +422,7 @@ describe("issuing keys", () => {
   });
 });
 
-describe("the gate on the proxy routes", () => {
+describe("the gate on the client API", () => {
   it("takes a key in each header form a client sends, as its member in its org", async () => {
     const { org, slug, alice } = await staffedOrg("gate-forms");
     const created = await createKey(slug, alice);
@@ -441,7 +441,7 @@ describe("the gate on the proxy routes", () => {
     ];
 
     for (const [method, path, headers] of forms) {
-      const reply = await proxy(path, headers, method);
+      const reply = await clientApi(path, headers, method);
 
       expect(reply.status, `${method} ${path}`).toBe(200);
       expect(reply.body).toMatchObject({
@@ -460,7 +460,7 @@ describe("the gate on the proxy routes", () => {
     const { slug, alice, bob } = await staffedOrg("gate-scope");
 
     const scopeOf = async (key: KeyBody) =>
-      ((await proxy("/v1/models", { authorization: `Bearer ${wholeKey(key)}` })).body as Seen)
+      ((await clientApi("/v1/models", { authorization: `Bearer ${wholeKey(key)}` })).body as Seen)
         .caller_scope;
 
     const laptop = await scopeOf(await createKey(slug, alice, "laptop"));
@@ -480,8 +480,13 @@ describe("the gate on the proxy routes", () => {
     expect(uploaded.status).toBe(200);
 
     const pickedWith = async (key: KeyBody) =>
-      (await proxy("/v1/chat/completions", { authorization: `Bearer ${wholeKey(key)}` }, "POST"))
-        .body;
+      (
+        await clientApi(
+          "/v1/chat/completions",
+          { authorization: `Bearer ${wholeKey(key)}` },
+          "POST",
+        )
+      ).body;
 
     expect(await pickedWith(await createKey(slug, alice))).toEqual({ credential: "alice.json" });
     expect(await pickedWith(await createKey(slug, bob))).toEqual({ refused: true });
@@ -521,7 +526,7 @@ describe("the gate on the proxy routes", () => {
     };
 
     for (const [why, presented] of Object.entries(refused)) {
-      const reply = await proxy("/v1/models", { authorization: `Bearer ${presented}` });
+      const reply = await clientApi("/v1/models", { authorization: `Bearer ${presented}` });
 
       expect([reply.status, reply.body], why).toEqual([401, { error: "Invalid API key" }]);
     }
@@ -534,7 +539,7 @@ describe("the gate on the proxy routes", () => {
 
     expect(withJwt.status).toBe(401);
 
-    expect(await proxy("/v1/models", {})).toMatchObject({
+    expect(await clientApi("/v1/models", {})).toMatchObject({
       status: 401,
       body: { error: "Missing API key" },
     });
@@ -549,8 +554,8 @@ describe("the gate on the proxy routes", () => {
 
     if (parsedA === undefined) throw new Error("the issued key does not parse");
 
-    expect(((await proxy("/v1/models", { "x-api-key": keyA })).body as Seen).org).toBe(a.org);
-    expect(((await proxy("/v1/models", { "x-api-key": keyB })).body as Seen).org).toBe(b.org);
+    expect(((await clientApi("/v1/models", { "x-api-key": keyA })).body as Seen).org).toBe(a.org);
+    expect(((await clientApi("/v1/models", { "x-api-key": keyB })).body as Seen).org).toBe(b.org);
 
     // Org B's ControlPlane does not know org A's key, even asked directly.
     expect(
@@ -559,7 +564,7 @@ describe("the gate on the proxy routes", () => {
 
     // Asked through the gate with B's org in front of A's key: refused, and B records no use of any key.
     const relabelled = keyA.replace(`cfp_${a.org}_`, `cfp_${b.org}_`);
-    expect((await proxy("/v1/models", { "x-api-key": relabelled })).status).toBe(401);
+    expect((await clientApi("/v1/models", { "x-api-key": relabelled })).status).toBe(401);
 
     const bKeys = (await send(b.slug, "/api-keys", b.admin)).body as { keys: Array<KeyBody> };
     expect(bKeys.keys.map((key) => key.id)).not.toContain(parsedA.keyId);
@@ -571,14 +576,14 @@ describe("the gate on the proxy routes", () => {
     const headers = { authorization: `Bearer ${wholeKey(created)}` };
 
     // Verified, so cached.
-    expect((await proxy("/v1/models", headers)).status).toBe(200);
+    expect((await clientApi("/v1/models", headers)).status).toBe(200);
     expect((await send(slug, `/api-keys/${created.id}`, alice, "DELETE")).status).toBe(200);
-    expect((await proxy("/v1/models", headers)).status).toBe(401);
+    expect((await clientApi("/v1/models", headers)).status).toBe(401);
 
     const bobs = { "x-api-key": wholeKey(await createKey(slug, bob)) };
-    expect((await proxy("/v1/models", bobs)).status).toBe(200);
+    expect((await clientApi("/v1/models", bobs)).status).toBe(200);
     expect((await send(slug, `/members/${bob.id}`, admin, "DELETE")).status).toBe(200);
-    expect((await proxy("/v1/models", bobs)).status).toBe(401);
+    expect((await clientApi("/v1/models", bobs)).status).toBe(401);
   });
 
   it("never takes a key on the management routes", async () => {
@@ -593,7 +598,7 @@ describe("the gate on the proxy routes", () => {
   });
 });
 
-describe("Access sign-ins on the proxy routes", () => {
+describe("Access sign-ins on the client API", () => {
   const owner = () => as(ADMIN);
 
   const setAccessClients = async (on: boolean) => {
@@ -615,7 +620,7 @@ describe("Access sign-ins on the proxy routes", () => {
     });
 
     const { slug } = await staffedOrg("access-default");
-    // An Access sign-in on a proxy route names no org, so it only ever reaches global: other orgs lack the setting.
+    // An Access sign-in on a client API route names no org, so it only ever reaches global: other orgs lack the setting.
     expect((await send(slug, "/membership", await owner())).body).toEqual({
       auto_join: false,
       private_credentials: false,
@@ -631,7 +636,7 @@ describe("Access sign-ins on the proxy routes", () => {
       { "cf-access-token": jwt, authorization: "Bearer sk-dummy" },
       { "cf-access-token": jwt, "x-api-key": "sk-dummy" },
     ]) {
-      const reply = await proxy("/v1/models", headers);
+      const reply = await clientApi("/v1/models", headers);
 
       expect(reply.status).toBe(200);
       expect((reply.body as Seen).principal_id).toBe("user:client@example.com");
@@ -640,7 +645,7 @@ describe("Access sign-ins on the proxy routes", () => {
     expect(await setAccessClients(false)).toMatchObject({ access_clients: false });
 
     try {
-      expect(await proxy("/v1/models", { "cf-access-token": jwt })).toMatchObject({
+      expect(await clientApi("/v1/models", { "cf-access-token": jwt })).toMatchObject({
         status: 401,
         body: { error: "Missing API key" },
       });
@@ -648,7 +653,7 @@ describe("Access sign-ins on the proxy routes", () => {
       const viaEdge = await harness.json("/v1/models", { auth: jwt });
       expect([viaEdge.status, viaEdge.body]).toEqual([401, { error: "Missing API key" }]);
 
-      const withDummy = await proxy("/v1/models", {
+      const withDummy = await clientApi("/v1/models", {
         "cf-access-token": jwt,
         authorization: "Bearer sk-dummy",
       });
@@ -697,7 +702,7 @@ describe("Access sign-ins on the proxy routes", () => {
         { "cf-access-token": jwt, authorization: "Bearer sk-dummy" },
         { "cf-access-jwt-assertion": jwt },
       ]) {
-        const reply = await proxy("/v1/models", headers);
+        const reply = await clientApi("/v1/models", headers);
 
         expect([reply.status, reply.body], why).toEqual([401, { error: "Invalid API key" }]);
       }
@@ -706,8 +711,12 @@ describe("Access sign-ins on the proxy routes", () => {
     const valid = await signToken({ key: managementKey, now, claims });
 
     expect(
-      (await proxy("/v1/models", { "cf-access-token": valid, authorization: "Bearer sk-dummy" }))
-        .status,
+      (
+        await clientApi("/v1/models", {
+          "cf-access-token": valid,
+          authorization: "Bearer sk-dummy",
+        })
+      ).status,
     ).toBe(200);
   });
 

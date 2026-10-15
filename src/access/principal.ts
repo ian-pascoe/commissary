@@ -5,10 +5,10 @@ import type { OrgRole } from "../members/roles.ts";
 import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 
 /**
- * The authenticated caller: a person (an Access user, or on a hosted proxy a person signed in with Better Auth: their
- * verified email), an Access service token (client id), an API key a member presented on a proxy route (ADR 0022,
+ * The authenticated caller: a person (an Access user, or on Commissary Cloud a person signed in with Better Auth: their
+ * verified email), an Access service token (client id), an API key a member presented on a client API route (ADR 0022,
  * `api-key.ts`; never on a management route), or a management key a script presented on the management API (ADR
- * 0026, `management-key.ts`; never on a proxy route).
+ * 0026, `management-key.ts`; never on a client API route).
  */
 export type Principal =
   | { readonly kind: "user"; readonly email: string; readonly sub: string }
@@ -24,7 +24,7 @@ export type Principal =
       readonly kind: "mkey";
       readonly keyId: string;
       readonly name: string;
-      /** The person who issued it, when a person did: their suspension refuses it on a hosted proxy. */
+      /** The person who issued it, when a person did: their suspension refuses it on Commissary Cloud. */
       readonly ownerEmail?: string;
     };
 

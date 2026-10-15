@@ -1,4 +1,4 @@
-// A self-hosted proxy (PROXY_MODE unset) has none of a hosted proxy's sign-in routes (src/hosted/routes.ts): Better
+// A self-hosted Commissary (PROXY_MODE unset) has none of Commissary Cloud's sign-in routes (src/hosted/routes.ts): Better
 // Auth's API, the sign-in options and the sign-in page answer exactly like an unknown path.
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
@@ -12,7 +12,7 @@ const snapshot = async (response: Response) => ({
   body: await response.text(),
 });
 
-describe("self-hosted proxy", () => {
+describe("self-hosted Commissary", () => {
   it("reaches no Better Auth route, sign-in options or sign-in page", async () => {
     const unknown = await snapshot(await fetchWorker("/nope"));
     expect(unknown.status).toBe(404);

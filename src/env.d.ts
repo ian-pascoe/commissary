@@ -3,7 +3,7 @@
 interface __BaseEnv_Env {
   /** Model catalogs, signature cache, Antigravity state (Workers KV). */
   CACHE: KVNamespace;
-  /** Usage records and, on a hosted proxy, Better Auth's people and sessions (D1); schema in migrations/. */
+  /** Usage records and, on Commissary Cloud, Better Auth's people and sessions (D1); schema in migrations/. */
   USAGE: D1Database;
   /** Static assets (management panel). */
   ASSETS: Fetcher;
@@ -26,7 +26,7 @@ interface __BaseEnv_Env {
    * like `API_DOMAIN`, on a deployment that serves everything on one host (src/http/hosts.ts, ADR 0028).
    */
   APP_DOMAIN?: string;
-  /** The API host (`CF_LLM_PROXY_API_DOMAIN`): the only host of the proxy routes. Unset: one host serves everything. */
+  /** The API host (`CF_LLM_PROXY_API_DOMAIN`): the only host of the client API. Unset: one host serves everything. */
   API_DOMAIN?: string;
   /** Overrides the Meta key-mint endpoint (empty: default). */
   META_MINT_URL: string;
@@ -44,7 +44,7 @@ interface __BaseEnv_Env {
   /** During a rotation, the secrets key `SECRETS_KEY` replaces: data keys still wrapped by it are wrapped again. */
   SECRETS_KEY_PREVIOUS?: string;
   /**
-   * `hosted`: a hosted proxy (ADR 0026, src/hosted/): the Worker signs people in with Better Auth and Access is not
+   * `hosted`: Commissary Cloud (ADR 0026, src/hosted/): the Worker signs people in with Better Auth and Access is not
    * used; unset or `self-hosted`: Cloudflare Access in front of the panel and the management API (ADR 0022).
    */
   PROXY_MODE?: string;
@@ -61,7 +61,7 @@ interface __BaseEnv_Env {
   TURNSTILE_SECRET_KEY?: string;
   /** Hosted: how many orgs a person may own unless a platform admin raised their limit (default 3). */
   OWNED_ORG_LIMIT?: string;
-  /** Hosted: the per-org request rate limit of the proxy routes (Workers rate limiting, keyed by org id). */
+  /** Hosted: the per-org request rate limit of the client API (Workers rate limiting, keyed by org id). */
   ORG_RATE_LIMIT?: RateLimit;
   CONTROL_PLANE: DurableObjectNamespace<import("./index").ControlPlane>;
   SESSION_STATE: DurableObjectNamespace<import("./index").SessionState>;

@@ -1,5 +1,5 @@
 /**
- * Shared request handling for the proxy routes: body reading/decoding and the services every handler needs.
+ * Shared request handling for the client API: body reading/decoding and the services every handler needs.
  *
  * Go source: sdk/api/handlers/request_body.go (ReadRequestBody), sdk/api/handlers/handlers.go (GetAlt).
  */
@@ -18,8 +18,8 @@ import type { UsageSink } from "../usage/sink.ts";
 import type { ModelCapabilities } from "./model-capabilities.ts";
 import type { ModelProviders } from "./model-providers.ts";
 
-/** Services the proxy routes close over (provided once per isolate by `handlers/layer.ts`). */
-export type ProxyServices =
+/** Services the client API close over (provided once per isolate by `handlers/layer.ts`). */
+export type ClientApiServices =
   | ConfigReader
   | CredentialPicker
   | CredentialRefresher

@@ -1,4 +1,4 @@
-// Usage: what the proxy served over a range (24 hours, 7 days, 30 days), narrowed by model, account, provider or
+// Usage: what Commissary served over a range (24 hours, 7 days, 30 days), narrowed by model, account, provider or
 // user: the totals, tokens per hour or day, a breakdown whose rows narrow the page further, and the request log
 // with each request's details. The range, breakdown and filters live in the address, so a view can be linked to.
 // A plain member sees their own requests only (the server narrows every read), without the account names, the

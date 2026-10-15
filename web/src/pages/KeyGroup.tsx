@@ -309,7 +309,7 @@ const GroupForm = ({
             label="Base URL"
             hint={
               defaultBaseUrl(family) === undefined
-                ? "Required: where the proxy sends this group's requests."
+                ? "Required: where Commissary sends this group's requests."
                 : "Leave empty for the provider's own API."
             }
             error={shown.baseUrl}
@@ -348,7 +348,7 @@ const GroupForm = ({
           <Field
             id={`${ids}-priority`}
             label="Priority"
-            hint="The proxy uses the highest priority first; empty counts as 0."
+            hint="Commissary uses the highest priority first; empty counts as 0."
             error={shown.priority}
           >
             <input
@@ -371,7 +371,7 @@ const GroupForm = ({
                 checked={draft.disabled}
                 onChange={(event) => set("disabled", event.target.checked)}
               />
-              <span>Disable this endpoint: the proxy sends it no requests</span>
+              <span>Disable this endpoint: Commissary sends it no requests</span>
             </label>
             <label className={styles["check"]}>
               <input
@@ -387,7 +387,7 @@ const GroupForm = ({
 
       <Section title="Keys">
         <p className={styles["lead"]}>
-          A key is shown only by its last characters. Type a new one to replace it; the proxy keeps
+          A key is shown only by its last characters. Type a new one to replace it; Commissary keeps
           it and never sends it back to this page.
         </p>
         {shown.keys === undefined ? null : <p className={kit["fieldError"]}>{shown.keys}</p>}
@@ -690,7 +690,7 @@ const DeleteGroup = ({
   return (
     <Section title="Delete" className={styles["delete"]}>
       <p className={styles["lead"]}>
-        The proxy stops using {count === 1 ? "this key" : `these ${formatCount(count)} keys`} and
+        Commissary stops using {count === 1 ? "this key" : `these ${formatCount(count)} keys`} and
         forgets {count === 1 ? "it" : "them"}. Their usage history stays.
       </p>
       {problem === undefined ? null : (
@@ -734,7 +734,7 @@ const DeleteGroup = ({
           </h2>
           <p>
             Requests stop going to {count === 1 ? "its key" : `its ${formatCount(count)} keys`}, and
-            the keys are removed from the proxy&rsquo;s configuration.
+            the keys are removed from Commissary&rsquo;s configuration.
           </p>
           <div className={kit["dialogActions"]}>
             <button type="submit" className={kit["danger"]} disabled={remove.busy}>

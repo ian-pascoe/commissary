@@ -19,7 +19,7 @@ import {
   type ExecutionInput,
 } from "../execute.ts";
 import { claudeFramer } from "../framing.ts";
-import { altOf, currentConfig, type ProxyServices, readRequestBody } from "../request.ts";
+import { altOf, currentConfig, type ClientApiServices, readRequestBody } from "../request.ts";
 import { errorResponse, jsonResponse, streamResponse, withNonStreamKeepAlive } from "../respond.ts";
 import { resolveClaudeModelIdPrefix } from "../../registry/listings.ts";
 
@@ -103,10 +103,10 @@ const handle = (kind: "messages" | "count") =>
     );
   });
 
-/** Route layer; requires the {@link ProxyServices} (see `handlers/layer.ts`) and `AccessPrincipal` (`withAccess`). */
+/** Route layer; requires the {@link ClientApiServices} (see `handlers/layer.ts`) and `AccessPrincipal` (`withAccess`). */
 export const ClaudeRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const services = yield* routeServices<ProxyServices>();
+    const services = yield* routeServices<ClientApiServices>();
     yield* router.add("POST", "/v1/messages", Effect.provide(handle("messages"), services));
     yield* router.add(
       "POST",

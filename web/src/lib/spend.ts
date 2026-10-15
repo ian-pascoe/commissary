@@ -68,7 +68,7 @@ export const spentShare = (
   limit: Pick<SpendLimitView, "spent_micros" | "amount_micros">,
 ): number => (limit.amount_micros <= 0 ? 1 : Math.min(1, limit.spent_micros / limit.amount_micros));
 
-/** Whether the limit has no room left: the proxy refuses what it covers until the period ends. */
+/** Whether the limit has no room left: Commissary refuses what it covers until the period ends. */
 export const reached = (limit: Pick<SpendLimitView, "spent_micros" | "amount_micros">): boolean =>
   limit.spent_micros >= limit.amount_micros;
 

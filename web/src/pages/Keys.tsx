@@ -206,8 +206,8 @@ const KeyRow = ({
                       ? {
                           tone: "done",
                           text: disabled
-                            ? "Disabled. The proxy sends it no requests."
-                            : "Enabled. The proxy sends it requests again.",
+                            ? "Disabled. Commissary sends it no requests."
+                            : "Enabled. Commissary sends it requests again.",
                         }
                       : {
                           tone: "problem",
@@ -477,7 +477,7 @@ export const KeysPage = () => {
             <OwnLead />
             {keySections(value).length === 0 ? (
               <p className={styles["empty"]}>
-                No provider keys yet. Add a provider key to let the proxy answer requests with it.
+                No provider keys yet. Add a provider key to let Commissary answer requests with it.
               </p>
             ) : (
               <List list={value} />

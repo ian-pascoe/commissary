@@ -27,7 +27,7 @@ import type { ExecutionContext } from "../../executor/types.ts";
 import { UsageReporter } from "../../usage/reporter.ts";
 import { allowsCodexAlphaSearch, withCredentialPolicy } from "../../executor/policy-picker.ts";
 import { asString, get, isJsonObject, type Json, tryParseJson } from "../../json/index.ts";
-import { currentConfig, type ProxyServices, readRequestBody } from "../request.ts";
+import { currentConfig, type ClientApiServices, readRequestBody } from "../request.ts";
 import { CurrentOrg } from "../../platform/org.ts";
 
 const MAX_BODY_BYTES = 16 << 20;
@@ -266,10 +266,10 @@ const handle = Effect.gen(function* () {
   });
 });
 
-/** Route layer; requires the {@link ProxyServices} and `AccessPrincipal`. */
+/** Route layer; requires the {@link ClientApiServices} and `AccessPrincipal`. */
 export const AlphaSearchRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const services = yield* routeServices<ProxyServices>();
+    const services = yield* routeServices<ClientApiServices>();
     yield* router.add("POST", "/v1/alpha/search", Effect.provide(handle, services));
     yield* router.add("POST", "/backend-api/codex/alpha/search", Effect.provide(handle, services));
   }),

@@ -268,7 +268,7 @@ export const ManagementKeysPage = () => {
         <p className={styles["intro"]}>
           A management key is for scripts that call this org&rsquo;s management API: send it as{" "}
           <code>Authorization: Bearer cfm_…</code>. It holds the role you give it and works on the
-          management API only, never on the proxy routes.
+          management API only, never on the client API.
         </p>
       </header>
       {created === undefined ? null : (

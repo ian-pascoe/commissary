@@ -81,7 +81,7 @@ export interface PanelPage {
   readonly privateMembers?: boolean;
   /** The link is active on this exact path only: another page of the nav lives below it (`/settings/sso`). */
   readonly exact?: boolean;
-  /** The page exists on a hosted proxy only (ADR 0026). */
+  /** The page exists on Commissary Cloud only (ADR 0026). */
   readonly hosted?: boolean;
 }
 
@@ -111,7 +111,7 @@ export const PAGES: ReadonlyArray<PanelPage> = [
 
 /**
  * The nav links a role sees; `privateCredentials`: the org lets members connect private credentials; `hosted`: the
- * proxy is a hosted one, which has the pages that exist there only.
+ * deployment is Commissary Cloud, which has the pages that exist there only.
  */
 export const pagesFor = (
   role: OrgRole,
@@ -208,7 +208,7 @@ export const canRemove = (caller: Caller, target: OrgRole): boolean =>
 /** Whether people Access admits may join by themselves is decided by org owners. */
 export const canSetAutoJoin = (caller: Caller): boolean => atLeast(caller.role, "owner");
 
-/** Whether the proxy routes still accept an Access sign-in instead of an API key is decided by org owners too. */
+/** Whether the client API still accepts an Access sign-in instead of an API key is decided by org owners too. */
 export const canSetAccessClients = canSetAutoJoin;
 
 /** Org admins list and revoke every API key of the org; every member their own. */

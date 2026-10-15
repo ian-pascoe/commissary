@@ -1,6 +1,6 @@
 // The org chooser: the panel's address without an org (`/`) when the caller manages several, or asked for it
-// (`/?choose`). Each org opens its panel (`/o/<slug>/`); a platform admin (or anyone, on a hosted proxy, up to their
-// limit) also creates orgs here, and a platform admin of a hosted proxy suspends them.
+// (`/?choose`). Each org opens its panel (`/o/<slug>/`); a platform admin (or anyone, on Commissary Cloud, up to their
+// limit) also creates orgs here, and a platform admin of Commissary Cloud suspends them.
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
 import { type FormEvent, useId, useState } from "react";
@@ -130,7 +130,7 @@ const OrgRow = ({
   readonly slug: string;
   readonly name: string;
   readonly suspended: boolean | undefined;
-  /** Present for platform admins of a hosted proxy. */
+  /** Present for platform admins of Commissary Cloud. */
   readonly onSuspension: (() => void) | undefined;
 }) => (
   <li className={styles["row"]}>
@@ -176,7 +176,7 @@ const OrgList = ({ me }: { readonly me: Me }) => {
         <p>Its members can use the org and its API keys work again. Nothing was deleted.</p>
       ) : (
         <p>
-          Everyone in {name} is signed out of it and its proxy and management keys are refused until
+          Everyone in {name} is signed out of it and its API and management keys are refused until
           you unsuspend it. Nothing is deleted.
         </p>
       ),

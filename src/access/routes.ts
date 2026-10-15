@@ -6,7 +6,7 @@ import { OrgSlug } from "../platform/org.ts";
 
 /**
  * Paths under these prefixes require a caller: an API key or, where the org still accepts them, an Access sign-in on
- * the proxy routes (`authenticate.ts`), an Access sign-in on `/v9/management`. `/v1` also covers `/v1beta*` and
+ * the client API (`authenticate.ts`), an Access sign-in on `/v9/management`. `/v1` also covers `/v1beta*` and
  * `/v1internal`;
  * `/chat/completions`, `/completions` and `/responses` are the unprefixed aliases of the `/v1` routes (not in Go, see
  * handlers/openai/routes.ts).

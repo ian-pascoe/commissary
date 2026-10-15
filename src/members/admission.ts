@@ -81,9 +81,9 @@ export const syncOrgIndex = (org: OrgId): Effect.Effect<void, never, WorkerEnv> 
 
 /**
  * The role of `principal` in `org`, `undefined` when it has none. With `autoJoin`, a person joins an org that has
- * auto-join on (on for `global`) as a plain member on their first request; on a hosted proxy (ADR 0026) nobody joins
- * `global` that way, even where its setting is still on from a self-hosted past. `client`: the request is for a proxy
- * route, which takes an Access sign-in only while the org accepts them there (`ClientsUseApiKeys` otherwise).
+ * auto-join on (on for `global`) as a plain member on their first request; on Commissary Cloud (ADR 0026) nobody joins
+ * `global` that way, even where its setting is still on from a self-hosted past. `client`: the request is for the client
+ * API, which takes an Access sign-in only while the org accepts them there (`ClientsUseApiKeys` otherwise).
  */
 export const admitPrincipal = (
   org: OrgId,

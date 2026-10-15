@@ -2,7 +2,7 @@
  * Email domains of per-org single sign-on (issue #76): how a domain is written, and the DNS TXT record that proves an
  * org controls it. Shared with the browser: no imports. New in the Workers port.
  *
- * An org owner adds a domain; the proxy gives it a random token, and the domain is unverified until a TXT record
+ * An org owner adds a domain; Commissary gives it a random token, and the domain is unverified until a TXT record
  * `_commissary-challenge.<domain>` holding `commissary-domain-verification=<token>` is found (`dns.ts`). Only that
  * exact domain is verified: a subdomain is a domain of its own.
  */

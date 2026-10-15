@@ -287,7 +287,7 @@ describe("summaries", () => {
       "Could not disable. It is no longer connected.",
     );
     expect(failureReason({ error: "unavailable" })).toBe(
-      "The proxy could not reach its account store. Try again.",
+      "Commissary could not reach its account store. Try again.",
     );
     expect(failureReason({ error: "check_failed", message: "usage request failed" })).toBe(
       "Usage request failed.",

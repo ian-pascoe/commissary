@@ -1,5 +1,5 @@
 // Keyed `auth_index` (src/management/auth-index.ts): HMAC under the deployment key, and no raw config credential id
-// or unkeyed hash of key material in any management or proxy response. End to end through `exports.default.fetch`
+// or unkeyed hash of key material in any management or client API response. End to end through `exports.default.fetch`
 // (dev bypass on localhost, see vitest.config.ts); only the upstream provider is mocked, through the global `fetch`.
 import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { runInDurableObject } from "cloudflare:test";
@@ -131,7 +131,7 @@ describe("a refused key on a deployed stage", () => {
   // Access configured (both harnesses) and a key that is long enough locally but not for a deployed stage.
   const bindings = { AUTH_INDEX_KEY: "short-but-valid-locally" };
 
-  it("keeps proxying (the log line omits authIndex) while management calls needing an index fail", async () => {
+  it("keeps serving (the log line omits authIndex) while management calls needing an index fail", async () => {
     const annotations: Array<Record<string, unknown>> = [];
 
     const capture = Logger.layer([
@@ -151,7 +151,7 @@ api-keys:
         - api-key: sk-test-1
 `);
 
-    const proxy = makePipeline({
+    const pipeline = makePipeline({
       config,
       respond: () =>
         jsonResponse({
@@ -171,14 +171,14 @@ api-keys:
     const management = makeHarness(undefined, bindings);
 
     try {
-      const response = await proxy.call(
+      const response = await pipeline.call(
         "/v1/chat/completions",
         postJson({ model: "upstream-model", messages: [{ role: "user", content: "hi" }] }),
       );
 
       expect(response.status).toBe(200);
       expect(await response.text()).toContain("hello");
-      expect(proxy.records).toHaveLength(1);
+      expect(pipeline.records).toHaveLength(1);
 
       // The request log line was written, without an index.
       const requestLine = annotations.find((entry) => entry["requestId"] !== undefined);
@@ -206,7 +206,7 @@ api-keys:
       ])
         expect((await management.call(path)).status, path).toBe(500);
     } finally {
-      await proxy.dispose();
+      await pipeline.dispose();
       await management.dispose();
     }
   });
@@ -433,7 +433,7 @@ describe("no raw config id or unkeyed hash in any response", () => {
       .concat(configIds.flatMap((id) => [id, id.slice(id.lastIndexOf(":") + 1)]))
       .concat([KEYS.claude, KEYS.codex]);
 
-  it("proxy responses (success, streaming, upstream failure, unknown model), every management read and the logs", async () => {
+  it("client API responses (success, streaming, upstream failure, unknown model), every management read and the logs", async () => {
     const seen: Array<{ readonly what: string; readonly text: string }> = [];
 
     const record = async (what: string, response: Promise<Response>) =>
@@ -448,7 +448,7 @@ describe("no raw config id or unkeyed hash in any response", () => {
       upstreamStatus = 200;
       await record("chat unknown model", chat("no-such-model"));
       await record("models", call("/v1/models"));
-      // The proxy really served (streamed, and failed) through the config credential.
+      // Commissary really served (streamed, and failed) through the config credential.
       expect(seen.map(({ text }) => text.slice(0, 3))).toEqual(["200", "200", "500", "400", "200"]);
       expect(seen[1]?.text).toContain("data: [DONE]");
 

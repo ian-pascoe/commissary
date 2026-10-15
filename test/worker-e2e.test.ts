@@ -93,7 +93,7 @@ const chatRequest = (body: Record<string, unknown>, init: RequestInit = {}) =>
   });
 
 /**
- * An upstream SSE stream that produces chunks on demand (bounded) until the proxy cancels it. Chunks are produced in
+ * An upstream SSE stream that produces chunks on demand (bounded) until Commissary cancels it. Chunks are produced in
  * `pull` (inside the Worker's request context): workerd only notices a client disconnect when it writes the next
  * bytes to the client, so the upstream must keep producing.
  */

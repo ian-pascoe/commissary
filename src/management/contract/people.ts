@@ -1,7 +1,7 @@
 /**
- * The people of a hosted proxy (ADR 0026, `../people-routes.ts`, the Platform registry in `src/platform`): a platform
+ * The people of Commissary Cloud (ADR 0026, `../people-routes.ts`, the Platform registry in `src/platform`): a platform
  * admin reads a person's owned-org count and limit, raises the limit, and suspends or unsuspends them. A self-hosted
- * proxy has no such routes (404). Workers addition, no Go counterpart. Shared with the browser: imports `effect` only.
+ * Commissary has no such routes (404). Workers addition, no Go counterpart. Shared with the browser: imports `effect` only.
  */
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";

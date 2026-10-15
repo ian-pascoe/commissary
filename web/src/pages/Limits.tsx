@@ -313,7 +313,7 @@ export const LimitsPage = () => {
         <h1 className={styles["title"]}>Limits</h1>
         <p className={styles["intro"]}>
           A Spend limit caps what a member, a team, the whole org, a shared credential or an API key
-          may spend in a day, week or month. When a limit is reached the proxy refuses what it
+          may spend in a day, week or month. When a limit is reached Commissary refuses what it
           covers with a 429 until the period starts over; other limits and credentials keep working.{" "}
           {admin
             ? "You are an org admin, so you set any limit and the calendar."

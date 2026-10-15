@@ -1,5 +1,5 @@
 /**
- * Management keys on the management API (ADR 0026), on every proxy: `Authorization: Bearer cfm_…`. New in the Workers
+ * Management keys on the management API (ADR 0026), on every deployment: `Authorization: Bearer cfm_…`. New in the Workers
  * port, no Go counterpart.
  *
  * A key names its org (`management-keys/key.ts`), so verification asks that org's ControlPlane only, after the Platform

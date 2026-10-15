@@ -101,7 +101,7 @@ const Gate = ({ role }: { readonly role: RoleState }) => {
 export const Shell = () => {
   const role = useRole();
   const me = useAtomValue(meAtom);
-  // A hosted proxy adds a page (Single sign-on) and the account menu's Sign out.
+  // Commissary Cloud adds a page (Single sign-on) and the account menu's Sign out.
   const hosted = AsyncResult.isSuccess(me) && me.value.hosted === true;
 
   const groups =

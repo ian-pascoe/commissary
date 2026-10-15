@@ -1,5 +1,5 @@
 // Which hostname serves what (ADR 0028), new in the Workers port: a deployment with an API host (`API_DOMAIN`) serves the
-// proxy routes there only, and the panel, sign-in and management API on its app host (`APP_DOMAIN`) only. Without
+// client API routes there only, and the panel, sign-in and management API on its app host (`APP_DOMAIN`) only. Without
 // `API_DOMAIN` one hostname serves everything. Decided before the router from the request's hostname and path, so a
 // request on the wrong host never reaches the Access gate or a handler.
 import { classifyPath, normalizedPath } from "../access/routes.ts";
@@ -29,8 +29,8 @@ const notFound = (message: string): Response =>
 
 /**
  * The answer to a request on a host that does not serve its path, `undefined` when the request goes on to the router.
- * With an API host: the API host serves the proxy routes (the Access zone `protected`) and `/healthz`, every other host
- * (the app host) serves everything but the proxy routes. Each refusal names the host that serves the path.
+ * With an API host: the API host serves the client API (the Access zone `protected`) and `/healthz`, every other host
+ * (the app host) serves everything but the client API. Each refusal names the host that serves the path.
  */
 export const misdirected = (requestUrl: string, env: HostEnv): Response | undefined => {
   const api = hostName(env.API_DOMAIN);
@@ -44,20 +44,20 @@ export const misdirected = (requestUrl: string, env: HostEnv): Response | undefi
     return undefined;
   }
 
-  const proxyRoute = classifyPath(requestUrl) === "protected";
+  const clientApiRoute = classifyPath(requestUrl) === "protected";
 
   if (host === api) {
-    if (proxyRoute || normalizedPath(requestUrl) === HEALTH_PATH) return undefined;
+    if (clientApiRoute || normalizedPath(requestUrl) === HEALTH_PATH) return undefined;
     const app = hostName(env.APP_DOMAIN);
 
     return notFound(
       app === ""
-        ? `Not found: ${api} serves the proxy routes only`
-        : `Not found: ${api} serves the proxy routes only; the control panel and the management API are at https://${app}`,
+        ? `Not found: ${api} serves the client API only`
+        : `Not found: ${api} serves the client API only; the control panel and the management API are at https://${app}`,
     );
   }
 
-  return proxyRoute
-    ? notFound(`Not found: the proxy routes are served at https://${api}`)
+  return clientApiRoute
+    ? notFound(`Not found: the client API is served at https://${api}`)
     : undefined;
 };

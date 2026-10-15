@@ -104,7 +104,7 @@ export type UpdateServiceToken = typeof UpdateServiceToken.Type;
  * request (and admits unregistered service tokens as plain members without storing them). On for `global`, off for
  * new orgs. `private_credentials` lets plain members connect private credentials, and keeps the ones they connected
  * in use (ADR 0023): on for `global`, chosen when an org is created; turning it off disables the private credentials
- * without deleting them. `access_clients` lets the proxy routes accept an Access sign-in (`Cf-Access-Jwt-Assertion` or
+ * without deleting them. `access_clients` lets the client API accept an Access sign-in (`Cf-Access-Jwt-Assertion` or
  * `cf-access-token`) instead of an API key, for clients set up before API keys (`docs/MIGRATION.md`). An Access
  * sign-in names no org, so it only ever reaches `global`: the setting exists there only (on by default), and other orgs
  * take API keys alone. Changing `auto_join` and `access_clients` is for org owners, `private_credentials` for org

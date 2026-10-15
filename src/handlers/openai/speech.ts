@@ -14,7 +14,7 @@ import { invalidRequestBody } from "../../http/errors.ts";
 import { mergeUpstreamHeaders } from "../../http/headers.ts";
 import { asString, get, isJsonObject, type Json, type JsonObject } from "../../json/index.ts";
 import { executeNonStream, type ExecutionInput } from "../execute.ts";
-import { currentConfig, type ProxyServices, readRequestBody } from "../request.ts";
+import { currentConfig, type ClientApiServices, readRequestBody } from "../request.ts";
 import { errorResponse } from "../respond.ts";
 
 const DEFAULT_SPEECH_MODEL = "grok-tts";
@@ -253,10 +253,10 @@ const handle = Effect.gen(function* () {
   });
 });
 
-/** Route layer; requires the {@link ProxyServices} and `AccessPrincipal`. */
+/** Route layer; requires the {@link ClientApiServices} and `AccessPrincipal`. */
 export const SpeechRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const services = yield* routeServices<ProxyServices>();
+    const services = yield* routeServices<ClientApiServices>();
     yield* router.add("POST", "/v1/audio/speech", Effect.provide(handle, services));
     yield* router.add("POST", "/v1/tts", Effect.provide(handle, services));
   }),

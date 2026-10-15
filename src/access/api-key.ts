@@ -1,5 +1,5 @@
 /**
- * API keys on the proxy routes (ADR 0022): which credential a client sent, and whether it is a live key of a member.
+ * API keys on the client API (ADR 0022): which credential a client sent, and whether it is a live key of a member.
  * The credential sources follow the Go config access provider (`internal/access/config_access/provider.go`
  * `Authenticate`): `Authorization` (`Bearer` stripped), `x-goog-api-key`, `x-api-key`, `?key=` and `?auth_token=`.
  *

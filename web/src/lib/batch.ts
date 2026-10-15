@@ -100,7 +100,7 @@ export const failureReason = (
     case "not_found":
       return "It is no longer connected.";
     case "unavailable":
-      return "The proxy could not reach its account store. Try again.";
+      return "Commissary could not reach its account store. Try again.";
     case "check_failed":
       if ((result.status === 401 || result.status === 403) && provider !== undefined && configKey)
         return `${provider} refused the provider key. Check it on the Keys page.`;

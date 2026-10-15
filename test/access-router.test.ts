@@ -172,7 +172,7 @@ describe("Access gate through the router", () => {
     expect(scope).toBe("21cd36b0");
   });
 
-  it("accepts service tokens on proxy routes", async () => {
+  it("accepts service tokens on the client API", async () => {
     const response = await call("/v1/chat/completions", {
       method: "POST",
       ...(await withToken(serviceClaims("some.access"))),

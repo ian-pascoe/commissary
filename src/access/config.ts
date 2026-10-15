@@ -149,7 +149,7 @@ type DevBypassOutcome = Data.TaggedEnum<{
 const { Active, Refused } = Data.taggedEnum<DevBypassOutcome>();
 
 /**
- * Whether the Worker is wired to Access (`ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` set) or is a hosted proxy
+ * Whether the Worker is wired to Access (`ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` set) or is Commissary Cloud
  * (`PROXY_MODE=hosted`, ADR 0026, which signs people in itself): a deployed stage. Such a Worker refuses the dev bypass
  * and the fixed development keys (`AUTH_INDEX_KEY`, `SECRETS_KEY`).
  */

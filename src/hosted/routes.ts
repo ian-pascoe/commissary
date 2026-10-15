@@ -1,7 +1,7 @@
 /**
- * The public routes of a hosted proxy's sign-in (ADR 0026): the part of Better Auth's API the panel uses
+ * The public routes of Commissary Cloud's sign-in (ADR 0026): the part of Better Auth's API the panel uses
  * (`/api/auth/*`), what the sign-in page needs (`/api/sign-in-options`) and the page itself (`/sign-in`). On a
- * self-hosted proxy none of them exists: they answer like any unknown path. New in the Workers port.
+ * self-hosted Commissary none of them exists: they answer like any unknown path. New in the Workers port.
  *
  * Better Auth checks its own requests' origin; the Worker also refuses cross-site writes like on every other route
  * (`access/csrf.ts`), and starts a sign-in only with a Turnstile token (`turnstile.ts`). The one cross-site write let

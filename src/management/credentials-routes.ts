@@ -385,16 +385,16 @@ const downloadCredential = Effect.gen(function* () {
   const viewer = yield* currentViewer;
   const name = (yield* queryParams).get("name")?.trim() ?? "";
 
-  // A management key never downloads a credential (ADR 0026), on any proxy.
+  // A management key never downloads a credential (ADR 0026), on any deployment.
   if (identity.principal.kind === "mkey")
     return yield* replyError(403, "download_requires_service_token", {
       message: "a management key cannot download a credential file",
     });
 
-  // On a hosted proxy only platform admins download stored credentials, their owners included (ADR 0026).
+  // On Commissary Cloud only platform admins download stored credentials, their owners included (ADR 0026).
   if (isHosted(yield* WorkerEnv) && !identity.platformAdmin)
     return yield* replyError(403, "download_requires_platform_admin", {
-      message: "on a hosted proxy only a platform admin can download a credential file",
+      message: "on Commissary Cloud only a platform admin can download a credential file",
     });
 
   // A private credential is its owner's alone: not even an org admin with the sensitive powers downloads it.

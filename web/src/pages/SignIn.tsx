@@ -1,4 +1,4 @@
-// The sign-in page of a hosted proxy (/sign-in, ADR 0026). It is the one page that opens before anyone is signed in, so
+// The sign-in page of Commissary Cloud (/sign-in, ADR 0026). It is the one page that opens before anyone is signed in, so
 // it never calls the management API: it asks `/api/sign-in-options` which providers are enabled and for the Turnstile
 // site key, shows the bot check, and sends the chosen provider to Better Auth, which answers the address to go to.
 import { Option, Schema } from "effect";

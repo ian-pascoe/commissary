@@ -90,13 +90,13 @@ export const orgListAtom = ManagementClient.query("orgs", "list", {
   timeToLive: Duration.seconds(30),
 });
 
-/** Suspends or unsuspends an org on a hosted proxy (platform admins; call with `reactivityKeys: ORGS`). */
+/** Suspends or unsuspends an org on Commissary Cloud (platform admins; call with `reactivityKeys: ORGS`). */
 export const updateOrgAtom = ManagementClient.mutation("orgs", "update");
 
-/** Looks a person up (hosted proxy, platform admins). */
+/** Looks a person up (Commissary Cloud, platform admins). */
 export const getPersonAtom = ManagementClient.mutation("people", "get");
 
-/** Changes a person's org limit or suspension (hosted proxy, platform admins). */
+/** Changes a person's org limit or suspension (Commissary Cloud, platform admins). */
 export const updatePersonAtom = ManagementClient.mutation("people", "update");
 
 /** The Management keys page refetches after a mutation tagged with this key. */
@@ -591,7 +591,7 @@ export const saveGrantAtom = ManagementClient.runtime.fn((write: GrantWrite) =>
 /** The Single sign-on page refetches after a mutation tagged with this key. */
 export const SSO = ["sso"] as const;
 
-/** The org's identity provider and domains, with the proxy's side for the provider's settings (hosted proxy only). */
+/** The org's identity provider and domains, with Commissary's side for the provider's settings (Commissary Cloud only). */
 export const ssoAtom = ManagementClient.query("sso", "get", {
   reactivityKeys: SSO,
   timeToLive: Duration.seconds(30),

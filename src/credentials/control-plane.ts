@@ -339,7 +339,7 @@ export class ControlPlane extends DurableObject<Env> {
   /** The `SessionState` instances of the org, so deleting the org can wipe them (`session-state/instances.ts`). */
   readonly #sessionInstances: SessionInstanceStore;
   readonly #managementKeys: ManagementKeyStore;
-  /** The org's single sign-on on a hosted proxy (issue #76): its identity provider and email domains. */
+  /** The org's single sign-on on Commissary Cloud (issue #76): its identity provider and email domains. */
   readonly #sso: SsoStore;
   /** The org this object serves, from its name. */
   readonly #org: OrgId;
@@ -581,7 +581,7 @@ export class ControlPlane extends DurableObject<Env> {
 
   /**
    * The role of a principal in the org (`MemberStore.admit`); `autoJoin` lets a person join when the org allows it.
-   * `client`: the request is for a proxy route, where an Access sign-in is accepted only while the org's
+   * `client`: the request is for a client API route, where an Access sign-in is accepted only while the org's
    * `accessClients` setting is on; otherwise the answer is {@link ClientsUseApiKeys} and nobody joins.
    */
   admit(

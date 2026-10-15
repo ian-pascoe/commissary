@@ -1,9 +1,9 @@
 /**
- * Per-org single sign-on on a hosted proxy (issue #76; `../sso-routes.ts`, the ControlPlane's `SsoStore` in
+ * Per-org single sign-on on Commissary Cloud (issue #76; `../sso-routes.ts`, the ControlPlane's `SsoStore` in
  * `src/sso`): the org's identity provider (one, OIDC or SAML) and the email domains it proves with a DNS TXT record.
  * Workers addition, no Go counterpart. Shared with the browser: imports `effect` only.
  *
- * Org admins read the settings; only an org owner changes them. A self-hosted proxy has no such routes (404): Access
+ * Org admins read the settings; only an org owner changes them. A self-hosted Commissary has no such routes (404): Access
  * configures its identity providers.
  */
 import { Schema } from "effect";
@@ -48,11 +48,11 @@ export const SsoDomainView = Schema.Struct({
 
 export type SsoDomainView = typeof SsoDomainView.Type;
 
-/** The proxy's side, for the identity provider's settings. */
+/** Commissary's side, for the identity provider's settings. */
 export const ServiceProviderView = Schema.Struct({
   /** The OIDC redirect URI to register with the provider. */
   oidc_redirect_uri: Schema.String,
-  /** SAML: the assertion consumer service URL (HTTP-POST), the proxy's entity id and its metadata. */
+  /** SAML: the assertion consumer service URL (HTTP-POST), Commissary's entity id and its metadata. */
   saml_acs_url: Schema.String,
   saml_entity_id: Schema.String,
   saml_metadata_url: Schema.String,

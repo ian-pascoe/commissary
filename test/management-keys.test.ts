@@ -1,6 +1,6 @@
-// Management keys (ADR 0026, issue #72) on a self-hosted proxy: the key text, issuing, listing and revoking them, and
+// Management keys (ADR 0026, issue #72) on a self-hosted Commissary: the key text, issuing, listing and revoking them, and
 // the gate on the management API: a key works there with its role in its org only, never downloads a credential,
-// never gives a key or a service token a role, never reaches another org or a proxy route, and is refused once revoked.
+// never gives a key or a service token a role, never reaches another org or a client API route, and is refused once revoked.
 import { afterAll, describe, expect, it } from "vitest";
 import { parseManagementKey } from "../src/management-keys/key.ts";
 import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
@@ -246,7 +246,7 @@ describe("the gate on the management API", () => {
     }
   });
 
-  it("is not accepted on the proxy routes", async () => {
+  it("is not accepted on the client API", async () => {
     const { slug, admin } = await staffedOrg("proxy");
     const { key } = await issue(slug, admin, "ci", "admin");
 

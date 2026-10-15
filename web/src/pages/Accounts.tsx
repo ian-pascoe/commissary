@@ -500,7 +500,7 @@ const ConfirmDelete = ({
         </ul>
         <p>
           Requests stop going to {count === 1 ? "it" : "them"} and {count === 1 ? "its" : "their"}{" "}
-          tokens are removed from the proxy. You can connect {count === 1 ? "it" : "them"} again
+          tokens are removed from Commissary. You can connect {count === 1 ? "it" : "them"} again
           later.
         </p>
         <div className={kit["dialogActions"]}>
@@ -928,7 +928,7 @@ export const AccountsPage = () => {
                 <Head />
                 <OwnLead />
                 <p className={styles["empty"]}>
-                  No accounts yet. Connect one to let the proxy answer requests with it.
+                  No accounts yet. Connect one to let Commissary answer requests with it.
                 </p>
                 <OtherPrivateAccounts others={others} />
               </>

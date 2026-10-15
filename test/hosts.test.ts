@@ -1,4 +1,4 @@
-// Which hostname serves what (src/http/hosts.ts, ADR 0028): with an API host the proxy routes are served there only and
+// Which hostname serves what (src/http/hosts.ts, ADR 0028): with an API host the client API is served there only and
 // everything else on the app host; without one, one host serves everything. Unit tests of the decision, and end to end
 // through the Worker's default export with the host settings bound (dev bypass on `localhost`, see vitest.config.ts).
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
@@ -33,7 +33,7 @@ describe("host routing", () => {
     expect(apiOrigin({})).toBeUndefined();
   });
 
-  it("serves the proxy routes and /healthz on the API host, and nothing else", async () => {
+  it("serves the client API and /healthz on the API host, and nothing else", async () => {
     for (const path of [
       "/v1/models",
       "/v1beta/models",
@@ -64,12 +64,12 @@ describe("host routing", () => {
         status: 404,
         body: {
           error:
-            "Not found: api.example.com serves the proxy routes only; the control panel and the management API are at https://app.example.com",
+            "Not found: api.example.com serves the client API only; the control panel and the management API are at https://app.example.com",
         },
       });
   });
 
-  it("serves everything but the proxy routes on the app host (and any other host)", async () => {
+  it("serves everything but the client API on the app host (and any other host)", async () => {
     for (const host of ["app.example.com", "other.example.com"]) {
       for (const path of ["/", "/accounts", "/v9/management/me", "/sign-in", "/healthz", "/nope"])
         expect(misdirected(`https://${host}${path}`, SPLIT), `${host}${path}`).toBeUndefined();
@@ -77,7 +77,7 @@ describe("host routing", () => {
       for (const path of ["/v1/models", "/v1beta/models", "/responses", "/%76%31/models"])
         expect(await refusal(`https://${host}${path}`, SPLIT), `${host}${path}`).toEqual({
           status: 404,
-          body: { error: "Not found: the proxy routes are served at https://api.example.com" },
+          body: { error: "Not found: the client API is served at https://api.example.com" },
         });
     }
   });
@@ -111,21 +111,21 @@ describe("a Worker with an API host", () => {
     expect(me.status).toBe(200);
     expect(await me.json()).toMatchObject({ api_url: "https://api.example.com" });
 
-    const proxy = await send("http://localhost/v1/models", hosts);
+    const clientApi = await send("http://localhost/v1/models", hosts);
 
-    expect(proxy.status).toBe(404);
-    expect(await proxy.json()).toEqual({
-      error: "Not found: the proxy routes are served at https://api.example.com",
+    expect(clientApi.status).toBe(404);
+    expect(await clientApi.json()).toEqual({
+      error: "Not found: the client API is served at https://api.example.com",
     });
 
-    // On the API host the proxy routes reach the Access gate, which fails closed off loopback without Access settings.
+    // On the API host the client API reaches the Access gate, which fails closed off loopback without Access settings.
     const api = await send("https://api.example.com/v1/models", hosts);
 
     expect(api.status).toBe(500);
     expect(await api.text()).not.toContain("Not found");
   });
 
-  it("serves the proxy routes on the API host only", async () => {
+  it("serves the client API on the API host only", async () => {
     const hosts = { APP_DOMAIN: "app.example.com", API_DOMAIN: "localhost" };
     const models = await send("http://localhost/v1/models", hosts);
 
@@ -138,7 +138,7 @@ describe("a Worker with an API host", () => {
       expect(response.status, path).toBe(404);
       expect(await response.json(), path).toEqual({
         error:
-          "Not found: localhost serves the proxy routes only; the control panel and the management API are at https://app.example.com",
+          "Not found: localhost serves the client API only; the control panel and the management API are at https://app.example.com",
       });
     }
   });

@@ -181,7 +181,7 @@ const removeMember = Effect.gen(function* () {
   return jsonReply(200, { status: "ok" });
 });
 
-/** `access_clients` exists in `global` only: an Access sign-in on a proxy route names no org, so it reaches no other. */
+/** `access_clients` exists in `global` only: an Access sign-in on a client API route names no org, so it reaches no other. */
 const settingsView = (settings: MembershipSettingsWire, org: OrgId): MembershipSettings => ({
   auto_join: settings.autoJoin,
   private_credentials: settings.privateCredentials,
@@ -217,7 +217,7 @@ const updateMembershipSettings = Effect.gen(function* () {
   if (input.access_clients !== undefined && identity.org !== GLOBAL_ORG)
     return yield* replyError(422, "access_clients_global_only", {
       message:
-        "only the first org takes Access sign-ins on the proxy routes; this org takes API keys only",
+        "only the first org takes Access sign-ins on the client API; this org takes API keys only",
     });
 
   const settings = yield* controlPlane("setMembershipSettings", (stub) =>

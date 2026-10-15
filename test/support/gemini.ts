@@ -13,7 +13,7 @@ import {
 } from "../../src/executor/picker.ts";
 import { Thinking } from "../../src/executor/thinking.ts";
 import { ModelProviders } from "../../src/handlers/model-providers.ts";
-import { makeProxyRoutes } from "../../src/handlers/layer.ts";
+import { makeClientApiRoutes } from "../../src/handlers/layer.ts";
 import { RootRoutes } from "../../src/http/routes.ts";
 import { requestContext } from "../../src/platform/env.ts";
 import type { UsageRecord } from "../../src/usage/record.ts";
@@ -115,7 +115,7 @@ export const makeGeminiHarness = (options: GeminiHarnessOptions): GeminiHarness 
     }),
   );
 
-  const routes = makeProxyRoutes({
+  const routes = makeClientApiRoutes({
     configReader: staticConfigReader(options.config),
     httpClient: mockHttpClient(calls, options.respond),
     usageSink: UsageSink.memory(records),

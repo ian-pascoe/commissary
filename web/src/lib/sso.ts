@@ -1,4 +1,4 @@
-// Per-org single sign-on (issue #76, hosted proxy only): what the Single sign-on page and the sign-in page's work email
+// Per-org single sign-on (issue #76, Commissary Cloud only): what the Single sign-on page and the sign-in page's work email
 // form need beyond the contract. Provider forms and their checks (which mirror the server's, never stricter), the
 // payloads they send, how a refused write reads, and what the page says about a domain. Pure: no DOM, tested in
 // test/web-sso.test.ts.
@@ -229,7 +229,7 @@ export const providerFacts = (provider: SsoProviderView): ReadonlyArray<Fact> =>
   ];
 };
 
-/** What the identity provider must be told about this proxy, for the protocol being set up. */
+/** What the identity provider must be told about Commissary, for the protocol being set up. */
 export const serviceProviderFacts = (
   service: SsoSettings["service_provider"],
   kind: ProviderKind,

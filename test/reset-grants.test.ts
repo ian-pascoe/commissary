@@ -1116,7 +1116,7 @@ describe("claim races and failures", () => {
     expect(sent(CLAIM_URL)).toHaveLength(0);
   });
 
-  it("returns Anthropic's answer with a warning when the proxy cannot record it", async () => {
+  it("returns Anthropic's answer with a warning when Commissary cannot record it", async () => {
     await seed();
 
     const rename = (from: string, to: string) =>

@@ -3,11 +3,11 @@
  * counterpart: Go has one management key for everything.
  *
  * - **platform-level**: needs no role in any org: who the caller is (`/v9/management/me`), the org list
- *   (`/v9/management/orgs`, `/v9/management/orgs/<slug>`, a hosted proxy's `/v9/management/people/<email>`; their
- *   handlers ask for a platform admin, or on a hosted proxy let anyone create an org), the panel's pages
+ *   (`/v9/management/orgs`, `/v9/management/orgs/<slug>`, Commissary Cloud's `/v9/management/people/<email>`; their
+ *   handlers ask for a platform admin, or on Commissary Cloud let anyone create an org), the panel's pages
  *   without an org (they redirect to an org of the caller or show the org chooser), its bundle files and the old
  *   panel's address.
- * - **member**: any role in the org: the proxy routes, the panel's pages of the org, reading usage (a plain member
+ * - **member**: any role in the org: the client API, the panel's pages of the org, reading usage (a plain member
  *   sees only their own requests, `management/usage-routes.ts`) and their own API keys
  *   (`management/api-key-routes.ts`).
  * - **admin**: everything else of the management API. Some routes need more and say so in their handler: changing a
@@ -86,7 +86,7 @@ const ME = `${MANAGEMENT_PREFIX}/me`;
 
 const ORGS = `${MANAGEMENT_PREFIX}/${ORGS_SEGMENT}`;
 
-/** The people of a hosted proxy (`management/people-routes.ts`, whose handlers ask for a platform admin). */
+/** The people of Commissary Cloud (`management/people-routes.ts`, whose handlers ask for a platform admin). */
 const PEOPLE = `${MANAGEMENT_PREFIX}/people`;
 
 const withoutTrailingSlash = (path: string): string =>

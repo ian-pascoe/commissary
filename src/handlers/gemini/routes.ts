@@ -21,7 +21,7 @@ import {
   type ExecutionInput,
 } from "../execute.ts";
 import { geminiFramer, interactionsFramer, type StreamFramer } from "../framing.ts";
-import { altOf, currentConfig, type ProxyServices, readRequestBody } from "../request.ts";
+import { altOf, currentConfig, type ClientApiServices, readRequestBody } from "../request.ts";
 import { errorResponse, jsonResponse, streamResponse, withNonStreamKeepAlive } from "../respond.ts";
 
 const GEMINI_INTERACTIONS = "gemini-interactions";
@@ -246,10 +246,10 @@ const interactions = Effect.gen(function* () {
   return yield* run(context, input, { stream: target.stream, framer: interactionsFramer });
 });
 
-/** Route layer; requires the {@link ProxyServices} (see `handlers/layer.ts`) and `AccessPrincipal` (`withAccess`). */
+/** Route layer; requires the {@link ClientApiServices} (see `handlers/layer.ts`) and `AccessPrincipal` (`withAccess`). */
 export const GeminiRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const services = yield* routeServices<ProxyServices>();
+    const services = yield* routeServices<ClientApiServices>();
     yield* router.add("POST", "/v1beta/models/*", Effect.provide(geminiAction, services));
     yield* router.add("POST", "/v1beta/interactions", Effect.provide(interactions, services));
   }),

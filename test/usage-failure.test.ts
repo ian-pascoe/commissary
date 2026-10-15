@@ -26,7 +26,7 @@ describe("failureDetail", () => {
     ).toEqual({ type: "RESOURCE_EXHAUSTED", code: "429" });
   });
 
-  it("lets the proxy's own code win over the upstream's", () => {
+  it("lets Commissary's own code win over the upstream's", () => {
     expect(
       failureDetail({ message: '{"error":{"code":"upstream_code"}}', code: "auth_unavailable" }),
     ).toEqual({ code: "auth_unavailable" });

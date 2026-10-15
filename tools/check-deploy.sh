@@ -4,17 +4,17 @@
 # - /healthz answers 200 through Access with a service token;
 # - the management API answers 200 through Access with a service token (which proves the Worker accepts the Access
 #   JWT, i.e. ACCESS_AUD and the team domain are wired);
-# - a proxy route without credentials reaches the Worker, which answers 401 `Missing API key` itself (the proxy routes
+# - a client API route without credentials reaches the Worker, which answers 401 `Missing API key` itself (the client API
 #   are out of Access: clients send API keys);
 # - a client the way `cloudflared access` clients (pi) send it, an Access JWT in `cf-access-token` and a dummy key in
-#   `Authorization`, is served on a proxy route (200): the first deploy with the bypass must not break them, since
+#   `Authorization`, is served on a client API route (200): the first deploy with the bypass must not break them, since
 #   `global` keeps Access sign-ins for clients on by default. The JWT is the `CF_Authorization` cookie Access sets for
 #   the service token, which is issued for the main application, like a `cloudflared access login` token;
 # - the control panel without credentials is stopped by Access (anything but 200);
-# - with an API host: the proxy routes answer 404 on the app host (through Access) and the management API 404 on the
+# - with an API host: the client API answers 404 on the app host (through Access) and the management API 404 on the
 #   API host, both from the Worker.
 # Usage: CF_ACCESS_CLIENT_ID=… CF_ACCESS_CLIENT_SECRET=… tools/check-deploy.sh <base-url> [<api-url>]
-# `<api-url>` is where the proxy routes are served (default: `<base-url>`).
+# `<api-url>` is where the client API is served (default: `<base-url>`).
 set -euo pipefail
 
 base="${1:?usage: check-deploy.sh <base-url> [<api-url>]}"
@@ -83,6 +83,6 @@ expect "$base" / none "no 200 without Access" not_ok
 
 if [ "$api" != "$base" ]; then
   expect "$api" /healthz none "200 without Access" ok
-  expect "$base" /v1/models token "404 from the Worker: the proxy routes are on the API host" worker_404
+  expect "$base" /v1/models token "404 from the Worker: the client API is on the API host" worker_404
   expect "$api" /v9/management/me none "404 from the Worker: the management API is on the app host" worker_404
 fi

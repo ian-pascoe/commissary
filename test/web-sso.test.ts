@@ -77,7 +77,7 @@ describe("who may change single sign-on", () => {
     expect(canChangeSso(callerOf({ role: "member", platform_admin: false }))).toBe(false);
   });
 
-  it("puts the page in the nav of org admins on a hosted proxy only", () => {
+  it("puts the page in the nav of org admins on Commissary Cloud only", () => {
     expect(navLinks(true)).toContain("/settings/sso");
     expect(navLinks(false)).not.toContain("/settings/sso");
     expect(pagesFor("member", true, true).map((page) => page.to)).not.toContain("/settings/sso");

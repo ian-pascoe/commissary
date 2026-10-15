@@ -1,12 +1,12 @@
 // Cross-site request forgery and cross-site WebSocket hijacking protections of the Access gate (src/access/csrf.ts):
 // the pure decision table, then the production Worker through `exports.default.fetch` (dev bypass on localhost, see
-// vitest.config.ts) for the panel, management writes, proxy routes and Responses WebSocket upgrades.
+// vitest.config.ts) for the panel, management writes, the client API and Responses WebSocket upgrades.
 import { exports } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { crossSiteRejection } from "../src/access/csrf.ts";
 import { resetControlPlane } from "./support/management.ts";
 
-const PROXY = "https://proxy.example.com";
+const ORIGIN = "https://proxy.example.com";
 
 type Zone = "protected" | "management";
 
@@ -15,7 +15,7 @@ const check = (
   path: string,
   headers: Record<string, string> = {},
   zone: Zone = "protected",
-) => crossSiteRejection(method, headers, `${PROXY}${path}`, zone)?.status;
+) => crossSiteRejection(method, headers, `${ORIGIN}${path}`, zone)?.status;
 
 const write = (method: string, path: string, headers: Record<string, string>) =>
   check(method, path, headers, "management");
@@ -39,7 +39,7 @@ describe("crossSiteRejection", () => {
 
   it("lets same-origin browser requests through", () => {
     const sameOrigin = {
-      origin: PROXY,
+      origin: ORIGIN,
       "sec-fetch-site": "same-origin",
       "content-type": "application/json",
     };
@@ -51,7 +51,7 @@ describe("crossSiteRejection", () => {
     expect(
       check("GET", "/v9/management/settings", { "sec-fetch-site": "same-origin" }, "management"),
     ).toBeUndefined();
-    expect(check("GET", "/v1/responses", { upgrade: "websocket", origin: PROXY })).toBeUndefined();
+    expect(check("GET", "/v1/responses", { upgrade: "websocket", origin: ORIGIN })).toBeUndefined();
     // A user typing the URL / a bookmark.
     expect(
       check(
@@ -79,7 +79,7 @@ describe("crossSiteRejection", () => {
       expect(check("DELETE", path, { origin: "https://evil.test" }, zone)).toBe(403);
     }
 
-    // Reads of proxy routes from other origins stay possible (CORS `*` without credentials).
+    // Reads of the client API from other origins stay possible (CORS `*` without credentials).
     expect(
       check("GET", "/v1/models", { origin: "https://app.test", "sec-fetch-site": "cross-site" }),
     ).toBeUndefined();
@@ -331,7 +331,7 @@ describe("Worker entry point: cross-site protections", () => {
     expect(preflight.headers.get("access-control-allow-origin")).toBeNull();
   });
 
-  it("refuses cross-site proxy writes but keeps CORS for reads", async () => {
+  it("refuses cross-site client API writes but keeps CORS for reads", async () => {
     const forged = await worker("/v1/chat/completions", {
       method: "POST",
       headers: { origin: "https://evil.test", "content-type": "application/json" },

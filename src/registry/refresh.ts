@@ -1,6 +1,6 @@
 /**
  * Cron refresh of the model catalog (ADR 0020): fetches the models.dev document (`https://models.dev/api.json`), trims
- * it to the providers the proxy reads (`models-dev.ts`) and stores the trimmed JSON in KV `CACHE`
+ * it to the providers Commissary reads (`models-dev.ts`) and stores the trimmed JSON in KV `CACHE`
  * (`CATALOG_KEYS.modelsDev`), where the registry (`CatalogStore`) and the OpenCode executor
  * (`currentOpenCodeCatalog`) read it. It is the one scheduled task that keeps every provider's models current; the
  * catalog additions are bundled data and never fetched.

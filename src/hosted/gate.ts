@@ -1,13 +1,13 @@
 /**
- * Authentication on a hosted proxy (ADR 0026), the counterpart of `access/authenticate.ts`: no Access application sits
+ * Authentication on Commissary Cloud (ADR 0026), the counterpart of `access/authenticate.ts`: no Access application sits
  * in front of the Worker, so Access JWTs and Access service tokens are accepted nowhere. New in the Workers port.
  *
- * - Proxy routes take API keys only. A key of a suspended org or person is refused, and each org's requests are
+ * - The client API takes API keys only. A key of a suspended org or person is refused, and each org's requests are
  *   rate-limited (`rate-limit.ts`).
  * - The management API takes management keys (`access/management-key.ts`, refused for a suspended org or issuer), like
- *   a self-hosted proxy.
+ *   a self-hosted Commissary.
  * - The management API and the panel take the session cookie of a person signed in with Better Auth (`session.ts`):
- *   the same verified email Access yields on a self-hosted proxy, so roles, the person-to-orgs index and caller scopes
+ *   the same verified email Access yields on a self-hosted Commissary, so roles, the person-to-orgs index and caller scopes
  *   work unchanged. A first sign-in signs the person up (`standing.ts`). Platform admins are the people in
  *   `PLATFORM_ADMIN_EMAILS` (a verified email); `PLATFORM_ADMIN_SERVICE_TOKENS` means nothing here.
  */
@@ -37,7 +37,7 @@ const originOf = (requestUrl: string): string => {
   }
 };
 
-/** Authenticates a request of a hosted proxy for `zone`; see the module comment. */
+/** Authenticates a request of Commissary Cloud for `zone`; see the module comment. */
 export const authenticateHosted = (
   headers: Readonly<Record<string, string | undefined>>,
   requestUrl: string,

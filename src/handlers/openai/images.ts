@@ -38,7 +38,7 @@ import {
   type StreamOutput,
 } from "../execute.ts";
 import type { StreamFramer } from "../framing.ts";
-import { currentConfig, type ProxyServices, readRequestBody } from "../request.ts";
+import { currentConfig, type ClientApiServices, readRequestBody } from "../request.ts";
 import { errorResponse, jsonResponse, streamResponse, withNonStreamKeepAlive } from "../respond.ts";
 import {
   buildEditRequest,
@@ -459,10 +459,10 @@ const handle = (edits: boolean) =>
     );
   });
 
-/** Route layer; requires the {@link ProxyServices} and `AccessPrincipal`. */
+/** Route layer; requires the {@link ClientApiServices} and `AccessPrincipal`. */
 export const ImagesRoutes = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const services = yield* routeServices<ProxyServices>();
+    const services = yield* routeServices<ClientApiServices>();
     yield* router.add("POST", "/v1/images/generations", Effect.provide(handle(false), services));
     yield* router.add("POST", "/v1/images/edits", Effect.provide(handle(true), services));
   }),

@@ -1,4 +1,4 @@
-// The model catalog's build (ADR 0020): the models.dev document trimmed to what the proxy reads, the provider catalogs
+// The model catalog's build (ADR 0020): the models.dev document trimmed to what Commissary reads, the provider catalogs
 // built from it with the catalog additions, and the coverage of what the Go server serves
 // (test/fixtures/go-catalog-served.json: the ids and thinking of every Go catalog section at the time the catalog moved
 // to models.dev, pinned from the `sections` of test/fixtures/registry.json; it does not follow the reference checkout).
@@ -266,7 +266,7 @@ describe("buildModelsCatalog", () => {
       expect(thinkingFromModelsDev(model, [{ min: 1, max: 2, levels: ["low"] }])).toBeUndefined();
     });
 
-    it("the bundled catalog gives the models the proxy relies on the right thinking", () => {
+    it("the bundled catalog gives the models Commissary relies on the right thinking", () => {
       const catalogs = embeddedCatalogs();
 
       const find = (section: Section, id: string) =>

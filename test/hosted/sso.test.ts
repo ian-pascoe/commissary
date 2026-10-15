@@ -1,4 +1,4 @@
-// Per-org single sign-on on a hosted proxy (issue #76; src/sso/, src/management/sso-routes.ts, src/hosted/): an org
+// Per-org single sign-on on Commissary Cloud (issue #76; src/sso/, src/management/sso-routes.ts, src/hosted/): an org
 // owner proves an email domain with a DNS TXT record and sets one identity provider; people of that domain sign in
 // through it (OIDC or SAML) and become members; GitHub and Google are refused for a domain that requires single
 // sign-on. The DNS resolver and the identity providers are fakes behind the global `fetch`.
@@ -366,7 +366,7 @@ describe("signing in with an org's identity provider", () => {
       expect.objectContaining({ email: "olga@oidc-corp.com", role: "member" }),
     );
 
-    // The proxy authenticated as the org's client, with PKCE.
+    // Commissary authenticated as the org's client, with PKCE.
     expect(oidcState.tokenRequests[0]?.get("code_verifier")).toBeTruthy();
   });
 

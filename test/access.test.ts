@@ -361,7 +361,7 @@ describe("authenticateRequest", () => {
         assert.strictEqual(identity.memberId, carol.id);
         assert.isFalse(identity.platformAdmin);
 
-        // A plain member reads usage and uses the proxy, but no admin route.
+        // A plain member reads usage and uses Commissary, but no admin route.
         const asDan = yield* as("dan@example.com");
         assert.strictEqual((yield* authenticateRequest(asDan, usage, "management")).role, "member");
         assert.strictEqual(

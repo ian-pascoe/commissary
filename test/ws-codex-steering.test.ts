@@ -96,7 +96,7 @@ const eventually = async (condition: () => boolean): Promise<void> => {
 const frames = (connection: UpstreamConnection | undefined) =>
   (connection?.received ?? []).map((text) => JSON.parse(text) as Record<string, unknown>);
 
-/** Scripted upstream: `script(frame, index, connection)` answers each frame the proxy writes. */
+/** Scripted upstream: `script(frame, index, connection)` answers each frame Commissary writes. */
 const scripted =
   (script: (frame: Record<string, unknown>, index: number, send: (event: Json) => void) => void) =>
   (connection: UpstreamConnection): void => {

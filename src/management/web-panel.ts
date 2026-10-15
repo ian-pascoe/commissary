@@ -40,11 +40,11 @@ export const PANEL_CSP = [
   "frame-ancestors 'none'",
 ].join("; ");
 
-/** Where the Turnstile widget of a hosted proxy's sign-in page (`src/hosted/turnstile.ts`) loads from. */
+/** Where the Turnstile widget of Commissary Cloud's sign-in page (`src/hosted/turnstile.ts`) loads from. */
 export const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
 
 /**
- * The panel's policy on a hosted proxy: {@link PANEL_CSP} plus the Turnstile widget (its script and its frame) on the
+ * The panel's policy on Commissary Cloud: {@link PANEL_CSP} plus the Turnstile widget (its script and its frame) on the
  * sign-in page. Every page gets it, since the panel moves between pages without a reload.
  */
 export const HOSTED_PANEL_CSP = PANEL_CSP.replace(
