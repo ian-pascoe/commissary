@@ -37,7 +37,7 @@ export class ConfigSource extends Context.Service<
       sinceVersion: number | undefined,
     ) => Effect.Effect<ConfigSnapshotWire, ConfigStoreError, WorkerEnv | CurrentOrg>;
   }
->()("cf-llm-proxy/config/ConfigSource") {
+>()("commissary/config/ConfigSource") {
   static readonly controlPlane = Layer.succeed(
     ConfigSource,
     ConfigSource.of({
@@ -73,7 +73,7 @@ export class ConfigReader extends Context.Service<
     /** Drops the current org's cached snapshot so the next `get` re-reads (use after a local write). */
     readonly invalidate: Effect.Effect<void, never, CurrentOrg>;
   }
->()("cf-llm-proxy/config/ConfigReader") {
+>()("commissary/config/ConfigReader") {
   /** Requires a {@link ConfigSource}. */
   static readonly layer = (options: ConfigReaderOptions = {}) =>
     Layer.effect(ConfigReader, makeConfigReader(options));

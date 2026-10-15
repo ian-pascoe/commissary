@@ -1,4 +1,4 @@
-// GET /v8/management/observability/usage/series: requests, failures and tokens per key × UTC hour/day bucket (D1).
+// GET /v9/management/observability/usage/series: requests, failures and tokens per key × UTC hour/day bucket (D1).
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { FetchHttpClient } from "effect/http";
@@ -20,7 +20,7 @@ afterAll(async () => {
   await withoutUsage.dispose();
 });
 
-const BASE = "/v8/management/observability/usage/series";
+const BASE = "/v9/management/observability/usage/series";
 
 const HOUR = 3_600_000;
 

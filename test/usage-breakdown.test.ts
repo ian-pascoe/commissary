@@ -30,7 +30,7 @@ const send = async (
   method = "GET",
   body?: Parameters<typeof jsonInit>[1],
 ) =>
-  await harness.json(`/v8/management/orgs/${slug}${path}`, {
+  await harness.json(`/v9/management/orgs/${slug}${path}`, {
     ...(body === undefined ? { method } : jsonInit(method, body)),
     ...who,
   });
@@ -59,7 +59,7 @@ const setup = async () => {
   const platform = await as(ADMIN);
 
   const created = await harness.json(
-    "/v8/management/orgs",
+    "/v9/management/orgs",
     jsonInit("POST", { slug, name: slug, private_credentials: true }),
   );
 

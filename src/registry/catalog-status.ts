@@ -1,5 +1,5 @@
 /**
- * What the panel shows about the model catalog (`GET /v8/management/models/catalog`, contract/catalog.ts): the
+ * What the panel shows about the model catalog (`GET /v9/management/models/catalog`, contract/catalog.ts): the
  * `models.catalog` mode, whether a refreshed copy from KV or the copy shipped with the Worker is in use, when the
  * stored copy was last confirmed current, the latest refresh attempt and the model counts of the catalog in use.
  */

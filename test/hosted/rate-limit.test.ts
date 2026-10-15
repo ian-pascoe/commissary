@@ -16,10 +16,10 @@ const LIMIT = 5;
 /** A proxy key in the Personal org of a new person. */
 const keyOf = async (email: string): Promise<string> => {
   const cookie = await signIn({ email });
-  const me = await call("/v8/management/me", { headers: panelHeaders(cookie) });
+  const me = await call("/v9/management/me", { headers: panelHeaders(cookie) });
   const { orgs } = await me.json<{ orgs: ReadonlyArray<{ slug: string }> }>();
 
-  const created = await call(`/v8/management/orgs/${orgs[0]?.slug}/proxy-keys`, {
+  const created = await call(`/v9/management/orgs/${orgs[0]?.slug}/proxy-keys`, {
     method: "POST",
     headers: panelHeaders(cookie, { "content-type": "application/json" }),
     body: JSON.stringify({ name: "load" }),
@@ -52,6 +52,6 @@ describe("the per-org rate limit", () => {
     const cookie = await signIn({ email: "admin-heavy@example.com" });
 
     for (let sent = 0; sent < LIMIT + 2; sent += 1)
-      expect((await call("/v8/management/me", { headers: panelHeaders(cookie) })).status).toBe(200);
+      expect((await call("/v9/management/me", { headers: panelHeaders(cookie) })).status).toBe(200);
   });
 });

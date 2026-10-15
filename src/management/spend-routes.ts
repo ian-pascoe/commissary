@@ -1,5 +1,5 @@
 /**
- * `/v8/management/spend` (`SpendGroup` in contract/spend.ts): Spend limits and the org's calendar (issue #71).
+ * `/v9/management/spend` (`SpendGroup` in contract/spend.ts): Spend limits and the org's calendar (issue #71).
  * Workers addition, no Go counterpart.
  *
  * Any member of the org may use `GET /spend` and the limit routes (`access/policy.ts`); the ControlPlane's
@@ -28,7 +28,7 @@ import {
 } from "./http.ts";
 import { currentViewer } from "./viewer.ts";
 
-const BASE = "/v8/management";
+const BASE = "/v9/management";
 
 const STATUS: Readonly<Record<SpendServiceErrorCode, readonly [number, string]>> = {
   invalid: [422, "invalid_limit"],

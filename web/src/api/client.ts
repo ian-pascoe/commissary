@@ -30,12 +30,12 @@ import {
 export const panelOrgSlug = orgSlugOfPath(window.location.pathname);
 
 export class ManagementClient extends AtomHttpApi.Service<ManagementClient>()(
-  "cf-llm-proxy/ManagementClient",
+  "commissary/ManagementClient",
   {
     api: ManagementApi,
     httpClient: FetchHttpClient.layer,
     baseUrl: window.location.origin,
-    // The pages call the routes of their org (`/v8/management/orgs/<slug>/...`); `/me` and `/orgs` are the platform's.
+    // The pages call the routes of their org (`/v9/management/orgs/<slug>/...`); `/me` and `/orgs` are the platform's.
     transformClient: HttpClient.mapRequest(
       HttpClientRequest.updateUrl((url) => scopedApiUrl(url, panelOrgSlug)),
     ),

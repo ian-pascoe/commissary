@@ -1,5 +1,5 @@
 /**
- * `GET /v8/management/api-keys` (`contract/api-keys.ts` `ApiKeysList`): the config's `api-keys` groups joined with
+ * `GET /v9/management/api-keys` (`contract/api-keys.ts` `ApiKeysList`): the config's `api-keys` groups joined with
  * the runtime state of the credentials they produced. Built inside the ControlPlane Durable Object so the config
  * version and the runtime state are one snapshot.
  *

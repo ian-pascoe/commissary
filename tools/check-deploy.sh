@@ -67,7 +67,7 @@ worker_404() { [ "$1" = 404 ] && grep -q '"Not found: ' "$body"; }
 not_ok() { [ "$1" != 200 ] && [ "$1" != 000 ]; }
 
 expect "$base" /healthz token "200 through Access" ok
-expect "$base" /v8/management/me token "200 through Access" ok
+expect "$base" /v9/management/me token "200 through Access" ok
 
 # The `CF_Authorization` cookie of the last answer through Access with the service token.
 jwt="$(sed -nE 's/^[Ss]et-[Cc]ookie: *CF_Authorization=([^;[:space:]]+).*/\1/p' "$headers" | tail -n 1)"
@@ -84,5 +84,5 @@ expect "$base" / none "no 200 without Access" not_ok
 if [ "$api" != "$base" ]; then
   expect "$api" /healthz none "200 without Access" ok
   expect "$base" /v1/models token "404 from the Worker: the proxy routes are on the API host" worker_404
-  expect "$api" /v8/management/me none "404 from the Worker: the management API is on the app host" worker_404
+  expect "$api" /v9/management/me none "404 from the Worker: the management API is on the app host" worker_404
 fi

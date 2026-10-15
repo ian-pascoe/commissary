@@ -111,7 +111,7 @@ interface KeyBody {
 
 const as = async (email: string): Promise<Auth> => ({ auth: await token(email) });
 
-const api = (slug: string, path: string) => `/v8/management/orgs/${slug}${path}`;
+const api = (slug: string, path: string) => `/v9/management/orgs/${slug}${path}`;
 
 const send = async (
   slug: string,
@@ -133,7 +133,7 @@ const staffedOrg = async (prefix: string, privateCredentials = false) => {
   const admin = await as(ADMIN);
 
   const created = await harness.json(
-    "/v8/management/orgs",
+    "/v9/management/orgs",
     jsonInit("POST", { slug, name: slug, private_credentials: privateCredentials }),
   );
 
@@ -597,7 +597,7 @@ describe("Access sign-ins on the proxy routes", () => {
   const owner = () => as(ADMIN);
 
   const setAccessClients = async (on: boolean) => {
-    const reply = await harness.json("/v8/management/membership", {
+    const reply = await harness.json("/v9/management/membership", {
       ...jsonInit("PATCH", { access_clients: on }),
       ...(await owner()),
     });
@@ -608,7 +608,7 @@ describe("Access sign-ins on the proxy routes", () => {
   };
 
   it("stay accepted in global, where clients signed in through Access before, and nowhere else", async () => {
-    expect((await harness.json("/v8/management/membership", await owner())).body).toEqual({
+    expect((await harness.json("/v9/management/membership", await owner())).body).toEqual({
       auto_join: true,
       private_credentials: true,
       access_clients: true,
@@ -662,7 +662,7 @@ describe("Access sign-ins on the proxy routes", () => {
       ).toBe(401);
 
       // The management routes still take Access, and only Access.
-      expect((await harness.json("/v8/management/membership", await owner())).status).toBe(200);
+      expect((await harness.json("/v9/management/membership", await owner())).status).toBe(200);
     } finally {
       await setAccessClients(true);
     }

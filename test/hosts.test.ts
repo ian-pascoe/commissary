@@ -21,7 +21,7 @@ describe("host routing", () => {
   it("passes every request through without an API host", async () => {
     for (const url of [
       "https://proxy.example.com/v1/models",
-      "https://proxy.example.com/v8/management/me",
+      "https://proxy.example.com/v9/management/me",
       "https://proxy.example.com/",
     ]) {
       expect(misdirected(url, {})).toBeUndefined();
@@ -53,8 +53,8 @@ describe("host routing", () => {
       "/accounts",
       "/o/acme/accounts",
       "/assets/index.js",
-      "/v8/management/me",
-      "/v8/management/orgs/acme/config",
+      "/v9/management/me",
+      "/v9/management/orgs/acme/config",
       "/sign-in",
       "/api/auth/get-session",
       "/management.html",
@@ -71,7 +71,7 @@ describe("host routing", () => {
 
   it("serves everything but the proxy routes on the app host (and any other host)", async () => {
     for (const host of ["app.example.com", "other.example.com"]) {
-      for (const path of ["/", "/accounts", "/v8/management/me", "/sign-in", "/healthz", "/nope"])
+      for (const path of ["/", "/accounts", "/v9/management/me", "/sign-in", "/healthz", "/nope"])
         expect(misdirected(`https://${host}${path}`, SPLIT), `${host}${path}`).toBeUndefined();
 
       for (const path of ["/v1/models", "/v1beta/models", "/responses", "/%76%31/models"])
@@ -106,7 +106,7 @@ const send = async (url: string, hosts: Partial<Env>, init?: RequestInit) => {
 describe("a Worker with an API host", () => {
   it("serves the panel and the management API on the app host and tells the panel the API host", async () => {
     const hosts = { APP_DOMAIN: "localhost", API_DOMAIN: "api.example.com" };
-    const me = await send("http://localhost/v8/management/me", hosts);
+    const me = await send("http://localhost/v9/management/me", hosts);
 
     expect(me.status).toBe(200);
     expect(await me.json()).toMatchObject({ api_url: "https://api.example.com" });
@@ -132,7 +132,7 @@ describe("a Worker with an API host", () => {
     expect(models.status).toBe(200);
     expect((await send("http://localhost/healthz", hosts)).status).toBe(200);
 
-    for (const path of ["/", "/v8/management/me"]) {
+    for (const path of ["/", "/v9/management/me"]) {
       const response = await send(`http://localhost${path}`, hosts);
 
       expect(response.status, path).toBe(404);
@@ -144,7 +144,7 @@ describe("a Worker with an API host", () => {
   });
 
   it("says nothing of an API host without one", async () => {
-    const me = await send("http://localhost/v8/management/me", {});
+    const me = await send("http://localhost/v9/management/me", {});
 
     expect(me.status).toBe(200);
     expect(await me.json()).not.toHaveProperty("api_url");

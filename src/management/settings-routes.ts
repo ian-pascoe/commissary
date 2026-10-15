@@ -1,5 +1,5 @@
 /**
- * `GET|PATCH /v8/management/settings` and `POST /v8/management/settings/import` (`SettingsGroup` in
+ * `GET|PATCH /v9/management/settings` and `POST /v9/management/settings/import` (`SettingsGroup` in
  * contract/settings.ts): the control panel's Settings page and the Go config import.
  *
  * Workers addition, no Go counterpart (Go's panel edits `/config` paths without a version). Every setting is a config
@@ -32,7 +32,7 @@ import {
   validateSettings,
 } from "./settings.ts";
 
-const PATH = "/v8/management/settings";
+const PATH = "/v9/management/settings";
 
 /** The largest config document the import takes. */
 const MAX_IMPORT_BYTES = 512 * 1024;

@@ -1,5 +1,5 @@
 /**
- * Spend limits (`/v8/management/spend`, `../spend-routes.ts`; the rules live in `src/spend/`): what a member, team, the
+ * Spend limits (`/v9/management/spend`, `../spend-routes.ts`; the rules live in `src/spend/`): what a member, team, the
  * org, a shared credential or a proxy key may spend in a day, week or month of the org's time zone. Workers addition,
  * no Go counterpart. Shared with the browser: imports `effect` and `./errors.ts` only.
  *

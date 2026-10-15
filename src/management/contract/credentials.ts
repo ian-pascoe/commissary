@@ -1,5 +1,5 @@
 /**
- * The `/v8/management/credentials` routes the panel uses (`../credentials-routes.ts`; `../credential-entry.ts` builds
+ * The `/v9/management/credentials` routes the panel uses (`../credentials-routes.ts`; `../credential-entry.ts` builds
  * each entry), the batch actions (`../credentials-batch.ts`) and the quota checks (`../quota-routes.ts`). Shared with
  * the browser: imports `effect` only. Field names are the wire's (snake_case, like Go's auth-file list).
  *

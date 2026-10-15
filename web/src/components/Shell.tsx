@@ -123,7 +123,7 @@ export const Shell = () => {
             to={role.kind === "ready" ? homeFor(role.caller.role) : "/"}
             className={styles["brand"]}
           >
-            <span className={styles["name"]}>cf-llm-proxy</span>
+            <span className={styles["name"]}>Commissary</span>
             <span className={styles["host"]} title={window.location.host}>
               {window.location.host}
             </span>

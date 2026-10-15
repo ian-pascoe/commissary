@@ -1,5 +1,5 @@
 /**
- * `GET /v8/management/observability/usage/summary` (token totals), `/series` (totals per time bucket) and `/records`
+ * `GET /v9/management/observability/usage/summary` (token totals), `/series` (totals per time bucket) and `/records`
  * (the request log, newest first, keyset-paged) from the D1 usage history (`../usage-routes.ts`, `src/usage/d1.ts`
  * `summarizeUsage` / `summarizeUsageSeries` / `listUsageRecords` / `rowToPayload`). Shared with the browser: imports
  * `effect` only.

@@ -130,7 +130,7 @@ describe("config import", () => {
   });
 
   it("is served at POST /settings/import", async () => {
-    const response = await json("/v8/management/settings/import", {
+    const response = await json("/v9/management/settings/import", {
       method: "POST",
       headers: { "content-type": "application/yaml" },
       body: "routing:\n  strategy: fill-first\nrequest-log: true\nclaude-api-key:\n  - api-key: sk-ant-legacy\n",
@@ -147,7 +147,7 @@ describe("config import", () => {
   });
 
   it("answers 422 with the position of a YAML error", async () => {
-    const response = await json("/v8/management/settings/import", {
+    const response = await json("/v9/management/settings/import", {
       method: "POST",
       headers: { "content-type": "text/yaml" },
       body: "routing:\n  strategy: [\n",
@@ -309,7 +309,7 @@ describe("entry revisions", () => {
   });
 });
 
-const SETTINGS = "/v8/management/settings";
+const SETTINGS = "/v9/management/settings";
 
 const settingsView = async (): Promise<SettingsView> => {
   const response = await json(SETTINGS);
@@ -389,7 +389,7 @@ describe("PATCH /settings", () => {
   });
 });
 
-const API_KEYS = "/v8/management/api-keys";
+const API_KEYS = "/v9/management/api-keys";
 
 const keysList = async (): Promise<ApiKeysList> => {
   const response = await json(API_KEYS);
@@ -464,7 +464,7 @@ describe("API key groups", () => {
 
     expect(rotated.status).toBe(200);
 
-    const imported = await json("/v8/management/settings/import", {
+    const imported = await json("/v9/management/settings/import", {
       method: "POST",
       headers: { "content-type": "application/yaml" },
       body: [
@@ -560,7 +560,7 @@ describe("API key groups", () => {
 
 describe("model rules", () => {
   const routing = async (): Promise<RoutingModels> => {
-    const response = await json("/v8/management/routing/models");
+    const response = await json("/v9/management/routing/models");
 
     expect(response.status).toBe(200);
 
@@ -569,7 +569,7 @@ describe("model rules", () => {
   };
 
   const put = (kind: string, channel: string, revision: number | string, body: Json) =>
-    json(`/v8/management/model-rules/${kind}/${channel}`, {
+    json(`/v9/management/model-rules/${kind}/${channel}`, {
       ...jsonInit("PUT", body),
       headers: { "content-type": "application/json", "if-match": String(revision) },
     });
@@ -595,11 +595,11 @@ describe("model rules", () => {
   });
 
   it("requires If-Match and answers 404 for a channel without rules", async () => {
-    const missing = await json("/v8/management/model-rules/aliases/claude", jsonInit("PUT", []));
+    const missing = await json("/v9/management/model-rules/aliases/claude", jsonInit("PUT", []));
     expect(missing.status).toBe(400);
     expect(missing.body).toMatchObject({ error: "invalid_if_match" });
 
-    const removed = await json("/v8/management/model-rules/exclusions/claude", {
+    const removed = await json("/v9/management/model-rules/exclusions/claude", {
       method: "DELETE",
       headers: { "if-match": "0" },
     });

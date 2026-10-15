@@ -1,5 +1,5 @@
 /**
- * Dotted-path edits of an auth file (`PATCH /v8/management/credentials/fields`).
+ * Dotted-path edits of an auth file (`PATCH /v9/management/credentials/fields`).
  *
  * Go source: internal/api/handlers/management/auth_files_fields.go (`PatchAuthFileFields`,
  * `normalizeAuthFilePatchFields`, `decodeAuthFileRequestRetryPatch`, `setAuthFileMetadataValue`,

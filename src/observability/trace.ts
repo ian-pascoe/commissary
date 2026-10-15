@@ -36,7 +36,7 @@ export interface RequestTraceState {
 
 /** The trace of the current request; `undefined` outside the Worker's router (tests, scheduled jobs). */
 export const RequestTrace = Context.Reference<RequestTraceState | undefined>(
-  "cf-llm-proxy/observability/RequestTrace",
+  "commissary/observability/RequestTrace",
   {
     defaultValue: () => undefined,
   },

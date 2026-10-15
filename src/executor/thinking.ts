@@ -109,7 +109,7 @@ export class Thinking extends Context.Service<
     /** Reasoning-summary hooks applied by the translator registry around request transforms. */
     readonly summary: SummaryHooks;
   }
->()("cf-llm-proxy/executor/Thinking") {
+>()("commissary/executor/Thinking") {
   /** Passthrough implementation (tests that do not exercise thinking). */
   static readonly noop = Layer.succeed(
     Thinking,

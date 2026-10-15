@@ -200,9 +200,9 @@ api-keys:
       });
 
       for (const path of [
-        "/v8/management/routing/models",
-        "/v8/management/observability/usage/summary?group_by=auth",
-        "/v8/management/observability/usage/records",
+        "/v9/management/routing/models",
+        "/v9/management/observability/usage/summary?group_by=auth",
+        "/v9/management/observability/usage/records",
       ])
         expect((await management.call(path)).status, path).toBe(500);
     } finally {
@@ -378,7 +378,7 @@ interface KeysList {
   >;
 }
 
-const BASE = "/v8/management";
+const BASE = "/v9/management";
 
 let configIds: ReadonlyArray<string> = [];
 

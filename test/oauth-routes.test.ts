@@ -85,30 +85,30 @@ interface Started {
 }
 
 const start = async (query: string): Promise<Started> => {
-  const reply = await json(`/v8/management/oauth/auth-url?${query}`);
+  const reply = await json(`/v9/management/oauth/auth-url?${query}`);
   expect(reply.status).toBe(200);
 
   return reply.body as Started;
 };
 
 const status = async (state: string) =>
-  (await json(`/v8/management/oauth/status?state=${state}`)).body;
+  (await json(`/v9/management/oauth/status?state=${state}`)).body;
 
 describe("management oauth routes", () => {
   it("requires a signed-in member of the org", async () => {
     expect(
-      (await call("/v8/management/oauth/auth-url?provider=claude", { auth: false })).status,
+      (await call("/v9/management/oauth/auth-url?provider=claude", { auth: false })).status,
     ).toBe(401);
     // A plain member starts a login for their own private credential.
     expect(
       (
-        await call("/v8/management/oauth/auth-url?provider=claude", {
+        await call("/v9/management/oauth/auth-url?provider=claude", {
           auth: await token("other@x.com"),
         })
       ).status,
     ).toBe(200);
     expect(
-      (await call("/v8/management/oauth/callback", { method: "POST", auth: false })).status,
+      (await call("/v9/management/oauth/callback", { method: "POST", auth: false })).status,
     ).toBe(401);
   });
 
@@ -123,7 +123,7 @@ describe("management oauth routes", () => {
 
     // The panel posts {provider, redirect_url}; Claude's code page appends `#state`, which is ignored.
     const posted = await json(
-      "/v8/management/oauth/callback",
+      "/v9/management/oauth/callback",
       jsonInit("POST", {
         provider: "claude",
         redirect_url: `http://localhost:54545/callback?code=auth-code%23frag&state=${started.state}`,
@@ -134,7 +134,7 @@ describe("management oauth routes", () => {
     expect(await status(started.state)).toEqual({ status: "ok" });
 
     // The credential is stored like the Go file and immediately selectable.
-    const entries = (await json("/v8/management/credentials")).body as {
+    const entries = (await json("/v9/management/credentials")).body as {
       files: Array<{ name: string }>;
     };
 
@@ -143,7 +143,7 @@ describe("management oauth routes", () => {
     expect(stored).toMatch(/^claude-[0-9a-f]{8}-me@x\.com\.json$/);
 
     const download = await json(
-      `/v8/management/credentials/download?name=${encodeURIComponent(stored)}`,
+      `/v9/management/credentials/download?name=${encodeURIComponent(stored)}`,
       { auth: await serviceToken(SERVICE_ADMIN) },
     );
 
@@ -164,7 +164,7 @@ describe("management oauth routes", () => {
 
     // Replaying the callback is a conflict.
     const replay = await json(
-      "/v8/management/oauth/callback",
+      "/v9/management/oauth/callback",
       jsonInit("POST", { provider: "claude", state: started.state, code: "again" }),
     );
 
@@ -175,29 +175,29 @@ describe("management oauth routes", () => {
   });
 
   it("answers the Go error shapes", async () => {
-    expect(await json("/v8/management/oauth/auth-url")).toMatchObject({
+    expect(await json("/v9/management/oauth/auth-url")).toMatchObject({
       status: 400,
       body: { error: "provider is required" },
     });
-    expect(await json("/v8/management/oauth/auth-url?provider=nope")).toMatchObject({
+    expect(await json("/v9/management/oauth/auth-url?provider=nope")).toMatchObject({
       status: 404,
       body: { error: "provider_not_found" },
     });
-    expect(await json("/v8/management/oauth/status?state=../x")).toMatchObject({
+    expect(await json("/v9/management/oauth/status?state=../x")).toMatchObject({
       status: 400,
       body: { status: "error", error: "invalid state" },
     });
-    expect(await json(`/v8/management/oauth/status?state=${"a".repeat(32)}`)).toMatchObject({
+    expect(await json(`/v9/management/oauth/status?state=${"a".repeat(32)}`)).toMatchObject({
       status: 200,
       body: { status: "error", error: "unknown or expired state" },
     });
-    expect(await json("/v8/management/oauth/session", { method: "DELETE" })).toMatchObject({
+    expect(await json("/v9/management/oauth/session", { method: "DELETE" })).toMatchObject({
       status: 400,
       body: { status: "error", error: "missing state" },
     });
-    const post = (body: Json) => json("/v8/management/oauth/callback", jsonInit("POST", body));
+    const post = (body: Json) => json("/v9/management/oauth/callback", jsonInit("POST", body));
     expect(
-      await json("/v8/management/oauth/callback", {
+      await json("/v9/management/oauth/callback", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: "nope",
@@ -225,13 +225,13 @@ describe("management oauth routes", () => {
   it("cancels a pending login and rejects its callback", async () => {
     const started = await start("provider=codex");
 
-    const cancelled = await json(`/v8/management/oauth/session?state=${started.state}`, {
+    const cancelled = await json(`/v9/management/oauth/session?state=${started.state}`, {
       method: "DELETE",
     });
 
     expect(cancelled.body).toEqual({ status: "ok", cancelled: true });
     expect(
-      (await json(`/v8/management/oauth/session?state=${started.state}`, { method: "DELETE" }))
+      (await json(`/v9/management/oauth/session?state=${started.state}`, { method: "DELETE" }))
         .body,
     ).toEqual({
       status: "ok",
@@ -239,12 +239,12 @@ describe("management oauth routes", () => {
     });
 
     const posted = await json(
-      "/v8/management/oauth/callback",
+      "/v9/management/oauth/callback",
       jsonInit("POST", { provider: "codex", state: started.state, code: "c" }),
     );
 
     expect(posted.status).toBe(404);
-    expect((await json("/v8/management/credentials")).body).toMatchObject({ files: [] });
+    expect((await json("/v9/management/credentials")).body).toMatchObject({ files: [] });
   });
 
   it("records a provider error posted to the callback; the GET form is not served", async () => {
@@ -253,14 +253,14 @@ describe("management oauth routes", () => {
     expect(
       (
         await call(
-          `/v8/management/oauth/callback?provider=antigravity&state=${started.state}&error=access_denied`,
+          `/v9/management/oauth/callback?provider=antigravity&state=${started.state}&error=access_denied`,
         )
       ).status,
     ).toBe(404);
     expect(await status(started.state)).toMatchObject({ status: "wait" });
 
     const reply = await json(
-      "/v8/management/oauth/callback",
+      "/v9/management/oauth/callback",
       jsonInit("POST", { provider: "antigravity", state: started.state, error: "access_denied" }),
     );
 
@@ -286,7 +286,7 @@ describe("management oauth routes", () => {
     });
 
     const late = await json(
-      "/v8/management/oauth/callback",
+      "/v9/management/oauth/callback",
       jsonInit("POST", { provider: "claude", state: started.state, code: "c" }),
     );
 
@@ -350,7 +350,7 @@ describe("management oauth routes", () => {
     expect(await status(started.state)).toEqual({ status: "ok" });
     expect(tokenCalls).toBe(2);
 
-    const files = (await json("/v8/management/credentials")).body as {
+    const files = (await json("/v9/management/credentials")).body as {
       files: Array<{ name: string; type?: string }>;
     };
 
@@ -387,7 +387,7 @@ describe("public browser callbacks", () => {
 
     expect(await status(started.state)).toEqual({ status: "ok" });
     expect(
-      ((await json("/v8/management/credentials")).body as { files: unknown[] }).files,
+      ((await json("/v9/management/credentials")).body as { files: unknown[] }).files,
     ).toHaveLength(1);
   });
 

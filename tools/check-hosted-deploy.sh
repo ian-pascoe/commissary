@@ -53,7 +53,7 @@ worker_404() { [ "$1" = 404 ] && grep -q '"Not found: ' "$body"; }
 
 expect "$base" /healthz "200 without credentials" ok
 expect "$base" /api/sign-in-options "200 with a sign-in provider" has_provider
-expect "$base" /v8/management/me "401 Not signed in from the Worker" not_signed_in
+expect "$base" /v9/management/me "401 Not signed in from the Worker" not_signed_in
 expect "$base" / "a redirect to /sign-in" to_sign_in
 expect "$api" /v1/models "401 Missing API key from the Worker" worker_401
 expect "$api" /v1beta/models "401 Missing API key from the Worker" worker_401
@@ -61,6 +61,6 @@ expect "$api" /v1beta/models "401 Missing API key from the Worker" worker_401
 if [ "$api" != "$base" ]; then
   expect "$api" /healthz "200 without credentials" ok
   expect "$base" /v1/models "404 from the Worker: the proxy routes are on the API host" worker_404
-  expect "$api" /v8/management/me "404 from the Worker: the management API is on the app host" worker_404
+  expect "$api" /v9/management/me "404 from the Worker: the management API is on the app host" worker_404
   expect "$api" /sign-in "404 from the Worker: sign-in is on the app host" worker_404
 fi

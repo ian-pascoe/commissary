@@ -1,5 +1,5 @@
 /**
- * `GET /v8/management/me` and `GET|POST /v8/management/orgs`, `PATCH /v8/management/orgs/:slug` (`OrgsGroup` in
+ * `GET /v9/management/me` and `GET|POST /v9/management/orgs`, `PATCH /v9/management/orgs/:slug` (`OrgsGroup` in
  * contract/orgs.ts): who the caller is, and the org list of the Platform registry (`src/platform`) with its creation and
  * rename. Workers addition, no Go counterpart.
  *
@@ -35,7 +35,7 @@ import { bodyObject, controlPlane, handled, jsonReply, replyError, type Reply } 
 import { storedConfig } from "./settings-routes.ts";
 import { currentViewer } from "./viewer.ts";
 
-const BASE = "/v8/management";
+const BASE = "/v9/management";
 
 /** Calls the Platform registry; a failed RPC is logged and answered with 502. */
 export const registry = <R>(

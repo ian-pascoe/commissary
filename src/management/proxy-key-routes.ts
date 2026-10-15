@@ -1,5 +1,5 @@
 /**
- * `/v8/management/proxy-keys` (`ProxyKeysGroup` in contract/proxy-keys.ts): the proxy keys clients send instead of an
+ * `/v9/management/proxy-keys` (`ProxyKeysGroup` in contract/proxy-keys.ts): the proxy keys clients send instead of an
  * Access sign-in (ADR 0022). Workers addition, no Go counterpart.
  *
  * Any member of the org may use these routes (`access/policy.ts`): a member creates keys for themselves and lists and
@@ -16,7 +16,7 @@ import type { ProxyKeyErrorCode, ProxyKeyListing, ProxyKeyResult } from "../prox
 import { CreateProxyKey, type ProxyKeyView } from "./contract/proxy-keys.ts";
 import { bodyJson, controlPlane, handled, jsonReply, type Reply, replyError } from "./http.ts";
 
-const BASE = "/v8/management";
+const BASE = "/v9/management";
 
 const STATUS: Readonly<Record<ProxyKeyErrorCode | "member_not_found", number>> = {
   invalid_name: 422,

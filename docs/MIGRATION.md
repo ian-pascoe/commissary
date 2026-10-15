@@ -8,15 +8,15 @@ The Workers port reads the Go `config.yaml` and the Go auth files (`*.json`), so
 The management API needs an **org admin** (or a platform admin). For scripts, add a service token name to
 `ACCESS_SERVICE_TOKENS` and to `PLATFORM_ADMIN_SERVICE_TOKENS` in `.env` and deploy (see [ACCESS.md](ACCESS.md); its
 credentials land in `.alchemy/access-service-tokens.json`), or register its Client ID to the org with a role
-(`POST /v8/management/service-tokens`, the Members page) once a platform admin has set it up, then:
+(`POST /v9/management/service-tokens`, the Members page) once a platform admin has set it up, then:
 
 ```bash
-M=https://proxy.example.com/v8/management
+M=https://proxy.example.com/v9/management
 H=(-H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
 ```
 
 The unscoped address is the `global` org's. To migrate into another org (ADR 0021), use
-`M=https://proxy.example.com/v8/management/orgs/<slug>`; every command below works the same there.
+`M=https://proxy.example.com/v9/management/orgs/<slug>`; every command below works the same there.
 
 Alternatively use the control panel (`/`) as an admin user: _Accounts_ → _Connect account_ uploads auth files, and Settings and the API keys
 page edit what the import stored. The panel has no UI for the config import yet, so that step is `curl`.

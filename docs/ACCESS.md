@@ -103,16 +103,16 @@ exists from the start with the slug `default` and holds everything the deploymen
 | What              | Address                                                                   |
 | ----------------- | ------------------------------------------------------------------------- |
 | Panel of an org   | `/o/<slug>/` (`/o/<slug>/accounts`, `/keys`, `/models`, ...)              |
-| Management API    | `/v8/management/orgs/<slug>/<route>` (every route below `/v8/management`) |
-| Org list, create  | `GET`/`POST /v8/management/orgs`                                          |
-| Rename an org     | `PATCH /v8/management/orgs/<slug>` (name and/or slug)                     |
-| Who am I, my orgs | `GET /v8/management/me`                                                   |
-| Delete my account | `DELETE /v8/management/me` with `{"email": "<your email>"}`               |
-| The org itself    | `GET`/`PATCH`/`DELETE /v8/management/orgs/<slug>/org`, `.../export`       |
+| Management API    | `/v9/management/orgs/<slug>/<route>` (every route below `/v9/management`) |
+| Org list, create  | `GET`/`POST /v9/management/orgs`                                          |
+| Rename an org     | `PATCH /v9/management/orgs/<slug>` (name and/or slug)                     |
+| Who am I, my orgs | `GET /v9/management/me`                                                   |
+| Delete my account | `DELETE /v9/management/me` with `{"email": "<your email>"}`               |
+| The org itself    | `GET`/`PATCH`/`DELETE /v9/management/orgs/<slug>/org`, `.../export`       |
 
 A **platform admin** (`PLATFORM_ADMIN_*`) manages every org through these addresses and is the only one who may list, create and
 rename orgs: anyone else gets `403 {"error":"platform_admin_required"}`. An org the registry does not list answers `404` to a
-platform admin and `403` to anyone else. The unscoped addresses (`/v8/management/credentials`, `/accounts`, ...) keep working
+platform admin and `403` to anyone else. The unscoped addresses (`/v9/management/credentials`, `/accounts`, ...) keep working
 and mean `global`, so existing scripts and bookmarks are unchanged. `/` opens the panel of the only org the caller belongs to
 and asks which one to open when there are several (`/?choose` always asks, to create an org). A person's login and proxy keys
 are unaffected: clients reach their org with their key, not with the address.
@@ -204,7 +204,7 @@ the Worker asks on every request: a removed member, or a member whose role was l
 
 A **proxy key** (ADR 0022) is how a client authenticates on the proxy routes: `cfp_<org id>_<key id>_<secret>`, with 288
 random bits of secret. Any member creates keys for themselves in the panel (**Proxy keys**) or with
-`POST /v8/management/proxy-keys {"name": "laptop", "expires_at": "<ISO time, optional>"}`; the answer carries the whole
+`POST /v9/management/proxy-keys {"name": "laptop", "expires_at": "<ISO time, optional>"}`; the answer carries the whole
 key once (`key`), and the org's ControlPlane stores only its SHA-256, a visible prefix (`cfp_<org id>_<key id>_<4
 characters>`), its member, its name and when it was created, last used (to the minute) and expires.
 
@@ -228,7 +228,7 @@ characters>`), its member, its name and when it was created, last used (to the m
 
 A **management key** (ADR 0026) is how a script calls the management API without a person's session:
 `cfm_<org id>_<key id>_<secret>`, sent as `Authorization: Bearer cfm_…`. Org admins issue them in the panel (**Management
-keys**) or with `POST /v8/management/orgs/<slug>/management-keys {"name": "ci", "role": "admin"}`;
+keys**) or with `POST /v9/management/orgs/<slug>/management-keys {"name": "ci", "role": "admin"}`;
 the answer carries the whole key once, and the org's ControlPlane stores only its SHA-256 and a visible prefix. `GET`
 lists the org's keys and `DELETE /management-keys/<id>` revokes one (only a caller holding at least the key's role
 revokes it, `403 role_too_high` otherwise).
@@ -273,7 +273,7 @@ characters; a missing key is refused everywhere.
 
 1. The path is classified (`src/access/routes.ts`): `/v1*` (incl. `/v1beta`, `/v1internal`), `/openai/v1*`, `/backend-api/codex*` and the unprefixed
    aliases `/chat/completions`, `/completions`, `/responses` are the proxy routes and need a
-   principal; `/v8/management*` (also `/v8/management/orgs/<slug>/...`), the control panel (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/members`, `/proxy-keys`, `/limits`, `/settings` with their
+   principal; `/v9/management*` (also `/v9/management/orgs/<slug>/...`), the control panel (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/members`, `/proxy-keys`, `/limits`, `/settings` with their
    sub-paths, the same pages under `/o/<slug>/`, `/assets/*`) and `/management.html` (the upstream panel's old address, a redirect to `/`) form the management zone;
    everything else (`/healthz`, the OAuth browser callbacks `/anthropic/callback`, `/codex/callback`,
    `/antigravity/callback`, `/callback`, `/devin/callback`) is public to the Worker.
@@ -291,8 +291,8 @@ characters; a missing key is refused everywhere.
    scopes session state per caller.
 5. The org's ControlPlane admits the principal (`src/members/admission.ts`, auto-joining it where that is on) and the route's
    policy (`src/access/policy.ts`) names the role it needs: a member role for the proxy endpoints, the org's panel pages and the
-   usage reads, org admin for every other management route. Who the caller is (`/v8/management/me`), the org list
-   (`/v8/management/orgs*`, whose handlers ask for a platform admin), the panel pages without an org, `/assets/*` and
+   usage reads, org admin for every other management route. Who the caller is (`/v9/management/me`), the org list
+   (`/v9/management/orgs*`, whose handlers ask for a platform admin), the panel pages without an org, `/assets/*` and
    `/management.html` need no role. A principal without the role gets 403 `Forbidden`.
 6. A missing header answers 401 `Missing API key`; an invalid token 401 `Invalid API key` (Go wording, so existing clients
    show familiar errors). On a proxy route of an org that takes proxy keys only, an Access sign-in alone answers 401
@@ -309,11 +309,11 @@ admin's session. Before authentication the gate (`src/access/csrf.ts`) refuses, 
 - state-changing requests (anything but `GET`/`HEAD`/`OPTIONS`) to `/v1*`, `/openai/v1*`, `/backend-api/codex*`, the
   unprefixed `/chat/completions`, `/completions`, `/responses` and the
   management zone when `Sec-Fetch-Site` is `cross-site`/`same-site` or `Origin` names another host;
-- any management request (`/v8/management*`, the panel paths) with a foreign `Origin` or a cross-site `Sec-Fetch-Site`,
+- any management request (`/v9/management*`, the panel paths) with a foreign `Origin` or a cross-site `Sec-Fetch-Site`,
   except a top-level document navigation (`GET`/`HEAD` with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document`)
   to a panel page (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/members`, `/proxy-keys`, `/limits`, `/settings` and their sub-paths) or
   `/management.html`: a link to a panel page still opens it, while frames (clickjacking), `/assets/*` and every
-  `/v8/management*` request are refused (OAuth providers redirect to the public callback paths, never there);
+  `/v9/management*` request are refused (OAuth providers redirect to the public callback paths, never there);
 - WebSocket upgrades (`GET /v1/responses`, `/backend-api/codex/responses`) whose `Origin` is not the Worker's own host
   (403 `Cross-origin WebSocket rejected`).
 
@@ -342,7 +342,7 @@ put a server-side client in between.
   never quote a written value (YAML errors are a fixed sentence per error code with line and column; schema errors an
   expectation and a path) and are not scrubbed: they name at most keys the caller wrote, so a refused write reads the same
   whether a typed value, key or alias name equals a stored secret or not.
-- Credential downloads (`GET /v8/management/credentials/download?name=<file>`) are the one way to read a stored token:
+- Credential downloads (`GET /v9/management/credentials/download?name=<file>`) are the one way to read a stored token:
   the auth file verbatim, refresh token included, for moving an account to another deployment. Only a **service
   token** that is an owner of the org (§3 "Members, roles and teams") or a platform admin may call it; any other org admin or
   owner, and every management key, gets `403 {"error":"download_requires_service_token","message":…}` before the file is
@@ -447,10 +447,10 @@ management keys work as above. What changes:
   org they own; an invited person gets none. Nobody joins `global` by signing in, even where its
   auto-join is still on from a self-hosted past.
 - **Owning orgs.** Everyone signed in may create orgs and owns the ones they create, up to `OWNED_ORG_LIMIT` (default
-  3; platform admins have no limit). A platform admin raises one person's limit with `PATCH /v8/management/people/<email>
+  3; platform admins have no limit). A platform admin raises one person's limit with `PATCH /v9/management/people/<email>
   {"org_limit": 10}` (`null` restores the default), or on the panel's **People** page.
 - **Suspension.** A platform admin suspends a person (`PATCH /people/<email> {"suspended": true}`) or an org (`PATCH
-  /v8/management/orgs/<slug> {"suspended": true}`, or the org chooser). A suspended person is signed out and their
+  /v9/management/orgs/<slug> {"suspended": true}`, or the org chooser). A suspended person is signed out and their
   sessions, proxy keys and management keys are refused; in a suspended org every member, proxy key and management key
   is, except platform admins, who lift it. A suspension applies at once in the isolate that made it and within 30
   seconds everywhere.
@@ -463,7 +463,7 @@ management keys work as above. What changes:
 ### Single sign-on for an org
 
 On a hosted proxy an org can sign its people in with its own identity provider (OIDC or SAML), on the panel's
-**Single sign-on** page or under `/v8/management/orgs/<slug>/sso`. Org admins see the settings; only the org owner
+**Single sign-on** page or under `/v9/management/orgs/<slug>/sso`. Org admins see the settings; only the org owner
 changes them. A self-hosted proxy has none of this: Access is where its identity providers are configured.
 
 1. **Prove a domain.** The owner adds an email domain (`example.com`); the proxy shows a TXT record to publish:

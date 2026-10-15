@@ -1,9 +1,9 @@
 /**
  * One quota check end to end, from the Worker: the ControlPlane resolves the credential and its fresh token
  * (`quotaProbeTarget`), the Worker calls the provider usage endpoint (src/quota/probe.ts) and the ControlPlane merges
- * the outcome into the stored report (`recordQuotaReport`). Used by `POST /v8/management/credentials/quota`, and for
+ * the outcome into the stored report (`recordQuotaReport`). Used by `POST /v9/management/credentials/quota`, and for
  * every account at once (`sweepQuotas`) by the `quota-check` cron task (`runQuotaSweep`) and the panel's "Check all
- * quotas" (`POST /v8/management/credentials/quota/all`). A sweep holds the ControlPlane's sweep lease
+ * quotas" (`POST /v9/management/credentials/quota/all`). A sweep holds the ControlPlane's sweep lease
  * (`sweep-lease.ts`), so only one runs at a time whoever started it. Accounts are named as the credential list names
  * them: auth files by file name, config API keys of a provider that reports quota with the key (OpenCode Go) by their
  * `auth_index`; a sweep covers both (`quotaCheckTargets`).

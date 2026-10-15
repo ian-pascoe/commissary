@@ -1,5 +1,5 @@
 /**
- * `/v8/management/members`, `/membership`, `/teams` and `/service-tokens` (`MembersGroup` in contract/members.ts): an
+ * `/v9/management/members`, `/membership`, `/teams` and `/service-tokens` (`MembersGroup` in contract/members.ts): an
  * org's members, teams and service tokens (ADR 0022). Workers addition, no Go counterpart.
  *
  * The Access gate lets only org admins in (`access/policy.ts`); the ControlPlane checks each write against the actor's
@@ -41,7 +41,7 @@ import {
 import { bodyJson, controlPlane, handled, jsonReply, type Reply, replyError } from "./http.ts";
 import { registry } from "./org-routes.ts";
 
-const BASE = "/v8/management";
+const BASE = "/v9/management";
 
 const STATUS: Readonly<Record<MemberErrorCode, number>> = {
   invalid_email: 422,

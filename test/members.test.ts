@@ -49,14 +49,14 @@ const asAdmin = () => as(ADMIN);
 /** Creates an org of its own for a test (as the platform admin) and answers with its slug. */
 const newOrg = async (prefix: string): Promise<string> => {
   const slug = `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
-  const created = await harness.json("/v8/management/orgs", jsonInit("POST", { slug, name: slug }));
+  const created = await harness.json("/v9/management/orgs", jsonInit("POST", { slug, name: slug }));
 
   expect(created.status).toBe(201);
 
   return slug;
 };
 
-const api = (slug: string, path: string) => `/v8/management/orgs/${slug}${path}`;
+const api = (slug: string, path: string) => `/v9/management/orgs/${slug}${path}`;
 
 const send = async (
   slug: string,
@@ -268,7 +268,7 @@ describe("membership in two orgs", () => {
     expect((await send(second, "/members", both)).status).toBe(403);
     expect((await send(second, USAGE, both)).status).toBe(200);
 
-    const me = await harness.json("/v8/management/me", both);
+    const me = await harness.json("/v9/management/me", both);
 
     expect(me.status).toBe(200);
     expect(
@@ -286,7 +286,7 @@ describe("membership in two orgs", () => {
       (await send(second, `/members/${membership?.id}`, await asAdmin(), "DELETE")).status,
     ).toBe(200);
 
-    const after = (await harness.json("/v8/management/me", both)).body as {
+    const after = (await harness.json("/v9/management/me", both)).body as {
       orgs: ReadonlyArray<{ slug: string }>;
     };
 
@@ -560,7 +560,7 @@ describe("service tokens", () => {
 describe("usage by member", () => {
   /** The id of the org with `slug` (usage records name the org by id). */
   const orgIdOf = async (slug: string): Promise<OrgId> => {
-    const { orgs } = (await harness.json("/v8/management/orgs")).body as {
+    const { orgs } = (await harness.json("/v9/management/orgs")).body as {
       orgs: ReadonlyArray<{ id: string; slug: string }>;
     };
 

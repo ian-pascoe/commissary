@@ -1,5 +1,5 @@
 // Orgs through the management API (ADR 0021): platform admins list, create and rename orgs, address one with
-// `/v8/management/orgs/<slug>/...`, and everyone else keeps to `global`. Through the router with the real ControlPlanes
+// `/v9/management/orgs/<slug>/...`, and everyone else keeps to `global`. Through the router with the real ControlPlanes
 // and a Platform registry of its own (`isolatedPlatform`).
 import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -42,14 +42,14 @@ interface OrgBody {
 }
 
 const orgs = async (): Promise<ReadonlyArray<OrgBody>> =>
-  ((await harness.json("/v8/management/orgs")).body as { orgs: ReadonlyArray<OrgBody> }).orgs;
+  ((await harness.json("/v9/management/orgs")).body as { orgs: ReadonlyArray<OrgBody> }).orgs;
 
 type Payload = Parameters<typeof jsonInit>[1];
 
-const create = (body: Payload) => harness.json("/v8/management/orgs", jsonInit("POST", body));
+const create = (body: Payload) => harness.json("/v9/management/orgs", jsonInit("POST", body));
 
 const patch = (slug: string, body: Payload) =>
-  harness.json(`/v8/management/orgs/${slug}`, jsonInit("PATCH", body));
+  harness.json(`/v9/management/orgs/${slug}`, jsonInit("PATCH", body));
 
 const seedCarol = async () => {
   const added = await controlPlane().addMember(
@@ -63,7 +63,7 @@ const seedCarol = async () => {
 
 describe("the org list", () => {
   it("starts with the org global, slug default", async () => {
-    const reply = await harness.json("/v8/management/orgs");
+    const reply = await harness.json("/v9/management/orgs");
 
     expect(reply.status).toBe(200);
     expect(reply.body).toEqual({
@@ -192,7 +192,7 @@ describe("creating an org", () => {
   });
 
   it("refuses an unreadable body", async () => {
-    const reply = await harness.json("/v8/management/orgs", {
+    const reply = await harness.json("/v9/management/orgs", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: "{",
@@ -211,8 +211,8 @@ describe("renaming an org", () => {
     expect(renamed.body).toMatchObject({ id: made.id, slug: "after", name: "After" });
 
     // The old address is gone, the new one reaches the same org.
-    expect((await harness.json("/v8/management/orgs/before/settings")).status).toBe(404);
-    expect((await harness.json("/v8/management/orgs/after/settings")).status).toBe(200);
+    expect((await harness.json("/v9/management/orgs/before/settings")).status).toBe(404);
+    expect((await harness.json("/v9/management/orgs/after/settings")).status).toBe(200);
     expect((await patch("after", { name: "Only the name" })).body).toMatchObject({
       id: made.id,
       slug: "after",
@@ -222,8 +222,8 @@ describe("renaming an org", () => {
 
   it("can rename the org global's slug, which only changes its address", async () => {
     expect((await patch("default", { slug: "home" })).status).toBe(200);
-    expect((await harness.json("/v8/management/orgs/default/settings")).status).toBe(404);
-    expect((await harness.json("/v8/management/orgs/home/settings")).status).toBe(200);
+    expect((await harness.json("/v9/management/orgs/default/settings")).status).toBe(404);
+    expect((await harness.json("/v9/management/orgs/home/settings")).status).toBe(200);
     expect((await patch("home", { slug: "default" })).status).toBe(200);
   });
 
@@ -260,23 +260,23 @@ describe("the org's own record and its retention period", () => {
   it("answers the org of the address, global for the unscoped route", async () => {
     await create({ slug: "own-record", name: "Own Record" });
 
-    expect((await harness.json("/v8/management/org")).body).toMatchObject({
+    expect((await harness.json("/v9/management/org")).body).toMatchObject({
       id: GLOBAL_ORG,
       slug: "default",
       usage_retention_days: null,
     });
-    expect((await harness.json("/v8/management/orgs/own-record/org")).body).toMatchObject({
+    expect((await harness.json("/v9/management/orgs/own-record/org")).body).toMatchObject({
       slug: "own-record",
       name: "Own Record",
       usage_retention_days: 90,
     });
-    expect((await harness.json("/v8/management/orgs/own-nobody/org")).status).toBe(404);
+    expect((await harness.json("/v9/management/orgs/own-nobody/org")).status).toBe(404);
   });
 
   it("sets and clears the usage retention period of one org only", async () => {
     await create({ slug: "ret-a", name: "A" });
     await create({ slug: "ret-b", name: "B" });
-    const prefix = "/v8/management/orgs/ret-a";
+    const prefix = "/v9/management/orgs/ret-a";
 
     expect(await retention(prefix, { usage_retention_days: 30 })).toMatchObject({
       status: 200,
@@ -297,19 +297,19 @@ describe("the org's own record and its retention period", () => {
   it.each([0, -3, 1.5, 3651, "30", true])("refuses the period %j", async (days) => {
     await create({ slug: "ret-bad", name: "Bad" });
 
-    const reply = await retention("/v8/management/orgs/ret-bad", {
+    const reply = await retention("/v9/management/orgs/ret-bad", {
       usage_retention_days: days as number,
     });
 
     expect([400, 422]).toContain(reply.status);
-    expect((await harness.json("/v8/management/orgs/ret-bad/org")).body).toMatchObject({
+    expect((await harness.json("/v9/management/orgs/ret-bad/org")).body).toMatchObject({
       usage_retention_days: 90,
     });
   });
 
   it("refuses a body that names nothing to change or something else", async () => {
-    expect((await retention("/v8/management", {})).status).toBe(400);
-    expect((await retention("/v8/management", { name: "X" })).status).toBe(400);
+    expect((await retention("/v9/management", {})).status).toBe(400);
+    expect((await retention("/v9/management", { name: "X" })).status).toBe(400);
   });
 
   it("is for an org admin: a plain member is refused, an admin of another org too", async () => {
@@ -318,24 +318,24 @@ describe("the org's own record and its retention period", () => {
     const dave = await token("dave@example.com");
 
     // Dave is a plain member of global.
-    expect((await harness.json("/v8/management/org", { auth: dave })).status).toBe(403);
-    expect((await retention("/v8/management", { usage_retention_days: 5 }, dave)).status).toBe(403);
+    expect((await harness.json("/v9/management/org", { auth: dave })).status).toBe(403);
+    expect((await retention("/v9/management", { usage_retention_days: 5 }, dave)).status).toBe(403);
 
     // Carol administers global, not ret-guard.
     const carol = await token(CAROL);
 
     expect(
-      (await retention("/v8/management/orgs/ret-guard", { usage_retention_days: 5 }, carol)).status,
+      (await retention("/v9/management/orgs/ret-guard", { usage_retention_days: 5 }, carol)).status,
     ).toBe(403);
-    expect((await harness.json("/v8/management/orgs/ret-guard/org")).body).toMatchObject({
+    expect((await harness.json("/v9/management/orgs/ret-guard/org")).body).toMatchObject({
       usage_retention_days: 90,
     });
 
     // An admin of global may change global's.
-    expect((await retention("/v8/management", { usage_retention_days: 365 }, carol)).status).toBe(
+    expect((await retention("/v9/management", { usage_retention_days: 365 }, carol)).status).toBe(
       200,
     );
-    expect((await retention("/v8/management", { usage_retention_days: null }, carol)).status).toBe(
+    expect((await retention("/v9/management", { usage_retention_days: null }, carol)).status).toBe(
       200,
     );
   });
@@ -347,22 +347,22 @@ describe("who may manage the list of orgs", () => {
     const carol = await asCarol();
 
     // She is an admin of global ...
-    expect((await harness.json("/v8/management/settings", carol)).status).toBe(200);
+    expect((await harness.json("/v9/management/settings", carol)).status).toBe(200);
 
     // ... but not of the platform.
     const forbidden = { status: 403, body: { error: "platform_admin_required" } };
 
-    expect(await harness.json("/v8/management/orgs", carol)).toMatchObject(forbidden);
+    expect(await harness.json("/v9/management/orgs", carol)).toMatchObject(forbidden);
 
     expect(
-      await harness.json("/v8/management/orgs", {
+      await harness.json("/v9/management/orgs", {
         ...jsonInit("POST", { slug: "carol-org", name: "Carol" }),
         ...carol,
       }),
     ).toMatchObject(forbidden);
 
     expect(
-      await harness.json("/v8/management/orgs/default", {
+      await harness.json("/v9/management/orgs/default", {
         ...jsonInit("PATCH", { name: "Mine" }),
         ...carol,
       }),
@@ -375,15 +375,15 @@ describe("who may manage the list of orgs", () => {
   it("refuses a plain member, who still learns who they are", async () => {
     const dave = { auth: await token("dave@example.com") };
 
-    expect((await harness.json("/v8/management/orgs", dave)).status).toBe(403);
+    expect((await harness.json("/v9/management/orgs", dave)).status).toBe(403);
     // `global` lets everyone Access admits join as a plain member (auto-join is on there).
-    expect((await harness.json("/v8/management/me", dave)).body).toEqual({
+    expect((await harness.json("/v9/management/me", dave)).body).toEqual({
       platform_admin: false,
       role: "member",
       orgs: [{ slug: "default", name: "Default" }],
       private_credentials: true,
     });
-    expect((await harness.json("/v8/management/orgs", { auth: false })).status).toBe(401);
+    expect((await harness.json("/v9/management/orgs", { auth: false })).status).toBe(401);
   });
 
   it("lets a service token named in PLATFORM_ADMIN_SERVICE_TOKENS create orgs", async () => {
@@ -393,7 +393,7 @@ describe("who may manage the list of orgs", () => {
     });
 
     try {
-      const reply = await service.json("/v8/management/orgs", {
+      const reply = await service.json("/v9/management/orgs", {
         ...jsonInit("POST", { slug: "from-service", name: "From a token" }),
         auth: await serviceToken("ops.access"),
       });
@@ -408,7 +408,7 @@ describe("who may manage the list of orgs", () => {
 describe("GET /me", () => {
   it("tells a platform admin it is one and lists every org", async () => {
     await create({ slug: "me-org", name: "Me Org" });
-    const reply = await harness.json("/v8/management/me");
+    const reply = await harness.json("/v9/management/me");
 
     expect(reply.status).toBe(200);
 
@@ -426,7 +426,7 @@ describe("GET /me", () => {
     await seedCarol();
     await create({ slug: "not-hers", name: "Not hers" });
 
-    const carol = await harness.json("/v8/management/me", await asCarol());
+    const carol = await harness.json("/v9/management/me", await asCarol());
 
     expect(carol.body).toEqual({
       platform_admin: false,
@@ -438,7 +438,7 @@ describe("GET /me", () => {
     await patch("default", { slug: "renamed-home" });
 
     try {
-      expect((await harness.json("/v8/management/me", await asCarol())).body).toEqual({
+      expect((await harness.json("/v9/management/me", await asCarol())).body).toEqual({
         platform_admin: false,
         role: "admin",
         orgs: [{ slug: "renamed-home", name: "Default" }],
@@ -452,7 +452,7 @@ describe("GET /me", () => {
 
 describe("org-scoped management routes", () => {
   const upload = (name: string) =>
-    harness.json(`/v8/management/credentials?name=${name}`, jsonInit("POST", claudeFile()));
+    harness.json(`/v9/management/credentials?name=${name}`, jsonInit("POST", claudeFile()));
 
   const credentialNames = async (prefix: string): Promise<ReadonlyArray<string>> => {
     const reply = await harness.json(`${prefix}/credentials`);
@@ -470,7 +470,7 @@ describe("org-scoped management routes", () => {
     expect(
       (
         await harness.json(
-          "/v8/management/orgs/scoped-acme/credentials?name=claude-acme.json",
+          "/v9/management/orgs/scoped-acme/credentials?name=claude-acme.json",
           jsonInit("POST", claudeFile() as never),
         )
       ).status,
@@ -482,20 +482,20 @@ describe("org-scoped management routes", () => {
         (entry) => entry.id,
       ),
     ).not.toEqual([]);
-    expect(await credentialNames("/v8/management/orgs/scoped-acme")).toEqual(["claude-acme.json"]);
-    expect(await credentialNames("/v8/management")).toEqual([]);
-    expect(await credentialNames("/v8/management/orgs/default")).toEqual([]);
+    expect(await credentialNames("/v9/management/orgs/scoped-acme")).toEqual(["claude-acme.json"]);
+    expect(await credentialNames("/v9/management")).toEqual([]);
+    expect(await credentialNames("/v9/management/orgs/default")).toEqual([]);
 
     // Global's own are reached by its slug and without one.
     expect((await upload("claude-global.json")).status).toBe(200);
-    expect(await credentialNames("/v8/management")).toEqual(["claude-global.json"]);
-    expect(await credentialNames("/v8/management/orgs/default")).toEqual(["claude-global.json"]);
-    expect(await credentialNames("/v8/management/orgs/scoped-acme")).toEqual(["claude-acme.json"]);
+    expect(await credentialNames("/v9/management")).toEqual(["claude-global.json"]);
+    expect(await credentialNames("/v9/management/orgs/default")).toEqual(["claude-global.json"]);
+    expect(await credentialNames("/v9/management/orgs/scoped-acme")).toEqual(["claude-acme.json"]);
   });
 
   it("keep each org's config entries apart on every config route", async () => {
     await create({ slug: "scoped-cfg", name: "Cfg" });
-    const ORG = "/v8/management/orgs/scoped-cfg";
+    const ORG = "/v9/management/orgs/scoped-cfg";
 
     const strategy = async (base: string) =>
       ((await harness.json(`${base}/settings`)).body as SettingsView).values.routing.strategy;
@@ -508,7 +508,7 @@ describe("org-scoped management routes", () => {
 
     expect(saved.status).toBe(200);
     expect(await strategy(ORG)).toBe("fill-first");
-    expect(await strategy("/v8/management")).toBe("round-robin");
+    expect(await strategy("/v9/management")).toBe("round-robin");
     // Duplicate slashes and case in the fixed prefix reach the same org and the same path.
     expect(await strategy("//V8/Management//Orgs/scoped-cfg/")).toBe("fill-first");
 
@@ -527,7 +527,7 @@ describe("org-scoped management routes", () => {
     const groups = async (base: string) =>
       ((await harness.json(`${base}/api-keys`)).body as ApiKeysList).families.claude;
 
-    expect(await groups("/v8/management")).toEqual([]);
+    expect(await groups("/v9/management")).toEqual([]);
     const [group] = await groups(ORG);
 
     expect(group?.id).toBe((written.body as { id: string }).id);
@@ -557,7 +557,7 @@ describe("org-scoped management routes", () => {
       ((await harness.json(`${base}/routing/models`)).body as RoutingModels).excluded;
 
     expect(await excluded(ORG)).toEqual({ claude: ["claude-opus-*"] });
-    expect(await excluded("/v8/management")).toEqual({});
+    expect(await excluded("/v9/management")).toEqual({});
 
     // The import replaces the org's entries only.
     const imported = await harness.json(`${ORG}/settings/import`, {
@@ -569,21 +569,21 @@ describe("org-scoped management routes", () => {
     expect(imported.status).toBe(200);
     expect(await strategy(ORG)).toBe("weighted-round-robin");
     expect(await excluded(ORG)).toEqual({});
-    expect(await strategy("/v8/management")).toBe("round-robin");
+    expect(await strategy("/v9/management")).toBe("round-robin");
   });
 
   it("keep the query of the request", async () => {
     await create({ slug: "scoped-query", name: "Query" });
 
     const reply = await harness.json(
-      "/v8/management/orgs/scoped-query/credentials?page=1&page_size=1",
+      "/v9/management/orgs/scoped-query/credentials?page=1&page_size=1",
     );
 
     expect(reply.status).toBe(200);
   });
 
   it("answer 404 for an org the registry does not list, to a platform admin", async () => {
-    expect((await harness.json("/v8/management/orgs/ghost/credentials")).status).toBe(404);
+    expect((await harness.json("/v9/management/orgs/ghost/credentials")).status).toBe(404);
     expect((await harness.json("/o/ghost/accounts")).status).toBe(404);
   });
 
@@ -592,18 +592,18 @@ describe("org-scoped management routes", () => {
     await create({ slug: "scoped-closed", name: "Closed" });
     const carol = await asCarol();
 
-    expect((await harness.json("/v8/management/orgs/default/settings", carol)).status).toBe(200);
-    expect((await harness.json("/v8/management/orgs/scoped-closed/settings", carol)).status).toBe(
+    expect((await harness.json("/v9/management/orgs/default/settings", carol)).status).toBe(200);
+    expect((await harness.json("/v9/management/orgs/scoped-closed/settings", carol)).status).toBe(
       403,
     );
     // An org that does not exist answers like one she may not manage.
-    expect((await harness.json("/v8/management/orgs/ghost/settings", carol)).status).toBe(403);
+    expect((await harness.json("/v9/management/orgs/ghost/settings", carol)).status).toBe(403);
   });
 
   it("keep the guards of the cross-site rules", async () => {
     await create({ slug: "scoped-csrf", name: "Csrf" });
 
-    const forged = await harness.json("/v8/management/orgs/scoped-csrf/settings/import", {
+    const forged = await harness.json("/v9/management/orgs/scoped-csrf/settings/import", {
       method: "POST",
       headers: { origin: "https://evil.test", "content-type": "application/yaml" },
       body: "routing:\n  strategy: fill-first\n",
@@ -611,11 +611,11 @@ describe("org-scoped management routes", () => {
 
     expect(forged.status).toBe(403);
     expect(
-      ((await harness.json("/v8/management/orgs/scoped-csrf/settings")).body as SettingsView).values
+      ((await harness.json("/v9/management/orgs/scoped-csrf/settings")).body as SettingsView).values
         .routing.strategy,
     ).toBe("round-robin");
 
-    const wrongType = await harness.json("/v8/management/orgs/scoped-csrf/settings/import", {
+    const wrongType = await harness.json("/v9/management/orgs/scoped-csrf/settings/import", {
       method: "POST",
       headers: { "content-type": "text/plain" },
       body: "routing:\n  strategy: fill-first\n",

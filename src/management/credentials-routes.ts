@@ -626,7 +626,7 @@ const resetCooldown = Effect.gen(function* () {
   return jsonReply(200, { status: "ok", auth_index: result.authIndex, models: result.models });
 });
 
-const BASE = "/v8/management";
+const BASE = "/v9/management";
 
 export const credentialRoutes = [
   HttpRouter.route("GET", `${BASE}/credentials`, handled(listCredentials)),

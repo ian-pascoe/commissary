@@ -19,7 +19,7 @@ interface Auth {
 
 const as = async (email: string): Promise<Auth> => ({ auth: await token(email) });
 
-const api = (slug: string, path: string) => `/v8/management/orgs/${slug}${path}`;
+const api = (slug: string, path: string) => `/v9/management/orgs/${slug}${path}`;
 
 const send = async (
   slug: string,
@@ -48,7 +48,7 @@ const decodeLimit = Schema.decodeUnknownSync(SpendLimitView);
 const staffedOrg = async () => {
   const slug = `spend-${crypto.randomUUID().slice(0, 8)}`;
   const platformAdmin = await as(ADMIN);
-  const created = await harness.json("/v8/management/orgs", jsonInit("POST", { slug, name: slug }));
+  const created = await harness.json("/v9/management/orgs", jsonInit("POST", { slug, name: slug }));
 
   expect(created.status).toBe(201);
   const org = OrgId.make((created.body as { id: string }).id);

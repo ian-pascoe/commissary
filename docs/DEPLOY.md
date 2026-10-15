@@ -18,14 +18,14 @@ Deploys run only after typecheck, lint, workflow lint (actionlint, zizmor), the 
 Fork and Dependabot pull requests get the checks but no preview (they receive no deploy secrets). A manual run
 (`workflow_dispatch`) on `main` redeploys production.
 
-After each deploy, `tools/check-deploy.sh` checks where Access sits (ADR 0022): `/healthz` and `/v8/management/me`
+After each deploy, `tools/check-deploy.sh` checks where Access sits (ADR 0022): `/healthz` and `/v9/management/me`
 answer 200 through Access with the CI service token (the second proves that the Worker accepts the Access JWT: team
 domain and AUD wired); `/v1/models` and `/v1beta/models` without credentials reach the Worker, which answers
 `401 Missing API key` itself (the proxy routes are outside Access, behind proxy keys); `/v1/models` with an Access JWT
 in `cf-access-token` and a dummy `Authorization` key, the way `cloudflared access` clients call it, answers 200 (the
 JWT is the `CF_Authorization` cookie Access set for the service token); and `/` without credentials is stopped by
 Access. A hosted deploy is checked by `tools/check-hosted-deploy.sh` instead: `/healthz` answers 200,
-`/api/sign-in-options` offers a provider, `/v8/management/me` answers `401 Not signed in` from the Worker, `/` redirects
+`/api/sign-in-options` offers a provider, `/v9/management/me` answers `401 Not signed in` from the Worker, `/` redirects
 to `/sign-in`, and the proxy routes answer `401 Missing API key`. With an API host ([API host](#api-host)) both
 scripts send the proxy routes to it and also check that each host refuses the other's paths with the Worker's `404`.
 The deploy job then shows the URL on the run, and previews get a pull request comment (`tools/preview-comment.sh`) that is updated on every push.

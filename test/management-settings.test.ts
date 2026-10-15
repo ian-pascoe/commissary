@@ -1,4 +1,4 @@
-// /v8/management/settings through the router, Access gate and real ControlPlane: the Settings page's view and writes.
+// /v9/management/settings through the router, Access gate and real ControlPlane: the Settings page's view and writes.
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { Json } from "../src/json/index.ts";
 import type { SettingsView } from "../src/management/contract/settings.ts";
@@ -18,7 +18,7 @@ beforeEach(resetControlPlane);
 
 const { call, json } = harness;
 
-const PATH = "/v8/management/settings";
+const PATH = "/v9/management/settings";
 
 const SECRETS = {
   key: "sk-ant-SETTINGS-SECRET-4242",
@@ -198,7 +198,7 @@ describe("management settings", () => {
 
   it("refuses the keys that do nothing on Workers as not settings", async () => {
     for (const [patch, path] of [
-      // No setting lives under `access`: the admin lists are an org's members now (`/v8/management/members`).
+      // No setting lives under `access`: the admin lists are an org's members now (`/v9/management/members`).
       [{ access: { "api-keys": ["other"] } }, "access"],
       [{ access: { "api-keys": null } }, "access"],
       [{ access: { "admin-emails": ["new@example.com"] } }, "access"],

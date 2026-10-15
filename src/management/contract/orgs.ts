@@ -4,7 +4,7 @@
  * Workers addition, no Go counterpart. Shared with the browser: imports `effect` only.
  *
  * `/orgs` and `/orgs/:slug` are platform-level. Every other management route also exists once per org, as
- * `/v8/management/orgs/<slug>/<route>`; the unscoped spelling means the deployment's first org, `global` (ADR 0021).
+ * `/v9/management/orgs/<slug>/<route>`; the unscoped spelling means the deployment's first org, `global` (ADR 0021).
  * Only platform admins (`PLATFORM_ADMIN_*`) may list, create and rename orgs: anyone else gets
  * `403 platform_admin_required`. On a hosted proxy (ADR 0026) anyone signed in may create orgs, up to their owned-org
  * limit (`409 org_limit_reached`), and becomes the new org's owner.
@@ -120,7 +120,7 @@ export type MyOrg = typeof MyOrg.Type;
 
 /**
  * `GET /me`: who the caller is for the panel, which orgs they may open, and their role in the org the request
- * addresses (`/v8/management/orgs/<slug>/me`; `global` for the unscoped spelling).
+ * addresses (`/v9/management/orgs/<slug>/me`; `global` for the unscoped spelling).
  */
 export const Me = Schema.Struct({
   /** A platform admin is an owner of every org and may create orgs. */

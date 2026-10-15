@@ -2,8 +2,8 @@
  * The role a request needs (ADR 0022, the permission matrix of `docs/ACCESS.md`). New in the Workers port, no Go
  * counterpart: Go has one management key for everything.
  *
- * - **platform-level**: needs no role in any org: who the caller is (`/v8/management/me`), the org list
- *   (`/v8/management/orgs`, `/v8/management/orgs/<slug>`, a hosted proxy's `/v8/management/people/<email>`; their
+ * - **platform-level**: needs no role in any org: who the caller is (`/v9/management/me`), the org list
+ *   (`/v9/management/orgs`, `/v9/management/orgs/<slug>`, a hosted proxy's `/v9/management/people/<email>`; their
  *   handlers ask for a platform admin, or on a hosted proxy let anyone create an org), the panel's pages
  *   without an org (they redirect to an org of the caller or show the org chooser), its bundle files and the old
  *   panel's address.

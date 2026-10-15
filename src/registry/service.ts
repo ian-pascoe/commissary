@@ -208,7 +208,7 @@ export class ModelRegistry extends Context.Service<
       WorkerEnv | CurrentOrg
     >;
   }
->()("cf-llm-proxy/registry/ModelRegistry") {
+>()("commissary/registry/ModelRegistry") {
   /** Needs `ConfigReader` and `CatalogStore`. */
   static readonly layer = Layer.effect(
     ModelRegistry,

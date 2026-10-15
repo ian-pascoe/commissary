@@ -1,5 +1,5 @@
 /**
- * `/v8/management/management-keys` (`ManagementKeysGroup` in contract/management-keys.ts): the keys scripts send on
+ * `/v9/management/management-keys` (`ManagementKeysGroup` in contract/management-keys.ts): the keys scripts send on
  * the management API (ADR 0026), on every proxy. Workers addition, no Go counterpart.
  *
  * Org admins (and platform admins) use these routes (`access/policy.ts`). A key holds a role no higher than its
@@ -15,7 +15,7 @@ import { roleAtLeast } from "../members/roles.ts";
 import { CreateManagementKey, type ManagementKeyView } from "./contract/management-keys.ts";
 import { bodyJson, controlPlane, handled, jsonReply, type Reply, replyError } from "./http.ts";
 
-const BASE = "/v8/management";
+const BASE = "/v9/management";
 
 const STATUS: Readonly<Record<ManagementKeyErrorCode, number>> = {
   invalid_name: 422,

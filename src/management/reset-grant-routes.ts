@@ -1,7 +1,7 @@
 /**
  * Claude reset grants (`resetGrants` and `claimResetGrant` in contract/credentials.ts):
- * `GET /v8/management/credentials/reset-grants?auth_index=` reads an account's grants from Anthropic now;
- * `POST /v8/management/credentials/reset-grants/claim` `{auth_index}` spends one reset (src/quota/reset-grant-flow.ts).
+ * `GET /v9/management/credentials/reset-grants?auth_index=` reads an account's grants from Anthropic now;
+ * `POST /v9/management/credentials/reset-grants/claim` `{auth_index}` spends one reset (src/quota/reset-grant-flow.ts).
  *
  * Workers addition, no Go counterpart: the upstream panel made these calls from the browser through Go's
  * `POST /requests/api-call`, which is not ported (see docs/ARCHITECTURE.md "Claude reset grants"). Tokens never leave

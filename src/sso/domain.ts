@@ -3,15 +3,15 @@
  * org controls it. Shared with the browser: no imports. New in the Workers port.
  *
  * An org owner adds a domain; the proxy gives it a random token, and the domain is unverified until a TXT record
- * `_cf-llm-proxy-challenge.<domain>` holding `cf-llm-proxy-domain-verification=<token>` is found (`dns.ts`). Only that
+ * `_commissary-challenge.<domain>` holding `commissary-domain-verification=<token>` is found (`dns.ts`). Only that
  * exact domain is verified: a subdomain is a domain of its own.
  */
 
 /** The label in front of the domain that the TXT record is published under. */
-export const CHALLENGE_LABEL = "_cf-llm-proxy-challenge";
+export const CHALLENGE_LABEL = "_commissary-challenge";
 
 /** What the TXT record holds before the token. */
-export const CHALLENGE_PREFIX = "cf-llm-proxy-domain-verification=";
+export const CHALLENGE_PREFIX = "commissary-domain-verification=";
 
 /** The longest domain name DNS allows. */
 const MAX_DOMAIN_LENGTH = 253;

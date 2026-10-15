@@ -1,5 +1,5 @@
 /**
- * `POST /v8/management/api-keys/probe` (`contract/api-keys.ts` `ProbeResult`): one connection test of a config API key.
+ * `POST /v9/management/api-keys/probe` (`contract/api-keys.ts` `ProbeResult`): one connection test of a config API key.
  *
  * Workers addition, no Go counterpart. The upstream panel tests keys from the browser through Go's (not ported)
  * `POST /requests/api-call` with the raw key (`useConnectivityTest.ts`, `models.ts`); here the ControlPlane hands the
@@ -271,7 +271,7 @@ const countTokens = Effect.fnUntraced(function* (
 });
 
 /** A model id no gateway serves: the check never runs (or bills) a completion. */
-export const OPENCODE_PROBE_MODEL = "cf-llm-proxy-key-check";
+export const OPENCODE_PROBE_MODEL = "commissary-key-check";
 
 const openCodeAuthCheck = Effect.fnUntraced(function* (
   target: ApiKeyProbeTarget,

@@ -95,7 +95,7 @@ const ApplicationSettings = Alchemy.Action(
 );
 
 /**
- * The proxy routes (`src/access/routes.ts` `PROTECTED_PREFIXES` without `/v8/management`): clients authenticate there
+ * The proxy routes (`src/access/routes.ts` `PROTECTED_PREFIXES` without `/v9/management`): clients authenticate there
  * with proxy keys the Worker checks itself (ADR 0022), so Access lets every request through. Access matches a path and
  * its sub-paths (`/v1` covers `/v1/models`), not other paths that start with the same letters, so `/v1beta` and
  * `/v1internal` are listed on their own.

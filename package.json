@@ -1,8 +1,8 @@
 {
-  "name": "cf-llm-proxy",
+  "name": "commissary",
   "version": "0.0.0",
   "private": true,
-  "description": "Personal LLM proxy for Cloudflare Workers: pool your Claude, Codex, Gemini and other accounts behind OpenAI-, Claude- and Gemini-compatible APIs",
+  "description": "Commissary: one service on Cloudflare Workers through which an org reaches models, tools, a browser and hosted agents, under its own credentials, grants and spend limits",
   "type": "module",
   "imports": {
     "#contract/*": "./src/management/contract/*"

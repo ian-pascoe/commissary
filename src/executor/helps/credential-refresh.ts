@@ -43,7 +43,7 @@ export class CredentialRefresher extends Context.Service<
       credentialId: string,
     ) => Effect.Effect<RefreshResult, never, WorkerEnv | CurrentOrg>;
   }
->()("cf-llm-proxy/executor/CredentialRefresher") {
+>()("commissary/executor/CredentialRefresher") {
   /**
    * Calls the ControlPlane through `api(env, org)`; transport failures become structured `refresh_failed` results.
    */

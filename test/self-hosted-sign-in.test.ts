@@ -42,7 +42,7 @@ describe("self-hosted proxy", () => {
 
   it("has no per-org single sign-on settings: Access configures the identity providers", async () => {
     const response = await exports.default.fetch(
-      new Request("http://localhost/v8/management/sso", { redirect: "manual" }),
+      new Request("http://localhost/v9/management/sso", { redirect: "manual" }),
     );
 
     expect(response.status).toBe(404);

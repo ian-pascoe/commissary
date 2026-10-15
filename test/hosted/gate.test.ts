@@ -45,19 +45,19 @@ const json = (cookie: string, method: string, body: Body) => ({
 });
 
 const me = async (cookie: string): Promise<Me> => {
-  const response = await call("/v8/management/me", { headers: panelHeaders(cookie) });
+  const response = await call("/v9/management/me", { headers: panelHeaders(cookie) });
   expect(response.status).toBe(200);
 
   return await response.json<Me>();
 };
 
 const createOrg = (cookie: string, slug: string) =>
-  call("/v8/management/orgs", json(cookie, "POST", { slug, name: slug }));
+  call("/v9/management/orgs", json(cookie, "POST", { slug, name: slug }));
 
 /** A new proxy key of the signed-in person in `org`. */
 const proxyKey = async (cookie: string, org: string): Promise<string> => {
   const response = await call(
-    `/v8/management/orgs/${org}/proxy-keys`,
+    `/v9/management/orgs/${org}/proxy-keys`,
     json(cookie, "POST", { name: "laptop" }),
   );
 
@@ -83,7 +83,7 @@ describe("signing up", () => {
     expect(first.orgs[0]?.name).toBe("Personal");
     expect(first.orgs[0]?.slug).toMatch(/^personal-[0-9a-f]{10}$/);
 
-    const members = await call(`/v8/management/orgs/${first.orgs[0]?.slug}/members`, {
+    const members = await call(`/v9/management/orgs/${first.orgs[0]?.slug}/members`, {
       headers: panelHeaders(cookie),
     });
 
@@ -104,7 +104,7 @@ describe("signing up", () => {
     expect(created.status).toBe(201);
 
     const invited = await call(
-      "/v8/management/orgs/acme/members",
+      "/v9/management/orgs/acme/members",
       json(owner, "POST", { email: "bob@example.com", role: "member" }),
     );
 
@@ -122,7 +122,7 @@ describe("signing up", () => {
     expect(
       (
         await call(
-          "/v8/management/orgs/default/membership",
+          "/v9/management/orgs/default/membership",
           json(root, "PATCH", { auto_join: true }),
         )
       ).status,
@@ -130,19 +130,19 @@ describe("signing up", () => {
 
     const cookie = await signIn({ email: "eve@example.com" });
 
-    const response = await call("/v8/management/orgs/default/members", {
+    const response = await call("/v9/management/orgs/default/members", {
       headers: panelHeaders(cookie),
     });
 
     expect(response.status).toBe(403);
     expect((await me(cookie)).orgs.map((org) => org.slug)).not.toContain("default");
-    await call("/v8/management/orgs/default/membership", json(root, "PATCH", { auto_join: false }));
+    await call("/v9/management/orgs/default/membership", json(root, "PATCH", { auto_join: false }));
   });
 });
 
 describe("authentication", () => {
   it("answers a management request without a session with 401 and sends a browser to the sign-in page", async () => {
-    const api = await call("/v8/management/me", { headers: panelHeaders("") });
+    const api = await call("/v9/management/me", { headers: panelHeaders("") });
     expect(api.status).toBe(401);
     expect(await api.json()).toMatchObject({ error: "Not signed in" });
 
@@ -172,7 +172,7 @@ describe("authentication", () => {
       { cookie: "CF_Authorization=eyJhbGciOiJSUzI1NiJ9.e30.c2ln" },
       { "cf-access-client-id": "admin-token.access", "cf-access-client-secret": "secret" },
     ]) {
-      const response = await call("/v8/management/me", {
+      const response = await call("/v9/management/me", {
         headers: { ...headers, origin: "https://proxy.test", "sec-fetch-site": "same-origin" },
       });
 
@@ -194,7 +194,7 @@ describe("authentication", () => {
   it("refuses cross-site management requests and form posts", async () => {
     const cookie = await signIn({ email: "ada@example.com" });
 
-    const crossSite = await call("/v8/management/orgs", {
+    const crossSite = await call("/v9/management/orgs", {
       method: "POST",
       headers: { cookie, "sec-fetch-site": "cross-site", "content-type": "application/json" },
       body: JSON.stringify({ slug: "x", name: "x" }),
@@ -202,7 +202,7 @@ describe("authentication", () => {
 
     expect(crossSite.status).toBe(403);
 
-    const form = await call("/v8/management/orgs", {
+    const form = await call("/v9/management/orgs", {
       method: "POST",
       headers: panelHeaders(cookie, { "content-type": "text/plain" }),
       body: JSON.stringify({ slug: "x", name: "x" }),
@@ -233,14 +233,14 @@ describe("the owned-org limit", () => {
     const root = await signIn({ email: ROOT });
 
     const forbidden = await call(
-      "/v8/management/people/ada@example.com",
+      "/v9/management/people/ada@example.com",
       json(cookie, "PATCH", { org_limit: 10 }),
     );
 
     expect(forbidden.status).toBe(403);
 
     const raised = await call(
-      "/v8/management/people/ada@example.com",
+      "/v9/management/people/ada@example.com",
       json(root, "PATCH", { org_limit: 4 }),
     );
 
@@ -268,13 +268,13 @@ describe("the owned-org limit", () => {
     const root = await signIn({ email: ROOT });
 
     const bad = await call(
-      "/v8/management/people/ada@example.com",
+      "/v9/management/people/ada@example.com",
       json(root, "PATCH", { org_limit: -1 }),
     );
 
     expect(bad.status).toBe(422);
     expect(
-      (await call("/v8/management/people/nobody", { headers: panelHeaders(root) })).status,
+      (await call("/v9/management/people/nobody", { headers: panelHeaders(root) })).status,
     ).toBe(422);
   });
 });
@@ -287,14 +287,14 @@ describe("suspension", () => {
     const root = await signIn({ email: ROOT });
 
     const suspended = await call(
-      "/v8/management/people/mallory@example.com",
+      "/v9/management/people/mallory@example.com",
       json(root, "PATCH", { suspended: true }),
     );
 
     expect(suspended.status).toBe(200);
     expect(await suspended.json()).toMatchObject({ suspended: true });
 
-    expect((await call("/v8/management/me", { headers: panelHeaders(cookie) })).status).toBe(401);
+    expect((await call("/v9/management/me", { headers: panelHeaders(cookie) })).status).toBe(401);
     expect((await models(key)).status).toBe(403);
 
     // A new sign-in is refused too.
@@ -302,7 +302,7 @@ describe("suspension", () => {
     expect(await signIn({ email: "mallory@example.com" }).catch(() => "")).toBe("");
 
     const lifted = await call(
-      "/v8/management/people/mallory@example.com",
+      "/v9/management/people/mallory@example.com",
       json(root, "PATCH", { suspended: false }),
     );
 
@@ -318,19 +318,19 @@ describe("suspension", () => {
     const root = await signIn({ email: ROOT });
 
     const suspended = await call(
-      "/v8/management/orgs/shady",
+      "/v9/management/orgs/shady",
       json(root, "PATCH", { suspended: true }),
     );
 
     expect(suspended.status).toBe(200);
     expect(await suspended.json()).toMatchObject({ slug: "shady", suspended: true });
 
-    expect((await call("/v8/management/me", { headers: panelHeaders(owner) })).status).toBe(401);
+    expect((await call("/v9/management/me", { headers: panelHeaders(owner) })).status).toBe(401);
     expect((await models(key)).status).toBe(403);
 
     const again = await signIn({ email: "owner@example.com" });
 
-    const members = await call("/v8/management/orgs/shady/members", {
+    const members = await call("/v9/management/orgs/shady/members", {
       headers: panelHeaders(again),
     });
 
@@ -339,11 +339,11 @@ describe("suspension", () => {
 
     // The platform admin still reaches it.
     expect(
-      (await call("/v8/management/orgs/shady/members", { headers: panelHeaders(root) })).status,
+      (await call("/v9/management/orgs/shady/members", { headers: panelHeaders(root) })).status,
     ).toBe(200);
 
     const lifted = await call(
-      "/v8/management/orgs/shady",
+      "/v9/management/orgs/shady",
       json(root, "PATCH", { suspended: false }),
     );
 
@@ -357,7 +357,7 @@ describe("suspension", () => {
     expect((await createOrg(owner, "mine")).status).toBe(201);
 
     const response = await call(
-      "/v8/management/orgs/mine",
+      "/v9/management/orgs/mine",
       json(owner, "PATCH", { suspended: true }),
     );
 
@@ -372,7 +372,7 @@ describe("management keys and downloads", () => {
     expect((await createOrg(owner, "keyed")).status).toBe(201);
 
     const issued = await call(
-      "/v8/management/orgs/keyed/management-keys",
+      "/v9/management/orgs/keyed/management-keys",
       json(owner, "POST", { name: "ci", role: "admin" }),
     );
 
@@ -380,11 +380,11 @@ describe("management keys and downloads", () => {
     const { key } = await issued.json<{ key: string }>();
 
     const members = () =>
-      call("/v8/management/orgs/keyed/members", { headers: { authorization: `Bearer ${key}` } });
+      call("/v9/management/orgs/keyed/members", { headers: { authorization: `Bearer ${key}` } });
 
     expect((await members()).status).toBe(200);
 
-    const proxyKeyThere = await call("/v8/management/orgs/keyed/members", {
+    const proxyKeyThere = await call("/v9/management/orgs/keyed/members", {
       headers: { authorization: `Bearer ${await proxyKey(owner, "keyed")}` },
     });
 
@@ -393,11 +393,11 @@ describe("management keys and downloads", () => {
     const root = await signIn({ email: ROOT });
 
     expect(
-      (await call("/v8/management/orgs/keyed", json(root, "PATCH", { suspended: true }))).status,
+      (await call("/v9/management/orgs/keyed", json(root, "PATCH", { suspended: true }))).status,
     ).toBe(200);
     expect((await members()).status).toBe(403);
     expect(
-      (await call("/v8/management/orgs/keyed", json(root, "PATCH", { suspended: false }))).status,
+      (await call("/v9/management/orgs/keyed", json(root, "PATCH", { suspended: false }))).status,
     ).toBe(200);
     expect((await members()).status).toBe(200);
   });
@@ -407,21 +407,21 @@ describe("management keys and downloads", () => {
     const org = (await me(owner)).orgs[0]?.slug ?? "";
 
     const issued = await call(
-      `/v8/management/orgs/${org}/management-keys`,
+      `/v9/management/orgs/${org}/management-keys`,
       json(owner, "POST", { name: "ci", role: "admin" }),
     );
 
     const { key } = await issued.json<{ key: string }>();
     const root = await signIn({ email: ROOT });
 
-    await call("/v8/management/people/erin@example.com", json(root, "PATCH", { suspended: true }));
+    await call("/v9/management/people/erin@example.com", json(root, "PATCH", { suspended: true }));
 
-    const refused = await call(`/v8/management/orgs/${org}/members`, {
+    const refused = await call(`/v9/management/orgs/${org}/members`, {
       headers: { authorization: `Bearer ${key}` },
     });
 
     expect(refused.status).toBe(403);
-    await call("/v8/management/people/erin@example.com", json(root, "PATCH", { suspended: false }));
+    await call("/v9/management/people/erin@example.com", json(root, "PATCH", { suspended: false }));
   });
 
   it("lets only platform admins download stored credentials", async () => {
@@ -430,7 +430,7 @@ describe("management keys and downloads", () => {
     expect((await createOrg(owner, "files")).status).toBe(201);
 
     const uploaded = await call(
-      "/v8/management/orgs/files/credentials?name=claude-fay.json",
+      "/v9/management/orgs/files/credentials?name=claude-fay.json",
       json(owner, "POST", {
         type: "claude",
         access_token: "sk-ant-oat-test",
@@ -439,7 +439,7 @@ describe("management keys and downloads", () => {
     );
 
     expect(uploaded.status).toBe(200);
-    const path = "/v8/management/orgs/files/credentials/download?name=claude-fay.json";
+    const path = "/v9/management/orgs/files/credentials/download?name=claude-fay.json";
     const refused = await call(path, { headers: panelHeaders(owner) });
 
     expect(refused.status).toBe(403);
@@ -471,7 +471,7 @@ describe("deleting an account", () => {
     expect(await authRows("gus@example.com")).toEqual({ users: 1, sessions: 1, accounts: 1 });
 
     const deleted = await call(
-      "/v8/management/me",
+      "/v9/management/me",
       json(cookie, "DELETE", { email: "gus@example.com" }),
     );
 
@@ -482,7 +482,7 @@ describe("deleting an account", () => {
       orgs_deleted: [personal],
     });
     expect(await authRows("gus@example.com")).toEqual({ users: 0, sessions: 0, accounts: 0 });
-    expect((await call("/v8/management/me", { headers: panelHeaders(cookie) })).status).toBe(401);
+    expect((await call("/v9/management/me", { headers: panelHeaders(cookie) })).status).toBe(401);
 
     const again = await me(await signIn({ email: "gus@example.com" }));
     expect(again.owned_orgs).toBe(1);

@@ -138,4 +138,4 @@ export class CredentialPicker extends Context.Service<
       query: RetryQuery,
     ) => Effect.Effect<RetryPlan, never, WorkerEnv | CurrentOrg>;
   }
->()("cf-llm-proxy/executor/CredentialPicker") {}
+>()("commissary/executor/CredentialPicker") {}

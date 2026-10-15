@@ -7,7 +7,7 @@
  * `/management.html` is a legacy redirect to `/` (`LEGACY_PANEL_REDIRECT`, deviation from Go). Every page path
  * answers the same `index.html`; the panel's router picks the page in the browser. Both pages and files are gated like
  * the management API (Access, `access/policy.ts`: a page of an org needs a role in it) because the Worker runs before
- * static assets. The page talks to `/v8/management`
+ * static assets. The page talks to `/v9/management`
  * on its own origin and sends no credentials of its own: Access authenticates those calls.
  */
 import { Effect } from "effect";

@@ -118,7 +118,7 @@ const SSO_METHODS = new Set(["sso-oidc", "sso-saml"]);
 /** Better Auth's options for the deployment at `origin` (`https://<host>`). */
 export const authOptions = (env: AuthEnv, origin: string, hooks: AuthHooks = {}) =>
   ({
-    appName: "cf-llm-proxy",
+    appName: "commissary",
     baseURL: origin,
     basePath: AUTH_BASE_PATH,
     trustedOrigins: [origin],

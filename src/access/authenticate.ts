@@ -153,7 +153,7 @@ export const keyIdentity = Effect.fnUntraced(function* (text: string) {
  * Authenticates a request for the given zone.
  *
  * `headers` must expose lowercased header names; `requestUrl` is the full URL as the client sent it (the dev bypass reads
- * its host; a management URL may address an org, `/v8/management/orgs/<slug>/...`, see `routes.ts`). `method` decides,
+ * its host; a management URL may address an org, `/v9/management/orgs/<slug>/...`, see `routes.ts`). `method` decides,
  * with the path, the role the request needs (`policy.ts`). Failures use the Go auth middleware wording (`Missing API
  * key`, `Invalid API key`).
  *

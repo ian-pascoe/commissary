@@ -108,7 +108,7 @@ const json = (
   ...(body === undefined ? {} : { body: JSON.stringify(body) }),
 });
 
-const sso = (org: string, path = "") => `/v8/management/orgs/${org}/sso${path}`;
+const sso = (org: string, path = "") => `/v9/management/orgs/${org}/sso${path}`;
 
 interface DomainView {
   readonly domain: string;
@@ -133,7 +133,7 @@ const orgOwnedBy = async (slug: string): Promise<string> => {
   const owner = await signIn({ email: `owner-${slug}@example.com` });
 
   expect(
-    (await call("/v8/management/orgs", json(owner, "POST", { slug, name: slug }))).status,
+    (await call("/v9/management/orgs", json(owner, "POST", { slug, name: slug }))).status,
   ).toBe(201);
 
   return owner;
@@ -227,10 +227,10 @@ const oidcSignIn = async (email: string): Promise<Response> => {
 };
 
 const signedIn = async (cookie: string) =>
-  await call("/v8/management/me", { headers: panelHeaders(cookie) });
+  await call("/v9/management/me", { headers: panelHeaders(cookie) });
 
 const members = async (owner: string, org: string) => {
-  const response = await call(`/v8/management/orgs/${org}/members`, {
+  const response = await call(`/v9/management/orgs/${org}/members`, {
     headers: panelHeaders(owner),
   });
 
@@ -261,7 +261,7 @@ describe("setting up single sign-on", () => {
     const domain = await added.json<DomainView>();
 
     expect(domain).toMatchObject({ domain: "setup.com", verified: false, require_sso: false });
-    expect(domain.record.name).toBe("_cf-llm-proxy-challenge.setup.com");
+    expect(domain.record.name).toBe("_commissary-challenge.setup.com");
 
     // No record yet.
     const early = await call(sso("setup", "/domains/setup.com/verify"), json(owner, "POST"));
@@ -307,7 +307,7 @@ describe("setting up single sign-on", () => {
     const owner = await orgOwnedBy("keyed-sso");
 
     const issued = await call(
-      "/v8/management/orgs/keyed-sso/management-keys",
+      "/v9/management/orgs/keyed-sso/management-keys",
       json(owner, "POST", { name: "ci", role: "owner" }),
     );
 
@@ -443,7 +443,7 @@ describe("signing in with an org's identity provider", () => {
     expect(
       (
         await call(
-          "/v8/management/orgs/member-org/members",
+          "/v9/management/orgs/member-org/members",
           json(owner, "POST", { email: "ada@member-corp.com", role: "admin" }),
         )
       ).status,
@@ -516,7 +516,7 @@ describe("signing in with an org's identity provider", () => {
     );
 
     expect(
-      (await call(`/v8/management/orgs/removal-org/members/${rita?.id}`, json(owner, "DELETE")))
+      (await call(`/v9/management/orgs/removal-org/members/${rita?.id}`, json(owner, "DELETE")))
         .status,
     ).toBe(200);
 
@@ -529,7 +529,7 @@ describe("signing in with an org's identity provider", () => {
     expect(
       (
         await call(
-          "/v8/management/orgs/removal-org/members",
+          "/v9/management/orgs/removal-org/members",
           json(owner, "POST", { email: "rita@removal.com", role: "member" }),
         )
       ).status,

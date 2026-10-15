@@ -71,7 +71,7 @@ const header = (headers: Headers, name: string): string =>
  * A top-level navigation (link, bookmark, typed URL) to a panel page, which may legitimately come from another site:
  * `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document` (not a frame: `iframe`/`frame`/`embed`/`object` are
  * refused, against clickjacking), to a panel page or the legacy panel address. The management API
- * (`/v8/management*`) has no such page: OAuth provider redirects land on the public callback paths. The pages of an
+ * (`/v9/management*`) has no such page: OAuth provider redirects land on the public callback paths. The pages of an
  * org (`/o/<slug>/accounts`) are panel pages like the unscoped ones.
  */
 const isPanelNavigation = (method: string, headers: Headers, requestUrl: string): boolean =>
@@ -91,7 +91,7 @@ const YAML_TYPES = new Set(["application/yaml", "application/x-yaml", "text/yaml
  * Content types accepted by management writes: JSON everywhere, multipart for credential uploads, YAML for
  * `POST /settings/import` (the Go config import). The CORS-safelisted types (`text/plain`, form encoding, a bare body
  * without type) are refused, so a write can never be a "simple" cross-site request. `path` is the path without the org
- * of an org-scoped request (`/v8/management/orgs/<slug>/settings/import` is `/v8/management/settings/import`).
+ * of an org-scoped request (`/v9/management/orgs/<slug>/settings/import` is `/v9/management/settings/import`).
  */
 const managementTypeAllowed = (method: string, path: string, type: string): boolean => {
   if (isJsonType(type)) return true;
@@ -125,7 +125,7 @@ const hasBody = (headers: Headers): boolean => {
  * - State-changing methods are refused when `Sec-Fetch-Site` is `cross-site`/`same-site` or `Origin` is foreign.
  * - Management requests of any method are refused for a foreign `Origin`, and for a cross-site `Sec-Fetch-Site` unless
  *   they are top-level document navigations to a panel page or `/management.html` (a link to `/accounts` still
- *   works; a frame or any `/v8/management` request does not).
+ *   works; a frame or any `/v9/management` request does not).
  * - Management writes need a JSON body (multipart for uploads, YAML for the config import) or no body at all.
  */
 export const crossSiteRejection = (

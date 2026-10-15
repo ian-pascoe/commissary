@@ -1078,7 +1078,7 @@ describe("management contract", () => {
         assert.strictEqual(list.families["openai-compatibility"][0]?.group.keys.length, 1);
 
         const raw = yield* Effect.promise(async () =>
-          (await harness.call("/v8/management/api-keys")).text(),
+          (await harness.call("/v9/management/api-keys")).text(),
         );
 
         for (const secret of SECRETS) assert.notInclude(raw, secret);

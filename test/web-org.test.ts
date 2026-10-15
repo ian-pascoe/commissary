@@ -42,44 +42,44 @@ describe("panelBasepath and orgPanelPath", () => {
 
 describe("scopedApiUrl", () => {
   it("inserts the org after the management prefix, in paths and absolute URLs", () => {
-    expect(scopedApiUrl("/v8/management/credentials", "acme")).toBe(
-      "/v8/management/orgs/acme/credentials",
+    expect(scopedApiUrl("/v9/management/credentials", "acme")).toBe(
+      "/v9/management/orgs/acme/credentials",
     );
-    expect(scopedApiUrl("https://proxy.test/v8/management/config/routing?x=1", "acme")).toBe(
-      "https://proxy.test/v8/management/orgs/acme/config/routing?x=1",
+    expect(scopedApiUrl("https://proxy.test/v9/management/config/routing?x=1", "acme")).toBe(
+      "https://proxy.test/v9/management/orgs/acme/config/routing?x=1",
     );
-    expect(scopedApiUrl("/v8/management/oauth/import?provider=vertex", "acme")).toBe(
-      "/v8/management/orgs/acme/oauth/import?provider=vertex",
+    expect(scopedApiUrl("/v9/management/oauth/import?provider=vertex", "acme")).toBe(
+      "/v9/management/orgs/acme/oauth/import?provider=vertex",
     );
   });
 
   it("addresses /me to the org, where it answers the caller's role in it", () => {
-    expect(scopedApiUrl("/v8/management/me", "acme")).toBe("/v8/management/orgs/acme/me");
-    expect(scopedApiUrl("/v8/management/me", undefined)).toBe("/v8/management/me");
+    expect(scopedApiUrl("/v9/management/me", "acme")).toBe("/v9/management/orgs/acme/me");
+    expect(scopedApiUrl("/v9/management/me", undefined)).toBe("/v9/management/me");
   });
 
   it("leaves the platform-level routes alone", () => {
     for (const url of [
-      "/v8/management/orgs",
-      "/v8/management/orgs/acme",
-      "https://proxy.test/v8/management/orgs?x=1",
+      "/v9/management/orgs",
+      "/v9/management/orgs/acme",
+      "https://proxy.test/v9/management/orgs?x=1",
     ])
       expect(scopedApiUrl(url, "acme")).toBe(url);
   });
 
   it("scopes routes whose name merely starts like a platform-level one", () => {
-    expect(scopedApiUrl("/v8/management/orgsx", "acme")).toBe("/v8/management/orgs/acme/orgsx");
-    expect(scopedApiUrl("/v8/management/media", "acme")).toBe("/v8/management/orgs/acme/media");
+    expect(scopedApiUrl("/v9/management/orgsx", "acme")).toBe("/v9/management/orgs/acme/orgsx");
+    expect(scopedApiUrl("/v9/management/media", "acme")).toBe("/v9/management/orgs/acme/media");
   });
 
   it("changes nothing without an org or for another API", () => {
-    expect(scopedApiUrl("/v8/management/credentials", undefined)).toBe(
-      "/v8/management/credentials",
+    expect(scopedApiUrl("/v9/management/credentials", undefined)).toBe(
+      "/v9/management/credentials",
     );
     expect(scopedApiUrl("/v1/models", "acme")).toBe("/v1/models");
   });
 
   it("encodes a slug", () => {
-    expect(scopedApiUrl("/v8/management/config", "a b")).toBe("/v8/management/orgs/a%20b/config");
+    expect(scopedApiUrl("/v9/management/config", "a b")).toBe("/v9/management/orgs/a%20b/config");
   });
 });

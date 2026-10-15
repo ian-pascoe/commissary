@@ -39,7 +39,7 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
     translator/               registry + one directory per (client -> provider) pair
     executor/                 executor interface + one directory per provider
     handlers/                 inbound protocol handlers (openai, responses, claude, gemini, interactions, ...)
-    management/               /v8/management API (+ contract/: shared Effect HttpApi schemas), panel serving, OAuth flows
+    management/               /v9/management API (+ contract/: shared Effect HttpApi schemas), panel serving, OAuth flows
     usage/                    usage records, D1 persistence
     quota/                    server-side quota check: provider usage endpoints, stored per-credential reports
   web/                        control panel served at / (React, Effect Atom, TanStack Router; built into public/)
@@ -715,13 +715,13 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
     cannot be shown); `embed` and `disabled` need no lease. The lease used to live in `global`'s ControlPlane
     (an unreleased lease there simply expires; the stale table is left unread).
 - **Catalog status and on-demand refresh** (`management/catalog-routes.ts`, `contract/catalog.ts`; no Go counterpart):
-  `GET /v8/management/models/catalog` answers `{mode, source_host?, source_problem?, stored, refreshed_at?, last_attempt?,
+  `GET /v9/management/models/catalog` answers `{mode, source_host?, source_problem?, stored, refreshed_at?, last_attempt?,
   models}`: the `models.catalog` mode (`official`, `embed`, `disabled`, `custom` with the host of the address, never the
   URL; an address that is not http(s) reads `disabled` with `source_problem` saying why), whether a refreshed copy from KV
   (`stored`) or the copy shipped with the Worker is in use (`embed` always reports the shipped copy: the stored one is not
   read), when the stored copy was last confirmed current, the latest attempt (`{at, status: updated|unchanged|failed,
   message?}`, the cron's or the panel's) and the model count per models.dev provider. `POST
-  /v8/management/models/catalog/refresh` runs the cron task's operation now with the stored `models.catalog` setting and
+  /v9/management/models/catalog/refresh` runs the cron task's operation now with the stored `models.catalog` setting and
   answers `200 {status: updated|unchanged|failed, message?, added?, removed?, skipped?, catalog}` (`added`/`removed`: models
   clients can call that appeared/disappeared, computed on the built catalogs per provider and counted once across Codex
   plans, so a deprecated or gateway-only change does not count; the removed ids are logged at warning level; `skipped`:
@@ -748,7 +748,7 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
   the Claude and Codex lists, the spawn-agent list), `ModelProviders.providersFor` / `firstAvailableModel` (so a model the
   member cannot reach answers `400 model_not_found` like an unknown one, also for another member's private-only model, which
   used to answer `503`) and the routing view (`routingView(snapshot.visibleTo(member))`) all read the caller's view.
-  `GET /v8/management/models/mine` answers the caller's own list (every role).
+  `GET /v9/management/models/mine` answers the caller's own list (every role).
 - **Index** (`registry.ts`): provider counts, per-provider records ("last registered wins", credentials registered in id
   order), the 5 min quota window and suspension rules of `modelRegistrationAvailability`, `GetModelProviders`,
   `GetModelInfo`, `LookupModelInfo` (registry, then static catalogs), `GetFirstAvailableModel`, native web-search capability.
@@ -759,7 +759,7 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
   detail routes pick the entry whose `id` equals the path remainder (ids may contain `/`). `GET /v1beta/models[/{model}]` is
   the Gemini shape. Bodies are serialised like Go's `encoding/json` (sorted keys, `\u003c` escapes) so they are byte-identical
   to the Go server's; lists are sorted by model id (Go's order is map iteration order).
-- **Routing view** (`routing-view.ts`, `GET /v8/management/routing/models`; no Go counterpart): the admin answer to "which
+- **Routing view** (`routing-view.ts`, `GET /v9/management/routing/models`; no Go counterpart): the admin answer to "which
   credentials serve each model, and why not". `RegistrySnapshot` keeps the enriched `sources` and the `configVersion` it was
   built from; `ModelRegistry.fresh` drops the config reader's cache, builds now and stores the result in the 5 s cache (no
   stale fallback: failures answer 502), so an edit shows on the next read (other isolates follow within the config and
@@ -993,11 +993,11 @@ claude/gemini/openai-response -> openai, interactions <-> openai (Chat Completio
 
 ## Management API and control panel (`src/management/`)
 
-Port of `internal/api/handlers/management` for the `/v8/management` routes that apply on Workers. The API serves the
+Port of `internal/api/handlers/management` for the `/v9/management` routes that apply on Workers. The API serves the
 control panel at `/` (`web/`, through `contract/`) and may change incompatibly: routes keep Go's response shapes where
 that is cheap, but scripts written for the Go server are not guaranteed to keep working. The upstream panel (`Cli-Proxy-API-Management-Center`) is not served:
 its address redirects to `/` (_Legacy panel address_ below), and the routes only it needed are gone (`requests/api-call`,
-the operational and log routes listed under _Also not ported_) or replaced by the config entry routes (_Config entries_). Auth is the Access admin gate only (`access/routes.ts` classifies `/v8/management*`, the
+the operational and log routes listed under _Also not ported_) or replaced by the config entry routes (_Config entries_). Auth is the Access admin gate only (`access/routes.ts` classifies `/v9/management*`, the
 panel paths and `/management.html` as `management`), or a hosted proxy's sign-in (_Hosted proxy_ below); Go's single
 management key is not ported, and the port's per-org management keys (_Management keys_ below) are its own design.
 
@@ -1213,7 +1213,7 @@ management key is not ported, and the port's per-org management keys (_Managemen
   `/settings` and their sub-paths; `access/routes.ts` `PANEL_SECTIONS`) and `/assets/*` (hashed bundle files) are in the
   management zone, so only Access admins get them. Every page path answers `public/index.html` (the browser router picks
   the page) with a strict CSP (own origin only; inline `style` attributes allowed for meter widths and chart sizes), `404` with a build
-  hint when it is missing. The panel calls `/v8/management` on its own origin with no key; Access authenticates the calls.
+  hint when it is missing. The panel calls `/v9/management` on its own origin with no key; Access authenticates the calls.
   Its client is derived from `contract/` (Effect `HttpApi` groups for the endpoints it uses, imported by the worker tests
   and the browser as `#contract/*`; `test/management-contract.test.ts` decodes real responses through it). Deviation
   from Go: `/` was a public JSON banner there.
@@ -1324,13 +1324,13 @@ result is stored.
   object is never held by a slow provider. Finally the ControlPlane merges the outcome into the stored report
   (`recordQuotaReport`, `report.ts`).
 - **Routes**:
-  - `POST /v8/management/credentials/quota {name}` answers `200 {status: "ok", report}`, including when the upstream call
+  - `POST /v9/management/credentials/quota {name}` answers `200 {status: "ok", report}`, including when the upstream call
     failed; the report then carries `error`.
   - `name` is the listed name: an auth file name, or a listed config key's `auth_index` (a config credential id is
     never accepted, so a check confirms no guessed key).
   - `404` for an unknown account; `422 quota check is not supported for <provider>` for providers without a usage
     endpoint.
-  - `POST /v8/management/credentials/quota/all` (the panel's "Check all quotas") runs the sweep below now and answers
+  - `POST /v9/management/credentials/quota/all` (the panel's "Check all quotas") runs the sweep below now and answers
     `200 {started_at, finished_at, results, checked, failed}` (`results`: `{name, ok, error?, message?, status?}` per
     account, `status` the provider's HTTP status so the panel can tell a refused sign-in); `409 quota_check_running`
     while another sweep holds the lease.
@@ -1410,7 +1410,7 @@ resets, each of which empties the usage windows it `clears` (`five_hour`, `seven
   control characters). `claimable` is `next_grant_id` when usable, else the lowest usable id; otherwise `blocked_by`
   says why (`ineligible`, `cooldown`, `none_left`, `unusable`, `not_limited`). The quota check reads it as a third,
   tolerated Claude call (one more subrequest per Claude account per check; the cron sweep skips it while the stored
-  status is under 6 h old, or under 24 h old when it says not eligible, so new grants are eventually noticed); `GET /v8/management/credentials/reset-grants?auth_index=` reads it now.
+  status is under 6 h old, or under 24 h old when it says not eligible, so new grants are eventually noticed); `GET /v9/management/credentials/reset-grants?auth_index=` reads it now.
   A status is dated by when its read started. The last good status is stored (SQLite table `credential_reset_grants`,
   `reset-grant-store.ts`) and listed as the entry's `reset_grants`; an older read never overwrites a newer one.
 - **Stale reads** (`reset-grant-store.ts`): each row keeps two counters that are never reset, a `generation` bumped
@@ -1421,7 +1421,7 @@ resets, each of which empties the usage windows it `clears` (`five_hour`, `seven
   was replaced answers `409`, and a fresh claim decided on it is refused with `409` ("check resets and try again"),
   since the read may predate a reset another claim spent. Counters instead of timestamps: only the ControlPlane's own
   values are compared, never the clocks of the Worker and the Durable Object.
-- **Claim** (`POST /v8/management/credentials/reset-grants/claim {auth_index}`, `reset-grant-flow.ts`): refused with
+- **Claim** (`POST /v9/management/credentials/reset-grants/claim {auth_index}`, `reset-grant-flow.ts`): refused with
   `409` on a disabled account (reads stay allowed); re-reads the status (`502` when it cannot; nothing is sent), answers `outcome: "none_available"` without a request when nothing is
   claimable, reads the organization (`502` when it cannot), then sends the claim. Anthropic's `result` is the
   `outcome`; `429` is `rate_limited`, `401`/`403` `auth_error`; any other status or body, a timeout or a transport
@@ -1534,7 +1534,7 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
 - **Failures without a body** (difference from Go): a failed attempt's usage record keeps the upstream status, error type
   and error code, and nothing of the response body (the `fail_body` column stays `NULL`; migration `0007` clears the
   bodies stored before it). Go's queue keeps the failure body for the management API.
-- **Management** (`management/usage-routes.ts`): `GET /v8/management/observability/usage/queue?count=N` (atomically pops the oldest unexported records, Go queue JSON with
+- **Management** (`management/usage-routes.ts`): `GET /v9/management/observability/usage/queue?count=N` (atomically pops the oldest unexported records, Go queue JSON with
   `token_breakdown`; `api_key` = Access principal id, `auth_index` = the management (keyed) `auth_index`) and the Workers
   additions `.../records` (filters `since|until|provider|model|principal|member|team|auth_index|failed`, `limit`, keyset
   `before`; `team` is the team's member ids, one `json_each` parameter so a large team stays within D1's bound parameters)
@@ -1940,14 +1940,14 @@ Grok/GPT/recognised checks, Gemini replay, ~500 sanitiser runs over synthetic hi
 An org is addressed by its slug (ADR 0021), in two places, and the address is the only thing that names an org to the
 management API and the panel (the proxy endpoints still name it with the caller's key):
 
-- **`/v8/management/orgs/<slug>/<route>`** and **`/o/<slug>/<page>`** (`parseOrgAddress`, `routes.ts`). `orgAddressing` is a
+- **`/v9/management/orgs/<slug>/<route>`** and **`/o/<slug>/<page>`** (`parseOrgAddress`, `routes.ts`). `orgAddressing` is a
   router middleware around the whole application: it takes the org prefix out of the URL before routing, so every
   management handler and the panel page handler are written once, for an unscoped path, and run against the org the address
   names (the `CurrentOrg` they read). The unscoped path means `global`. Matching is case-, slash- and
   percent-encoding-insensitive like the rest of the classification (`/V8/Management//Orgs/Acme/settings`), and
-  `/v8/management/orgs` and `/v8/management/orgs/<slug>` (no route after the slug) are not prefixes: they are the
+  `/v9/management/orgs` and `/v9/management/orgs/<slug>` (no route after the slug) are not prefixes: they are the
   platform-level routes below. The CSRF guards and the admin gate see the original URL, so every rule that applies to
-  `/v8/management*` and to the panel pages applies to the scoped spellings too.
+  `/v9/management*` and to the panel pages applies to the scoped spellings too.
 - The slug is resolved by the Platform registry (`getOrgBySlug`) **after** authentication, so an unauthenticated caller
   learns nothing about which slugs exist. A platform admin gets the org; a slug the registry does not list is `404` for a
   platform admin and `403` for anyone else; a known slug then needs the caller to be a member of the org (see
@@ -1958,10 +1958,10 @@ Platform-level routes (`org-routes.ts`, contract group `orgs`, `src/management/c
 
 | Route                              | Who            | Does                                                                                                                                                                                                                                      |
 | ---------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /v8/management/me`            | anyone         | `{platform_admin, role, orgs: [{slug, name}]}`: `role` in the addressed org (`null` without one); every org for a platform admin, the orgs the caller belongs to otherwise; on a hosted proxy also `hosted`, `org_limit` and `owned_orgs` |
-| `GET /v8/management/orgs`          | platform admin | every org, `global` first (`suspended` on a suspended one)                                                                                                                                                                                |
-| `POST /v8/management/orgs`         | platform admin | creates `{slug, name}`; `201`, `409 slug_taken`, `422 invalid_slug`/`invalid_name`; on a hosted proxy anyone signed in, up to their owned-org limit (`409 org_limit_reached`), becoming its owner                                         |
-| `PATCH /v8/management/orgs/<slug>` | platform admin | changes `slug` and/or `name`; the id never changes, so stored data stays where it is; on a hosted proxy also `suspended`                                                                                                                  |
+| `GET /v9/management/me`            | anyone         | `{platform_admin, role, orgs: [{slug, name}]}`: `role` in the addressed org (`null` without one); every org for a platform admin, the orgs the caller belongs to otherwise; on a hosted proxy also `hosted`, `org_limit` and `owned_orgs` |
+| `GET /v9/management/orgs`          | platform admin | every org, `global` first (`suspended` on a suspended one)                                                                                                                                                                                |
+| `POST /v9/management/orgs`         | platform admin | creates `{slug, name}`; `201`, `409 slug_taken`, `422 invalid_slug`/`invalid_name`; on a hosted proxy anyone signed in, up to their owned-org limit (`409 org_limit_reached`), becoming its owner                                         |
+| `PATCH /v9/management/orgs/<slug>` | platform admin | changes `slug` and/or `name`; the id never changes, so stored data stays where it is; on a hosted proxy also `suspended`                                                                                                                  |
 
 Anyone else gets `403 platform_admin_required` on the org routes it may not use. The panel reads `/me` for its org switcher.
 
@@ -1978,7 +1978,7 @@ Routes of the addressed org (`/org`, `/export`) and the account route (`DELETE /
 
 **Panel.** The panel of an org is the same single-page app served at `/o/<slug>/...` (the Worker answers every page path of
 every org with `index.html`). The app reads its org from the address: TanStack Router's `basepath` is `/o/<slug>`, and the
-typed client rewrites each request to `/v8/management/orgs/<slug>/...` except `/orgs` (`web/src/lib/org.ts`,
+typed client rewrites each request to `/v9/management/orgs/<slug>/...` except `/orgs` (`web/src/lib/org.ts`,
 `ManagementClient`'s `transformClient`; the one hand-written request, the Vertex import, does the same). The shell bar shows an
 org switcher to anyone who belongs to several orgs or may create them; choosing an org reloads the app at its address. An
 address without an org (`/`, `/accounts`, ...) goes through `orgRedirect` (`web-panel.ts`): a caller who belongs to exactly
@@ -2010,7 +2010,7 @@ error codes are in `docs/ACCESS.md` "Members, roles and teams".
   a role applies on the next one. An unreachable ControlPlane fails the request (500) unless the caller is a platform admin
   or the route is platform-level. `AccessIdentity` carries `role` and `memberId`; proxy handlers write the member id into
   usage records (`member_id`, `migrations/0005_usage_member.sql`).
-- **Policy** (`access/policy.ts` `routeAccess`): platform-level (no role: `/v8/management/me`, `/v8/management/orgs*`, panel
+- **Policy** (`access/policy.ts` `routeAccess`): platform-level (no role: `/v9/management/me`, `/v9/management/orgs*`, panel
   pages without an org, `/assets`, `/management.html`), member (the proxy endpoints, the org's panel pages, `GET` usage
   records/summary/series, where a plain member is narrowed to their own records: by member id, or by Access principal for
   records from before members), admin (every other management route). Owner-only and ADR 0006 checks live in the handlers
@@ -2050,7 +2050,7 @@ credentials a subject may use; selection and the model registry read it (_Creden
   teams). `unrestricted` when a grant for all credentials gives `*`; `coversAll(credential)` when one grant gives `*` on
   the credential; `permits(credential, upstreamModel)` otherwise. There is no deny. `reachFromTable(table, memberId)`
   is the same computation for the Worker, from `grantTable()`.
-- **Routes** (`grant-routes.ts`, contract `contract/grants.ts`): `GET /v8/management/grants` answers `{version, grants}`;
+- **Routes** (`grant-routes.ts`, contract `contract/grants.ts`): `GET /v9/management/grants` answers `{version, grants}`;
   `POST /grants` creates one (`409 conflict` when the subject and scope have one); `PUT|DELETE /grants/:id` take `If-Match`
   (`409` stale, `400 invalid_if_match` missing); an empty pattern list or a member or team the org does not have is `422
   invalid_config`. Org admins only. `GET /models/mine` answers `{models}` from `snapshot.visibleTo(caller)` for every role
@@ -2185,12 +2185,12 @@ prices each attempt, the ControlPlane counts and decides.
   browsers automatically): state-changing requests are refused on protected and management zones when `Sec-Fetch-Site` is
   `cross-site`/`same-site` or `Origin` is another host; management requests of any method with a foreign `Origin` (or a
   cross-site `Sec-Fetch-Site`, unless a `GET`/`HEAD` with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document` to a
-  panel page or `/management.html`: `routes.ts` `isPanelPagePath`; frames, `/assets` and `/v8/management*` never) too; WebSocket upgrades with a foreign `Origin`; management writes need
+  panel page or `/management.html`: `routes.ts` `isPanelPagePath`; frames, `/assets` and `/v9/management*` never) too; WebSocket upgrades with a foreign `Origin`; management writes need
   JSON (multipart for `POST /credentials`, YAML for `POST /settings/import`) or no body (415). The CORS middleware adds no headers in
   the management zone (deviation from Go's `*`).
 - Implementation notes (`src/access/`): the gate is a _global_ router middleware that matches protected path
   prefixes (default-deny for `/v1*`, `/openai/v1*`, `/backend-api/codex*`, the unprefixed `/chat/completions`,
-  `/completions`, `/responses`, `/v8/management*`, normalising case, duplicate
+  `/completions`, `/responses`, `/v9/management*`, normalising case, duplicate
   slashes and percent-encoding) and provides `AccessPrincipal`; route layers that read it use `withAccess(...)` for typing.
   JWKS keys are cached per isolate and refreshed on unknown `kid` at most once per 30 s (no cross-request locks, which
   workerd forbids). `ACCESS_DEV_BYPASS` only applies when the request host is loopback (i.e. `alchemy dev`) and is refused (warning logged once
@@ -2275,7 +2275,7 @@ Access one, unchanged. User docs: `docs/ACCESS.md` "Hosted proxy", `docs/DEPLOY.
 ## Provider OAuth logins (`src/oauth/`, `src/management/oauth-routes.ts`)
 
 Port of the management OAuth handlers (`auth_files_provider_oauth.go`, `auth_files_devin_oauth.go`, `oauth_callback.go`,
-`oauth_sessions.go`) and `internal/auth/*`. The panel's OAuth page works unchanged: `GET /v8/management/oauth/auth-url?provider=`
+`oauth_sessions.go`) and `internal/auth/*`. The panel's OAuth page works unchanged: `GET /v9/management/oauth/auth-url?provider=`
 (`claude`, `codex`, `antigravity`, `devin`, `xai`, `meta`, `kimi`, `kimi-ai`; `is_webui` ignored) returns `{status,url,state}`
 (+ `flow:"device"`, `user_code`, `expires_in` for device logins), `GET /oauth/status?state=` answers `ok|wait|error`,
 `DELETE /oauth/session?state=` cancels and `POST /oauth/callback` takes `{provider, redirect_url | state+code}`.
@@ -2308,7 +2308,7 @@ Deviations from Go: the Antigravity login uses the Go fallback client version `2
 _Antigravity provider_) and project discovery runs inside the login (non-fatal; the executor repeats it when `project_id` is missing); a transport failure or 5xx of one xAI/Kimi poll keeps waiting instead of ending the login; Codex
 exchange errors include the (scrubbed) upstream status/body like Go but cap it at 512 chars; device-flow states carry a random
 suffix (`xai-<ms>-<hex>`); Kimi stores the normalised `domain`; Claude's uTLS/ordered-header fingerprint cannot be reproduced (see
-Claude provider). `POST /v8/management/oauth/import?provider=vertex` (`management/oauth-import.ts`, Go `ImportVertexCredential`)
+Claude provider). `POST /v9/management/oauth/import?provider=vertex` (`management/oauth-import.ts`, Go `ImportVertexCredential`)
 takes a multipart service-account `file` (+ `location`, default `us-central1`), re-encodes the key as an RSA PKCS#1 PEM
 (`normalizePrivateKey`, parity with `NormalizeServiceAccountMap` in `test/fixtures/session.json`; error texts of invalid keys
 differ) and stores `vertex-<project>.json` merged over an existing file. Not ported: plugin logins and the local callback forwarder (`is_webui`). Credential JSON files from the Go

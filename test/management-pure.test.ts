@@ -617,7 +617,7 @@ describe("access classification of the panel page", () => {
       expect(isPanelPagePath(path), path).toBe(true);
 
     for (const path of [
-      "/v8/management/config",
+      "/v9/management/config",
       "/assets/index.js",
       "/assets",
       "/management.htm",

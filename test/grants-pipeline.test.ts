@@ -109,7 +109,7 @@ const restrictTo = async (models: ReadonlyArray<string>) => {
   expect(written.ok).toBe(true);
   // The routing view rebuilds the registry now (`fresh`), so the next list does not wait for the 5 s snapshot TTL.
   expect(
-    (await exports.default.fetch("http://localhost/v8/management/routing/models")).status,
+    (await exports.default.fetch("http://localhost/v9/management/routing/models")).status,
   ).toBe(200);
 };
 

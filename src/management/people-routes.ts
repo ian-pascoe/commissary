@@ -1,5 +1,5 @@
 /**
- * `GET|PATCH /v8/management/people/:email` (`PeopleGroup` in contract/people.ts): the people of a hosted proxy (ADR
+ * `GET|PATCH /v9/management/people/:email` (`PeopleGroup` in contract/people.ts): the people of a hosted proxy (ADR
  * 0026) as platform admins manage them: the owned-org limit, raisable per person, and suspension, which signs the person
  * out and refuses their sessions, proxy keys and management keys until it is lifted. Nothing is deleted. A self-hosted
  * proxy has no such routes. Workers addition, no Go counterpart.
@@ -16,7 +16,7 @@ import type { PersonView } from "./contract/people.ts";
 import { bodyObject, handled, jsonReply, replyError } from "./http.ts";
 import { registry } from "./org-routes.ts";
 
-const BASE = "/v8/management";
+const BASE = "/v9/management";
 
 /** Loose like the member routes' check: something@something.something, no spaces. */
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

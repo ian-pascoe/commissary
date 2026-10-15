@@ -1,5 +1,5 @@
 /**
- * `POST /v8/management/oauth/import?provider=vertex`: uploads a Vertex service-account JSON as an auth file.
+ * `POST /v9/management/oauth/import?provider=vertex`: uploads a Vertex service-account JSON as an auth file.
  *
  * Go source: internal/api/handlers/management/auth_files_v8.go (`ImportOAuthV8`), vertex_import.go
  * (`ImportVertexCredential`, `sanitizeVertexFilePart`, `labelForVertex`), internal/auth/vertex/keyutil.go
@@ -13,7 +13,7 @@ import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { controlPlane, handled, jsonReply, queryParams, replyError } from "./http.ts";
 import { currentViewer } from "./viewer.ts";
 
-const BASE = "/v8/management/oauth";
+const BASE = "/v9/management/oauth";
 
 const DEFAULT_LOCATION = "us-central1";
 

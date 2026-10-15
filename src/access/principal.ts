@@ -61,10 +61,10 @@ export interface AccessIdentity {
  * The authenticated principal of the current request.
  *
  * Provided by the Access gate for every request under a protected prefix (see `access/routes.ts`); handlers for
- * `/v1*`, `/v1beta*`, `/openai/v1*`, `/backend-api/codex*` and `/v8/management*` can `yield* AccessPrincipal`.
+ * `/v1*`, `/v1beta*`, `/openai/v1*`, `/backend-api/codex*` and `/v9/management*` can `yield* AccessPrincipal`.
  */
 export class AccessPrincipal extends Context.Service<AccessPrincipal, AccessIdentity>()(
-  "cf-llm-proxy/access/AccessPrincipal",
+  "commissary/access/AccessPrincipal",
 ) {}
 
 export const principalId = (principal: Principal): string => {

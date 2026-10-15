@@ -295,7 +295,7 @@ describe("authenticateRequest", () => {
     run(
       makeFakeJwks([keyA]),
       Effect.gen(function* () {
-        const url = "https://proxy.test/v8/management/config";
+        const url = "https://proxy.test/v9/management/config";
         const alice = { "cf-access-jwt-assertion": yield* token(keyA) };
         const identity = yield* authenticateRequest(alice, url, "protected");
         assert.strictEqual(identity.principalId, "user:alice@example.com");
@@ -344,8 +344,8 @@ describe("authenticateRequest", () => {
     run(
       makeFakeJwks([keyA]),
       Effect.gen(function* () {
-        const config = "https://proxy.test/v8/management/config";
-        const usage = "https://proxy.test/v8/management/observability/usage/records";
+        const config = "https://proxy.test/v9/management/config";
+        const usage = "https://proxy.test/v9/management/observability/usage/records";
         const stub = controlPlaneOf(env, GLOBAL_ORG);
         const carol = yield* addMember(GLOBAL_ORG, "carol@example.com", "admin");
         const dan = yield* addMember(GLOBAL_ORG, "dan@example.com", "member");
@@ -464,7 +464,7 @@ describe("authenticateRequest and orgs", () => {
 
         const scoped = yield* authenticateRequest(
           admin,
-          "https://proxy.test/v8/management/orgs/acme-access/config",
+          "https://proxy.test/v9/management/orgs/acme-access/config",
           "management",
         );
 
@@ -486,7 +486,7 @@ describe("authenticateRequest and orgs", () => {
 
         const unscoped = yield* authenticateRequest(
           admin,
-          "https://proxy.test/v8/management/config",
+          "https://proxy.test/v9/management/config",
           "management",
         );
 
@@ -496,7 +496,7 @@ describe("authenticateRequest and orgs", () => {
         // Platform-level routes address no org.
         const platformLevel = yield* authenticateRequest(
           admin,
-          "https://proxy.test/v8/management/orgs/acme-access",
+          "https://proxy.test/v9/management/orgs/acme-access",
           "management",
         );
 
@@ -508,7 +508,7 @@ describe("authenticateRequest and orgs", () => {
   it.effect("answers an unknown slug with 404 to a platform admin and 403 to anyone else", () =>
     run(
       Effect.gen(function* () {
-        const url = "https://proxy.test/v8/management/orgs/nobody-here/config";
+        const url = "https://proxy.test/v9/management/orgs/nobody-here/config";
 
         assert.strictEqual(
           (yield* Effect.flip(
@@ -546,7 +546,7 @@ describe("authenticateRequest and orgs", () => {
 
         const own = yield* authenticateRequest(
           carol,
-          "https://proxy.test/v8/management/orgs/default/config",
+          "https://proxy.test/v9/management/orgs/default/config",
           "management",
         );
 
@@ -556,14 +556,14 @@ describe("authenticateRequest and orgs", () => {
         assert.strictEqual(
           (yield* authenticateRequest(
             carol,
-            "https://proxy.test/v8/management/config",
+            "https://proxy.test/v9/management/config",
             "management",
           )).org,
           GLOBAL_ORG,
         );
 
         for (const url of [
-          "https://proxy.test/v8/management/orgs/acme-limits/config",
+          "https://proxy.test/v9/management/orgs/acme-limits/config",
           "https://proxy.test/o/acme-limits/accounts",
         ]) {
           assert.strictEqual(
@@ -637,7 +637,7 @@ describe("ACCESS_ADMIN_* aliases", () => {
 
         const identity = yield* authenticateRequest(
           headers,
-          "https://proxy.test/v8/management/config",
+          "https://proxy.test/v9/management/config",
           "management",
         );
 
@@ -821,7 +821,7 @@ describe("classifyPath", () => {
       expect(classifyPath(`https://x.test${path}?q=1`)).toBe("protected");
     }
 
-    expect(classifyPath("https://x.test/v8/management/config")).toBe("management");
+    expect(classifyPath("https://x.test/v9/management/config")).toBe("management");
   });
 
   it("is not fooled by alternative spellings", () => {

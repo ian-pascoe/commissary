@@ -1,5 +1,5 @@
 /**
- * `POST /v8/management/credentials/batch {action, names}` (`batch` in contract/credentials.ts): enable, disable,
+ * `POST /v9/management/credentials/batch {action, names}` (`batch` in contract/credentials.ts): enable, disable,
  * refresh the tokens of or delete several accounts (auth files, named by file name) at once, for the control panel's
  * selection on the Accounts page. Answers `200 {action, results, succeeded, failed, skipped}` with one result per
  * distinct name, in the order sent: `{name, ok}`, `{name, ok: false, error, message, status?}` (`not_found`,

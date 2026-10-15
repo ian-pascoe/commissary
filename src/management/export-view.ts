@@ -1,5 +1,5 @@
 /**
- * The export of an org (`GET /v8/management/export`, ADR 0027), new in the Workers port: what an org owner may keep
+ * The export of an org (`GET /v9/management/export`, ADR 0027), new in the Workers port: what an org owner may keep
  * before the org is deleted. It holds the org's settings, its shared config (with every secret as a preview, like every
  * other view of it), its price overrides, the credentials it holds (summaries, never tokens), and who belongs. Usage
  * records are not part of it: the usage routes already page and export them.

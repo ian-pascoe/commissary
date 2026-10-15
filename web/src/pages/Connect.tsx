@@ -415,7 +415,7 @@ const importVertex = async (
   try {
     response = await fetch(
       scopedApiUrl(
-        `/v8/management/oauth/import?provider=vertex${privately ? "&private=true" : ""}`,
+        `/v9/management/oauth/import?provider=vertex${privately ? "&private=true" : ""}`,
         panelOrgSlug,
       ),
       {

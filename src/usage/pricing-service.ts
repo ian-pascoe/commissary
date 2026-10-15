@@ -33,7 +33,7 @@ export class UsagePricing extends Context.Service<
       record: UsageRecord,
     ) => Effect.Effect<UsageCost | undefined, never, WorkerEnv>;
   }
->()("cf-llm-proxy/usage/UsagePricing") {
+>()("commissary/usage/UsagePricing") {
   /** Stores records without a cost (tests that do not look at it). */
   static readonly none = Layer.succeed(
     UsagePricing,

@@ -54,8 +54,8 @@ const domain = (
   verified,
   require_sso: requireSso,
   record: {
-    name: `_cf-llm-proxy-challenge.${name}`,
-    value: "cf-llm-proxy-domain-verification=abc",
+    name: `_commissary-challenge.${name}`,
+    value: "commissary-domain-verification=abc",
   },
   ...(stamped && { verified_at: "2026-10-13T09:00:00Z" }),
 });

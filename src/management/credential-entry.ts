@@ -1,5 +1,5 @@
 /**
- * One entry of `GET /v8/management/credentials` (the panel's "auth files" list).
+ * One entry of `GET /v9/management/credentials` (the panel's "auth files" list).
  *
  * Go source: internal/api/handlers/management/auth_files.go (`buildAuthFileEntryLocked`, `quotaObservationPayload`,
  * `extractCodexIDTokenClaims`, `reconcileAuthFileCooldownState`), sdk/cliproxy/auth/cooldown_view.go

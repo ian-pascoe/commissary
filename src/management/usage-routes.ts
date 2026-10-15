@@ -1,5 +1,5 @@
 /**
- * Usage observability routes (`/v8/management/observability/usage/*`).
+ * Usage observability routes (`/v9/management/observability/usage/*`).
  *
  * Go source: internal/api/server_management_v8.go (route table), internal/api/handlers/management/usage.go
  * (`GetUsageQueue`). Records are read from D1 (`src/usage/d1.ts`) instead of
@@ -46,7 +46,7 @@ import {
 import { controlPlane, handled, jsonReply, queryParams, replyError } from "./http.ts";
 import { viewerOf } from "./viewer.ts";
 
-const BASE = "/v8/management/observability/usage";
+const BASE = "/v9/management/observability/usage";
 
 /** The D1 database, or a 503 when the `USAGE` binding is missing. */
 const usageDb = Effect.gen(function* () {

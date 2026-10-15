@@ -1,5 +1,5 @@
 /**
- * `GET /v8/management/models/catalog` and `POST /v8/management/models/catalog/refresh` (`CatalogGroup` in
+ * `GET /v9/management/models/catalog` and `POST /v9/management/models/catalog/refresh` (`CatalogGroup` in
  * contract/catalog.ts): the Models page's catalog status line and "Refresh catalog" button.
  *
  * Workers addition, no Go counterpart. The refresh is the cron task's operation (`refreshModelsDev`,
@@ -10,7 +10,7 @@
  * `disabled`), and while another refresh holds the refresh lease (`409 catalog_refresh_running`, the scheduled task's
  * included; nothing is downloaded). Anything else that goes wrong (download, size, validation, storage) is a `200` with
  * `status: "failed"` and a fixed message: the stored catalog stays. Admin-only and CSRF-protected like every management
- * write (Access gate over the `/v8/management` prefix).
+ * write (Access gate over the `/v9/management` prefix).
  */
 import { Effect } from "effect";
 import { catalogMode, catalogStatus } from "../registry/catalog-status.ts";

@@ -1,5 +1,5 @@
 /**
- * `/v8/management/api-keys*` (`ApiKeysGroup` in contract/api-keys.ts): the API keys page's list, group writes and
+ * `/v9/management/api-keys*` (`ApiKeysGroup` in contract/api-keys.ts): the API keys page's list, group writes and
  * connection test.
  *
  * Workers addition, no Go counterpart (Go's panel edits whole family arrays through `PUT /api-keys` style routes with
@@ -42,7 +42,7 @@ import { bodyJson, controlPlane, handled, jsonReply, type Reply, replyError } fr
 import { storedConfig } from "./settings-routes.ts";
 import { currentViewer } from "./viewer.ts";
 
-const BASE = "/v8/management/api-keys";
+const BASE = "/v9/management/api-keys";
 
 const invalidBody = () => replyError(400, "invalid body");
 

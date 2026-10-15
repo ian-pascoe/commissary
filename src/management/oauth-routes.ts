@@ -17,7 +17,7 @@ import { bodyJson, controlPlane, handled, jsonReply, queryParams, replyError } f
 import { oauthImportRoutes } from "./oauth-import.ts";
 import { currentViewer } from "./viewer.ts";
 
-const BASE = "/v8/management/oauth";
+const BASE = "/v9/management/oauth";
 
 const trimmed = (value: Json | undefined): string =>
   typeof value === "string" ? value.trim() : "";

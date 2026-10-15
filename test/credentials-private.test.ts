@@ -56,7 +56,7 @@ const send = async (
   method = "GET",
   body?: Payload,
 ): Promise<{ status: number; body: unknown }> =>
-  await harness.json(`/v8/management/orgs/${org.slug}${path}`, {
+  await harness.json(`/v9/management/orgs/${org.slug}${path}`, {
     ...(body === undefined ? { method } : jsonInit(method, body)),
     ...who,
   });
@@ -67,7 +67,7 @@ const newOrg = async (privateCredentials = true): Promise<Org> => {
   const platform = { auth: await token(ADMIN) };
 
   const created = await harness.json(
-    "/v8/management/orgs",
+    "/v9/management/orgs",
     jsonInit("POST", { slug, name: slug, private_credentials: privateCredentials }),
   );
 

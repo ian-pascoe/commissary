@@ -1,9 +1,9 @@
 /**
- * Management API routes (`/v8/management/*`), the control panel (`web/`, at `/`) and the old panel's address
+ * Management API routes (`/v9/management/*`), the control panel (`web/`, at `/`) and the old panel's address
  * (`/management.html`, a redirect to `/`).
  *
  * Go source: internal/api/server_management_v8.go (route table). Authorization is the Access admin gate
- * (`access/routes.ts`: the whole `/v8/management` prefix, the panel paths and `/management.html`), which replaces the
+ * (`access/routes.ts`: the whole `/v9/management` prefix, the panel paths and `/management.html`), which replaces the
  * Go management key, IP ban and `allow-remote` logic. Routes that are not ported: plugins, Home, the file-log routes,
  * `GET /server/latest-version`, the static `routing/model-definitions/:channel` catalog, `GET /oauth/callback` and
  * `GET /observability/usage/api-keys` (all four only fed the upstream panel; the control panel reads
@@ -64,7 +64,7 @@ import {
 } from "./web-panel.ts";
 import { usageRoutes } from "./usage-routes.ts";
 
-const BASE = "/v8/management";
+const BASE = "/v9/management";
 
 /** All management routes; needs `ModelRegistry`, the `CatalogStore` and an `HttpClient`. */
 export const ManagementRoutes = HttpRouter.addAll(

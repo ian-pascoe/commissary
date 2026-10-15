@@ -70,7 +70,7 @@ export class UpstreamWebSocketConnector extends Context.Service<
       request: UpstreamConnectRequest,
     ) => Effect.Effect<UpstreamSocket, HandshakeError>;
   }
->()("cf-llm-proxy/executor/UpstreamWebSocketConnector") {
+>()("commissary/executor/UpstreamWebSocketConnector") {
   static readonly layerFetch = Layer.succeed(
     UpstreamWebSocketConnector,
     UpstreamWebSocketConnector.of(fetchConnector()),

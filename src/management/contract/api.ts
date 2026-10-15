@@ -1,6 +1,6 @@
 /**
  * The management API contract shared by the Worker's tests and the control panel (`web/`): endpoint paths, query
- * schemas, response and error bodies of the `/v8/management` routes the panel uses. The handlers themselves stay plain
+ * schemas, response and error bodies of the `/v9/management` routes the panel uses. The handlers themselves stay plain
  * router handlers (`../routes.ts`); `test/management-contract.test.ts` checks their real responses against these
  * schemas through the generated client.
  *
@@ -24,7 +24,7 @@ import { SpendGroup } from "./spend.ts";
 import { SsoGroup } from "./sso.ts";
 import { UsageGroupApi } from "./usage.ts";
 
-export const MANAGEMENT_API_PREFIX = "/v8/management";
+export const MANAGEMENT_API_PREFIX = "/v9/management";
 
 export class ManagementApi extends HttpApi.make("management")
   .add(CredentialsGroup)

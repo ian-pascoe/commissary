@@ -1,5 +1,5 @@
 /**
- * `GET|PATCH /v8/management/settings` (`../settings-routes.ts`, `../settings.ts`): the Settings page's typed view of
+ * `GET|PATCH /v9/management/settings` (`../settings-routes.ts`, `../settings.ts`): the Settings page's typed view of
  * the config settings that apply on Workers, and its writes; `POST /settings/import`: the Go config import.
  * Shared with the browser: imports `effect` and sibling contract modules only.
  *

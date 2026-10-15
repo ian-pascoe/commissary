@@ -1,5 +1,5 @@
 /**
- * `GET /v8/management/routing/models` (`../routing-models.ts`, `src/registry/routing-view.ts`) and the channel rule
+ * `GET /v9/management/routing/models` (`../routing-models.ts`, `src/registry/routing-view.ts`) and the channel rule
  * edits of the Models page (`PUT|DELETE /model-rules/aliases/:channel`, `/model-rules/exclusions/:channel`, served by
  * `../model-rules-routes.ts`). Shared with the browser: imports `effect` only.
  *

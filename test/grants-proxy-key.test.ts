@@ -67,7 +67,7 @@ const send = async (
   method = "GET",
   body?: Parameters<typeof jsonInit>[1],
 ) =>
-  await harness.json(`/v8/management/orgs/${slug}${path}`, {
+  await harness.json(`/v9/management/orgs/${slug}${path}`, {
     ...(body === undefined ? { method } : jsonInit(method, body)),
     ...who,
   });
@@ -82,7 +82,7 @@ const org = async () => {
   const platform = await as(ADMIN);
 
   expect(
-    (await harness.json("/v8/management/orgs", jsonInit("POST", { slug, name: slug }))).status,
+    (await harness.json("/v9/management/orgs", jsonInit("POST", { slug, name: slug }))).status,
   ).toBe(201);
 
   const add = async (name: string, role: string) => {
@@ -140,7 +140,7 @@ describe("grants and proxy keys", () => {
 
     expect(
       (
-        await harness.json(`/v8/management/orgs/${slug}/grants/${fallback?.id}`, {
+        await harness.json(`/v9/management/orgs/${slug}/grants/${fallback?.id}`, {
           method: "DELETE",
           headers: { "if-match": String(fallback?.revision) },
           auth: admin.who.auth,

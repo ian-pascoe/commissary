@@ -65,7 +65,7 @@ interface Entry {
 }
 
 const credentials = async (harness: typeof global): Promise<ReadonlyArray<Entry>> => {
-  const response = await harness.json("/v8/management/credentials");
+  const response = await harness.json("/v9/management/credentials");
   expect(response.status).toBe(200);
 
   return (response.body as { readonly files: ReadonlyArray<Entry> }).files;
@@ -87,14 +87,14 @@ describe("org-scoped names", () => {
 describe("two orgs in one deployment", () => {
   it("keep separate config", async () => {
     const put = await acme.json(
-      "/v8/management/settings/import",
+      "/v9/management/settings/import",
       importYaml("routing:\n  strategy: fill-first\n"),
     );
 
     expect(put.status).toBe(200);
 
     const strategy = async (harness: typeof acme) =>
-      ((await harness.json("/v8/management/settings")).body as SettingsView).values.routing
+      ((await harness.json("/v9/management/settings")).body as SettingsView).values.routing
         .strategy;
 
     expect(await strategy(acme)).toBe("fill-first");
@@ -104,12 +104,12 @@ describe("two orgs in one deployment", () => {
   it("keep separate credentials, and the same credential gets another auth index in each", async () => {
     const name = "claude-shared.json";
     expect(
-      (await acme.json(`/v8/management/credentials?name=${name}`, upload(claudeFile()))).status,
+      (await acme.json(`/v9/management/credentials?name=${name}`, upload(claudeFile()))).status,
     ).toBe(200);
     expect(await credentials(global)).toEqual([]);
 
     expect(
-      (await global.json(`/v8/management/credentials?name=${name}`, upload(claudeFile()))).status,
+      (await global.json(`/v9/management/credentials?name=${name}`, upload(claudeFile()))).status,
     ).toBe(200);
     const [inAcme] = await credentials(acme);
     const [inGlobal] = await credentials(global);
@@ -121,7 +121,7 @@ describe("two orgs in one deployment", () => {
     expect(inAcme?.auth_index).not.toBe(inGlobal?.auth_index);
 
     expect(
-      (await beta.json(`/v8/management/credentials?name=${name}`, upload(claudeFile()))).status,
+      (await beta.json(`/v9/management/credentials?name=${name}`, upload(claudeFile()))).status,
     ).toBe(200);
     const [inBeta] = await credentials(beta);
     expect(inBeta?.auth_index).toMatch(/^[0-9a-f]{16}$/);
@@ -173,7 +173,7 @@ api-keys:
 });
 
 describe("usage", () => {
-  const USAGE = "/v8/management/observability/usage";
+  const USAGE = "/v9/management/observability/usage";
 
   beforeEach(async () => {
     const db = await resetUsageDb();
@@ -234,14 +234,14 @@ describe("OAuth logins", () => {
   }
 
   const startIn = async (harness: typeof global): Promise<Started> => {
-    const reply = await harness.json("/v8/management/oauth/auth-url?provider=claude");
+    const reply = await harness.json("/v9/management/oauth/auth-url?provider=claude");
     expect(reply.status).toBe(200);
 
     return reply.body as Started;
   };
 
   const statusIn = async (harness: typeof global, state: string) =>
-    (await harness.json(`/v8/management/oauth/status?state=${state}`)).body;
+    (await harness.json(`/v9/management/oauth/status?state=${state}`)).body;
 
   it("the public callback reaches the ControlPlane of the org that started the login", async () => {
     const inGlobal = await startIn(global);
@@ -280,11 +280,11 @@ describe("OAuth logins", () => {
 });
 
 describe("the shared model catalog", () => {
-  const CATALOG = "/v8/management/models/catalog";
+  const CATALOG = "/v9/management/models/catalog";
 
   it("only global's config sets its source; another org refuses the setting", async () => {
     const refused = await acme.json(
-      "/v8/management/settings/import",
+      "/v9/management/settings/import",
       importYaml("models:\n  catalog: embed\n"),
     );
 
@@ -293,7 +293,7 @@ describe("the shared model catalog", () => {
     expect(JSON.stringify(refused.body)).toContain("deployment setting");
 
     const accepted = await global.json(
-      "/v8/management/settings/import",
+      "/v9/management/settings/import",
       importYaml("models:\n  catalog: embed\n"),
     );
 

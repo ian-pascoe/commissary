@@ -15,10 +15,10 @@ import type { CredentialSnapshot } from "../picker.ts";
 import type { ExecutorOptions } from "../types.ts";
 
 /** Stable client identity (OpenCode asks clients not to pose as a generic SDK). */
-export const OPENCODE_USER_AGENT = "cf-llm-proxy";
+export const OPENCODE_USER_AGENT = "commissary";
 
 /** `x-opencode-client` value. */
-export const OPENCODE_CLIENT = "cf-llm-proxy";
+export const OPENCODE_CLIENT = "commissary";
 
 /** Header carrying the conversation id. */
 export const OPENCODE_SESSION_HEADER = "x-opencode-session";

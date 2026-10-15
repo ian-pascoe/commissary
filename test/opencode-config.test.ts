@@ -118,10 +118,10 @@ describe("management import and key groups", () => {
   beforeEach(resetControlPlane);
 
   const groups = async (family: "opencode-zen" | "opencode-go") =>
-    ((await harness.json("/v8/management/api-keys")).body as ApiKeysList).families[family];
+    ((await harness.json("/v9/management/api-keys")).body as ApiKeysList).families[family];
 
   it("imports the sections from YAML and edits them as key groups", async () => {
-    const stored = await harness.json("/v8/management/settings/import", {
+    const stored = await harness.json("/v9/management/settings/import", {
       method: "POST",
       headers: { "content-type": "application/yaml" },
       body: YAML,
@@ -137,7 +137,7 @@ describe("management import and key groups", () => {
 
     const write = (protocol: string) =>
       harness.json(
-        "/v8/management/api-keys/groups",
+        "/v9/management/api-keys/groups",
         jsonInit("PUT", {
           family: "opencode-go",
           revision: 0,

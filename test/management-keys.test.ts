@@ -29,7 +29,7 @@ interface Created {
   readonly key: string;
 }
 
-const api = (slug: string, path: string) => `/v8/management/orgs/${slug}${path}`;
+const api = (slug: string, path: string) => `/v9/management/orgs/${slug}${path}`;
 
 /** A request signed in through Access as `email`. */
 const asPerson = async (email: string, path: string, init: RequestInit = {}) =>
@@ -49,7 +49,7 @@ const staffedOrg = async (prefix: string) => {
 
   const created = await asPerson(
     ADMIN,
-    "/v8/management/orgs",
+    "/v9/management/orgs",
     jsonInit("POST", { slug, name: slug }),
   );
 
@@ -186,7 +186,7 @@ describe("the gate on the management API", () => {
     expect((await withKey(key, api(slug, "/credentials"))).status).toBe(200);
 
     // The unscoped address means the key's org.
-    expect((await withKey(key, "/v8/management/members")).status).toBe(200);
+    expect((await withKey(key, "/v9/management/members")).status).toBe(200);
 
     const download = await withKey(key, api(slug, "/credentials/download?name=claude-ci.json"));
 

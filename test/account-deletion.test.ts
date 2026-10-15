@@ -29,13 +29,13 @@ beforeAll(async () => {
 type Payload = Parameters<typeof jsonInit>[1];
 
 const send = async (slug: string, path: string, auth: string, method = "GET", body?: Payload) =>
-  await harness.json(`/v8/management/orgs/${slug}${path}`, {
+  await harness.json(`/v9/management/orgs/${slug}${path}`, {
     ...(body === undefined ? { method } : jsonInit(method, body)),
     auth,
   });
 
 const deleteAccount = async (auth: string, body: Payload) =>
-  await harness.json("/v8/management/me", { ...jsonInit("DELETE", body), auth });
+  await harness.json("/v9/management/me", { ...jsonInit("DELETE", body), auth });
 
 interface Org {
   readonly slug: string;
@@ -46,7 +46,7 @@ const createOrg = async (label: string): Promise<Org> => {
   const slug = `${label}-${crypto.randomUUID().slice(0, 8)}`;
 
   const created = await harness.json(
-    "/v8/management/orgs",
+    "/v9/management/orgs",
     jsonInit("POST", { slug, name: `Org ${slug}`, private_credentials: true }),
   );
 
@@ -68,7 +68,7 @@ const orgsOf = async (email: string) =>
   (await registry.platform.orgsOfEmail(email)).map((org) => org.slug);
 
 const listed = async () =>
-  (await harness.json("/v8/management/orgs", { method: "GET", auth: await token(ADMIN) })).body as {
+  (await harness.json("/v9/management/orgs", { method: "GET", auth: await token(ADMIN) })).body as {
     orgs: ReadonlyArray<{ slug: string }>;
   };
 

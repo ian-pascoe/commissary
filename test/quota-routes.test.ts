@@ -1,4 +1,4 @@
-// `POST /v8/management/credentials/quota`: the Worker probes the provider usage endpoint with the credential's token
+// `POST /v9/management/credentials/quota`: the Worker probes the provider usage endpoint with the credential's token
 // (mocked outbound HTTP) and the ControlPlane stores the report shown in the credential list.
 import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { assert, describe, it } from "@effect/vitest";
@@ -25,7 +25,7 @@ import { type MockReply, mockHttp, routes } from "./support/refresh.ts";
 import { env } from "cloudflare:workers";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 
-const QUOTA = "/v8/management/credentials/quota";
+const QUOTA = "/v9/management/credentials/quota";
 
 const USAGE = {
   five_hour: { utilization: 12, resets_at: "2026-10-10T15:00:00Z" },
@@ -73,7 +73,7 @@ const decodeListed = Schema.decodeUnknownSync(
 
 /** The `quota_report` of `name` in `GET /credentials`, decoded with the contract. */
 const listedReport = async (name: string): Promise<QuotaReport | undefined> => {
-  const { body } = await harness.json("/v8/management/credentials");
+  const { body } = await harness.json("/v9/management/credentials");
 
   return decodeListed(body).files.find((file) => file.name === name)?.quota_report;
 };
