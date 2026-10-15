@@ -1,5 +1,5 @@
 /**
- * The text of an API key (ADR 0022): `cfp_<orgId>_<keyId>_<secret>`. New in the Workers port, no Go counterpart.
+ * The text of an API key (ADR 0022): `cms_<orgId>_<keyId>_<secret>`. New in the Workers port, no Go counterpart.
  *
  * The key names its org (the permanent org id, not the renamable slug), so the Worker reaches the org's ControlPlane
  * without a global lookup, and its id, so the ControlPlane finds the stored entry without searching by hash. The
@@ -11,7 +11,7 @@ import { Schema } from "effect";
 import { sha256Hex } from "../hash.ts";
 import { OrgId } from "../platform/org.ts";
 
-export const API_KEY_PREFIX = "cfp_";
+export const API_KEY_PREFIX = "cms_";
 
 /** A key id: 20 lowercase hex characters (80 random bits); never contains the `_` that separates the key's parts. */
 const KEY_ID = /^[0-9a-f]{20}$/;
@@ -36,7 +36,7 @@ export interface ParsedApiKey {
 export interface MintedApiKey extends ParsedApiKey {
   /** The whole key: returned to its member once, never stored. */
   readonly key: string;
-  /** What lists show of the key, so its member recognises it: `cfp_<orgId>_<keyId>_<first 4 secret characters>`. */
+  /** What lists show of the key, so its member recognises it: `cms_<orgId>_<keyId>_<first 4 secret characters>`. */
   readonly prefix: string;
 }
 
@@ -56,7 +56,7 @@ const randomHex = (bytes: number): string =>
   ).join("");
 
 /**
- * A new key of `org` with a fresh id and secret, its text starting with `prefix`: `cfp_` for an API key, `cfm_` for a
+ * A new key of `org` with a fresh id and secret, its text starting with `prefix`: `cms_` for an API key, `cmsm_` for a
  * management key (`management-keys/key.ts`), which has the same shape.
  */
 export const mintOrgKey = (prefix: string, org: OrgId): MintedApiKey => {

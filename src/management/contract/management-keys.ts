@@ -4,8 +4,8 @@
  * counterpart. Shared with the browser: imports `effect` only.
  *
  * Org admins issue, list and revoke them. A key holds a role in its org (at most the issuer's role), is stored hashed,
- * is shown whole once (in the answer to its creation) and names its org like an API key: `cfm_<orgId>_<keyId>_<secret>`,
- * sent as `Authorization: Bearer cfm_…`. It is accepted on the management API only, never on the client API, and it
+ * is shown whole once (in the answer to its creation) and names its org like an API key: `cmsm_<orgId>_<keyId>_<secret>`,
+ * sent as `Authorization: Bearer cmsm_…`. It is accepted on the management API only, never on the client API, and it
  * can never download a stored credential, register a service token, change a service token's role or issue a key.
  */
 import { Schema } from "effect";
@@ -18,7 +18,7 @@ export const ManagementKeyView = Schema.Struct({
   id: Schema.String,
   name: Schema.String,
   role: OrgRole,
-  /** `cfm_<orgId>_<keyId>_<first 4 secret characters>`, so its issuer recognises it. */
+  /** `cmsm_<orgId>_<keyId>_<first 4 secret characters>`, so its issuer recognises it. */
   prefix: Schema.String,
   /** Who issued it: an email, or `service:<client id>` for a service token. */
   created_by: Schema.String,

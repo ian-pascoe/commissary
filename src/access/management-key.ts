@@ -1,5 +1,5 @@
 /**
- * Management keys on the management API (ADR 0026), on every deployment: `Authorization: Bearer cfm_…`. New in the Workers
+ * Management keys on the management API (ADR 0026), on every deployment: `Authorization: Bearer cmsm_…`. New in the Workers
  * port, no Go counterpart.
  *
  * A key names its org (`management-keys/key.ts`), so verification asks that org's ControlPlane only, after the Platform
@@ -44,7 +44,7 @@ export const resetManagementKeyCache = (): void => {
   verified.clear();
 };
 
-/** The management key of a request: `Authorization: Bearer cfm_…`, well formed or not. */
+/** The management key of a request: `Authorization: Bearer cmsm_…`, well formed or not. */
 export const presentedManagementKey = (
   headers: Readonly<Record<string, string | undefined>>,
 ): string | undefined => {

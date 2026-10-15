@@ -134,7 +134,7 @@ describe("SecretCipher", () => {
   it("is AES-256-GCM: WebCrypto opens it with the key, a 96-bit nonce and the context as additional data", async () => {
     const key = raw();
     const copy = key.slice();
-    const sealed = SecretCipher.fromRawKey(key).seal(API_KEY, "config_api_keys/k1");
+    const sealed = SecretCipher.fromRawKey(key).seal(API_KEY, "config_provider_keys/k1");
 
     // The caller wipes its copy of the key; the cipher keeps its own.
     key.fill(0);
@@ -146,7 +146,7 @@ describe("SecretCipher", () => {
       {
         name: "AES-GCM",
         iv: bytes.subarray(0, 12),
-        additionalData: new TextEncoder().encode("enc:v1\u0000config_api_keys/k1"),
+        additionalData: new TextEncoder().encode("enc:v1\u0000config_provider_keys/k1"),
         tagLength: 128,
       },
       imported,
@@ -433,7 +433,7 @@ describe("ControlPlane stored secrets", () => {
       // The state the previous code left: plain-text secrets and no data key.
       plain = JSON.stringify([
         sql.exec("SELECT metadata FROM credentials").toArray(),
-        sql.exec("SELECT value FROM config_api_keys").toArray(),
+        sql.exec("SELECT value FROM config_provider_keys").toArray(),
         sql.exec("SELECT value FROM config_key_groups").toArray(),
       ]);
     });

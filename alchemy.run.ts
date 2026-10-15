@@ -2,7 +2,7 @@
  * Infrastructure of the Workers port, deployed with Alchemy (`pnpm deploy`, `pnpm dev`, `pnpm destroy`): the Worker
  * with its Durable Objects, static assets and cron trigger, the KV namespace, the D1 usage database (migrations
  * applied on every deploy), the `auth_index` HMAC key and the Cloudflare Access application, policies and service tokens
- * in front of it (except the client API, where clients send API keys). Commissary Cloud (`PROXY_MODE=hosted`, ADR
+ * in front of it (except the client API, where clients send API keys). Commissary Cloud (`COMMISSARY_MODE=cloud`, ADR
  * 0026) creates no Access resources: the Worker signs people in itself, and gets its sign-in settings, Better Auth's
  * secret and the per-org rate limit instead.
  * Deploy-time settings are read from the environment / `.env` (see `.env.example` and infra/settings.ts).
@@ -28,7 +28,7 @@ export const CRONS = ["0 */3 * * *"];
 const state = process.env["ALCHEMY_STATE"] === "local" ? Alchemy.localState() : Cloudflare.state();
 
 export default Alchemy.Stack(
-  "cf-llm-proxy",
+  "commissary",
   { providers: Cloudflare.providers(), state },
   Effect.gen(function* () {
     const dev = yield* Alchemy.ALCHEMY_DEV;
@@ -81,7 +81,7 @@ export default Alchemy.Stack(
       hosted === undefined
         ? {}
         : {
-            PROXY_MODE: "hosted",
+            COMMISSARY_MODE: "cloud",
             BETTER_AUTH_SECRET: yield* Alchemy.makeRandom("BetterAuthSecret", { bytes: 32 }),
             ...(hosted.githubClientId === ""
               ? {}
@@ -112,7 +112,7 @@ export default Alchemy.Stack(
       ? { name: settings.domain, aliases: [settings.apiDomain] }
       : settings.domain;
 
-    const worker = yield* Cloudflare.Worker("Proxy", {
+    const worker = yield* Cloudflare.Worker("Commissary", {
       main: "./src/index.ts",
       compatibility: COMPATIBILITY,
       // Production serves only its Access-protected domain; pull-request previews serve their workers.dev URL,

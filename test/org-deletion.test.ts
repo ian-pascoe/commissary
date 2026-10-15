@@ -160,7 +160,7 @@ describe("deleting an org", () => {
     expect(Object.keys(await storedRows(org))).toEqual(
       expect.arrayContaining([
         "credentials",
-        "proxy_keys",
+        "api_keys",
         "private_key_groups",
         "session_instances",
       ]),
@@ -195,7 +195,7 @@ describe("deleting an org", () => {
     expect(await kvKeys(kept)).toHaveLength(2);
     expect(await sessionValue(kept)).toMatchObject({ status: "ok", value: "v" });
     expect(await registry.platform.getOrgById(kept.id)).toBeDefined();
-    expect((await storedRows(kept))["proxy_keys"]).toBe(1);
+    expect((await storedRows(kept))["api_keys"]).toBe(1);
     expect((await send(kept.slug, "/credentials", kept.platform)).body).toMatchObject({
       files: [{ name: "shared.json" }],
     });

@@ -22,7 +22,7 @@ Google on the panel's sign-in page), on a desktop browser, in English. Each hold
   who belongs (the Members page: members, teams, service tokens, auto-join) and who may use which models of which shared
   accounts (the Grants page, by member, by team or by credential). Owners also change roles. On a self-hosted
   deployment this is often one person, the owner of the deployment, who is also a **platform admin** (owner of every
-  org, the only one who creates orgs). On **Commissary Cloud** (ADR 0026, the `hosted` mode) anyone may sign up: each new person owns a
+  org, the only one who creates orgs). On **Commissary Cloud** (ADR 0026, `COMMISSARY_MODE=cloud`) anyone may sign up: each new person owns a
   Personal org and may create a few more (their owned-org limit), and the platform admins are the service's operators,
   who raise limits and suspend people and orgs (the People page and the org chooser). Scripts get management keys from
   the Management keys page.

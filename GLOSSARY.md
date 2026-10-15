@@ -512,7 +512,7 @@ _Avoid_: probe, connection test
 
 **Stage**:
 One deployment of Commissary with its own storage: production, which is a self-hosted Commissary behind Cloudflare Access;
-the Commissary Cloud stage, run from `main` on its own hostname (deployed as `hosted` until it is renamed); or a pull
+the Commissary Cloud stage, run from `main` on its own hostname (stage `cloud`); or a pull
 request's preview, which has empty storage.
 _Avoid_: environment
 

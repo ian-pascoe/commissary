@@ -9,9 +9,9 @@
   },
   "scripts": {
     "catalog:sync": "node tools/sync-models-dev-catalog.ts",
-    "ci:setup": "alchemy deploy --config stacks/github.ts --stage ci --profile admin --adopt && alchemy state read cf-llm-proxy-github/ci/output --profile admin",
+    "ci:setup": "alchemy deploy --config stacks/github.ts --stage ci --profile admin --adopt && alchemy state read commissary-github/ci/output --profile admin",
     "deploy": "alchemy deploy",
-    "deploy:hosted": "alchemy deploy --stage hosted --env-file .env.hosted",
+    "deploy:cloud": "alchemy deploy --stage cloud --env-file .env.cloud",
     "destroy": "alchemy destroy",
     "dev": "alchemy dev",
     "format": "oxfmt",

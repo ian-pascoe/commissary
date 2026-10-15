@@ -52,7 +52,7 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
 ## Runtime topology
 
 - **Worker** (stateless): routing, Access verification, request handling, translation, upstream `fetch`, streaming.
-- **Hosts** (ADR 0028, `src/http/hosts.ts`): with `API_DOMAIN` set (deploy setting `CF_LLM_PROXY_API_DOMAIN`), the
+- **Hosts** (ADR 0028, `src/http/hosts.ts`): with `API_DOMAIN` set (deploy setting `COMMISSARY_API_DOMAIN`), the
   Worker answers on two custom domains and the default export decides by hostname before the router: the API host
   serves the client API (the Access zone `protected` of `classifyPath`) and `/healthz`, every other host (the app host
   `APP_DOMAIN`) everything else; a request on the wrong host answers `404 {"error": "Not found: …"}` naming the right
@@ -2069,10 +2069,10 @@ credentials a subject may use; selection and the model registry read it (_Creden
 Workers addition replacing the Go server's client keys (`access.api-keys`, imported but never enforced); ADR 0022. User docs:
 `docs/ACCESS.md` "API keys", `docs/CLIENTS.md`.
 
-- **Format** (`api-keys/key.ts`): `cfp_<org id>_<key id>_<secret>`, key id 20 hex characters, secret 36 random bytes in
+- **Format** (`api-keys/key.ts`): `cms_<org id>_<key id>_<secret>`, key id 20 hex characters, secret 36 random bytes in
   base64url. The org id is the permanent id, not the slug, so renaming an org keeps its keys working. Only the SHA-256 of
-  the whole key is stored, with a display prefix (`cfp_<org>_<key id>_` and 4 characters of the secret).
-- **Store**: table `proxy_keys` in each org's ControlPlane (`CREATE IF NOT EXISTS`, next to the members tables): member id,
+  the whole key is stored, with a display prefix (`cms_<org>_<key id>_` and 4 characters of the secret).
+- **Store**: table `api_keys` in each org's ControlPlane (`CREATE IF NOT EXISTS`, next to the members tables): member id,
   name, hash, prefix, created, last used (written at most once a minute per key), expiry. Listing and revoking
   are narrowed to the caller's own keys unless the gate admitted an org admin; creating checks in the ControlPlane that
   the member exists. Nothing dead is kept (ADR 0027): revoking deletes the row (the answer still carries `revoked_at`),
@@ -2081,7 +2081,7 @@ Workers addition replacing the Go server's client keys (`access.api-keys`, impor
   ControlPlane starts (the `revoked_at` column stays, never written). A member holds at most 100 keys (`409
   too_many_keys`). Removing a member deletes their keys, private accounts, private key groups and OAuth logins in the
   same Durable Object call.
-- **Gate** (`access/api-key.ts`): on a client API route the first `cfp_…` credential in the Go config access provider's order
+- **Gate** (`access/api-key.ts`): on a client API route the first `cms_…` credential in the Go config access provider's order
   wins over everything else, including an Access JWT. Verification asks the Platform registry whether the org exists (the
   answer is trusted for 30 s per isolate) (so a made-up org id never creates a ControlPlane), then the org's ControlPlane, which compares
   hashes in constant time and answers the member's id, email and role. The answer is cached per isolate for 30 s (never
@@ -2206,12 +2206,12 @@ prices each attempt, the ControlPlane counts and decides.
 Workers addition, no Go counterpart (Go's single `remote-management.secret-key` is not ported); ADR 0026. User docs:
 `docs/ACCESS.md` "Management keys".
 
-- **Format** (`management-keys/key.ts`): `cfm_<org id>_<key id>_<secret>`, minted and parsed by the API keys' code
+- **Format** (`management-keys/key.ts`): `cmsm_<org id>_<key id>_<secret>`, minted and parsed by the API keys' code
   (`api-keys/key.ts` `mintOrgKey`/`parseOrgKey`) with its own prefix, so neither kind is ever taken for the other.
 - **Store** (`management-keys/store.ts`): table `management_keys` in each org's ControlPlane (`CREATE IF NOT EXISTS`):
   name, role, issuer, hash, prefix, created and last used (no expiry; revoking deletes the row); at most 100 rows per org
   (`409 too_many_keys`).
-- **Gate**: `Authorization: Bearer cfm_…` on the management zone of either mode, before the session or Access JWT. The
+- **Gate**: `Authorization: Bearer cmsm_…` on the management zone of either mode, before the session or Access JWT. The
   key is checked like an API key (registry `orgExists`, then the org's ControlPlane, cached 30 s per isolate, forgotten
   at once in the isolate that revokes it) and becomes the principal `{kind: "mkey"}` (`mkey:<key id>` in logs), with the
   key's role in its org and never platform admin. `AdmissiblePrincipal` excludes it: a key is never admitted by the
@@ -2222,7 +2222,7 @@ Workers addition, no Go counterpart (Go's single `remote-management.secret-key` 
 
 ## Commissary Cloud (`src/hosted/`)
 
-Workers addition, no Go counterpart; ADR 0026. `PROXY_MODE=hosted` (`hosted/mode.ts` `isHosted`) replaces Access with
+Workers addition, no Go counterpart; ADR 0026. `COMMISSARY_MODE=cloud` (`hosted/mode.ts` `isHosted`) replaces Access with
 the Worker's own sign-in; unset, every hosted route answers like an unknown path (`hosted/only.ts`) and the gate is the
 Access one, unchanged. User docs: `docs/ACCESS.md` "Commissary Cloud", `docs/DEPLOY.md` "Commissary Cloud".
 
@@ -2267,10 +2267,10 @@ Access one, unchanged. User docs: `docs/ACCESS.md` "Commissary Cloud", `docs/DEP
   {suspended}` and `GET|PATCH /people/<email>` (`people-routes.ts`) for platform admins.
 - **Downloads**: only platform admins download a stored credential (`download_requires_platform_admin`), since no
   service token exists to carry ADR 0006's rule.
-- **Infra**: `alchemy.run.ts` creates no Access application or bypass when hosted, mints `BETTER_AUTH_SECRET` as an
+- **Infra**: `alchemy.run.ts` creates no Access application or bypass on Commissary Cloud, mints `BETTER_AUTH_SECRET` as an
   Alchemy `Random`, and binds the sign-in settings and the `ORG_RATE_LIMIT` rate-limit binding (`infra/settings.ts`
-  validates them). CI deploys a preview as hosted while its pull request has the `hosted-preview` label and checks it with
-  `tools/check-hosted-deploy.sh`.
+  validates them). CI deploys a preview as Commissary Cloud while its pull request has the `cloud-preview` label and checks it with
+  `tools/check-cloud-deploy.sh`.
 
 ## Provider OAuth logins (`src/oauth/`, `src/management/oauth-routes.ts`)
 

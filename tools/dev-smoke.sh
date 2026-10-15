@@ -11,14 +11,14 @@ pid=$!
 cleanup() {
   kill "$pid" 2>/dev/null || true
   wait "$pid" 2>/dev/null || true
-  rm -rf .alchemy/state/cf-llm-proxy/smoke .alchemy/local
+  rm -rf .alchemy/state/commissary/smoke .alchemy/local
 }
 trap cleanup EXIT INT TERM
 
 url=""
 i=0
 while [ "$i" -lt 180 ]; do
-  url=$(sed -n 's/.*\[Proxy\] ready at \(http[^ ]*\).*/\1/p' "$log" | tail -n 1)
+  url=$(sed -n 's/.*\[Commissary\] ready at \(http[^ ]*\).*/\1/p' "$log" | tail -n 1)
   if [ -n "$url" ] && curl -fsS "$url/healthz" >/dev/null 2>&1; then break; fi
   if ! kill -0 "$pid" 2>/dev/null; then cat "$log"; echo "alchemy dev exited" >&2; exit 1; fi
   i=$((i + 1))

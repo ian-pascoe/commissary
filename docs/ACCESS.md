@@ -7,7 +7,7 @@ that the Worker verifies. The Worker never sees their passwords. Clients of the 
 member, which the Worker checks itself (§4, "API keys" below, [CLIENTS.md](CLIENTS.md)). Scripts on the management API
 may send a **management key** instead of an Access service token ("Management keys" below).
 
-This is a self-hosted Commissary, the default. **Commissary Cloud** (`PROXY_MODE=hosted`, ADR 0026) has no Access application
+This is a self-hosted Commissary, the default. **Commissary Cloud** (`COMMISSARY_MODE=cloud`, ADR 0026) has no Access application
 and signs people in itself: see [Commissary Cloud](#commissary-cloud) at the end.
 
 ## 1. What the deploy creates
@@ -17,9 +17,9 @@ settings in `.env` (template: `.env.example`):
 
 | Setting                                                  | Creates / sets                                                                                                  |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `CF_LLM_PROXY_DOMAIN`                                    | A **self-hosted application** on that hostname (empty path: the whole hostname), and the Worker's custom domain |
-| `CF_LLM_PROXY_API_DOMAIN` (optional)                     | A second custom domain, the API host, which serves the client API and has no Access application (below)         |
-| (without `CF_LLM_PROXY_API_DOMAIN`)                      | A second application on the client API paths of that hostname with a **Bypass** policy for everyone (below)     |
+| `COMMISSARY_DOMAIN`                                      | A **self-hosted application** on that hostname (empty path: the whole hostname), and the Worker's custom domain |
+| `COMMISSARY_API_DOMAIN` (optional)                       | A second custom domain, the API host, which serves the client API and has no Access application (below)         |
+| (without `COMMISSARY_API_DOMAIN`)                        | A second application on the client API paths of that hostname with a **Bypass** policy for everyone (below)     |
 | `ACCESS_ALLOW_EMAILS`, `ACCESS_ALLOW_EMAIL_DOMAINS`      | A reusable **Allow** policy (interactive login with your identity providers)                                    |
 | `ACCESS_SERVICE_TOKENS` (names)                          | One **service token** per name and a **Service Auth** policy that admits exactly those tokens                   |
 | `ACCESS_ALLOW_SERVICE_TOKEN_IDS`                         | Adds service tokens managed elsewhere (by token ID, e.g. CI's) to the **Service Auth** policy                   |
@@ -34,11 +34,11 @@ subrequests (the first line of defence against cross-site request forgery on the
 Alchemy application resource does not manage these fields and its updates are PUT-style, so a follow-up step re-applies them
 after every change of the application: do not edit them in the dashboard.
 
-**The client API leaves Access.** With an API host (`CF_LLM_PROXY_API_DOMAIN`, ADR 0028) it is served there only,
+**The client API leaves Access.** With an API host (`COMMISSARY_API_DOMAIN`, ADR 0028) it is served there only,
 and no Access application covers that hostname: the Worker answers the client API on the API host and everything else
-(the panel, the management API, the OAuth callbacks) on `CF_LLM_PROXY_DOMAIN`, each with a `404` naming the other host
+(the panel, the management API, the OAuth callbacks) on `COMMISSARY_DOMAIN`, each with a `404` naming the other host
 for a path it does not serve (`src/http/hosts.ts`). A client that signs in through Access sends the token of the app
-host's application (`cloudflared access token -app=https://<CF_LLM_PROXY_DOMAIN>`) in `cf-access-token` to the API host;
+host's application (`cloudflared access token -app=https://<COMMISSARY_DOMAIN>`) in `cf-access-token` to the API host;
 the Worker checks it against `ACCESS_AUD` itself. Without an API host, the bypass application (`infra/access.ts` `provisionClientApiBypass`) covers `/v1`,
 `/v1beta`, `/v1internal`, `/openai/v1`, `/backend-api/codex`, `/chat/completions`, `/completions` and `/responses` with
 their sub-paths. Access applies the most specific application to a request, and a hostname-and-path application before
@@ -202,10 +202,10 @@ the Worker asks on every request: a removed member, or a member whose role was l
 
 ### API keys
 
-An **API key** (ADR 0022) is how a client authenticates on the client API: `cfp_<org id>_<key id>_<secret>`, with 288
+An **API key** (ADR 0022) is how a client authenticates on the client API: `cms_<org id>_<key id>_<secret>`, with 288
 random bits of secret. Any member creates keys for themselves in the panel (**API keys**) or with
 `POST /v9/management/api-keys {"name": "laptop", "expires_at": "<ISO time, optional>"}`; the answer carries the whole
-key once (`key`), and the org's ControlPlane stores only its SHA-256, a visible prefix (`cfp_<org id>_<key id>_<4
+key once (`key`), and the org's ControlPlane stores only its SHA-256, a visible prefix (`cms_<org id>_<key id>_<4
 characters>`), its member, its name and when it was created, last used (to the minute) and expires.
 
 - A key names its org by the org's permanent id, so the Worker asks that org's ControlPlane and no other (after the Platform
@@ -227,7 +227,7 @@ characters>`), its member, its name and when it was created, last used (to the m
 ### Management keys
 
 A **management key** (ADR 0026) is how a script calls the management API without a person's session:
-`cfm_<org id>_<key id>_<secret>`, sent as `Authorization: Bearer cfm_…`. Org admins issue them in the panel (**Management
+`cmsm_<org id>_<key id>_<secret>`, sent as `Authorization: Bearer cmsm_…`. Org admins issue them in the panel (**Management
 keys**) or with `POST /v9/management/orgs/<slug>/management-keys {"name": "ci", "role": "admin"}`;
 the answer carries the whole key once, and the org's ControlPlane stores only its SHA-256 and a visible prefix. `GET`
 lists the org's keys and `DELETE /management-keys/<id>` revokes one (only a caller holding at least the key's role
@@ -237,7 +237,7 @@ revokes it, `403 role_too_high` otherwise).
   unscoped management URL means the key's org; another org's URL answers 403.
 - It never holds the sensitive powers: it cannot download a credential (`403 download_requires_service_token`), register
   or re-role a service token, or issue a management key (`403 management_key_forbidden`).
-- It is accepted on the management API only; client API routes take API keys, and a `cfp_` key is never accepted on the
+- It is accepted on the management API only; client API routes take API keys, and a `cms_` key is never accepted on the
   management API. Revocation applies at once in the isolate that revoked it and within 30 seconds everywhere.
 - On a self-hosted Commissary the request must still pass Access, whose application covers the management API: send the
   key together with a service token, or put the management paths a script calls behind your own Access policy. On a
@@ -278,7 +278,7 @@ characters; a missing key is refused everywhere.
    everything else (`/healthz`, the OAuth browser callbacks `/anthropic/callback`, `/codex/callback`,
    `/antigravity/callback`, `/callback`, `/devin/callback`) is public to the Worker.
    Matching is case-, slash- and percent-encoding-insensitive, so odd spellings cannot dodge the gate.
-2. On a client API route, an API key wins (`src/access/api-key.ts`): the first credential starting with `cfp_` in
+2. On a client API route, an API key wins (`src/access/api-key.ts`): the first credential starting with `cms_` in
    `Authorization: Bearer`, `x-goog-api-key`, `x-api-key`, `?key=` or `?auth_token=` (the Go server's order) is checked
    against its org's ControlPlane ("API keys" above), and the request runs as its member in its org. A malformed, unknown,
    wrong, revoked or expired key answers 401 `Invalid API key`, whatever else the request carries. Without a key, the
@@ -432,7 +432,7 @@ affected. Check the Cloudflare WARP/Access docs for the current options.
 
 ## Commissary Cloud
 
-Commissary Cloud (`PROXY_MODE=hosted`, ADR 0026; deploy settings in [DEPLOY.md](DEPLOY.md#commissary-cloud)) has no Access
+Commissary Cloud (`COMMISSARY_MODE=cloud`, ADR 0026; deploy settings in [DEPLOY.md](DEPLOY.md#commissary-cloud)) has no Access
 application. Everything in §1-§2 and the service tokens of §3 do not apply; members, roles, teams, grants, API keys and
 management keys work as above. What changes:
 

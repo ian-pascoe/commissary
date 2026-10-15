@@ -23,7 +23,7 @@ export const VERIFIED_KEY_TTL_MS = 30_000;
 const MAX_CACHED_KEYS = 1024;
 
 export interface PresentedCredentials {
-  /** The first credential that is meant as an API key (`cfp_…`), well formed or not. */
+  /** The first credential that is meant as an API key (`cms_…`), well formed or not. */
   readonly apiKey?: string;
   /** Whether the client sent any credential at all (an old shared key such as `sk-dummy` counts). */
   readonly any: boolean;

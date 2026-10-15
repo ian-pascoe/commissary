@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 
 /**
- * Commissary Cloud's settings (ADR 0026, `PROXY_MODE=hosted`): the Worker signs people in itself, so no Access application
+ * Commissary Cloud's settings (ADR 0026, `COMMISSARY_MODE=cloud`): the Worker signs people in itself, so no Access application
  * is created. Secrets come from the shell (CI: the GitHub environment's secrets) and are bound as secret text.
  */
 export interface HostedSettings {
@@ -26,7 +26,7 @@ export interface HostedSettings {
  * are inputs of `alchemy deploy` only; the Worker itself never reads this file.
  */
 export interface Settings {
-  /** `PROXY_MODE=hosted` (ADR 0026): set for Commissary Cloud, `undefined` for a self-hosted one (the default). */
+  /** `COMMISSARY_MODE=cloud` (ADR 0026): set for Commissary Cloud, `undefined` for a self-hosted one (the default). */
   readonly hosted: HostedSettings | undefined;
   /**
    * Pull-request preview stage (`pr-<number>`): served on its `workers.dev` URL behind its own Access application (none
@@ -34,12 +34,12 @@ export interface Settings {
    */
   readonly preview: boolean;
   /**
-   * Custom hostname of the Worker (the zone must exist in the account), e.g. `proxy.example.com`. With `apiDomain`, the
+   * Custom hostname of the Worker (the zone must exist in the account), e.g. `commissary.example.com`. With `apiDomain`, the
    * app host: the panel, sign-in and the management API.
    */
   readonly domain: string;
   /**
-   * The API host (`CF_LLM_PROXY_API_DOMAIN`, ADR 0028), e.g. `api.example.com`: the only host of the client API, which
+   * The API host (`COMMISSARY_API_DOMAIN`, ADR 0028), e.g. `api.example.com`: the only host of the client API, which
    * leave `domain` then. Empty (the default, and always on a preview): `domain` serves everything.
    */
   readonly apiDomain: string;
@@ -153,17 +153,17 @@ const wholeNumber = (value: string, fallback: number, min: number): number | und
   return Number.isSafeInteger(parsed) && parsed >= min ? parsed : undefined;
 };
 
-/** `PROXY_MODE`: `self-hosted` (or unset) or `hosted`. */
-const proxyMode = Effect.gen(function* () {
-  const mode = (yield* text("PROXY_MODE")).trim();
+/** `COMMISSARY_MODE`: `self-hosted` (or unset) or `cloud`. */
+const commissaryMode = Effect.gen(function* () {
+  const mode = (yield* text("COMMISSARY_MODE")).trim();
 
   if (mode === "" || mode === "self-hosted") return "self-hosted" as const;
 
-  if (mode === "hosted") return "hosted" as const;
+  if (mode === "cloud") return "cloud" as const;
 
   return yield* Effect.die(
     new Error(
-      `Invalid deploy settings:\n- PROXY_MODE must be self-hosted or hosted, not "${mode}"`,
+      `Invalid deploy settings:\n- COMMISSARY_MODE must be self-hosted or cloud, not "${mode}"`,
     ),
   );
 });
@@ -214,33 +214,33 @@ export const PREVIEW_STAGE = /^pr-\d+$/;
 
 /**
  * Stage of Commissary Cloud, which CI deploys from `main` next to `prod` (docs/DEPLOY.md "The Commissary Cloud stage"). Its settings live
- * in `.env.hosted` (`pnpm deploy:hosted`) and the GitHub environment `hosted`.
+ * in `.env.cloud` (`pnpm deploy:cloud`) and the GitHub environment `cloud`.
  */
-export const HOSTED_STAGE = "hosted";
+export const CLOUD_STAGE = "cloud";
 
 export const readSettings = (dev: boolean, stage: string) =>
   Effect.gen(function* () {
     const preview = !dev && PREVIEW_STAGE.test(stage);
     const secretsKey = yield* secretsKeyGenerations;
-    const mode = yield* proxyMode;
+    const mode = yield* commissaryMode;
 
     // Deployed with `.env`'s self-hosted settings, the stage would claim the self-hosted Commissary's hostname.
-    if (!dev && stage === HOSTED_STAGE && mode !== "hosted")
+    if (!dev && stage === CLOUD_STAGE && mode !== "cloud")
       return yield* Effect.die(
         new Error(
-          `Invalid deploy settings:\n- the ${HOSTED_STAGE} stage is Commissary Cloud: set PROXY_MODE=hosted (deploy it with \`pnpm deploy:hosted\`, which reads .env.hosted)`,
+          `Invalid deploy settings:\n- the ${CLOUD_STAGE} stage is Commissary Cloud: set COMMISSARY_MODE=cloud (deploy it with \`pnpm deploy:cloud\`, which reads .env.cloud)`,
         ),
       );
 
     // `alchemy dev` stays self-hosted: the dev bypass needs it.
-    const hosted = !dev && mode === "hosted" ? yield* hostedSettings : undefined;
+    const hosted = !dev && mode === "cloud" ? yield* hostedSettings : undefined;
 
     const settings: Settings = {
       hosted: hosted?.hosted,
       preview,
-      domain: (yield* text("CF_LLM_PROXY_DOMAIN")).trim(),
+      domain: (yield* text("COMMISSARY_DOMAIN")).trim(),
       // A preview serves its workers.dev URL only (one host).
-      apiDomain: dev || preview ? "" : (yield* text("CF_LLM_PROXY_API_DOMAIN")).trim(),
+      apiDomain: dev || preview ? "" : (yield* text("COMMISSARY_API_DOMAIN")).trim(),
       teamDomain: (yield* text("ACCESS_TEAM_DOMAIN")).trim(),
       existingAud: preview ? "" : (yield* text("ACCESS_AUD")).trim(),
       allowEmails: yield* list("ACCESS_ALLOW_EMAILS"),
@@ -255,7 +255,7 @@ export const readSettings = (dev: boolean, stage: string) =>
       sessionDuration: (yield* text("ACCESS_SESSION_DURATION", "24h")).trim(),
       serviceTokenHeader: (yield* text("ACCESS_SERVICE_TOKEN_HEADER")).trim(),
       metaMintUrl: (yield* text("META_MINT_URL")).trim(),
-      cpuMs: yield* Config.Number("CF_LLM_PROXY_CPU_MS").pipe(Config.withDefault(300_000)),
+      cpuMs: yield* Config.Number("COMMISSARY_CPU_MS").pipe(Config.withDefault(300_000)),
       devBypass: (yield* text("ACCESS_DEV_BYPASS", "dev@example.com")).trim(),
       secretsKeyGeneration: secretsKey.current,
       secretsKeyPreviousGeneration: secretsKey.previous,
@@ -265,16 +265,16 @@ export const readSettings = (dev: boolean, stage: string) =>
     const problems: Array<string> = [...(hosted?.problems ?? [])];
 
     if (settings.domain === "" && !preview)
-      problems.push("CF_LLM_PROXY_DOMAIN is required (the Worker's custom hostname)");
+      problems.push("COMMISSARY_DOMAIN is required (the Worker's custom hostname)");
 
     if (settings.apiDomain !== "") {
       if (!HOSTNAME.test(settings.apiDomain))
         problems.push(
-          `CF_LLM_PROXY_API_DOMAIN must be a lowercase hostname such as api.example.com, not "${settings.apiDomain}"`,
+          `COMMISSARY_API_DOMAIN must be a lowercase hostname such as api.example.com, not "${settings.apiDomain}"`,
         );
       else if (settings.apiDomain === settings.domain.toLowerCase())
         problems.push(
-          "CF_LLM_PROXY_API_DOMAIN must differ from CF_LLM_PROXY_DOMAIN (unset it to serve everything on one host)",
+          "COMMISSARY_API_DOMAIN must differ from COMMISSARY_DOMAIN (unset it to serve everything on one host)",
         );
     }
 

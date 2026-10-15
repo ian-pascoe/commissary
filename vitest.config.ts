@@ -2,7 +2,7 @@ import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 import { BUNDLE_ALIASES } from "./infra/bundle.ts";
 
-/** Bindings of a self-hosted proxy (`PROXY_MODE` unset), the deployment every test but `test/hosted/` runs against. */
+/** Bindings of a self-hosted Commissary (`COMMISSARY_MODE` unset), the deployment every test but `test/hosted/` runs against. */
 const SELF_HOSTED_BINDINGS = {
   ACCESS_TEAM_DOMAIN: "",
   ACCESS_AUD: "",
@@ -23,14 +23,14 @@ const SELF_HOSTED_BINDINGS = {
 };
 
 /**
- * A hosted proxy (ADR 0026, `src/hosted/`): Better Auth signs people in with GitHub and Google (stubbed through the
+ * Commissary Cloud (`COMMISSARY_MODE=cloud`, ADR 0026, `src/hosted/`): Better Auth signs people in with GitHub and Google (stubbed through the
  * global `fetch` in the tests), Turnstile guards sign-up, and the per-org rate limit is low enough to reach. No dev
  * bypass: requests go to `https://commissary.test`.
  */
 const HOSTED_BINDINGS = {
   ...SELF_HOSTED_BINDINGS,
   ACCESS_DEV_BYPASS: "",
-  PROXY_MODE: "hosted",
+  COMMISSARY_MODE: "cloud",
   PLATFORM_ADMIN_EMAILS: "root@example.com",
   PLATFORM_ADMIN_SERVICE_TOKENS: "admin-token.access",
   BETTER_AUTH_SECRET: "commissary-test-better-auth-secret-0123456789abcdef0123456789abcd",
@@ -43,7 +43,7 @@ const HOSTED_BINDINGS = {
   OWNED_ORG_LIMIT: "3",
 };
 
-/** Requests per minute an org may send on the proxy routes of the hosted test Worker (test/hosted/rate-limit.test.ts). */
+/** Requests per minute an org may send on the client API of the Commissary Cloud test Worker (test/hosted/rate-limit.test.ts). */
 const HOSTED_TEST_RATE_LIMIT = 5;
 
 // The test Worker mirrors the deployed one declared in alchemy.run.ts (same entry, compatibility settings and binding

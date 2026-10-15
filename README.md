@@ -20,7 +20,7 @@ secrets Commissary holds for outside services are **credentials**, and a model p
 - **Zero-trust by default.** People sign in to the control panel and management API through Cloudflare Access with
   your identity provider; tools send an API key each member creates in the panel, stored only as a hash and
   revocable at once; scripts use management keys or Access service tokens. The Worker stores no client passwords.
-- **Or run it for others.** With `PROXY_MODE=hosted` the Worker signs people in itself with GitHub or Google, anyone
+- **Or run it for others.** With `COMMISSARY_MODE=cloud` the Worker signs people in itself with GitHub or Google, anyone
   may sign up and gets a Personal org, and platform admins limit and suspend people and orgs: this is Commissary Cloud
   ([DEPLOY.md](docs/DEPLOY.md#commissary-cloud)).
 - **Control panel.** Connect accounts, manage provider keys, watch quotas and usage, shape model routing and edit the
@@ -51,7 +51,7 @@ secrets Commissary holds for outside services are **credentials**, and a model p
 
 ### Prerequisites
 
-- A Cloudflare account on the **Workers Paid** plan (requests may use up to 300 s of CPU; see `CF_LLM_PROXY_CPU_MS`).
+- A Cloudflare account on the **Workers Paid** plan (requests may use up to 300 s of CPU; see `COMMISSARY_CPU_MS`).
 - A domain (zone) in that account. Commissary gets its own hostname on it, e.g. `llm.example.com`.
 - **Zero Trust** enabled on the account, with an identity provider (the built-in one-time PIN works). Note your team
   name: `<team>.cloudflareaccess.com`.
@@ -86,7 +86,7 @@ Fill in at least these (`.env` is git-ignored; shell variables override it):
 
 | Variable                                          | Example           | Purpose                                                                                                           |
 | ------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `CF_LLM_PROXY_DOMAIN`                             | `llm.example.com` | Hostname of Commissary; its zone must be in the account                                                           |
+| `COMMISSARY_DOMAIN`                               | `llm.example.com` | Hostname of Commissary; its zone must be in the account                                                           |
 | `ACCESS_TEAM_DOMAIN`                              | `myteam`          | Your Zero Trust team name                                                                                         |
 | `ACCESS_ALLOW_EMAILS` / `_EMAIL_DOMAINS`          | `you@example.com` | Who may sign in through the browser                                                                               |
 | `ACCESS_SERVICE_TOKENS`                           | `laptop,ci`       | One Access service token is created per name, for scripts that use the management API                             |
@@ -136,7 +136,7 @@ Clients send an API key (control panel, **API keys**) where they send a provider
 `x-api-key` or `x-goog-api-key`/`?key=`. The client API is not behind Access, so no Access headers are needed.
 
 ```bash
-export COMMISSARY_API_KEY='cfp_…'
+export COMMISSARY_API_KEY='cms_…'
 H=(-H "Authorization: Bearer $COMMISSARY_API_KEY")
 
 curl "${H[@]}" https://llm.example.com/v1/models
@@ -170,8 +170,8 @@ model aliases, retries, …) are edited in the control panel and stored in the W
 
 | Variable                         | Default    | Purpose                                                                                                                            |
 | -------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `CF_LLM_PROXY_DOMAIN`            | (required) | Custom hostname of the Worker and of its Access application                                                                        |
-| `CF_LLM_PROXY_API_DOMAIN`        |            | A second hostname that alone serves the client API, outside Access ([docs/DEPLOY.md](docs/DEPLOY.md#api-host))                     |
+| `COMMISSARY_DOMAIN`              | (required) | Custom hostname of the Worker and of its Access application                                                                        |
+| `COMMISSARY_API_DOMAIN`          |            | A second hostname that alone serves the client API, outside Access ([docs/DEPLOY.md](docs/DEPLOY.md#api-host))                     |
 | `ACCESS_TEAM_DOMAIN`             | (required) | Zero Trust team name or `<team>.cloudflareaccess.com`                                                                              |
 | `ACCESS_ALLOW_EMAILS`            |            | Emails allowed to sign in (comma separated)                                                                                        |
 | `ACCESS_ALLOW_EMAIL_DOMAINS`     |            | Email domains allowed to sign in                                                                                                   |
@@ -182,8 +182,8 @@ model aliases, retries, …) are edited in the control panel and stored in the W
 | `ACCESS_SESSION_DURATION`        | `24h`      | Access session length for browser sign-ins                                                                                         |
 | `ACCESS_SERVICE_TOKEN_HEADER`    |            | Accept service tokens as JSON in one header (e.g. `x-api-key`) for management scripts without custom headers                       |
 | `ACCESS_AUD`                     |            | Use an Access application you manage yourself instead of creating one                                                              |
-| `CF_LLM_PROXY_CPU_MS`            | `300000`   | CPU limit per request in ms; lower it on plans with smaller limits                                                                 |
-| `PROXY_MODE`                     |            | `hosted` for Commissary Cloud (own sign-in, no Access; its settings: [DEPLOY.md](docs/DEPLOY.md#commissary-cloud))                 |
+| `COMMISSARY_CPU_MS`              | `300000`   | CPU limit per request in ms; lower it on plans with smaller limits                                                                 |
+| `COMMISSARY_MODE`                |            | `cloud` for Commissary Cloud (own sign-in, no Access; its settings: [DEPLOY.md](docs/DEPLOY.md#commissary-cloud))                  |
 
 [ACCESS.md](docs/ACCESS.md) explains what each Access setting creates, how the Worker validates requests, and how to
 extend the policies (IdP groups, device posture).
@@ -203,18 +203,18 @@ A cron trigger (`0 */3 * * *`) refreshes the model catalog from [models.dev](htt
 the Models page), prunes old usage rows and re-arms credential refresh alarms.
 
 **Continuous deployment.** `.github/workflows/ci.yml` deploys `main` to production and, once set up, to Commissary Cloud on
-its own domain (stage `hosted`), and every pull request to its own preview stage on `workers.dev`. The CI credentials are code too (`stacks/github.ts`, `pnpm ci:setup`); see
+its own domain (stage `cloud`), and every pull request to its own preview stage on `workers.dev`. The CI credentials are code too (`stacks/github.ts`, `pnpm ci:setup`); see
 [DEPLOY.md](docs/DEPLOY.md).
 
 ## Troubleshooting
 
 | Symptom                                     | Fix                                                                                                  |
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Deploy fails on the custom domain           | `CF_LLM_PROXY_DOMAIN` must be a hostname on a zone in the same Cloudflare account                    |
-| Client gets 401 `Missing API key`           | Send an API key (`Authorization: Bearer cfp_…`, `x-api-key` or `x-goog-api-key`)                     |
+| Deploy fails on the custom domain           | `COMMISSARY_DOMAIN` must be a hostname on a zone in the same Cloudflare account                      |
+| Client gets 401 `Missing API key`           | Send an API key (`Authorization: Bearer cms_…`, `x-api-key` or `x-goog-api-key`)                     |
 | Client gets 401 `Invalid API key`           | The API key is wrong, revoked or expired: create a new one on the API keys page                      |
 | Client gets a 302 to `cloudflareaccess.com` | Its path is not part of the client API, or the deploy's bypass application is missing (`ACCESS_AUD`) |
-| Client gets 404 `Not found: …`              | With `CF_LLM_PROXY_API_DOMAIN` set, send the client API to the API host the message names            |
+| Client gets 404 `Not found: …`              | With `COMMISSARY_API_DOMAIN` set, send the client API to the API host the message names              |
 | 500 `Authentication service error`          | `ACCESS_TEAM_DOMAIN` is wrong                                                                        |
 | 403 `Forbidden` on the control panel        | Your email or token is not in `PLATFORM_ADMIN_EMAILS` / `PLATFORM_ADMIN_SERVICE_TOKENS`              |
 | A model is missing from `/v1/models`        | No connected account or provider key serves it; check the Accounts and Models pages                  |
@@ -247,7 +247,7 @@ The matrix is indicative: which (client protocol, provider) pairs work follows t
   pinned. Providers that bind sessions to an IP or block cloud ranges may reject or challenge them.
 - **No outbound proxies.** `proxy-url` (global, per credential, per key group) is read but not applied.
 - **WebSocket CPU limit.** A Responses WebSocket lives in the invocation that accepted it and is bounded by the CPU
-  limit (`CF_LLM_PROXY_CPU_MS`). There are no ping keep-alives (`streaming.keepalive-seconds` is ignored).
+  limit (`COMMISSARY_CPU_MS`). There are no ping keep-alives (`streaming.keepalive-seconds` is ignored).
 - **Not supported:** plugins, TUI, mDNS discovery, pprof, git/Postgres/object-store config backends, request-log files,
   Codex live/realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, `/v0/management` and the Go server's client API keys
   (API keys replace them). `/v1/responses/compact` answers 501 for Gemini/Vertex credentials.

@@ -203,7 +203,7 @@ export type ImportResult =
 const TABLES = {
   settings: "config_settings",
   groups: "config_key_groups",
-  keys: "config_api_keys",
+  keys: "config_provider_keys",
   aliases: "config_model_aliases",
   exclusions: "config_model_exclusions",
   payload: "config_payload_rules",
@@ -232,7 +232,7 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS config_key_groups (
      id TEXT PRIMARY KEY, family TEXT NOT NULL, position INTEGER NOT NULL, value TEXT NOT NULL, ${ENTRY_COLUMNS}
    )`,
-  `CREATE TABLE IF NOT EXISTS config_api_keys (
+  `CREATE TABLE IF NOT EXISTS config_provider_keys (
      id TEXT PRIMARY KEY, group_id TEXT NOT NULL, position INTEGER NOT NULL, owner TEXT, value TEXT NOT NULL,
      ${ENTRY_COLUMNS}
    )`,

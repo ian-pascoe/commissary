@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Post-deploy check of Commissary Cloud (PROXY_MODE=hosted, ADR 0026): no Access in front, the Worker signs people in.
+# Post-deploy check of Commissary Cloud (COMMISSARY_MODE=cloud, ADR 0026): no Access in front, the Worker signs people in.
 # Retries while a new workers.dev hostname propagates.
 # - /healthz answers 200 with no credentials;
 # - /api/sign-in-options answers 200 and offers at least one provider (the sign-in settings reached the Worker);
@@ -8,11 +8,11 @@
 # - a client API route without credentials answers 401 `Missing API key` from the Worker;
 # - with an API host (ADR 0028): the client API answers 404 on the app host and the management API 404 on the API
 #   host, both from the Worker.
-# Usage: tools/check-hosted-deploy.sh <base-url> [<api-url>]
+# Usage: tools/check-cloud-deploy.sh <base-url> [<api-url>]
 # `<api-url>` is where the client API is served (default: `<base-url>`).
 set -euo pipefail
 
-base="${1:?usage: check-hosted-deploy.sh <base-url> [<api-url>]}"
+base="${1:?usage: check-cloud-deploy.sh <base-url> [<api-url>]}"
 base="${base%/}"
 api="${2:-$base}"
 api="${api%/}"

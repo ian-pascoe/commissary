@@ -2,13 +2,13 @@
  * An org's API keys inside its ControlPlane Durable Object (SQLite; ADR 0022). New in the Workers port, no Go
  * counterpart.
  *
- * - **proxy_keys**: one row per key: its id, the member it belongs to, a name, the SHA-256 of the whole key (never the
+ * - **api_keys**: one row per key: its id, the member it belongs to, a name, the SHA-256 of the whole key (never the
  *   key itself: a hash needs no sealing), the visible prefix, and when it was created, last used and expires. A key
  *   that is revoked or has expired is deleted, not kept marked (zero data retention, ADR 0027): revoking deletes the row
  *   at once, an expired key is deleted by the next listing, issue or presentation of it, and by the cron sweep. The
  *   `revoked_at` column of the first version stays in the table, never written; rows a previous version revoked are
  *   deleted when the ControlPlane starts.
- * - **proxy_key_settings**: one row of org-wide state: whether the org still accepts Access sign-ins (the clients of
+ * - **api_key_settings**: one row of org-wide state: whether the org still accepts Access sign-ins (the clients of
  *   the time before API keys) on the client API. On for `global`, where clients signed in through Access before,
  *   off for every other org.
  *
@@ -24,7 +24,7 @@ export interface ApiKeyRecord {
   readonly id: string;
   readonly memberId: string;
   readonly name: string;
-  /** `cfp_<orgId>_<keyId>_<first 4 secret characters>`. */
+  /** `cms_<orgId>_<keyId>_<first 4 secret characters>`. */
   readonly prefix: string;
   /** Epoch milliseconds. */
   readonly createdAt: number;
@@ -91,13 +91,13 @@ export const MAX_KEYS_PER_MEMBER = 100;
 export const LAST_USED_RESOLUTION_MS = 60_000;
 
 const SCHEMA = [
-  `CREATE TABLE IF NOT EXISTS proxy_keys (
+  `CREATE TABLE IF NOT EXISTS api_keys (
      id TEXT PRIMARY KEY, member_id TEXT NOT NULL, name TEXT NOT NULL, hash TEXT NOT NULL, prefix TEXT NOT NULL,
      created_at INTEGER NOT NULL, last_used_at INTEGER, expires_at INTEGER,
      revoked_at INTEGER
    )`,
-  `CREATE INDEX IF NOT EXISTS proxy_keys_by_member ON proxy_keys (member_id)`,
-  `CREATE TABLE IF NOT EXISTS proxy_key_settings (
+  `CREATE INDEX IF NOT EXISTS api_keys_by_member ON api_keys (member_id)`,
+  `CREATE TABLE IF NOT EXISTS api_key_settings (
      id INTEGER PRIMARY KEY CHECK (id = 1),
      access_clients INTEGER NOT NULL
    )`,
@@ -185,10 +185,10 @@ export class ApiKeyStore {
     for (const statement of SCHEMA) sql.exec(statement);
 
     // A key the first version revoked was kept marked; none is kept any more.
-    sql.exec(`DELETE FROM proxy_keys WHERE revoked_at IS NOT NULL`);
+    sql.exec(`DELETE FROM api_keys WHERE revoked_at IS NOT NULL`);
 
     sql.exec(
-      `INSERT OR IGNORE INTO proxy_key_settings (id, access_clients) VALUES (1, ?)`,
+      `INSERT OR IGNORE INTO api_key_settings (id, access_clients) VALUES (1, ?)`,
       org === GLOBAL_ORG ? 1 : 0,
     );
   }
@@ -199,13 +199,13 @@ export class ApiKeyStore {
   accessClients(): boolean {
     return (
       this.#sql
-        .exec<SettingsRow>(`SELECT access_clients FROM proxy_key_settings WHERE id = 1`)
+        .exec<SettingsRow>(`SELECT access_clients FROM api_key_settings WHERE id = 1`)
         .toArray()[0]?.access_clients === 1
     );
   }
 
   setAccessClients(on: boolean): void {
-    this.#sql.exec(`UPDATE proxy_key_settings SET access_clients = ? WHERE id = 1`, on ? 1 : 0);
+    this.#sql.exec(`UPDATE api_key_settings SET access_clients = ? WHERE id = 1`, on ? 1 : 0);
   }
 
   // --- keys ---------------------------------------------------------------------------------------------------
@@ -216,9 +216,9 @@ export class ApiKeyStore {
 
     const rows =
       memberId === undefined
-        ? this.#sql.exec<KeyRow>(`SELECT ${COLUMNS} FROM proxy_keys ORDER BY created_at DESC, id`)
+        ? this.#sql.exec<KeyRow>(`SELECT ${COLUMNS} FROM api_keys ORDER BY created_at DESC, id`)
         : this.#sql.exec<KeyRow>(
-            `SELECT ${COLUMNS} FROM proxy_keys WHERE member_id = ? ORDER BY created_at DESC, id`,
+            `SELECT ${COLUMNS} FROM api_keys WHERE member_id = ? ORDER BY created_at DESC, id`,
             memberId,
           );
 
@@ -252,7 +252,7 @@ export class ApiKeyStore {
     this.purgeExpired(now);
 
     if (
-      this.#count(`SELECT COUNT(*) AS n FROM proxy_keys WHERE member_id = ?`, input.memberId) >=
+      this.#count(`SELECT COUNT(*) AS n FROM api_keys WHERE member_id = ?`, input.memberId) >=
       MAX_KEYS_PER_MEMBER
     )
       return refuse("too_many_keys", MESSAGES.tooManyKeys);
@@ -262,7 +262,7 @@ export class ApiKeyStore {
     while (this.#row(minted.keyId) !== undefined) minted = mintApiKey(this.#org);
 
     this.#sql.exec(
-      `INSERT INTO proxy_keys (id, member_id, name, hash, prefix, created_at, expires_at)
+      `INSERT INTO api_keys (id, member_id, name, hash, prefix, created_at, expires_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
       minted.keyId,
       input.memberId,
@@ -292,7 +292,7 @@ export class ApiKeyStore {
     if (row === undefined || (memberId !== undefined && row.member_id !== memberId))
       return refuse("api_key_not_found", MESSAGES.notFound);
 
-    this.#sql.exec(`DELETE FROM proxy_keys WHERE id = ?`, id);
+    this.#sql.exec(`DELETE FROM api_keys WHERE id = ?`, id);
     this.#removed([id]);
 
     return { ok: true, value: { ...record(row), revokedAt: now } };
@@ -302,14 +302,14 @@ export class ApiKeyStore {
   purgeExpired(now: number): number {
     const ids = this.#sql
       .exec<{ id: string }>(
-        `SELECT id FROM proxy_keys WHERE expires_at IS NOT NULL AND expires_at <= ?`,
+        `SELECT id FROM api_keys WHERE expires_at IS NOT NULL AND expires_at <= ?`,
         now,
       )
       .toArray()
       .map((row) => row.id);
 
     if (ids.length === 0) return 0;
-    this.#sql.exec(`DELETE FROM proxy_keys WHERE expires_at IS NOT NULL AND expires_at <= ?`, now);
+    this.#sql.exec(`DELETE FROM api_keys WHERE expires_at IS NOT NULL AND expires_at <= ?`, now);
     this.#removed(ids);
 
     return ids.length;
@@ -318,11 +318,11 @@ export class ApiKeyStore {
   /** Deletes every key of a member who leaves the org (ADR 0027). */
   removeMemberKeys(memberId: string): void {
     const ids = this.#sql
-      .exec<{ id: string }>(`SELECT id FROM proxy_keys WHERE member_id = ?`, memberId)
+      .exec<{ id: string }>(`SELECT id FROM api_keys WHERE member_id = ?`, memberId)
       .toArray()
       .map((row) => row.id);
 
-    this.#sql.exec(`DELETE FROM proxy_keys WHERE member_id = ?`, memberId);
+    this.#sql.exec(`DELETE FROM api_keys WHERE member_id = ?`, memberId);
     this.#removed(ids);
   }
 
@@ -336,14 +336,14 @@ export class ApiKeyStore {
     if (row === undefined || !sameHash(row.hash, hash)) return { ok: false, reason: "unknown" };
 
     if (row.expires_at !== null && now >= row.expires_at) {
-      this.#sql.exec(`DELETE FROM proxy_keys WHERE id = ?`, keyId);
+      this.#sql.exec(`DELETE FROM api_keys WHERE id = ?`, keyId);
       this.#removed([keyId]);
 
       return { ok: false, reason: "expired" };
     }
 
     if (row.last_used_at === null || now - row.last_used_at >= LAST_USED_RESOLUTION_MS)
-      this.#sql.exec(`UPDATE proxy_keys SET last_used_at = ? WHERE id = ?`, now, keyId);
+      this.#sql.exec(`UPDATE api_keys SET last_used_at = ? WHERE id = ?`, now, keyId);
 
     return {
       ok: true,
@@ -353,9 +353,7 @@ export class ApiKeyStore {
   }
 
   #row(id: string): KeyRow | undefined {
-    return this.#sql
-      .exec<KeyRow>(`SELECT ${COLUMNS} FROM proxy_keys WHERE id = ?`, id)
-      .toArray()[0];
+    return this.#sql.exec<KeyRow>(`SELECT ${COLUMNS} FROM api_keys WHERE id = ?`, id).toArray()[0];
   }
 
   #count(sql: string, ...bindings: Array<SqlStorageValue>): number {

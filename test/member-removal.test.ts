@@ -70,7 +70,7 @@ const holdings = async (org: Awaited<ReturnType<typeof newOrg>>, person: Person)
     const count = (sql: string) => state.storage.sql.exec<{ n: number }>(sql, person.id).one().n;
 
     return {
-      keys: count("SELECT COUNT(*) AS n FROM proxy_keys WHERE member_id = ?"),
+      keys: count("SELECT COUNT(*) AS n FROM api_keys WHERE member_id = ?"),
       groups: count("SELECT COUNT(*) AS n FROM private_key_groups WHERE owner = ?"),
       logins: count("SELECT COUNT(*) AS n FROM oauth_sessions WHERE owner = ?"),
       accounts: count("SELECT COUNT(*) AS n FROM credentials WHERE owner = ?"),
