@@ -1,68 +1,78 @@
-# cf-llm-proxy
+# Commissary
 
-An LLM proxy for orgs: it pools each org's provider accounts and API keys and serves them to the org's members through
-OpenAI-, Claude- and Gemini-compatible APIs. An org can host it for itself, or one deployment can serve many orgs. It
-began as a port of the Go server CLIProxyAPI, which it now consults as a reference rather than follows.
+One service through which an org's members and their clients reach models, tools, a browser and hosted agents, under the
+org's credentials, grants and spend limits. An org can run it itself (self-hosted Commissary), or use Commissary Cloud.
+Its Models area began as a port of the Go server CLIProxyAPI, which it now consults as a reference rather than follows.
 
 ## Language
 
-### The proxy, orgs and members
+### Commissary, orgs and members
 
-**Proxy**:
-This deployment as a whole: one service that answers model requests for one or more orgs, each with its own
-credentials.
-_Avoid_: gateway, server
+**Commissary**:
+The product, and any one deployment of it: one service that serves one or more orgs, each with its own credentials,
+through its four areas.
+_Avoid_: proxy (as the whole), gateway, server, platform
+
+**Area**:
+One of Commissary's four parts, under one org, one API key and one control panel: Models (the model proxy), Tools, Browser
+and Agents. Commissary Cloud is not an area; it is how Commissary is run.
+_Avoid_: product, module, feature
+
+**Hosted agent**:
+An agent that Commissary runs for an org in its Agents area, as opposed to a client a member runs.
+_Avoid_: agent (on its own), bot, assistant
 
 **Org**:
-A company or group that uses the proxy as one unit, with its own members, teams, credentials, config entries and spend
-limits. Nothing in one org is visible to another. A self-hosted proxy usually serves a single org.
+A company or group that uses Commissary as one unit, with its own members, teams, credentials, config entries and spend
+limits. Nothing in one org is visible to another. A self-hosted Commissary usually serves a single org.
 _Avoid_: tenant, workspace, organisation (kept for a provider's own organisation, such as an Anthropic organisation)
 
 **Retention period**:
 How many days an org keeps its usage records before they are deleted; an org admin sets it (none keeps them). It is the
-one retention setting, per org; deletions of orgs, members, credentials and proxy keys keep nothing and have no grace
+one retention setting, per org; deletions of orgs, members, credentials and API keys keep nothing and have no grace
 period.
-_Avoid_: TTL, expiry (a proxy key and replay state expire on their own)
+_Avoid_: TTL, expiry (an API key and replay state expire on their own)
 
 **Export**:
 What an org owner downloads before deleting the org: its settings, shared config, prices, credential summaries and
 people, with every secret as a preview. It holds no usage records and cannot rebuild a secret.
 _Avoid_: backup (nothing can be restored from it)
 
-**Self-hosted proxy**:
-A proxy run by an org for its own people, who sign in through Cloudflare Access.
+**Self-hosted Commissary**:
+A Commissary run by an org for its own people, who sign in through Cloudflare Access.
+_Avoid_: self-hosted proxy, on-prem
 
-**Hosted proxy**:
-A proxy run as a service for anyone: people sign up and sign in through the proxy itself, and signing up gives them an
-org of their own.
-_Avoid_: SaaS, cloud, multi-tenant mode
+**Commissary Cloud**:
+The Commissary run as a paid service for anyone: people sign up and sign in through Commissary itself, and signing up
+gives them an org of their own.
+_Avoid_: hosted proxy, SaaS, cloud (on its own), multi-tenant mode
 
 **API host**:
-The hostname a deployment may give its proxy routes alone (ADR 0028), where clients send proxy keys.
+The hostname a deployment may give its client API alone (ADR 0028), where clients send API keys.
 _Avoid_: proxy domain, endpoint
 
 **App host**:
-The hostname of the control panel, sign-in and the management API; with no API host it serves the proxy routes too.
+The hostname of the control panel, sign-in and the management API; with no API host it serves the client API too.
 _Avoid_: dashboard domain, panel host
 
 **Personal org**:
-The org a hosted proxy gives a person who signs up without being a member anywhere; they are its org owner. An ordinary
+The org Commissary Cloud gives a person who signs up without being a member anywhere; they are its org owner. An ordinary
 org in every other way.
 _Avoid_: default org, home org, workspace
 
 **Owned-org limit**:
-How many orgs one person may own on a hosted proxy, their Personal org included: the deployment's default unless a
+How many orgs one person may own on Commissary Cloud, their Personal org included: the deployment's default unless a
 platform admin set theirs. Platform admins have none.
 _Avoid_: quota, org quota (a quota is a provider's)
 
 **Platform admin**:
-A person named by the deployment who can repair any org, and the only one who can create orgs on a self-hosted proxy.
-On a hosted proxy they also set owned-org limits and suspend people and orgs.
+A person named by the deployment who can repair any org, and the only one who can create orgs on a self-hosted Commissary.
+On Commissary Cloud they also set owned-org limits and suspend people and orgs.
 _Avoid_: operator, superuser, admin (on its own)
 
 **Org slug**:
 The short name that addresses an org in URLs (`/o/acme/accounts`, `/v8/management/orgs/acme/...`): lowercase letters,
-digits and inner hyphens, unique across the proxy, and renamable. It is not the org's id, which never changes and names
+digits and inner hyphens, unique across the deployment, and renamable. It is not the org's id, which never changes and names
 its stored data.
 _Avoid_: org name (a free-text display name), handle, subdomain
 
@@ -94,43 +104,47 @@ A named group of members within one org. Grants and spend limits can name a team
 _Avoid_: group
 
 **Plain member**:
-A member with the lowest role: they use the proxy and see their own usage, and manage nothing.
+A member with the lowest role: they use Commissary and see their own usage, and manage nothing.
 _Avoid_: user, viewer
 
 **Auto-join**:
 An org's setting that makes every person the org's sign-in admits a plain member on their first request. On for the
-first org of a self-hosted proxy, off for every org created later.
+first org of a self-hosted Commissary, off for every org created later.
 _Avoid_: open signup, self-service
 
 **Access sign-ins for clients**:
-A setting of the first org of a self-hosted proxy that lets clients on the proxy routes still sign in through
-Cloudflare Access instead of sending a proxy key, so its existing clients keep working. On until an owner turns it off;
+A setting of the first org of a self-hosted Commissary that lets clients on the client API still sign in through
+Cloudflare Access instead of sending an API key, so its existing clients keep working. On until an owner turns it off;
 no other org has it.
 _Avoid_: legacy auth, Access fallback
 
 **Client**:
-An application that sends model requests to the proxy, such as pi, Claude Code, Codex or an SDK.
-_Avoid_: caller, consumer, user
+An application that calls the client API, such as pi, Claude Code, Codex, an MCP client or an SDK.
+_Avoid_: caller, consumer, user, agent (on its own: a hosted agent is Commissary's)
 
 **Principal**:
-The identity behind a request: a signed-in person, a service token, a management key or a proxy key. Usage and session
+The identity behind a request: a signed-in person, a service token, a management key or an API key. Usage and session
 state are attributed to it.
-_Avoid_: user, API key, caller
+_Avoid_: user, caller
 
-**Proxy key**:
-A secret the proxy issues to a member for their clients. It names its org and member, and it can have a spend limit of
-its own.
-_Avoid_: API key, client key, access key, token
+**Client API**:
+Everything clients call with an API key: the model endpoints, the MCP endpoint and the browser and agent endpoints.
+_Avoid_: proxy routes, public API, model routes (a model route is a credential's)
+
+**API key**:
+A secret Commissary issues to a member for their clients, which reaches every area through the client API. It names its
+org and member, and it can have a spend limit of its own.
+_Avoid_: proxy key, client key, access key, agent key, token
 
 **Service token**:
 An Access identity for a machine, registered to one org with a role, which scripts present to the management API of a
-self-hosted proxy.
-_Avoid_: API key, client key, proxy key
+self-hosted Commissary.
+_Avoid_: API key, client key
 
 **Management key**:
 A secret an org admin issues for scripts that use the management API, carrying a role in that org. Unlike a service
 token it never grants the sensitive powers, such as downloading a stored credential.
-_Avoid_: API key, admin key, proxy key
+_Avoid_: API key, admin key
 
 **Suspended**:
 Said of an org or person a platform admin has stopped: signed out and refused everywhere, with nothing deleted.
@@ -141,8 +155,8 @@ The namespace that keeps one principal's sessions and cached conversation state 
 _Avoid_: tenant, user scope
 
 **Client key**:
-A shared secret that the Go server accepted from clients. The proxy accepts it on import but never enforces it.
-_Avoid_: API key, proxy key
+A shared secret that the Go server accepted from clients. Commissary accepts it on import but never enforces it.
+_Avoid_: API key
 
 **Secrets key**:
 The secret of a deployment that protects every org's data key. Rotating it does not encrypt any stored secret again.
@@ -156,7 +170,7 @@ _Avoid_: org key, encryption key (unqualified)
 ### Providers and credentials
 
 **Provider**:
-An upstream LLM service the proxy can call: Claude, Codex, Gemini, Vertex, xAI, Antigravity, Kimi, Meta, Devin, OpenCode
+An upstream LLM service the Models area can call: Claude, Codex, Gemini, Vertex, xAI, Antigravity, Kimi, Meta, Devin, OpenCode
 Zen, OpenCode Go, or any single OpenAI-compatible endpoint.
 _Avoid_: upstream (as a noun), family, executor type, section
 
@@ -165,7 +179,7 @@ A provider in its role as the scope of model rules that apply to all of its acco
 _Avoid_: channel as a general word for a provider
 
 **Credential**:
-Anything the proxy can authenticate to a provider with: an account or an API key.
+Anything Commissary can authenticate to an outside service with, such as a provider: an account or a provider key.
 _Avoid_: auth
 
 **Shared credential**:
@@ -189,13 +203,13 @@ lists are computed under it; a model outside it answers like an unknown one.
 _Avoid_: allowance (a provider's limit), permissions
 
 **Sign-in account**:
-A person's own identity with the proxy, which a hosted proxy keeps outside every org (Better Auth's user with its
-sessions and linked GitHub/Google accounts). Deleting it removes the person from every org with their data there. On a self-hosted proxy Access is the sign-in, so deleting the account only
+A person's own identity with Commissary, which Commissary Cloud keeps outside every org (Better Auth's user with its
+sessions and linked GitHub/Google accounts). Deleting it removes the person from every org with their data there. On a self-hosted Commissary Access is the sign-in, so deleting the account only
 leaves the orgs until Access signs the person in again.
 _Avoid_: account (that is a provider login, below), user
 
 **Identity provider**:
-An org's own sign-in service on a hosted proxy (OIDC or SAML, such as Okta or Entra ID), one per org, through which the
+An org's own sign-in service on Commissary Cloud (OIDC or SAML, such as Okta or Entra ID), one per org, through which the
 people of the org's verified domains sign in and join the org. A provider of models is never called this.
 _Avoid_: IdP (in user-facing text), SSO connection, provider (alone)
 
@@ -206,16 +220,16 @@ _Avoid_: claimed domain, owned domain
 
 **Account**:
 A credential that is a provider login: an OAuth sign-in, a device-code login, an imported service account or an
-uploaded auth file. API keys whose provider reports allowances, such as OpenCode Go keys, are listed beside the accounts
-but are still API keys.
+uploaded auth file. Provider keys whose provider reports allowances, such as OpenCode Go keys, are listed beside the accounts
+but are still provider keys.
 _Avoid_: auth, auth file, login
 
-**API key**:
+**Provider key**:
 A credential that is a provider secret, entered by an org admin or a member as part of a key group.
-_Avoid_: config key, config credential, provider key
+_Avoid_: API key (that is the member's), config key, config credential
 
 **Key group**:
-One endpoint of a provider, together with its API keys and the rules they share.
+One endpoint of a provider, together with its provider keys and the rules they share.
 _Avoid_: section, compat group
 
 **OpenAI-compatible endpoint**:
@@ -231,12 +245,12 @@ The opaque public handle that names a credential in the control panel, the manag
 _Avoid_: credential id, auth id
 
 **Disabled**:
-Said of an account or API key that an org admin, or the member a private credential belongs to, has taken out of
+Said of an account or provider key that an org admin, or the member a private credential belongs to, has taken out of
 selection without deleting it.
 _Avoid_: paused, excluded
 
 **Connect**:
-To add an account to the proxy, whether by signing in to the provider, importing a service account or uploading an auth
+To add an account to Commissary, whether by signing in to the provider, importing a service account or uploading an auth
 file.
 _Avoid_: login, auth
 
@@ -255,7 +269,7 @@ _Avoid_: refresh (on its own)
 ### Models
 
 **Model id**:
-A model name a client can request, as listed by the proxy's model lists.
+A model name a client can request, as listed by the Models area's model lists.
 _Avoid_: model name
 
 **Upstream model**:
@@ -295,7 +309,7 @@ The known models of each provider and their capabilities, built from models.dev 
 _Avoid_: catalogue, static models
 
 **Catalog addition**:
-A model, or a fact about a model, that the proxy records itself because models.dev lacks it. It fills gaps and never
+A model, or a fact about a model, that Commissary records itself because models.dev lacks it. It fills gaps and never
 overrides a value models.dev has.
 _Avoid_: overlay, patch, overrides
 
@@ -314,12 +328,12 @@ _Avoid_: suffix (on its own)
 ### Requests
 
 **Client format**:
-The API a client speaks to the proxy: OpenAI Chat Completions, OpenAI Responses, Claude Messages, Gemini or
+The API a client speaks to the Models area: OpenAI Chat Completions, OpenAI Responses, Claude Messages, Gemini or
 Interactions.
 _Avoid_: entry protocol, source format, handler type
 
 **Provider format**:
-The API the proxy speaks to a provider for an attempt.
+The API the Models area speaks to a provider for an attempt.
 _Avoid_: target format, protocol
 
 **Translation**:
@@ -331,7 +345,7 @@ Toward the provider: the upstream request, the upstream model, the upstream answ
 _Avoid_: upstream as a noun for a provider or for the Go server
 
 **Request**:
-One call a client makes to the proxy. It may take several attempts.
+One model call a client makes to Commissary. It may take several attempts.
 _Avoid_: attempt, call
 
 **Attempt**:
@@ -352,7 +366,7 @@ credential.
 _Avoid_: peek, first byte
 
 **Selection**:
-Choosing the credential for an attempt. The proxy keeps the available credentials that the principal's grants allow,
+Choosing the credential for an attempt. Commissary keeps the available credentials that the principal's grants allow,
 takes the highest priority tier, applies the routing strategy and then honours session affinity.
 _Avoid_: scheduling, rotation
 
@@ -375,7 +389,7 @@ Sending a session's later requests to the credential that served it before.
 _Avoid_: sticky routing, binding
 
 **Payload rule**:
-An org-defined change to the body sent upstream. Payload rules are applied after every other change the proxy makes.
+An org-defined change to the body sent upstream. Payload rules are applied after every other change Commissary makes.
 _Avoid_: payload (on its own), payload config
 
 **Reasoning signature**:
@@ -426,11 +440,11 @@ Asking a provider for an account's current allowances.
 _Avoid_: probe, quota (on its own)
 
 **Quota signals**:
-The rate-limit figures the proxy observes on live answers, as opposed to those from a quota check.
+The rate-limit figures Commissary observes on live answers, as opposed to those from a quota check.
 _Avoid_: quota (on its own)
 
 **Standing**:
-The control panel's verdict on an account, API key or model: taking requests, near its limit, resting, closed, failing
+The control panel's verdict on an account, provider key or model: taking requests, near its limit, resting, closed, failing
 or disabled.
 _Avoid_: status, health
 
@@ -445,7 +459,7 @@ _using a reset_.
 ### Configuration and the control panel
 
 **Config entry**:
-One stored part of an org's configuration, such as a setting, key group, API key, model rule or payload rule. Each is
+One stored part of an org's configuration, such as a setting, key group, provider key, model rule or payload rule. Each is
 created, changed and deleted on its own. A setting at its default is not stored.
 _Avoid_: config document, config row, record
 
@@ -481,11 +495,11 @@ A key of a Go config document that the import names but does not store, because 
 _Avoid_: unsupported, deprecated, ignored
 
 **Control panel**:
-The proxy's own web interface for members and org admins.
+Commissary's own web interface for members and org admins.
 _Avoid_: management panel, dashboard, web UI
 
 **Upstream panel**:
-The Go server's management web interface. The proxy does not serve it.
+The Go server's management web interface. Commissary does not serve it.
 _Avoid_: panel (on its own), Management Center
 
 **Management API**:
@@ -493,17 +507,17 @@ The HTTP API that the control panel and scripts use. What a principal may do thr
 _Avoid_: admin API
 
 **Key test**:
-A one-off check that a stored API key is accepted by its provider.
+A one-off check that a stored provider key is accepted by its provider.
 _Avoid_: probe, connection test
 
 **Stage**:
-One deployment of the proxy: production, or a pull request's preview with empty storage.
+One deployment of Commissary: production, or a pull request's preview with empty storage.
 _Avoid_: environment
 
 ### Usage
 
 **Usage**:
-The proxy's own record of the traffic it served.
+Commissary's own record of the traffic it served.
 _Avoid_: usage as a word for allowances
 
 **Usage record**:
@@ -532,7 +546,7 @@ _Avoid_: custom pricing, rate card
 
 **Cost**:
 The API-equivalent price of an attempt: its token breakdown at the model's prices. Attempts on subscription accounts
-are costed the same way as attempts on API keys.
+are costed the same way as attempts on provider keys.
 _Avoid_: charge, bill, spend (for one attempt)
 
 **Unpriced**:
@@ -545,17 +559,17 @@ The cost added up over a period for whatever a spend limit covers.
 _Avoid_: usage (on its own), consumption
 
 **Spend limit**:
-A cap on spend over a calendar day, week or month, set on a member, a team, an org, a shared credential or a proxy key.
+A cap on spend over a calendar day, week or month, set on a member, a team, an org, a shared credential or an API key.
 _Avoid_: budget, quota, allowance (a provider's limit)
 
 ### The reference
 
 **Go server**:
-The original CLIProxyAPI, which the proxy was ported from and still consults for ideas and tested behaviour.
+The original CLIProxyAPI, which Commissary's Models area was ported from and still consults for ideas and tested behaviour.
 _Avoid_: upstream, reference repo
 
 **Deviation**:
-A deliberate behaviour difference from the Go server, from the time when the proxy followed it everywhere.
+A deliberate behaviour difference from the Go server, from the time when the Models area followed it everywhere.
 _Avoid_: difference, divergence
 
 **Golden fixture**:
