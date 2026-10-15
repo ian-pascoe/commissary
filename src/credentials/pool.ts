@@ -1,5 +1,5 @@
 /**
- * In-memory credential pool: credentials (stored files + config provider keys), runtime state, rotation cursors and
+ * In-memory credential pool: credentials (stored files + provider keys), runtime state, rotation cursors and
  * session affinity behind the `pick` / `report` operations of the ControlPlane Durable Object.
  *
  * Go counterpart: the `Manager` parts that register credentials and select them (sdk/cliproxy/auth/conductor*.go).
@@ -417,7 +417,7 @@ export class CredentialPool {
     return { ok: true, applied: true };
   }
 
-  /** Stored credentials (never config provider keys: they have no tokens) with their runtime state. */
+  /** Stored credentials (never provider keys: they have no tokens) with their runtime state. */
   refreshTargets(): RefreshTarget[] {
     const targets: RefreshTarget[] = [];
 
@@ -491,7 +491,7 @@ export class CredentialPool {
     });
   }
 
-  /** Every credential (stored files and config provider keys) with its runtime state, ordered by id (management views). */
+  /** Every credential (stored files and provider keys) with its runtime state, ordered by id (management views). */
   entries(): RefreshTarget[] {
     return [...this.#current().credentials.values()]
       .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
@@ -604,7 +604,7 @@ export class CredentialPool {
     return applied;
   }
 
-  /** Disables/enables a stored credential. Config provider keys are disabled by removing them from the config. */
+  /** Disables/enables a stored credential. Provider keys are disabled by removing them from the config. */
   setDisabled(id: string, disabled: boolean): "ok" | "not_found" | "config_credential" {
     if (this.#store.get(id) === undefined) {
       return this.#current().credentials.has(id) ? "config_credential" : "not_found";

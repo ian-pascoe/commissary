@@ -1,6 +1,6 @@
 ---
 name: Commissary control panel
-description: A personal LLM gateway panel set as Swiss hiking trail signage (Wanderweg), where quota is a walk to the next reset.
+description: Commissary's control panel set as Swiss hiking trail signage (Wanderweg), where quota is a walk to the next reset.
 colors:
   white: "#ffffff"
   stone-1: "#f3f3f1"

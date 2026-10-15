@@ -13,7 +13,7 @@
 import { Effect, Schema } from "effect";
 import { PayloadConfig } from "./payload/schema.ts";
 import {
-  API_KEY_FAMILIES,
+  PROVIDER_KEY_FAMILIES,
   ProviderKeyEntry,
   ProviderKeyFamily,
   ProviderKeyGroup,
@@ -56,7 +56,7 @@ const Strings = Schema.Array(Schema.String);
 
 // The provider-key group schemas are browser-safe and shared with the control panel: they live in the management contract.
 export {
-  API_KEY_FAMILIES,
+  PROVIDER_KEY_FAMILIES,
   ProviderKeyEntry,
   ProviderKeyFamily,
   ProviderKeyGroup,

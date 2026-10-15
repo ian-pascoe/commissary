@@ -100,7 +100,7 @@ const ApplicationSettings = Alchemy.Action(
  * its sub-paths (`/v1` covers `/v1/models`), not other paths that start with the same letters, so `/v1beta` and
  * `/v1internal` are listed on their own.
  */
-export const PROXY_PATHS = [
+export const CLIENT_API_PATHS = [
   "/v1",
   "/v1beta",
   "/v1internal",
@@ -118,19 +118,23 @@ export const PROXY_PATHS = [
  * with a stack-managed Access application: a deployment that brings its own (`ACCESS_AUD`) adds the bypass itself
  * (docs/DEPLOY.md).
  */
-export const provisionProxyBypass = (settings: Settings, host: string | Output.Output<string>) =>
+export const provisionClientApiBypass = (
+  settings: Settings,
+  host: string | Output.Output<string>,
+) =>
   Effect.gen(function* () {
     if (settings.existingAud !== "") return;
 
     const uri = (path: string) =>
       Output.asOutput(host).pipe(Output.map((name) => `${name}${path}`));
 
+    // The logical ID keeps its deployed name until the stacks are renamed (#122).
     yield* Cloudflare.Access.Application("ProxyRoutes", {
       type: "self_hosted",
       // The first destination, as Cloudflare records it. Declared because an update without a `domain` resends the
       // recorded one, which Cloudflare refuses once the host changes ("domain not included in destinations").
-      domain: uri(PROXY_PATHS[0]),
-      destinations: PROXY_PATHS.map((path) => ({ type: "public" as const, uri: uri(path) })),
+      domain: uri(CLIENT_API_PATHS[0]),
+      destinations: CLIENT_API_PATHS.map((path) => ({ type: "public" as const, uri: uri(path) })),
       policies: [{ decision: "bypass", include: ["everyone"] }],
     });
   });
@@ -170,7 +174,7 @@ const WriteServiceTokens = Alchemy.Action(
 
 /**
  * Cloudflare Access for the Worker's custom domain: one self-hosted application covering the whole hostname (the client
- * API leaves it through {@link provisionProxyBypass}), an Allow
+ * API leaves it through {@link provisionClientApiBypass}), an Allow
  * policy for people, a Service Auth policy for the stack's service tokens (and `ACCESS_ALLOW_SERVICE_TOKEN_IDS`), and
  * the tokens themselves. With `ACCESS_AUD` set, an application managed elsewhere is used instead and nothing is
  * created. Preview stages get an application without a domain that the Worker enrolls into (see `application`).

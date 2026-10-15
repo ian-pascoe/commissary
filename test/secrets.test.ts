@@ -64,7 +64,7 @@ api-keys:
         - api-key: ${COMPAT_KEY}
 `;
 
-/** A ControlPlane of a new org holding an auth file and config provider keys. */
+/** A ControlPlane of a new org holding an auth file and provider keys. */
 const orgWithSecrets = async () => {
   const org = newOrg();
   const stub = controlPlane(org);

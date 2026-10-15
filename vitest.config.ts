@@ -10,7 +10,7 @@ const SELF_HOSTED_BINDINGS = {
   PLATFORM_ADMIN_SERVICE_TOKENS: "",
   // End-to-end tests through `exports.default.fetch` authenticate with the dev bypass, which only applies to
   // loopback hosts (`http://localhost/...`) while ACCESS_TEAM_DOMAIN/ACCESS_AUD stay empty; other hosts still
-  // fail closed (`https://proxy.test/...` answers 500 without Access settings).
+  // fail closed (`https://commissary.test/...` answers 500 without Access settings).
   ACCESS_DEV_BYPASS: "true",
   META_MINT_URL: "",
   // Fixed test key of the keyed `auth_index` (deployed: an Alchemy `Random`, alchemy.run.ts); 64 characters, so
@@ -25,7 +25,7 @@ const SELF_HOSTED_BINDINGS = {
 /**
  * A hosted proxy (ADR 0026, `src/hosted/`): Better Auth signs people in with GitHub and Google (stubbed through the
  * global `fetch` in the tests), Turnstile guards sign-up, and the per-org rate limit is low enough to reach. No dev
- * bypass: requests go to `https://proxy.test`.
+ * bypass: requests go to `https://commissary.test`.
  */
 const HOSTED_BINDINGS = {
   ...SELF_HOSTED_BINDINGS,

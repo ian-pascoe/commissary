@@ -1,5 +1,5 @@
 /**
- * Which custom header values the management API shows and which it masks: the Account page and the Keys page
+ * Which custom header values the management API shows and which it masks: the Account page and the Provider keys page
  * (`maskHeaders`) classify headers by these rules. Shared
  * with the browser (no imports), so the panel types a new secret header's value into a password field by the same
  * rule the server masks it by.

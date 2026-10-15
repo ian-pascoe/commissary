@@ -47,7 +47,7 @@ const DOCUMENT = {
   },
   access: { "api-keys": ["client-key"], "admin-emails": ["ops@example.com"] },
   requests: {
-    "proxy-url": "http://proxy.test:8080",
+    "proxy-url": "http://commissary.test:8080",
     payload: {
       default: [{ models: [{ name: "gpt-*" }], params: { "reasoning.effort": "high" } }],
       filter: [{ models: [{ name: "claude-*" }], params: ["metadata"] }],

@@ -74,7 +74,7 @@ describe("Access gate through the router", () => {
     path: string,
     init: RequestInit = {},
     bindings: Env = accessEnv,
-    base = "https://proxy.test",
+    base = "https://commissary.test",
   ) => handler(new Request(`${base}${path}`, init), requestContext(bindings, ctx));
 
   it("keeps /healthz public and gates / (the control panel)", async () => {
@@ -293,7 +293,7 @@ describe("Access gate through the router", () => {
 });
 
 const fetchWorker = (path: string) =>
-  exports.default.fetch(new Request(`https://proxy.test${path}`));
+  exports.default.fetch(new Request(`https://commissary.test${path}`));
 
 describe("Worker entry point", () => {
   it("serves public routes and gates protected ones (unconfigured defaults fail closed)", async () => {

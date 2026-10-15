@@ -5,7 +5,7 @@
  * every account at once (`sweepQuotas`) by the `quota-check` cron task (`runQuotaSweep`) and the panel's "Check all
  * quotas" (`POST /v9/management/credentials/quota/all`). A sweep holds the ControlPlane's sweep lease
  * (`sweep-lease.ts`), so only one runs at a time whoever started it. Accounts are named as the credential list names
- * them: auth files by file name, config provider keys of a provider that reports quota with the key (OpenCode Go) by their
+ * them: auth files by file name, provider keys of a provider that reports quota with the key (OpenCode Go) by their
  * `auth_index`; a sweep covers both (`quotaCheckTargets`).
  *
  * The upstream call runs in the Worker rather than inside the Durable Object so the single-writer object is not held
@@ -90,7 +90,7 @@ const record = (id: string, outcome: QuotaOutcome, options: RecordOptions) =>
   });
 
 /**
- * Checks the quota of the account `name` (an auth file name, or a listed config provider key's `auth_index`) and/or
+ * Checks the quota of the account `name` (an auth file name, or a listed provider key's `auth_index`) and/or
  * `authIndex` and returns the stored report. An outcome for tokens
  * replaced during the check is dropped (`stale`), like a refresh result. `sweep`: part of a sweep, which skips
  * recent Claude reset grant reads (`quotaProbeTarget`).
@@ -253,7 +253,7 @@ const keepLease = (token: string): Effect.Effect<void, never, WorkerEnv | Curren
   });
 
 /**
- * Checks every enabled account of a supported provider (auth files and the listed config provider keys),
+ * Checks every enabled account of a supported provider (auth files and the listed provider keys),
  * {@link SWEEP_CONCURRENCY} at a time, under the sweep lease:
  * `running` without any provider call when another sweep holds it. Each account's outcome renews the lease, and so
  * does a background renewal every {@link LEASE_RENEW_INTERVAL_MS}; when a renewal finds the lease lost the sweep stops

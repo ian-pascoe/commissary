@@ -1043,9 +1043,9 @@ management key is not ported, and the port's per-org management keys (_Managemen
   tokens included; deviation from Go: only a service-token admin may call it, an email admin gets
   `403 download_requires_service_token`: the response is the one place a stored refresh token leaves the Worker, and
   a service token is the credential meant for scripts, see `ACCESS.md`), `models`, `status`, `fields`, `refresh`, `routing/cooldown/reset`. Credential id = file name; the
-  list holds the auth files plus the config provider keys whose provider reports quota with the key itself (`source:
+  list holds the auth files plus the provider keys whose provider reports quota with the key itself (`source:
   "config"`, `quota/report.ts` `CONFIG_QUOTA_PROVIDERS`: OpenCode Go only; `status` toggles any config key through its
-  `excluded-models`, see _Provider keys_ below). Deviation from Go, which lists no config provider keys in `/auth-files` (its
+  `excluded-models`, see _Provider keys_ below). Deviation from Go, which lists no provider keys in `/auth-files` (its
   panel shows them on the providers page only): the panel's Accounts page needs them for the OpenCode Go usage windows
   (see _Quota check_). Such an entry is named by its `auth_index` (`id` and `name`; the content-addressed credential id
   is never sent), `account` is the masked key (`[redacted]…abcd`), `supports_quota` is true, `key_group` (`{family,
@@ -1150,7 +1150,7 @@ management key is not ported, and the port's per-org management keys (_Managemen
     `countTokens` on the first configured model. 30 s bound, not reported to the credential pool (no counters or
     cooldown), `200` always (`ok: false` with `status_code` and a fixed message; bodies and keys are never copied).
     Meta `/models` and Vertex `countTokens` are unverified against the live services.
-  - `PATCH /credentials/status` (`auth_index`; `name` addresses auth files only) on a config provider key adds or removes `*` in its
+  - `PATCH /credentials/status` (`auth_index`; `name` addresses auth files only) on a provider key adds or removes `*` in its
     `excluded-models` (Go `toggleConfigAPIKeyExcludedAll`; answers `via: "config:excluded-models"`, `excluded_pattern: "*"`);
     the id and `auth_index` do not change. A compat key answers `409`: disable the endpoint (its group's `disabled`). The
     toggle names no revision: it sets one flag to the state asked for, so the last toggle wins; it moves the group's
@@ -1308,7 +1308,7 @@ management key is not ported, and the port's per-org management keys (_Managemen
   Settings (with the import) and model rule routes are Workers additions (secrets never in their responses and never read
   back; every write names the revision of the entry it changes and a stale one is `409`; values the normaliser would
   rewrite refused with `422` instead of silently changed). Go's whole-document `/config*` routes are not ported
-  (_Config entries_ above). Config provider keys can be toggled
+  (_Config entries_ above). Provider keys can be toggled
   (Go answers the same through `excluded-models`); compat keys cannot, only their endpoint.
 
 ## Quota check (`src/quota/`, `src/management/quota-routes.ts`)
@@ -1319,7 +1319,7 @@ result is stored.
 
 - **Flow** (`check.ts`): the ControlPlane resolves the account and its token (`quotaProbeTarget`: `ensureFresh`, then
   `target.ts`; the token Go's api-call substitutes for `$TOKEN$`, the Meta `dca_token`, the Devin session token; for a
-  listed config provider key, named by its `auth_index`, the key itself without a refresh). The
+  listed provider key, named by its `auth_index`, the key itself without a refresh). The
   **Worker** then calls the usage endpoint with its `HttpClient` (`probe.ts`, 15 s per call), so the single-writer
   object is never held by a slow provider. Finally the ControlPlane merges the outcome into the stored report
   (`recordQuotaReport`, `report.ts`).
@@ -2099,7 +2099,7 @@ Workers addition replacing the Go server's client keys (`access.api-keys`, impor
   Access edge the Worker reads the JWT from `cf-access-token` too (Access only sets `Cf-Access-Jwt-Assertion` on paths
   it guards). Service token headers cannot be honoured there: only Access turns them into a JWT, and the bypass
   application skips it.
-- **Infra** (`infra/access.ts` `provisionProxyBypass`): a second self-hosted Access application on the client API paths of the
+- **Infra** (`infra/access.ts` `provisionClientApiBypass`): a second self-hosted Access application on the client API paths of the
   Worker's hostname (custom domain, or the preview's `workers.dev` URL) with a Bypass/everyone policy; Access matches the
   most specific application, so the main application keeps every other path. It is derived from the Worker's output, so
   a deploy applies it only after the new Worker, which reads `cf-access-token`, is live. `tools/check-deploy.sh` verifies

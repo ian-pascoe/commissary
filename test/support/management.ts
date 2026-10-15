@@ -132,7 +132,7 @@ export const makeHarness = (
     if (auth !== false) headers.set("Cf-Access-Jwt-Assertion", auth ?? (await token()));
 
     return await web.handler(
-      new Request(`https://proxy.test${path}`, { ...rest, headers }),
+      new Request(`https://commissary.test${path}`, { ...rest, headers }),
       Context.add(requestContext({ ...baseEnv, ...bindings }, ctx), CurrentOrg, org),
     );
   };

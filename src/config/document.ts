@@ -16,7 +16,7 @@ import {
   type JsonObject,
   set,
 } from "../json/index.ts";
-import { API_KEY_FAMILIES } from "./schema.ts";
+import { PROVIDER_KEY_FAMILIES } from "./schema.ts";
 import { ConfigValidationError } from "./errors.ts";
 
 type Move = readonly [from: string, to: string];
@@ -241,7 +241,7 @@ const validateProviderKeys = (providerKeys: Json | undefined): void => {
 
   if (!isJsonObject(providerKeys))
     throw new ConfigValidationError({ message: "api-keys must be a mapping of provider groups" });
-  const allowed = new Set<string>(API_KEY_FAMILIES);
+  const allowed = new Set<string>(PROVIDER_KEY_FAMILIES);
 
   for (const [family, groups] of Object.entries(providerKeys)) {
     if (!allowed.has(family))

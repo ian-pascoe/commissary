@@ -255,7 +255,7 @@ const meta = Effect.fnUntraced(function* (target: QuotaProbeTarget) {
   return usage === undefined ? yield* Effect.fail(invalid) : (usage satisfies Usage);
 });
 
-/** OpenCode Go `{base}/usage` with the config provider key; never followed to another host (the key is in the header). */
+/** OpenCode Go `{base}/usage` with the provider key; never followed to another host (the key is in the header). */
 const opencodeGo = Effect.fnUntraced(function* (target: QuotaProbeTarget) {
   const answer = yield* get(target.usageUrl ?? "", {
     authorization: bearer(target.token),

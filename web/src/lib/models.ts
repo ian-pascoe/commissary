@@ -246,7 +246,7 @@ export const routeStanding = (route: ModelRoute, now: number): RouteStanding => 
   }
 };
 
-/** Where a config provider key lives on the provider keys page. */
+/** Where a provider key lives on the provider keys page. */
 export interface KeyHome {
   readonly family: ProviderKeyFamily;
   readonly index: number;

@@ -457,7 +457,7 @@ describe("public browser callbacks", () => {
 describe("production wiring", () => {
   it("serves the public callback routes without Access (and refuses unknown states)", async () => {
     const response = await exports.default.fetch(
-      new Request(`https://proxy.test/anthropic/callback?code=c&state=${"a".repeat(32)}`),
+      new Request(`https://commissary.test/anthropic/callback?code=c&state=${"a".repeat(32)}`),
     );
 
     expect(response.status).toBe(400);

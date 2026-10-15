@@ -173,7 +173,7 @@ describe("authentication", () => {
       { "cf-access-client-id": "admin-token.access", "cf-access-client-secret": "secret" },
     ]) {
       const response = await call("/v9/management/me", {
-        headers: { ...headers, origin: "https://proxy.test", "sec-fetch-site": "same-origin" },
+        headers: { ...headers, origin: "https://commissary.test", "sec-fetch-site": "same-origin" },
       });
 
       expect(response.status).toBe(401);

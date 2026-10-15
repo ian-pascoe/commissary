@@ -133,8 +133,8 @@ const keyFields = {
 };
 
 /**
- * The config entry id of a key group or provider key (ADR 0025), set by the ControlPlane when the entry is stored. An API
- * key's id is its credential id, so it never leaves the Worker; a group's id is random and names the group in writes.
+ * The config entry id of a key group or provider key (ADR 0025), set by the ControlPlane when the entry is stored. A
+ * provider key's id is its credential id, so it never leaves the Worker; a group's id is random and names the group in writes.
  * A Go config document never sets it: the import drops ids and assigns its own.
  */
 const entryId = { id: optional(Schema.String) };
@@ -198,7 +198,7 @@ export const OpenAICompatGroup = Schema.Struct({
 export type OpenAICompatGroup = typeof OpenAICompatGroup.Type;
 
 /** The v8 provider family names that may appear under `api-keys`. */
-export const API_KEY_FAMILIES = [
+export const PROVIDER_KEY_FAMILIES = [
   "gemini",
   "interactions",
   "vertex",
@@ -211,7 +211,7 @@ export const API_KEY_FAMILIES = [
   "openai-compatibility",
 ] as const;
 
-export const ProviderKeyFamily = Schema.Literals(API_KEY_FAMILIES);
+export const ProviderKeyFamily = Schema.Literals(PROVIDER_KEY_FAMILIES);
 
 export type ProviderKeyFamily = typeof ProviderKeyFamily.Type;
 

@@ -2,9 +2,9 @@
 // cooldowns, tokens per past window, its own routing fields (`AccountRouting.tsx`, `#routing`), details, the models it
 // serves, and the actions on it (check quota, refresh tokens, enable or disable, delete).
 //
-// A config provider key listed for its quota (OpenCode Go, `source: "config"`) keeps the allowance, the quota check, the
+// A provider key listed for its quota (OpenCode Go, `source: "config"`) keeps the allowance, the quota check, the
 // cooldowns, the history and the models; what changes the key (enable or disable, routing fields, delete) lives on
-// the Keys page, which the page links to instead.
+// the Provider keys page, which the page links to instead.
 import { useAtomValue } from "@effect/atom-react";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
@@ -601,7 +601,7 @@ const Details = ({ entry, now }: { readonly entry: CredentialEntry; readonly now
     ["Changed", updated === undefined ? undefined : formatDate(updated)],
     ["Requests served", formatCount(entry.success)],
     ["Requests failed", formatCount(entry.failed)],
-    isConfigAccount(entry) ? ["Source", "Config provider key"] : ["File", entry.name],
+    isConfigAccount(entry) ? ["Source", "Provider key"] : ["File", entry.name],
     ["Index", entry.auth_index],
   ];
 
@@ -768,7 +768,7 @@ const InConfig = ({ entry, home }: { readonly entry: CredentialEntry; readonly h
   <Section title="In the config">
     <p className={styles["lead"]}>
       This {providerName(entry.provider)} account is a provider key from the config. Edit, disable
-      or remove it with its group on the Keys page.
+      or remove it with its group on the Provider keys page.
     </p>
     <KeyLink home={home} className={kit["secondary"]}>
       <KeyRound aria-hidden="true" size={16} strokeWidth={2.25} />

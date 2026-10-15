@@ -150,7 +150,7 @@ export const makeGeminiHarness = (options: GeminiHarnessOptions): GeminiHarness 
     headers.set("Cf-Access-Jwt-Assertion", token);
 
     return handler(
-      new Request(`https://proxy.test${path}`, { ...init, headers }),
+      new Request(`https://commissary.test${path}`, { ...init, headers }),
       requestContext(workerEnv, {} as unknown as ExecutionContext),
     );
   };

@@ -13,7 +13,7 @@
 import { Effect } from "effect";
 import { decodeConfig } from "../config/codec.ts";
 import { documentOfEntries, type GroupRow, type KeyRow } from "../config/entries.ts";
-import { API_KEY_FAMILIES, type ProviderKeyFamily, type Config } from "../config/schema.ts";
+import { PROVIDER_KEY_FAMILIES, type ProviderKeyFamily, type Config } from "../config/schema.ts";
 import type { KeyGroupChange, WriteResult } from "../config/store.ts";
 import {
   isJsonArray,
@@ -88,7 +88,7 @@ class Refusal extends Error {
 }
 
 const isFamily = (value: string): value is ProviderKeyFamily =>
-  API_KEY_FAMILIES.some((family) => family === value);
+  PROVIDER_KEY_FAMILIES.some((family) => family === value);
 
 /** The private groups of every owner with the change counter they were assembled at. */
 export interface PrivateKeyOwners {

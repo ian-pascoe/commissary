@@ -45,8 +45,8 @@ describe("scopedApiUrl", () => {
     expect(scopedApiUrl("/v9/management/credentials", "acme")).toBe(
       "/v9/management/orgs/acme/credentials",
     );
-    expect(scopedApiUrl("https://proxy.test/v9/management/config/routing?x=1", "acme")).toBe(
-      "https://proxy.test/v9/management/orgs/acme/config/routing?x=1",
+    expect(scopedApiUrl("https://commissary.test/v9/management/config/routing?x=1", "acme")).toBe(
+      "https://commissary.test/v9/management/orgs/acme/config/routing?x=1",
     );
     expect(scopedApiUrl("/v9/management/oauth/import?provider=vertex", "acme")).toBe(
       "/v9/management/orgs/acme/oauth/import?provider=vertex",
@@ -62,7 +62,7 @@ describe("scopedApiUrl", () => {
     for (const url of [
       "/v9/management/orgs",
       "/v9/management/orgs/acme",
-      "https://proxy.test/v9/management/orgs?x=1",
+      "https://commissary.test/v9/management/orgs?x=1",
     ])
       expect(scopedApiUrl(url, "acme")).toBe(url);
   });

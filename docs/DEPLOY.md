@@ -11,7 +11,7 @@
 
 A preview is a Commissary Cloud deploy (`PROXY_MODE=hosted`) while its pull request has the label `hosted-preview` (adding or removing the label
 redeploys it in the other mode); production is one when the `production` environment sets `PROXY_MODE=hosted`
-([Commissary Cloud](#commissary-cloud)); the `hosted` stage always is ([The Cloud stage](#the-cloud-stage)). Everything
+([Commissary Cloud](#commissary-cloud)); the `hosted` stage always is ([The Commissary Cloud stage](#the-commissary-cloud-stage)). Everything
 else in this file describes a self-hosted Commissary, the default.
 
 Deploys run only after typecheck, lint, workflow lint (actionlint, zizmor), the test shards and the smoke test pass.
@@ -106,21 +106,21 @@ the deploy needs nothing for it: no setting, binding or D1 migration (the provid
 ControlPlane and the domain index in the Platform registry, created on first use). The Worker reaches the identity
 providers and `cloudflare-dns.com` (domain proof) with `fetch`.
 
-**Cloud previews.** A preview with the `hosted-preview` label uses the `preview` environment's sign-in settings and
+**Commissary Cloud previews.** A preview with the `hosted-preview` label uses the `preview` environment's sign-in settings and
 serves its `workers.dev` URL, so a sign-in completes only after that URL's callback is registered with the provider
 (and its hostname added to the Turnstile widget). Previews share the rate-limit namespace with each other, and with
 production when the environments set the same `ORG_RATE_LIMIT_NAMESPACE_ID`: the org `global` exists on every stage
 under the same id, so give `preview` its own namespace.
 
-### The Cloud stage
+### The Commissary Cloud stage
 
-Next to `prod`, which stays self-hosted behind Access, CI deploys Commissary Cloud from `main`: the stage `hosted` (the Cloud stage; its identifier changes in the next rebrand step), with
+Next to `prod`, which stays self-hosted behind Access, CI deploys Commissary Cloud from `main`: the stage `hosted` (the Commissary Cloud stage; its identifier changes in the next rebrand step), with
 its own hostname, Worker, storage and users. The two share nothing but the code: an org, account or API key of one
 does not exist on the other. The stage is always Commissary Cloud; the deploy refuses it without `PROXY_MODE=hosted`, so it can
 never take the self-hosted Commissary's hostname from `.env`.
 
 Its settings live in `.env.hosted` (copy `.env.hosted.example`), never in `.env`, which keeps the self-hosted Commissary's
-and the Cloud previews'. Set them up once:
+and the Commissary Cloud previews'. Set them up once:
 
 1. **Hostname.** Pick one in a zone of the account, other than `CF_LLM_PROXY_DOMAIN` of `.env`, and optionally an API
    host (`CF_LLM_PROXY_API_DOMAIN`, [API host](#api-host)). The other steps use the app host.
@@ -149,7 +149,7 @@ CI's credentials are code: `stacks/github.ts` is a second Alchemy stack that cre
 It manages:
 
 - the GitHub environments `production` (deployments from `main` only, no reviewers: a green push deploys) and
-  `preview`, and `hosted` (like `production`) when `.env.hosted` exists ([The Cloud stage](#the-cloud-stage));
+  `preview`, and `hosted` (like `production`) when `.env.hosted` exists ([The Commissary Cloud stage](#the-commissary-cloud-stage));
 - `cf-llm-proxy-ci-deploy`, an account-owned Cloudflare API token limited to what `alchemy.run.ts` deploys: Workers Scripts,
   Workers KV Storage, D1, Secrets Store (Alchemy's state store) and Access: Apps and Policies (Write), Account Settings
   (Read), and Zone Read, DNS Write and Workers Routes Write on the zones of `CF_LLM_PROXY_DOMAIN` and

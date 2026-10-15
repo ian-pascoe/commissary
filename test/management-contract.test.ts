@@ -84,7 +84,7 @@ const fetchVia =
   };
 
 /** The generated client; `Fetch` is read per request, so it is provided around the whole test (`through`). */
-const client = HttpApiClient.make(ManagementApi, { baseUrl: "https://proxy.test" });
+const client = HttpApiClient.make(ManagementApi, { baseUrl: "https://commissary.test" });
 
 const through = (target: Harness) =>
   Effect.provide(
@@ -1502,7 +1502,7 @@ describe("management contract", () => {
 
         // The panel's client addresses its org this way (web/src/api/client.ts).
         const scoped = HttpApiClient.make(ManagementApi, {
-          baseUrl: "https://proxy.test",
+          baseUrl: "https://commissary.test",
           transformClient: HttpClient.mapRequest(
             HttpClientRequest.updateUrl((url) => scopedApiUrl(url, "contract-scoped")),
           ),

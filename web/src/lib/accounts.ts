@@ -4,11 +4,11 @@ import type { CredentialEntry } from "#contract/credentials.ts";
 import { providerName } from "./providers.ts";
 import { type AccountStanding, accountStanding, checksQuota } from "./quota.ts";
 
-/** The server's mask before the last characters of a config provider key (`[redacted]…abcd`). */
+/** The server's mask before the last characters of a provider key (`[redacted]…abcd`). */
 const KEY_MASK = /^\[redacted\]/;
 
 /**
- * The account's address or label, whichever it has (the file name as a last resort); a config provider key reads
+ * The account's address or label, whichever it has (the file name as a last resort); a provider key reads
  * "Key …abcd".
  */
 export const accountName = (entry: CredentialEntry): string => {
@@ -120,8 +120,8 @@ const REFRESHABLE = new Set([
 export const refreshable = (provider: string): boolean => REFRESHABLE.has(provider);
 
 /**
- * A config provider key listed for its quota (`source: "config"`, OpenCode Go): it lives in the config, so it is edited,
- * disabled and removed on the Keys page, not here.
+ * A provider key listed for its quota (`source: "config"`, OpenCode Go): it lives in the config, so it is edited,
+ * disabled and removed on the Provider keys page, not here.
  */
 export const isConfigAccount = (entry: CredentialEntry): boolean => entry.source === "config";
 
@@ -148,7 +148,7 @@ export const accountActions = (entry: CredentialEntry): AccountActions => {
   };
 };
 
-/** Where a config account's key is edited: its group on the Keys page, else the Keys page itself. */
+/** Where a config account's key is edited: its group on the Provider keys page, else the Provider keys page itself. */
 export type KeyHome =
   | { readonly to: "/keys/$family/$index"; readonly params: { family: string; index: string } }
   | { readonly to: "/keys" };

@@ -21,7 +21,7 @@ import {
 const pickForCaller = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
   const request = yield* HttpServerRequest.HttpServerRequest;
-  const model = new URL(request.url, "https://proxy.test").searchParams.get("model") ?? "";
+  const model = new URL(request.url, "https://commissary.test").searchParams.get("model") ?? "";
 
   const answer = yield* Effect.promise(
     async () =>

@@ -385,7 +385,9 @@ effectDescribe("grants contract", () => {
   effectIt.effect("decodes the list, the saves, the errors and models/mine", () =>
     Effect.flatMap(Effect.promise(newOrg), (org) =>
       Effect.gen(function* () {
-        const api = yield* HttpApiClient.make(ManagementApi, { baseUrl: "https://proxy.test" });
+        const api = yield* HttpApiClient.make(ManagementApi, {
+          baseUrl: "https://commissary.test",
+        });
 
         const body = { subject: subjectOf(org.alice.id), scope: ALL, models: ["claude-*"] };
         const saved = yield* api.grants.create({ payload: body });

@@ -6,8 +6,8 @@
  * (`CooldownSnapshotForAuth`) and types.go (`RecentRequestsSnapshot`). Pure: no secrets are included (the Codex
  * `id_token` is reduced to a few claims), so the result can leave the ControlPlane Durable Object.
  *
- * Differences: auth files are listed, plus the config provider keys whose provider reports quota with the key itself
- * (`CONFIG_QUOTA_PROVIDERS`, OpenCode Go; Go lists no config provider keys, its panel shows them on the providers page
+ * Differences: auth files are listed, plus the provider keys whose provider reports quota with the key itself
+ * (`CONFIG_QUOTA_PROVIDERS`, OpenCode Go; Go lists no provider keys, its panel shows them on the providers page
  * only) as `source: "config"` entries ({@link buildConfigCredentialEntry}); `recent_requests` come from the
  * credential's recent-requests ring; cooldown reasons are reduced to the quota reason or the last error class.
  * `quota_report` is the stored server-side quota check and `reset_grants` the last Claude reset grant status read
@@ -179,7 +179,7 @@ export interface ConfigKeyGroup {
 const isDisablingPattern = (pattern: string): boolean => pattern.trim() === "*";
 
 /**
- * Builds the panel entry of a config provider key listed on the Accounts page (`source: "config"`).
+ * Builds the panel entry of a provider key listed on the Accounts page (`source: "config"`).
  *
  * The credential id is an unsalted hash of the key (`credentials/synthesize.ts`), so it is never sent: the entry's `id`
  * and `name` are the keyed `auth_index`, which is what the quota check, the cron sweep's results and the panel address

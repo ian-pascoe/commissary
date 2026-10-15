@@ -61,7 +61,7 @@ describe("scopedUrl", () => {
       url: "/v9/management/config?x=1&y=2",
     });
     expect(scopedUrl("/o/acme/accounts")?.url).toBe("/accounts");
-    expect(scopedUrl("https://proxy.test/o/acme/keys?z=1")).toEqual({
+    expect(scopedUrl("https://commissary.test/o/acme/keys?z=1")).toEqual({
       slug: "acme",
       url: "/keys?z=1",
     });
@@ -110,7 +110,7 @@ describe("zones", () => {
 });
 
 describe("cross-site rules for scoped spellings", () => {
-  const ORIGIN = "https://proxy.test";
+  const ORIGIN = "https://commissary.test";
   const crossSite = { "sec-fetch-site": "cross-site" };
   const navigate = { ...crossSite, "sec-fetch-mode": "navigate", "sec-fetch-dest": "document" };
 

@@ -1,5 +1,5 @@
 /**
- * `POST /v9/management/provider-keys/probe` (`contract/provider-keys.ts` `ProbeResult`): one connection test of a config provider key.
+ * `POST /v9/management/provider-keys/probe` (`contract/provider-keys.ts` `ProbeResult`): one connection test of a provider key.
  *
  * Workers addition, no Go counterpart. The upstream panel tests keys from the browser through Go's (not ported)
  * `POST /requests/api-call` with the raw key (`useConnectivityTest.ts`, `models.ts`); here the ControlPlane hands the

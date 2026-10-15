@@ -6,8 +6,8 @@
  *
  *   pnpm ci:setup        # alchemy deploy --config stacks/github.ts --profile admin --stage ci
  *
- * The deploy settings (CF_LLM_PROXY_DOMAIN, ACCESS_*) come from `.env`, like `alchemy.run.ts`, and so do a hosted
- * proxy's (SIGN_IN_*, TURNSTILE_*, …), written whenever `.env` sets them: previews labeled `hosted-preview` need them
+ * The deploy settings (CF_LLM_PROXY_DOMAIN, ACCESS_*) come from `.env`, like `alchemy.run.ts`, and so do Commissary
+ * Cloud's (SIGN_IN_*, TURNSTILE_*, …), written whenever `.env` sets them: previews labeled `hosted-preview` need them
  * even while production is self-hosted. The `hosted` environment (Commissary Cloud, which CI deploys next to production,
  * stage `hosted`) takes its settings from `.env.hosted` instead, and is left alone while that file does not exist.
  */
@@ -25,7 +25,7 @@ import * as Stream from "effect/Stream";
 import { existsSync, readFileSync } from "node:fs";
 import { HOSTED_STAGE, readSettings } from "../infra/settings.ts";
 
-/** The hosted stage's deploy settings, next to `.env` (docs/DEPLOY.md "The Cloud stage"). */
+/** The hosted stage's deploy settings, next to `.env` (docs/DEPLOY.md "The Commissary Cloud stage"). */
 const HOSTED_ENV_FILE = ".env.hosted";
 
 /** Commissary Cloud's settings (docs/DEPLOY.md "Commissary Cloud"): GitHub variables, then GitHub secrets. */

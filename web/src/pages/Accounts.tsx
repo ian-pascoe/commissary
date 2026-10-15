@@ -13,7 +13,7 @@
 //
 // Config provider keys whose provider reports quota (OpenCode Go) are listed too, marked "Config key": they take the quota
 // check like any account but live in the config, so a selection leaves them out (their row keeps opening the account,
-// which links to the key's group on the Keys page).
+// which links to the key's group on the Provider keys page).
 import { useAtomRefresh, useAtomValue } from "@effect/atom-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
@@ -657,7 +657,7 @@ const List = ({ accounts }: { readonly accounts: ReadonlyArray<Assessed> }) => {
   const query = useDeferredValue(search.trim().toLowerCase());
   const searchId = useId();
   const listed = shownAccounts(accounts, filter, query);
-  // What a selection and its actions see: the shown auth files (config keys are edited on the Keys page).
+  // What a selection and its actions see: the shown auth files (config keys are edited on the Provider keys page).
   const shown = selectable(listed);
 
   // Accounts deleted here or elsewhere leave the selection.

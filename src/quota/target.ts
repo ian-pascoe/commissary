@@ -5,7 +5,7 @@
  * Token per provider: the `$TOKEN$` value of Go's `POST /requests/api-call` (`apiCallToken`; the route itself is not
  * ported) for Claude, Codex, Antigravity, Kimi and xAI; the `dca_token` for Meta (the usage endpoint refuses the
  * minted provider key, upstream panel features/quota/providers/meta/requests.ts); the session token for Devin
- * (`devinCredentials`); the config provider key itself for OpenCode Go (`attributes.api_key`, usage URL from the key's
+ * (`devinCredentials`); the provider key itself for OpenCode Go (`attributes.api_key`, usage URL from the key's
  * `base_url`). The target carries token material, so it only ever crosses the RPC boundary to the Worker and is never
  * logged or returned to clients.
  */

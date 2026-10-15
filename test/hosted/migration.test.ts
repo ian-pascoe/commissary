@@ -40,7 +40,7 @@ describe("migration 0008 (hosted auth)", () => {
       )
       .run();
 
-    const before = await getMigrations(authOptions(env, "https://proxy.test"));
+    const before = await getMigrations(authOptions(env, "https://commissary.test"));
     expect(before.toBeCreated.map((table) => table.table).sort()).toEqual([
       "auth_account",
       "auth_session",
@@ -50,7 +50,7 @@ describe("migration 0008 (hosted auth)", () => {
 
     for (const statement of statementsOf(hostedAuth)) await db.prepare(statement).run();
 
-    const after = await getMigrations(authOptions(env, "https://proxy.test"));
+    const after = await getMigrations(authOptions(env, "https://commissary.test"));
     expect(after.toBeCreated).toEqual([]);
     expect(after.toBeAdded).toEqual([]);
     expect(await tables()).toEqual([

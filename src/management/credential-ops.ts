@@ -21,7 +21,7 @@ export interface CredentialRef {
  * `matchesAuthFileLookup`: both given criteria must match; a reference without criteria matches nothing. `authIndexOf`
  * is the deployment's indexer.
  *
- * Deviation from Go: `name` matches auth files only. A config provider key is addressed by its `auth_index`: its id is
+ * Deviation from Go: `name` matches auth files only. A provider key is addressed by its `auth_index`: its id is
  * derived from the key and never published, and matching it would let a caller confirm guessed keys.
  */
 export const findCredential = (

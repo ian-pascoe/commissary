@@ -798,7 +798,7 @@ describe("the verified-key cache", () => {
         });
 
         const headers = { authorization: `Bearer ${key.key}` };
-        const url = "https://proxy.test/v1/models";
+        const url = "https://commissary.test/v1/models";
         const identity = yield* authenticateRequest(headers, url, "protected");
 
         assert.strictEqual(identity.principalId, `key:${key.record.id}`);

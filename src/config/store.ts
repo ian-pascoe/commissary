@@ -1141,7 +1141,7 @@ export class ConfigStore {
       .toArray()
       .map((row): GroupRow => ({
         id: row.id,
-        // SAFETY: only `writeKeyGroup` and `#replace` write this column, with an `ProviderKeyFamily`.
+        // SAFETY: only `writeKeyGroup` and `#replace` write this column, with a `ProviderKeyFamily`.
         family: row.family as ProviderKeyFamily,
         position: row.position,
         value: objectOf(this.#open(TABLES.groups, row.id, row.value)),

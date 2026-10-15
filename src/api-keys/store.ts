@@ -195,7 +195,7 @@ export class ApiKeyStore {
 
   // --- settings -----------------------------------------------------------------------------------------------
 
-  /** Whether the client API still accept an Access sign-in instead of an API key. */
+  /** Whether the client API still accepts an Access sign-in instead of an API key. */
   accessClients(): boolean {
     return (
       this.#sql

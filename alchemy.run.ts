@@ -11,7 +11,7 @@ import * as Alchemy from "alchemy";
 import * as Cloudflare from "alchemy/Cloudflare";
 import * as Effect from "effect/Effect";
 import * as Output from "alchemy/Output";
-import { type AccessWiring, provisionAccess, provisionProxyBypass } from "./infra/access.ts";
+import { type AccessWiring, provisionAccess, provisionClientApiBypass } from "./infra/access.ts";
 import { BUNDLE_ALIASES } from "./infra/bundle.ts";
 import { readSettings } from "./infra/settings.ts";
 import { DEV_AUTH_INDEX_KEY } from "./src/management/auth-index-key.ts";
@@ -117,7 +117,7 @@ export default Alchemy.Stack(
       compatibility: COMPATIBILITY,
       // Production serves only its Access-protected domain; pull-request previews serve their workers.dev URL,
       // protected by enrolling the Worker into the preview's Access application. The client API leaves Access on both
-      // (`provisionProxyBypass` below, or the API host): clients authenticate there with API keys (ADR 0022).
+      // (`provisionClientApiBypass` below, or the API host): clients authenticate there with API keys (ADR 0022).
       workersDev: settings.preview,
       ...(dev || settings.preview ? {} : { domain }),
       ...(access.application === undefined ? {} : { access: access.application }),
@@ -154,7 +154,7 @@ export default Alchemy.Stack(
     // `Cf-Access-Jwt-Assertion`, still serves them (clients sending `cf-access-token` would get 401 in between).
     // An API host needs none: Access covers the app host only.
     if (!dev && hosted === undefined && !split)
-      yield* provisionProxyBypass(
+      yield* provisionClientApiBypass(
         settings,
         Output.asOutput(worker.url).pipe(
           Output.map((url) => {

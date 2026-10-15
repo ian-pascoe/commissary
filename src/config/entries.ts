@@ -26,7 +26,7 @@ import {
 import { setOwn } from "../json/value.ts";
 import { SETTINGS_TREE } from "../management/contract/settings.ts";
 import { encodeConfig } from "./codec.ts";
-import { API_KEY_FAMILIES, type ProviderKeyFamily, Config } from "./schema.ts";
+import { PROVIDER_KEY_FAMILIES, type ProviderKeyFamily, Config } from "./schema.ts";
 import { Schema } from "effect";
 
 interface Tree {
@@ -174,7 +174,7 @@ export const entriesOfConfig = (config: Config, payloadId: () => string): EntryR
   const keys: KeyRow[] = [];
   const providerKeys = objectOf(document["api-keys"]);
 
-  for (const family of API_KEY_FAMILIES) {
+  for (const family of PROVIDER_KEY_FAMILIES) {
     for (const [position, raw] of arrayOf(providerKeys[family]).entries()) {
       const { id, keys: groupKeys, ...value } = objectOf(raw);
 

@@ -1,5 +1,5 @@
 /**
- * Credentials synthesised from config provider keys (currently `api-keys.openai-compatibility`) and the model ids they
+ * Credentials synthesised from provider keys (currently `api-keys.openai-compatibility`) and the model ids they
  * serve.
  *
  * Go source: internal/watcher/synthesizer/config.go (synthesizeOpenAICompat), internal/watcher/synthesizer/helpers.go

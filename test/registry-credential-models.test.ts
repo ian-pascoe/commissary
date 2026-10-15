@@ -274,7 +274,7 @@ oauth:
   });
 });
 
-describe("assembleCredentialModels: config provider keys", () => {
+describe("assembleCredentialModels: provider keys", () => {
   it("replaces the catalog with the configured models (owner/type per family, static thinking inherited)", () => {
     const assembled = assembleCredentialModels(
       source("k", "claude", {

@@ -1307,7 +1307,7 @@ const fetchVia =
     });
   };
 
-const client = HttpApiClient.make(ManagementApi, { baseUrl: "https://proxy.test" });
+const client = HttpApiClient.make(ManagementApi, { baseUrl: "https://commissary.test" });
 
 const through = (target: Harness) =>
   Effect.provide(

@@ -170,7 +170,7 @@ describe("POST /credentials/batch", () => {
     expect((await files()).find((file) => file.name === "a.json")?.disabled).toBe(false);
   });
 
-  it("reports unknown names and config provider keys as not_found next to the ones that succeeded", async () => {
+  it("reports unknown names and provider keys as not_found next to the ones that succeeded", async () => {
     await seed("a.json");
     await controlPlane().importConfig(
       "api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-x }]\n",
@@ -474,7 +474,7 @@ describe("POST /credentials/batch", () => {
     const same = await harness.call(BATCH, {
       method: "POST",
       headers: {
-        origin: "https://proxy.test",
+        origin: "https://commissary.test",
         "sec-fetch-site": "same-origin",
         "content-type": "application/json",
       },
@@ -1024,7 +1024,7 @@ const fetchVia =
     });
   };
 
-const client = HttpApiClient.make(ManagementApi, { baseUrl: "https://proxy.test" });
+const client = HttpApiClient.make(ManagementApi, { baseUrl: "https://commissary.test" });
 
 const through = (target: Harness) =>
   Effect.provide(

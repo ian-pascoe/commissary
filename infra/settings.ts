@@ -213,7 +213,7 @@ const hostedSettings = Effect.gen(function* () {
 export const PREVIEW_STAGE = /^pr-\d+$/;
 
 /**
- * Stage of Commissary Cloud, which CI deploys from `main` next to `prod` (docs/DEPLOY.md "The Cloud stage"). Its settings live
+ * Stage of Commissary Cloud, which CI deploys from `main` next to `prod` (docs/DEPLOY.md "The Commissary Cloud stage"). Its settings live
  * in `.env.hosted` (`pnpm deploy:hosted`) and the GitHub environment `hosted`.
  */
 export const HOSTED_STAGE = "hosted";

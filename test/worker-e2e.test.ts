@@ -71,7 +71,7 @@ const CONFIG_KEY_ID = "openai-compatibility:mock:";
 
 const controlPlane = () => env.CONTROL_PLANE.getByName("global");
 
-/** Counters the ControlPlane keeps for the config provider key (written by `report`). */
+/** Counters the ControlPlane keeps for the provider key (written by `report`). */
 const reportedCounts = async () => {
   const entry = (await controlPlane().listCredentials(FULL_ACCESS)).find((summary) =>
     summary.id.startsWith(CONFIG_KEY_ID),

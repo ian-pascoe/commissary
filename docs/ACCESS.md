@@ -34,12 +34,12 @@ subrequests (the first line of defence against cross-site request forgery on the
 Alchemy application resource does not manage these fields and its updates are PUT-style, so a follow-up step re-applies them
 after every change of the application: do not edit them in the dashboard.
 
-**The client API leaves Access.** With an API host (`CF_LLM_PROXY_API_DOMAIN`, ADR 0028) they are served there only,
+**The client API leaves Access.** With an API host (`CF_LLM_PROXY_API_DOMAIN`, ADR 0028) it is served there only,
 and no Access application covers that hostname: the Worker answers the client API on the API host and everything else
 (the panel, the management API, the OAuth callbacks) on `CF_LLM_PROXY_DOMAIN`, each with a `404` naming the other host
 for a path it does not serve (`src/http/hosts.ts`). A client that signs in through Access sends the token of the app
 host's application (`cloudflared access token -app=https://<CF_LLM_PROXY_DOMAIN>`) in `cf-access-token` to the API host;
-the Worker checks it against `ACCESS_AUD` itself. Without an API host, the bypass application (`infra/access.ts` `provisionProxyBypass`) covers `/v1`,
+the Worker checks it against `ACCESS_AUD` itself. Without an API host, the bypass application (`infra/access.ts` `provisionClientApiBypass`) covers `/v1`,
 `/v1beta`, `/v1internal`, `/openai/v1`, `/backend-api/codex`, `/chat/completions`, `/completions` and `/responses` with
 their sub-paths. Access applies the most specific application to a request, and a hostname-and-path application before
 a Worker-level one, so these paths reach the Worker without a sign-in while every other path (the panel, the management

@@ -187,7 +187,7 @@ describe("price override routes", () => {
 });
 
 /** The generated client of the management contract decodes the same routes. */
-const client = HttpApiClient.make(ManagementApi, { baseUrl: "https://proxy.test" });
+const client = HttpApiClient.make(ManagementApi, { baseUrl: "https://commissary.test" });
 
 const fetchVia =
   (target: Harness): typeof fetch =>

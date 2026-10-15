@@ -652,7 +652,7 @@ export const saveSettingsAtom = Atom.family((_section: string) =>
 );
 
 // Mutations: call with `reactivityKeys: CREDENTIALS` so the credential list refetches afterwards (`PROVIDER_KEYS` for a
-// config provider key).
+// provider key).
 export const setDisabledAtom = ManagementClient.mutation("credentials", "setDisabled");
 
 export const patchFieldsAtom = ManagementClient.mutation("credentials", "patchFields");

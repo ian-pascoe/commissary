@@ -1,10 +1,10 @@
-// Helpers for Commissary Cloud tests (vitest project `hosted`, vitest.config.ts): requests to `https://proxy.test`, a
+// Helpers for Commissary Cloud tests (vitest project `hosted`, vitest.config.ts): requests to `https://commissary.test`, a
 // fake GitHub and Turnstile behind the global `fetch`, and a sign-in that walks Better Auth's real GitHub flow.
 import { exports } from "cloudflare:workers";
 import { SITEVERIFY_URL } from "../../src/hosted/turnstile.ts";
 import { resetUsageDb } from "../support/usage.ts";
 
-export const ORIGIN = "https://proxy.test";
+export const ORIGIN = "https://commissary.test";
 
 /** The Turnstile token the fake siteverify accepts; any other token fails. */
 export const GOOD_TURNSTILE = "turnstile-ok";

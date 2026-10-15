@@ -465,7 +465,7 @@ export const ApiKeysPage = () => {
       <header className={styles["head"]}>
         <h1 className={styles["title"]}>API keys</h1>
         <p className={styles["intro"]}>
-          An API key lets a coding agent or script use this org&rsquo;s Commissary without an Access
+          An API key lets a coding agent or script use Commissary in this org without an Access
           sign-in. Each key belongs to the member who created it, and anything holding it can use
           Commissary as that member.{" "}
           {every

@@ -399,7 +399,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     ).toBe(404);
   });
 
-  it("toggles config provider keys through excluded-models and refuses compat keys", async () => {
+  it("toggles provider keys through excluded-models and refuses compat keys", async () => {
     await controlPlane().importConfig(
       "api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-x }]\n",
       "test",

@@ -4,7 +4,9 @@ import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
 const fetchWorker = (path: string, init?: RequestInit) =>
-  exports.default.fetch(new Request(`https://proxy.test${path}`, { redirect: "manual", ...init }));
+  exports.default.fetch(
+    new Request(`https://commissary.test${path}`, { redirect: "manual", ...init }),
+  );
 
 const snapshot = async (response: Response) => ({
   status: response.status,
@@ -32,7 +34,7 @@ describe("self-hosted Commissary", () => {
     ] as const) {
       const response = await fetchWorker(path, {
         method,
-        headers: { "content-type": "application/json", origin: "https://proxy.test" },
+        headers: { "content-type": "application/json", origin: "https://commissary.test" },
         ...(method === "POST" ? { body: JSON.stringify({ provider: "github" }) } : {}),
       });
 

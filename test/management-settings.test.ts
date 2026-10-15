@@ -22,8 +22,8 @@ const PATH = "/v9/management/settings";
 
 const SECRETS = {
   key: "sk-ant-SETTINGS-SECRET-4242",
-  proxy: "http://user:proxy-pass-777@proxy.test:8080",
-  groupProxy: "http://group-user:group-pass-555@proxy.test:9090",
+  proxy: "http://user:proxy-pass-777@commissary.test:8080",
+  groupProxy: "http://group-user:group-pass-555@commissary.test:9090",
   client: "client-key-SECRET-1313",
 };
 

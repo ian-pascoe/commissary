@@ -19,9 +19,9 @@
  * - The outcome is decided where the state is, so the answer per account is exactly what was stored.
  * A batch names at most `MAX_BATCH_NAMES` accounts, `MAX_BATCH_REFRESH_NAMES` for a refresh (`400` beyond; the body
  * is read up to {@link MAX_BODY_BYTES}, `413` beyond); the panel sends larger selections in several requests. Unknown
- * names and config provider keys (not auth files) are `not_found` results, not a failed request, except for a delete, which
+ * names and provider keys (not auth files) are `not_found` results, not a failed request, except for a delete, which
  * answers every name that is no stored auth file `ok`: a config id must read like any unknown name, or the reply would
- * confirm a guessed id and with it a guessed provider key (`auth-index.ts`). A config provider key named by its `auth_index`
+ * confirm a guessed id and with it a guessed provider key (`auth-index.ts`). A provider key named by its `auth_index`
  * (the name the credential list gives OpenCode Go keys) answers `config_credential` for every action: it lives in the
  * config, and an index is public, so the clear answer confirms nothing.
  */
