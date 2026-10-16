@@ -75,6 +75,17 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
   `src/observability` (D1 usage records, trace ids); `test/` (workerd tests and golden fixtures).
 - `apps/web` (`@commissary/web`): the control panel (below).
 - `packages/contract` (`@commissary/contract`): the management API contract, shared by the Worker and the panel.
+- `packages/core` (`@commissary/core`): the foundation without bindings, for code that two or more packages or apps
+  need (today the Worker imports it). `src/org.ts` (the org model: `OrgId`, `newOrgId`, `OrgSlug`, `GLOBAL_ORG`,
+  `DEFAULT_ORG_SLUG`, `CurrentOrg`, org-scoped names), `src/errors.ts` (the shared tagged errors), `src/hash.ts`
+  (`sha256Hex`), `src/logging.ts` (`redactHeaders`), `src/observability/` (`causeSummary`, the Workers Logs logger),
+  `src/http/management.ts` (the management replies and the text, query and `If-Match` readers, `handled`),
+  `src/http/route-services.ts` and `src/execution-context.ts` (`WorkerExecutionContext` over a structural
+  `InvocationContext`, so core needs no Workers types, and `holdInvocation`), all behind the one export `.`. It may
+  import `effect` and `node:crypto` only: no bindings, no Workers APIs, no other workspace package. The per-request
+  context (`requestContext`, `src/worker-env.ts`) stays in the Worker, which provides its env views, and so do
+  `bodyJson`/`bodyObject` (they return `@commissary/json` values) and the ControlPlane stubs (`controlPlaneOf`,
+  `controlPlane`).
 - `packages/json` (`@commissary/json`): the gjson/sjson path engine over parsed JSON, the `Json` types, `isValidJson`,
   `compactJson` and `stableStringify`. Depends on nothing.
 - `packages/translation` (`@commissary/translation`): pure sync translation. `src/translator` (the `TranslatorRegistry`
@@ -102,8 +113,8 @@ are pinned once in the `catalog:` of `pnpm-workspace.yaml`.
 adds `typecheck:root` (the deploy code) and `lint:root` (one `oxlint`/`oxfmt` run over the repository). The packages
 depend on each other's sources, not on build output, so every package task depends on `transit`, a task with no script whose
 hash covers a package's files and those of its dependencies (Turborepo's transit-node pattern): a change in
-`packages/contract` re-runs the panel's and the Worker's tasks, and one in `packages/json` re-runs translation's and the
-Worker's. The root `typecheck` and `test` tasks also hash `tools/vitest/` (the packages' Vitest configs import it); a
+`packages/contract` re-runs the panel's and the Worker's tasks, one in `packages/json` re-runs translation's and the
+Worker's, and one in `packages/core` re-runs the Worker's. The root `typecheck` and `test` tasks also hash `tools/vitest/` (the packages' Vitest configs import it); a
 package's `turbo.json` appends the root files its tasks read (`"$TURBO_EXTENDS$"`; `apps/app`: `infra/bundle.ts`,
 `infra/settings.ts`, `migrations/`). The cache is local
 (`.turbo/cache`, one per git worktree: `cacheDir` keeps a worktree from writing into the main checkout's); there is
@@ -249,8 +260,8 @@ assertion that cannot be removed carries a `// SAFETY: <invariant>` comment on t
 
 - TypeScript 7 (native `tsc`). Each program has its own tsconfig extending `tsconfig.base.json`: `apps/app/tsconfig.json`
   (Worker, workerd types), `apps/web/tsconfig.app.json` (panel, DOM types) and `tsconfig.node.json` (its Node.js side),
-  `packages/contract/tsconfig.json` (no runtime types), `packages/json` and `packages/translation` (Node.js types, no
-  Workers types) and the root's `tsconfig.infra.json` (deploy code, Node.js types). `tsc` only checks (`noEmit`); Turborepo caches it. `capnp-es` (via Alchemy) declares a TypeScript 5/6 peer
+  `packages/contract/tsconfig.json` (no runtime types), `packages/core`, `packages/json` and `packages/translation` (Node.js types,
+  no Workers types) and the root's `tsconfig.infra.json` (deploy code, Node.js types). `tsc` only checks (`noEmit`); Turborepo caches it. `capnp-es` (via Alchemy) declares a TypeScript 5/6 peer
   range; it only ships types, so the peer warning is harmless.
 - `@cloudflare/vitest-plugin` (successor of `@cloudflare/vitest-pool-workers`) is used because it supports vitest 5,
   which `@effect/vitest@4` requires.

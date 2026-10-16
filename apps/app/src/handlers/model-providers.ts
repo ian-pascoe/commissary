@@ -11,7 +11,7 @@ import { ConfigReader } from "../config/reader.ts";
 import { configCredentials, openAICompatModelIds } from "../executor/config-credentials.ts";
 import { ExecutionError } from "../executor/errors.ts";
 import type { SpawnAgentSource } from "../executor/helps/codex-multi-agent-v2.ts";
-import type { CurrentOrg } from "../platform/org.ts";
+import type { CurrentOrg } from "@commissary/core";
 import { ModelRegistry } from "../registry/service.ts";
 import type { ModelsEnv } from "../models/env.ts";
 

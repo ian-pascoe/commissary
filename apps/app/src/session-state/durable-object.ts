@@ -10,7 +10,8 @@
  * while it holds entries, so that deleting the org can wipe it ({@link SessionState.wipe}, ADR 0027).
  */
 import { DurableObject } from "cloudflare:workers";
-import { controlPlaneOf, GLOBAL_ORG, orgOfScopedName } from "../platform/org.ts";
+import { GLOBAL_ORG, orgOfScopedName } from "@commissary/core";
+import { controlPlaneOf } from "../platform/org.ts";
 import { StateEngine } from "./engine.ts";
 import { MAX_TTL_MS, type StateOp, type StateResult } from "./protocol.ts";
 import { SqliteStateTable } from "./sqlite-table.ts";

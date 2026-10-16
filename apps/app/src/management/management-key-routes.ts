@@ -13,7 +13,8 @@ import { AccessPrincipal, type Principal } from "../access/principal.ts";
 import type { ManagementKeyErrorCode, ManagementKeyRecord } from "../management-keys/store.ts";
 import { roleAtLeast } from "../members/roles.ts";
 import { CreateManagementKey, type ManagementKeyView } from "@commissary/contract/management-keys";
-import { bodyJson, controlPlane, handled, jsonReply, type Reply, replyError } from "./http.ts";
+import { handled, jsonReply, type Reply, replyError } from "@commissary/core";
+import { bodyJson, controlPlane } from "./http.ts";
 
 const BASE = "/v9/management";
 

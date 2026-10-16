@@ -44,7 +44,7 @@ import {
   token,
 } from "./support/management.ts";
 import { type MockReply, mockHttp, routes } from "./support/refresh.ts";
-import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { envContext } from "../src/worker-env.ts";
 
 const NOW = Date.parse("2026-10-11T12:00:00Z");

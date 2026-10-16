@@ -18,7 +18,7 @@ import {
   type ModelThinkingSupport,
   type ThinkingModelInfo,
 } from "@commissary/translation/thinking";
-import type { CurrentOrg } from "../platform/org.ts";
+import type { CurrentOrg } from "@commissary/core";
 import { ModelRegistry } from "../registry/service.ts";
 import type { ModelsEnv } from "../models/env.ts";
 

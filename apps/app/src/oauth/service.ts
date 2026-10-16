@@ -22,7 +22,7 @@ import { metaFlow } from "./flows/meta.ts";
 import type { CallbackFlow, CredentialRecord, DeviceFlow, Flow } from "./flows/types.ts";
 import { xaiFlow } from "./flows/xai.ts";
 import { generateState, randomHex } from "./encoding.ts";
-import { type OrgId, orgScopedName } from "../platform/org.ts";
+import { type OrgId, orgScopedName } from "@commissary/core";
 import { isValidOAuthState, normalizeCallbackProvider, type OAuthProvider } from "./names.ts";
 import { type CredentialSink, saveCredentialRecord } from "./record.ts";
 import type { OAuthSession, OAuthSessions } from "./session-store.ts";

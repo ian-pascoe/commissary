@@ -6,7 +6,7 @@ import { encodeConfig, parseConfigYaml } from "../src/config/codec.ts";
 import { ConfigStoreError } from "../src/config/errors.ts";
 import { ConfigReader, ConfigSource } from "../src/config/reader.ts";
 import { decodeStoredConfig, type ConfigSnapshotWire } from "../src/config/store.ts";
-import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { comparable } from "./support/config-entries.ts";
 import { type EnvServices, envContext } from "../src/worker-env.ts";
 

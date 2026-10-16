@@ -5,7 +5,7 @@
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { orgAuthIndexer } from "../src/management/auth-index.ts";
-import { OrgId } from "../src/platform/org.ts";
+import { OrgId } from "@commissary/core";
 import { insertUsageRecord } from "../src/usage/d1.ts";
 import {
   ADMIN,

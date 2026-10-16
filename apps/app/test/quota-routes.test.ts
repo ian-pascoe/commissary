@@ -22,7 +22,7 @@ import {
 } from "./support/management.ts";
 import { type MockReply, mockHttp, routes } from "./support/refresh.ts";
 import { env } from "cloudflare:workers";
-import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { envContext } from "../src/worker-env.ts";
 
 const QUOTA = "/v9/management/credentials/quota";

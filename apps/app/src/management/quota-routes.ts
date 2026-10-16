@@ -21,7 +21,8 @@
 import { Effect } from "effect";
 import type { Json } from "@commissary/json";
 import { checkCredentialQuota, sweepQuotas } from "../quota/check.ts";
-import { bodyObject, handled, jsonReply, replyError } from "./http.ts";
+import { handled, jsonReply, replyError } from "@commissary/core";
+import { bodyObject } from "./http.ts";
 import { currentViewer } from "./viewer.ts";
 
 const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");

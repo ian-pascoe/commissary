@@ -72,7 +72,7 @@ import {
 } from "@commissary/translation/signature";
 import { builtinTranslators, makeTranslationState } from "@commissary/translation";
 import { mockHttpClient, type UpstreamCall } from "./support/pipeline.ts";
-import { CurrentOrg, GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG, OrgId } from "@commissary/core";
 import { envContext } from "../src/worker-env.ts";
 
 const LONG_SIGNATURE = "S".repeat(80);

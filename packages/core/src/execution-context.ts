@@ -1,10 +1,19 @@
 import { Context, Effect, Option } from "effect";
 
+/**
+ * What Commissary uses of a Cloudflare `ExecutionContext`. Structural, so this package needs no Workers types: a
+ * Worker's `ctx` is one.
+ */
+export interface InvocationContext {
+  waitUntil<T>(promise: Promise<T>): void;
+  passThroughOnException(): void;
+}
+
 /** Cloudflare `ExecutionContext` (`waitUntil`, `passThroughOnException`) of the current invocation. */
 export class WorkerExecutionContext extends Context.Service<
   WorkerExecutionContext,
-  ExecutionContext
->()("commissary/platform/WorkerExecutionContext") {}
+  InvocationContext
+>()("commissary/core/WorkerExecutionContext") {}
 
 const noop = (): void => undefined;
 

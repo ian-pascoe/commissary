@@ -9,7 +9,7 @@
  */
 import { Schema } from "effect";
 import { AUTH_BASE_PATH } from "../hosted/auth.ts";
-import { OrgId } from "../platform/org.ts";
+import { OrgId } from "@commissary/core";
 import type { IdpSettings } from "./store.ts";
 
 const PREFIX = "sso-";

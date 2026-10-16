@@ -10,7 +10,7 @@ import { Effect } from "effect";
 import { HttpRouter, HttpServerRequest } from "effect/http";
 import { normalizePrivateKey } from "../credentials/refresh/vertex.ts";
 import { isJsonObject, type Json, type JsonObject } from "@commissary/json";
-import { handled, jsonReply, queryParams, replyError } from "./http.ts";
+import { handled, jsonReply, queryParams, replyError } from "@commissary/core";
 import { currentViewer } from "./viewer.ts";
 import { modelsControlPlane } from "../models/env.ts";
 

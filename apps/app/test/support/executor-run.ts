@@ -16,7 +16,7 @@ import type {
 } from "../../src/executor/types.ts";
 import type { Json } from "@commissary/json";
 import { UsageReporter } from "../../src/usage/reporter.ts";
-import { GLOBAL_ORG } from "../../src/platform/org.ts";
+import { GLOBAL_ORG } from "@commissary/core";
 
 export interface RecordedCall {
   readonly url: string;

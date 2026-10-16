@@ -11,7 +11,7 @@
  */
 import { Clock, Effect, Result, Stream } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { routeServices } from "../../http/route-services.ts";
+import { routeServices } from "@commissary/core";
 import {
   ExecutionError,
   type ExecutionError as ExecutionErrorType,

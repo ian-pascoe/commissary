@@ -10,7 +10,7 @@ import {
   type SignatureStore,
   signatureStoreKey,
 } from "@commissary/translation/signature";
-import { type OrgId, orgScopedName } from "../platform/org.ts";
+import { type OrgId, orgScopedName } from "@commissary/core";
 
 /** KV `expirationTtl` is in seconds (minimum 60). */
 const TTL_SECONDS = SIGNATURE_CACHE_TTL_MS / 1000;

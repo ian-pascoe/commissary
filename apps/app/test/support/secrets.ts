@@ -3,7 +3,7 @@
 import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import type { ControlPlane } from "../../src/index.ts";
-import type { OrgId } from "../../src/platform/org.ts";
+import type { OrgId } from "@commissary/core";
 import { openDataKey } from "../../src/secrets/data-key.ts";
 import { deploymentSecretsKeys, type SecretsKeys } from "../../src/secrets/deployment-keys.ts";
 

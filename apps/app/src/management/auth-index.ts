@@ -31,7 +31,7 @@
 import { createHmac, createSecretKey, type KeyObject } from "node:crypto";
 import { Effect } from "effect";
 import { isDeployedStage } from "../access/config.ts";
-import { CurrentOrg, GLOBAL_ORG, type OrgId } from "../platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG, type OrgId } from "@commissary/core";
 import {
   DEV_AUTH_INDEX_KEY,
   MIN_AUTH_INDEX_KEY_LENGTH,

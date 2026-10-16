@@ -1,5 +1,5 @@
-// Translation's private copy of the Worker's hashing helper (Go `sha256.Sum256` + `hex.EncodeToString` over a string);
-// not exported: translation shares no foundation code.
+// Translation's private copy of `@commissary/core`'s hashing helper (Go `sha256.Sum256` + `hex.EncodeToString` over a
+// string); not exported: translation depends on no foundation package.
 import { createHash } from "node:crypto";
 
 /** Lowercase hex SHA-256 of the UTF-8 encoding of `text`. */

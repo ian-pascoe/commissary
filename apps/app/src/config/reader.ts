@@ -12,7 +12,7 @@
  * settings are listed in `DEPLOYMENT_SETTINGS` (`config/store.ts`), which both the store and this reader apply.
  */
 import { Clock, Context, Duration, Effect, Layer, Ref } from "effect";
-import { CurrentOrg, GLOBAL_ORG, type OrgId } from "../platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG, type OrgId } from "@commissary/core";
 import { ConfigStoreError } from "./errors.ts";
 import type { PriceOverride } from "../usage/pricing.ts";
 import type { Config } from "./schema.ts";

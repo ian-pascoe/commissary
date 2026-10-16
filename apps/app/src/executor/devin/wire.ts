@@ -8,7 +8,7 @@
  * WrapConnectEnvelope). Field numbers follow docs/research/providers-other.md §4.4.
  */
 import { randomBytes, randomUUID } from "node:crypto";
-import { sha256Hex } from "../../hash.ts";
+import { sha256Hex } from "@commissary/core";
 import { isJsonObject, tryParseJson } from "@commissary/json";
 import { isClaudeCodeAttributionSystemText } from "@commissary/translation";
 import type { SensitiveWordMatcher } from "../claude/cloaking.ts";

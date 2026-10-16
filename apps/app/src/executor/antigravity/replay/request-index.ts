@@ -9,7 +9,7 @@
  * byte-identical to Go's hashes.
  */
 import { createHash, type Hash } from "node:crypto";
-import { sha256Hex } from "../../../hash.ts";
+import { sha256Hex } from "@commissary/core";
 import {
   asBool,
   asString,

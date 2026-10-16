@@ -16,7 +16,8 @@ import { AccessPrincipal } from "../access/principal.ts";
 import { decodeConfig } from "../config/codec.ts";
 import type { ChannelRuleKind, WriteResult } from "../config/store.ts";
 import { isJsonArray, type Json } from "@commissary/json";
-import { bodyJson, handled, ifMatch, jsonReply, replyError } from "./http.ts";
+import { handled, ifMatch, jsonReply, replyError } from "@commissary/core";
+import { bodyJson } from "./http.ts";
 import { modelsControlPlane } from "../models/env.ts";
 
 const BASE = "/v9/management/model-rules";

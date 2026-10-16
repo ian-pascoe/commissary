@@ -7,7 +7,7 @@
  */
 import { Effect, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { routeServices } from "../../http/route-services.ts";
+import { routeServices } from "@commissary/core";
 import type { ExecutionError } from "../../executor/errors.ts";
 import { claudeErrorBody } from "../../http/errors.ts";
 import { asString, get, type Json, set } from "@commissary/json";

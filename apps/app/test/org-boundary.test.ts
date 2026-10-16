@@ -7,15 +7,8 @@ import { ConfigStoreError } from "../src/config/errors.ts";
 import type { SettingsView } from "@commissary/contract/settings";
 import { ConfigReader, ConfigSource } from "../src/config/reader.ts";
 import { makeControlPlanePicker } from "../src/executor/control-plane-picker.ts";
-import {
-  controlPlaneOf,
-  CurrentOrg,
-  GLOBAL_ORG,
-  OrgId,
-  orgOfControlPlane,
-  orgOfScopedName,
-  orgScopedName,
-} from "../src/platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG, OrgId } from "@commissary/core";
+import { controlPlaneOf, orgOfControlPlane } from "../src/platform/org.ts";
 import { resolveBackend } from "../src/session-state/client.ts";
 import { loadVideoBinding, saveVideoBinding } from "../src/handlers/openai/video-binding.ts";
 import { insertUsageRecord } from "../src/usage/d1.ts";
@@ -70,19 +63,6 @@ const credentials = async (harness: typeof global): Promise<ReadonlyArray<Entry>
 
   return (response.body as { readonly files: ReadonlyArray<Entry> }).files;
 };
-
-describe("org-scoped names", () => {
-  it("keep global's names and give every other org its own, which name the org back", () => {
-    const acme = OrgId.make("acme");
-    expect(orgScopedName(GLOBAL_ORG, "ag:sc:x")).toBe("ag:sc:x");
-    expect(orgScopedName(acme, "ag:sc:x")).toBe("org.acme.ag:sc:x");
-    expect(orgOfScopedName("ag:sc:x")).toBe(GLOBAL_ORG);
-    expect(orgOfScopedName("org.acme.ag:sc:x")).toBe(acme);
-    expect(orgOfScopedName("org.global.x")).toBeUndefined();
-    expect(orgOfScopedName("org.Bad_Org.x")).toBeUndefined();
-    expect(orgOfScopedName("org.acme")).toBeUndefined();
-  });
-});
 
 describe("two orgs in one deployment", () => {
   it("keep separate config", async () => {

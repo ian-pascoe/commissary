@@ -6,7 +6,7 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { makeControlPlanePicker } from "../src/executor/control-plane-picker.ts";
 import type { PickResult } from "../src/credentials/selection/types.ts";
-import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { type EnvServices, envContext } from "../src/worker-env.ts";
 
 const plane = (name: string = crypto.randomUUID()) => env.CONTROL_PLANE.getByName(name);

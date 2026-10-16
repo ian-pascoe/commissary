@@ -32,7 +32,7 @@ import { builtinTranslators, makeTranslationState } from "@commissary/translatio
 import { UsageReporter } from "../src/usage/reporter.ts";
 import { oauthCredential } from "./support/codex.ts";
 import { loadConfig } from "./support/pipeline.ts";
-import { GLOBAL_ORG } from "../src/platform/org.ts";
+import { GLOBAL_ORG } from "@commissary/core";
 
 describe("Responses frame assembler", () => {
   const created = 'event: response.created\ndata: {"type":"response.created","sequence_number":0}';

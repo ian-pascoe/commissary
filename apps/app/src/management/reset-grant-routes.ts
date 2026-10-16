@@ -17,7 +17,8 @@ import {
   readResetGrants,
   type ResetGrantFailure,
 } from "../quota/reset-grant-flow.ts";
-import { bodyObject, handled, jsonReply, queryParams, type Reply, replyError } from "./http.ts";
+import { handled, jsonReply, queryParams, type Reply, replyError } from "@commissary/core";
+import { bodyObject } from "./http.ts";
 import { currentViewer } from "./viewer.ts";
 
 const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");

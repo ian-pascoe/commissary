@@ -14,7 +14,7 @@ import {
   HttpServerRequest,
   HttpServerResponse,
 } from "effect/http";
-import { routeServices } from "../../http/route-services.ts";
+import { routeServices } from "@commissary/core";
 import { videoResultAuthCacheTtlMs } from "../../config/accessors.ts";
 import {
   type ExecutionError,

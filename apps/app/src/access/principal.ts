@@ -2,7 +2,7 @@
 // The Go `userApiKey` is replaced by the Cloudflare Access principal.
 import { Context, Effect } from "effect";
 import type { OrgRole } from "../members/roles.ts";
-import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
+import { GLOBAL_ORG, type OrgId } from "@commissary/core";
 
 /**
  * The authenticated caller: a person (an Access user, or on Commissary Cloud a person signed in with Better Auth: their

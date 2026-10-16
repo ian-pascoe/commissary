@@ -16,7 +16,7 @@ import { addressedSlug } from "../access/org-address.ts";
 import { AccessPrincipal } from "../access/principal.ts";
 import { PANEL_ORG_PREFIX, PANEL_SECTIONS } from "../access/routes.ts";
 import { isHosted } from "../hosted/mode.ts";
-import { jsonReply } from "./http.ts";
+import { jsonReply } from "@commissary/core";
 import { openableOrgs } from "./org-routes.ts";
 import { AuthConfig } from "../auth/config.ts";
 import { AppEnv } from "../worker-env.ts";

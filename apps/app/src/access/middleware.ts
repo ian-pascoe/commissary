@@ -2,7 +2,7 @@
 // internal/api/server_middleware.go: flat `{"error": "..."}` bodies).
 import { Effect, Match, Predicate, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { CurrentOrg, type OrgId } from "../platform/org.ts";
+import { CurrentOrg, type OrgId } from "@commissary/core";
 import { authenticateRequest } from "./authenticate.ts";
 import type { AccessError } from "./authenticate.ts";
 import { crossSiteRejection } from "./csrf.ts";

@@ -4,7 +4,7 @@
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { OrgId } from "../src/platform/org.ts";
+import { OrgId } from "@commissary/core";
 import {
   ADMIN,
   controlPlane,

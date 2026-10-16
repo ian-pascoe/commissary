@@ -3,7 +3,7 @@
 // never gives a key or a service token a role, never reaches another org or a client API route, and is refused once revoked.
 import { afterAll, describe, expect, it } from "vitest";
 import { parseManagementKey } from "../src/management-keys/key.ts";
-import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
+import { GLOBAL_ORG, OrgId } from "@commissary/core";
 import { parseApiKey } from "../src/api-keys/key.ts";
 import {
   ADMIN,

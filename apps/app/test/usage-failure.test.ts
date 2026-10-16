@@ -1,7 +1,7 @@
 // What a usage record keeps of a failed attempt (ADR 0027): status code, error type and error code; never the body.
 import { describe, expect, it } from "vitest";
 import { failureDetail } from "../src/usage/failure.ts";
-import { GLOBAL_ORG } from "../src/platform/org.ts";
+import { GLOBAL_ORG } from "@commissary/core";
 import { UsageReporter } from "../src/usage/reporter.ts";
 
 describe("failureDetail", () => {

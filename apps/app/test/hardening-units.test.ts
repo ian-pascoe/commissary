@@ -1,15 +1,11 @@
-// Small hardening helpers: config keys that do nothing on Workers, log-safe cause summaries, shared hashing.
+// Small hardening helpers: config keys that do nothing on Workers, shared hashing.
 import { createHash } from "node:crypto";
 import { env } from "cloudflare:workers";
-import { Cause, Data } from "effect";
 import { describe, expect, it } from "vitest";
 import { notAppliedSettings } from "../src/config/not-applied.ts";
-import { sha256Hex } from "../src/hash.ts";
-import { causeSummary, redactUrls } from "../src/observability/cause.ts";
+import { sha256Hex } from "@commissary/core";
 import { sha256Hex as oauthSha256Hex } from "../src/oauth/encoding.ts";
 import { loadConfig } from "./support/pipeline.ts";
-
-class CatalogError extends Data.TaggedError("CatalogError")<{ readonly message: string }> {}
 
 const GO_CONFIG = `
 access:
@@ -65,27 +61,6 @@ describe("notAppliedSettings", () => {
     expect(result.ok && result.notApplied).toContain("access.api-keys");
     // Response steering is ported: an effective key, not reported.
     expect(result.ok && result.notApplied).not.toContain("upstream.codex.response-steering");
-  });
-});
-
-describe("causeSummary", () => {
-  it("keeps the tag and message but drops stacks and URL queries", () => {
-    const error = new Error(
-      "GET https://cloudcode-pa.googleapis.com/v1:fetch?key=SECRET&alt=json failed",
-    );
-
-    const summary = causeSummary(Cause.fail(error));
-    expect(summary).toBe("Error: GET https://cloudcode-pa.googleapis.com/v1:fetch?… failed");
-    expect(summary).not.toContain("SECRET");
-    expect(summary).not.toContain("at ");
-    expect(causeSummary(Cause.fail(new CatalogError({ message: "bad" })))).toBe(
-      "CatalogError: bad",
-    );
-    expect(causeSummary(Cause.interrupt())).toBe("interrupted");
-    expect(causeSummary(Cause.die("x".repeat(500))).length).toBeLessThanOrEqual(301);
-    expect(redactUrls("see http://a.test/p#frag and https://b.test/q")).toBe(
-      "see http://a.test/p?… and https://b.test/q",
-    );
   });
 });
 

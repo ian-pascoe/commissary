@@ -7,7 +7,7 @@ import { ModelProviders } from "../src/handlers/model-providers.ts";
 import { embeddedCatalogs } from "../src/registry/catalog.ts";
 import { buildSnapshot, ModelRegistry, ModelRegistryError } from "../src/registry/service.ts";
 import { configOf, source } from "./support/registry-sources.ts";
-import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { envContext } from "../src/worker-env.ts";
 
 const snapshot = (yaml = "") =>

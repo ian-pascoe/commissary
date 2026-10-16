@@ -14,7 +14,7 @@ import {
   token,
 } from "./support/management.ts";
 import { insertUsageRecord } from "../src/usage/d1.ts";
-import { OrgId } from "../src/platform/org.ts";
+import { OrgId } from "@commissary/core";
 import { resetUsageDb, sampleRecord } from "./support/usage.ts";
 
 const registry = isolatedPlatform();

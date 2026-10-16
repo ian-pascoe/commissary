@@ -12,7 +12,7 @@
 import { Effect } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { isValidOAuthState, type OAuthProvider } from "./names.ts";
-import { CurrentOrg, orgOfScopedName } from "../platform/org.ts";
+import { CurrentOrg, orgOfScopedName } from "@commissary/core";
 import { FULL_ACCESS } from "../credentials/ownership.ts";
 import { modelsControlPlane } from "../models/env.ts";
 

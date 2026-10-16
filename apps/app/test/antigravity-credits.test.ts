@@ -25,7 +25,7 @@ import {
   type UpstreamCall,
 } from "./support/pipeline.ts";
 import { makePool, poolPickerLayer } from "./support/pool.ts";
-import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { envContext } from "../src/worker-env.ts";
 
 const identity = {

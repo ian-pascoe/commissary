@@ -15,7 +15,7 @@ import { nextSessionTurnIndex, resetSessionTurnIndex } from "../src/executor/dev
 import { makeRequestReplayCache } from "../src/executor/gemini/replay.ts";
 import { makeSessionStateKimiReplayStore } from "../src/executor/kimi/replay.ts";
 import { makeSessionStateXaiReplayStore } from "../src/executor/xai/replay.ts";
-import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import {
   addressName,
   durableObjectBackend,

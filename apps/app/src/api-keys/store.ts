@@ -16,7 +16,7 @@
  * milliseconds), so the Worker's `Clock` drives them.
  */
 import type { OrgRole } from "../members/roles.ts";
-import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
+import { GLOBAL_ORG, type OrgId } from "@commissary/core";
 import { cleanName, MAX_NAME_LENGTH } from "../platform/registry-store.ts";
 import { isKeyId, mintApiKey } from "./key.ts";
 

@@ -15,9 +15,8 @@
 import { Effect } from "effect";
 import { catalogMode, catalogStatus } from "../registry/catalog-status.ts";
 import { refreshModelsDev } from "../registry/refresh.ts";
-import { handled, jsonReply, replyError } from "./http.ts";
+import { handled, jsonReply, replyError, CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { storedConfig } from "./settings-routes.ts";
-import { CurrentOrg, GLOBAL_ORG } from "../platform/org.ts";
 
 const configured = storedConfig.pipe(
   Effect.map((current) => current.config.models.catalog),

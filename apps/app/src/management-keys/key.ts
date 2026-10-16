@@ -4,7 +4,7 @@
  * stored). The prefix tells the two apart, so neither is ever taken for the other. New in the Workers port.
  */
 import { mintOrgKey, type MintedApiKey, type ParsedApiKey, parseOrgKey } from "../api-keys/key.ts";
-import type { OrgId } from "../platform/org.ts";
+import type { OrgId } from "@commissary/core";
 
 export const MANAGEMENT_KEY_PREFIX = "cmsm_";
 

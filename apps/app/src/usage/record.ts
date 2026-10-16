@@ -12,7 +12,7 @@ import {
   type TokenBreakdown,
   unclassifiedTokenBreakdown,
 } from "./accounting.ts";
-import type { OrgId } from "../platform/org.ts";
+import type { OrgId } from "@commissary/core";
 import type { UsageFailure } from "./failure.ts";
 import type { UsageCost } from "./pricing.ts";
 

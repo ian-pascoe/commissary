@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
-import { CurrentOrg, GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG, OrgId } from "@commissary/core";
 import { platformOf } from "../src/platform/registry.ts";
 import { runScheduledTasks, type ScheduledTask, scheduledTasks } from "../src/scheduled.ts";
 import { ModelsEnv } from "../src/models/env.ts";

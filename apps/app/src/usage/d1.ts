@@ -28,7 +28,7 @@
  * against the distinct ids of the filtered rows (`resolveAuthIds`).
  */
 import type { AuthIndexer } from "../management/auth-index.ts";
-import type { OrgId } from "../platform/org.ts";
+import type { OrgId } from "@commissary/core";
 import { normalizeToCanonicalUuid } from "../session-routing/identity.ts";
 import {
   ensureTokenBreakdown,

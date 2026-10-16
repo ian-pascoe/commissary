@@ -112,7 +112,8 @@ import {
   mergeQuotaReport,
   type QuotaOutcome,
 } from "../quota/report.ts";
-import { orgOfControlPlane, type OrgId } from "../platform/org.ts";
+import type { OrgId } from "@commissary/core";
+import { orgOfControlPlane } from "../platform/org.ts";
 import { OrgSecrets } from "../secrets/data-key.ts";
 import { deploymentSecretsKeys } from "../secrets/deployment-keys.ts";
 import { QuotaReportStore } from "../quota/store.ts";

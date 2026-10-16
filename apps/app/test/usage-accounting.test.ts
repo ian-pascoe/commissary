@@ -30,7 +30,7 @@ import {
   type UsageDetail,
 } from "../src/usage/record.ts";
 import { UsageReporter } from "../src/usage/reporter.ts";
-import { GLOBAL_ORG } from "../src/platform/org.ts";
+import { GLOBAL_ORG } from "@commissary/core";
 
 const MAX = Number.MAX_SAFE_INTEGER;
 

@@ -10,7 +10,7 @@ import { type CredentialSink } from "../../src/oauth/record.ts";
 import { makeOAuthService, type OAuthService, type StatusResult } from "../../src/oauth/service.ts";
 import { MemorySessionTable, OAuthSessions } from "../../src/oauth/session-store.ts";
 import { type MockHandler, mockHttp, T0 } from "./refresh.ts";
-import { GLOBAL_ORG } from "../../src/platform/org.ts";
+import { GLOBAL_ORG } from "@commissary/core";
 
 export { jwt, routes, T0 } from "./refresh.ts";
 

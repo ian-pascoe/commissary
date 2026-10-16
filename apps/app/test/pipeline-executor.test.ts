@@ -26,7 +26,7 @@ import {
 } from "@commissary/translation";
 import { Formats } from "@commissary/translation/formats";
 import { loadConfig, staticConfigReader } from "./support/pipeline.ts";
-import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { type EnvServices, envContext } from "../src/worker-env.ts";
 
 describe("LineSplitter", () => {

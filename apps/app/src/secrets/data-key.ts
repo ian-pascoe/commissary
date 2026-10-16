@@ -16,7 +16,7 @@
  */
 import { Buffer } from "node:buffer";
 import { Effect } from "effect";
-import type { OrgId } from "../platform/org.ts";
+import type { OrgId } from "@commissary/core";
 import { DATA_KEY_BYTES, NONCE_BYTES, SecretCipher, type Sealer } from "./cipher.ts";
 import { SecretsKeyError, type SecretsKeys } from "./deployment-keys.ts";
 

@@ -5,7 +5,7 @@ import { orgAddressing } from "../access/org-address.ts";
 import { ClientApiLayer } from "../handlers/layer.ts";
 import { HostedRoutes } from "../hosted/routes.ts";
 import { ManagementRoutesLive } from "../management/routes.ts";
-import { WorkersLoggerLayer } from "../observability/logger.ts";
+import { WorkersLoggerLayer } from "@commissary/core";
 import { TraceLayer } from "../observability/trace.ts";
 import { OAuthCallbackRoutes } from "../oauth/public-routes.ts";
 import { ModelRoutesLive } from "../registry/live.ts";

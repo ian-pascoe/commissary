@@ -21,7 +21,8 @@ import {
 } from "./support/access.ts";
 import type { FakeJwks, TestKey } from "./support/access.ts";
 import { env } from "cloudflare:workers";
-import { controlPlaneOf, GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
+import { GLOBAL_ORG, OrgId } from "@commissary/core";
+import { controlPlaneOf } from "../src/platform/org.ts";
 import { platformOf } from "../src/platform/registry.ts";
 import { requestContext } from "../src/worker-env.ts";
 
@@ -269,7 +270,7 @@ describe("authenticateRequest", () => {
       E,
       | import("../src/worker-env.ts").EnvServices
       | import("../src/access/jwks.ts").AccessJwks
-      | import("../src/platform/org.ts").CurrentOrg
+      | import("@commissary/core").CurrentOrg
     >,
   ) => withJwks(state, body.pipe(Effect.provideContext(context)));
 
@@ -431,7 +432,7 @@ describe("authenticateRequest and orgs", () => {
       E,
       | import("../src/worker-env.ts").EnvServices
       | import("../src/access/jwks.ts").AccessJwks
-      | import("../src/platform/org.ts").CurrentOrg
+      | import("@commissary/core").CurrentOrg
     >,
   ) => withJwks(makeFakeJwks([keyA]), body.pipe(Effect.provideContext(context)));
 

@@ -8,8 +8,7 @@
  * (`store.ts`) share them.
  */
 import { Schema } from "effect";
-import { sha256Hex } from "../hash.ts";
-import { OrgId } from "../platform/org.ts";
+import { sha256Hex, OrgId } from "@commissary/core";
 
 export const API_KEY_PREFIX = "cms_";
 

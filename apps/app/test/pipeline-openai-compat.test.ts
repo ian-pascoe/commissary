@@ -18,7 +18,7 @@ import {
   postJson,
   sseResponse,
 } from "./support/pipeline.ts";
-import { GLOBAL_ORG } from "../src/platform/org.ts";
+import { GLOBAL_ORG } from "@commissary/core";
 
 const YAML = `
 api-keys:

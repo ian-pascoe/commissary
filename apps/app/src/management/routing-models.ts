@@ -13,7 +13,7 @@ import { AccessPrincipal } from "../access/principal.ts";
 import { routingView } from "../registry/routing-view.ts";
 import { ModelRegistry } from "../registry/service.ts";
 import { currentAuthIndexer } from "./auth-index.ts";
-import { handled, jsonReply, replyError } from "./http.ts";
+import { handled, jsonReply, replyError } from "@commissary/core";
 import { modelsControlPlane } from "../models/env.ts";
 
 const routingModels = Effect.gen(function* () {

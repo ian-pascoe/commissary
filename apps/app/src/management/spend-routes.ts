@@ -17,7 +17,8 @@ import {
   UpdateSpendLimit,
   UpdateSpendSettings,
 } from "@commissary/contract/spend";
-import { bodyJson, handled, ifMatch, jsonReply, type Reply, replyError } from "./http.ts";
+import { handled, ifMatch, jsonReply, type Reply, replyError } from "@commissary/core";
+import { bodyJson } from "./http.ts";
 import { currentViewer } from "./viewer.ts";
 import { modelsControlPlane } from "../models/env.ts";
 

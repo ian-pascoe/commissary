@@ -13,7 +13,7 @@ import { Clock, Context, Effect, Layer, Ref, Result, Schema } from "effect";
 import { ConfigReader } from "../config/reader.ts";
 import type { ConfigStoreError } from "../config/errors.ts";
 import type { Config } from "../config/schema.ts";
-import { CurrentOrg, type OrgId } from "../platform/org.ts";
+import { CurrentOrg, type OrgId } from "@commissary/core";
 import { ALLOW_ALL, type Reach, reachFromTable } from "../grants/reach.ts";
 import type { GrantTable } from "../grants/grant.ts";
 import { projectModel } from "./availability.ts";

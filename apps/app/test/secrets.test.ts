@@ -8,7 +8,7 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 import { ControlPlane } from "../src/index.ts";
 import type { PickResult } from "../src/credentials/selection/types.ts";
-import { OrgId } from "../src/platform/org.ts";
+import { OrgId } from "@commissary/core";
 import { SealedValueError, SecretCipher, isSealed } from "../src/secrets/cipher.ts";
 import { openDataKey } from "../src/secrets/data-key.ts";
 import { SecretsKeyError, deploymentSecretsKeys } from "../src/secrets/deployment-keys.ts";

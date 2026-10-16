@@ -8,8 +8,7 @@ import { Context } from "effect";
 import { type AuthBindings, AuthConfig } from "./auth/config.ts";
 import type { SignInBindings } from "./hosted/auth.ts";
 import { type ModelsBindings, ModelsEnv } from "./models/env.ts";
-import { WorkerExecutionContext } from "./platform/env.ts";
-import { CurrentOrg, GLOBAL_ORG } from "./platform/org.ts";
+import { WorkerExecutionContext, CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { type StateBindings, StateEnv } from "./state/env.ts";
 
 /**
