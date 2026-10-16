@@ -23,7 +23,7 @@ import { isJsonObject, type Json, type JsonObject } from "@commissary/json";
 import { ModelRegistry } from "../registry/service.ts";
 import { currentViewer } from "@commissary/auth";
 import { bodyText, handled, jsonReply, queryParams, replyError } from "@commissary/core";
-import { bodyJson, bodyObject } from "../../management/http.ts";
+import { bodyJson, bodyObject } from "@commissary/state";
 import { modelsControlPlane } from "../env.ts";
 
 const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");

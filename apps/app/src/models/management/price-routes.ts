@@ -15,7 +15,7 @@ import { AccessPrincipal } from "@commissary/auth";
 import type { PriceOverrideValue, WriteResult } from "../config/store.ts";
 import { isJsonObject, type Json } from "@commissary/json";
 import { handled, ifMatch, jsonReply, replyError } from "@commissary/core";
-import { bodyJson } from "../../management/http.ts";
+import { bodyJson } from "@commissary/state";
 import { modelsControlPlane } from "../env.ts";
 
 const BASE = "/v9/management/price-overrides";

@@ -17,7 +17,7 @@ import { decodeConfig } from "../config/codec.ts";
 import type { ChannelRuleKind, WriteResult } from "../config/store.ts";
 import { isJsonArray, type Json } from "@commissary/json";
 import { handled, ifMatch, jsonReply, replyError } from "@commissary/core";
-import { bodyJson } from "../../management/http.ts";
+import { bodyJson } from "@commissary/state";
 import { modelsControlPlane } from "../env.ts";
 
 const BASE = "/v9/management/model-rules";

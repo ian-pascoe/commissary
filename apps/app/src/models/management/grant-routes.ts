@@ -18,7 +18,7 @@ import type { GrantScope, GrantSubject, GrantValue } from "../grants/grant.ts";
 import { isJsonObject, type Json } from "@commissary/json";
 import { ModelRegistry } from "../registry/service.ts";
 import { handled, ifMatch, jsonReply, replyError } from "@commissary/core";
-import { bodyJson } from "../../management/http.ts";
+import { bodyJson } from "@commissary/state";
 import { modelsControlPlane } from "../env.ts";
 
 const BASE = "/v9/management/grants";

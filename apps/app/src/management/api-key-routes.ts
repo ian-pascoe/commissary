@@ -16,10 +16,10 @@ import {
   type ApiKeyListing,
   type ApiKeyResult,
   controlPlane,
+  bodyJson,
 } from "@commissary/state";
 import { CreateApiKey, type ApiKeyView } from "@commissary/contract/api-keys";
 import { handled, jsonReply, type Reply, replyError } from "@commissary/core";
-import { bodyJson } from "./http.ts";
 
 const BASE = "/v9/management";
 

@@ -17,6 +17,19 @@ export const isOrgRole = Schema.is(OrgRole);
  */
 export type RouteAccess = "platform" | OrgRole;
 
+/**
+ * One entry of the Worker's role table that an area hands it (#134 "The area package convention"): the role a
+ * management route needs. `path` is the route once the org is taken out of it, lowercased (`/v9/management/spend`);
+ * `subpaths` also covers the paths below it, and `methods` limits the entry to those methods (every method when absent).
+ * The table takes the first entry that matches; a route none matches needs `admin`.
+ */
+export interface AccessRule {
+  readonly path: string;
+  readonly subpaths?: boolean;
+  readonly methods?: ReadonlyArray<string>;
+  readonly role: RouteAccess;
+}
+
 const RANK: Readonly<Record<OrgRole, number>> = { member: 0, admin: 1, owner: 2 };
 
 /** Whether `role` includes the rights of `minimum` (an owner is an admin and a member too). */

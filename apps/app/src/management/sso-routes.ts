@@ -24,6 +24,7 @@ import {
   type SsoErrorCode,
   type SsoResult,
   type StoredIdp,
+  bodyJson,
 } from "@commissary/state";
 import {
   AddSsoDomain,
@@ -34,7 +35,6 @@ import {
   UpdateSsoDomain,
 } from "@commissary/contract/sso";
 import { handled, jsonReply, type Reply, replyError } from "@commissary/core";
-import { bodyJson } from "./http.ts";
 import { registry } from "./org-routes.ts";
 import { AppEnv } from "../worker-env.ts";
 

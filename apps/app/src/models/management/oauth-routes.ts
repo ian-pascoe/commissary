@@ -14,7 +14,7 @@ import { HttpRouter } from "effect/http";
 import { isJsonObject, type Json } from "@commissary/json";
 import { isValidOAuthState } from "../oauth/names.ts";
 import { handled, jsonReply, queryParams, replyError } from "@commissary/core";
-import { bodyJson } from "../../management/http.ts";
+import { bodyJson } from "@commissary/state";
 import { oauthImportRoutes } from "./oauth-import.ts";
 import { currentViewer } from "@commissary/auth";
 import { modelsControlPlane } from "../env.ts";

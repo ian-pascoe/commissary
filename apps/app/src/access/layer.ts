@@ -1,7 +1,16 @@
 import { Layer } from "effect";
-import { CorsLayer } from "../api/cors.ts";
+import { makeCorsLayer } from "../api/cors.ts";
 import { AccessJwks } from "@commissary/auth";
+import { classifyPath } from "../management/zones.ts";
 import { AccessGate } from "./middleware.ts";
+
+/**
+ * The client API's CORS (`api/cors.ts`). Deviation from Go: the management zone (`/v9/management*`, the control panel
+ * at `/` and its pages, the legacy `/management.html` redirect) gets no CORS headers at all, so other origins can
+ * neither pass a preflight nor read a management response with an admin's Access cookie. The panel is served by the
+ * Worker itself and does not need CORS.
+ */
+const CorsLayer = makeCorsLayer((requestUrl) => classifyPath(requestUrl) === "management");
 
 /**
  * CORS plus the Access gate, in that order: global middleware registered first is outermost, so preflights are

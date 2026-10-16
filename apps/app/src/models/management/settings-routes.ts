@@ -23,7 +23,7 @@ import { decodeStoredConfig } from "../config/store.ts";
 import { isJsonObject, type JsonObject } from "@commissary/json";
 import { Revisions } from "@commissary/contract/config";
 import { boundedBodyText, handled, jsonReply, replyError } from "@commissary/core";
-import { bodyJson } from "../../management/http.ts";
+import { bodyJson } from "@commissary/state";
 import { currentViewer } from "@commissary/auth";
 import {
   applySettingsPatch,

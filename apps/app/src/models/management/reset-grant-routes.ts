@@ -18,7 +18,7 @@ import {
   type ResetGrantFailure,
 } from "../quota/reset-grant-flow.ts";
 import { handled, jsonReply, queryParams, type Reply, replyError } from "@commissary/core";
-import { bodyObject } from "../../management/http.ts";
+import { bodyObject } from "@commissary/state";
 import { currentViewer } from "@commissary/auth";
 
 const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");

@@ -8,14 +8,15 @@
  *   handlers ask for a platform admin, or on Commissary Cloud let anyone create an org), the panel's pages
  *   without an org (they redirect to an org of the caller or show the org chooser), its bundle files and the old
  *   panel's address.
- * - **member**: any role in the org: the client API, the panel's pages of the org, reading usage (a plain member
- *   sees only their own requests, `management/usage-routes.ts`) and their own API keys
- *   (`management/api-key-routes.ts`).
+ * - **member**: any role in the org: the client API, the panel's pages of the org, their own API keys
+ *   (`management/api-key-routes.ts`) and the areas' routes their entries name (Models: reading usage, their own
+ *   credentials and spend limits).
  * - **admin**: everything else of the management API. Some routes need more and say so in their handler: changing a
  *   role (org owner), downloading a credential or giving a service token a role above member (ADR 0006's rule per
  *   org, `@commissary/auth` `holdsSensitivePowers`).
  */
-import type { RouteAccess } from "@commissary/auth";
+import type { AccessRule, RouteAccess } from "@commissary/auth";
+import { accessRules as modelsAccessRules } from "../models/management/access-rules.ts";
 import {
   type AccessZone,
   isPanelPagePath,
@@ -26,60 +27,21 @@ import {
   parseOrgAddress,
 } from "./zones.ts";
 
-/** Management API routes a plain member may use (`GET` only), after the org is taken out of the path. */
-const MEMBER_READS = [
-  `${MANAGEMENT_PREFIX}/observability/usage/records`,
-  `${MANAGEMENT_PREFIX}/observability/usage/summary`,
-  `${MANAGEMENT_PREFIX}/observability/usage/series`,
-  // The models the caller may use (ADR 0023): the registry as their own grants leave it.
-  `${MANAGEMENT_PREFIX}/models/mine`,
-];
-
-/**
- * Management API routes a plain member may use besides the reads above: connecting and managing their own private
- * credentials (ADR 0023). Their handlers scope every operation to what the caller reaches, so a plain member never sees
- * or changes a shared credential, nor another member's private one (`credentials/ownership.ts`).
- */
-const CREDENTIAL = `${MANAGEMENT_PREFIX}/credentials`;
-
-const PROVIDER_KEYS = `${MANAGEMENT_PREFIX}/provider-keys`;
-
-const MEMBER_CREDENTIAL_ROUTES: ReadonlyArray<{
-  readonly methods: ReadonlyArray<string>;
-  readonly path: string;
-}> = [
-  { methods: ["GET", "POST", "DELETE"], path: CREDENTIAL },
-  { methods: ["GET"], path: `${CREDENTIAL}/download` },
-  { methods: ["GET"], path: `${CREDENTIAL}/models` },
-  { methods: ["PATCH"], path: `${CREDENTIAL}/status` },
-  { methods: ["PATCH"], path: `${CREDENTIAL}/fields` },
-  { methods: ["POST"], path: `${CREDENTIAL}/refresh` },
-  { methods: ["POST"], path: `${CREDENTIAL}/batch` },
-  { methods: ["POST"], path: `${CREDENTIAL}/quota` },
-  { methods: ["POST"], path: `${CREDENTIAL}/quota/all` },
-  { methods: ["GET"], path: `${CREDENTIAL}/reset-grants` },
-  { methods: ["POST"], path: `${CREDENTIAL}/reset-grants/claim` },
-  { methods: ["POST"], path: `${MANAGEMENT_PREFIX}/routing/cooldown/reset` },
-  { methods: ["GET"], path: `${MANAGEMENT_PREFIX}/oauth/auth-url` },
-  { methods: ["GET"], path: `${MANAGEMENT_PREFIX}/oauth/status` },
-  { methods: ["DELETE"], path: `${MANAGEMENT_PREFIX}/oauth/session` },
-  { methods: ["POST"], path: `${MANAGEMENT_PREFIX}/oauth/callback` },
-  { methods: ["POST"], path: `${MANAGEMENT_PREFIX}/oauth/import` },
-  { methods: ["GET"], path: PROVIDER_KEYS },
-  { methods: ["PUT", "DELETE"], path: `${PROVIDER_KEYS}/groups` },
-  { methods: ["POST"], path: `${PROVIDER_KEYS}/probe` },
-];
-
 /** A member's own API keys (`management/api-key-routes.ts`, which limits a plain member to their keys). */
 const API_KEYS = `${MANAGEMENT_PREFIX}/api-keys`;
 
 /**
- * Spend limits (`management/spend-routes.ts`): a plain member reads the limits that bind them and limits their own API
- * keys, so those routes are for members; the calendar (`/spend/settings`) stays for org admins.
+ * The routes below `admin`, first match wins: the Worker's own (a member's API keys), then each area's, listed
+ * explicitly (#134 "The area package convention").
  */
-const SPEND = `${MANAGEMENT_PREFIX}/spend`;
+const RULES: ReadonlyArray<AccessRule> = [
+  { path: API_KEYS, subpaths: true, role: "member" },
+  ...modelsAccessRules,
+];
 
-const SPEND_SETTINGS = `${SPEND}/settings`;
+const matches = (rule: AccessRule, method: string, route: string): boolean =>
+  (route === rule.path || (rule.subpaths === true && route.startsWith(`${rule.path}/`))) &&
+  (rule.methods === undefined || rule.methods.includes(method));
 
 const ME = `${MANAGEMENT_PREFIX}/me`;
 
@@ -121,17 +83,5 @@ export const routeAccess = (
     if (isPanelPagePath(route)) return "platform";
   } else if (isPanelPagePath(route)) return "member";
 
-  if (route === API_KEYS || route.startsWith(`${API_KEYS}/`)) return "member";
-
-  if ((route === SPEND || route.startsWith(`${SPEND}/`)) && route !== SPEND_SETTINGS)
-    return "member";
-  const reading = method === "GET" || method === "HEAD";
-
-  if (reading && MEMBER_READS.includes(route)) return "member";
-
-  return MEMBER_CREDENTIAL_ROUTES.some(
-    (entry) => entry.path === route && entry.methods.includes(method),
-  )
-    ? "member"
-    : "admin";
+  return RULES.find((rule) => matches(rule, method, route))?.role ?? "admin";
 };

@@ -22,7 +22,7 @@ import { Effect } from "effect";
 import type { Json } from "@commissary/json";
 import { checkCredentialQuota, sweepQuotas } from "../quota/check.ts";
 import { handled, jsonReply, replyError } from "@commissary/core";
-import { bodyObject } from "../../management/http.ts";
+import { bodyObject } from "@commissary/state";
 import { currentViewer } from "@commissary/auth";
 
 const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");
