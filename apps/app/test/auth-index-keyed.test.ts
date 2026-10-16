@@ -15,7 +15,7 @@ import {
 import { DEV_AUTH_INDEX_KEY } from "../src/management/auth-index-key.ts";
 import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/quota/claude.ts";
 import { RESET_GRANT_STATUS_URL, resetGrantClaimUrl } from "../src/quota/reset-grants.ts";
-import { TraceLayer } from "../src/observability/trace.ts";
+import { TraceLayer } from "../src/models/observability/trace.ts";
 import { ControlPlane } from "../src/index.ts";
 import { authIndexOf, emptyKeyAuthIndexOf, unkeyedAuthIndexOf } from "./support/auth-index.ts";
 import { claudeFile, makeHarness } from "./support/management.ts";

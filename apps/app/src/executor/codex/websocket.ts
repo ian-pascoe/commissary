@@ -30,7 +30,7 @@ import {
   type JsonObject,
   tryParseJson,
 } from "@commissary/json";
-import { statusText } from "../../http/status.ts";
+import { statusText } from "../../models/http/status.ts";
 import { responseModelOf } from "../../usage/record.ts";
 import { isResponsesTokenEvent } from "../../usage/ttft.ts";
 import { ExecutionError } from "../errors.ts";

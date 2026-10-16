@@ -17,7 +17,7 @@ import type { Config } from "../config/schema.ts";
 import { ExecutionError, withErrorFields } from "../executor/errors.ts";
 import type { CredentialSnapshot } from "../executor/picker.ts";
 import type { ExecutionMetadata, ExecutorOptions, WebsocketExecution } from "../executor/types.ts";
-import { filterUpstreamHeaders } from "../http/headers.ts";
+import { filterUpstreamHeaders } from "../models/http/headers.ts";
 import { get, type Json } from "@commissary/json";
 import type { Format } from "@commissary/translation/formats";
 import { CurrentOrg } from "@commissary/core";

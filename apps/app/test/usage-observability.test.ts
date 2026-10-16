@@ -3,7 +3,7 @@ import { Layer, Logger, References } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Config } from "../src/config/schema.ts";
 import { authIndexOf, unkeyedAuthIndexOf } from "./support/auth-index.ts";
-import { TraceLayer } from "../src/observability/trace.ts";
+import { TraceLayer } from "../src/models/observability/trace.ts";
 import {
   jsonResponse,
   loadConfig,

@@ -4,8 +4,9 @@ import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { deleteOrg, DELETION_BUDGET } from "../src/platform/org-deletion.ts";
-import { orgScopedName, OrgId } from "@commissary/core";
+import { type OrgDeletionStep, orgScopedName, OrgId } from "@commissary/core";
 import { addressName } from "@commissary/state";
+import { deleteOrgModels } from "../src/models/org-deletion.ts";
 import { insertUsageRecord } from "../src/usage/d1.ts";
 import {
   ADMIN,
@@ -297,18 +298,20 @@ describe("a deletion that needs more than one call", () => {
   it("stops within its budget, keeps the org listed and finishes when it is run again", async () => {
     const org = await newOrg();
 
-    // Too small a budget to wipe even one instance and one page of cache keys.
+    // Too small a budget for one page of cache keys.
     const bindings = { ...env, PLATFORM: registry.bindings.PLATFORM };
 
-    const first = await deleteOrg(bindings, bindings, org.id, {
+    const first = await deleteOrg(bindings, [deleteOrgModels(bindings)], org.id, {
       now: Date.now(),
       budget: 5,
     });
 
-    expect(first).toMatchObject({ state: "incomplete" });
+    expect(first).toEqual({ state: "incomplete", step: "cache" });
+    expect(await usageRows(org)).toBe(0);
+    expect(await sessionValue(org)).toMatchObject({ status: "ok", value: "v" });
     expect(await registry.platform.getOrgById(org.id)).toBeDefined();
 
-    const second = await deleteOrg(bindings, bindings, org.id, {
+    const second = await deleteOrg(bindings, [deleteOrgModels(bindings)], org.id, {
       now: Date.now(),
       budget: DELETION_BUDGET,
     });
@@ -322,11 +325,44 @@ describe("a deletion that needs more than one call", () => {
     const org = await newOrg();
     const bindings = { ...env, PLATFORM: registry.bindings.PLATFORM };
 
-    expect(await deleteOrg(bindings, bindings, org.id, { now: Date.now() })).toEqual({
+    expect(
+      await deleteOrg(bindings, [deleteOrgModels(bindings)], org.id, { now: Date.now() }),
+    ).toEqual({
       state: "deleted",
     });
-    expect(await deleteOrg(bindings, bindings, org.id, { now: Date.now() })).toEqual({
+    expect(
+      await deleteOrg(bindings, [deleteOrgModels(bindings)], org.id, { now: Date.now() }),
+    ).toEqual({
       state: "deleted",
     });
+  });
+
+  it("runs the area steps first, in order, on the budget left, and stops at one that is not complete", async () => {
+    const org = await newOrg();
+    const bindings = { ...env, PLATFORM: registry.bindings.PLATFORM };
+    const seen: Array<readonly [string, number]> = [];
+
+    const step =
+      (name: string, calls: number, complete: boolean): OrgDeletionStep =>
+      async (id, budget) => {
+        seen.push([`${name}:${id === org.id ? "org" : id}`, budget]);
+
+        return complete ? { complete, calls } : { complete, calls, part: name };
+      };
+
+    const steps = [step("first", 10, true), step("second", 5, false), step("third", 1, true)];
+
+    expect(await deleteOrg(bindings, steps, org.id, { now: Date.now(), budget: 100 })).toEqual({
+      state: "incomplete",
+      step: "second",
+    });
+    expect(seen).toEqual([
+      ["first:org", 100],
+      ["second:org", 90],
+    ]);
+    // Nothing after the area steps ran: the session state, the ControlPlane and the registry entry are kept.
+    expect(await sessionValue(org)).toMatchObject({ status: "ok", value: "v" });
+    expect((await storedRows(org))["api_keys"]).toBe(1);
+    expect(await registry.platform.getOrgById(org.id)).toBeDefined();
   });
 });

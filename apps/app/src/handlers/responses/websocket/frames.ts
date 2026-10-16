@@ -8,8 +8,8 @@
  * completeResponsesWebsocketLocalInterrupt), openai_responses_websocket.go (websocketClosePayloadForUpstreamError,
  * truncateWebsocketCloseReason), openai_responses_websocket_timeline.go (responsesWebsocketErrorMessageFromPayload).
  */
-import { statusText } from "../../../http/status.ts";
-import { openAIErrorBody } from "../../../http/errors.ts";
+import { statusText } from "../../../models/http/status.ts";
+import { openAIErrorBody } from "../../../models/http/errors.ts";
 import { isRequestInvalid } from "../../../executor/classify.ts";
 import { ExecutionError } from "../../../executor/errors.ts";
 import { isReplayRequired } from "../../../executor/websocket/session.ts";

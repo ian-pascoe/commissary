@@ -11,7 +11,7 @@ import { Effect, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { routeServices } from "@commissary/core";
 import type { ExecutionError } from "../../executor/errors.ts";
-import { invalidRequestBody } from "../../http/errors.ts";
+import { invalidRequestBody } from "../../models/http/errors.ts";
 import { asString, del, get, type Json } from "@commissary/json";
 import { Formats } from "@commissary/translation/formats";
 import { executeNonStream, executeStream, type ExecutionInput } from "../execute.ts";

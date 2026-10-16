@@ -38,9 +38,12 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
     src/
       index.ts                Worker entry: fetch, scheduled, DO class exports
       control-plane.ts        the ControlPlane Durable Object: @commissary/state's base composed with the Models part
-      models/                 the ControlPlane's Models part (config, credentials, grants, Spend, quota, OAuth)
+      models/                 the ControlPlane's Models part (config, credentials, grants, Spend, quota, OAuth), the
+                              client-API HTTP helpers (error formatting per protocol, bodies, headers), the request
+                              trace, Models' cron tasks and its org-deletion step
       platform/               org deletion (every area's step, then the state's)
-      http/                   router, CORS, error formatting per protocol, SSE framing, streaming helpers
+      api/                    what moves to the API Worker: CORS and the cron runner
+      http/                   router, hosts, /healthz
       access/                 the Access gate middleware: @commissary/auth's entry points with the Worker's routes
       config/                 config schema (Effect Schema), storage, payload rules
       registry/               model catalogs, model info, /models listings
@@ -62,7 +65,8 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
                               the stub helpers, the AuthDirectory adapter), tested in workerd
   packages/contract/          @commissary/contract: the management API's Effect HttpApi schemas and addressing (browser-safe)
   packages/core/              @commissary/core: the foundation without bindings (org model, shared errors, hashing,
-                              log-safe helpers, management replies, route services, the execution context)
+                              log-safe helpers, management replies, route services, the execution context, the
+                              area contracts ScheduledTask and OrgDeletionStep)
   packages/json/              @commissary/json: gjson/sjson-compatible path engine, Json types, JSON text helpers
   packages/translation/       @commissary/translation: pure translation, tested in Node.js
     src/translator/           registry + one directory per (client -> provider) pair
@@ -150,7 +154,9 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
   last refresh, best-effort caches (signature cache) with `expirationTtl`; org data under org-scoped keys.
 - **D1 `USAGE`**: usage records written with `ctx.waitUntil`, each with its `org_id`; every query filters on it.
 - **Static assets** (`apps/web/dist/`, Worker runs first): the control panel (`apps/web` build).
-- **Cron trigger** (every 3 h, production only; `src/scheduled.ts`): the model catalog refresh (the one
+- **Cron trigger** (every 3 h, production only; the runner `src/api/scheduled.ts`, the future API Worker's): its own job
+  (expired API keys), then each area's tasks (`ScheduledTask` of `@commissary/core`; Models' in
+  `src/models/scheduled-tasks.ts`): the model catalog refresh (the one
   models.dev document: every provider's models, OpenCode's included), Antigravity version and model entitlements, xAI client version, usage retention, the Devin user status, a
   safety sweep that re-arms credential refresh alarms, and the quota check of connected accounts. A job is
   deployment-wide (catalog, client versions, usage retention: once per run) or org-scoped (entitlements, Devin status,
@@ -182,7 +188,7 @@ client -> Cloudflare Access -> Worker
   Worker reads `AppEnv` (`src/worker-env.ts`). `requestContext` provides each from the invocation's `env`, plus auth's
   ports over it: `AuthDirectory` (`state/auth-directory.ts`, the Durable Object stubs) and `SignInSessions`
   (`src/hosted/session.ts`, Better Auth); the global
-  `Env` appears only in the entry (`index.ts`, `scheduled.ts`), the Durable Object classes and tests.
+  `Env` appears only in the entry (`index.ts`, `api/scheduled.ts`), the Durable Object classes and tests.
 - Use Effect at boundaries and for orchestration: services (`Context.Service`) + `Layer`s, `Schema` for config,
   credentials and external payloads, tagged errors, `Stream` for upstream/downstream streaming, `HttpClient`
   (`FetchHttpClient`) for upstream calls so tests can swap the transport.
@@ -438,7 +444,7 @@ Core contracts every provider slice implements (Go references in each module hea
   `ModelProviders.configLayer` serves tests without one) -> pick -> executor -> report -> usage (one record per attempt via `UsageSink`, published when the
   stream ends). `respond.ts` peeks the first stream chunk inside the request scope (the web handler keeps the scope
   open for streamed bodies) so pre-stream failures become real HTTP errors, then frames with a per-protocol
-  `StreamFramer` (`framing.ts`), with optional keep-alives. Error bodies per protocol are in `http/errors.ts`. Non-stream answers of Claude, OpenAI chat/completions,
+  `StreamFramer` (`framing.ts`), with optional keep-alives. Error bodies per protocol are in `models/http/errors.ts`. Non-stream answers of Claude, OpenAI chat/completions,
   Gemini/Interactions, images and OpenAI-shaped video retrieval go through `withNonStreamKeepAlive` (`requests.nonstream-keepalive-interval`):
   nothing is committed before the first interval, so a timely answer keeps its real status; afterwards a blank line is written per interval and
   the final body (errors included) follows under a committed `200 application/json`, like Go. Video content downloads and `/v1/responses` are
@@ -449,8 +455,8 @@ Core contracts every provider slice implements (Go references in each module hea
   `/v1/messages` and whose OpenAI models append `/chat/completions` to the same base URL (pi's `opencode-go` catalog)
   then needs a single base URL. The aliases are in `PROTECTED_PREFIXES` (`management/zones.ts`). `GET /models` is not
   aliased, because it is a control panel page.
-  Request bodies (`handlers/request.ts`, `http/body.ts`) decode `Content-Encoding: zstd` with a 32 MiB cap on the decoded
-  size (`http/zstd.ts`: frame windows/content sizes are checked before fzstd allocates, the streaming decoder stops past the
+  Request bodies (`handlers/request.ts`, `models/http/body.ts`) decode `Content-Encoding: zstd` with a 32 MiB cap on the
+  decoded size (`models/http/zstd.ts`: frame windows/content sizes are checked before fzstd allocates, the streaming decoder stops past the
   cap); a larger body answers 413 (deviation: Go reads it unbounded).
 - **Conductor** (`handlers/conductor.ts`, port of `conductor_execution.go`/`conductor_stream.go`): `conduct(prepared, run)`
   runs retry rounds. A round picks credentials one after another (`excludedIds` grows, no sleeping) until one succeeds, a
@@ -1518,7 +1524,7 @@ resets, each of which empties the usage windows it `clears` (`five_hour`, `seven
   the panel's three are kept when they look like ids. The weekly `juniper_tide` program is not handled (nor by the
   panel).
 
-## Usage accounting and observability (`src/usage/`, `src/observability/`, `src/management/usage-routes.ts`)
+## Usage accounting and observability (`src/usage/`, `src/models/observability/`, `src/management/usage-routes.ts`)
 
 Port of `sdk/cliproxy/usage` (token accounting v2), `helps/usage_helpers.go` (parsers, `StreamUsageBuffer`, TTFT) and the
 `internal/redisqueue` export shape. One `UsageRecord` per upstream attempt (`UsageReporter` per attempt, `finish` exactly
@@ -1615,7 +1621,7 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   no live credential (deleted, or matching nothing) reads the distinct `auth_id`s of the filtered rows
   (`resolveAuthIds`, an index scan bounded by the retained records). The former `auth_id`
   filter answers 400 instead of being ignored.
-- **Trace and logs** (`observability/`, `core/observability/`): the global `TraceLayer` middleware gives each request a `RequestTrace` (Context
+- **Trace and logs** (`models/observability/`, `core/observability/`): the global `TraceLayer` middleware gives each request a `RequestTrace` (Context
   reference, `undefined` outside the router) and sets `X-CPA-TRACE-ID` = the request id (a random UUID, also the usage
   records' `trace_id`). Deviation from Go: Go sends `yyyyMMddHHmmss-<auth index>-<request id>` to every API client (none
   when no credential was selected); its unsalted index would let any client confirm key guesses, and even a keyed one
@@ -1752,7 +1758,7 @@ error; `X-Opencode-Session` from a client is also an explicit session identity f
 OpenCode Go keys are listed as Accounts (config-sourced) for their usage windows. Not ported/added: the `jev`/systemone
 endpoint.
 
-## Zero data retention (`src/platform/org-deletion.ts`, `src/management/{org-routes,export-view}.ts`)
+## Zero data retention (`src/platform/org-deletion.ts`, `src/models/org-deletion.ts`, `src/management/{org-routes,export-view}.ts`)
 
 ADR 0027: deleting something deletes it at once, and Commissary keeps no content it does not need. The pieces:
 
@@ -1761,11 +1767,12 @@ ADR 0027: deleting something deletes it at once, and Commissary keeps no content
 - **Member removal** deletes the member's private data in the ControlPlane (`#deleteMemberData`: their API keys in the
   base, then the Models part's `memberLeft`), and their Spend limits and counters; **API keys** are deleted when revoked or expired ("API keys"), and `ApiKeyStore` reports every key it
   deletes so the key's Spend limits and counters go with it.
-- **Org deletion** (`deleteOrg`, called by `DELETE /org` and by account deletion) runs, in this order: the org's usage rows in
-  D1 (`deleteOrgUsage`, batched), the `SessionState` instances it registered, its `org.<id>.…` keys in the `CACHE` KV
-  namespace, its ControlPlane's whole storage (`ControlPlane.wipeOrg`: the Models part drops its tables, then the rest of the SQL
+- **Org deletion** (`deleteOrg`, called by `DELETE /org` and by account deletion, app-only) runs, in this order: the
+  org-deletion steps of the areas the Worker mounts, which it takes as input (`OrgDeletionStep` of `@commissary/core`;
+  Models' `deleteOrgModels`: the org's usage rows in D1, `deleteOrgUsage`, batched, then its `org.<id>.…` keys in the
+  `CACHE` KV namespace), the `SessionState` instances it registered, its ControlPlane's whole storage (`ControlPlane.wipeOrg`: the Models part drops its tables, then the rest of the SQL
   tables, the key-value store and the alarm go) and last its registry entry, which frees the slug. The registry entry goes last, so a deletion that stops half way
-  (a Worker invocation has a subrequest limit: `DELETION_BUDGET`, 400 calls; the step is named in the log) is repeated by
+  (a Worker invocation has a subrequest limit: `DELETION_BUDGET`, 400 calls shared by every step; the step is named in the log) is repeated by
   sending the request again: the org is still listed and each earlier step finds less to do. `global` is refused. After the
   wipe the object keeps a `#wiped` flag: a stale in-memory ControlPlane of the deleted org answers empty for session
   instances and refuses to wipe twice; a request that still names the org's id is refused by the registry check before a
@@ -1938,7 +1945,7 @@ Ported from `antigravity_executor*.go`, `internal/translator/antigravity/*`, `in
   (`findAllAntigravityCreditsCandidateAuths`): known-available balances first, then unknown ones (optimistic), each group sorted by credential id;
   known-empty credentials are skipped without an attempt (the conductor collects them with repeated `pick`s and releases the skipped leases
   as connection-lifecycle failures).
-- **Cron** (`scheduled.ts`): `antigravity-version` polls the Hub manifest into KV `antigravity:version` (`2.9.1` fallback, 6 h TTL; executors read it
+- **Cron** (`models/scheduled-tasks.ts`): `antigravity-version` polls the Hub manifest into KV `antigravity:version` (`2.9.1` fallback, 6 h TTL; executors read it
   through a 60 s isolate cache) and `antigravity-models` probes `fetchAvailableModels` for every enabled credential (first endpoint only, global
   user agent, failures keep the last good list and back off 2-30 min with jitter) into KV `ag:models:<id>`. The registry snapshot attaches
   the stored entitlements to the credential's `ModelSource` (`antigravityHints`): registered models = static list intersected with the fetched

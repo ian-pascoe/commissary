@@ -5,6 +5,7 @@ import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Viewer } from "@commissary/auth";
 import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { deleteOrgModels } from "../src/models/org-deletion.ts";
 import { deleteOrg } from "../src/platform/org-deletion.ts";
 import { OrgId } from "@commissary/core";
 import { controlPlaneOf } from "@commissary/state";
@@ -168,7 +169,9 @@ describe("Spend data of an org that is deleted", () => {
     const org = await spendingOrg();
     const other = await spendingOrg();
 
-    expect(await deleteOrg(env, env, org.org, { now: Date.now() })).toEqual({ state: "deleted" });
+    expect(await deleteOrg(env, [deleteOrgModels(env)], org.org, { now: Date.now() })).toEqual({
+      state: "deleted",
+    });
 
     // The wiped object holds no table at all, so no Spend table and no row of one.
     const tables = await runInDurableObject(controlPlaneOf(env, org.org), (_instance, state) =>

@@ -15,7 +15,7 @@
 import { type Cause, Effect, Queue, Result, type Scope } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import { AccessPrincipal } from "@commissary/auth";
-import { invalidRequestBody } from "../../../http/errors.ts";
+import { invalidRequestBody } from "../../../models/http/errors.ts";
 import { executeStream, type ExecutionInput } from "../../execute.ts";
 import { currentConfig } from "../../request.ts";
 import { prepareCodexResponsesRequest } from "../codex-prepare.ts";

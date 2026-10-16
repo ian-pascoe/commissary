@@ -54,7 +54,7 @@ import type {
 } from "../executor/types.ts";
 import type { Json } from "@commissary/json";
 import { holdInvocation, CurrentOrg, type OrgId } from "@commissary/core";
-import { noteSelection, notePrincipal, RequestTrace } from "../observability/trace.ts";
+import { noteSelection, notePrincipal, RequestTrace } from "../models/observability/trace.ts";
 import type { SessionRouting } from "../session-routing/routing.ts";
 import { UsageReporter } from "../usage/reporter.ts";
 import { priceForSpend, UsageSink } from "../usage/sink.ts";

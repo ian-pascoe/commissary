@@ -13,7 +13,7 @@ import {
   XAI_FALLBACK_CLIENT_VERSION,
   XAI_VERSION_KV_KEY,
 } from "../src/executor/xai/version.ts";
-import { scheduledTasks } from "../src/scheduled.ts";
+import { scheduledTasks } from "../src/api/scheduled.ts";
 import {
   jsonResponse,
   loadConfig,

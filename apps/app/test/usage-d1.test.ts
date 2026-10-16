@@ -4,7 +4,7 @@ import { Effect, Layer, Logger, References } from "effect";
 import { TestClock } from "effect/testing";
 import { beforeEach, describe, expect, it } from "vitest";
 import { WorkerExecutionContext, GLOBAL_ORG, OrgId } from "@commissary/core";
-import { scheduledTasks } from "../src/scheduled.ts";
+import { scheduledTasks } from "../src/api/scheduled.ts";
 import {
   insertUsageRecord,
   listUsageRecords,

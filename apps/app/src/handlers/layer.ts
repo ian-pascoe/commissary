@@ -7,7 +7,6 @@
  */
 import { Layer } from "effect";
 import { FetchHttpClient, type HttpClient } from "effect/http";
-import { withAccess } from "../access/layer.ts";
 import { ConfigReader } from "../config/reader.ts";
 import type { CredentialPicker } from "../executor/picker.ts";
 import { ControlPlanePickerLayer } from "../executor/control-plane-picker.ts";
@@ -90,5 +89,5 @@ export const makeClientApiRoutes = (options: ClientApiLayerOptions = {}) => {
   return ClientApiRoutes.pipe(Layer.provide(services));
 };
 
-/** Production client API layer (Access-gated, ControlPlane config, global `fetch`). */
-export const ClientApiLayer = withAccess(makeClientApiRoutes());
+/** Production client API layer (ControlPlane config, global `fetch`); the app wraps it with `withAccess(...)`. */
+export const ClientApiLayer = makeClientApiRoutes();

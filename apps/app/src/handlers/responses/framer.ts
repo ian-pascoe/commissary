@@ -9,9 +9,9 @@
  * is written after a terminal event. The stream ends with a bare newline and no `[DONE]`.
  */
 import { ExecutionError } from "../../executor/errors.ts";
-import { responsesStreamErrorChunk, responsesStreamFailedChunk } from "../../http/errors.ts";
+import { responsesStreamErrorChunk, responsesStreamFailedChunk } from "../../models/http/errors.ts";
 import { SSE_KEEP_ALIVE } from "@commissary/translation/sse";
-import { statusText } from "../../http/status.ts";
+import { statusText } from "../../models/http/status.ts";
 import {
   asInt,
   asString,

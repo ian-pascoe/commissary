@@ -14,9 +14,9 @@
  */
 import { Clock, Context, Effect, Exit } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { AuthIndexKeyError, orgAuthIndexer } from "../management/auth-index.ts";
+import { AuthIndexKeyError, orgAuthIndexer } from "../../management/auth-index.ts";
 import { CurrentOrg } from "@commissary/core";
-import { ModelsEnv } from "../models/env.ts";
+import { ModelsEnv } from "../env.ts";
 
 export const CPA_TRACE_ID_HEADER = "X-CPA-TRACE-ID";
 
