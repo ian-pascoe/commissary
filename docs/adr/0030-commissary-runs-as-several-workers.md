@@ -32,7 +32,7 @@ This replaces ADR 0028's statement that one Worker answers on both hostnames. It
 - Prod and cloud move their existing Durable Objects from the `Commissary` Worker to the state Worker with Alchemy's `transferredFrom`, on the first split deploy; self-hosters transfer when they upgrade, and previews start fresh. The move is rehearsed by hand on a throwaway stage before the split merges.
 - Each `pr-<n>` preview deploys several Workers, each with its own `workers.dev` URL (the state Worker has none).
 - Only the app Worker sits under Access. The API Worker never does.
-- Tests that cross Workers need auxiliary Workers pre-compiled to JavaScript for `@cloudflare/vitest-plugin`.
+- Each app's test Worker re-exports its handler plus the composed Durable Objects from `apps/state`, so tests run in one isolate with no auxiliary Workers. Behaviour across Workers is checked by the smokes: on self-hosted, creating, using and revoking an API key; on Cloud, `/api/auth/ok` and an anonymous panel request turned away through the RPC (#135).
 - Service-binding and RPC calls cost no extra request but count toward the subrequest limits (50 per request on the Free plan) and the cap of 32 invocations per request. Self-hosted Commissary has no service-binding hop; the app-to-auth hop is Cloud-only.
 - Self-hosted Commissary now runs three Workers, which count against the account's Worker limit and share the daily request quota.
 - Commissary Cloud's people sign in once more after the move, because the session cookie and Better Auth's tables are new.
