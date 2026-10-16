@@ -1,5 +1,5 @@
 // Page routes (code-based, no generator). The Worker answers every one of these paths with index.html
-// (apps/app/src/access/routes.ts `PANEL_SECTIONS`); add a section there when adding a top-level page here.
+// (apps/app/src/management/zones.ts `PANEL_SECTIONS`); add a section there when adding a top-level page here.
 import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import { Shell } from "./components/Shell.tsx";
 import { AccountPage } from "./pages/Account.tsx";

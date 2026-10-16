@@ -2,13 +2,14 @@
  * Management keys on the management API (ADR 0026), on every deployment: `Authorization: Bearer cmsm_…`. New in the Workers
  * port, no Go counterpart.
  *
- * A key names its org (`management-keys/key.ts`), so verification asks that org's ControlPlane only, after the Platform
- * registry confirmed the org exists (`orgExists`, shared with API keys). A request with a key is for the key's org:
+ * A key names its org (`keys.ts`), so verification asks that org's ControlPlane only, after the Platform registry
+ * confirmed the org exists (`orgExists`, shared with API keys). A request with a key is for the key's org:
  * an unscoped management URL means it, an org-scoped one must name it (403 otherwise). The key holds a role in its org
  * and is never a platform admin. Verified keys are cached per isolate for {@link VERIFIED_KEY_TTL_MS}, so a revocation
  * applies within that time everywhere, and at once in the isolate that revoked it.
  */
 import { Clock, Effect } from "effect";
+import type { OrgRole } from "@commissary/contract/members";
 import {
   ForbiddenError,
   InternalError,
@@ -16,14 +17,11 @@ import {
   UnauthorizedError,
   type OrgId,
 } from "@commissary/core";
-import { looksLikeManagementKey, parseManagementKey } from "../management-keys/key.ts";
-import { roleAtLeast, type OrgRole } from "../members/roles.ts";
-import { controlPlaneOf } from "../platform/org.ts";
-import { platform } from "../platform/registry.ts";
-import type { RouteAccess } from "./policy.ts";
-import { type AccessIdentity, makeIdentity } from "./principal.ts";
 import { orgExists, VERIFIED_KEY_TTL_MS } from "./api-key.ts";
-import { StateEnv } from "../state/env.ts";
+import { AuthDirectory, directoryFailure } from "./directory.ts";
+import { looksLikeManagementKey, parseManagementKey } from "./keys.ts";
+import { type AccessIdentity, makeIdentity } from "./principal.ts";
+import { roleAtLeast, type RouteAccess } from "./roles.ts";
 
 export interface VerifiedManagementKey {
   readonly org: OrgId;
@@ -74,16 +72,11 @@ export const verifyManagementKey = Effect.fnUntraced(function* (text: string) {
   verified.delete(parsed.hash);
 
   if (!(yield* orgExists(parsed.org, now))) return yield* invalid;
-  const env = yield* StateEnv;
+  const directory = yield* AuthDirectory;
 
-  const verdict = yield* Effect.tryPromise({
-    try: async () =>
-      await controlPlaneOf(env, parsed.org).verifyManagementKey(parsed.keyId, parsed.hash, now),
-    catch: (cause) =>
-      new InternalError({
-        message: `management key verification: ${cause instanceof Error ? cause.message : "unknown error"}`,
-      }),
-  });
+  const verdict = yield* directory
+    .verifyManagementKey(parsed.org, parsed.keyId, parsed.hash, now)
+    .pipe(Effect.mapError(directoryFailure("management key verification")));
 
   if (!verdict.ok) return yield* invalid;
 
@@ -117,15 +110,17 @@ export const managementKeyIdentity = (
 ): Effect.Effect<
   { readonly identity: AccessIdentity; readonly key: VerifiedManagementKey },
   UnauthorizedError | ForbiddenError | NotFoundError | InternalError,
-  StateEnv
+  AuthDirectory
 > =>
   Effect.gen(function* () {
     const key = yield* verifyManagementKey(text);
 
     if (slug !== undefined) {
-      const addressed = yield* platform("getOrgBySlug", (stub) => stub.getOrgBySlug(slug)).pipe(
-        Effect.mapError((error) => new InternalError({ message: error.message })),
-      );
+      const directory = yield* AuthDirectory;
+
+      const addressed = yield* directory
+        .getOrgBySlug(slug)
+        .pipe(Effect.mapError(directoryFailure()));
 
       if (addressed?.id !== key.org) return yield* new ForbiddenError({ message: "Forbidden" });
     }

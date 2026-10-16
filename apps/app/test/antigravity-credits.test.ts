@@ -3,7 +3,7 @@
 import { Effect, Layer, Result } from "effect";
 import type { HttpServerRequest } from "effect/http";
 import { describe, expect, it } from "vitest";
-import { AccessPrincipal } from "../src/access/principal.ts";
+import { AccessPrincipal } from "@commissary/auth";
 import {
   antigravityStateFor,
   resetMemoryAntigravityState,

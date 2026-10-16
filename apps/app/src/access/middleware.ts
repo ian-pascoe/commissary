@@ -4,16 +4,23 @@ import { Effect, Match, Predicate, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { CurrentOrg, type OrgId } from "@commissary/core";
 import { authenticateRequest } from "./authenticate.ts";
-import type { AccessError } from "./authenticate.ts";
 import { crossSiteRejection } from "./csrf.ts";
-import { AccessJwks } from "./jwks.ts";
-import { AccessPrincipal } from "./principal.ts";
-import type { AccessIdentity, Principal } from "./principal.ts";
-import { classifyPath, isPanelAssetPath, isPanelPagePath, normalizedPath } from "./routes.ts";
-import { authenticateHosted } from "../hosted/gate.ts";
-import { isHosted } from "../hosted/mode.ts";
+import {
+  type AccessError,
+  type AccessIdentity,
+  AccessJwks,
+  AccessPrincipal,
+  AuthConfig,
+  isHosted,
+  type Principal,
+} from "@commissary/auth";
+import {
+  classifyPath,
+  isPanelAssetPath,
+  isPanelPagePath,
+  normalizedPath,
+} from "../management/zones.ts";
 import { SIGN_IN_PAGE_PATH } from "@commissary/contract/sign-in";
-import { AuthConfig } from "../auth/config.ts";
 
 const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
 
@@ -107,14 +114,15 @@ const signInRedirect = (
 };
 
 /**
- * Global middleware: requests under the protected prefixes (see `routes.ts`) must carry a valid Access JWT, or on a
- * client API route an API key (`api-key.ts`), and come from a member of the request's org with the role the route needs
- * (`policy.ts`, ADR 0022): a platform admin
- * (`PLATFORM_ADMIN_*`) is an owner of every org, anyone else has the role their membership gives them. Cross-site
- * requests and cross-origin WebSocket upgrades are refused first (`csrf.ts`). Everything else (`/healthz`, unknown
- * paths) is passed through untouched. On success the principal is available to handlers as `AccessPrincipal`, and
- * `CurrentOrg` is the org of the request: the org addressed by an org-scoped management URL (`org-address.ts`), the
- * org an API key names, unchanged otherwise.
+ * Global middleware: requests under the protected prefixes (`management/zones.ts`) must carry a credential
+ * `@commissary/auth` accepts (`authenticate.ts`): an Access JWT, a Commissary Cloud session, an API key on a client
+ * API route or a management key on a management route, and come from a member of the request's org with the role the
+ * route needs (`management/policy.ts`, ADR 0022): a platform admin (`PLATFORM_ADMIN_*`) is an owner of every org,
+ * anyone else has the role their membership gives them. Cross-site requests and cross-origin WebSocket upgrades are
+ * refused first (`csrf.ts`). Everything else (`/healthz`, unknown paths) is passed through untouched. On success the
+ * principal is available to handlers as `AccessPrincipal`, and `CurrentOrg` is the org of the request: the org
+ * addressed by an org-scoped management URL (`management/org-address.ts`), the org an API key names, unchanged
+ * otherwise.
  *
  * Register it after `CorsLayer` so that 401/403 responses still carry CORS headers and preflights are not gated.
  */
@@ -145,11 +153,9 @@ export const AccessGate = HttpRouter.middleware<{ provides: AccessPrincipal }>()
         if (rejection !== undefined) return errorResponse(rejection.status, rejection.message);
 
         const authenticated = yield* Effect.result(
-          hosted
-            ? authenticateHosted(request.headers, request.originalUrl, zone, request.method)
-            : authenticateRequest(request.headers, request.originalUrl, zone, request.method).pipe(
-                Effect.provideService(AccessJwks, jwks),
-              ),
+          authenticateRequest(request.headers, request.originalUrl, zone, request.method).pipe(
+            Effect.provideService(AccessJwks, jwks),
+          ),
         );
 
         if (Result.isFailure(authenticated)) {

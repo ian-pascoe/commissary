@@ -26,7 +26,8 @@ A pnpm workspace run by Turborepo: Workers and the panel in `apps/`, libraries i
 source-only: they export TypeScript and whatever imports them compiles it). The deploy code stays at the root. Paths
 such as `src/...` and `test/...` in the rest of this document are relative to `apps/app/`; translation's modules are
 cited as `translation/...` (relative to `packages/translation/src/`), core's as `core/...` (relative to
-`packages/core/src/`) and the JSON path engine as `packages/json`.
+`packages/core/src/`), auth's as `auth/...` (relative to `packages/auth/src/`) and the JSON path engine as
+`packages/json`.
 
 ```
 .                             workspace root and deploy root (Alchemy, no Wrangler config); turbo.json
@@ -41,19 +42,23 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
       models/                 the ControlPlane's Models part (config, credentials, grants, Spend, quota, OAuth)
       platform/               Cloudflare bindings as Effect services (Env, KV, D1, DO stubs)
       http/                   router, CORS, error formatting per protocol, SSE framing, streaming helpers
-      access/                 Cloudflare Access JWT verification, principals
+      access/                 the Access gate middleware: @commissary/auth's entry points with the Worker's routes
       config/                 config schema (Effect Schema), storage, payload rules
       registry/               model catalogs, model info, /models listings
       credentials/            credential model, selection, cooldowns, refresh
       executor/               executor interface + one directory per provider
       signature/              the CACHE KV store of the thinking-signature cache
       handlers/               inbound protocol handlers (openai, responses, claude, gemini, interactions, ...)
-      management/             /v9/management API, panel serving, OAuth flows
+      management/             /v9/management API, panel serving, OAuth flows; path zones, role table, org addressing
+      state/                  state bindings, the lease store, the AuthDirectory adapter over the Durable Objects
       usage/                  usage records, D1 persistence
       quota/                  server-side quota check: provider usage endpoints, stored per-credential reports
     test/                     vitest suites in workerd (+ fixtures generated from the Go code)
   apps/web/                   @commissary/web: control panel served at / (React, Effect Atom, TanStack Router; built
                               into apps/web/dist, the Worker's assets), its tests in Node.js
+  packages/auth/              @commissary/auth: request-side authentication (principals, Access JWTs, API and
+                              management keys, roles, admission, Cloud suspension checks, the gates), state
+                              through AuthDirectory
   packages/contract/          @commissary/contract: the management API's Effect HttpApi schemas and addressing (browser-safe)
   packages/core/              @commissary/core: the foundation without bindings (org model, shared errors, hashing,
                               log-safe helpers, management replies, route services, the execution context)
@@ -169,11 +174,13 @@ client -> Cloudflare Access -> Worker
 
 - TypeScript strict mode, ESM, `effect@4` (HTTP via `effect/http` `HttpRouter.toWebHandler`; per-request Cloudflare
   `env`/`ctx` are provided as services through the handler's per-request `Context`).
-- Each future package reads its own view of `env` (#134): `AuthConfig` (`src/auth/config.ts`: Access, platform admins,
+- Each package reads its own view of `env` (#134): `AuthConfig` (`auth/config.ts`: Access, platform admins,
   dev bypass, hosted mode, rate limiter), `StateEnv` (`src/state/env.ts`: the Durable Object namespaces, typed through
   their classes), `ModelsEnv` (`src/models/env.ts`: `CACHE`, `USAGE`, `SESSION_STATE`, `AUTH_INDEX_KEY`,
   `META_MINT_URL`, and `CONTROL_PLANE` typed as objects with `models()`, the Models part's methods Models calls); `core` reads none. Code that stays in the
-  Worker reads `AppEnv` (`src/worker-env.ts`). `requestContext` provides each from the invocation's `env`; the global
+  Worker reads `AppEnv` (`src/worker-env.ts`). `requestContext` provides each from the invocation's `env`, plus auth's
+  ports over it: `AuthDirectory` (`src/state/auth-directory.ts`, the Durable Object stubs) and `SignInSessions`
+  (`src/hosted/session.ts`, Better Auth); the global
   `Env` appears only in the entry (`index.ts`, `scheduled.ts`), the Durable Object classes and tests.
 - Use Effect at boundaries and for orchestration: services (`Context.Service`) + `Layer`s, `Schema` for config,
   credentials and external payloads, tagged errors, `Stream` for upstream/downstream streaming, `HttpClient`
@@ -378,7 +385,7 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
     private key listed among the accounts (OpenCode Go) can also be disabled and enabled there (`PrivateKeyStore.setKeyExcludedAll`,
     the `*` exclusion, like a shared key). A shared credential
     stays admin-only. A plain member reaches only their own private credentials through the same routes (`/credentials*`,
-    `/oauth/*`, `/provider-keys*`: `MEMBER_CREDENTIAL_ROUTES` in `access/policy.ts`); what they upload, log in or add is private
+    `/oauth/*`, `/provider-keys*`: `MEMBER_CREDENTIAL_ROUTES` in `management/policy.ts`); what they upload, log in or add is private
     whatever they send, an org admin's is shared unless `?private=true` (`private: true` for a key group) asks otherwise.
     Where the org setting is off creating one answers `403` (`forbidden` for an account, `private_credentials_unavailable`
     for a key group). The download is the owner's alone (`403 private_credential` for an org admin, a service-token owner
@@ -439,7 +446,7 @@ Core contracts every provider slice implements (Go references in each module hea
   Deviation: `POST /chat/completions`, `/completions`, `/responses`, `/responses/compact` and the `GET /responses`
   WebSocket are unprefixed aliases of the `/v1` routes (Go serves only `/v1`). A client whose Anthropic models append
   `/v1/messages` and whose OpenAI models append `/chat/completions` to the same base URL (pi's `opencode-go` catalog)
-  then needs a single base URL. The aliases are in `PROTECTED_PREFIXES` (`access/routes.ts`). `GET /models` is not
+  then needs a single base URL. The aliases are in `PROTECTED_PREFIXES` (`management/zones.ts`). `GET /models` is not
   aliased, because it is a control panel page.
   Request bodies (`handlers/request.ts`, `http/body.ts`) decode `Content-Encoding: zstd` with a 32 MiB cap on the decoded
   size (`http/zstd.ts`: frame windows/content sizes are checked before fzstd allocates, the streaming decoder stops past the
@@ -1049,7 +1056,7 @@ Port of `internal/api/handlers/management` for the `/v9/management` routes that 
 control panel at `/` (`apps/web`, through `@commissary/contract`) and may change incompatibly: routes keep Go's response shapes where
 that is cheap, but scripts written for the Go server are not guaranteed to keep working. The upstream panel (`Cli-Proxy-API-Management-Center`) is not served:
 its address redirects to `/` (_Legacy panel address_ below), and the routes only it needed are gone (`requests/api-call`,
-the operational and log routes listed under _Also not ported_) or replaced by the config entry routes (_Config entries_). Auth is the Access admin gate only (`access/routes.ts` classifies `/v9/management*`, the
+the operational and log routes listed under _Also not ported_) or replaced by the config entry routes (_Config entries_). Auth is the Access admin gate only (`management/zones.ts` classifies `/v9/management*`, the
 panel paths and `/management.html` as `management`), or Commissary Cloud's sign-in (_Commissary Cloud_ below); Go's single
 management key is not ported, and the port's per-org management keys (_Management keys_ below) are its own design.
 
@@ -1262,7 +1269,7 @@ management key is not ported, and the port's per-org management keys (_Managemen
   quota and key probes; here those probes run server-side (`credentials/quota`, `provider-keys/probe`), so the route is not
   ported and answers `404` (still behind the admin gate).
 - **Control panel** (`web-panel.ts`, `apps/web`): `GET /`, the panel's page paths (`/accounts`, `/keys`, `/models`, `/usage`,
-  `/settings` and their sub-paths; `access/routes.ts` `PANEL_SECTIONS`) and `/assets/*` (hashed bundle files) are in the
+  `/settings` and their sub-paths; `management/zones.ts` `PANEL_SECTIONS`) and `/assets/*` (hashed bundle files) are in the
   management zone, so only Access admins get them. Every page path answers the build's `index.html` (the browser router picks
   the page) with a strict CSP (own origin only; inline `style` attributes allowed for meter widths and chart sizes), `404` with a build
   hint when it is missing. The panel calls `/v9/management` on its own origin with no key; Access authenticates the calls.
@@ -1347,7 +1354,7 @@ management key is not ported, and the port's per-org management keys (_Managemen
   Node.js (`apps/web/test/`).
 - **Legacy panel address** (`web-panel.ts` `LEGACY_PANEL_REDIRECT`, deviation from Go, which serves the upstream panel
   there): `GET|HEAD /management.html` (any case or percent-encoding) answers `302 Location: /` with
-  `cache-control: no-store`. It stays in the management zone (`access/routes.ts` `LEGACY_PANEL_PATH`): `401`
+  `cache-control: no-store`. It stays in the management zone (`management/zones.ts` `LEGACY_PANEL_PATH`): `401`
   unauthenticated, `403` for non-admins, no CORS. The browser keeps the old `#/auth-files`-style fragment over the
   redirect, and the panel maps it on boot to the page that replaced it (`apps/web/src/lib/legacy-hash.ts`: auth files and
   quota → `/accounts`, OAuth → `/accounts/connect`, providers → `/keys`, OAuth rule editors → `/models/rules`, config and
@@ -1986,12 +1993,12 @@ Grok/GPT/recognised checks, Gemini replay, ~500 sanitiser runs over synthetic hi
   and foreign `encrypted_content` for compat models. Fixtures: corpus `executor-compat.json` runs the Go helper itself
   (`corpusCase.executor`).
 
-## Orgs in addresses (`src/access/org-address.ts`, `src/management/org-routes.ts`)
+## Orgs in addresses (`src/management/org-address.ts`, `src/management/org-routes.ts`)
 
 An org is addressed by its slug (ADR 0021), in two places, and the address is the only thing that names an org to the
 management API and the panel (the client API endpoints still name it with the caller's key):
 
-- **`/v9/management/orgs/<slug>/<route>`** and **`/o/<slug>/<page>`** (`parseOrgAddress`, `routes.ts`). `orgAddressing` is a
+- **`/v9/management/orgs/<slug>/<route>`** and **`/o/<slug>/<page>`** (`parseOrgAddress`, `management/zones.ts`). `orgAddressing` is a
   router middleware around the whole application: it takes the org prefix out of the URL before routing, so every
   management handler and the panel page handler are written once, for an unscoped path, and run against the org the address
   names (the `CurrentOrg` they read). The unscoped path means `global`. Matching is case-, slash- and
@@ -2038,7 +2045,7 @@ org and shows the **chooser** (the orgs of `/me`, and for a platform admin a for
 redirect, so a platform admin of one org can reach the form. Bookmarks and clients of the unscoped management API are
 unaffected.
 
-## Members, roles and teams (`src/members/`, `src/access/policy.ts`, `src/management/member-routes.ts`)
+## Members, roles and teams (`src/members/`, `auth/roles.ts`, `src/management/policy.ts`, `src/management/member-routes.ts`)
 
 Workers addition, no Go counterpart (Go has one management key for everything); ADR 0022. The permission matrix and the
 error codes are in `docs/ACCESS.md` "Members, roles and teams".
@@ -2052,16 +2059,16 @@ error codes are in `docs/ACCESS.md` "Members, roles and teams".
   the one chosen); `GET`/`PATCH /membership`, `/me` and the panel read it; an org
   admin changes it, and a change makes the credential pool derive again). Members are not config entries: a config import replaces every entry and must not
   remove people. Every write takes the actor's role and checks it against the target in the same Durable Object call
-  (`members/roles.ts`: `mayManageMember`, `mayChangeRoles`, `mayGrantTokenRole`, `holdsSensitivePowers`), so check and write
+  (`auth/roles.ts`: `mayManageMember`, `mayChangeRoles`, `mayGrantTokenRole`, `holdsSensitivePowers`), so check and write
   cannot interleave with another request; refusals are data (`{ok: false, error, message}`) that `member-routes.ts` maps to
   statuses.
-- **Admission** (`members/admission.ts`, called by the Access gate on every protected request): the org's ControlPlane
+- **Admission** (`auth/admission.ts`, called by the gates on every protected request through `AuthDirectory`): the org's ControlPlane
   answers the principal's role and member id (`admit`), joining a person as a plain member when auto-join is on; a
   platform admin is an owner without joining. The ControlPlane is asked on every request, so removing a member or lowering
   a role applies on the next one. An unreachable ControlPlane fails the request (500) unless the caller is a platform admin
   or the route is platform-level. `AccessIdentity` carries `role` and `memberId`; client API handlers write the member id into
   usage records (`member_id`, `migrations/0005_usage_member.sql`).
-- **Policy** (`access/policy.ts` `routeAccess`): platform-level (no role: `/v9/management/me`, `/v9/management/orgs*`, panel
+- **Policy** (`management/policy.ts` `routeAccess`, the role table the Worker passes to `authenticateManagement` as `needs`): platform-level (no role: `/v9/management/me`, `/v9/management/orgs*`, panel
   pages without an org, `/assets`, `/management.html`), member (the client API endpoints, the org's panel pages, `GET` usage
   records/summary/series, where a plain member is narrowed to their own records: by member id, or by Access principal for
   records from before members), admin (every other management route). Owner-only and ADR 0006 checks live in the handlers
@@ -2105,7 +2112,7 @@ credentials a subject may use; selection and the model registry read it (_Creden
   `POST /grants` creates one (`409 conflict` when the subject and scope have one); `PUT|DELETE /grants/:id` take `If-Match`
   (`409` stale, `400 invalid_if_match` missing); an empty pattern list or a member or team the org does not have is `422
   invalid_config`. Org admins only. `GET /models/mine` answers `{models}` from `snapshot.visibleTo(caller)` for every role
-  (`MEMBER_READS` in `access/policy.ts`).
+  (`MEMBER_READS` in `management/policy.ts`).
 - **Panel** (`apps/web/src/pages/Grants.tsx`, `MyModels.tsx`, model in `apps/web/src/lib/grants.ts`): **Grants** (`/grants`, org
   admins) reads the grants by member (what reaches each member: their own, their teams' and everyone's, marked "via"), by team
   or by credential (who may use each account, provider or all of them) and adds, edits and removes them with the entry
@@ -2115,12 +2122,12 @@ credentials a subject may use; selection and the model registry read it (_Creden
   selection on the next request. Model lists lag by the registry's 5 s snapshot TTL. Grants never apply to private
   credentials, and Spend limits are separate (ADR 0024, _Spend limits_).
 
-## API keys (`src/api-keys/`, `src/access/api-key.ts`, `src/management/api-key-routes.ts`)
+## API keys (`src/api-keys/`, `auth/api-key.ts`, `src/management/api-key-routes.ts`)
 
 Workers addition replacing the Go server's client keys (`access.api-keys`, imported but never enforced); ADR 0022. User docs:
 `docs/ACCESS.md` "API keys", `docs/CLIENTS.md`.
 
-- **Format** (`api-keys/key.ts`): `cms_<org id>_<key id>_<secret>`, key id 20 hex characters, secret 36 random bytes in
+- **Format** (`auth/keys.ts`): `cms_<org id>_<key id>_<secret>`, key id 20 hex characters, secret 36 random bytes in
   base64url. The org id is the permanent id, not the slug, so renaming an org keeps its keys working. Only the SHA-256 of
   the whole key is stored, with a display prefix (`cms_<org>_<key id>_` and 4 characters of the secret).
 - **Store**: table `api_keys` in each org's ControlPlane (`CREATE IF NOT EXISTS`, next to the members tables): member id,
@@ -2132,7 +2139,7 @@ Workers addition replacing the Go server's client keys (`access.api-keys`, impor
   ControlPlane starts (the `revoked_at` column stays, never written). A member holds at most 100 keys (`409
   too_many_keys`). Removing a member deletes their keys, private accounts, private key groups and OAuth logins in the
   same Durable Object call.
-- **Gate** (`access/api-key.ts`): on a client API route the first `cms_…` credential in the Go config access provider's order
+- **Gate** (`auth/api-key.ts`): on a client API route the first `cms_…` credential in the Go config access provider's order
   wins over everything else, including an Access JWT. Verification asks the Platform registry whether the org exists (the
   answer is trusted for 30 s per isolate) (so a made-up org id never creates a ControlPlane), then the org's ControlPlane, which compares
   hashes in constant time and answers the member's id, email and role. The answer is cached per isolate for 30 s (never
@@ -2200,7 +2207,7 @@ prices each attempt, the ControlPlane counts and decides.
   already running (ADR 0024). Alpha search publishes no usage record, so it is not charged; a key limit still refuses it.
 - **`global`**: an org starts with no limits and an upgrade adds none, so nothing is limited until an org admin sets one;
   the first request of an org with no limits does no ledger work.
-- **Routes** (`spend-routes.ts`, contract `@commissary/contract/spend`; `access/policy.ts`): `GET /spend` answers the calendar and
+- **Routes** (`spend-routes.ts`, contract `@commissary/contract/spend`; `management/policy.ts`): `GET /spend` answers the calendar and
   the limits the caller sees with `spent_micros`, `remaining_micros`, `period_start`, `resets_at` and `editable`
   (org admins: every limit; a plain member: their own member limit, their teams', the org's and those on their API
   keys); `POST /spend/limits` (201), `PUT|DELETE /spend/limits/:id` and `PATCH /spend/settings` (org admins only). Every
@@ -2231,34 +2238,46 @@ prices each attempt, the ControlPlane counts and decides.
 - Past Access, every protected request needs a role in its org (see "Members, roles and teams"): the
   `PLATFORM_ADMIN_EMAILS`/`PLATFORM_ADMIN_SERVICE_TOKENS` variables name the **platform admins**, owners of every org (checked
   first, no I/O, so one can always repair an org and the registry); anyone else is admitted by the org's
-  ControlPlane. The route's policy (`access/policy.ts`) names the role it needs.
-- Cross-site protections (`access/csrf.ts`, before authentication; new in the port because the Access session cookie is sent by
+  ControlPlane. The route's policy (`management/policy.ts`) names the role it needs.
+- Cross-site protections (`auth/csrf.ts`, with the Worker's routes in `src/access/csrf.ts`, before authentication; new in the port because the Access session cookie is sent by
   browsers automatically): state-changing requests are refused on protected and management zones when `Sec-Fetch-Site` is
   `cross-site`/`same-site` or `Origin` is another host; management requests of any method with a foreign `Origin` (or a
   cross-site `Sec-Fetch-Site`, unless a `GET`/`HEAD` with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document` to a
-  panel page or `/management.html`: `routes.ts` `isPanelPagePath`; frames, `/assets` and `/v9/management*` never) too; WebSocket upgrades with a foreign `Origin`; management writes need
+  panel page or `/management.html`: `management/zones.ts` `isPanelPagePath`; frames, `/assets` and `/v9/management*` never) too; WebSocket upgrades with a foreign `Origin`; management writes need
   JSON (multipart for `POST /credentials`, YAML for `POST /settings/import`) or no body (415). The CORS middleware adds no headers in
   the management zone (deviation from Go's `*`).
-- Implementation notes (`src/access/`): the gate is a _global_ router middleware that matches protected path
+- Implementation notes (`src/access/`, `packages/auth`): the gate is a _global_ router middleware that matches protected path
   prefixes (default-deny for `/v1*`, `/openai/v1*`, `/backend-api/codex*`, the unprefixed `/chat/completions`,
   `/completions`, `/responses`, `/v9/management*`, normalising case, duplicate
   slashes and percent-encoding) and provides `AccessPrincipal`; route layers that read it use `withAccess(...)` for typing.
   JWKS keys are cached per isolate and refreshed on unknown `kid` at most once per 30 s (no cross-request locks, which
   workerd forbids). `ACCESS_DEV_BYPASS` only applies when the request host is loopback (i.e. `alchemy dev`) and is refused (warning logged once
   per isolate) whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set.
+- **`@commissary/auth`** (`packages/auth`, #132): request-side authentication with two entry points,
+  `authenticateClient(headers, url)` (the client API) and `authenticateManagement(headers, url, {needs, slug})` (the
+  management API and the panel), each picking the Access gate (`auth/access-gate.ts`) or Commissary Cloud's
+  (`auth/hosted-gate.ts`). The Worker owns the routes and passes in what a path needs: the zone (`management/zones.ts`
+  `classifyPath`, which entry point), the role (`management/policy.ts`), the addressed org's slug and, for the cross-site
+  checks, whether a path is a panel page and which body types its route takes (`src/access/csrf.ts`); `src/access/`
+  keeps the router middleware. Auth reads `AuthConfig` (raw variables, parsed per request) and reaches state only through
+  `AuthDirectory`, a narrow Effect service of the ControlPlane and Platform calls it makes (`auth/directory.ts`, which
+  also holds the types crossing it, such as `ApiKeyVerdict`, `Admission` and `Standing`, that the stores import); the
+  Worker's adapter over the Durable Object stubs is `src/state/auth-directory.ts`, an in-memory one is
+  `@commissary/auth/testing`. Better Auth's session lookup stays in the Worker behind auth's `SignInSessions` port. Auth
+  imports `@commissary/core`, `@commissary/contract`, `effect` and `jose` only, and tests in Node.js.
 - Clients of the client API send API keys ("API keys" above). Scripts on the management API use Access service
   tokens (`CF-Access-Client-Id`/`CF-Access-Client-Secret` headers, or Access single-header mode via `x-api-key`, set on
   the Access application with `read_service_tokens_from_header`; the Worker only sees the resulting JWT, so no Worker
   code is involved). User docs: `README.md` and `ACCESS.md`, `CLIENTS.md`, `MIGRATION.md`,
   `DEVELOPMENT.md` in this directory.
 
-## Management keys (`src/management-keys/`, `src/access/management-key.ts`, `src/management/management-key-routes.ts`)
+## Management keys (`src/management-keys/`, `auth/management-key.ts`, `src/management/management-key-routes.ts`)
 
 Workers addition, no Go counterpart (Go's single `remote-management.secret-key` is not ported); ADR 0026. User docs:
 `docs/ACCESS.md` "Management keys".
 
-- **Format** (`management-keys/key.ts`): `cmsm_<org id>_<key id>_<secret>`, minted and parsed by the API keys' code
-  (`api-keys/key.ts` `mintOrgKey`/`parseOrgKey`) with its own prefix, so neither kind is ever taken for the other.
+- **Format** (`auth/keys.ts`): `cmsm_<org id>_<key id>_<secret>`, minted and parsed by the API keys' code
+  (`mintOrgKey`/`parseOrgKey`) with its own prefix, so neither kind is ever taken for the other.
 - **Store** (`management-keys/store.ts`): table `management_keys` in each org's ControlPlane (`CREATE IF NOT EXISTS`):
   name, role, issuer, hash, prefix, created and last used (no expiry; revoking deletes the row); at most 100 rows per org
   (`409 too_many_keys`).
@@ -2271,9 +2290,9 @@ Workers addition, no Go counterpart (Go's single `remote-management.secret-key` 
 - **Limits**: the role is at most the issuer's; a key never downloads a credential, registers or re-roles a service
   token, or issues a key (`management_key_forbidden`); on Commissary Cloud a key of a suspended org or issuer is refused.
 
-## Commissary Cloud (`src/hosted/`)
+## Commissary Cloud (`src/hosted/`, `auth/hosted-gate.ts`, `auth/standing.ts`)
 
-Workers addition, no Go counterpart; ADR 0026. `COMMISSARY_MODE=cloud` (`hosted/mode.ts` `isHosted`) replaces Access with
+Workers addition, no Go counterpart; ADR 0026. `COMMISSARY_MODE=cloud` (`auth/mode.ts` `isHosted`) replaces Access with
 the Worker's own sign-in; unset, every hosted route answers like an unknown path (`hosted/only.ts`) and the gate is the
 Access one, unchanged. User docs: `docs/ACCESS.md` "Commissary Cloud", `docs/DEPLOY.md` "Commissary Cloud".
 
@@ -2285,24 +2304,24 @@ Access one, unchanged. User docs: `docs/ACCESS.md` "Commissary Cloud", `docs/DEP
   against `TURNSTILE_SECRET_KEY`. `/api/sign-in-options` tells the panel's `/sign-in` page the enabled providers and the
   Turnstile site key. The session cookie is read on every request, so a session ended by sign-out or suspension stops
   working at once.
-- **Gate** (`gate.ts` `authenticateHosted`, called by the access middleware when hosted): client API routes take API keys
-  only (rate-limited per org, `rate-limit.ts`, `429` with `Retry-After`); the management zone takes a management key,
-  else the Better Auth session cookie, whose verified email becomes a `user` principal admitted like an Access email
+- **Gate** (`auth/hosted-gate.ts`, picked by the entry points when hosted): client API routes take API keys
+  only (rate-limited per org, `auth/rate-limit.ts`, `429` with `Retry-After`); the management zone takes a management key,
+  else the Better Auth session cookie (looked up by the Worker, `session.ts`, behind auth's `SignInSessions` port), whose verified email becomes a `user` principal admitted like an Access email
   (platform admin when in `PLATFORM_ADMIN_EMAILS`). Access JWTs and service tokens are ignored. A panel page without a
   session redirects to `/sign-in?next=…`; the management API answers `401 Not signed in`. The cross-site checks
-  (`access/csrf.ts`) run first, as on a self-hosted Commissary.
-- **Standing** (`standing.ts`, Platform registry `signIn`/`standing`): the first request of a new person signs them up,
+  (`auth/csrf.ts`) run first, as on a self-hosted Commissary.
+- **Standing** (`auth/standing.ts`, Platform registry `signIn`/`standing`): the first request of a new person signs them up,
   creating a Personal org they own unless the person-to-orgs index already lists them (invited); `admitPrincipal` never
   auto-joins anyone to `global` on Commissary Cloud, whatever its stored setting. The registry records
   `people` (owned-org limit, suspension) and each org's `created_by` (owned orgs are counted by it) and `suspended_at`.
   Every request checks that neither the person nor the org is suspended, cached 30 s per isolate and forgotten at once
   where a suspension is made; suspending also deletes the person's (or the org members') sessions.
-- **Per-org single sign-on** (`src/sso/`, `sso-adapter.ts`, `management/sso-routes.ts`; issue #76): each org's one
+- **Per-org single sign-on** (`src/sso/`, `@commissary/auth/sso`, `sso-adapter.ts`, `management/sso-routes.ts`; issue #76): each org's one
   identity provider (OIDC or SAML, sealed with the org's data key) and its email domains live in its ControlPlane
   (`sso/store.ts`); the Platform registry keeps the index of verified domains (`sso_domains`, one org per domain, with
   `require_sso`) that a sign-in looks up. A domain is proved by a DNS TXT record read over DNS over HTTPS (`sso/dns.ts`).
   Better Auth's SSO plugin runs the OIDC (PKCE) and SAML flows, but its `ssoProvider` model is never in D1: the adapter
-  wrapper answers it from the org's ControlPlane by provider id (`sso-<org id>`, `sso/provider.ts`), so no migration is
+  wrapper answers it from the org's ControlPlane by provider id (`sso-<org id>`, `auth/sso/provider.ts`), so no migration is
   needed and nothing writes it (the plugin's registration and domain-verification routes are not passed). `POST
   /api/auth/sign-in/sso {email}` is rewritten by the Worker to the provider of the org holding the email's domain. A
   completed SSO sign-in is admitted by `ControlPlane.admitThroughSso` (the email's domain must be one the org verified;

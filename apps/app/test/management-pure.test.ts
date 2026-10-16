@@ -7,7 +7,7 @@ import { resetCooldownState } from "../src/credentials/cooldown-reset.ts";
 import { synthesizeConfigCredentials } from "../src/credentials/synthesize.ts";
 import { applyFieldPatch } from "../src/credentials/field-patch.ts";
 import { emptyQuota, emptyState, type CredentialState } from "../src/credentials/model.ts";
-import { classifyPath, isPanelPagePath, LEGACY_PANEL_PATH } from "../src/access/routes.ts";
+import { classifyPath, isPanelPagePath, LEGACY_PANEL_PATH } from "../src/management/zones.ts";
 import { configKeyIds } from "../src/credentials/key-ids.ts";
 import { buildCredentialEntry, cooldownSnapshot } from "../src/management/credential-entry.ts";
 import { typedDuplicates, withoutKeys } from "../src/management/key-duplicates.ts";

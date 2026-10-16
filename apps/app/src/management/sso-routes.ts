@@ -3,7 +3,7 @@
  * #76): its identity provider and the email domains it proves with a DNS TXT record. A self-hosted Commissary has no
  * such routes. Workers addition, no Go counterpart.
  *
- * Org admins read the settings (`access/policy.ts`); changing them takes the org owner role. A domain becomes the org's
+ * Org admins read the settings (`policy.ts`); changing them takes the org owner role. A domain becomes the org's
  * when its TXT record is found and the Platform registry gives it to the org, which it refuses while another org holds
  * it (`PlatformStore.claimSsoDomain`); removing a domain or the org frees it there. Requiring single sign-on for a
  * domain is recorded in both, so the sign-in can refuse GitHub and Google for it (`hosted/auth.ts`), and ends the
@@ -12,14 +12,12 @@
 import { X509Certificate } from "node:crypto";
 import { Clock, Effect, Schema } from "effect";
 import { HttpRouter, HttpServerRequest, type HttpServerResponse } from "effect/http";
-import { AccessPrincipal, type Principal } from "../access/principal.ts";
+import { AccessPrincipal, type Principal, roleAtLeast } from "@commissary/auth";
+import { challengeRecord, serviceProviderOf } from "@commissary/auth/sso";
 import { hostedOnly } from "../hosted/only.ts";
 import { endDomainSessions } from "../hosted/session.ts";
-import { roleAtLeast } from "../members/roles.ts";
-import { challengeRecord } from "../sso/domain.ts";
 import { lookupTxt } from "../sso/dns.ts";
 import { type IdpInput, type IdpProblem, resolveIdp, testIdp } from "../sso/idp.ts";
-import { serviceProviderOf } from "../sso/provider.ts";
 import type { SsoDomain, SsoErrorCode, SsoResult, StoredIdp } from "../sso/store.ts";
 import {
   AddSsoDomain,

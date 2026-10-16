@@ -1,11 +1,10 @@
 // JWKS cache for Cloudflare Access (`https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`).
 // New in the Workers port. Keys are cached per isolate (the layer lives as long as the web handler) and refreshed
 // when an unknown `kid` shows up, at most once per cooldown so bogus `kid`s cannot trigger a fetch per request.
-import { Clock, Context, Effect, Layer, Result, Schema } from "effect";
+import { Clock, Context, Effect, Layer, Predicate, Result, Schema } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/http";
 import { importJWK } from "jose";
 import type { JWK } from "jose";
-import { isJsonArray, isJsonObject } from "@commissary/json";
 
 /** Keys are considered fresh for this long (same default as jose's `createRemoteJWKSet`). */
 export const JWKS_MAX_AGE_MS = 600_000;
@@ -31,7 +30,7 @@ export class AccessJwks extends Context.Service<
       kid: string,
     ) => Effect.Effect<CryptoKey, JwksFetchError | UnknownKeyError>;
   }
->()("commissary/access/AccessJwks") {
+>()("commissary/auth/AccessJwks") {
   static readonly layer = Layer.effect(
     AccessJwks,
     Effect.gen(function* () {
@@ -52,9 +51,9 @@ interface CacheEntry {
 }
 
 const importKeys = async (body: Schema.Json): Promise<ReadonlyMap<string, CryptoKey>> => {
-  const list = isJsonObject(body) ? body["keys"] : undefined;
+  const list = Predicate.isObject(body) && !Array.isArray(body) ? body["keys"] : undefined;
 
-  if (!isJsonArray(list)) throw new Error("JWKS document has no keys array");
+  if (!Array.isArray(list)) throw new Error("JWKS document has no keys array");
   const keys = new Map<string, CryptoKey>();
 
   // SAFETY: each entry is only used after the kty/kid checks below and importJWK validates the remaining fields.

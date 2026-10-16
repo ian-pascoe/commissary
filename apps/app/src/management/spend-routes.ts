@@ -2,14 +2,14 @@
  * `/v9/management/spend` (`SpendGroup` in @commissary/contract/spend): Spend limits and the org's calendar (issue #71).
  * Workers addition, no Go counterpart.
  *
- * Any member of the org may use `GET /spend` and the limit routes (`access/policy.ts`); the ControlPlane's
+ * Any member of the org may use `GET /spend` and the limit routes (`policy.ts`); the ControlPlane's
  * `SpendService` decides what the caller sees and writes: an org admin (or a platform admin) every limit, a plain
  * member the limits that bind them and limits on their own API keys. The calendar (`PATCH /spend/settings`) is
  * for org admins. An edit names the limit's revision in `If-Match`; a stale one is `409 conflict`.
  */
 import { Effect, Schema } from "effect";
 import { HttpRouter, type HttpServerResponse } from "effect/http";
-import { AccessPrincipal } from "../access/principal.ts";
+import { AccessPrincipal } from "@commissary/auth";
 import type { SpendEntry, SpendServiceErrorCode, SpendServiceResult } from "../spend/service.ts";
 import {
   CreateSpendLimit,

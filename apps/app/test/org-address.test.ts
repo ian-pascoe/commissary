@@ -8,7 +8,7 @@ import {
   normalizedPath,
   parseOrgAddress,
   scopedUrl,
-} from "../src/access/routes.ts";
+} from "../src/management/zones.ts";
 
 describe("parseOrgAddress", () => {
   it.each([

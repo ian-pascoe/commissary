@@ -15,11 +15,8 @@
  * Better Auth is imported on first use: a self-hosted Commissary never loads it.
  */
 import type { betterAuth, BetterAuthOptions } from "better-auth";
-import { SIGN_IN_PAGE_PATH } from "@commissary/contract/sign-in";
+import { AUTH_BASE_PATH, SIGN_IN_PAGE_PATH } from "@commissary/contract/sign-in";
 import { type ProviderLookup, ssoAwareAdapter } from "./sso-adapter.ts";
-
-/** Where Better Auth's routes live; `routes.ts` lets through only {@link AUTH_PATHS}. */
-export const AUTH_BASE_PATH = "/api/auth";
 
 /** The social providers Commissary Cloud can offer, in the order the sign-in page lists them. */
 export const SIGN_IN_PROVIDERS = ["github", "google"] as const;
@@ -99,7 +96,7 @@ export interface SignInRefusal {
 export interface AuthHooks {
   /** Whether a session may start for the person with this (verified, lowercased) email. */
   readonly maySignIn?: (email: string) => Promise<boolean>;
-  /** The identity provider with this Better Auth provider id (`sso/provider.ts`). */
+  /** The identity provider with this Better Auth provider id (`@commissary/auth/sso` `provider.ts`). */
   readonly ssoProvider?: ProviderLookup;
   /**
    * Admits the person the identity provider `providerId` signed in with this (lowercased) email to its org, or says

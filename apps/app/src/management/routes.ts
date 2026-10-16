@@ -3,7 +3,7 @@
  * (`/management.html`, a redirect to `/`).
  *
  * Go source: internal/api/server_management_v8.go (route table). Authorization is the Access admin gate
- * (`access/routes.ts`: the whole `/v9/management` prefix, the panel paths and `/management.html`), which replaces the
+ * (`zones.ts`: the whole `/v9/management` prefix, the panel paths and `/management.html`), which replaces the
  * Go management key, IP ban and `allow-remote` logic. Routes that are not ported: plugins, Home, the file-log routes,
  * `GET /server/latest-version`, the static `routing/model-definitions/:channel` catalog, `GET /oauth/callback` and
  * `GET /observability/usage/api-keys` (all four only fed the upstream panel; the control panel reads
@@ -29,8 +29,8 @@ import {
   type HttpServerRequest,
   type HttpServerResponse,
 } from "effect/http";
-import type { AccessPrincipal } from "../access/principal.ts";
-import { LEGACY_PANEL_PATH } from "../access/routes.ts";
+import type { AccessPrincipal } from "@commissary/auth";
+import { LEGACY_PANEL_PATH } from "./zones.ts";
 import { routeServices, type CurrentOrg } from "@commissary/core";
 import type { EnvServices } from "../worker-env.ts";
 import { CatalogStore } from "../registry/catalog-store.ts";

@@ -258,7 +258,7 @@ const LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 const ALL_DIGITS = /^[0-9]+$/;
 
-/** A typed domain as the server stores it (`apps/app/src/sso/domain.ts`): trimmed, lower-case, no trailing dot; else `undefined`. */
+/** A typed domain as the server stores it (`packages/auth/src/sso/domain.ts`): trimmed, lower-case, no trailing dot; else `undefined`. */
 export const normalizeDomain = (text: string): string | undefined => {
   const domain = text.trim().toLowerCase().replace(/\.$/, "");
 

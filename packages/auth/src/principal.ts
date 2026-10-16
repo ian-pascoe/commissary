@@ -1,7 +1,7 @@
 // Mirrors CallerScope in sdk/cliproxy/session/identity.go (sha256 of a versioned prefix + caller credential).
 // The Go `userApiKey` is replaced by the Cloudflare Access principal.
 import { Context, Effect } from "effect";
-import type { OrgRole } from "../members/roles.ts";
+import type { OrgRole } from "@commissary/contract/members";
 import { GLOBAL_ORG, type OrgId } from "@commissary/core";
 
 /**
@@ -50,7 +50,7 @@ export interface AccessIdentity {
   readonly platformAdmin: boolean;
   /**
    * The principal's role in `org` (ADR 0022): `owner` for a platform admin, absent on a platform-level route for a
-   * principal that belongs to no org there (`access/policy.ts`).
+   * principal that belongs to no org there (the Worker's role table, `management/policy.ts`).
    */
   readonly role?: OrgRole | undefined;
   /** The member id of a person who belongs to `org` (usage records' `member_id`); absent for a service token. */
@@ -60,11 +60,11 @@ export interface AccessIdentity {
 /**
  * The authenticated principal of the current request.
  *
- * Provided by the Access gate for every request under a protected prefix (see `access/routes.ts`); handlers for
- * `/v1*`, `/v1beta*`, `/openai/v1*`, `/backend-api/codex*` and `/v9/management*` can `yield* AccessPrincipal`.
+ * Provided by the Worker's Access gate for every request under a protected prefix (`management/zones.ts`); handlers
+ * for `/v1*`, `/v1beta*`, `/openai/v1*`, `/backend-api/codex*` and `/v9/management*` can `yield* AccessPrincipal`.
  */
 export class AccessPrincipal extends Context.Service<AccessPrincipal, AccessIdentity>()(
-  "commissary/access/AccessPrincipal",
+  "commissary/auth/AccessPrincipal",
 ) {}
 
 export const principalId = (principal: Principal): string => {

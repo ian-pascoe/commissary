@@ -1,24 +1,22 @@
 /**
  * The control panel built from `apps/web` (`pnpm build` writes `apps/web/dist/index.html` and
- * `apps/web/dist/assets/*`): `/`, its page paths (`access/routes.ts` `PANEL_SECTIONS`), the same pages under an org
- * (`/o/<slug>/accounts`, routed as the unscoped page by `access/org-address.ts`) and the bundled files under `/assets`.
+ * `apps/web/dist/assets/*`): `/`, its page paths (`zones.ts` `PANEL_SECTIONS`), the same pages under an org
+ * (`/o/<slug>/accounts`, routed as the unscoped page by `org-address.ts`) and the bundled files under `/assets`.
  *
  * New in the Workers port: Go serves the upstream panel at `/management.html` and a public JSON banner at `/`. Here
  * `/management.html` is a legacy redirect to `/` (`LEGACY_PANEL_REDIRECT`, deviation from Go). Every page path
  * answers the same `index.html`; the panel's router picks the page in the browser. Both pages and files are gated like
- * the management API (Access, `access/policy.ts`: a page of an org needs a role in it) because the Worker runs before
+ * the management API (Access, `policy.ts`: a page of an org needs a role in it) because the Worker runs before
  * static assets. The page talks to `/v9/management`
  * on its own origin and sends no credentials of its own: Access authenticates those calls.
  */
 import { Effect } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
-import { addressedSlug } from "../access/org-address.ts";
-import { AccessPrincipal } from "../access/principal.ts";
-import { PANEL_ORG_PREFIX, PANEL_SECTIONS } from "../access/routes.ts";
-import { isHosted } from "../hosted/mode.ts";
+import { addressedSlug } from "./org-address.ts";
+import { AccessPrincipal, AuthConfig, isHosted } from "@commissary/auth";
+import { PANEL_ORG_PREFIX, PANEL_SECTIONS } from "./zones.ts";
 import { jsonReply } from "@commissary/core";
 import { openableOrgs } from "./org-routes.ts";
-import { AuthConfig } from "../auth/config.ts";
 import { AppEnv } from "../worker-env.ts";
 
 export const PANEL_NOT_BUILT = "the control panel is not built; run `pnpm build`";

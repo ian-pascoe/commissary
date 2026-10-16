@@ -2,7 +2,7 @@
  * An org's members, teams and service tokens inside its ControlPlane Durable Object (SQLite; ADR 0022, ADR 0025). New
  * in the Workers port, no Go counterpart.
  *
- * - **members**: the people of the org, by lowercased email, each with one role (`roles.ts`). Their id is permanent
+ * - **members**: the people of the org, by lowercased email, each with one role (`@commissary/auth` `roles.ts`). Their id is permanent
  *   while they stay a member and names them in usage records (`member_id`).
  * - **teams**: named groups of members; a member can be on several. Removing a member takes them off every team.
  * - **service tokens**: Access service tokens (by Client ID) registered to the org with a role.
@@ -11,7 +11,7 @@
  *   index has caught up with.
  *
  * The ControlPlane is authoritative; the Platform registry keeps a copy of which orgs each person and service token
- * belong to (`index`, pushed by the Worker, `admission.ts`). Writes take the acting principal's role (`Actor`) and
+ * belong to (`index`, pushed by `@commissary/auth` `syncOrgIndex`). Writes take the acting principal's role (`Actor`) and
  * check it against the target here, so the check and the write are one step under the Durable Object's input gate.
  * All methods are synchronous; refusals are plain data (`MemberRefused`).
  */
@@ -19,29 +19,16 @@ import { GLOBAL_ORG, type OrgId } from "@commissary/core";
 import { cleanName, MAX_NAME_LENGTH } from "../platform/registry-store.ts";
 import {
   type Actor,
+  type Admission,
   isOrgRole,
+  type MembershipIndex,
+  type PrincipalRef,
   mayChangeRoles,
   mayGrantTokenRole,
   mayManageMember,
   mayRemoveToken,
-  type OrgRole,
-} from "./roles.ts";
-
-/** Who a request is, as the store looks it up: a person by email, a service token by Client ID. */
-export type PrincipalRef =
-  | { readonly kind: "user"; readonly email: string }
-  | { readonly kind: "service"; readonly clientId: string };
-
-/** A principal's place in the org. */
-export interface Admission {
-  readonly role: OrgRole;
-  /** The member id of a person; absent for a service token. */
-  readonly memberId?: string;
-  /** The person joined just now (auto-join). */
-  readonly joined: boolean;
-  /** The Platform registry's index is behind the org's members and service tokens (`index`). */
-  readonly indexStale: boolean;
-}
+} from "@commissary/auth";
+import type { OrgRole } from "@commissary/contract/members";
 
 export interface MemberRecord {
   readonly id: string;
@@ -77,16 +64,6 @@ export interface MembershipSettingsWire {
    * keys (`api-keys/store.ts`). Only `global` uses it: an Access sign-in names no org.
    */
   readonly accessClients: boolean;
-}
-
-/** What the Platform registry indexes for the org, and the change it reflects. */
-export interface MembershipIndex {
-  readonly emails: ReadonlyArray<string>;
-  readonly serviceTokens: ReadonlyArray<string>;
-  /** The change counter the lists reflect; hand it back to `markIndexSynced`. */
-  readonly counter: number;
-  /** Whether the registry has caught up with `counter`. */
-  readonly synced: boolean;
 }
 
 export type MemberErrorCode =

@@ -9,10 +9,9 @@
  * registry. Methods are exposed to the Worker through JS RPC and exchange plain data only.
  */
 import { DurableObject } from "cloudflare:workers";
+import type { IndexRepair, OrgIndex, SsoDomainRecord, Standing } from "@commissary/auth";
 import { type LeaseSource, LeaseStore, type TakeLease } from "../state/lease.ts";
 import {
-  type IndexRepair,
-  type OrgIndex,
   type OrgInput,
   type OrgPatch,
   type OrgRecord,
@@ -23,8 +22,6 @@ import {
   PlatformStore,
   type SignInState,
   type SsoDomainClaim,
-  type SsoDomainRecord,
-  type Standing,
 } from "./registry-store.ts";
 
 export class Platform extends DurableObject<Env> {

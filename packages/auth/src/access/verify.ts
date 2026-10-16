@@ -5,7 +5,7 @@ import type { JWTPayload } from "jose";
 import { InternalError, UnauthorizedError } from "@commissary/core";
 import type { AccessConfig } from "./config.ts";
 import { AccessJwks } from "./jwks.ts";
-import type { AdmissiblePrincipal } from "./principal.ts";
+import type { AdmissiblePrincipal } from "../principal.ts";
 
 /** Allowed clock difference in seconds for `exp` / `nbf`. */
 export const CLOCK_SKEW_SECONDS = 30;

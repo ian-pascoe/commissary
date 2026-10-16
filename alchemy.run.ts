@@ -67,9 +67,9 @@ export default Alchemy.Stack(
         ? undefined
         : secretsKeys.get(settings.secretsKeyPreviousGeneration);
 
-    // `alchemy dev` serves the Worker on localhost without Access: the dev bypass (apps/app/src/access/config.ts) makes
-    // every loopback request an admin. Deployed Workers never get it and require the Access JWT (or an API key on the
-    // client API).
+    // `alchemy dev` serves the Worker on localhost without Access: the dev bypass (packages/auth/src/access/config.ts)
+    // makes every loopback request an admin. Deployed Workers never get it and require the Access JWT (or an API key on
+    // the client API).
     const { hosted } = settings;
 
     const access: AccessWiring =

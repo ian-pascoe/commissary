@@ -1,6 +1,7 @@
 /**
- * The role a request needs (ADR 0022, the permission matrix of `docs/ACCESS.md`). New in the Workers port, no Go
- * counterpart: Go has one management key for everything.
+ * The role a request needs (ADR 0022, the permission matrix of `docs/ACCESS.md`): the role table the Worker passes to
+ * `@commissary/auth`'s `authenticateManagement`. New in the Workers port, no Go counterpart: Go has one management key
+ * for everything.
  *
  * - **platform-level**: needs no role in any org: who the caller is (`/v9/management/me`), the org list
  *   (`/v9/management/orgs`, `/v9/management/orgs/<slug>`, Commissary Cloud's `/v9/management/people/<email>`; their
@@ -12,9 +13,9 @@
  *   (`management/api-key-routes.ts`).
  * - **admin**: everything else of the management API. Some routes need more and say so in their handler: changing a
  *   role (org owner), downloading a credential or giving a service token a role above member (ADR 0006's rule per
- *   org, `members/roles.ts` `holdsSensitivePowers`).
+ *   org, `@commissary/auth` `holdsSensitivePowers`).
  */
-import type { OrgRole } from "../members/roles.ts";
+import type { RouteAccess } from "@commissary/auth";
 import {
   type AccessZone,
   isPanelPagePath,
@@ -23,9 +24,7 @@ import {
   normalizedPath,
   ORGS_SEGMENT,
   parseOrgAddress,
-} from "./routes.ts";
-
-export type RouteAccess = "platform" | OrgRole;
+} from "./zones.ts";
 
 /** Management API routes a plain member may use (`GET` only), after the org is taken out of the path. */
 const MEMBER_READS = [

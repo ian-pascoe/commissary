@@ -1,16 +1,20 @@
 /**
  * The person Commissary Cloud's request comes from (ADR 0026): Better Auth's session cookie, read on every request, so a
- * session ended by sign-out or suspension stops working at once. New in the Workers port.
+ * session ended by sign-out or suspension stops working at once. The gate (`@commissary/auth`) asks through its
+ * `SignInSessions` port ({@link signInSessions}); Better Auth itself runs here, and reaches the orgs and the Platform
+ * registry through `AuthDirectory`. New in the Workers port.
  */
 import { Effect } from "effect";
-import { syncOrgIndex } from "../members/admission.ts";
+import {
+  AuthDirectory,
+  type AuthDirectoryService,
+  type SignedInPerson,
+  SignInSessions,
+  type SsoAdmission,
+  syncOrgIndex,
+} from "@commissary/auth";
+import { betterAuthProvider, emailDomain, orgOfProviderId } from "@commissary/auth/sso";
 import { GLOBAL_ORG } from "@commissary/core";
-import { controlPlaneOf } from "../platform/org.ts";
-import { platformOf } from "../platform/registry.ts";
-import { emailDomain } from "../sso/domain.ts";
-import { betterAuthProvider, orgOfProviderId } from "../sso/provider.ts";
-import { type StateBindings, StateEnv } from "../state/env.ts";
-import type { SsoAdmission } from "../sso/store.ts";
 import {
   AUTH_TABLES,
   hostedAuth,
@@ -41,47 +45,50 @@ const SSO_REFUSALS: Readonly<Record<Exclude<SsoAdmission, { ok: true }>["error"]
  * The identity provider of the org `providerId` names, as Better Auth's SSO plugin reads it: with the domains the org
  * verified that the Platform registry also gives it (one org per domain), `undefined` without one.
  */
-const ssoProvider = (env: StateBindings, origin: string) => async (providerId: string) => {
-  const org = orgOfProviderId(providerId);
+const ssoProvider =
+  (directory: AuthDirectoryService, origin: string) => async (providerId: string) => {
+    const org = orgOfProviderId(providerId);
 
-  if (org === undefined) return undefined;
+    if (org === undefined) return undefined;
 
-  const [state, held] = await Promise.all([
-    controlPlaneOf(env, org).ssoState(),
-    platformOf(env).ssoDomainsOf(org),
-  ]);
+    const [state, held] = await Effect.runPromise(
+      Effect.all([directory.ssoState(org), directory.ssoDomainsOf(org)], { concurrency: 2 }),
+    );
 
-  if (state.provider === undefined) return undefined;
-  const registered = new Set(held);
+    if (state.provider === undefined) return undefined;
+    const registered = new Set(held);
 
-  const verified = state.domains
-    .filter((domain) => domain.verifiedAt !== undefined && registered.has(domain.domain))
-    .map((domain) => domain.domain);
+    const verified = state.domains
+      .filter((domain) => domain.verifiedAt !== undefined && registered.has(domain.domain))
+      .map((domain) => domain.domain);
 
-  return betterAuthProvider(origin, org, state.provider.settings, verified);
-};
+    return betterAuthProvider(origin, org, state.provider.settings, verified);
+  };
 
 /**
  * Admits a person the org's identity provider signed in: the registry must give their email's domain to that org, and
  * the org's ControlPlane makes them a member (`ControlPlane.admitThroughSso`), then the registry's index learns it
- * before their session starts (so the sign-up does not give them a Personal org instead, `standing.ts`).
+ * before their session starts (so the sign-up does not give them a Personal org instead, `@commissary/auth`
+ * `ensureSignedUp`).
  */
 const admitThroughSso =
-  (env: StateBindings) =>
+  (directory: AuthDirectoryService) =>
   async (providerId: string, email: string): Promise<SignInRefusal | undefined> => {
     const org = orgOfProviderId(providerId);
     const domain = emailDomain(email);
 
     if (org === undefined || domain === undefined) return SSO_REFUSALS.domain_unverified;
 
-    if ((await platformOf(env).ssoDomain(domain))?.org !== org)
+    if ((await Effect.runPromise(directory.ssoDomain(domain)))?.org !== org)
       return SSO_REFUSALS.domain_unverified;
-    const admission = await controlPlaneOf(env, org).admitThroughSso(email);
+    const admission = await Effect.runPromise(directory.admitThroughSso(org, email));
 
     if (!admission.ok) return SSO_REFUSALS[admission.error];
 
     if (admission.joined || admission.indexStale)
-      await Effect.runPromise(syncOrgIndex(org).pipe(Effect.provideService(StateEnv, env)));
+      await Effect.runPromise(
+        syncOrgIndex(org).pipe(Effect.provideService(AuthDirectory, directory)),
+      );
 
     return undefined;
   };
@@ -92,19 +99,20 @@ const admitThroughSso =
  */
 export const signedInAuth = (
   env: SignInBindings,
-  state: StateBindings,
+  directory: AuthDirectoryService,
   origin: string,
 ): Promise<HostedAuth> =>
   hostedAuth(env, origin, {
     maySignIn: async (email) =>
-      (await platformOf(state).standing(GLOBAL_ORG, email)).person !== "suspended",
-    ssoProvider: ssoProvider(state, origin),
-    admitThroughSso: admitThroughSso(state),
+      (await Effect.runPromise(directory.standing(GLOBAL_ORG, email))).person !== "suspended",
+    ssoProvider: ssoProvider(directory, origin),
+    admitThroughSso: admitThroughSso(directory),
     ssoRequired: async (email) => {
       const domain = emailDomain(email);
 
       return (
-        domain !== undefined && (await platformOf(state).ssoDomain(domain))?.requireSso === true
+        domain !== undefined &&
+        (await Effect.runPromise(directory.ssoDomain(domain)))?.requireSso === true
       );
     },
   });
@@ -154,7 +162,7 @@ export const endDomainSessions = async (
   env: Pick<SignInBindings, "USAGE">,
   domain: string,
 ): Promise<number> => {
-  // A normalized domain (`sso/domain.ts`) holds only letters, digits, `-` and `.`: nothing `LIKE` treats specially.
+  // A normalized domain (`@commissary/auth/sso` `normalizeDomain`) holds only letters, digits, `-` and `.`: nothing `LIKE` treats specially.
   const result = await env.USAGE.prepare(
     `DELETE FROM ${AUTH_TABLES.session} WHERE "userId" IN
        (SELECT id FROM ${AUTH_TABLES.user} WHERE lower(email) LIKE ?)`,
@@ -187,29 +195,20 @@ export const deleteSignInAccount = async (
   return users?.meta.changes ?? 0;
 };
 
-/** A signed-in person: Better Auth's user id and their email, which the provider verified. */
-export interface SignedInPerson {
-  readonly userId: string;
-  /** Lowercased. */
-  readonly email: string;
-}
-
 /**
- * The person whose live session the request's cookie names; `undefined` without one, for an expired or ended session,
- * and for an email the provider has not verified (Better Auth never creates those, `auth.ts`).
+ * The person whose live session `cookie` names; `undefined` without one, for an expired or ended session, and for an
+ * email the provider has not verified (Better Auth never creates those, `auth.ts`).
  */
-export const signedInPerson = (
+const signedInPerson = (
   env: SignInBindings,
-  state: StateBindings,
+  directory: AuthDirectoryService,
   origin: string,
-  headers: Readonly<Record<string, string | undefined>>,
+  cookie: string,
 ): Effect.Effect<SignedInPerson | undefined> => {
-  const cookie = headers["cookie"] ?? "";
-
   if (cookie === "") return Effect.succeed(undefined);
 
   return Effect.tryPromise(async () => {
-    const auth = await signedInAuth(env, state, origin);
+    const auth = await signedInAuth(env, directory, origin);
 
     const session = await auth.api.getSession({
       headers: new Headers({ cookie }),
@@ -224,3 +223,12 @@ export const signedInPerson = (
     ),
   );
 };
+
+/** The gate's port to Better Auth's sessions (`SignInSessions`), over the invocation's bindings and directory. */
+export const signInSessions = (
+  env: SignInBindings,
+  directory: AuthDirectoryService,
+): SignInSessions["Service"] =>
+  SignInSessions.of({
+    person: (cookie, origin) => signedInPerson(env, directory, origin, cookie),
+  });

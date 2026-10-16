@@ -265,14 +265,14 @@ characters; a missing key is refused everywhere.
 
 ## 4. How the Worker validates requests
 
-1. The path is classified (`apps/app/src/access/routes.ts`): `/v1*` (incl. `/v1beta`, `/v1internal`), `/openai/v1*`, `/backend-api/codex*` and the unprefixed
+1. The path is classified (`apps/app/src/management/zones.ts`): `/v1*` (incl. `/v1beta`, `/v1internal`), `/openai/v1*`, `/backend-api/codex*` and the unprefixed
    aliases `/chat/completions`, `/completions`, `/responses` are the client API and need a
    principal; `/v9/management*` (also `/v9/management/orgs/<slug>/...`), the control panel (`/`, `/accounts`, `/keys`, `/models`, `/usage`, `/members`, `/api-keys`, `/limits`, `/settings` with their
    sub-paths, the same pages under `/o/<slug>/`, `/assets/*`) and `/management.html` (the upstream panel's old address, a redirect to `/`) form the management zone;
    everything else (`/healthz`, the OAuth browser callbacks `/anthropic/callback`, `/codex/callback`,
    `/antigravity/callback`, `/callback`, `/devin/callback`) is public to the Worker.
    Matching is case-, slash- and percent-encoding-insensitive, so odd spellings cannot dodge the gate.
-2. On a client API route, an API key wins (`apps/app/src/access/api-key.ts`): the first credential starting with `cms_` in
+2. On a client API route, an API key wins (`packages/auth/src/api-key.ts`): the first credential starting with `cms_` in
    `Authorization: Bearer`, `x-goog-api-key`, `x-api-key`, `?key=` or `?auth_token=` (the Go server's order) is checked
    against its org's ControlPlane ("API keys" above), and the request runs as its member in its org. A malformed, unknown,
    wrong, revoked or expired key answers 401 `Invalid API key`, whatever else the request carries. Without a key, the
@@ -283,8 +283,8 @@ characters; a missing key is refused everywhere.
    30 s), `iss` = the team domain, `aud` contains one of `ACCESS_AUD`, `exp` required and `exp`/`nbf` valid (30 s clock skew).
 4. The principal is the `email` claim (users) or `common_name` (service token Client ID). It is recorded in usage records and
    scopes session state per caller.
-5. The org's ControlPlane admits the principal (`apps/app/src/members/admission.ts`, auto-joining it where that is on) and the route's
-   policy (`apps/app/src/access/policy.ts`) names the role it needs: a member role for the client API endpoints, the org's panel pages and the
+5. The org's ControlPlane admits the principal (`packages/auth/src/admission.ts`, auto-joining it where that is on) and the route's
+   policy (`apps/app/src/management/policy.ts`) names the role it needs: a member role for the client API endpoints, the org's panel pages and the
    usage reads, org admin for every other management route. Who the caller is (`/v9/management/me`), the org list
    (`/v9/management/orgs*`, whose handlers ask for a platform admin), the panel pages without an org, `/assets/*` and
    `/management.html` need no role. A principal without the role gets 403 `Forbidden`.
@@ -298,7 +298,7 @@ by hand) are rejected.
 ### Browser sessions (CSRF and WebSocket hijacking)
 
 Browsers attach the Access session cookie automatically, so without further checks a page on another site could drive an
-admin's session. Before authentication the gate (`apps/app/src/access/csrf.ts`) refuses, with 403 `Cross-site request rejected`:
+admin's session. Before authentication the gate (`packages/auth/src/csrf.ts`) refuses, with 403 `Cross-site request rejected`:
 
 - state-changing requests (anything but `GET`/`HEAD`/`OPTIONS`) to `/v1*`, `/openai/v1*`, `/backend-api/codex*`, the
   unprefixed `/chat/completions`, `/completions`, `/responses` and the

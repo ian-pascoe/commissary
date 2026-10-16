@@ -3,15 +3,19 @@
  *
  * A member holds one role in their org: org owner, org admin or plain member. Org owners are org admins too. A
  * platform admin (`PLATFORM_ADMIN_*`) holds owner rights in every org without being stored anywhere. Pure functions
- * only: the Access gate (`access/authenticate.ts`), the management routes and the ControlPlane's `MemberStore` share
- * them, so the matrix in `docs/ACCESS.md` has one implementation.
+ * only: the gates (`authenticate.ts`, `hosted-gate.ts`), the management routes and the ControlPlane's `MemberStore`
+ * share them, so the matrix in `docs/ACCESS.md` has one implementation. `OrgRole` itself is the contract's.
  */
 import { Schema } from "effect";
 import { OrgRole } from "@commissary/contract/members";
 
-export { OrgRole };
-
 export const isOrgRole = Schema.is(OrgRole);
+
+/**
+ * What a request needs (ADR 0022): a role in its org, or none (`platform`: a platform-level route). The Worker's role
+ * table (`management/policy.ts`) decides it for a management request; the client API needs `member`.
+ */
+export type RouteAccess = "platform" | OrgRole;
 
 const RANK: Readonly<Record<OrgRole, number>> = { member: 0, admin: 1, owner: 2 };
 

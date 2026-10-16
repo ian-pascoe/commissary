@@ -3,18 +3,17 @@
  * The credential sources follow the Go config access provider (`internal/access/config_access/provider.go`
  * `Authenticate`): `Authorization` (`Bearer` stripped), `x-goog-api-key`, `x-api-key`, `?key=` and `?auth_token=`.
  *
- * A key names its org (`api-keys/key.ts`), so verification asks that org's ControlPlane only, never another org's.
- * Before that, the Platform registry confirms that the org exists (at most every {@link VERIFIED_KEY_TTL_MS} per org
- * and isolate), so a made-up org id never instantiates a ControlPlane. Verified keys are cached per isolate for {@link VERIFIED_KEY_TTL_MS} (never past
- * the key's expiry), so a revoked key may keep working for that long in every isolate of every Worker: revocation clears no cache.
+ * A key names its org (`keys.ts`), so verification asks that org's ControlPlane only, never another org's (through
+ * `AuthDirectory`). Before that, the Platform registry confirms that the org exists (at most every
+ * {@link VERIFIED_KEY_TTL_MS} per org and isolate), so a made-up org id never instantiates a ControlPlane. Verified keys
+ * are cached per isolate for {@link VERIFIED_KEY_TTL_MS} (never past the key's expiry), so a revoked key may keep
+ * working for that long in every isolate of every Worker: revocation clears no cache.
  */
 import { Clock, Effect } from "effect";
+import type { OrgRole } from "@commissary/contract/members";
 import { InternalError, UnauthorizedError, type OrgId } from "@commissary/core";
-import type { OrgRole } from "../members/roles.ts";
-import { controlPlaneOf } from "../platform/org.ts";
-import { platform } from "../platform/registry.ts";
-import { looksLikeApiKey, parseApiKey } from "../api-keys/key.ts";
-import { StateEnv } from "../state/env.ts";
+import { AuthDirectory, directoryFailure } from "./directory.ts";
+import { looksLikeApiKey, parseApiKey } from "./keys.ts";
 
 /** How long a verified key is trusted without asking its ControlPlane again; revocation applies within this time. */
 export const VERIFIED_KEY_TTL_MS = 30_000;
@@ -88,17 +87,12 @@ export const resetApiKeyCaches = (): void => {
 
 const invalid = new UnauthorizedError({ message: "Invalid API key" });
 
-const unavailable = (cause: unknown) =>
-  new InternalError({
-    message: `API key verification: ${cause instanceof Error ? cause.message : "unknown error"}`,
-  });
-
+/** Whether the Platform registry lists `org` (cached per isolate while it does). */
 export const orgExists = Effect.fnUntraced(function* (org: OrgId, now: number) {
   if (now < (knownOrgs.get(org) ?? 0)) return true;
+  const directory = yield* AuthDirectory;
 
-  const found = yield* platform("getOrgById", (stub) => stub.getOrgById(org)).pipe(
-    Effect.mapError((error) => new InternalError({ message: error.message })),
-  );
+  const found = yield* directory.getOrgById(org).pipe(Effect.mapError(directoryFailure()));
 
   if (found === undefined) {
     knownOrgs.delete(org);
@@ -117,8 +111,8 @@ export const orgExists = Effect.fnUntraced(function* (org: OrgId, now: number) {
  */
 export const verifyApiKey: (
   text: string,
-) => Effect.Effect<VerifiedApiKey, UnauthorizedError | InternalError, StateEnv> = Effect.fnUntraced(
-  function* (text: string) {
+) => Effect.Effect<VerifiedApiKey, UnauthorizedError | InternalError, AuthDirectory> =
+  Effect.fnUntraced(function* (text: string) {
     const parsed = parseApiKey(text);
 
     if (parsed === undefined) return yield* invalid;
@@ -129,13 +123,11 @@ export const verifyApiKey: (
     verified.delete(parsed.hash);
 
     if (!(yield* orgExists(parsed.org, now))) return yield* invalid;
-    const env = yield* StateEnv;
+    const directory = yield* AuthDirectory;
 
-    const verdict = yield* Effect.tryPromise({
-      try: async () =>
-        await controlPlaneOf(env, parsed.org).verifyApiKey(parsed.keyId, parsed.hash, now),
-      catch: unavailable,
-    });
+    const verdict = yield* directory
+      .verifyApiKey(parsed.org, parsed.keyId, parsed.hash, now)
+      .pipe(Effect.mapError(directoryFailure("API key verification")));
 
     if (!verdict.ok) return yield* invalid;
 
@@ -159,5 +151,4 @@ export const verifyApiKey: (
     });
 
     return key;
-  },
-);
+  });

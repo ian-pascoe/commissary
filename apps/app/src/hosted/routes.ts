@@ -15,6 +15,7 @@ import { Effect, Option, Schema } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { crossSiteRejection } from "../access/csrf.ts";
 import {
+  AUTH_BASE_PATH,
   AUTH_ROUTES,
   SIGN_IN_OPTIONS_PATH,
   SIGN_IN_PAGE_PATH,
@@ -22,12 +23,10 @@ import {
 } from "@commissary/contract/sign-in";
 import { jsonReply } from "@commissary/core";
 import { panelIndex } from "../management/web-panel.ts";
-import { platformOf } from "../platform/registry.ts";
-import { emailDomain } from "../sso/domain.ts";
-import { providerIdOf } from "../sso/provider.ts";
-import { StateEnv } from "../state/env.ts";
+import { AuthDirectory } from "@commissary/auth";
+import { emailDomain, providerIdOf } from "@commissary/auth/sso";
 import { AppEnv } from "../worker-env.ts";
-import { AUTH_BASE_PATH, authConfigurationProblem, enabledProviders } from "./auth.ts";
+import { authConfigurationProblem, enabledProviders } from "./auth.ts";
 import { hostedOnly, routeNotFound } from "./only.ts";
 import { signedInAuth } from "./session.ts";
 import { TURNSTILE_TOKEN_HEADER, verifyTurnstile } from "./turnstile.ts";
@@ -86,14 +85,14 @@ const passed = (method: string, path: string): boolean =>
  */
 const ssoSignInRequest = (request: Request, input: typeof SsoSignIn.Type) =>
   Effect.gen(function* () {
-    const env = yield* StateEnv;
+    const directory = yield* AuthDirectory;
 
     if (input.email.length > MAX_EMAIL_LENGTH) return undefined;
     const email = input.email.trim().toLowerCase();
     const domain = emailDomain(email);
 
     if (domain === undefined) return undefined;
-    const holder = yield* Effect.tryPromise(async () => await platformOf(env).ssoDomain(domain));
+    const holder = yield* directory.ssoDomain(domain);
 
     if (holder === undefined) return undefined;
     const headers = new Headers(request.headers);
@@ -187,10 +186,10 @@ const authRoute = hostedOnly(
       web = forwarded;
     }
 
-    const state = yield* StateEnv;
+    const directory = yield* AuthDirectory;
 
     const response = yield* Effect.tryPromise(async () =>
-      (await signedInAuth(env, state, url.origin)).handler(web),
+      (await signedInAuth(env, directory, url.origin)).handler(web),
     ).pipe(
       Effect.catch((error) =>
         Effect.logError(`sign-in request failed: ${error.message}`).pipe(Effect.as(undefined)),

@@ -11,6 +11,9 @@ export const SIGN_IN_OPTIONS_PATH = "/api/sign-in-options";
 /** The panel's sign-in page on Commissary Cloud. */
 export const SIGN_IN_PAGE_PATH = "/sign-in";
 
+/** Where Better Auth's routes live; the Worker lets through only the paths it uses (`hosted/routes.ts`). */
+export const AUTH_BASE_PATH = "/api/auth";
+
 /** Better Auth's routes the panel calls (the Worker refuses the rest of Better Auth's API). */
 export const AUTH_ROUTES = {
   /** `POST {provider, callbackURL}` with the Turnstile token in `x-captcha-response`: `{url}` to send the browser to. */

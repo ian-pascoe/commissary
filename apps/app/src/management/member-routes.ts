@@ -3,18 +3,23 @@
  * @commissary/contract/members): an org's members, teams and service tokens (ADR 0022). Workers addition, no Go
  * counterpart.
  *
- * The Access gate lets only org admins in (`access/policy.ts`); the ControlPlane checks each write against the actor's
- * role (`members/store.ts`, `members/roles.ts`): org admins manage plain members, org owners everyone and every role,
+ * The Access gate lets only org admins in (`policy.ts`); the ControlPlane checks each write against the actor's
+ * role (`members/store.ts`, `@commissary/auth` `roles.ts`): org admins manage plain members, org owners everyone and every role,
  * and a service token gets a role above member only from a service token that is an org owner, or a platform admin
  * (ADR 0006's rule per org). Changing auto-join is for org owners. After a change of who belongs to the org, the
- * Platform registry's index is brought up to date (`members/admission.ts`).
+ * Platform registry's index is brought up to date (`@commissary/auth` `syncOrgIndex`).
  */
 import { managementKeyForbidden } from "./management-key-routes.ts";
 import { Effect, Schema } from "effect";
 import { HttpRouter, type HttpServerResponse } from "effect/http";
-import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
-import { syncOrgIndex } from "../members/admission.ts";
-import { type Actor, holdsSensitivePowers, roleAtLeast } from "../members/roles.ts";
+import {
+  type AccessIdentity,
+  AccessPrincipal,
+  type Actor,
+  holdsSensitivePowers,
+  roleAtLeast,
+  syncOrgIndex,
+} from "@commissary/auth";
 import type {
   MemberErrorCode,
   MemberRecord,

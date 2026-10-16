@@ -14,15 +14,19 @@
  */
 import { Clock, Data, Effect, Match } from "effect";
 import { HttpRouter } from "effect/http";
-import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
-import { roleAtLeast } from "../members/roles.ts";
+import {
+  type AccessIdentity,
+  AccessPrincipal,
+  AuthConfig,
+  forgetStanding,
+  isHosted,
+  roleAtLeast,
+  syncOrgIndex,
+} from "@commissary/auth";
+import { ownedOrgLimit } from "../hosted/owned-orgs.ts";
 import type { JsonObject } from "@commissary/json";
 import { deleteSignInAccount, endSessions } from "../hosted/session.ts";
-import { forgetStanding, ownedOrgLimit } from "../hosted/standing.ts";
-import { isHosted } from "../hosted/mode.ts";
 import { apiOrigin } from "../http/hosts.ts";
-import { syncOrgIndex } from "../members/admission.ts";
-import { AuthConfig } from "../auth/config.ts";
 import { ModelsEnv, modelsControlPlane } from "../models/env.ts";
 import { GLOBAL_ORG, newOrgId, handled, jsonReply, replyError, type Reply } from "@commissary/core";
 import { controlPlaneOf } from "../platform/org.ts";
@@ -249,7 +253,7 @@ const create = Effect.gen(function* () {
 });
 
 /**
- * Suspends or unsuspends an org of Commissary Cloud: its members are signed out, its keys refused (`hosted/standing.ts`
+ * Suspends or unsuspends an org of Commissary Cloud: its members are signed out, its keys refused (`@commissary/auth` `standing.ts`
  * forgets what this isolate knew at once; other isolates within `STANDING_TTL_MS`).
  */
 const suspendOrg = (slug: string, suspended: boolean) =>

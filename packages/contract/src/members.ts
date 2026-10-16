@@ -11,7 +11,7 @@ import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api";
 import { managementErrors } from "./errors.ts";
 
-/** What a member, or a service token, may do in its org (`apps/app/src/members/roles.ts`). */
+/** What a member, or a service token, may do in its org (`packages/auth/src/roles.ts`). */
 export const OrgRole = Schema.Literals(["owner", "admin", "member"]);
 
 export type OrgRole = typeof OrgRole.Type;

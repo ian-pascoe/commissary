@@ -11,6 +11,7 @@
   "dependencies": {
     "@better-auth/core": "1.7.7",
     "@better-auth/sso": "1.7.7",
+    "@commissary/auth": "workspace:*",
     "@commissary/contract": "workspace:*",
     "@commissary/core": "workspace:*",
     "@commissary/json": "workspace:*",
@@ -18,7 +19,7 @@
     "better-auth": "1.7.7",
     "effect": "catalog:",
     "fzstd": "^0.1.1",
-    "jose": "^6.2.12",
+    "jose": "catalog:",
     "yaml": "^2.9.1"
   },
   "devDependencies": {

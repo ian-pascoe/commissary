@@ -4,9 +4,8 @@
  * the caller reaches (`credentials/ownership.ts`).
  */
 import { Effect } from "effect";
-import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
+import { type AccessIdentity, AccessPrincipal, roleAtLeast } from "@commissary/auth";
 import type { Viewer } from "../credentials/ownership.ts";
-import { roleAtLeast } from "../members/roles.ts";
 
 export const viewerOf = (identity: AccessIdentity): Viewer => ({
   member: identity.memberId,

@@ -8,7 +8,7 @@
  * the routes that would (registering a provider, verifying its domain through Better Auth) are not passed on.
  */
 import type { DBAdapter, DBTransactionAdapter, Where } from "@better-auth/core/db/adapter";
-import type { BetterAuthSsoProvider } from "../sso/provider.ts";
+import type { BetterAuthSsoProvider } from "@commissary/auth/sso";
 
 /** The plugin's model name for identity providers. */
 export const SSO_PROVIDER_MODEL = "ssoProvider";
@@ -40,7 +40,7 @@ const withProviders = <A extends DBTransactionAdapter>(adapter: A, lookup: Provi
     const providerId = providerIdOf(data.where);
 
     if (providerId === undefined) return null;
-    // SAFETY: the plugin reads `ssoProvider` rows as `BetterAuthSsoProvider` (its own row shape, `sso/provider.ts`).
+    // SAFETY: the plugin reads `ssoProvider` rows as `BetterAuthSsoProvider` (its own row shape, `@commissary/auth/sso`).
     const found = (await lookup(providerId)) as T | undefined;
 
     return found ?? null;

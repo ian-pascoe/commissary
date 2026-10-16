@@ -3,7 +3,7 @@ import { Effect, Layer } from "effect";
 import { HttpRouter, HttpServerResponse } from "effect/http";
 import { afterAll, describe, expect, it } from "vitest";
 import { makeAccessLayer, makeWithAccess } from "../src/access/layer.ts";
-import { AccessPrincipal } from "../src/access/principal.ts";
+import { AccessPrincipal } from "@commissary/auth";
 import { RootRoutes } from "../src/http/routes.ts";
 import {
   AUD,
@@ -13,7 +13,7 @@ import {
   serviceClaims,
   signToken,
   userClaims,
-} from "./support/access.ts";
+} from "@commissary/auth/testing";
 import { requestContext } from "../src/worker-env.ts";
 
 const key = await makeKey("router-kid");

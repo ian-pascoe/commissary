@@ -1,4 +1,4 @@
-// Cross-site request forgery and cross-site WebSocket hijacking protections of the Access gate (src/access/csrf.ts):
+// Cross-site request forgery and cross-site WebSocket hijacking protections of the Access gate (packages/auth/src/csrf.ts, with the Worker's routes in src/access/csrf.ts):
 // the pure decision table, then the production Worker through `exports.default.fetch` (dev bypass on localhost, see
 // vitest.config.ts) for the panel, management writes, the client API and Responses WebSocket upgrades.
 import { exports } from "cloudflare:workers";
