@@ -42,8 +42,8 @@ import {
   type UsageFilter,
   unpricedModels,
 } from "../usage/d1.ts";
-import { controlPlane } from "./http.ts";
-import { viewerOf } from "./viewer.ts";
+import { controlPlane } from "@commissary/state";
+import { viewerOf } from "@commissary/auth";
 import { ModelsEnv, modelsControlPlane } from "../models/env.ts";
 
 const BASE = "/v9/management/observability/usage";

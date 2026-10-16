@@ -35,9 +35,9 @@ import {
   makeMemoryBackend,
   putValue,
   resolveBackend,
+  type SessionAddress,
   updateEntry,
-} from "../../session-state/client.ts";
-import type { SessionAddress } from "../../session-state/protocol.ts";
+} from "@commissary/state";
 import { uuidV5Oid } from "../helps/uuid.ts";
 
 /** Marker item that opens each cached turn. */

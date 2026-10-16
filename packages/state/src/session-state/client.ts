@@ -14,7 +14,7 @@ import { GLOBAL_ORG, type OrgId, orgScopedName } from "@commissary/core";
 import type { SessionState } from "./durable-object.ts";
 import { MemoryStateTable, StateEngine } from "./engine.ts";
 import type { SessionAddress, StateOp, StateResult } from "./protocol.ts";
-import { optionalRequestOrg, StateEnv } from "../state/env.ts";
+import { optionalRequestOrg, StateEnv } from "../env.ts";
 
 /** The Durable Object could not be reached or answered unusably. Stores treat it as a cache miss. */
 export class SessionStateError extends Schema.TaggedError<SessionStateError>()(

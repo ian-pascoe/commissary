@@ -21,7 +21,7 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { AccessPrincipal, AuthConfig, holdsSensitivePowers, isHosted } from "@commissary/auth";
 import { isJsonObject, type Json, type JsonObject } from "@commissary/json";
 import { ModelRegistry } from "../registry/service.ts";
-import { currentViewer } from "./viewer.ts";
+import { currentViewer } from "@commissary/auth";
 import { bodyText, handled, jsonReply, queryParams, replyError } from "@commissary/core";
 import { bodyJson, bodyObject } from "./http.ts";
 import { modelsControlPlane } from "../models/env.ts";

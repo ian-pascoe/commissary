@@ -1,7 +1,8 @@
 {
   // Deploy-time code runs in Node.js, not in workerd: alchemy.run.ts, infra/, stacks/ (Alchemy CLI) and the catalog
-  // sync script. The Worker modules they import (apps/app/src/registry/models-dev.ts, secrets/key.ts,
-  // management/auth-index-key.ts) are checked here too, with Node.js types.
+  // sync script. The workspace modules they import (apps/app/src/registry/models-dev.ts,
+  // apps/app/src/management/auth-index-key.ts, packages/state/src/secrets/key.ts) are checked here too, with Node.js
+  // types.
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2023"],

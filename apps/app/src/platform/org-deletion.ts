@@ -3,7 +3,7 @@
  * removes, in this order:
  *
  * 1. its usage records in D1 (`deleteOrgUsage`),
- * 2. the `SessionState` instances it registered (`session-state/instances.ts`), each wiped,
+ * 2. the `SessionState` instances it registered (`@commissary/state`'s session instances), each wiped,
  * 3. its keys in the `CACHE` KV namespace (the names `org.<org>.…` of `orgScopedName`),
  * 4. its ControlPlane's whole storage: credentials, config entries, members, API keys, private data, OAuth logins and
  *    the refresh alarm (`ControlPlane.wipeOrg`),
@@ -14,11 +14,9 @@
  * a limit); a big org answers `incomplete` and the caller runs the deletion again. `global` is never deleted.
  */
 import type { ModelsBindings } from "../models/env.ts";
-import type { StateBindings } from "../state/env.ts";
+import { controlPlaneOf, platformOf, type StateBindings } from "@commissary/state";
 import { deleteOrgUsage } from "../usage/d1.ts";
 import { GLOBAL_ORG, type OrgId } from "@commissary/core";
-import { controlPlaneOf } from "./org.ts";
-import { platformOf } from "./registry.ts";
 
 /** The most Durable Object, KV and D1 calls one deletion makes before it asks to be run again. */
 export const DELETION_BUDGET = 400;

@@ -14,10 +14,14 @@ import {
   type Principal,
   roleAtLeast,
 } from "@commissary/auth";
-import type { ManagementKeyErrorCode, ManagementKeyRecord } from "../management-keys/store.ts";
+import {
+  controlPlane,
+  type ManagementKeyErrorCode,
+  type ManagementKeyRecord,
+} from "@commissary/state";
 import { CreateManagementKey, type ManagementKeyView } from "@commissary/contract/management-keys";
 import { handled, jsonReply, type Reply, replyError } from "@commissary/core";
-import { bodyJson, controlPlane } from "./http.ts";
+import { bodyJson } from "./http.ts";
 
 const BASE = "/v9/management";
 

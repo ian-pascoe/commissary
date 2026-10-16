@@ -15,20 +15,20 @@ import {
   type ManagementKeyRecord,
   type ManagementKeyResult,
   ManagementKeyStore,
-} from "../management-keys/store.ts";
+} from "./management-keys/store.ts";
 import {
   type SsoDomain,
   type SsoResult,
   type SsoState,
   SsoStore,
   type StoredIdp,
-} from "../sso/store.ts";
-import { SessionInstanceStore } from "../session-state/instances.ts";
+} from "./sso/store.ts";
+import { SessionInstanceStore } from "./session-state/instances.ts";
 import type { OrgId } from "@commissary/core";
-import { orgOfControlPlane } from "../platform/org.ts";
-import type { SecretCipher, Sealer } from "../secrets/cipher.ts";
-import { OrgSecrets } from "../secrets/data-key.ts";
-import { deploymentSecretsKeys } from "../secrets/deployment-keys.ts";
+import { orgOfControlPlane } from "./org.ts";
+import type { SecretCipher, Sealer } from "./secrets/cipher.ts";
+import { OrgSecrets } from "./secrets/data-key.ts";
+import { deploymentSecretsKeys } from "./secrets/deployment-keys.ts";
 import {
   type AccountStanding,
   MemberStore,
@@ -37,14 +37,15 @@ import {
   type MembershipSettingsWire,
   type ServiceTokenRecord,
   type TeamRecord,
-} from "../members/store.ts";
+} from "./members/store.ts";
 import {
   type MemberNotFound,
   type ApiKeyListing,
   type ApiKeyRecord,
   type ApiKeyResult,
   ApiKeyStore,
-} from "../api-keys/store.ts";
+} from "./api-keys/store.ts";
+import type { StateObjectEnv } from "./env.ts";
 
 /**
  * The org-wide ControlPlane as an area's part sees it from inside the Durable Object (#134 "How an area's ControlPlane
@@ -106,15 +107,18 @@ export interface ControlPlanePart {
   privateCredentialsChanged(): void;
 }
 
+/** The areas' parts of a ControlPlane, by name. */
+export type ControlPlaneParts = Readonly<Record<string, ControlPlanePart>>;
+
 /** How the composed ControlPlane constructs each of its parts, by name. */
 export type PartFactories<P> = { readonly [K in keyof P]: (core: OrgCore) => P[K] };
 
 /**
  * The org-wide ControlPlane (#134, #148): one Durable Object per org (`controlPlaneOf(env, org)`, named by the org id;
  * ADR 0021), the single writer for the org's members, teams, service tokens, membership index and settings, API keys,
- * management keys, single sign-on, `SessionState` instances and data key. The composed `ControlPlane`
- * (`src/control-plane.ts`) adds the areas' parts, each an `RpcTarget` with its own tables that callers reach through a
- * method of the composed class (`stub.models().x()`).
+ * management keys, single sign-on, `SessionState` instances and data key. The `ControlPlane` a Worker binds is this
+ * base composed with the areas' parts (`composeControlPlane`, `compose.ts`), each an `RpcTarget` with its own tables
+ * that callers reach through a method of the composed class (`stub.models().x()`).
  *
  * The org's stored secrets are sealed with its data key (`secrets/`), which it opens when it starts, in
  * `blockConcurrencyWhile`: on the first start it creates the key and seals what was stored in plain text (the parts'
@@ -125,9 +129,7 @@ export type PartFactories<P> = { readonly [K in keyof P]: (core: OrgCore) => P[K
  * The object has one alarm: the base sets it to the earliest wake-up of any part and, when it fires, calls the parts
  * that are due. Methods are exposed to the Worker through JS RPC and exchange plain data only.
  */
-export class OrgControlPlane<
-  P extends Readonly<Record<string, ControlPlanePart>>,
-> extends DurableObject<Env> {
+export class OrgControlPlane<P extends ControlPlaneParts> extends DurableObject<StateObjectEnv> {
   /** The org's data key: seals and opens the stored secrets once the object started. */
   readonly #secrets = new OrgSecrets();
   readonly #members: MemberStore;
@@ -154,7 +156,7 @@ export class OrgControlPlane<
    */
   readonly started: Promise<void>;
 
-  constructor(ctx: DurableObjectState, env: Env, parts: PartFactories<P>) {
+  constructor(ctx: DurableObjectState, env: StateObjectEnv, parts: PartFactories<P>) {
     super(ctx, env);
     this.#org = orgOfControlPlane(ctx.id);
     const transaction = <T>(body: () => T): T => ctx.storage.transactionSync(body);
@@ -402,7 +404,7 @@ export class OrgControlPlane<
   }
 
   /**
-   * Deletes everything this object stores, tables included: the org was deleted (`platform/org-deletion.ts`, ADR 0027).
+   * Deletes everything this object stores, tables included: the org was deleted (the Worker's org deletion, ADR 0027).
    * Each part deletes its tables (`wipe`), then the rest of the storage goes, the alarm with it. Nothing reaches this id
    * afterwards (the Platform registry no longer lists the org, and a new org takes a new id); the object itself is
    * evicted when idle and, if ever started again, finds an empty org. Until then the object answers the calls a repeated
@@ -672,3 +674,6 @@ export class OrgControlPlane<
     this.#members.markIndexSynced(counter);
   }
 }
+
+/** An org's ControlPlane as `@commissary/state` sees it: the org-wide base, whatever parts the Worker composed. */
+export type StateControlPlane = OrgControlPlane<ControlPlaneParts>;

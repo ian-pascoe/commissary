@@ -17,8 +17,8 @@ import {
   fixedBackend,
   makeMemoryBackend,
   resolveBackend,
-} from "../../session-state/client.ts";
-import type { SessionAddress } from "../../session-state/protocol.ts";
+  type SessionAddress,
+} from "@commissary/state";
 import { isArr, isObj, str } from "@commissary/translation";
 import { ssePayloadObject } from "../../usage/record.ts";
 

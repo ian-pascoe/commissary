@@ -24,7 +24,7 @@ import { isJsonObject, type JsonObject } from "@commissary/json";
 import { Revisions } from "@commissary/contract/config";
 import { boundedBodyText, handled, jsonReply, replyError } from "@commissary/core";
 import { bodyJson } from "./http.ts";
-import { currentViewer } from "./viewer.ts";
+import { currentViewer } from "@commissary/auth";
 import {
   applySettingsPatch,
   checkSurvival,

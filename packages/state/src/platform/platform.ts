@@ -1,7 +1,7 @@
 /**
  * `Platform` Durable Object: the Platform registry (ADR 0021), one object per deployment (`platformOf`, registry.ts).
  * It holds what spans orgs: the list of orgs, an index of which orgs each person and each Access service token belong to
- * (the orgs' ControlPlanes stay authoritative for membership), and deployment-wide named leases (src/state/lease.ts:
+ * (the orgs' ControlPlanes stay authoritative for membership), and deployment-wide named leases (`lease.ts`:
  * the model catalog refresh takes one, so one refresh of the shared catalog runs at a time). It stays out of the
  * request path for clients, which name their org with their API key. New in the Workers port.
  *
@@ -10,7 +10,8 @@
  */
 import { DurableObject } from "cloudflare:workers";
 import type { IndexRepair, OrgIndex, SsoDomainRecord, Standing } from "@commissary/auth";
-import { type LeaseSource, LeaseStore, type TakeLease } from "../state/lease.ts";
+import type { StateObjectEnv } from "../env.ts";
+import { type LeaseSource, LeaseStore, type TakeLease } from "../lease.ts";
 import {
   type OrgInput,
   type OrgPatch,
@@ -24,11 +25,11 @@ import {
   type SsoDomainClaim,
 } from "./registry-store.ts";
 
-export class Platform extends DurableObject<Env> {
+export class Platform extends DurableObject<StateObjectEnv> {
   readonly #store: PlatformStore;
   readonly #leases: LeaseStore;
 
-  constructor(ctx: DurableObjectState, env: Env) {
+  constructor(ctx: DurableObjectState, env: StateObjectEnv) {
     super(ctx, env);
     this.#store = new PlatformStore(ctx.storage.sql);
     this.#leases = new LeaseStore(ctx.storage.sql, () => Date.now());
@@ -85,7 +86,7 @@ export class Platform extends DurableObject<Env> {
     return this.#store.replaceOrgIndex(org, index);
   }
 
-  // --- people of Commissary Cloud (ADR 0026, `src/hosted/`) ---------------------------------------------------------
+  // --- people of Commissary Cloud (ADR 0026, the Worker's sign-in) ---------------------------------------------------
 
   /** A person signed in: suspended, signed up, or due the Personal org created for them here. `now`: epoch ms. */
   signIn(email: string, now: number): SignInState {
@@ -118,7 +119,7 @@ export class Platform extends DurableObject<Env> {
     return this.#store.emailsOfOrg(org);
   }
 
-  // --- single sign-on domains of Commissary Cloud (issue #76, `src/sso/`) -------------------------------------------
+  // --- single sign-on domains of Commissary Cloud (issue #76, `sso/store.ts`) ----------------------------------------
 
   /** Gives a verified email domain (lowercased) to `org`; refused while another org holds it. */
   claimSsoDomain(domain: string, org: string): SsoDomainClaim {
@@ -141,7 +142,7 @@ export class Platform extends DurableObject<Env> {
     return this.#store.ssoDomain(domain);
   }
 
-  // --- deployment-wide leases (src/state/lease.ts) ----------------------------------------------------------------
+  // --- deployment-wide leases (`lease.ts`) ---------------------------------------------------------------------------
 
   /** Takes the lease `name` at this object's own time; refused while a live holder has it. */
   takeLease(name: string, source: LeaseSource): TakeLease {

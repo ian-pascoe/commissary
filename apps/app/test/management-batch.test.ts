@@ -18,7 +18,7 @@ import { LEASE_RENEW_INTERVAL_MS, runQuotaSweep, sweepQuotas } from "../src/quot
 import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/quota/claude.ts";
 import { RESET_GRANT_STATUS_URL } from "../src/quota/reset-grants.ts";
 import type { Json } from "@commissary/json";
-import { LEASE_TTL_MS, type LeaseSource, type TakeLease } from "../src/state/lease.ts";
+import { LEASE_TTL_MS, type LeaseSource, type TakeLease } from "@commissary/state";
 import {
   claudeFile,
   controlPlane,
@@ -79,7 +79,7 @@ const leaseSql = async (query: string, ...bindings: number[]): Promise<void> => 
   });
 };
 
-/** Frees the sweep lease whatever holds it; nothing does before its table exists (first taken: src/state/lease.ts). */
+/** Frees the sweep lease whatever holds it; nothing does before its table exists (first taken: the lease store). */
 const freeLease = async (): Promise<void> => {
   await runInDurableObject(controlPlane(), (_instance, state) => {
     const { sql } = state.storage;

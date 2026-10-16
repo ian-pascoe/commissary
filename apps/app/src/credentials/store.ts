@@ -6,8 +6,9 @@
  * Runtime state (`credential_state`) is persisted only when it matters across restarts (failures and cooldowns);
  * round-robin cursors and session bindings stay in memory (credentials.md §10).
  *
- * The file JSON is a sealed value (`secrets/cipher.ts`): encrypted with the org's data key before it is written and
- * opened on read, so the table holds no token in plain text. `sealPlaintext` seals the rows written before encryption.
+ * The file JSON is a sealed value (`@commissary/state` `secrets/cipher.ts`): encrypted with the org's data key before
+ * it is written and opened on read, so the table holds no token in plain text. `sealPlaintext` seals the rows written
+ * before encryption.
  *
  * All methods are synchronous so read-modify-write sequences are atomic under the Durable Object input gate.
  */
@@ -16,7 +17,7 @@ import type { JsonObject } from "@commissary/json";
 import type { StoredCredential } from "./derive.ts";
 import { credentialsChanged, mergeExistingMetadata } from "./merge.ts";
 import { CredentialState } from "./model.ts";
-import { isSealed, type Sealer } from "../secrets/cipher.ts";
+import { isSealed, type Sealer } from "@commissary/state";
 
 interface CredentialRow {
   id: string;

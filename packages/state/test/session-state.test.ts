@@ -3,13 +3,14 @@
 // `now`, so nothing sleeps.
 import { env, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { MemoryStateTable, StateEngine } from "../src/session-state/engine.ts";
 import {
   MAX_TTL_MS,
+  MemoryStateTable,
   MIN_TTL_MS,
+  StateEngine,
   type StateOp,
   type StateResult,
-} from "../src/session-state/protocol.ts";
+} from "../src/index.ts";
 
 type Run = (ops: StateOp[], now: number) => Promise<StateResult[]>;
 

@@ -22,7 +22,7 @@ import {
   type JsonObject,
   jsonEquals,
 } from "@commissary/json";
-import type { Sealer } from "../secrets/cipher.ts";
+import type { Sealer } from "@commissary/state";
 import { freshEntryId, GROUP_ID_KIND } from "./key-ids.ts";
 import { providerKeyIdKind } from "./synthesize.ts";
 

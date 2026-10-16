@@ -28,8 +28,8 @@ import {
   fixedBackend,
   makeMemoryBackend,
   resolveBackend,
-} from "../../session-state/client.ts";
-import type { SessionAddress } from "../../session-state/protocol.ts";
+  type SessionAddress,
+} from "@commissary/state";
 import type { CredentialSnapshot } from "../picker.ts";
 import type { ExecutorOptions, ExecutorRequest } from "../types.ts";
 

@@ -21,8 +21,7 @@ import {
 } from "@commissary/auth";
 import { scheduledTasks } from "../src/scheduled.ts";
 import { type CurrentOrg, GLOBAL_ORG, OrgId } from "@commissary/core";
-import { controlPlaneOf } from "../src/platform/org.ts";
-import { MAX_KEYS_PER_MEMBER } from "../src/api-keys/store.ts";
+import { controlPlaneOf, type ControlPlaneStub, MAX_KEYS_PER_MEMBER } from "@commissary/state";
 import {
   fakeJwksLayer,
   makeFakeJwks,
@@ -41,7 +40,6 @@ import {
   serviceToken,
   token,
 } from "./support/management.ts";
-import type { ControlPlaneStub } from "../src/state/env.ts";
 import { type EnvServices, requestContext } from "../src/worker-env.ts";
 
 /** What the stand-in client API route saw of its caller. */

@@ -49,12 +49,13 @@ add a binding or variable, change three places together: the Worker's `env` in `
 `apps/app/src/env.d.ts`, and the test bindings in `apps/app/vitest.config.ts` (which mirrors the deployed Worker: entry, compatibility
 settings, Durable Objects, `*.bin` Data modules).
 
-`apps/app/worker-configuration.d.ts` holds the Workers runtime types for the compatibility date and flags in `alchemy.run.ts`.
-Regenerate it when those change (Wrangler is used only as a type generator here):
+`tools/workers/worker-configuration.d.ts` holds the Workers runtime types for the compatibility date and flags in
+`alchemy.run.ts`, shared by every program that runs in workerd (`apps/app`, `packages/state`; each declares its own
+`Env`). Regenerate it when those change (Wrangler is used only as a type generator here):
 
 ```bash
 printf '{"name":"t","main":"apps/app/src/index.ts","compatibility_date":"2026-08-01","compatibility_flags":["nodejs_compat"]}' > /tmp/rt.json
-pnpm dlx wrangler@4 types --include-env=false -c /tmp/rt.json apps/app/worker-configuration.d.ts
+pnpm dlx wrangler@4 types --include-env=false -c /tmp/rt.json tools/workers/worker-configuration.d.ts
 ```
 
 then restore the three-line header comment. Durable Object classes are SQLite-backed; Alchemy derives their class migrations from the
@@ -68,8 +69,8 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
 - `apps/app` (`@commissary/app`): the one Worker. `src/access` (the gate middleware over `@commissary/auth`),
   `src/http` (router, CORS),
   `src/handlers` (inbound protocols and the shared execution pipeline), `src/executor` (one directory per provider),
-  `src/control-plane.ts` (the ControlPlane Durable Object: the org-wide base in `src/state` composed with the Models
-  part in `src/models`), `src/credentials` (credential pool, selection, token refresh), `src/session-state` (SessionState Durable Object), `src/registry` (model catalogs and `/models`),
+  `src/control-plane.ts` (the ControlPlane Durable Object: `@commissary/state`'s org-wide base composed with the Models
+  part in `src/models`), `src/credentials` (credential pool, selection, token refresh), `src/registry` (model catalogs and `/models`),
   `src/management` and `src/oauth` (management API, panel serving, provider logins), `src/usage` and
   `src/observability` (D1 usage records, trace ids); `test/` (workerd tests and golden fixtures).
 - `apps/web` (`@commissary/web`): the control panel (below).
@@ -78,7 +79,7 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
   verified keys), admission and `syncOrgIndex`, Commissary Cloud's suspension checks and rate limit, and the two gates
   behind the entry points `authenticateClient` and `authenticateManagement`; `./sso` holds the pure parts of single sign-on,
   `./testing` the Access test helpers and an in-memory `AuthDirectory`. It reads `AuthConfig` and reaches state through
-  its `AuthDirectory` service (the Worker's adapter: `src/state/auth-directory.ts`), never through bindings or the
+  its `AuthDirectory` service (the adapter: `@commissary/state`'s `auth-directory.ts`), never through bindings or the
   stores; the Worker passes in what its routes say (path zones, role table, org addressing: `src/management/zones.ts`,
   `policy.ts`, `org-address.ts`). It may import `@commissary/core`, `@commissary/contract`, `effect` and `jose` only.
 - `packages/contract` (`@commissary/contract`): the management API contract, shared by the Worker and the panel.
@@ -91,8 +92,18 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
   `InvocationContext`, so core needs no Workers types, and `holdInvocation`), all behind the one export `.`. It may
   import `effect` and `node:crypto` only: no bindings, no Workers APIs, no other workspace package. The per-request
   context (`requestContext`, `src/worker-env.ts`) stays in the Worker, which provides its env views, and so do
-  `bodyJson`/`bodyObject` (they return `@commissary/json` values) and the ControlPlane stubs (`controlPlaneOf`,
-  `controlPlane`).
+  `bodyJson`/`bodyObject` (they return `@commissary/json` values); the ControlPlane stubs (`controlPlaneOf`,
+  `controlPlane`) are `@commissary/state`.
+- `packages/state` (`@commissary/state`): the org-wide state on Durable Objects (#134, #149). The ControlPlane's org-wide
+  base (`src/control-plane.ts`) and its stores (`src/members`, `src/api-keys`, `src/management-keys`, `src/sso`,
+  `src/secrets`, the `SessionState` instances), `composeControlPlane` (`src/compose.ts`: the base with the areas' parts,
+  each reached through a method of its name, `stub.models().x()`), the Platform registry (`src/platform`), the
+  general-purpose lease store (`src/lease.ts`), `SessionState` (`src/session-state`: class, client, protocol, engine),
+  the stub helpers (`controlPlaneOf`, `platformOf`, `currentControlPlane`, the management routes' `controlPlane`) and
+  the one `AuthDirectory` adapter, all behind the one export `.`; `./testing` holds the workerd test helpers
+  (`tablesOf`, `storedText`, `alarmOf`, `withPart`, `ORG_WIDE_TABLES`). It reads its bindings through `StateEnv` and its
+  classes' settings from `StateObjectEnv`, and may import `@commissary/auth`, `@commissary/core`,
+  `@commissary/contract` and `effect` only: nothing from an area's code or `apps/`.
 - `packages/json` (`@commissary/json`): the gjson/sjson path engine over parsed JSON, the `Json` types, `isValidJson`,
   `compactJson` and `stableStringify`. Depends on nothing.
 - `packages/translation` (`@commissary/translation`): pure sync translation. `src/translator` (the `TranslatorRegistry`
@@ -120,8 +131,10 @@ are pinned once in the `catalog:` of `pnpm-workspace.yaml`.
 adds `typecheck:root` (the deploy code) and `lint:root` (one `oxlint`/`oxfmt` run over the repository). The packages
 depend on each other's sources, not on build output, so every package task depends on `transit`, a task with no script whose
 hash covers a package's files and those of its dependencies (Turborepo's transit-node pattern): a change in
-`packages/contract` re-runs the panel's, auth's and the Worker's tasks, one in `packages/json` re-runs translation's and the
-Worker's, one in `packages/core` re-runs auth's and the Worker's, and one in `packages/auth` re-runs the Worker's. The root `typecheck` and `test` tasks also hash `tools/vitest/` (the packages' Vitest configs import it); a
+`packages/contract` re-runs the panel's, auth's, state's and the Worker's tasks, one in `packages/json` re-runs translation's and the
+Worker's, one in `packages/core` or `packages/auth` re-runs state's and the Worker's (and core's auth's too), and one in
+`packages/state` re-runs the Worker's. The root `typecheck` and `test` tasks also hash `tools/vitest/` (the packages' Vitest configs import it), and
+`typecheck` hashes `tools/workers/` (the Workers runtime types); a
 package's `turbo.json` appends the root files its tasks read (`"$TURBO_EXTENDS$"`; `apps/app`: `infra/bundle.ts`,
 `infra/settings.ts`, `migrations/`). The cache is local
 (`.turbo/cache`, one per git worktree: `cacheDir` keeps a worktree from writing into the main checkout's); there is
@@ -165,11 +178,17 @@ lives in the lowest package that holds all the code it exercises; a test that go
 stays with that Worker.
 
 - **Runtime.** A package tests in plain Node.js unless the code under test needs a binding or a Durable Object. The
-  Worker's tests run in workerd (`@cloudflare/vitest-plugin`, two projects: self-hosted and Cloud), the panel's and the
-  packages' in Node.js. A test that restarts a ControlPlane (`evictDurableObject`) first disposes of every stub of its
-  Models part it holds (`const part = await stub.models()` … `part[Symbol.dispose]()`); a pipelined call
-  (`stub.models().x()`) leaves one held until the test ends, and the eviction never finishes.
-- **Package config.** A Node.js package's `vitest.config.ts` is `defineConfig(nodePackageTests("<name>"))` from
+  Worker's tests run in workerd (`@cloudflare/vitest-plugin`, two projects: self-hosted and Cloud), and so do
+  `@commissary/state`'s (one project, `state`: a test Worker of its own, `packages/state/test/worker.ts`, exports the
+  ControlPlane's base composed with two dummy area parts, the Platform registry and SessionState, on real SQLite
+  storage; its bindings are declared in `test/env.d.ts`); the panel's and the other packages' run in Node.js. A test
+  that restarts a ControlPlane (`evictDurableObject`) first disposes of every stub of a part it holds
+  (`withPart(stub.models(), …)` from `@commissary/state/testing`); a pipelined call (`stub.models().x()`) leaves one
+  held until the test ends, and the eviction never finishes.
+- **Package config.** A workerd package's `vitest.config.ts` uses `cloudflareTest` with its test Worker, the deployed
+  Worker's compatibility settings and the bindings its env view names; its tsconfig adds the shared Workers runtime
+  types and `@cloudflare/vitest-plugin/types`. A Node.js package's `vitest.config.ts` is
+  `defineConfig(nodePackageTests("<name>"))` from
   `tools/vitest/node-package.ts`: one project named after the package over `test/**/*.test.ts`, and the `binModules`
   Vite plugin, which loads `*.bin` imports as the `ArrayBuffer` a Workers `Data` module gives (the Worker bundles them
   with that module rule, so binary assets behave the same in both runtimes). It sets `passWithNoTests`: CI's shards
@@ -177,7 +196,8 @@ stays with that Worker.
   includes `src`, `test` and `vitest.config.ts` with Node.js types but no Workers types.
 - **Shared helpers.** A package whose fixtures or helpers its dependants' tests need exports them as `./testing`
   (`test/testing.ts`), e.g. `@commissary/translation/testing` (the thinking and token fixtures, the structural JSON
-  comparison, the golden translator harness). There is no test-utils package. Lint allows `@commissary/*/testing`
+  comparison, the golden translator harness) or `@commissary/state/testing` (a Durable Object's tables, rows and alarm,
+  the ControlPlane's org-wide tables, `withPart`). There is no test-utils package. Lint allows `@commissary/*/testing`
   imports only in `test/` folders.
 - **Fixtures** sit in the `test/fixtures/` of the package whose tests read them (below). A dependant reads them through
   `./testing`, never by a relative path into another package.
@@ -247,7 +267,7 @@ Rules downgraded to warnings on purpose (reported, not failing): `effecttsgo/uns
 dictionary-type rules are off (fake bindings and loose fixtures).
 
 `no-restricted-imports` enforces the workspace boundaries: `@commissary/*/testing` only in `test/` folders, nothing
-from `apps/` in `packages/`, and nothing from Models code in the org-wide ControlPlane (`apps/app/src/state/control-plane.ts`).
+from `apps/` in `packages/` (so the org-wide ControlPlane in `@commissary/state` imports nothing from Models code).
 
 Errors fail lint; warnings are reported but do not. Fix findings rather than silencing them: no disable comments. A type
 assertion that cannot be removed carries a `// SAFETY: <invariant>` comment on the line(s) before it.

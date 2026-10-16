@@ -20,8 +20,8 @@ import {
   fixedBackend,
   makeMemoryBackend,
   resolveBackend,
-} from "../../session-state/client.ts";
-import type { SessionAddress } from "../../session-state/protocol.ts";
+  type SessionAddress,
+} from "@commissary/state";
 import { isValidGrokEncryptedContent } from "@commissary/translation/signature";
 import {
   alignToolCallIds,

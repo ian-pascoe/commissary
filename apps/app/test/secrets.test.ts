@@ -9,17 +9,22 @@ import { describe, expect, it } from "vitest";
 import { ControlPlane } from "../src/index.ts";
 import type { PickResult } from "../src/credentials/selection/types.ts";
 import { OrgId } from "@commissary/core";
-import { SealedValueError, SecretCipher, isSealed } from "../src/secrets/cipher.ts";
-import { openDataKey } from "../src/secrets/data-key.ts";
-import { SecretsKeyError, deploymentSecretsKeys } from "../src/secrets/deployment-keys.ts";
-import { DEV_SECRETS_KEY } from "../src/secrets/key.ts";
+import {
+  deploymentSecretsKeys,
+  DEV_SECRETS_KEY,
+  isSealed,
+  openDataKey,
+  SealedValueError,
+  SecretCipher,
+  SecretsKeyError,
+} from "@commissary/state";
+import { storedText } from "@commissary/state/testing";
 import { orgAuthIndexer } from "../src/management/auth-index.ts";
 import { controlPlane } from "./support/management.ts";
 import {
   UNRELATED_SECRETS_KEY,
   asBeforeEncryption,
   restart,
-  storedText,
   wrapDataKeyUnder,
   wrappedDataKey,
 } from "./support/secrets.ts";

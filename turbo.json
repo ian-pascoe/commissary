@@ -9,9 +9,13 @@
       "dependsOn": ["^transit"]
     },
     "typecheck": {
-      "description": "tsc over each program of the package (no emit); the packages' Vitest configs import tools/vitest",
+      "description": "tsc over each program of the package (no emit); the packages' Vitest configs import tools/vitest, and the workerd programs read the Workers runtime types in tools/workers",
       "dependsOn": ["transit"],
-      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/tools/vitest/**"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/tools/vitest/**",
+        "$TURBO_ROOT$/tools/workers/**"
+      ],
       "outputs": []
     },
     "test": {

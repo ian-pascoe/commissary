@@ -1,13 +1,18 @@
 {
-  // The Worker (workerd) and its tests. infra/bundle.ts and infra/settings.ts at the repository root are imported by
-  // vitest.config.ts and the tests, and checked here too.
+  // The Worker (workerd) and its tests, with the Workers runtime types shared with the workerd packages
+  // (tools/workers/worker-configuration.d.ts). infra/bundle.ts and infra/settings.ts at the repository root are
+  // imported by vitest.config.ts and the tests, and checked here too.
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2023"],
-    "types": ["node", "./worker-configuration.d.ts", "@cloudflare/vitest-plugin/types"],
+    "types": [
+      "node",
+      "../../tools/workers/worker-configuration.d.ts",
+      "@cloudflare/vitest-plugin/types"
+    ],
     "resolveJsonModule": true,
     // samlify's own declarations put the DOM library into the program (types/samlify.d.ts).
     "paths": { "samlify": ["./types/samlify.d.ts"] }
   },
-  "include": ["src", "test", "worker-configuration.d.ts", "vitest.config.ts"]
+  "include": ["src", "test", "vitest.config.ts"]
 }

@@ -37,7 +37,7 @@ import {
 import { splitLines } from "@commissary/translation/sse";
 import { fetchProjectId } from "../../oauth/flows/antigravity.ts";
 import { WorkerExecutionContext, type OrgId } from "@commissary/core";
-import { controlPlaneOf } from "../../platform/org.ts";
+import { controlPlaneOf, optionalRequestOrg } from "@commissary/state";
 import {
   isolateSignatureCache,
   type MemorySignatureCache,
@@ -119,7 +119,6 @@ import { type AntigravityState, antigravityStateFor } from "./state.ts";
 import { convertStreamToNonStream, JsonAssembler, UsageFilter } from "./stream.ts";
 import { antigravityRequestUserAgent, currentAntigravityVersion } from "./version.ts";
 import { ModelsEnv } from "../../models/env.ts";
-import { optionalRequestOrg } from "../../state/env.ts";
 
 export const ANTIGRAVITY_IDENTIFIER = "antigravity";
 

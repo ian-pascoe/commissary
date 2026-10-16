@@ -2,14 +2,12 @@
 // is used, the deployment's platform admins become org owners of `global`, once. Each test starts from a ControlPlane
 // whose members are cleared and whose seeding has not run.
 import { runInDurableObject } from "cloudflare:test";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { MemberStore } from "../src/members/store.ts";
+import { env } from "cloudflare:workers";
+import { beforeEach, describe, expect, it } from "vitest";
 import { GLOBAL_ORG, OrgId } from "@commissary/core";
-import { controlPlane, makeHarness } from "./support/management.ts";
+import { controlPlaneOf, MemberStore } from "../src/index.ts";
 
-const harness = makeHarness();
-
-afterAll(harness.dispose);
+const controlPlane = (org: OrgId) => controlPlaneOf(env, org);
 
 /** The members and the seeded flag back to a ControlPlane that was never used. */
 const unseeded = async (org: OrgId) => {

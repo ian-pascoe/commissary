@@ -16,7 +16,7 @@ import { isValidOAuthState } from "../oauth/names.ts";
 import { handled, jsonReply, queryParams, replyError } from "@commissary/core";
 import { bodyJson } from "./http.ts";
 import { oauthImportRoutes } from "./oauth-import.ts";
-import { currentViewer } from "./viewer.ts";
+import { currentViewer } from "@commissary/auth";
 import { modelsControlPlane } from "../models/env.ts";
 
 const BASE = "/v9/management/oauth";

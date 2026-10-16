@@ -6,12 +6,13 @@
  * {@link SessionState.run} (see `client.ts`). Expired entries read as absent immediately; an alarm deletes them
  * (and the whole instance storage once nothing is left) so abandoned sessions cost nothing.
  *
- * An instance of an org other than `global` registers itself with the org's ControlPlane (`session-state/instances.ts`)
+ * An instance of an org other than `global` registers itself with the org's ControlPlane (`instances.ts`)
  * while it holds entries, so that deleting the org can wipe it ({@link SessionState.wipe}, ADR 0027).
  */
 import { DurableObject } from "cloudflare:workers";
 import { GLOBAL_ORG, orgOfScopedName } from "@commissary/core";
-import { controlPlaneOf } from "../platform/org.ts";
+import type { StateObjectEnv } from "../env.ts";
+import { controlPlaneOf } from "../org.ts";
 import { StateEngine } from "./engine.ts";
 import { MAX_TTL_MS, type StateOp, type StateResult } from "./protocol.ts";
 import { SqliteStateTable } from "./sqlite-table.ts";
@@ -20,13 +21,13 @@ import { SqliteStateTable } from "./sqlite-table.ts";
 const movesExpiry = (op: StateOp): boolean =>
   op.op === "put" || op.op === "incr" || (op.op === "get" && op.extendTtlMs !== undefined);
 
-export class SessionState extends DurableObject<Env> {
+export class SessionState extends DurableObject<StateObjectEnv> {
   #engine: StateEngine;
   #armedAt: number | undefined;
   /** Until when the org's ControlPlane knows this instance (epoch ms), in this object's memory only. */
   #registeredUntil = 0;
 
-  constructor(ctx: DurableObjectState, env: Env) {
+  constructor(ctx: DurableObjectState, env: StateObjectEnv) {
     super(ctx, env);
     this.#engine = this.#newEngine();
   }

@@ -3,7 +3,7 @@
 import { env } from "cloudflare:workers";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { CatalogRefresh, CatalogStatus } from "@commissary/contract/catalog";
-import { platformOf } from "../src/platform/registry.ts";
+import { platformOf } from "@commissary/state";
 import { CATALOG_KEYS } from "../src/registry/catalog-store.ts";
 import { MODELS_DEV_URL } from "../src/registry/refresh.ts";
 import { documentText, mdModel } from "./support/models-dev.ts";

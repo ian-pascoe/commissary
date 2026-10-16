@@ -9,9 +9,9 @@
  * abandoned (its Worker died), and the next taker takes it over. A second taker that finds the lease held is refused
  * and told who holds it.
  *
- * Leases in use: the ControlPlane's `quota_sweep` (one check of every quota at a time, renewed while it runs:
- * src/quota/check.ts) and the Platform registry's `catalog_refresh` (one model catalog download at a time, not renewed:
- * src/registry/refresh.ts).
+ * Leases in use: the ControlPlane's `quota_sweep` (one check of every quota at a time, renewed while it runs: the
+ * Models area's quota sweep) and the Platform registry's `catalog_refresh` (one model catalog download at a time, not
+ * renewed: the Models area's catalog refresh).
  *
  * Each name has its own table, `<name>_lease`, as each lease had before leases were named, so the rows stored then
  * read back. A token names its lease (`<name>:<uuid>`), so renewing and giving it back need only the token; a token

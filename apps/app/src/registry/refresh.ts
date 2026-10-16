@@ -19,8 +19,7 @@ import type { HttpClientResponse } from "effect/http";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { ConfigReader } from "../config/reader.ts";
 import { holdInvocation, CurrentOrg, GLOBAL_ORG } from "@commissary/core";
-import { platformOf } from "../platform/registry.ts";
-import type { NamedLease } from "../state/lease.ts";
+import { type NamedLease, platformOf, type StateBindings, StateEnv } from "@commissary/state";
 import {
   catalogsFromModelsDev,
   embeddedCatalogs,
@@ -37,7 +36,6 @@ import {
 } from "./catalog-store.ts";
 import { type ModelsDevCatalog, trimModelsDev } from "./models-dev.ts";
 import { ModelsEnv } from "../models/env.ts";
-import { type StateBindings, StateEnv } from "../state/env.ts";
 
 /** The three-hourly cron trigger (`CRONS` in alchemy.run.ts) runs this refresh. */
 export const MODELS_REFRESH_INTERVAL_HOURS = 3;
@@ -266,7 +264,7 @@ const refreshNow = (
  */
 const catalogLeaseHolder = (env: StateBindings) => platformOf(env);
 
-/** The Platform registry's lease (src/state/lease.ts) of the catalog refresh: table `catalog_refresh_lease`. */
+/** The Platform registry's lease (`@commissary/state` `lease.ts`) of the catalog refresh: `catalog_refresh_lease`. */
 const CATALOG_REFRESH_LEASE = "catalog_refresh";
 
 type Taken =

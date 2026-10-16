@@ -5,7 +5,7 @@ import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { deleteOrg, DELETION_BUDGET } from "../src/platform/org-deletion.ts";
 import { orgScopedName, OrgId } from "@commissary/core";
-import { addressName } from "../src/session-state/client.ts";
+import { addressName } from "@commissary/state";
 import { insertUsageRecord } from "../src/usage/d1.ts";
 import {
   ADMIN,

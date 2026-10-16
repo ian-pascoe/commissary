@@ -17,8 +17,9 @@ import {
   fixedBackend,
   makeMemoryBackend,
   resolveBackend,
-} from "../../session-state/client.ts";
-import type { SessionAddress, StateOp } from "../../session-state/protocol.ts";
+  type SessionAddress,
+  type StateOp,
+} from "@commissary/state";
 import {
   REPLAY_CACHE_MAX_ENTRIES,
   REPLAY_CACHE_TTL_MS,

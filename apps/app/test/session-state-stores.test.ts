@@ -21,9 +21,9 @@ import {
   durableObjectBackend,
   fixedBackend,
   resolveBackend,
+  type SessionAddress,
   type SessionStateBackend,
-} from "../src/session-state/client.ts";
-import type { SessionAddress } from "../src/session-state/protocol.ts";
+} from "@commissary/state";
 import { grokCiphertext } from "./support/xai.ts";
 import { envContext } from "../src/worker-env.ts";
 

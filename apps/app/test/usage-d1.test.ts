@@ -33,7 +33,7 @@ import costMigration from "../../../migrations/0004_usage_cost.sql?raw";
 import memberMigration from "../../../migrations/0005_usage_member.sql?raw";
 import privateMigration from "../../../migrations/0006_usage_private.sql?raw";
 import failureMigration from "../../../migrations/0007_usage_failure.sql?raw";
-import { platformOf } from "../src/platform/registry.ts";
+import { platformOf } from "@commissary/state";
 import { envContext } from "../src/worker-env.ts";
 
 /** The D1 sink without pricing: records are stored as they are published. */

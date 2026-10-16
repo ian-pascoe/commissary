@@ -7,7 +7,7 @@ import { CorsLayer } from "../src/http/cors.ts";
 import { WorkerExecutionContext } from "@commissary/core";
 import { AuthConfig } from "@commissary/auth";
 import { ModelsEnv } from "../src/models/env.ts";
-import { StateEnv } from "../src/state/env.ts";
+import { StateEnv } from "@commissary/state";
 import { AppEnv, requestContext } from "../src/worker-env.ts";
 
 // Only `waitUntil`/`passThroughOnException` are exercised; the rest of the interface is runtime-internal.

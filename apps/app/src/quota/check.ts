@@ -4,11 +4,11 @@
  * the outcome into the stored report (`recordQuotaReport`). Used by `POST /v9/management/credentials/quota`, and for
  * every account at once (`sweepQuotas`) by the `quota-check` cron task (`runQuotaSweep`) and the panel's "Check all
  * quotas" (`POST /v9/management/credentials/quota/all`). A sweep holds the ControlPlane's `quota_sweep` lease
- * (src/state/lease.ts), so only one runs at a time whoever started it: a second sweep is refused (the panel answers
- * `409 quota_check_running`, the cron task skips its run) instead of asking every provider a second time. There is no
- * rate limit beyond that: a sweep started right after another one finished checks again. Accounts are named as the
- * credential list names them: auth files by file name, provider keys of a provider that reports quota with the key
- * (OpenCode Go) by their `auth_index`; a sweep covers both (`quotaCheckTargets`).
+ * (`@commissary/state` `lease.ts`), so only one runs at a time whoever started it: a second sweep is refused (the
+ * panel answers `409 quota_check_running`, the cron task skips its run) instead of asking every provider a second
+ * time. There is no rate limit beyond that: a sweep started right after another one finished checks again. Accounts
+ * are named as the credential list names them: auth files by file name, provider keys of a provider that reports quota
+ * with the key (OpenCode Go) by their `auth_index`; a sweep covers both (`quotaCheckTargets`).
  *
  * The upstream call runs in the Worker rather than inside the Durable Object so the single-writer object is not held
  * by slow provider endpoints and the Worker's injected `HttpClient` (mocked in tests) is used.
@@ -21,7 +21,7 @@ import { holdInvocation, type CurrentOrg } from "@commissary/core";
 import { probeQuota } from "./probe.ts";
 import type { QuotaOutcome } from "./report.ts";
 import type { ResetGrantMark } from "./reset-grant-store.ts";
-import type { LeaseSource, NamedLease } from "../state/lease.ts";
+import type { LeaseSource, NamedLease } from "@commissary/state";
 import {
   currentModelsControlPlane,
   type ModelsControlPlaneStub,

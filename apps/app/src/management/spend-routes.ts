@@ -19,7 +19,7 @@ import {
 } from "@commissary/contract/spend";
 import { handled, ifMatch, jsonReply, type Reply, replyError } from "@commissary/core";
 import { bodyJson } from "./http.ts";
-import { currentViewer } from "./viewer.ts";
+import { currentViewer } from "@commissary/auth";
 import { modelsControlPlane } from "../models/env.ts";
 
 const BASE = "/v9/management";

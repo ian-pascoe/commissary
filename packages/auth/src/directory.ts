@@ -1,8 +1,8 @@
 /**
  * The state auth asks for, behind one Effect service (#132 "How it reaches its stores"): the calls it makes to an org's
- * ControlPlane and to the Platform registry. Auth never sees a Durable Object: the Worker provides the one adapter over
- * the stubs (`apps/app/src/state/auth-directory.ts`, which moves with `@commissary/state`), and the tests an in-memory
- * one (`@commissary/auth/testing`). The types that cross the service live here, and the stores import them, so
+ * ControlPlane and to the Platform registry. Auth never sees a Durable Object: the Worker provides the one adapter
+ * over the stubs (`@commissary/state` `auth-directory.ts`), and the tests an in-memory one
+ * (`@commissary/auth/testing`). The types that cross the service live here, and the stores import them, so
  * dependencies run one way: state → auth.
  *
  * Where auth reads only part of a store's answer, the type here names that part (`OrgRef`, `SignInOutcome`,

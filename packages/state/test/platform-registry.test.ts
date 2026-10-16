@@ -5,8 +5,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { runInDurableObject } from "cloudflare:test";
 import { DEFAULT_ORG_SLUG, GLOBAL_ORG, newOrgId } from "@commissary/core";
-import { DEFAULT_USAGE_RETENTION_DAYS } from "../src/platform/registry-store.ts";
-import { PLATFORM_NAME, platformOf } from "../src/platform/registry.ts";
+import { DEFAULT_USAGE_RETENTION_DAYS, PLATFORM_NAME, platformOf } from "../src/index.ts";
 
 const fresh = () => env.PLATFORM.getByName(`registry-${crypto.randomUUID()}`);
 

@@ -15,7 +15,7 @@ import { type AccessWiring, provisionAccess, provisionClientApiBypass } from "./
 import { BUNDLE_ALIASES } from "./infra/bundle.ts";
 import { readSettings } from "./infra/settings.ts";
 import { DEV_AUTH_INDEX_KEY } from "./apps/app/src/management/auth-index-key.ts";
-import { DEV_SECRETS_KEY, secretsKeyResourceId } from "./apps/app/src/secrets/key.ts";
+import { DEV_SECRETS_KEY, secretsKeyResourceId } from "./packages/state/src/secrets/key.ts";
 
 /** Runtime compatibility of the Worker; keep in sync with apps/app/vitest.config.ts and apps/app/worker-configuration.d.ts. */
 export const COMPATIBILITY = { date: "2026-08-01", flags: ["nodejs_compat"] };
@@ -44,11 +44,11 @@ export default Alchemy.Stack(
       ? DEV_AUTH_INDEX_KEY
       : yield* Alchemy.makeRandom("AuthIndexKey", { bytes: 32 });
 
-    // Secrets key (apps/app/src/secrets/): wraps every org's data key, which seals the stored auth files and config
-    // entries. Minted like the auth index key, one `Random` per generation: raising SECRETS_KEY_GENERATION mints a new
-    // one, and during the rotation the previous generation is bound as SECRETS_KEY_PREVIOUS (docs/DEPLOY.md). Every
-    // generation up to the current one stays declared: Alchemy deletes an undeclared resource with its state, and a
-    // `Random` exists only there, so an old key must never drop out of the stack. Losing a key loses every secret it
+    // Secrets key (packages/state/src/secrets/): wraps every org's data key, which seals the stored auth files and
+    // config entries. Minted like the auth index key, one `Random` per generation: raising SECRETS_KEY_GENERATION mints
+    // a new one, and during the rotation the previous generation is bound as SECRETS_KEY_PREVIOUS (docs/DEPLOY.md).
+    // Every generation up to the current one stays declared: Alchemy deletes an undeclared resource with its state, and
+    // a `Random` exists only there, so an old key must never drop out of the stack. Losing a key loses every secret it
     // still protects.
     const secretsKeys = new Map<number, Effect.Success<ReturnType<typeof Alchemy.makeRandom>>>();
 

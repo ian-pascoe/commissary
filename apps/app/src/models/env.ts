@@ -5,10 +5,8 @@
  */
 import { Context, Effect } from "effect";
 import { type OrgId, type Reply, CurrentOrg } from "@commissary/core";
-import { callControlPlane } from "../management/http.ts";
+import { callControlPlane, controlPlaneOf, type SessionState } from "@commissary/state";
 import type { ModelsPart } from "./control-plane-part.ts";
-import { controlPlaneOf } from "../platform/org.ts";
-import type { SessionState } from "../session-state/durable-object.ts";
 
 /** The methods of the Models part Models calls: config, credentials, selection, refresh, quota, grants, spend, OAuth. */
 type ModelsPartMethod =
