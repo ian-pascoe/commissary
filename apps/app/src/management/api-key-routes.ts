@@ -5,7 +5,8 @@
  * Any member of the org may use these routes (`policy.ts`): a member creates keys for themselves and lists and
  * revokes their own; an org admin (or a platform admin) lists and revokes every key of the org. Keys are issued to
  * members only, so a caller without a member id in the org (a service token, a platform admin from outside) cannot
- * create one. A revoked key is forgotten by this isolate's cache at once (`@commissary/auth` `api-key.ts`).
+ * create one. Each isolate caches a verified key briefly, so a revoked key may keep working for that long
+ * (`@commissary/auth` `api-key.ts`).
  */
 import { Clock, Effect, Schema } from "effect";
 import { HttpRouter, type HttpServerResponse } from "effect/http";

@@ -18,7 +18,7 @@ import {
   type OrgId,
 } from "@commissary/core";
 import { orgExists, VERIFIED_KEY_TTL_MS } from "./api-key.ts";
-import { AuthDirectory } from "./directory.ts";
+import { AuthDirectory, directoryFailure } from "./directory.ts";
 import { looksLikeManagementKey, parseManagementKey } from "./keys.ts";
 import { type AccessIdentity, makeIdentity } from "./principal.ts";
 import { roleAtLeast, type RouteAccess } from "./roles.ts";
@@ -76,11 +76,7 @@ export const verifyManagementKey = Effect.fnUntraced(function* (text: string) {
 
   const verdict = yield* directory
     .verifyManagementKey(parsed.org, parsed.keyId, parsed.hash, now)
-    .pipe(
-      Effect.mapError(
-        (error) => new InternalError({ message: `management key verification: ${error.reason}` }),
-      ),
-    );
+    .pipe(Effect.mapError(directoryFailure("management key verification")));
 
   if (!verdict.ok) return yield* invalid;
 
@@ -124,7 +120,7 @@ export const managementKeyIdentity = (
 
       const addressed = yield* directory
         .getOrgBySlug(slug)
-        .pipe(Effect.mapError((error) => new InternalError({ message: error.message })));
+        .pipe(Effect.mapError(directoryFailure()));
 
       if (addressed?.id !== key.org) return yield* new ForbiddenError({ message: "Forbidden" });
     }

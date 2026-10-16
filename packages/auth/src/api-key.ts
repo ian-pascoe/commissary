@@ -12,7 +12,7 @@
 import { Clock, Effect } from "effect";
 import type { OrgRole } from "@commissary/contract/members";
 import { InternalError, UnauthorizedError, type OrgId } from "@commissary/core";
-import { AuthDirectory } from "./directory.ts";
+import { AuthDirectory, directoryFailure } from "./directory.ts";
 import { looksLikeApiKey, parseApiKey } from "./keys.ts";
 
 /** How long a verified key is trusted without asking its ControlPlane again; revocation applies within this time. */
@@ -92,9 +92,7 @@ export const orgExists = Effect.fnUntraced(function* (org: OrgId, now: number) {
   if (now < (knownOrgs.get(org) ?? 0)) return true;
   const directory = yield* AuthDirectory;
 
-  const found = yield* directory
-    .getOrgById(org)
-    .pipe(Effect.mapError((error) => new InternalError({ message: error.message })));
+  const found = yield* directory.getOrgById(org).pipe(Effect.mapError(directoryFailure()));
 
   if (found === undefined) {
     knownOrgs.delete(org);
@@ -129,11 +127,7 @@ export const verifyApiKey: (
 
     const verdict = yield* directory
       .verifyApiKey(parsed.org, parsed.keyId, parsed.hash, now)
-      .pipe(
-        Effect.mapError(
-          (error) => new InternalError({ message: `API key verification: ${error.reason}` }),
-        ),
-      );
+      .pipe(Effect.mapError(directoryFailure("API key verification")));
 
     if (!verdict.ok) return yield* invalid;
 

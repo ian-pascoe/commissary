@@ -17,7 +17,7 @@
     "@commissary/contract": "workspace:*",
     "@commissary/core": "workspace:*",
     "effect": "catalog:",
-    "jose": "^6.2.12"
+    "jose": "catalog:"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",

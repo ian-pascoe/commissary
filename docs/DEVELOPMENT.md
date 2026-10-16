@@ -75,8 +75,8 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
 - `apps/web` (`@commissary/web`): the control panel (below).
 - `packages/auth` (`@commissary/auth`): request-side authentication (#132). The principal and `AccessPrincipal`, roles,
   Access JWT verification, the cross-site checks, API and management keys (their text and the per-isolate caches of
-  verified keys), admission and `syncOrgIndex`, Commissary Cloud's standing and rate limit, and the two gates behind
-  the entry points `authenticateClient` and `authenticateManagement`; `./sso` holds the pure parts of single sign-on,
+  verified keys), admission and `syncOrgIndex`, Commissary Cloud's suspension checks and rate limit, and the two gates
+  behind the entry points `authenticateClient` and `authenticateManagement`; `./sso` holds the pure parts of single sign-on,
   `./testing` the Access test helpers and an in-memory `AuthDirectory`. It reads `AuthConfig` and reaches state through
   its `AuthDirectory` service (the Worker's adapter: `src/state/auth-directory.ts`), never through bindings or the
   stores; the Worker passes in what its routes say (path zones, role table, org addressing: `src/management/zones.ts`,

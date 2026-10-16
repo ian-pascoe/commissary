@@ -56,8 +56,9 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
     test/                     vitest suites in workerd (+ fixtures generated from the Go code)
   apps/web/                   @commissary/web: control panel served at / (React, Effect Atom, TanStack Router; built
                               into apps/web/dist, the Worker's assets), its tests in Node.js
-  packages/auth/               @commissary/auth: request-side authentication (principals, Access JWTs, API and
-                              management keys, roles, admission, Cloud standing, the gates), state through AuthDirectory
+  packages/auth/              @commissary/auth: request-side authentication (principals, Access JWTs, API and
+                              management keys, roles, admission, Cloud suspension checks, the gates), state
+                              through AuthDirectory
   packages/contract/          @commissary/contract: the management API's Effect HttpApi schemas and addressing (browser-safe)
   packages/core/              @commissary/core: the foundation without bindings (org model, shared errors, hashing,
                               log-safe helpers, management replies, route services, the execution context)

@@ -10,7 +10,7 @@
 import { Clock, Effect } from "effect";
 import { ForbiddenError, InternalError, type OrgId } from "@commissary/core";
 import { syncOrgIndex } from "./admission.ts";
-import { AuthDirectory, type Standing } from "./directory.ts";
+import { AuthDirectory, directoryFailure, type Standing } from "./directory.ts";
 
 /** How long an isolate trusts a person's or an org's standing without asking the registry again. */
 export const STANDING_TTL_MS = 30_000;
@@ -54,9 +54,6 @@ export const resetStandingCaches = (): void => {
   standings.clear();
 };
 
-const unavailable = (error: { readonly message: string }) =>
-  new InternalError({ message: error.message });
-
 export const SUSPENDED = "Suspended";
 
 /**
@@ -73,7 +70,7 @@ export const ensureSignedUp = (
     if (now < (signedUp.get(address) ?? 0)) return;
     signedUp.delete(address);
     const directory = yield* AuthDirectory;
-    const state = yield* directory.signIn(address, now).pipe(Effect.mapError(unavailable));
+    const state = yield* directory.signIn(address, now).pipe(Effect.mapError(directoryFailure()));
 
     if (state.kind === "suspended") return yield* new ForbiddenError({ message: SUSPENDED });
 
@@ -87,15 +84,13 @@ export const ensureSignedUp = (
           { role: "owner", sensitive: false },
           "sign-up",
         )
-        .pipe(
-          Effect.mapError((error) => new InternalError({ message: `sign-up: ${error.reason}` })),
-        );
+        .pipe(Effect.mapError(directoryFailure("sign-up")));
 
       // A retry after a failure further down finds them a member already.
       if (!added.ok && added.error !== "member_exists")
         return yield* new InternalError({ message: `sign-up: ${added.error}` });
       yield* syncOrgIndex(org);
-      yield* directory.finishSignUp(address, now).pipe(Effect.mapError(unavailable));
+      yield* directory.finishSignUp(address, now).pipe(Effect.mapError(directoryFailure()));
       yield* Effect.logInfo("signed up with a Personal org").pipe(Effect.annotateLogs({ org }));
     }
 
@@ -118,7 +113,9 @@ export const requireStanding = (
     const standing =
       cached !== undefined && now < cached.until
         ? cached.standing
-        : yield* (yield* AuthDirectory).standing(org, email).pipe(Effect.mapError(unavailable));
+        : yield* (yield* AuthDirectory)
+            .standing(org, email)
+            .pipe(Effect.mapError(directoryFailure()));
 
     if (cached === undefined || now >= cached.until)
       remember(standings, key, { standing, until: now + STANDING_TTL_MS });

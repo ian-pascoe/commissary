@@ -10,7 +10,7 @@
  */
 import { Context, Data, type Effect } from "effect";
 import type { OrgRole } from "@commissary/contract/members";
-import type { OrgId } from "@commissary/core";
+import { InternalError, type OrgId } from "@commissary/core";
 import type { Actor } from "./roles.ts";
 import type { IdpSettings } from "./sso/settings.ts";
 
@@ -139,6 +139,17 @@ export class DirectoryUnavailable extends Data.TaggedError("DirectoryUnavailable
   readonly message: string;
   readonly reason: string;
 }> {}
+
+/**
+ * A failed directory call as the request's failure (a 500): the call's own message, or `<label>: <reason>` when the
+ * caller names what it was doing.
+ */
+export const directoryFailure =
+  (label?: string) =>
+  (error: DirectoryUnavailable): InternalError =>
+    new InternalError({
+      message: label === undefined ? error.message : `${label}: ${error.reason}`,
+    });
 
 type Call<A> = Effect.Effect<A, DirectoryUnavailable>;
 

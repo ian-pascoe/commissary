@@ -17,7 +17,7 @@ import {
 } from "@commissary/core";
 import { admitPrincipal } from "./admission.ts";
 import { verifyApiKey } from "./api-key.ts";
-import { AuthDirectory } from "./directory.ts";
+import { AuthDirectory, directoryFailure } from "./directory.ts";
 import { type AdmissiblePrincipal, makeIdentity } from "./principal.ts";
 import { roleAtLeast, type RouteAccess } from "./roles.ts";
 
@@ -48,9 +48,7 @@ export const targetOrg = (slug: OrgSlug | undefined, platformAdmin: boolean) =>
     if (slug === undefined) return yield* CurrentOrg;
     const directory = yield* AuthDirectory;
 
-    const found = yield* directory
-      .getOrgBySlug(slug)
-      .pipe(Effect.mapError((error) => new InternalError({ message: error.message })));
+    const found = yield* directory.getOrgBySlug(slug).pipe(Effect.mapError(directoryFailure()));
 
     if (found !== undefined) return found.id;
 
