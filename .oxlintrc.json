@@ -95,6 +95,26 @@
       }
     },
     {
+      "files": ["apps/app/src/state/control-plane.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "^@commissary/[^/]+/testing$",
+                "message": "A package's ./testing helpers are for test files only (docs/DEVELOPMENT.md, \"Tests\")."
+              },
+              {
+                "regex": "^\\.\\./(config|credentials|executor|grants|handlers|management|models|oauth|quota|registry|session-routing|signature|spend|usage)/",
+                "message": "The org-wide ControlPlane imports nothing from Models code: an area reaches it through its part (#134, #148)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["packages/**"],
       "rules": {
         "no-restricted-imports": [

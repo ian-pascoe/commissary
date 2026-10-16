@@ -1,4 +1,4 @@
-import { ControlPlane } from "./credentials/control-plane.ts";
+import { ControlPlane } from "./control-plane.ts";
 import { makeWebHandler } from "./http/app.ts";
 import { misdirected } from "./http/hosts.ts";
 import { requestContext } from "./worker-env.ts";
