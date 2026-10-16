@@ -8,11 +8,12 @@
  */
 import { Context, Effect, Layer } from "effect";
 import { causeSummary } from "../observability/cause.ts";
-import { WorkerEnv, WorkerExecutionContext } from "../platform/env.ts";
+import { WorkerExecutionContext } from "../platform/env.ts";
 import { insertUsageRecord } from "./d1.ts";
 import { UsagePricing } from "./pricing-service.ts";
 import type { UsageRecord } from "./record.ts";
 import { UsageSink } from "./sink.ts";
+import { ModelsEnv } from "../models/env.ts";
 
 const errorMessage = (cause: unknown): string =>
   cause instanceof Error ? cause.message : String(cause);
@@ -57,16 +58,16 @@ export const D1UsageSink = Layer.effect(
     return UsageSink.of({
       cost: (record) =>
         Effect.contextWith((context: Context.Context<never>) => {
-          const env = Context.getOrUndefined(context, WorkerEnv);
+          const env = Context.getOrUndefined(context, ModelsEnv);
 
           return env === undefined
             ? Effect.undefined
-            : priced(pricing, record).pipe(Effect.provideService(WorkerEnv, env));
+            : priced(pricing, record).pipe(Effect.provideService(ModelsEnv, env));
         }),
       publish: (record) =>
         Effect.contextWith((context: Context.Context<never>) => {
           // The bindings are per-request services of the invocation, resolved here and never captured by the layer.
-          const env = Context.getOrUndefined(context, WorkerEnv);
+          const env = Context.getOrUndefined(context, ModelsEnv);
           const db = env?.USAGE;
 
           if (db === undefined) return Effect.void;
@@ -74,7 +75,7 @@ export const D1UsageSink = Layer.effect(
           // Runs detached from the response (and possibly after it), keeping the invocation's context (loggers).
           const write = Effect.runPromiseWith(context)(
             costed(pricing, record).pipe(
-              Effect.provideService(WorkerEnv, env),
+              Effect.provideService(ModelsEnv, env),
               Effect.flatMap((priced) => writeUsageRecord(db, priced)),
             ),
           );

@@ -15,7 +15,6 @@ import type { AccessJwks } from "../src/access/jwks.ts";
 import { AccessPrincipal } from "../src/access/principal.ts";
 import { VERIFIED_KEY_TTL_MS } from "../src/access/api-key.ts";
 import { scheduledTasks } from "../src/scheduled.ts";
-import { requestContext, type WorkerEnv } from "../src/platform/env.ts";
 import { controlPlaneOf, type CurrentOrg, GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 import { mintApiKey, parseApiKey } from "../src/api-keys/key.ts";
 import { MAX_KEYS_PER_MEMBER } from "../src/api-keys/store.ts";
@@ -30,6 +29,8 @@ import {
   serviceToken,
   token,
 } from "./support/management.ts";
+import type { ControlPlaneStub } from "../src/state/env.ts";
+import { type EnvServices, requestContext } from "../src/worker-env.ts";
 
 /** What the stand-in client API route saw of its caller. */
 interface Seen {
@@ -175,7 +176,7 @@ const wholeKey = (created: KeyBody): string => {
 
 /** Issues a key straight through the ControlPlane and answers its name. */
 const createKeyDirect = async (
-  stub: ReturnType<typeof controlPlaneOf>,
+  stub: ControlPlaneStub,
   memberId: string,
   name: string,
 ): Promise<string> => {
@@ -765,7 +766,7 @@ describe("the verified-key cache", () => {
     {} as unknown as ExecutionContext,
   );
 
-  const run = <A, E>(body: Effect.Effect<A, E, WorkerEnv | AccessJwks | CurrentOrg>) =>
+  const run = <A, E>(body: Effect.Effect<A, E, EnvServices | AccessJwks | CurrentOrg>) =>
     Effect.gen(function* () {
       yield* TestClock.setTime(NOW_MS);
 

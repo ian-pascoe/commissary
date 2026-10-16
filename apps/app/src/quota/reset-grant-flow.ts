@@ -28,7 +28,6 @@ import type {
   ResetGrantStatus,
 } from "@commissary/contract/credentials";
 import type { Scope } from "../credentials/ownership.ts";
-import type { WorkerEnv } from "../platform/env.ts";
 import type { CurrentOrg } from "../platform/org.ts";
 import { call, checkCredentialQuota, type QuotaControlPlaneError } from "./check.ts";
 import type { ResetGrantMark } from "./reset-grant-store.ts";
@@ -46,6 +45,7 @@ import {
   RESET_GRANT_STATUS_URL,
   resetGrantClaimUrl,
 } from "./reset-grants.ts";
+import type { ModelsEnv } from "../models/env.ts";
 
 const READ_TIMEOUT = "12 seconds";
 
@@ -126,7 +126,7 @@ export type ResetGrantClaimResult =
 
 type Ref = { readonly authIndex: string };
 
-type Requirements = WorkerEnv | CurrentOrg | HttpClient.HttpClient;
+type Requirements = ModelsEnv | CurrentOrg | HttpClient.HttpClient;
 
 const STATUS_FAILED = "could not read the reset grants from Anthropic";
 

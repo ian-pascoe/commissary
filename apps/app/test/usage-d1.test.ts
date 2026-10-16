@@ -3,7 +3,7 @@ import { env } from "cloudflare:workers";
 import { Effect, Layer, Logger, References } from "effect";
 import { TestClock } from "effect/testing";
 import { beforeEach, describe, expect, it } from "vitest";
-import { WorkerEnv, WorkerExecutionContext } from "../src/platform/env.ts";
+import { WorkerExecutionContext } from "../src/platform/env.ts";
 import { scheduledTasks } from "../src/scheduled.ts";
 import {
   insertUsageRecord,
@@ -35,6 +35,7 @@ import privateMigration from "../../../migrations/0006_usage_private.sql?raw";
 import failureMigration from "../../../migrations/0007_usage_failure.sql?raw";
 import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 import { platformOf } from "../src/platform/registry.ts";
+import { envContext } from "../src/worker-env.ts";
 
 /** The D1 sink without pricing: records are stored as they are published. */
 const sink = D1UsageSink.pipe(Layer.provide(UsagePricing.none));
@@ -445,7 +446,7 @@ describe("D1 usage sink", () => {
       yield* sink.publish(record);
     }).pipe(
       Effect.provide(sink),
-      Effect.provideService(WorkerEnv, env),
+      Effect.provideContext(envContext(env)),
       Effect.provideService(WorkerExecutionContext, ctx),
       Effect.runPromise,
     );
@@ -542,7 +543,7 @@ describe("D1 usage sink", () => {
       }).pipe(
         Effect.provide(sink),
         Effect.provide(capture),
-        Effect.provideService(WorkerEnv, bindings),
+        Effect.provideContext(envContext(bindings)),
         Effect.provideService(WorkerExecutionContext, ctx),
         Effect.runPromise,
       );
@@ -570,7 +571,7 @@ describe("D1 usage sink", () => {
       yield* (yield* UsageSink).publish(sampleRecord());
     }).pipe(
       Effect.provide(sink),
-      Effect.provideService(WorkerEnv, env),
+      Effect.provideContext(envContext(env)),
       Effect.provideService(WorkerExecutionContext, ctx),
       Effect.runPromise,
     );
@@ -889,7 +890,7 @@ describe("retention", () => {
         return yield* pruneExpiredUsage;
       }).pipe(
         Effect.provide(TestClock.layer()),
-        Effect.provideService(WorkerEnv, env),
+        Effect.provideContext(envContext(env)),
         Effect.runPromise,
       );
 

@@ -13,9 +13,10 @@ import { Effect } from "effect";
 import { HttpRouter } from "effect/http";
 import { isJsonObject, type Json } from "../json/index.ts";
 import { isValidOAuthState } from "../oauth/names.ts";
-import { bodyJson, controlPlane, handled, jsonReply, queryParams, replyError } from "./http.ts";
+import { bodyJson, handled, jsonReply, queryParams, replyError } from "./http.ts";
 import { oauthImportRoutes } from "./oauth-import.ts";
 import { currentViewer } from "./viewer.ts";
+import { modelsControlPlane } from "../models/env.ts";
 
 const BASE = "/v9/management/oauth";
 
@@ -29,7 +30,7 @@ const startLogin = Effect.gen(function* () {
   const viewer = yield* currentViewer;
 
   // A plain member's login connects their private credential, an org admin's a shared one unless `private=true`.
-  const result = yield* controlPlane("oauthStart", (stub) =>
+  const result = yield* modelsControlPlane("oauthStart", (stub) =>
     stub.oauthStart(
       {
         provider: params.get("provider") ?? "",
@@ -60,7 +61,10 @@ const loginStatus = Effect.gen(function* () {
 
   if (!isValidOAuthState(state)) return jsonReply(400, { status: "error", error: "invalid state" });
   const viewer = yield* currentViewer;
-  const result = yield* controlPlane("oauthStatus", (stub) => stub.oauthStatus(state, viewer));
+
+  const result = yield* modelsControlPlane("oauthStatus", (stub) =>
+    stub.oauthStatus(state, viewer),
+  );
 
   return jsonReply(200, result);
 });
@@ -73,7 +77,7 @@ const cancelLogin = Effect.gen(function* () {
   if (!isValidOAuthState(state)) return jsonReply(400, { status: "error", error: "invalid state" });
   const viewer = yield* currentViewer;
 
-  const { cancelled } = yield* controlPlane("oauthCancel", (stub) =>
+  const { cancelled } = yield* modelsControlPlane("oauthCancel", (stub) =>
     stub.oauthCancel(state, viewer),
   );
 
@@ -111,7 +115,7 @@ const completeLogin = (parts: CallbackParts & { readonly redirectUrl?: string })
 
     const viewer = yield* currentViewer;
 
-    const result = yield* controlPlane("oauthCallback", (stub) =>
+    const result = yield* modelsControlPlane("oauthCallback", (stub) =>
       stub.oauthCallback(
         {
           ...(parts.provider === "" ? {} : { provider: parts.provider }),

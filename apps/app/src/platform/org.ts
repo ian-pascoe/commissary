@@ -46,11 +46,14 @@ export class CurrentOrg extends Context.Service<CurrentOrg, OrgId>()(
   "commissary/platform/CurrentOrg",
 ) {}
 
-export type ControlPlaneStub = ReturnType<Env["CONTROL_PLANE"]["getByName"]>;
-
-/** The ControlPlane of `org`: its Durable Object is named by the org id. */
-export const controlPlaneOf = (env: Env, org: OrgId): ControlPlaneStub =>
-  env.CONTROL_PLANE.getByName(org);
+/**
+ * The ControlPlane of `org`: its Durable Object is named by the org id. The stub has the type of the caller's view of
+ * `CONTROL_PLANE` (`StateEnv`, `ModelsEnv`).
+ */
+export const controlPlaneOf = <T extends Rpc.DurableObjectBranded>(
+  env: { readonly CONTROL_PLANE: DurableObjectNamespace<T> },
+  org: OrgId,
+): DurableObjectStub<T> => env.CONTROL_PLANE.getByName(org);
 
 /**
  * The org a ControlPlane serves, from its Durable Object id. Every ControlPlane is reached by name

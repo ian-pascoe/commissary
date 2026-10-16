@@ -56,7 +56,6 @@ import {
   resolveStoredVersion,
 } from "../src/executor/antigravity/version.ts";
 import { asString, get, type Json } from "../src/json/index.ts";
-import { WorkerEnv } from "../src/platform/env.ts";
 import { applyAntigravityHints } from "../src/registry/antigravity-hints.ts";
 import { embeddedCatalogs, sectionModels } from "../src/registry/catalog.ts";
 import {
@@ -76,6 +75,7 @@ import { builtinTranslators } from "../src/translator/builtin.ts";
 import { makeTranslationState } from "../src/translator/registry.ts";
 import { mockHttpClient, type UpstreamCall } from "./support/pipeline.ts";
 import { CurrentOrg, GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
+import { envContext } from "../src/worker-env.ts";
 
 const LONG_SIGNATURE = "S".repeat(80);
 
@@ -524,7 +524,7 @@ describe("version", () => {
       Effect.runPromise(
         refreshAntigravityVersion.pipe(
           Effect.provide(Layer.mergeAll(mockHttpClient(calls, respond))),
-          Effect.provideService(WorkerEnv, env),
+          Effect.provideContext(envContext(env)),
         ),
       );
 
@@ -625,7 +625,7 @@ describe("model catalog probes", () => {
             }),
           ),
         ),
-        Effect.provideService(WorkerEnv, stubEnv),
+        Effect.provideContext(envContext(stubEnv)),
         Effect.provideService(CurrentOrg, GLOBAL_ORG),
       ),
     );
@@ -647,7 +647,7 @@ describe("model catalog probes", () => {
     const failed = await Effect.runPromise(
       refreshAntigravityModels.pipe(
         Effect.provide(mockHttpClient(calls, () => new Response("down", { status: 503 }))),
-        Effect.provideService(WorkerEnv, stubEnv),
+        Effect.provideContext(envContext(stubEnv)),
         Effect.provideService(CurrentOrg, GLOBAL_ORG),
       ),
     );
@@ -659,7 +659,7 @@ describe("model catalog probes", () => {
     const backoff = await Effect.runPromise(
       refreshAntigravityModels.pipe(
         Effect.provide(mockHttpClient(calls, () => new Response("never", { status: 500 }))),
-        Effect.provideService(WorkerEnv, stubEnv),
+        Effect.provideContext(envContext(stubEnv)),
         Effect.provideService(CurrentOrg, GLOBAL_ORG),
       ),
     );

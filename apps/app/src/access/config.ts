@@ -3,6 +3,7 @@
 import { Data, Effect } from "effect";
 import { ConfigurationError } from "../errors.ts";
 import type { Principal } from "./principal.ts";
+import type { AuthBindings } from "../auth/config.ts";
 import { isHosted } from "../hosted/mode.ts";
 
 export interface AccessConfig {
@@ -42,7 +43,7 @@ const normalizeTeamHost = (raw: string): string | undefined => {
 
 /** The variables that name the platform admins: `PLATFORM_ADMIN_EMAILS` / `PLATFORM_ADMIN_SERVICE_TOKENS` (ADR 0022). */
 export type PlatformAdminEnv = Partial<
-  Pick<Env, "PLATFORM_ADMIN_EMAILS" | "PLATFORM_ADMIN_SERVICE_TOKENS">
+  Pick<AuthBindings, "PLATFORM_ADMIN_EMAILS" | "PLATFORM_ADMIN_SERVICE_TOKENS">
 >;
 
 /**
@@ -54,7 +55,7 @@ export const platformAdminLists = (env: PlatformAdminEnv): AdminLists => ({
   adminServiceTokens: new Set(splitList(env.PLATFORM_ADMIN_SERVICE_TOKENS)),
 });
 
-type AccessEnv = Pick<Env, "ACCESS_TEAM_DOMAIN" | "ACCESS_AUD"> & PlatformAdminEnv;
+type AccessEnv = Pick<AuthBindings, "ACCESS_TEAM_DOMAIN" | "ACCESS_AUD"> & PlatformAdminEnv;
 
 /** Parses and validates the Access settings. Fails closed when the team domain or AUD is missing. */
 export const loadAccessConfig = (
@@ -102,8 +103,8 @@ export const isAdmin = (lists: AdminLists, principal: Principal): boolean => {
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
-type DevBypassEnv = Pick<Env, "ACCESS_DEV_BYPASS"> &
-  Partial<Pick<Env, "ACCESS_TEAM_DOMAIN" | "ACCESS_AUD" | "COMMISSARY_MODE">>;
+type DevBypassEnv = Pick<AuthBindings, "ACCESS_DEV_BYPASS"> &
+  Partial<Pick<AuthBindings, "ACCESS_TEAM_DOMAIN" | "ACCESS_AUD" | "COMMISSARY_MODE">>;
 
 /** Outcome of the dev bypass check: `undefined` when `ACCESS_DEV_BYPASS` is unset or the host is not loopback. */
 export type DevBypass = DevBypassOutcome | undefined;

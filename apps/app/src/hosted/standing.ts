@@ -10,10 +10,10 @@
 import { Clock, Effect } from "effect";
 import { ForbiddenError, InternalError } from "../errors.ts";
 import { syncOrgIndex } from "../members/admission.ts";
-import { WorkerEnv } from "../platform/env.ts";
 import { controlPlaneOf, type OrgId } from "../platform/org.ts";
 import { platform } from "../platform/registry.ts";
 import type { Standing } from "../platform/registry-store.ts";
+import { StateEnv } from "../state/env.ts";
 
 /** How long an isolate trusts a person's or an org's standing without asking the registry again. */
 export const STANDING_TTL_MS = 30_000;
@@ -80,7 +80,7 @@ export const SUSPENDED = "Suspended";
  */
 export const ensureSignedUp = (
   email: string,
-): Effect.Effect<void, ForbiddenError | InternalError, WorkerEnv> =>
+): Effect.Effect<void, ForbiddenError | InternalError, StateEnv> =>
   Effect.gen(function* () {
     const address = email.toLowerCase();
     const now = yield* Clock.currentTimeMillis;
@@ -95,7 +95,7 @@ export const ensureSignedUp = (
     if (state.kind === "suspended") return yield* new ForbiddenError({ message: SUSPENDED });
 
     if (state.kind === "personal") {
-      const env = yield* WorkerEnv;
+      const env = yield* StateEnv;
       const org = state.org.id;
 
       const added = yield* Effect.tryPromise({
@@ -131,7 +131,7 @@ export const ensureSignedUp = (
 export const requireStanding = (
   org: OrgId,
   email: string | undefined,
-): Effect.Effect<Standing, ForbiddenError | InternalError, WorkerEnv> =>
+): Effect.Effect<Standing, ForbiddenError | InternalError, StateEnv> =>
   Effect.gen(function* () {
     const key = `${org}\u0000${email?.toLowerCase() ?? ""}`;
     const now = yield* Clock.currentTimeMillis;

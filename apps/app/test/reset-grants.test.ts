@@ -15,7 +15,6 @@ import { ManagementApi } from "@commissary/contract/api";
 import { CredentialEntry, type ResetGrantStatus } from "@commissary/contract/credentials";
 import { ManagementError } from "@commissary/contract/errors";
 import type { Json } from "../src/json/index.ts";
-import { WorkerEnv } from "../src/platform/env.ts";
 import { runQuotaSweep } from "../src/quota/check.ts";
 import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/quota/claude.ts";
 import { claimResetGrant } from "../src/quota/reset-grant-flow.ts";
@@ -46,6 +45,7 @@ import {
 } from "./support/management.ts";
 import { type MockReply, mockHttp, routes } from "./support/refresh.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { envContext } from "../src/worker-env.ts";
 
 const NOW = Date.parse("2026-10-11T12:00:00Z");
 
@@ -1160,7 +1160,7 @@ describe("claim races and failures", () => {
       const fiber = yield* Effect.forkChild(
         claimResetGrant({ authIndex: INDEX }, FULL_ACCESS).pipe(
           Effect.provide(outbound.layer),
-          Effect.provideService(WorkerEnv, env),
+          Effect.provideContext(envContext(env)),
         ),
       );
 
@@ -1239,7 +1239,7 @@ describe("quota check", () => {
 
         const sweep = runQuotaSweep.pipe(
           Effect.provide(outbound.layer),
-          Effect.provideService(WorkerEnv, env),
+          Effect.provideContext(envContext(env)),
         );
 
         assert.deepStrictEqual(yield* sweep, { checked: 4, failed: 0 });

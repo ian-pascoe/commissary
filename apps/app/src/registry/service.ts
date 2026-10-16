@@ -13,7 +13,6 @@ import { Clock, Context, Effect, Layer, Ref, Result, Schema } from "effect";
 import { ConfigReader } from "../config/reader.ts";
 import type { ConfigStoreError } from "../config/errors.ts";
 import type { Config } from "../config/schema.ts";
-import { currentControlPlane, WorkerEnv } from "../platform/env.ts";
 import { CurrentOrg, type OrgId } from "../platform/org.ts";
 import { ALLOW_ALL, type Reach, reachFromTable } from "../grants/reach.ts";
 import type { GrantTable } from "../grants/grant.ts";
@@ -28,6 +27,7 @@ import type { ModelInfo } from "./model-info.ts";
 import { type ClientRegistration, ModelRegistryIndex } from "./registry.ts";
 import type { ModelSource } from "./source.ts";
 import { FULL_ACCESS } from "../credentials/ownership.ts";
+import { ModelsEnv, currentModelsControlPlane } from "../models/env.ts";
 
 /** The ControlPlane could not provide the credential model sources. */
 export class ModelRegistryError extends Schema.TaggedError<ModelRegistryError>()(
@@ -195,7 +195,7 @@ export class ModelRegistry extends Context.Service<
     readonly snapshot: Effect.Effect<
       RegistrySnapshot,
       ModelRegistryError | ConfigStoreError,
-      WorkerEnv | CurrentOrg
+      ModelsEnv | CurrentOrg
     >;
     /**
      * A snapshot built right now from a freshly read config (the config reader's cache is dropped first), stored in
@@ -205,7 +205,7 @@ export class ModelRegistry extends Context.Service<
     readonly fresh: Effect.Effect<
       RegistrySnapshot,
       ModelRegistryError | ConfigStoreError,
-      WorkerEnv | CurrentOrg
+      ModelsEnv | CurrentOrg
     >;
   }
 >()("commissary/registry/ModelRegistry") {
@@ -222,9 +222,9 @@ export class ModelRegistry extends Context.Service<
         Ref.update(cache, (all) => new Map(all).set(org, snapshot));
 
       const build = Effect.gen(function* () {
-        const env = yield* WorkerEnv;
+        const env = yield* ModelsEnv;
         const org = yield* CurrentOrg;
-        const plane = yield* currentControlPlane;
+        const plane = yield* currentModelsControlPlane;
 
         const { config, version } = yield* configReader.get;
 

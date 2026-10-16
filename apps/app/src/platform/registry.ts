@@ -3,14 +3,16 @@
  * into a `Platform` stub, as `controlPlaneOf` is for an org's ControlPlane.
  */
 import { Data, Effect } from "effect";
-import { WorkerEnv } from "./env.ts";
+import { type StateBindings, StateEnv } from "../state/env.ts";
+import type { Platform } from "./platform.ts";
 
-export type PlatformStub = ReturnType<Env["PLATFORM"]["getByName"]>;
+export type PlatformStub = DurableObjectStub<Platform>;
 
 /** The one Platform object of the deployment is named like this. */
 export const PLATFORM_NAME = "platform";
 
-export const platformOf = (env: Env): PlatformStub => env.PLATFORM.getByName(PLATFORM_NAME);
+export const platformOf = (env: Pick<StateBindings, "PLATFORM">): PlatformStub =>
+  env.PLATFORM.getByName(PLATFORM_NAME);
 
 /** The Platform registry could not be reached; the message names the call, the caller logs it. */
 export class PlatformUnavailable extends Data.TaggedError("PlatformUnavailable")<{
@@ -21,9 +23,9 @@ export class PlatformUnavailable extends Data.TaggedError("PlatformUnavailable")
 export const platform = <R>(
   label: string,
   call: (stub: PlatformStub) => R,
-): Effect.Effect<Awaited<R>, PlatformUnavailable, WorkerEnv> =>
+): Effect.Effect<Awaited<R>, PlatformUnavailable, StateEnv> =>
   Effect.gen(function* () {
-    const stub = platformOf(yield* WorkerEnv);
+    const stub = platformOf(yield* StateEnv);
 
     return yield* Effect.tryPromise({
       try: async (): Promise<Awaited<R>> => await call(stub),

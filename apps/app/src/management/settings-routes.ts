@@ -22,7 +22,7 @@ import { decodeConfig, parseConfigYaml } from "../config/codec.ts";
 import { decodeStoredConfig } from "../config/store.ts";
 import { isJsonObject, type JsonObject } from "../json/index.ts";
 import { Revisions } from "@commissary/contract/config";
-import { boundedBodyText, bodyJson, controlPlane, handled, jsonReply, replyError } from "./http.ts";
+import { boundedBodyText, bodyJson, handled, jsonReply, replyError } from "./http.ts";
 import { currentViewer } from "./viewer.ts";
 import {
   applySettingsPatch,
@@ -31,6 +31,7 @@ import {
   settingsView,
   validateSettings,
 } from "./settings.ts";
+import { modelsControlPlane } from "../models/env.ts";
 
 const PATH = "/v9/management/settings";
 
@@ -51,7 +52,7 @@ const failIf = (refused: SettingsProblem | undefined) =>
  * document is an internal error.
  */
 export const storedConfig = Effect.gen(function* () {
-  const wire = yield* controlPlane("configEntries", (stub) => stub.configEntries());
+  const wire = yield* modelsControlPlane("configEntries", (stub) => stub.configEntries());
 
   const config = yield* decodeStoredConfig(wire.document).pipe(
     Effect.mapError(() => replyError(500, "invalid_config")),
@@ -72,7 +73,10 @@ export const storedConfig = Effect.gen(function* () {
 const view = Effect.gen(function* () {
   const current = yield* storedConfig;
   const viewer = yield* currentViewer;
-  const sources = yield* controlPlane("listModelSources", (stub) => stub.listModelSources(viewer));
+
+  const sources = yield* modelsControlPlane("listModelSources", (stub) =>
+    stub.listModelSources(viewer),
+  );
 
   return jsonReply(
     200,
@@ -123,7 +127,7 @@ const save = Effect.gen(function* () {
     };
   });
 
-  const result = yield* controlPlane("writeSettings", (stub) =>
+  const result = yield* modelsControlPlane("writeSettings", (stub) =>
     stub.writeSettings(changes, identity.principalId),
   );
 
@@ -154,7 +158,7 @@ const importDocument = Effect.gen(function* () {
 
   const identity = yield* AccessPrincipal;
 
-  const result = yield* controlPlane("importConfig", (stub) =>
+  const result = yield* modelsControlPlane("importConfig", (stub) =>
     stub.importConfig(text, identity.principalId),
   );
 

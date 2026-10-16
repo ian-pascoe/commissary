@@ -27,8 +27,9 @@
  */
 import { Effect, Option, Schema } from "effect";
 import { BatchAction, batchLimit } from "@commissary/contract/credentials";
-import { boundedBodyText, controlPlane, handled, jsonReply, replyError } from "./http.ts";
+import { boundedBodyText, handled, jsonReply, replyError } from "./http.ts";
 import { currentViewer } from "./viewer.ts";
+import { modelsControlPlane } from "../models/env.ts";
 
 /** A hundred file names fit many times over. */
 const MAX_BODY_BYTES = 64 * 1024;
@@ -61,7 +62,7 @@ const batchCredentials = Effect.gen(function* () {
 
   const viewer = yield* currentViewer;
 
-  const results = yield* controlPlane("batchCredentials", (stub) =>
+  const results = yield* modelsControlPlane("batchCredentials", (stub) =>
     stub.batchCredentials(action, names, viewer),
   );
 

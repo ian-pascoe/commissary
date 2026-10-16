@@ -6,9 +6,9 @@ import { encodeConfig, parseConfigYaml } from "../src/config/codec.ts";
 import { ConfigStoreError } from "../src/config/errors.ts";
 import { ConfigReader, ConfigSource } from "../src/config/reader.ts";
 import { decodeStoredConfig, type ConfigSnapshotWire } from "../src/config/store.ts";
-import { WorkerEnv } from "../src/platform/env.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 import { comparable } from "./support/config-entries.ts";
+import { type EnvServices, envContext } from "../src/worker-env.ts";
 
 // Each test uses its own Durable Object instance; production uses getByName("global").
 const controlPlane = () => env.CONTROL_PLANE.getByName(crypto.randomUUID());
@@ -142,7 +142,7 @@ describe("ControlPlane config storage (Workers pool)", () => {
       const reader = yield* ConfigReader;
 
       const snapshot = yield* reader.get.pipe(
-        Effect.provideService(WorkerEnv, env),
+        Effect.provideContext(envContext(env)),
         Effect.provideService(CurrentOrg, GLOBAL_ORG),
       );
 
@@ -208,7 +208,7 @@ describe("ConfigReader cache", () => {
     body: (
       source: FakeSource,
       reader: ConfigReader["Service"],
-    ) => Effect.Effect<A, E, WorkerEnv | CurrentOrg>,
+    ) => Effect.Effect<A, E, EnvServices | CurrentOrg>,
   ) =>
     Effect.gen(function* () {
       const source = yield* makeFakeSource;
@@ -218,7 +218,7 @@ describe("ConfigReader cache", () => {
       );
 
       return yield* body(source, reader).pipe(
-        Effect.provideService(WorkerEnv, env),
+        Effect.provideContext(envContext(env)),
         Effect.provideService(CurrentOrg, GLOBAL_ORG),
       );
     });

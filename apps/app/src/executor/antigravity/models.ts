@@ -18,7 +18,6 @@ import {
   type JsonObject,
   tryParseJson,
 } from "../../json/index.ts";
-import { WorkerEnv } from "../../platform/env.ts";
 import { controlPlaneOf, CurrentOrg, type OrgId, orgScopedName } from "../../platform/org.ts";
 import {
   type AntigravityModelHints,
@@ -28,6 +27,7 @@ import type { ModelSource } from "../../registry/source.ts";
 import { antigravityUserAgent, currentAntigravityVersion } from "./version.ts";
 import { ANTIGRAVITY_BASE_URL_DAILY } from "./envelope.ts";
 import { FULL_ACCESS } from "../../credentials/ownership.ts";
+import { ModelsEnv } from "../../models/env.ts";
 
 export const MODELS_PATH = "/v1internal:fetchAvailableModels";
 
@@ -224,7 +224,7 @@ export const withAntigravityHints = async (
  * entitlements.
  */
 export const refreshAntigravityModels = Effect.gen(function* () {
-  const env = yield* WorkerEnv;
+  const env = yield* ModelsEnv;
   const org = yield* CurrentOrg;
   const plane = controlPlaneOf(env, org);
   const sources = yield* Effect.promise(() => plane.listModelSources(FULL_ACCESS));

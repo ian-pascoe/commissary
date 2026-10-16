@@ -11,10 +11,10 @@
 import { Clock, Effect } from "effect";
 import { InternalError, UnauthorizedError } from "../errors.ts";
 import type { OrgRole } from "../members/roles.ts";
-import { WorkerEnv } from "../platform/env.ts";
 import { controlPlaneOf, type OrgId } from "../platform/org.ts";
 import { platform } from "../platform/registry.ts";
 import { looksLikeApiKey, parseApiKey } from "../api-keys/key.ts";
+import { StateEnv } from "../state/env.ts";
 
 /** How long a verified key is trusted without asking its ControlPlane again; revocation applies within this time. */
 export const VERIFIED_KEY_TTL_MS = 30_000;
@@ -135,8 +135,8 @@ export const orgExists = Effect.fnUntraced(function* (org: OrgId, now: number) {
  */
 export const verifyApiKey: (
   text: string,
-) => Effect.Effect<VerifiedApiKey, UnauthorizedError | InternalError, WorkerEnv> =
-  Effect.fnUntraced(function* (text: string) {
+) => Effect.Effect<VerifiedApiKey, UnauthorizedError | InternalError, StateEnv> = Effect.fnUntraced(
+  function* (text: string) {
     const parsed = parseApiKey(text);
 
     if (parsed === undefined) return yield* invalid;
@@ -147,7 +147,7 @@ export const verifyApiKey: (
     verified.delete(parsed.hash);
 
     if (!(yield* orgExists(parsed.org, now))) return yield* invalid;
-    const env = yield* WorkerEnv;
+    const env = yield* StateEnv;
 
     const verdict = yield* Effect.tryPromise({
       try: async () =>
@@ -177,4 +177,5 @@ export const verifyApiKey: (
     });
 
     return key;
-  });
+  },
+);

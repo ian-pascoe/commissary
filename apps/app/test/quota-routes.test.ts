@@ -9,7 +9,6 @@ import { afterAll, beforeEach, expect } from "vitest";
 import { ManagementApi } from "@commissary/contract/api";
 import { CredentialEntry, type QuotaReport } from "@commissary/contract/credentials";
 import { ManagementError } from "@commissary/contract/errors";
-import { WorkerEnv } from "../src/platform/env.ts";
 import { runQuotaSweep } from "../src/quota/check.ts";
 import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/quota/claude.ts";
 import { RESET_GRANT_STATUS_URL } from "../src/quota/reset-grants.ts";
@@ -24,6 +23,7 @@ import {
 import { type MockReply, mockHttp, routes } from "./support/refresh.ts";
 import { env } from "cloudflare:workers";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { envContext } from "../src/worker-env.ts";
 
 const QUOTA = "/v9/management/credentials/quota";
 
@@ -303,7 +303,7 @@ describe("quota-check cron task", () => {
 
       const summary = yield* runQuotaSweep.pipe(
         Effect.provide(outbound.layer),
-        Effect.provideService(WorkerEnv, env),
+        Effect.provideContext(envContext(env)),
       );
 
       assert.deepStrictEqual(summary, { checked: 1, failed: 0 });

@@ -11,9 +11,10 @@
 import { Data, Effect } from "effect";
 import type { AdmissiblePrincipal } from "../access/principal.ts";
 import { isHosted } from "../hosted/mode.ts";
-import { WorkerEnv } from "../platform/env.ts";
+import { AuthConfig } from "../auth/config.ts";
 import { controlPlaneOf, GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 import { platformOf } from "../platform/registry.ts";
+import { StateEnv } from "../state/env.ts";
 import type { ClientsUseApiKeys } from "../api-keys/store.ts";
 import type { Admission, PrincipalRef } from "./store.ts";
 
@@ -36,9 +37,9 @@ export const principalRef = (principal: AdmissiblePrincipal): PrincipalRef =>
  * Pushes the org's members and service tokens to the Platform registry when its index is behind; never fails (a
  * failure is logged, the next change or admission tries again).
  */
-export const syncOrgIndex = (org: OrgId): Effect.Effect<void, never, WorkerEnv> =>
+export const syncOrgIndex = (org: OrgId): Effect.Effect<void, never, StateEnv> =>
   Effect.gen(function* () {
-    const env = yield* WorkerEnv;
+    const env = yield* StateEnv;
     const stub = controlPlaneOf(env, org);
 
     const index = yield* Effect.tryPromise({
@@ -90,10 +91,14 @@ export const admitPrincipal = (
   principal: AdmissiblePrincipal,
   autoJoin = true,
   client = false,
-): Effect.Effect<Admission | ClientsUseApiKeys | undefined, MembershipUnavailable, WorkerEnv> =>
+): Effect.Effect<
+  Admission | ClientsUseApiKeys | undefined,
+  MembershipUnavailable,
+  AuthConfig | StateEnv
+> =>
   Effect.gen(function* () {
-    const env = yield* WorkerEnv;
-    const joins = autoJoin && !(org === GLOBAL_ORG && isHosted(env));
+    const joins = autoJoin && !(org === GLOBAL_ORG && isHosted(yield* AuthConfig));
+    const env = yield* StateEnv;
 
     const admission = yield* Effect.tryPromise({
       try: async () => await controlPlaneOf(env, org).admit(principalRef(principal), joins, client),

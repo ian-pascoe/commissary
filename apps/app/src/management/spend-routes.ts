@@ -17,16 +17,9 @@ import {
   UpdateSpendLimit,
   UpdateSpendSettings,
 } from "@commissary/contract/spend";
-import {
-  bodyJson,
-  controlPlane,
-  handled,
-  ifMatch,
-  jsonReply,
-  type Reply,
-  replyError,
-} from "./http.ts";
+import { bodyJson, handled, ifMatch, jsonReply, type Reply, replyError } from "./http.ts";
 import { currentViewer } from "./viewer.ts";
+import { modelsControlPlane } from "../models/env.ts";
 
 const BASE = "/v9/management";
 
@@ -83,7 +76,7 @@ const idParam = Effect.gen(function* () {
 
 const overview = Effect.gen(function* () {
   const viewer = yield* currentViewer;
-  const spend = yield* controlPlane("spendOverview", (stub) => stub.spendOverview(viewer));
+  const spend = yield* modelsControlPlane("spendOverview", (stub) => stub.spendOverview(viewer));
 
   return jsonReply(200, {
     time_zone: spend.settings.timeZone,
@@ -98,7 +91,7 @@ const create = Effect.gen(function* () {
   const { principalId } = yield* AccessPrincipal;
   const input = yield* decode(CreateSpendLimit);
 
-  const result = yield* controlPlane("createSpendLimit", (stub) =>
+  const result = yield* modelsControlPlane("createSpendLimit", (stub) =>
     stub.createSpendLimit(
       viewer,
       {
@@ -121,7 +114,7 @@ const update = Effect.gen(function* () {
   const revision = yield* ifMatch;
   const input = yield* decode(UpdateSpendLimit);
 
-  const result = yield* controlPlane("updateSpendLimit", (stub) =>
+  const result = yield* modelsControlPlane("updateSpendLimit", (stub) =>
     stub.updateSpendLimit(viewer, id, revision, input.amount_micros, principalId),
   );
 
@@ -133,7 +126,7 @@ const remove = Effect.gen(function* () {
   const id = yield* idParam;
   const revision = yield* ifMatch;
 
-  const result = yield* controlPlane("removeSpendLimit", (stub) =>
+  const result = yield* modelsControlPlane("removeSpendLimit", (stub) =>
     stub.removeSpendLimit(viewer, id, revision),
   );
 
@@ -143,7 +136,7 @@ const remove = Effect.gen(function* () {
 const settings = Effect.gen(function* () {
   const input = yield* decode(UpdateSpendSettings);
 
-  const result = yield* controlPlane("setSpendSettings", (stub) =>
+  const result = yield* modelsControlPlane("setSpendSettings", (stub) =>
     stub.setSpendSettings({
       ...(input.time_zone === undefined ? {} : { timeZone: input.time_zone }),
       ...(input.week_start === undefined ? {} : { weekStart: input.week_start }),

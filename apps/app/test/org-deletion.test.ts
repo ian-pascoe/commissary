@@ -298,7 +298,9 @@ describe("a deletion that needs more than one call", () => {
     const org = await newOrg();
 
     // Too small a budget to wipe even one instance and one page of cache keys.
-    const first = await deleteOrg({ ...env, PLATFORM: registry.bindings.PLATFORM }, org.id, {
+    const bindings = { ...env, PLATFORM: registry.bindings.PLATFORM };
+
+    const first = await deleteOrg(bindings, bindings, org.id, {
       now: Date.now(),
       budget: 5,
     });
@@ -306,7 +308,7 @@ describe("a deletion that needs more than one call", () => {
     expect(first).toMatchObject({ state: "incomplete" });
     expect(await registry.platform.getOrgById(org.id)).toBeDefined();
 
-    const second = await deleteOrg({ ...env, PLATFORM: registry.bindings.PLATFORM }, org.id, {
+    const second = await deleteOrg(bindings, bindings, org.id, {
       now: Date.now(),
       budget: DELETION_BUDGET,
     });
@@ -320,7 +322,11 @@ describe("a deletion that needs more than one call", () => {
     const org = await newOrg();
     const bindings = { ...env, PLATFORM: registry.bindings.PLATFORM };
 
-    expect(await deleteOrg(bindings, org.id, { now: Date.now() })).toEqual({ state: "deleted" });
-    expect(await deleteOrg(bindings, org.id, { now: Date.now() })).toEqual({ state: "deleted" });
+    expect(await deleteOrg(bindings, bindings, org.id, { now: Date.now() })).toEqual({
+      state: "deleted",
+    });
+    expect(await deleteOrg(bindings, bindings, org.id, { now: Date.now() })).toEqual({
+      state: "deleted",
+    });
   });
 });

@@ -13,6 +13,8 @@
  * earlier step finds less to do. Each call may use at most {@link DELETION_BUDGET} subrequests (a Worker invocation has
  * a limit); a big org answers `incomplete` and the caller runs the deletion again. `global` is never deleted.
  */
+import type { ModelsBindings } from "../models/env.ts";
+import type { StateBindings } from "../state/env.ts";
 import { deleteOrgUsage } from "../usage/d1.ts";
 import { controlPlaneOf, GLOBAL_ORG, type OrgId } from "./org.ts";
 import { platformOf } from "./registry.ts";
@@ -42,9 +44,13 @@ export interface DeletionOptions {
   readonly budget?: number;
 }
 
-/** Deletes every trace of `org`; see the module comment. Never rejects for an org that is already half deleted. */
+/**
+ * Deletes every trace of `org`; see the module comment. Never rejects for an org that is already half deleted. `models`
+ * holds the Models data (usage records, `CACHE` keys), `state` the Durable Objects.
+ */
 export const deleteOrg = async (
-  env: Env,
+  state: StateBindings,
+  models: Pick<ModelsBindings, "USAGE" | "CACHE">,
   org: OrgId,
   options: DeletionOptions,
 ): Promise<OrgDeletion> => {
@@ -52,10 +58,10 @@ export const deleteOrg = async (
     return { state: "refused", reason: "global", message: "the first org cannot be deleted" };
 
   let budget = options.budget ?? DELETION_BUDGET;
-  const plane = controlPlaneOf(env, org);
+  const plane = controlPlaneOf(state, org);
 
   // 1. Usage: each batch is one D1 call; the helper bounds its own loop.
-  const usage = await deleteOrgUsage(env.USAGE, org);
+  const usage = await deleteOrgUsage(models.USAGE, org);
   budget -= usage.calls;
 
   if (!usage.complete) return { state: "incomplete", step: "usage" };
@@ -68,7 +74,7 @@ export const deleteOrg = async (
 
     if (names.length === 0) break;
 
-    await Promise.all(names.map(async (name) => await env.SESSION_STATE.getByName(name).wipe()));
+    await Promise.all(names.map(async (name) => await state.SESSION_STATE.getByName(name).wipe()));
     budget -= names.length;
     await plane.forgetSessionInstances(names);
     budget -= 1;
@@ -79,10 +85,10 @@ export const deleteOrg = async (
 
   for (;;) {
     if (budget < KV_PAGE + 2) return { state: "incomplete", step: "cache" };
-    const page = await env.CACHE.list({ prefix, limit: KV_PAGE });
+    const page = await models.CACHE.list({ prefix, limit: KV_PAGE });
     budget -= 1;
 
-    await Promise.all(page.keys.map(async (key) => await env.CACHE.delete(key.name)));
+    await Promise.all(page.keys.map(async (key) => await models.CACHE.delete(key.name)));
     budget -= page.keys.length;
 
     if (page.list_complete) break;
@@ -92,7 +98,7 @@ export const deleteOrg = async (
   await plane.wipeOrg();
 
   // 5. The registry entry, last.
-  const removed = await platformOf(env).deleteOrg(org);
+  const removed = await platformOf(state).deleteOrg(org);
 
   if (!removed.ok && removed.error !== "not_found")
     return { state: "refused", reason: removed.error, message: removed.message };

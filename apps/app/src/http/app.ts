@@ -31,8 +31,8 @@ export const AppLayer = Layer.mergeAll(
 );
 
 /**
- * Creates the Web `Request` handler. Per-request services (`WorkerEnv`, `WorkerExecutionContext`) are supplied as
- * the second argument of `handler`; see `requestContext` in `platform/env.ts`.
+ * Creates the Web `Request` handler. Per-request services (the env views, `WorkerExecutionContext`) are supplied as
+ * the second argument of `handler`; see `requestContext` in `worker-env.ts`.
  */
 export const makeWebHandler = () =>
   HttpRouter.toWebHandler(AppLayer, { disableLogger: true, middleware: orgAddressing });

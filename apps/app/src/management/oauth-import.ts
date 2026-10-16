@@ -10,8 +10,9 @@ import { Effect } from "effect";
 import { HttpRouter, HttpServerRequest } from "effect/http";
 import { normalizePrivateKey } from "../credentials/refresh/vertex.ts";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
-import { controlPlane, handled, jsonReply, queryParams, replyError } from "./http.ts";
+import { handled, jsonReply, queryParams, replyError } from "./http.ts";
 import { currentViewer } from "./viewer.ts";
+import { modelsControlPlane } from "../models/env.ts";
 
 const BASE = "/v9/management/oauth";
 
@@ -137,7 +138,7 @@ const importVertex = Effect.gen(function* () {
   const viewer = yield* currentViewer;
   const wantPrivate = (yield* queryParams).get("private") === "true";
 
-  const result = yield* controlPlane("importAuthFile", (stub) =>
+  const result = yield* modelsControlPlane("importAuthFile", (stub) =>
     stub.importAuthFile(name, metadata, { mergeExisting: true, private: wantPrivate }, viewer),
   );
 

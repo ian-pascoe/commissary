@@ -20,7 +20,6 @@ import type { ExecutionMetadata, ExecutorOptions, WebsocketExecution } from "../
 import { filterUpstreamHeaders } from "../http/headers.ts";
 import { get, type Json } from "../json/index.ts";
 import type { Format } from "../translator/formats.ts";
-import type { WorkerEnv } from "../platform/env.ts";
 import { CurrentOrg } from "../platform/org.ts";
 import {
   type Attempt,
@@ -33,6 +32,7 @@ import { rewriteResponseModel, rewriteStreamChunk } from "./model-rewrite.ts";
 import { resolveModel } from "./resolve.ts";
 import { prepareSessionRouting } from "../session-routing/routing.ts";
 import { extractSessionInfo } from "./session.ts";
+import type { ModelsEnv } from "../models/env.ts";
 
 export interface ExecutionInput {
   /** Entry protocol (handler type), passed to executors as `sourceFormat`. */
@@ -323,7 +323,7 @@ const runStreamAttempt = (prepared: Prepared, attempt: Attempt) =>
       });
     }
 
-    const services = yield* Effect.context<WorkerEnv | CurrentOrg>();
+    const services = yield* Effect.context<ModelsEnv | CurrentOrg>();
     const target = attempt.rewriteTo;
     const rest = boot.closed ? Stream.empty : Stream.fromPull(Effect.succeed(pull));
 

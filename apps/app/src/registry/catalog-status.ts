@@ -5,11 +5,11 @@
  */
 import { Effect } from "effect";
 import type { CatalogMode, CatalogStatus } from "@commissary/contract/catalog";
-import { WorkerEnv } from "../platform/env.ts";
 import { embeddedModelsDev, modelsDevFromText } from "./catalog.ts";
 import { CATALOG_KEYS, readRefreshStatus } from "./catalog-store.ts";
 import type { ModelsDevCatalog } from "./models-dev.ts";
 import { resolveSource } from "./catalog-source.ts";
+import { ModelsEnv } from "../models/env.ts";
 
 export interface CatalogModeInfo {
   readonly mode: CatalogMode;
@@ -42,9 +42,9 @@ const counts = (doc: ModelsDevCatalog): Record<string, number> =>
 const iso = (ms: number): string => new Date(ms).toISOString();
 
 /** Reads KV directly (no isolate cache): a refresh shows on the next read. A KV failure reads as nothing stored. */
-export const catalogStatus = (configured: string): Effect.Effect<CatalogStatus, never, WorkerEnv> =>
+export const catalogStatus = (configured: string): Effect.Effect<CatalogStatus, never, ModelsEnv> =>
   Effect.gen(function* () {
-    const env = yield* WorkerEnv;
+    const env = yield* ModelsEnv;
     const { mode, host, problem } = catalogMode(configured);
 
     const text = yield* Effect.tryPromise(() => env.CACHE.get(CATALOG_KEYS.modelsDev)).pipe(

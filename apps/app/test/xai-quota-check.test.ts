@@ -11,9 +11,9 @@ import {
   XAI_FALLBACK_CLIENT_VERSION,
   XAI_VERSION_KV_KEY,
 } from "../src/executor/xai/version.ts";
-import { WorkerEnv } from "../src/platform/env.ts";
 import { probeQuota } from "../src/quota/probe.ts";
 import { XAI_BILLING_MONTHLY_URL, XAI_BILLING_WEEKLY_URL } from "../src/quota/xai.ts";
+import { envContext } from "../src/worker-env.ts";
 
 interface Seen {
   readonly url: string;
@@ -96,7 +96,7 @@ describe("xAI quota check", () => {
     Effect.gen(function* () {
       yield* storeVersion("1.0.99");
       const seen: Seen[] = [];
-      yield* checkXai(seen).pipe(Effect.provideService(WorkerEnv, env));
+      yield* checkXai(seen).pipe(Effect.provideContext(envContext(env)));
 
       assertSentVersion(seen, "1.0.99");
     }),
@@ -106,7 +106,7 @@ describe("xAI quota check", () => {
     Effect.gen(function* () {
       yield* storeVersion("0.2.91");
       const seen: Seen[] = [];
-      yield* checkXai(seen).pipe(Effect.provideService(WorkerEnv, env));
+      yield* checkXai(seen).pipe(Effect.provideContext(envContext(env)));
 
       assertSentVersion(seen, XAI_FALLBACK_CLIENT_VERSION);
     }),

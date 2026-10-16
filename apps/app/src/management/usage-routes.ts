@@ -22,7 +22,6 @@
 import { Clock, Effect } from "effect";
 import { HttpRouter } from "effect/http";
 import { AccessPrincipal } from "../access/principal.ts";
-import { WorkerEnv } from "../platform/env.ts";
 import { CurrentOrg } from "../platform/org.ts";
 import { currentAuthIndexer } from "./auth-index.ts";
 import {
@@ -45,12 +44,13 @@ import {
 } from "../usage/d1.ts";
 import { controlPlane, handled, jsonReply, queryParams, replyError } from "./http.ts";
 import { viewerOf } from "./viewer.ts";
+import { ModelsEnv, modelsControlPlane } from "../models/env.ts";
 
 const BASE = "/v9/management/observability/usage";
 
 /** The D1 database, or a 503 when the `USAGE` binding is missing. */
 const usageDb = Effect.gen(function* () {
-  const env = yield* WorkerEnv;
+  const env = yield* ModelsEnv;
   const db: D1Database | undefined = env.USAGE;
 
   if (db === undefined) return yield* replyError(503, "usage store unavailable");
@@ -187,7 +187,7 @@ const parseFilter = (params: URLSearchParams) =>
       filter.authIndex = authIndex.toLowerCase();
 
       // A live credential narrows D1 to its id directly; only other indexes read the distinct ids (`resolveAuthIds`).
-      const live = yield* controlPlane("credentialIdOfAuthIndex", (stub) =>
+      const live = yield* modelsControlPlane("credentialIdOfAuthIndex", (stub) =>
         stub.credentialIdOfAuthIndex(authIndex.toLowerCase(), viewerOf(identity)),
       );
 

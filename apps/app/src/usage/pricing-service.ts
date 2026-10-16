@@ -17,11 +17,11 @@ import { ConfigReader } from "../config/reader.ts";
 import { usesEmbeddedCatalog } from "../registry/catalog-source.ts";
 import { embeddedModelsDev } from "../registry/catalog.ts";
 import { CatalogStore } from "../registry/catalog-store.ts";
-import type { WorkerEnv } from "../platform/env.ts";
 import { CurrentOrg } from "../platform/org.ts";
 import { ensureTokenBreakdown } from "./accounting.ts";
 import { costOf, findPrice, type PriceSources, type UsageCost } from "./pricing.ts";
 import type { UsageRecord } from "./record.ts";
+import type { ModelsEnv } from "../models/env.ts";
 
 const NO_COST: UsageCost = { micros: 0, unpriced: false };
 
@@ -31,7 +31,7 @@ export class UsagePricing extends Context.Service<
     /** The cost of `record`; `undefined` when it cannot be costed (the record is stored without one). */
     readonly costOf: (
       record: UsageRecord,
-    ) => Effect.Effect<UsageCost | undefined, never, WorkerEnv>;
+    ) => Effect.Effect<UsageCost | undefined, never, ModelsEnv>;
   }
 >()("commissary/usage/UsagePricing") {
   /** Stores records without a cost (tests that do not look at it). */

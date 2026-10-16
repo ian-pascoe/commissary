@@ -4,7 +4,7 @@
  * Each isolate keeps the last snapshot of every org it served. After `ttl` it asks the org's Durable Object for the
  * document with the cached version, so an unchanged config costs one small RPC and no decoding. When the Durable
  * Object is unreachable the last snapshot keeps being served (stale-if-error). Per-request bindings are never
- * captured: the DO stub is resolved from `WorkerEnv` and `CurrentOrg` at call time.
+ * captured: the DO stub is resolved from `ModelsEnv` and `CurrentOrg` at call time.
  *
  * Deployment settings: the model catalog is shared by every org, so its source (`models.catalog`) is the `global`
  * org's setting. Another org's snapshot carries `global`'s value (its own ControlPlane refuses to store one,
@@ -12,12 +12,12 @@
  * settings are listed in `DEPLOYMENT_SETTINGS` (`config/store.ts`), which both the store and this reader apply.
  */
 import { Clock, Context, Duration, Effect, Layer, Ref } from "effect";
-import { currentControlPlane, type WorkerEnv } from "../platform/env.ts";
 import { CurrentOrg, GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 import { ConfigStoreError } from "./errors.ts";
 import type { PriceOverride } from "../usage/pricing.ts";
 import type { Config } from "./schema.ts";
 import { decodeStoredConfig, withDeploymentSettings, type ConfigSnapshotWire } from "./store.ts";
+import { currentModelsControlPlane, type ModelsEnv } from "../models/env.ts";
 
 export interface ConfigSnapshot {
   readonly version: number;
@@ -35,7 +35,7 @@ export class ConfigSource extends Context.Service<
   {
     readonly fetch: (
       sinceVersion: number | undefined,
-    ) => Effect.Effect<ConfigSnapshotWire, ConfigStoreError, WorkerEnv | CurrentOrg>;
+    ) => Effect.Effect<ConfigSnapshotWire, ConfigStoreError, ModelsEnv | CurrentOrg>;
   }
 >()("commissary/config/ConfigSource") {
   static readonly controlPlane = Layer.succeed(
@@ -43,7 +43,7 @@ export class ConfigSource extends Context.Service<
     ConfigSource.of({
       fetch: (sinceVersion) =>
         Effect.gen(function* () {
-          const stub = yield* currentControlPlane;
+          const stub = yield* currentModelsControlPlane;
 
           return yield* Effect.tryPromise({
             try: async () => await stub.getConfig(sinceVersion),
@@ -69,7 +69,7 @@ export class ConfigReader extends Context.Service<
   ConfigReader,
   {
     /** The current org's config snapshot (cached per org). */
-    readonly get: Effect.Effect<ConfigSnapshot, ConfigStoreError, WorkerEnv | CurrentOrg>;
+    readonly get: Effect.Effect<ConfigSnapshot, ConfigStoreError, ModelsEnv | CurrentOrg>;
     /** Drops the current org's cached snapshot so the next `get` re-reads (use after a local write). */
     readonly invalidate: Effect.Effect<void, never, CurrentOrg>;
   }

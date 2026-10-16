@@ -16,7 +16,8 @@ import { AccessPrincipal } from "../access/principal.ts";
 import { decodeConfig } from "../config/codec.ts";
 import type { ChannelRuleKind, WriteResult } from "../config/store.ts";
 import { isJsonArray, type Json } from "../json/index.ts";
-import { bodyJson, controlPlane, handled, ifMatch, jsonReply, replyError } from "./http.ts";
+import { bodyJson, handled, ifMatch, jsonReply, replyError } from "./http.ts";
+import { modelsControlPlane } from "../models/env.ts";
 
 const BASE = "/v9/management/model-rules";
 
@@ -88,7 +89,7 @@ const put = (kind: ChannelRuleKind) =>
       });
     const { principalId } = yield* AccessPrincipal;
 
-    const result = yield* controlPlane("writeChannelRule", (stub) =>
+    const result = yield* modelsControlPlane("writeChannelRule", (stub) =>
       stub.writeChannelRule(kind, channel, revision, value, principalId),
     );
 
@@ -101,7 +102,7 @@ const remove = (kind: ChannelRuleKind) =>
     const revision = yield* ifMatch;
     const { principalId } = yield* AccessPrincipal;
 
-    const result = yield* controlPlane("writeChannelRule", (stub) =>
+    const result = yield* modelsControlPlane("writeChannelRule", (stub) =>
       stub.writeChannelRule(kind, channel, revision, null, principalId),
     );
 

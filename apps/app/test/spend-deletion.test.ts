@@ -160,7 +160,7 @@ describe("Spend data of an org that is deleted", () => {
     const org = await spendingOrg();
     const other = await spendingOrg();
 
-    expect(await deleteOrg(env, org.org, { now: Date.now() })).toEqual({ state: "deleted" });
+    expect(await deleteOrg(env, env, org.org, { now: Date.now() })).toEqual({ state: "deleted" });
 
     // The wiped object holds no table at all, so no Spend table and no row of one.
     const tables = await runInDurableObject(controlPlaneOf(env, org.org), (_instance, state) =>

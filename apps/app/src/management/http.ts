@@ -8,8 +8,8 @@ import { Data, Effect, Stream } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { causeSummary } from "../observability/cause.ts";
-import { currentControlPlane, type WorkerEnv } from "../platform/env.ts";
-import type { ControlPlaneStub, CurrentOrg } from "../platform/org.ts";
+import type { CurrentOrg } from "../platform/org.ts";
+import { type ControlPlaneStub, currentControlPlane, type StateEnv } from "../state/env.ts";
 
 const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
 
@@ -32,26 +32,30 @@ export class Reply extends Data.TaggedError("Reply")<{
 export const replyError = (status: number, error: string, extra: JsonObject = {}): Reply =>
   new Reply({ response: jsonReply(status, { error, ...extra }) });
 
-/** Calls the current org's ControlPlane; a failed RPC is logged (never with payloads) and answered with 502. */
+/** Calls a ControlPlane stub; a failed RPC is logged (never with payloads) and answered with 502. */
+export const callControlPlane = <S, R>(
+  label: string,
+  stub: S,
+  call: (stub: S) => R,
+): Effect.Effect<Awaited<R>, Reply> =>
+  Effect.tryPromise({
+    // RPC results are promise-pipelining stubs; `await` yields the plain data.
+    try: async (): Promise<Awaited<R>> => await call(stub),
+    catch: (cause) => (cause instanceof Error ? cause.message : "unknown error"),
+  }).pipe(
+    Effect.catch((message) =>
+      Effect.logError(`management ${label} failed: ${message}`).pipe(
+        Effect.andThen(Effect.fail(replyError(502, "control plane unavailable"))),
+      ),
+    ),
+  );
+
+/** Calls the current org's ControlPlane ({@link callControlPlane}). */
 export const controlPlane = <R>(
   label: string,
   call: (stub: ControlPlaneStub) => R,
-): Effect.Effect<Awaited<R>, Reply, WorkerEnv | CurrentOrg> =>
-  Effect.gen(function* () {
-    const stub = yield* currentControlPlane;
-
-    return yield* Effect.tryPromise({
-      // RPC results are promise-pipelining stubs; `await` yields the plain data.
-      try: async (): Promise<Awaited<R>> => await call(stub),
-      catch: (cause) => (cause instanceof Error ? cause.message : "unknown error"),
-    }).pipe(
-      Effect.catch((message) =>
-        Effect.logError(`management ${label} failed: ${message}`).pipe(
-          Effect.andThen(Effect.fail(replyError(502, "control plane unavailable"))),
-        ),
-      ),
-    );
-  });
+): Effect.Effect<Awaited<R>, Reply, StateEnv | CurrentOrg> =>
+  Effect.flatMap(currentControlPlane, (stub) => callControlPlane(label, stub, call));
 
 /** Request body as text; `invalid body` (400) when it cannot be read. */
 export const bodyText = Effect.gen(function* () {

@@ -11,13 +11,13 @@
 import { Clock, Effect, Option, type Types } from "effect";
 import type { OpenCodeProtocol } from "../config/schema.ts";
 import { OPENCODE_SPECS, type OpenCodeProvider } from "../executor/opencode/providers.ts";
-import { WorkerEnv } from "../platform/env.ts";
 import { embeddedModelsDev, modelsDevFromText } from "./catalog.ts";
 import { usesEmbeddedCatalog } from "./catalog-source.ts";
 import { CATALOG_KEYS } from "./catalog-store.ts";
 import { isDeprecatedModel, thinkingFromModelsDev } from "./catalog-build.ts";
 import type { ModelInfo } from "./model-info.ts";
 import type { ModelsDevCatalog, ModelsDevModel, ModelsDevProvider } from "./models-dev.ts";
+import { ModelsEnv } from "../models/env.ts";
 
 export type { ModelsDevModel as OpenCodeCatalogModel } from "./models-dev.ts";
 
@@ -78,7 +78,7 @@ export const currentOpenCodeCatalog: Effect.Effect<OpenCodeCatalog> = Effect.gen
   const now = yield* Clock.currentTimeMillis;
 
   if (cached !== undefined && now - cached.loadedAt < LOCAL_CACHE_MS) return cached.catalog;
-  const env = yield* Effect.serviceOption(WorkerEnv);
+  const env = yield* Effect.serviceOption(ModelsEnv);
 
   if (Option.isNone(env)) return embeddedModelsDev();
 

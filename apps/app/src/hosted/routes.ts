@@ -22,10 +22,11 @@ import {
 } from "@commissary/contract/sign-in";
 import { jsonReply } from "../management/http.ts";
 import { panelIndex } from "../management/web-panel.ts";
-import { WorkerEnv } from "../platform/env.ts";
 import { platformOf } from "../platform/registry.ts";
 import { emailDomain } from "../sso/domain.ts";
 import { providerIdOf } from "../sso/provider.ts";
+import { StateEnv } from "../state/env.ts";
+import { AppEnv } from "../worker-env.ts";
 import { AUTH_BASE_PATH, authConfigurationProblem, enabledProviders } from "./auth.ts";
 import { hostedOnly, routeNotFound } from "./only.ts";
 import { signedInAuth } from "./session.ts";
@@ -59,7 +60,7 @@ const SsoSignIn = Schema.Struct({ email: Schema.String });
 const NO_STORE = { "cache-control": "no-store" } as const;
 
 const configurationProblem = Effect.gen(function* () {
-  const env = yield* WorkerEnv;
+  const env = yield* AppEnv;
   const problem = authConfigurationProblem(env);
 
   if (problem === undefined) return undefined;
@@ -85,7 +86,7 @@ const passed = (method: string, path: string): boolean =>
  */
 const ssoSignInRequest = (request: Request, input: typeof SsoSignIn.Type) =>
   Effect.gen(function* () {
-    const env = yield* WorkerEnv;
+    const env = yield* StateEnv;
 
     if (input.email.length > MAX_EMAIL_LENGTH) return undefined;
     const email = input.email.trim().toLowerCase();
@@ -116,7 +117,7 @@ const ssoSignInRequest = (request: Request, input: typeof SsoSignIn.Type) =>
 const authRoute = hostedOnly(
   Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest;
-    const env = yield* WorkerEnv;
+    const env = yield* AppEnv;
     const url = new URL(request.originalUrl, "http://localhost");
 
     if (!passed(request.method, url.pathname)) return yield* routeNotFound;
@@ -186,8 +187,10 @@ const authRoute = hostedOnly(
       web = forwarded;
     }
 
+    const state = yield* StateEnv;
+
     const response = yield* Effect.tryPromise(async () =>
-      (await signedInAuth(env, url.origin)).handler(web),
+      (await signedInAuth(env, state, url.origin)).handler(web),
     ).pipe(
       Effect.catch((error) =>
         Effect.logError(`sign-in request failed: ${error.message}`).pipe(Effect.as(undefined)),
@@ -203,7 +206,7 @@ const authRoute = hostedOnly(
 /** `GET /api/sign-in-options`: the enabled providers and the Turnstile site key, for the sign-in page. */
 const signInOptions = hostedOnly(
   Effect.gen(function* () {
-    const env = yield* WorkerEnv;
+    const env = yield* AppEnv;
 
     const options: SignInOptions = {
       providers: [...enabledProviders(env)],

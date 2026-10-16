@@ -16,9 +16,10 @@ import { addressedSlug } from "../access/org-address.ts";
 import { AccessPrincipal } from "../access/principal.ts";
 import { PANEL_ORG_PREFIX, PANEL_SECTIONS } from "../access/routes.ts";
 import { isHosted } from "../hosted/mode.ts";
-import { WorkerEnv } from "../platform/env.ts";
 import { jsonReply } from "./http.ts";
 import { openableOrgs } from "./org-routes.ts";
+import { AuthConfig } from "../auth/config.ts";
+import { AppEnv } from "../worker-env.ts";
 
 export const PANEL_NOT_BUILT = "the control panel is not built; run `pnpm build`";
 
@@ -64,7 +65,7 @@ const PAGE_HEADERS = {
 /** The asset response; `undefined` when the binding throws. */
 const fetchAsset = (request: Request) =>
   Effect.gen(function* () {
-    const env = yield* WorkerEnv;
+    const env = yield* AppEnv;
 
     return yield* Effect.tryPromise({
       try: async () => await env.ASSETS.fetch(request),
@@ -122,7 +123,7 @@ export const webPanelPage = Effect.gen(function* () {
 /** The panel's `index.html` (the panel's router picks the page in the browser); `404` when the panel is not built. */
 export const panelIndex = Effect.gen(function* () {
   const url = yield* requestUrl;
-  const env = yield* WorkerEnv;
+  const auth = yield* AuthConfig;
 
   const asset = yield* fetchAsset(
     new Request(new URL("/", url), { headers: { accept: "text/html" } }),
@@ -138,7 +139,7 @@ export const panelIndex = Effect.gen(function* () {
 
   return HttpServerResponse.raw(asset.body, {
     status: 200,
-    headers: isHosted(env)
+    headers: isHosted(auth)
       ? { ...PAGE_HEADERS, "content-security-policy": HOSTED_PANEL_CSP }
       : PAGE_HEADERS,
   });

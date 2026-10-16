@@ -4,8 +4,8 @@
  */
 import { Effect } from "effect";
 import { HttpServerError, HttpServerRequest } from "effect/http";
-import { WorkerEnv } from "../platform/env.ts";
 import { isHosted } from "./mode.ts";
+import { AuthConfig } from "../auth/config.ts";
 
 /** Answers like a path the router does not know. */
 export const routeNotFound = Effect.gen(function* () {
@@ -19,7 +19,7 @@ export const routeNotFound = Effect.gen(function* () {
 /** Runs `handler` on Commissary Cloud only. */
 export const hostedOnly = <A, E, R>(handler: Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
-    const env = yield* WorkerEnv;
+    const env = yield* AuthConfig;
 
     return isHosted(env) ? yield* handler : yield* routeNotFound;
   });

@@ -16,7 +16,7 @@ export class SecretsKeyError extends Error {
   override readonly name = "SecretsKeyError";
 }
 
-/** The bindings the key check reads; each may be missing at runtime whatever `Env` says. */
+/** The bindings the key check reads; each may be missing at runtime whatever the env type says. */
 export interface SecretsKeyEnv {
   readonly SECRETS_KEY?: string | undefined;
   readonly SECRETS_KEY_PREVIOUS?: string | undefined;

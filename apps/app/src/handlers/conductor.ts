@@ -53,13 +53,14 @@ import type {
   ProviderExecutor,
 } from "../executor/types.ts";
 import type { Json } from "../json/index.ts";
-import { holdInvocation, WorkerEnv } from "../platform/env.ts";
+import { holdInvocation } from "../platform/env.ts";
 import { CurrentOrg, type OrgId } from "../platform/org.ts";
 import { noteSelection, notePrincipal, RequestTrace } from "../observability/trace.ts";
 import type { SessionRouting } from "../session-routing/routing.ts";
 import { UsageReporter } from "../usage/reporter.ts";
 import { priceForSpend, UsageSink } from "../usage/sink.ts";
 import { ModelCapabilities } from "./model-capabilities.ts";
+import { ModelsEnv } from "../models/env.ts";
 
 /** Upstream attempts (executor calls) allowed for one request. */
 export const MAX_UPSTREAM_ATTEMPTS = 16;
@@ -193,7 +194,7 @@ export interface Attempt {
   readonly finish: (
     error: ExecutionError | undefined,
     headers?: Headers,
-  ) => Effect.Effect<RequestScopedAction | undefined, never, WorkerEnv | CurrentOrg>;
+  ) => Effect.Effect<RequestScopedAction | undefined, never, ModelsEnv | CurrentOrg>;
 }
 
 export type ConductResult<T> =
@@ -419,7 +420,7 @@ export const conduct = <T, R>(
     /** Stored balance of a credential: `undefined` = unknown, otherwise whether it can pay (`creditsAvailable`). */
     const creditsBalance = (credentialId: string) =>
       Effect.gen(function* () {
-        const env = yield* WorkerEnv;
+        const env = yield* ModelsEnv;
         const org = yield* CurrentOrg;
 
         const record = yield* Effect.promise(() =>

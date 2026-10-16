@@ -14,21 +14,25 @@ import { ConfigReader } from "./config/reader.ts";
 import { refreshAntigravityModels } from "./executor/antigravity/models.ts";
 import { refreshAntigravityVersion } from "./executor/antigravity/version.ts";
 import { causeSummary } from "./observability/cause.ts";
-import { currentControlPlane, WorkerEnv, WorkerExecutionContext } from "./platform/env.ts";
+import { currentModelsControlPlane, type ModelsEnv } from "./models/env.ts";
+import { WorkerExecutionContext } from "./platform/env.ts";
 import { CurrentOrg, GLOBAL_ORG, type OrgId } from "./platform/org.ts";
 import { platform } from "./platform/registry.ts";
 import { runQuotaSweep } from "./quota/check.ts";
 import { CatalogStore } from "./registry/catalog-store.ts";
 import { refreshXaiClientVersion } from "./executor/xai/version.ts";
 import { refreshCatalogs } from "./registry/refresh.ts";
+import { currentControlPlane, type StateEnv } from "./state/env.ts";
 import { pruneExpiredUsage } from "./usage/retention.ts";
+import { envContext } from "./worker-env.ts";
 
 /** Services available to scheduled jobs (provided by {@link ScheduledLayer} and the invocation's bindings). */
 export type ScheduledServices =
   | HttpClient.HttpClient
   | ConfigReader
   | CatalogStore
-  | WorkerEnv
+  | StateEnv
+  | ModelsEnv
   | WorkerExecutionContext;
 
 export type ScheduledTask =
@@ -60,7 +64,7 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
     name: "devin-user-status",
     scope: "org",
     run: Effect.gen(function* () {
-      const plane = yield* currentControlPlane;
+      const plane = yield* currentModelsControlPlane;
 
       return yield* Effect.promise(() => plane.refreshDevinStatus());
     }),
@@ -83,7 +87,7 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
     name: "credential-refresh-sweep",
     scope: "org",
     run: Effect.gen(function* () {
-      const plane = yield* currentControlPlane;
+      const plane = yield* currentModelsControlPlane;
       yield* Effect.promise(() => plane.sweepRefresh());
     }),
   },
@@ -116,7 +120,7 @@ const isolated = <R>(
  * for `global`, the org every deployment has had since before orgs existed, so one failing object does not stop the
  * deployment's maintenance; the failure is logged.
  */
-export const registeredOrgs: Effect.Effect<ReadonlyArray<OrgId>, never, WorkerEnv> = platform(
+export const registeredOrgs: Effect.Effect<ReadonlyArray<OrgId>, never, StateEnv> = platform(
   "listOrgs",
   (stub) => stub.listOrgs(),
 ).pipe(
@@ -158,7 +162,7 @@ export const runScheduledTasks = (
     );
   }).pipe(
     Effect.provide(ScheduledLayer),
-    Effect.provideService(WorkerEnv, env),
+    Effect.provideContext(envContext(env)),
     Effect.provideService(WorkerExecutionContext, ctx),
     Effect.runPromise,
   );

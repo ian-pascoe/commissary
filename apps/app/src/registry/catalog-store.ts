@@ -7,13 +7,13 @@
  * stored text changes.
  */
 import { Clock, Context, Effect, Layer, Ref, Result, Schema } from "effect";
-import { WorkerEnv } from "../platform/env.ts";
 import {
   catalogsFromModelsDev,
   embeddedCatalogs,
   type ModelCatalogs,
   modelsDevFromText,
 } from "./catalog.ts";
+import { ModelsEnv } from "../models/env.ts";
 
 /** KV key of the refreshed models.dev document (trimmed JSON text) and of the last refresh report. */
 export const CATALOG_KEYS = {
@@ -107,9 +107,9 @@ export class CatalogStore extends Context.Service<
      * The active catalogs (cached per isolate, re-read from KV every minute). Never fails: KV errors keep the last
      * value. `embed` (`models.catalog` is `embed`) ignores the stored copy: the catalogs compiled into the Worker.
      */
-    readonly load: (embed: boolean) => Effect.Effect<ModelCatalogs, never, WorkerEnv>;
+    readonly load: (embed: boolean) => Effect.Effect<ModelCatalogs, never, ModelsEnv>;
     /** Raw stored models.dev text (for the refresh job, which compares against and replaces it). */
-    readonly stored: Effect.Effect<string | null, Error, WorkerEnv>;
+    readonly stored: Effect.Effect<string | null, Error, ModelsEnv>;
     /** Drops the isolate cache (after a refresh wrote a new text). */
     readonly invalidate: Effect.Effect<void>;
   }
@@ -120,7 +120,7 @@ export class CatalogStore extends Context.Service<
       const cache = yield* Ref.make<Cached | undefined>(undefined);
 
       const stored = Effect.gen(function* () {
-        const env = yield* WorkerEnv;
+        const env = yield* ModelsEnv;
 
         return yield* Effect.tryPromise({
           try: () => env.CACHE.get(CATALOG_KEYS.modelsDev),

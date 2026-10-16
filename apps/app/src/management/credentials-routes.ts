@@ -21,7 +21,6 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { AccessPrincipal } from "../access/principal.ts";
 import { isHosted } from "../hosted/mode.ts";
 import { holdsSensitivePowers } from "../members/roles.ts";
-import { WorkerEnv } from "../platform/env.ts";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { ModelRegistry } from "../registry/service.ts";
 import { currentViewer } from "./viewer.ts";
@@ -29,12 +28,13 @@ import {
   bodyJson,
   bodyObject,
   bodyText,
-  controlPlane,
   handled,
   jsonReply,
   queryParams,
   replyError,
 } from "./http.ts";
+import { AuthConfig } from "../auth/config.ts";
+import { modelsControlPlane } from "../models/env.ts";
 
 const text = (value: Json | undefined): string => (typeof value === "string" ? value.trim() : "");
 
@@ -87,7 +87,10 @@ const entryName = (entry: JsonObject): string => text(entry.name);
 const refuseConfigKey = (name: string) =>
   Effect.gen(function* () {
     const viewer = yield* currentViewer;
-    const config = yield* controlPlane("isConfigKey", (stub) => stub.isConfigKey(name, viewer));
+
+    const config = yield* modelsControlPlane("isConfigKey", (stub) =>
+      stub.isConfigKey(name, viewer),
+    );
 
     if (config) {
       return yield* replyError(409, "config_credential", {
@@ -111,7 +114,7 @@ const listCredentials = Effect.gen(function* () {
 
   const viewer = yield* currentViewer;
 
-  const entries = yield* controlPlane("listCredentialEntries", (stub) =>
+  const entries = yield* modelsControlPlane("listCredentialEntries", (stub) =>
     stub.listCredentialEntries(viewer),
   );
 
@@ -182,7 +185,7 @@ const storeUpload = (upload: Upload, wantPrivate: boolean) =>
     if (unsafeName(name)) return "invalid name";
     const viewer = yield* currentViewer;
 
-    const result = yield* controlPlane("importAuthFile", (stub) =>
+    const result = yield* modelsControlPlane("importAuthFile", (stub) =>
       stub.importAuthFile(name, upload.content, { private: wantPrivate }, viewer),
     );
 
@@ -321,7 +324,7 @@ const deleteCredentials = Effect.gen(function* () {
   if (all === "true" || all === "1" || all === "*") {
     const viewer = yield* currentViewer;
 
-    const entries = yield* controlPlane("listCredentialEntries", (stub) =>
+    const entries = yield* modelsControlPlane("listCredentialEntries", (stub) =>
       stub.listCredentialEntries(viewer),
     );
 
@@ -330,7 +333,7 @@ const deleteCredentials = Effect.gen(function* () {
       .filter((entry) => entry.source === "file" && entry.limited !== true)
       .map((entry) => text(entry.id));
 
-    const removed = yield* controlPlane("removeCredentials", (stub) =>
+    const removed = yield* modelsControlPlane("removeCredentials", (stub) =>
       stub.removeCredentials(ids, viewer),
     );
 
@@ -346,7 +349,7 @@ const deleteCredentials = Effect.gen(function* () {
   const safe = names.filter((name) => !unsafeName(name));
   const viewer = yield* currentViewer;
 
-  const removed = yield* controlPlane("removeCredentials", (stub) =>
+  const removed = yield* modelsControlPlane("removeCredentials", (stub) =>
     stub.removeCredentials(safe, viewer),
   );
 
@@ -363,7 +366,7 @@ const deleteCredentials = Effect.gen(function* () {
     (name) =>
       unsafeName(name)
         ? Effect.succeed({ name, error: "invalid name" })
-        : controlPlane("isConfigKey", (stub) => stub.isConfigKey(name, viewer)).pipe(
+        : modelsControlPlane("isConfigKey", (stub) => stub.isConfigKey(name, viewer)).pipe(
             Effect.map((config) => ({
               name,
               error: config ? "config_credential" : "auth file not found",
@@ -391,13 +394,13 @@ const downloadCredential = Effect.gen(function* () {
     });
 
   // On Commissary Cloud only platform admins download stored credentials, their owners included (ADR 0026).
-  if (isHosted(yield* WorkerEnv) && !identity.platformAdmin)
+  if (isHosted(yield* AuthConfig) && !identity.platformAdmin)
     return yield* replyError(403, "download_requires_platform_admin", {
       message: "on Commissary Cloud only a platform admin can download a credential file",
     });
 
   // A private credential is its owner's alone: not even an org admin with the sensitive powers downloads it.
-  const { access, private: isPrivate } = yield* controlPlane("credentialAccess", (stub) =>
+  const { access, private: isPrivate } = yield* modelsControlPlane("credentialAccess", (stub) =>
     stub.credentialAccess(name, viewer),
   );
 
@@ -416,7 +419,7 @@ const downloadCredential = Effect.gen(function* () {
 
   if (unsafeName(name)) return yield* replyError(400, "invalid name");
 
-  const file = yield* controlPlane("getCredentialFile", (stub) =>
+  const file = yield* modelsControlPlane("getCredentialFile", (stub) =>
     stub.getCredentialFile(name, viewer),
   );
 
@@ -446,7 +449,7 @@ const credentialModels = Effect.gen(function* () {
   // Auth files by id; config keys only by their `auth_index` (the name the list gives them): a config credential id is
   // derived from its key, so answering for one would confirm guesses. The models of a private credential are its
   // owner's to see, and of a shared one an org admin's.
-  const { access } = yield* controlPlane("credentialAccess", (stub) =>
+  const { access } = yield* modelsControlPlane("credentialAccess", (stub) =>
     stub.credentialAccess(name, viewer),
   );
 
@@ -457,7 +460,7 @@ const credentialModels = Effect.gen(function* () {
   const configId =
     file || !/^[0-9a-f]{16}$/i.test(name)
       ? undefined
-      : yield* controlPlane("credentialIdOfAuthIndex", (stub) =>
+      : yield* modelsControlPlane("credentialIdOfAuthIndex", (stub) =>
           stub.credentialIdOfAuthIndex(name.toLowerCase(), viewer),
         );
 
@@ -501,7 +504,7 @@ const patchStatus = Effect.gen(function* () {
   const { principalId } = yield* AccessPrincipal;
   const viewer = yield* currentViewer;
 
-  const result = yield* controlPlane("setCredentialDisabledByRef", (stub) =>
+  const result = yield* modelsControlPlane("setCredentialDisabledByRef", (stub) =>
     // SAFETY: typeof body.disabled === "boolean" was checked above; the narrowing is lost inside the callback.
     stub.setCredentialDisabledByRef(refOf(body), body.disabled as boolean, principalId, viewer),
   );
@@ -546,7 +549,7 @@ const patchFields = Effect.gen(function* () {
   const { name: _name, ...fields } = body;
   const viewer = yield* currentViewer;
 
-  const result = yield* controlPlane("patchCredentialFields", (stub) =>
+  const result = yield* modelsControlPlane("patchCredentialFields", (stub) =>
     stub.patchCredentialFields({ name }, fields, viewer),
   );
 
@@ -582,7 +585,7 @@ const refreshCredentials = Effect.gen(function* () {
   const viewer = yield* currentViewer;
 
   if (all) {
-    const results = yield* controlPlane("refreshAllCredentials", (stub) =>
+    const results = yield* modelsControlPlane("refreshAllCredentials", (stub) =>
       stub.refreshAllCredentials(viewer),
     );
 
@@ -594,7 +597,7 @@ const refreshCredentials = Effect.gen(function* () {
 
   if (name === "") return yield* replyError(400, "name or all=true is required");
 
-  const result = yield* controlPlane("refreshCredential", (stub) =>
+  const result = yield* modelsControlPlane("refreshCredential", (stub) =>
     stub.refreshCredential({ name, ...(authIndex === "" ? {} : { authIndex }) }, viewer),
   );
 
@@ -617,7 +620,7 @@ const resetCooldown = Effect.gen(function* () {
 
   const viewer = yield* currentViewer;
 
-  const result = yield* controlPlane("resetCredentialCooldown", (stub) =>
+  const result = yield* modelsControlPlane("resetCredentialCooldown", (stub) =>
     stub.resetCredentialCooldown({ authIndex }, viewer),
   );
 

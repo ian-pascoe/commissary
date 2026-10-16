@@ -38,9 +38,10 @@ import {
   ProbeRequest,
   PutGroupRequest,
 } from "@commissary/contract/provider-keys";
-import { bodyJson, controlPlane, handled, jsonReply, type Reply, replyError } from "./http.ts";
+import { bodyJson, handled, jsonReply, type Reply, replyError } from "./http.ts";
 import { storedConfig } from "./settings-routes.ts";
 import { currentViewer } from "./viewer.ts";
+import { modelsControlPlane } from "../models/env.ts";
 
 const BASE = "/v9/management/provider-keys";
 
@@ -129,7 +130,10 @@ const familyOf = (
  */
 const privateStoredConfig = Effect.gen(function* () {
   const viewer = yield* currentViewer;
-  const wire = yield* controlPlane("privateKeyConfig", (stub) => stub.privateKeyConfig(viewer));
+
+  const wire = yield* modelsControlPlane("privateKeyConfig", (stub) =>
+    stub.privateKeyConfig(viewer),
+  );
 
   if (!wire.ok)
     return yield* replyError(403, "private_credentials_unavailable", { message: wire.message });
@@ -146,7 +150,10 @@ const privateStoredConfig = Effect.gen(function* () {
 
 const list = Effect.gen(function* () {
   const viewer = yield* currentViewer;
-  const view = yield* controlPlane("providerKeysView", (stub) => stub.providerKeysView(viewer));
+
+  const view = yield* modelsControlPlane("providerKeysView", (stub) =>
+    stub.providerKeysView(viewer),
+  );
 
   return jsonReply(200, view);
 });
@@ -217,10 +224,10 @@ const putGroup = Effect.gen(function* () {
   };
 
   const result = asPrivate
-    ? yield* controlPlane("writePrivateKeyGroup", (stub) =>
+    ? yield* modelsControlPlane("writePrivateKeyGroup", (stub) =>
         stub.writePrivateKeyGroup(change, principalId, viewer),
       )
-    : yield* controlPlane("writeKeyGroup", (stub) => stub.writeKeyGroup(change, principalId));
+    : yield* modelsControlPlane("writeKeyGroup", (stub) => stub.writeKeyGroup(change, principalId));
 
   return yield* written(result);
 });
@@ -233,10 +240,12 @@ const deleteGroup = Effect.gen(function* () {
 
   const result =
     value.private === true || !viewer.admin
-      ? yield* controlPlane("writePrivateKeyGroup", (stub) =>
+      ? yield* modelsControlPlane("writePrivateKeyGroup", (stub) =>
           stub.writePrivateKeyGroup(change, principalId, viewer),
         )
-      : yield* controlPlane("writeKeyGroup", (stub) => stub.writeKeyGroup(change, principalId));
+      : yield* modelsControlPlane("writeKeyGroup", (stub) =>
+          stub.writeKeyGroup(change, principalId),
+        );
 
   return yield* written(result);
 });
@@ -249,7 +258,7 @@ const probe = Effect.gen(function* () {
 
   const viewer = yield* currentViewer;
 
-  const resolved = yield* controlPlane("providerKeyProbeTarget", (stub) =>
+  const resolved = yield* modelsControlPlane("providerKeyProbeTarget", (stub) =>
     stub.providerKeyProbeTarget(authIndex, viewer),
   );
 

@@ -3,8 +3,8 @@ import { Effect, Layer } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { encodeConfig, parseConfigYaml } from "../../src/config/codec.ts";
 import { ConfigReader, ConfigSource } from "../../src/config/reader.ts";
-import { WorkerEnv } from "../../src/platform/env.ts";
 import { CatalogStore } from "../../src/registry/catalog-store.ts";
+import { type EnvServices, envContext } from "../../src/worker-env.ts";
 
 export class FakeKv {
   readonly data = new Map<string, string>();
@@ -71,28 +71,30 @@ export interface FakeLease {
 
 export const fakeLease = (): FakeLease => ({ taken: [], released: [] });
 
-export const workerEnv = (kv: FakeKv, lease: FakeLease = fakeLease()): Layer.Layer<WorkerEnv> =>
-  Layer.succeed(WorkerEnv, {
-    CACHE: kv as unknown as KVNamespace,
-    PLATFORM: {
-      getByName: () => ({
-        takeCatalogRefreshLease: async (source: "cron" | "panel") => {
-          lease.taken.push(source);
+export const workerEnv = (kv: FakeKv, lease: FakeLease = fakeLease()): Layer.Layer<EnvServices> =>
+  Layer.succeedContext(
+    envContext({
+      CACHE: kv as unknown as KVNamespace,
+      PLATFORM: {
+        getByName: () => ({
+          takeCatalogRefreshLease: async (source: "cron" | "panel") => {
+            lease.taken.push(source);
 
-          if (lease.held !== undefined)
-            return {
-              ok: false,
-              held: { token: "other", ...lease.held, renewedAt: lease.held.startedAt },
-            };
+            if (lease.held !== undefined)
+              return {
+                ok: false,
+                held: { token: "other", ...lease.held, renewedAt: lease.held.startedAt },
+              };
 
-          return { ok: true, lease: { token: "tok", source, startedAt: 1, renewedAt: 1 } };
-        },
-        releaseCatalogRefreshLease: async (token: string) => {
-          lease.released.push(token);
-        },
-      }),
-    },
-  } as unknown as Env);
+            return { ok: true, lease: { token: "tok", source, startedAt: 1, renewedAt: 1 } };
+          },
+          releaseCatalogRefreshLease: async (token: string) => {
+            lease.released.push(token);
+          },
+        }),
+      },
+    } as unknown as Env),
+  );
 
 export const refreshLayer = (
   kv: FakeKv,

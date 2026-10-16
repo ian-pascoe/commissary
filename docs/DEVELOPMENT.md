@@ -187,7 +187,9 @@ assertion that cannot be removed carries a `// SAFETY: <invariant>` comment on t
 ## Conventions
 
 - Per-request Cloudflare `env` / `ctx` are passed as the `Context` argument of the web handler
-  (`handler(request, requestContext(env, ctx))`); routes read them via `yield* WorkerEnv`. Never capture them in a layer.
+  (`handler(request, requestContext(env, ctx))`); code reads the view of its package (`yield* AuthConfig`,
+  `StateEnv`, `ModelsEnv`, or `AppEnv` for code that stays in the Worker; `apps/app/src/worker-env.ts`), never the
+  global `Env`. Never capture them in a layer.
 - Add routes as `HttpRouter.add(...)` layers and merge them into `AppLayer` in `apps/app/src/http/app.ts`.
 - Never log tokens, API keys, JWTs or bodies; use `redactHeaders` when headers must be logged.
 - No wall-clock sleeps in tests; use Effect `TestClock` or injected clocks.

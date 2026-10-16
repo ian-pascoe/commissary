@@ -4,7 +4,7 @@ import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { env } from "cloudflare:workers";
 import { afterAll, describe, expect, it } from "vitest";
 import { makeWebHandler } from "../src/http/app.ts";
-import { requestContext } from "../src/platform/env.ts";
+import { requestContext } from "../src/worker-env.ts";
 import { claudeFile, resetControlPlane } from "./support/management.ts";
 
 const app = makeWebHandler();
