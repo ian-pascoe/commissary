@@ -40,52 +40,19 @@ const normalizeTeamHost = (raw: string): string | undefined => {
   return host.includes(".") ? host : `${host}.cloudflareaccess.com`;
 };
 
-/**
- * The variables that name the platform admins: `PLATFORM_ADMIN_EMAILS` / `PLATFORM_ADMIN_SERVICE_TOKENS`, and the
- * deprecated `ACCESS_ADMIN_EMAILS` / `ACCESS_ADMIN_SERVICE_TOKENS` they replace (ADR 0022), still read as aliases so a
- * deployment upgrades without changing its settings.
- */
+/** The variables that name the platform admins: `PLATFORM_ADMIN_EMAILS` / `PLATFORM_ADMIN_SERVICE_TOKENS` (ADR 0022). */
 export type PlatformAdminEnv = Partial<
-  Pick<
-    Env,
-    | "PLATFORM_ADMIN_EMAILS"
-    | "PLATFORM_ADMIN_SERVICE_TOKENS"
-    | "ACCESS_ADMIN_EMAILS"
-    | "ACCESS_ADMIN_SERVICE_TOKENS"
-  >
+  Pick<Env, "PLATFORM_ADMIN_EMAILS" | "PLATFORM_ADMIN_SERVICE_TOKENS">
 >;
 
 /**
- * The platform admins named by the deployment (emails lowercased): the union of the `PLATFORM_ADMIN_*` variables and
- * their deprecated `ACCESS_ADMIN_*` aliases. They need no stored state, so they can always repair the Platform registry
- * or any org.
+ * The platform admins named by the deployment (emails lowercased). They need no stored state, so they can always
+ * repair the Platform registry or any org.
  */
 export const platformAdminLists = (env: PlatformAdminEnv): AdminLists => ({
-  adminEmails: new Set(
-    [...splitList(env.PLATFORM_ADMIN_EMAILS), ...splitList(env.ACCESS_ADMIN_EMAILS)].map((email) =>
-      email.toLowerCase(),
-    ),
-  ),
-  adminServiceTokens: new Set([
-    ...splitList(env.PLATFORM_ADMIN_SERVICE_TOKENS),
-    ...splitList(env.ACCESS_ADMIN_SERVICE_TOKENS),
-  ]),
+  adminEmails: new Set(splitList(env.PLATFORM_ADMIN_EMAILS).map((email) => email.toLowerCase())),
+  adminServiceTokens: new Set(splitList(env.PLATFORM_ADMIN_SERVICE_TOKENS)),
 });
-
-/** The deprecated variables (`ACCESS_ADMIN_*`) a deployment still sets, to be renamed to `PLATFORM_ADMIN_*`. */
-export const deprecatedAdminVariables = (env: PlatformAdminEnv): ReadonlyArray<string> =>
-  (
-    [
-      ["ACCESS_ADMIN_EMAILS", "PLATFORM_ADMIN_EMAILS", env.ACCESS_ADMIN_EMAILS],
-      [
-        "ACCESS_ADMIN_SERVICE_TOKENS",
-        "PLATFORM_ADMIN_SERVICE_TOKENS",
-        env.ACCESS_ADMIN_SERVICE_TOKENS,
-      ],
-    ] as const
-  ).flatMap(([old, current, value]) =>
-    splitList(value).length > 0 ? [`${old} (now ${current})`] : [],
-  );
 
 type AccessEnv = Pick<Env, "ACCESS_TEAM_DOMAIN" | "ACCESS_AUD"> & PlatformAdminEnv;
 

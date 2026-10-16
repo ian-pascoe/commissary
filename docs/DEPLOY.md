@@ -207,13 +207,9 @@ the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --pro
   add one yourself.
 - **Platform registry and orgs.** The `Platform` Durable Object (the list of orgs, ADR 0021) is a new class that the
   next deploy adds; its tables are created on first use, so there is no migration to run, and the org `global` (slug
-  `default`) exists from the start with everything the deployment stored before. Nothing has to change in `.env` or
-  in GitHub: `ACCESS_ADMIN_EMAILS` and `ACCESS_ADMIN_SERVICE_TOKENS` are still read, as aliases of
-  `PLATFORM_ADMIN_EMAILS` and `PLATFORM_ADMIN_SERVICE_TOKENS`, and the Worker logs a warning until they are renamed
-  (rename them in `.env` and, for CI, in the GitHub variables: `pnpm ci:setup` writes the new name). The addresses of the
+  `default`) exists from the start with everything the deployment stored before. The addresses of the
   panel and the management API without an org keep meaning `global`; the panel at `/` then redirects to `/o/default/`
-  (see [ACCESS.md](ACCESS.md#platform-admins-and-orgs)). The model catalog's refresh lease moved to the registry; an
-  unreleased one in the old place only expires.
+  (see [ACCESS.md](ACCESS.md#platform-admins-and-orgs)).
 - **State.** Deploys use the Alchemy state store in the account (`Cloudflare.state()`), shared by CI and local
   machines; `deploy --yes` also upgrades the state store when Alchemy needs a newer version.
 - **Concurrency.** One deploy per stage at a time, never cancelled midway; a newer push to `main` waits for the

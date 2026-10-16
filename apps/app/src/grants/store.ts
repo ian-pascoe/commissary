@@ -3,9 +3,8 @@
  * counter and the seeded flag).
  *
  * The first time a ControlPlane constructs this store it writes the default grant ("everyone, every shared credential,
- * every model") and sets `seeded`. That is both the new-org path and the upgrade path: an org that existed before
- * grants has no `grant_state` row, gets the default grant once, and so keeps what its members could always do. An org
- * admin who deletes the default grant is not given it back: `seeded` stays set.
+ * every model") and sets `seeded`. An org admin who deletes the default grant is not given it back: `seeded` stays
+ * set.
  *
  * Every write names the revision it is based on (0 to create), like price overrides; a stale revision is a `conflict`.
  */
@@ -156,7 +155,7 @@ export class GrantStore {
     this.#seed();
   }
 
-  /** Writes the default grant the first time only (a new org, or an org that existed before grants). */
+  /** Writes the default grant the first time only (a new org). */
   #seed(): void {
     this.#transaction(() => {
       if (this.#sql.exec(`SELECT id FROM grant_state WHERE id = 1`).toArray().length > 0) return;

@@ -130,8 +130,6 @@ jobs:
       ACCESS_ALLOW_EMAILS: ${{ vars.ACCESS_ALLOW_EMAILS }}
       ACCESS_ALLOW_EMAIL_DOMAINS: ${{ vars.ACCESS_ALLOW_EMAIL_DOMAINS }}
       PLATFORM_ADMIN_EMAILS: ${{ vars.PLATFORM_ADMIN_EMAILS }}
-      # Deprecated alias of PLATFORM_ADMIN_EMAILS: read until the variable is renamed.
-      ACCESS_ADMIN_EMAILS: ${{ vars.ACCESS_ADMIN_EMAILS }}
       ACCESS_ALLOW_SERVICE_TOKEN_IDS: ${{ vars.ACCESS_ALLOW_SERVICE_TOKEN_IDS }}
       ACCESS_SESSION_DURATION: ${{ vars.ACCESS_SESSION_DURATION }}
       # Rotation of the secrets key (docs/DEPLOY.md); unset means generation 1 and no rotation.

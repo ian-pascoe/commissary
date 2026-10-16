@@ -35,7 +35,6 @@ export class Platform extends DurableObject<Env> {
     super(ctx, env);
     this.#store = new PlatformStore(ctx.storage.sql);
 
-    // The shared catalog's refresh lease lived in the ControlPlane of `global` before the registry existed.
     this.#catalogLease = new SweepLeaseStore(
       ctx.storage.sql,
       () => Date.now(),

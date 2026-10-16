@@ -81,15 +81,14 @@ Need IdP groups, device posture or other rules? Extend the policies in `infra/ac
 
 Set by the deploy from the settings above (Alchemy binds them as plain-text variables):
 
-| Variable                                             | Meaning                                                                                               |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `ACCESS_TEAM_DOMAIN`                                 | `myteam`, `myteam.cloudflareaccess.com` or `https://myteam.cloudflareaccess.com` (issuer + JWKS host) |
-| `ACCESS_AUD`                                         | AUD tag(s) of the application(s), comma separated                                                     |
-| `PLATFORM_ADMIN_EMAILS`                              | Platform admins: manage every org and create orgs (comma/space separated, case-insensitive)           |
-| `PLATFORM_ADMIN_SERVICE_TOKENS`                      | Service token **Client IDs** that are platform admins (the full `….access` id)                        |
-| `ACCESS_ADMIN_EMAILS`, `ACCESS_ADMIN_SERVICE_TOKENS` | Deprecated names of the two above: still read and merged with them, and logged once as a warning      |
-| `ACCESS_DEV_BYPASS`                                  | Set only by `alchemy dev` (local development); empty on deployed Workers                              |
-| `AUTH_INDEX_KEY`                                     | Secret (`secret_text`) HMAC key of `auth_index`: minted by the deploy, not a setting (below)          |
+| Variable                        | Meaning                                                                                               |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `ACCESS_TEAM_DOMAIN`            | `myteam`, `myteam.cloudflareaccess.com` or `https://myteam.cloudflareaccess.com` (issuer + JWKS host) |
+| `ACCESS_AUD`                    | AUD tag(s) of the application(s), comma separated                                                     |
+| `PLATFORM_ADMIN_EMAILS`         | Platform admins: manage every org and create orgs (comma/space separated, case-insensitive)           |
+| `PLATFORM_ADMIN_SERVICE_TOKENS` | Service token **Client IDs** that are platform admins (the full `….access` id)                        |
+| `ACCESS_DEV_BYPASS`             | Set only by `alchemy dev` (local development); empty on deployed Workers                              |
+| `AUTH_INDEX_KEY`                | Secret (`secret_text`) HMAC key of `auth_index`: minted by the deploy, not a setting (below)          |
 
 Empty `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` fails closed: protected routes answer 500. Past Access, what a principal may do
 depends on its role in the org it reaches ("Members, roles and teams" below): a principal with no role there gets 403.
@@ -117,8 +116,7 @@ and mean `global`, so existing scripts and bookmarks are unchanged. `/` opens th
 and asks which one to open when there are several (`/?choose` always asks, to create an org). A person's login and API keys
 are unaffected: clients reach their org with their key, not with the address.
 
-Renaming `ACCESS_ADMIN_*` to `PLATFORM_ADMIN_*` is the only settings change an upgrade asks for, and it can wait: the old names are
-merged with the new ones. A rename of an org's slug breaks the old address, not the org's data (stored under its permanent id).
+A rename of an org's slug breaks the old address, not the org's data (stored under its permanent id).
 
 ### Members, roles and teams
 
@@ -158,7 +156,7 @@ the Worker asks on every request: a removed member, or a member whose role was l
 
 - **Grants** (ADR 0023): a member uses a shared credential only through a grant (a member, a team or everyone; one
   account, every account of a provider or all of them; model patterns). Access is the union of the grants that name the
-  member; there is no deny. A new org, and every org that existed before grants, starts with the grant "everyone, all
+  member; there is no deny. Every org starts with the grant "everyone, all
   shared credentials, every model": delete it and add narrower ones to restrict. A model a member has no grant for answers
   `400 model_not_found`, like an unknown model, and is left out of their model lists; a request without a member (a service
   token) is served by the grants for everyone only. Private credentials are never granted: they are their owner's alone.
@@ -252,14 +250,10 @@ upgraded deployment's `cloudflared` clients keep working), `GET /membership` of 
 setting it there answers `422 access_clients_global_only`. Every other org takes API keys only. An API key always wins: a request with a key is judged by the key alone. Moving clients:
 [MIGRATION.md](MIGRATION.md#5-move-clients-to-api-keys).
 
-**Upgrading from config admin lists.** Before members, `global` was also managed by the config document's
-`access.admin-emails` and `access.admin-service-tokens`. The first time an org's ControlPlane is used after the upgrade, those
-lists become members of `global`, once: the platform admins of the time become org owners, `access.admin-emails` org admins and
-`access.admin-service-tokens` service tokens with the owner role (they could download credentials before). The lists then leave
-the config, `GET /settings` no longer shows them, and a Go config document imported later has its `access.admin-*` keys ignored
-(`not_applied`). In any other org the lists never granted anything and are only removed. The platform admins become stored
-owners of `global` even when the lists were empty: taking an email out of `PLATFORM_ADMIN_EMAILS` later ends its platform admin
-rights but not its `global` membership, which an org owner removes on the Members page (`DELETE /members/<id>`).
+**Platform admins in `global`.** The first time `global` is used, the emails in `PLATFORM_ADMIN_EMAILS` become org owners of
+it, so a platform admin has a member id there (API keys, private credentials) without adding themselves. Taking an email out
+of `PLATFORM_ADMIN_EMAILS` later ends its platform admin rights but not its `global` membership, which an org owner removes
+on the Members page (`DELETE /members/<id>`).
 
 `ACCESS_DEV_BYPASS` only applies to requests whose host is `localhost`, `127.0.0.1` or `[::1]`, and is refused (with a logged
 warning) whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set: a Worker wired to Access never skips it.
@@ -375,8 +369,7 @@ put a server-side client in between.
 Commissary keeps as little as it can and deletes at once; there is no grace period, no soft delete and no restore.
 
 - **Usage records** keep an upstream failure's status, type and code but not its body, and are pruned after the org's
-  **retention period** (`usage_retention_days`, in days; `null` keeps them). A new org starts at 90 days; `global` and
-  every org that existed before keep records until an org admin sets a period, so upgrading deletes no history. The cron
+  **retention period** (`usage_retention_days`, in days; `null` keeps them). A new org starts at 90 days; `global` keeps records until an org admin sets a period. The cron
   task `usage-retention` applies each org's period.
 - **Removing a member** (`DELETE /members/<id>`) deletes their API keys, private accounts and provider key groups, the
   OAuth logins they started in that org, and their Spend limits and counters and those of their API keys.

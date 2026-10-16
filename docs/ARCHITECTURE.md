@@ -177,9 +177,8 @@ client -> Cloudflare Access -> Worker
   (`schema.ts`, kebab-case keys as in YAML). `codec.ts` imports YAML/JSON (v8, legacy flat layout and historical v8
   spellings, see `document.ts`), validates, normalises (`normalize.ts`, port of the Go `Sanitize*` functions) and
   encodes it back to the v8 layout (`encodeConfig`, which config entries are made of). The schema still decodes
-  `access.admin-emails` and `access.admin-service-tokens` (a Workers addition from before members) so an old stored document
-  can be migrated, but they are no settings: an import lists them as `not_applied`, and a ControlPlane that stored them
-  hands them to the members migration once (see "Members, roles and teams").
+  `access.admin-emails` and `access.admin-service-tokens` so a document that carries them imports, but they are no
+  settings: an import lists them as `not_applied` (org members and roles replace them, see "Members, roles and teams").
   Keys that are accepted but have no effect on Workers are listed in `config/not-applied.ts` with a one-line reason (and
   MIGRATION.md); the import names them in its answer (`not_applied`) and stores none of them (ADR 0025), so the Settings
   view carries no such list. `requests.proxy-url` is accepted but ignored. Unknown/inapplicable keys are dropped on import.
@@ -728,8 +727,7 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
     by its 30 s timeout so it is not renewed). The cron task and the panel therefore never download at once, in whichever
     isolates they run; the second gets `running` without a request being made. The invocation is held open with
     `waitUntil` until the lease is given back. A Platform registry that cannot be reached fails the refresh (exclusivity
-    cannot be shown); `embed` and `disabled` need no lease. The lease used to live in `global`'s ControlPlane
-    (an unreleased lease there simply expires; the stale table is left unread).
+    cannot be shown); `embed` and `disabled` need no lease.
 - **Catalog status and on-demand refresh** (`management/catalog-routes.ts`, `@commissary/contract/catalog`; no Go counterpart):
   `GET /v9/management/models/catalog` answers `{mode, source_host?, source_problem?, stored, refreshed_at?, last_attempt?,
   models}`: the `models.catalog` mode (`official`, `embed`, `disabled`, `custom` with the host of the address, never the
@@ -1542,8 +1540,7 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   model, with a revision like every entry) so a Go-document import, which replaces the other entry tables, leaves them
   alone; the table is created idempotently with the rest of the schema. Rates must be finite, from 0 to 100,000.
 - **Retention** (`retention.ts`, cron task `usage-retention`, ADR 0027): deletes each org's records older than that org's
-  `usage_retention_days` (a column of the Platform registry's `orgs` table, added idempotently when the registry starts;
-  `null` keeps them; new orgs start at 90, `global` and existing orgs at `null`) in bounded batches (a deployment-wide cron
+  `usage_retention_days` (a column of the Platform registry's `orgs` table; `null` keeps them; new orgs start at 90, `global` at `null`) in bounded batches (a deployment-wide cron
   task). The deployment variable `USAGE_RETENTION_DAYS` (default 30) is gone: the period belongs to the org and an org admin
   sets it (`PATCH /org`). `usage-statistics-enabled` and `redis-usage-queue-retention-seconds` are not used:
   persistence is always on when the `USAGE` binding exists.
@@ -2010,7 +2007,7 @@ error codes are in `docs/ACCESS.md` "Members, roles and teams".
 
 - **Store** (`members/store.ts` `MemberStore`, in each org's ControlPlane, SQLite, tables `CREATE IF NOT EXISTS`): `members`
   (permanent `mem-…` id, lowercased unique email, role, who added them), `teams` and `team_members`, `service_tokens` (Client
-  ID, name, role) and one `membership` row (auto-join, whether the admin lists were migrated, a change counter and the
+  ID, name, role) and one `membership` row (auto-join, whether the platform admins were seeded, a change counter and the
   change the registry's index holds) and the org setting `private_credentials` (members may connect private credentials: `1`
   for `global`, `0` for a new org unless `POST /orgs` chose it (that route sets it in the new org's ControlPlane first and
   creates the org in the registry second, so a failure creates nothing and an existing org never has another setting than
@@ -2038,11 +2035,11 @@ error codes are in `docs/ACCESS.md` "Members, roles and teams".
   (`syncOrgIndex`: `membershipIndex` → `replaceOrgIndex` → `markIndexSynced(counter)`), and admission retries a push that
   failed. A service token belongs to one org: registering one the registry indexes for another org answers
   `409 service_token_taken`.
-- **Migration** (`members/migration.ts`, once per ControlPlane, before member calls, a settings write or a config import): the
-  config admin lists of `global` become members in one transaction with their removal from the config: the platform
-  admins of the time owners, `access.admin-emails` admins, `access.admin-service-tokens` owner service tokens. A stored
-  document from before config entries keeps its admin lists as entries until then. In any other org the lists are only
-  removed.
+- **Platform admins in `global`** (`MemberStore.seedPlatformAdmins`, once per ControlPlane, before member calls): the first time `global` is used, the emails in `PLATFORM_ADMIN_EMAILS` become org owners
+  of it, so a platform admin has a member id there (API keys, private credentials) without adding themselves; another
+  org only records that it ran (the stored flag is the `membership` column `admins_migrated`, and the rows say
+  `added_by = "migration"`, names kept so stages that stored them do not seed again). Taking an email out of the variable
+  later ends its platform admin rights but not its `global` membership.
 
 ## Grants (`src/grants/`, `src/management/grant-routes.ts`)
 
@@ -2058,10 +2055,10 @@ credentials a subject may use; selection and the model registry read it (_Creden
   store keeps a counter that moves with every grant write and with every change of who is on a team
   (`membershipChanged`, called by the ControlPlane's team writes). A grant for a member or team the org does not have is
   refused, and removing a member or deleting a team deletes the grants that name them in the same call.
-- **Default grant and upgrade** (`GrantStore`'s constructor): the first time a ControlPlane constructs the store it writes
-  "everyone, all shared credentials, `*`" and records that in `grant_state`, in one transaction. A new org and every org that
-  existed before grants (`global` included) therefore start with it and nothing changes for them until an org admin deletes
-  it; deleting it is not undone by a later start (`grant_state` says it was seeded).
+- **Default grant** (`GrantStore`'s constructor): the first time a ControlPlane constructs the store it writes
+  "everyone, all shared credentials, `*`" and records that in `grant_state`, in one transaction. Every org (`global`
+  included) therefore starts with it until an org admin deletes it; deleting it is not undone by a later start
+  (`grant_state` says it was seeded).
 - **Reach** (`grants/reach.ts`): the union of the grants that name a holder (`everyone`, their member id, their
   teams). `unrestricted` when a grant for all credentials gives `*`; `coversAll(credential)` when one grant gives `*` on
   the credential; `permits(credential, upstreamModel)` otherwise. There is no deny. `reachFromTable(table, memberId)`
@@ -2194,8 +2191,7 @@ prices each attempt, the ControlPlane counts and decides.
   Go `userApiKey` for usage records and the `caller_scope` hash used to isolate session state.
 - Past Access, every protected request needs a role in its org (see "Members, roles and teams"): the
   `PLATFORM_ADMIN_EMAILS`/`PLATFORM_ADMIN_SERVICE_TOKENS` variables name the **platform admins**, owners of every org (checked
-  first, no I/O, so one can always repair an org and the registry; the deprecated `ACCESS_ADMIN_EMAILS`/
-  `ACCESS_ADMIN_SERVICE_TOKENS` are merged in as aliases and logged once as a warning); anyone else is admitted by the org's
+  first, no I/O, so one can always repair an org and the registry); anyone else is admitted by the org's
   ControlPlane. The route's policy (`access/policy.ts`) names the role it needs.
 - Cross-site protections (`access/csrf.ts`, before authentication; new in the port because the Access session cookie is sent by
   browsers automatically): state-changing requests are refused on protected and management zones when `Sec-Fetch-Site` is

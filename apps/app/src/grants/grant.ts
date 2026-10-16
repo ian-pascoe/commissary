@@ -65,7 +65,7 @@ export interface GrantTable {
 /** The pattern of the default grant: every model. */
 export const ALL_MODELS = "*";
 
-/** The default grant of a new org, and of every org that existed before grants (ADR 0023). */
+/** The default grant of a new org (ADR 0023). */
 export const DEFAULT_GRANT: GrantValue = {
   subject: { kind: "everyone" },
   scope: { kind: "all" },

@@ -1,12 +1,8 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Effect, Logger } from "effect";
+import { Effect } from "effect";
 import { TestClock } from "effect/testing";
 import { expect } from "vitest";
-import {
-  authenticateRequest,
-  resetAccessWarnings,
-  warnDeprecatedAdminVariables,
-} from "../src/access/authenticate.ts";
+import { authenticateRequest } from "../src/access/authenticate.ts";
 import { devBypass, devBypassEmail, isAdmin, loadAccessConfig } from "../src/access/config.ts";
 import { JWKS_REFRESH_COOLDOWN_MS } from "../src/access/jwks.ts";
 import { callerScope, makeIdentity, principalId } from "../src/access/principal.ts";
@@ -596,90 +592,6 @@ describe("authenticateRequest and orgs", () => {
         assert.strictEqual(alice.org, GLOBAL_ORG);
       }),
     ),
-  );
-});
-
-describe("ACCESS_ADMIN_* aliases", () => {
-  const legacyEnv = {
-    ...env,
-    ACCESS_TEAM_DOMAIN: "team",
-    ACCESS_AUD: AUD,
-    PLATFORM_ADMIN_EMAILS: "",
-    PLATFORM_ADMIN_SERVICE_TOKENS: "",
-    ACCESS_ADMIN_EMAILS: "Old@Example.com",
-    ACCESS_ADMIN_SERVICE_TOKENS: "old.access",
-  };
-
-  it.effect("still make admins, together with PLATFORM_ADMIN_*", () =>
-    Effect.gen(function* () {
-      const loaded = yield* loadAccessConfig({
-        ...legacyEnv,
-        PLATFORM_ADMIN_EMAILS: "new@example.com",
-        PLATFORM_ADMIN_SERVICE_TOKENS: "new.access",
-      });
-
-      for (const email of ["old@example.com", "NEW@example.com"])
-        assert.isTrue(isAdmin(loaded, { kind: "user", email, sub: "" }), email);
-
-      for (const commonName of ["old.access", "new.access"])
-        assert.isTrue(isAdmin(loaded, { kind: "service", commonName }), commonName);
-
-      assert.isFalse(isAdmin(loaded, { kind: "user", email: "other@example.com", sub: "" }));
-    }),
-  );
-
-  it.effect("make a platform admin of a request", () =>
-    withJwks(
-      makeFakeJwks([keyA]),
-      Effect.gen(function* () {
-        const headers = {
-          "cf-access-jwt-assertion": yield* token(keyA, { claims: userClaims("old@example.com") }),
-        };
-
-        const identity = yield* authenticateRequest(
-          headers,
-          "https://commissary.test/v9/management/config",
-          "management",
-        );
-
-        assert.isTrue(identity.platformAdmin);
-      }).pipe(Effect.provideContext(requestContext(legacyEnv, {} as unknown as ExecutionContext))),
-    ),
-  );
-
-  it.effect("are reported once, with the names to use", () =>
-    Effect.gen(function* () {
-      const lines: Array<string> = [];
-
-      const capture = Logger.layer([
-        Logger.make(({ logLevel, message }) => {
-          lines.push(`${logLevel}: ${[message].flat().map(String).join(" ")}`);
-        }),
-      ]);
-
-      resetAccessWarnings();
-
-      yield* Effect.gen(function* () {
-        yield* warnDeprecatedAdminVariables(legacyEnv);
-        yield* warnDeprecatedAdminVariables(legacyEnv);
-      }).pipe(Effect.provide(capture));
-
-      assert.strictEqual(lines.length, 1);
-      assert.include(lines[0], "Warn");
-      assert.include(lines[0], "ACCESS_ADMIN_EMAILS (now PLATFORM_ADMIN_EMAILS)");
-      assert.include(lines[0], "ACCESS_ADMIN_SERVICE_TOKENS (now PLATFORM_ADMIN_SERVICE_TOKENS)");
-
-      // A deployment that renamed them is not told anything.
-      resetAccessWarnings();
-      lines.length = 0;
-
-      yield* warnDeprecatedAdminVariables({
-        PLATFORM_ADMIN_EMAILS: "new@example.com",
-        ACCESS_ADMIN_EMAILS: "",
-      }).pipe(Effect.provide(capture));
-
-      assert.deepStrictEqual(lines, []);
-    }),
   );
 });
 

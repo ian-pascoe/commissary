@@ -1,5 +1,5 @@
-// Deploy settings (infra/settings.ts): the platform admins (PLATFORM_ADMIN_* and the deprecated ACCESS_ADMIN_* names
-// they replace, which a deployment may still set), the secrets key generations and Commissary Cloud's settings.
+// Deploy settings (infra/settings.ts): the platform admins (PLATFORM_ADMIN_*), the secrets key generations and
+// Commissary Cloud's settings.
 import { assert, describe, it } from "@effect/vitest";
 import { ConfigProvider, Effect, Logger, Redacted } from "effect";
 import { readSettings } from "../../../infra/settings.ts";
@@ -31,28 +31,6 @@ describe("platform admin settings", () => {
       assert.deepStrictEqual(settings.adminEmails, ["a@x.com", "b@x.com"]);
       assert.deepStrictEqual(settings.adminServiceTokens, ["ops"]);
       assert.deepStrictEqual(warnings, []);
-    }),
-  );
-
-  it.effect("still reads ACCESS_ADMIN_*, merged with the new names and with a warning each", () =>
-    Effect.gen(function* () {
-      const { settings, warnings } = yield* read({
-        PLATFORM_ADMIN_EMAILS: "new@x.com",
-        ACCESS_ADMIN_EMAILS: "old@x.com new@x.com",
-        ACCESS_ADMIN_SERVICE_TOKENS: "legacy",
-      });
-
-      assert.deepStrictEqual(settings.adminEmails, ["new@x.com", "old@x.com"]);
-      assert.deepStrictEqual(settings.adminServiceTokens, ["legacy"]);
-      assert.strictEqual(warnings.length, 2);
-      assert.include(
-        warnings[0],
-        "ACCESS_ADMIN_EMAILS is deprecated: rename it to PLATFORM_ADMIN_EMAILS",
-      );
-      assert.include(
-        warnings[1],
-        "ACCESS_ADMIN_SERVICE_TOKENS is deprecated: rename it to PLATFORM_ADMIN_SERVICE_TOKENS",
-      );
     }),
   );
 });

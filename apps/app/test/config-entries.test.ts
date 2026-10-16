@@ -87,7 +87,7 @@ describe("config import", () => {
     const result = await controlPlane().importConfig(JSON.stringify(DOCUMENT), "test");
 
     expect(result).toMatchObject({ ok: true });
-    // The admin lists are members now (`members/migration.ts`): an import names them as not applied.
+    // Org members and roles replace the config admin lists: an import names them as not applied.
     expect(result.ok && result.notApplied).toEqual([
       "access.api-keys",
       "access.admin-emails",
@@ -181,9 +181,8 @@ describe("migration of a stored config document", () => {
     });
 
     const snapshot = await stub.getConfig();
-    // The change counter continues after the document's version, so every cached view is rebuilt; the members
-    // migration then takes the document's admin list out of the config (one more change).
-    expect(snapshot.version).toBe(43);
+    // The change counter continues after the document's version, so every cached view is rebuilt.
+    expect(snapshot.version).toBe(42);
     const after = decoded(snapshot.document);
     expect(comparable(after)).toEqual(comparable(before));
     expect(configKeyIds(after, { includeDisabledGroups: true })).toEqual(
@@ -219,7 +218,7 @@ describe("migration of a stored config document", () => {
     });
 
     // Idempotent: the next start finds the entries and imports nothing again.
-    expect((await stub.getConfig()).version).toBe(43);
+    expect((await stub.getConfig()).version).toBe(42);
   });
 
   it("starts empty without a stored document", async () => {

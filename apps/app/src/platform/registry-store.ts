@@ -9,9 +9,9 @@
  * existed before orgs, so upgrading needs no settings and moves no data.
  *
  * An org also has its usage retention period here (`usage_retention_days`, ADR 0027), the one org setting the scheduled
- * usage job reads for every org at once: a number of days, or NULL for none (keep records forever). The column is added
- * on start when it is missing, so every org that existed before it starts with none and an upgrade deletes no history;
- * an org created afterwards gets {@link DEFAULT_USAGE_RETENTION_DAYS}. Removing an org or a person deletes their rows.
+ * usage job reads for every org at once: a number of days, or NULL for none (keep records forever). `global` starts
+ * with none; an org created afterwards gets {@link DEFAULT_USAGE_RETENTION_DAYS}. Removing an org or a person deletes
+ * their rows.
  *
  * Commissary Cloud (ADR 0026) also keeps its people here: who signed up (and the Personal org they got), how many orgs
  * each may own, and who a platform admin suspended; orgs record who created them and whether they are suspended.
@@ -219,7 +219,8 @@ export class PlatformStore {
          id TEXT PRIMARY KEY,
          slug TEXT NOT NULL UNIQUE,
          name TEXT NOT NULL,
-         created_at INTEGER NOT NULL
+         created_at INTEGER NOT NULL,
+         usage_retention_days INTEGER
        )`,
     );
     sql.exec(
@@ -230,15 +231,6 @@ export class PlatformStore {
        )`,
     );
     sql.exec(`CREATE INDEX IF NOT EXISTS org_members_by_org ON org_members (org_id)`);
-
-    // The retention period came after the table: an org stored without it keeps its records (NULL), as before.
-    if (
-      !sql
-        .exec<{ name: string }>(`PRAGMA table_info(orgs)`)
-        .toArray()
-        .some((column) => column.name === "usage_retention_days")
-    )
-      sql.exec(`ALTER TABLE orgs ADD COLUMN usage_retention_days INTEGER`);
 
     sql.exec(
       `CREATE TABLE IF NOT EXISTS org_service_tokens (

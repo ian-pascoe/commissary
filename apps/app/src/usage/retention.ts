@@ -1,7 +1,7 @@
 /**
  * Usage retention cron job (ADR 0027): deletes the usage records older than each org's retention period. An org's period
- * is a number of days in the Platform registry, or none, which keeps its records forever (`global` and every org that
- * existed before the setting start with none; a new org starts with 90 days).
+ * is a number of days in the Platform registry, or none, which keeps its records forever (`global` starts with none; a new org
+ * starts with 90 days).
  *
  * Go counterpart: `redis-usage-queue-retention-seconds` bounds the in-process queue (internal/redisqueue/queue.go); D1
  * keeps history, so retention is expressed in days per org and applied by the scheduled handler. The deployment-wide
