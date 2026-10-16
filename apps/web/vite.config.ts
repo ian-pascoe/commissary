@@ -41,10 +41,10 @@ const compileThemeBoot = async () => {
 };
 
 /**
- * The stored theme choice must apply before the first paint, and the CSP (`apps/app/src/management/web-panel.ts`) allows only
- * same-origin scripts: build `src/theme-boot.ts` separately, emit it under `/assets` (served by the Worker like the
- * rest of the bundle) and load it with a plain, render-blocking `<script src>` at the end of `<head>`, after the
- * metas it updates. A module script would run deferred, after a paint could show the other theme.
+ * The stored theme choice must apply before the first paint, and the CSP (`apps/app/src/management/web-panel.ts`)
+ * allows only same-origin scripts: build `src/theme-boot.ts` separately, emit it under `/assets` (served by the Worker
+ * like the rest of the bundle) and load it with a plain, render-blocking `<script src>` at the end of `<head>`, after
+ * the metas it updates. A module script would run deferred, after a paint could show the other theme.
  */
 const themeBoot = (): Plugin => {
   let building = false;
@@ -100,8 +100,8 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      // The Worker refuses management calls whose Origin is another host (apps/app/src/access/csrf.ts); present the Worker's
-      // own origin, as the deployed panel does.
+      // The Worker refuses management calls whose Origin is another host (apps/app/src/access/csrf.ts); present the
+      // Worker's own origin, as the deployed panel does.
       "/v9": {
         target: workerUrl,
         changeOrigin: true,

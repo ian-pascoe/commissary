@@ -1,7 +1,7 @@
 /**
- * Grants (`/v9/management/grants`, `apps/app/src/management/grant-routes.ts`): which upstream models of which shared credentials a member, a
- * team or everyone may use (ADR 0023), and `GET /models/mine`, the models the caller may use. Shared with the browser:
- * imports `effect` and `./config.ts`, `./errors.ts` only.
+ * Grants (`/v9/management/grants`, `apps/app/src/management/grant-routes.ts`): which upstream models of which shared
+ * credentials a member, a team or everyone may use (ADR 0023), and `GET /models/mine`, the models the caller may use.
+ * Shared with the browser: imports `effect` and `./config.ts`, `./errors.ts` only.
  *
  * A grant names a subject, a scope and model patterns (`claude-sonnet-*`, case-insensitive, like model exclusions). A
  * member may use the union of the grants that name them; there is no deny. Each grant is a config entry with a revision

@@ -1,7 +1,8 @@
 /**
- * `GET|PATCH /v9/management/settings` (`apps/app/src/management/settings-routes.ts`, `apps/app/src/management/settings.ts`): the Settings page's typed view of
- * the config settings that apply on Workers, and its writes; `POST /settings/import`: the Go config import.
- * Shared with the browser: imports `effect` and sibling contract modules only.
+ * `GET|PATCH /v9/management/settings` (`apps/app/src/management/settings-routes.ts`,
+ * `apps/app/src/management/settings.ts`): the Settings page's typed view of the config settings that apply on Workers,
+ * and its writes; `POST /settings/import`: the Go config import. Shared with the browser: imports `effect` and sibling
+ * contract modules only.
  *
  * Values keep the config's kebab-case spelling and nesting, so a patch maps 1:1 to config paths. The view never
  * carries a secret (PRODUCT.md): provider keys have their own page.

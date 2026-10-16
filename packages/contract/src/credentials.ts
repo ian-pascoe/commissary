@@ -1,7 +1,8 @@
 /**
- * The `/v9/management/credentials` routes the panel uses (`apps/app/src/management/credentials-routes.ts`; `apps/app/src/management/credential-entry.ts` builds
- * each entry), the batch actions (`apps/app/src/management/credentials-batch.ts`) and the quota checks (`apps/app/src/management/quota-routes.ts`). Shared with
- * the browser: imports `effect` only. Field names are the wire's (snake_case, like Go's auth-file list).
+ * The `/v9/management/credentials` routes the panel uses (`apps/app/src/management/credentials-routes.ts`;
+ * `apps/app/src/management/credential-entry.ts` builds each entry), the batch actions
+ * (`apps/app/src/management/credentials-batch.ts`) and the quota checks (`apps/app/src/management/quota-routes.ts`).
+ * Shared with the browser: imports `effect` only. Field names are the wire's (snake_case, like Go's auth-file list).
  *
  * Mutations answer with a status only (except refresh, the batch actions and the quota checks, which answer per
  * account): the panel re-reads the list afterwards.
@@ -71,7 +72,7 @@ export const QuotaReport = Schema.Struct({
 export type QuotaReport = typeof QuotaReport.Type;
 
 /**
- * One Claude reset grant (Anthropic's `cedar_ember` program, `../../quota/reset-grants.ts`): a bundle of resets, each
+ * One Claude reset grant (Anthropic's `cedar_ember` program, `apps/app/src/quota/reset-grants.ts`): a bundle of resets, each
  * of which sets the usage windows in `clears` (`five_hour`, `seven_day`, …) back to empty. `label` is Anthropic's
  * display text, sanitised (empty when none); times are ISO instants.
  */

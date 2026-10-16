@@ -1,7 +1,7 @@
 /**
- * Per-org single sign-on on Commissary Cloud (issue #76; `apps/app/src/management/sso-routes.ts`, the ControlPlane's `SsoStore` in
- * `apps/app/src/sso`): the org's identity provider (one, OIDC or SAML) and the email domains it proves with a DNS TXT record.
- * Workers addition, no Go counterpart. Shared with the browser: imports `effect` only.
+ * Per-org single sign-on on Commissary Cloud (issue #76; `apps/app/src/management/sso-routes.ts`, the ControlPlane's
+ * `SsoStore` in `apps/app/src/sso`): the org's identity provider (one, OIDC or SAML) and the email domains it proves
+ * with a DNS TXT record. Workers addition, no Go counterpart. Shared with the browser: imports `effect` only.
  *
  * Org admins read the settings; only an org owner changes them. A self-hosted Commissary has no such routes (404): Access
  * configures its identity providers.

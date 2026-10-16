@@ -1,7 +1,7 @@
 /**
  * `PUT|DELETE /v9/management/model-rules/aliases/:channel` and `/model-rules/exclusions/:channel` (`RoutingGroup` in
- * @commissary/contract/routing): the Models page's channel rule edits. Workers addition, no Go counterpart (Go's panel writes
- * `oauth.model-alias` and `oauth.excluded-models` through `/config` paths).
+ * @commissary/contract/routing): the Models page's channel rule edits. Workers addition, no Go counterpart (Go's panel
+ * writes `oauth.model-alias` and `oauth.excluded-models` through `/config` paths).
  *
  * Each channel's aliases and exclusions are a config entry (ADR 0025). An edit replaces the channel's whole list (`PUT`)
  * or removes it (`DELETE`, `404 not_found` when the channel has none), and names the revision it was based on in

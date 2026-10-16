@@ -1,7 +1,8 @@
 /**
- * Spend limits (`/v9/management/spend`, `apps/app/src/management/spend-routes.ts`; the rules live in `apps/app/src/spend/`): what a member, team, the
- * org, a shared credential or an API key may spend in a day, week or month of the org's time zone. Workers addition,
- * no Go counterpart. Shared with the browser: imports `effect` and `./errors.ts` only.
+ * Spend limits (`/v9/management/spend`, `apps/app/src/management/spend-routes.ts`; the rules live in
+ * `apps/app/src/spend/`): what a member, team, the org, a shared credential or an API key may spend in a day, week or
+ * month of the org's time zone. Workers addition, no Go counterpart. Shared with the browser: imports `effect` and
+ * `./errors.ts` only.
  *
  * Amounts are micro-USD (1 USD = 1,000,000). An org admin sees and writes every limit and sets the calendar; a plain
  * member sees the limits that bind them (their own, their teams', the org's and those on their API keys) and writes

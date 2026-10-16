@@ -1,8 +1,8 @@
 /**
- * `POST /v9/management/credentials/batch {action, names}` (`batch` in @commissary/contract/credentials): enable, disable,
- * refresh the tokens of or delete several accounts (auth files, named by file name) at once, for the control panel's
- * selection on the Accounts page. Answers `200 {action, results, succeeded, failed, skipped}` with one result per
- * distinct name, in the order sent: `{name, ok}`, `{name, ok: false, error, message, status?}` (`not_found`,
+ * `POST /v9/management/credentials/batch {action, names}` (`batch` in @commissary/contract/credentials): enable,
+ * disable, refresh the tokens of or delete several accounts (auth files, named by file name) at once, for the control
+ * panel's selection on the Accounts page. Answers `200 {action, results, succeeded, failed, skipped}` with one result
+ * per distinct name, in the order sent: `{name, ok}`, `{name, ok: false, error, message, status?}` (`not_found`,
  * `refresh_failed`, `unauthorized`: fixed reasons, never the upstream body) or `{name, ok: false, skipped: true}` (a
  * refresh of an account without a refresh token), so a partial failure says which accounts failed and why. Names are
  * taken as sent (file names are exact). A delete of a name that is no longer stored is `ok`: it is already gone.

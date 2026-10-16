@@ -1,6 +1,6 @@
 /**
- * `GET|POST /v9/management/price-overrides` and `PUT|DELETE /price-overrides/:id` (`PricesGroup` in @commissary/contract/prices):
- * an org's price overrides (ADR 0024). Workers addition, no Go counterpart.
+ * `GET|POST /v9/management/price-overrides` and `PUT|DELETE /price-overrides/:id` (`PricesGroup` in
+ * @commissary/contract/prices): an org's price overrides (ADR 0024). Workers addition, no Go counterpart.
  *
  * An override is a config entry (ADR 0025) of the request's org. `POST` creates one (`409 conflict` when the provider
  * and model already have one); `PUT` and `DELETE` name the revision they were based on in `If-Match` and answer `409

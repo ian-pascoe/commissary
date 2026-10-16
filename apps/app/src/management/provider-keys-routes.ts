@@ -1,6 +1,6 @@
 /**
- * `/v9/management/provider-keys*` (`ProviderKeysGroup` in @commissary/contract/provider-keys): the provider keys page's list, group writes and
- * connection test.
+ * `/v9/management/provider-keys*` (`ProviderKeysGroup` in @commissary/contract/provider-keys): the provider keys page's
+ * list, group writes and connection test.
  *
  * Workers addition, no Go counterpart (Go's panel edits whole family arrays through `PUT /api-keys` style routes with
  * raw keys). Reads never carry secrets (`provider-keys-view.ts`). Writes are semantic, one group at a time: a key group and

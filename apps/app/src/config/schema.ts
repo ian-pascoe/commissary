@@ -91,7 +91,8 @@ export type OAuthModelSetting = typeof OAuthModelSetting.Type;
 
 // --- sections ------------------------------------------------------------------------------------------------------
 
-// `routing.strategy` and `multimedia.disable-image-generation` are shared with the Settings page (@commissary/contract/settings).
+// `routing.strategy` and `multimedia.disable-image-generation` are shared with the Settings page
+// (@commissary/contract/settings).
 export { DisableImageGeneration, RoutingStrategy };
 
 const routing = section({

@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/turbo/schema.json",
   "agentGuidance": false,
+  "cacheDir": ".turbo/cache",
   "globalDependencies": ["tsconfig.base.json"],
   "tasks": {
     "transit": {
@@ -23,16 +24,7 @@
       "outputs": ["dist/**"]
     },
     "//#typecheck:root": {
-      "description": "tsc over the deploy code at the root (tsconfig.infra.json) and the Worker modules it imports",
-      "inputs": [
-        "alchemy.run.ts",
-        "infra/**",
-        "stacks/**",
-        "tools/sync-models-dev-catalog.ts",
-        "tsconfig.json",
-        "tsconfig.infra.json",
-        "apps/app/src/**"
-      ],
+      "description": "tsc over the deploy code at the root (tsconfig.infra.json) and the Worker modules it imports; the root task hashes the whole repository",
       "outputs": []
     },
     "//#lint:root": {

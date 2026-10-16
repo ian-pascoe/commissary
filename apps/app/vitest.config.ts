@@ -74,7 +74,8 @@ const worker = (bindings: Record<string, string>, hosted: boolean) =>
           }
         : {}),
       assets: {
-        // The control panel's build (`pnpm build`); the tests that need a panel bind their own `ASSETS`.
+        // The control panel's build (`pnpm build`), as deployed. No test reads it (a missing folder serves nothing): the
+        // tests that need a panel bind their own `ASSETS`, so it is not an input of the test task (turbo.json).
         directory: "../web/dist",
         binding: "ASSETS",
         routerConfig: { invoke_user_worker_ahead_of_assets: true },

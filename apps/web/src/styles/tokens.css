@@ -8,7 +8,7 @@
  * Two layers. The paints are the sign colours themselves; stylesheets never use them directly. They use the semantic
  * tokens, each a light-dark() pair that the root's color-scheme resolves: the system's preference, unless the
  * operator picked Light or Dark in the shell (`data-theme` on <html>, set before the first paint by
- * `web/src/theme-boot.ts`). At night the stone ramp keeps its roles on a dark ground (the same warm grey, oklch hue
+ * `src/theme-boot.ts`). At night the stone ramp keeps its roles on a dark ground (the same warm grey, oklch hue
  * 118), sign ink becomes a light stone, yellow and red stay the route and danger.
  *
  * Ratios are WCAG contrast of text on its ground, light theme / dark theme.

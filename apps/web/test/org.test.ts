@@ -1,4 +1,5 @@
-// Which org the panel shows (src/lib/org.ts), and how its API calls are addressed (`scopedApiUrl`, @commissary/contract/api).
+// Which org the panel shows (src/lib/org.ts), and how its API calls are addressed (`scopedApiUrl`,
+// @commissary/contract/api).
 import { describe, expect, it } from "vitest";
 import { scopedApiUrl } from "@commissary/contract/api";
 import { orgPanelPath, orgSlugOfPath, panelBasepath } from "../src/lib/org.ts";

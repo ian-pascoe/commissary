@@ -1,7 +1,7 @@
 /**
- * Management keys (ADR 0026; `apps/app/src/management/management-key-routes.ts`, the ControlPlane's `ManagementKeyStore` in
- * `apps/app/src/management-keys`): keys scripts send on the management API, on every deployment. Workers addition, no Go
- * counterpart. Shared with the browser: imports `effect` only.
+ * Management keys (ADR 0026; `apps/app/src/management/management-key-routes.ts`, the ControlPlane's
+ * `ManagementKeyStore` in `apps/app/src/management-keys`): keys scripts send on the management API, on every
+ * deployment. Workers addition, no Go counterpart. Shared with the browser: imports `effect` only.
  *
  * Org admins issue, list and revoke them. A key holds a role in its org (at most the issuer's role), is stored hashed,
  * is shown whole once (in the answer to its creation) and names its org like an API key: `cmsm_<orgId>_<keyId>_<secret>`,

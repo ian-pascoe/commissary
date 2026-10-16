@@ -1,7 +1,7 @@
 /**
- * The control panel built from `apps/web` (`pnpm build` writes `apps/web/dist/index.html` and `apps/web/dist/assets/*`): `/`, its
- * page paths (`access/routes.ts` `PANEL_SECTIONS`), the same pages under an org (`/o/<slug>/accounts`, routed as the
- * unscoped page by `access/org-address.ts`) and the bundled files under `/assets`.
+ * The control panel built from `apps/web` (`pnpm build` writes `apps/web/dist/index.html` and
+ * `apps/web/dist/assets/*`): `/`, its page paths (`access/routes.ts` `PANEL_SECTIONS`), the same pages under an org
+ * (`/o/<slug>/accounts`, routed as the unscoped page by `access/org-address.ts`) and the bundled files under `/assets`.
  *
  * New in the Workers port: Go serves the upstream panel at `/management.html` and a public JSON banner at `/`. Here
  * `/management.html` is a legacy redirect to `/` (`LEGACY_PANEL_REDIRECT`, deviation from Go). Every page path

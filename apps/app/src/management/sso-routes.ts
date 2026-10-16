@@ -1,7 +1,7 @@
 /**
- * `/v9/management/sso*` (`SsoGroup` in @commissary/contract/sso): an org's single sign-on on Commissary Cloud (issue #76): its
- * identity provider and the email domains it proves with a DNS TXT record. A self-hosted Commissary has no such routes.
- * Workers addition, no Go counterpart.
+ * `/v9/management/sso*` (`SsoGroup` in @commissary/contract/sso): an org's single sign-on on Commissary Cloud (issue
+ * #76): its identity provider and the email domains it proves with a DNS TXT record. A self-hosted Commissary has no
+ * such routes. Workers addition, no Go counterpart.
  *
  * Org admins read the settings (`access/policy.ts`); changing them takes the org owner role. A domain becomes the org's
  * when its TXT record is found and the Platform registry gives it to the org, which it refuses while another org holds

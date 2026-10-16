@@ -1,6 +1,6 @@
 // The Settings page's model: which setting lives in which section, the form's inputs for a value and back, the
-// client-side checks that mirror the server's (`apps/app/src/management/settings.ts`), the patch a section's draft becomes,
-// and the rebase of a draft onto a newer view. Pure: no DOM, tested in test/settings.test.ts.
+// client-side checks that mirror the server's (`apps/app/src/management/settings.ts`), the patch a section's draft
+// becomes, and the rebase of a draft onto a newer view. Pure: no DOM, tested in test/settings.test.ts.
 //
 // A section's draft is a delta: the inputs the operator touched, by dotted config path. Everything else shows the
 // view. A save sends only the leaves that differ from the view, `null` for a value equal to the default (the entry is

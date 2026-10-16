@@ -1,8 +1,8 @@
 /**
- * `GET|PATCH /v9/management/people/:email` (`PeopleGroup` in @commissary/contract/people): the people of Commissary Cloud (ADR
- * 0026) as platform admins manage them: the owned-org limit, raisable per person, and suspension, which signs the person
- * out and refuses their sessions, API keys and management keys until it is lifted. Nothing is deleted. A self-hosted
- * Commissary has no such routes. Workers addition, no Go counterpart.
+ * `GET|PATCH /v9/management/people/:email` (`PeopleGroup` in @commissary/contract/people): the people of Commissary
+ * Cloud (ADR 0026) as platform admins manage them: the owned-org limit, raisable per person, and suspension, which
+ * signs the person out and refuses their sessions, API keys and management keys until it is lifted. Nothing is deleted.
+ * A self-hosted Commissary has no such routes. Workers addition, no Go counterpart.
  */
 import { Clock, Effect } from "effect";
 import { HttpRouter } from "effect/http";

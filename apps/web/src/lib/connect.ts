@@ -1,6 +1,6 @@
-// The ways to connect an account (apps/app/src/management/oauth-routes.ts, apps/app/src/oauth/service.ts): sign-in flows that end
-// with a pasted address (the provider only redirects to localhost), sign-in flows with a device code, the Vertex
-// service-account import and auth-file upload. Pure: no DOM, tested in test/connect.test.ts.
+// The ways to connect an account (apps/app/src/management/oauth-routes.ts, apps/app/src/oauth/service.ts): sign-in
+// flows that end with a pasted address (the provider only redirects to localhost), sign-in flows with a device code,
+// the Vertex service-account import and auth-file upload. Pure: no DOM, tested in test/connect.test.ts.
 import type { OAuthProvider } from "@commissary/contract/oauth";
 
 export type ConnectMethod =

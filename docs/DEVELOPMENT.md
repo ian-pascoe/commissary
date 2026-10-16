@@ -87,11 +87,12 @@ are pinned once in the `catalog:` of `pnpm-workspace.yaml`.
 
 `turbo.json` declares the tasks: `typecheck`, `test` and `build` run each package's script of that name, and the root
 adds `typecheck:root` (the deploy code) and `lint:root` (one `oxlint`/`oxfmt` run over the repository). The packages
-depend on each other's sources, not on build output, so every task depends on `transit`, a task with no script whose
+depend on each other's sources, not on build output, so every package task depends on `transit`, a task with no script whose
 hash covers a package's files and those of its dependencies (Turborepo's transit-node pattern): a change in
 `packages/contract` re-runs the panel's and the Worker's tasks. A package's `turbo.json` adds the root files its tasks
-read (`apps/app`: `infra/bundle.ts`, `infra/settings.ts`, `migrations/`, the panel's build). The cache is local
-(`.turbo/`, shared between git worktrees of one clone); there is no remote cache. `pnpm exec turbo run <task> --force`
+read (`apps/app`: `infra/bundle.ts`, `infra/settings.ts`, `migrations/`). The cache is local
+(`.turbo/cache`, one per git worktree: `cacheDir` keeps a worktree from writing into the main checkout's); there is
+no remote cache. `pnpm exec turbo run <task> --force`
 ignores it, `--dry` shows what would run and why.
 
 ## Model catalog

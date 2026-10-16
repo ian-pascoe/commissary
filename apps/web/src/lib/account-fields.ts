@@ -1,10 +1,11 @@
 // The Account page's Routing form: one account's own auth-file fields as a draft of the inputs the operator touched,
-// which of them apply to the account's provider, the checks the server makes (`apps/app/src/credentials/field-patch.ts`), the
-// change count, and the `PATCH /credentials/fields` body (changed fields only; `null` deletes a field, so the routing
-// setting applies again). Header values arrive masked (`[redacted]…abcd`) except safe headers (`@commissary/contract/headers`):
-// a header keeps its mask until the operator replaces the value, and the mask goes back unchanged, which the server
-// reads as "keep". An error names its field and, for aliases and headers, the row (a `422` path such as
-// `headers.X-Team` or `model_aliases.1` is mapped back to its row).
+// which of them apply to the account's provider, the checks the server makes
+// (`apps/app/src/credentials/field-patch.ts`), the change count, and the `PATCH /credentials/fields` body (changed
+// fields only; `null` deletes a field, so the routing setting applies again). Header values arrive masked
+// (`[redacted]…abcd`) except safe headers (`@commissary/contract/headers`): a header keeps its mask until the operator
+// replaces the value, and the mask goes back unchanged, which the server reads as "keep". An error names its field and,
+// for aliases and headers, the row (a `422` path such as `headers.X-Team` or `model_aliases.1` is mapped back to its
+// row).
 import { REDACTED_PREFIX } from "@commissary/contract/provider-keys";
 import type {
   CredentialEntry,

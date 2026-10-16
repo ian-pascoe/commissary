@@ -31,9 +31,9 @@ export const MANAGEMENT_PREFIX = "/v9/management";
 export const LEGACY_PANEL_PATH = "/management.html";
 
 /**
- * Top-level paths of the new control panel (`apps/web`, served by `src/management/web-panel.ts`): `/` itself, the panel's
- * pages and their sub-paths, and its bundled files under `/assets`. Like the management API, only administrators get
- * them. Deviation from Go: `/` serves the panel instead of the public JSON banner.
+ * Top-level paths of the new control panel (`apps/web`, served by `src/management/web-panel.ts`): `/` itself, the
+ * panel's pages and their sub-paths, and its bundled files under `/assets`. Like the management API, only
+ * administrators get them. Deviation from Go: `/` serves the panel instead of the public JSON banner.
  */
 export const PANEL_SECTIONS = [
   "accounts",

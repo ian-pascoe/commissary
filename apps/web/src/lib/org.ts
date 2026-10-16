@@ -1,6 +1,7 @@
 // Which org the panel is showing (ADR 0021). The panel of an org lives under `/o/<slug>/...` and calls the org's
 // management routes `/v9/management/orgs/<slug>/...`; the address without an org (`/`, `/accounts`) is the chooser, or
-// a redirect to the caller's only org (apps/app/src/management/web-panel.ts). Pure helpers, shared by the router and the client.
+// a redirect to the caller's only org (apps/app/src/management/web-panel.ts). Pure helpers, shared by the router and
+// the client.
 
 const PANEL_ORG = /^\/o\/([^/]+)(?=\/|$)/i;
 

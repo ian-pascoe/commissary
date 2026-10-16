@@ -1,7 +1,8 @@
 /**
- * The `api-keys` config groups as the panel's provider keys page sees them (`apps/app/src/management/provider-keys-routes.ts`), plus the schemas of
- * those groups themselves: `config/schema.ts` re-exports the group schemas from here, so there is one definition.
- * Shared with the browser: imports `effect` and sibling contract modules only.
+ * The `api-keys` config groups as the panel's provider keys page sees them
+ * (`apps/app/src/management/provider-keys-routes.ts`), plus the schemas of those groups themselves: `config/schema.ts`
+ * re-exports the group schemas from here, so there is one definition. Shared with the browser: imports `effect` and
+ * sibling contract modules only.
  *
  * Secrets never leave the server (PRODUCT.md): a key is shown as `key_preview` (`[redacted]…abcd`), secret-looking
  * header values are masked, and the settings that do nothing on Workers (`proxy-url`, `experimental-cch-signing`)

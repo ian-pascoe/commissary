@@ -1,7 +1,7 @@
 /**
- * Price overrides (`/v9/management/price-overrides`, `apps/app/src/management/price-routes.ts`): an org's own price for a provider and model,
- * which wins over the models.dev price when a usage record is costed (ADR 0024). Shared with the browser: imports
- * `effect` and `./config.ts`, `./errors.ts` only.
+ * Price overrides (`/v9/management/price-overrides`, `apps/app/src/management/price-routes.ts`): an org's own price for
+ * a provider and model, which wins over the models.dev price when a usage record is costed (ADR 0024). Shared with the
+ * browser: imports `effect` and `./config.ts`, `./errors.ts` only.
  *
  * Prices are US dollars per million tokens. `cache_read` and `cache_write` left out charge those tokens at the input
  * price. Each override is a config entry with a revision (ADR 0025): an edit names the revision it was based on in

@@ -1,7 +1,7 @@
 /**
- * Module aliases of the Worker's bundle (`alchemy.run.ts`) and of the tests (`apps/app/vitest.config.ts`): smaller stand-ins
- * for dependencies of dependencies whose full code the Worker does not need. Every module of the bundle is compiled
- * when the Worker starts, also those only imported lazily, and startup has a CPU time limit.
+ * Module aliases of the Worker's bundle (`alchemy.run.ts`) and of the tests (`apps/app/vitest.config.ts`): smaller
+ * stand-ins for dependencies of dependencies whose full code the Worker does not need. Every module of the bundle is
+ * compiled when the Worker starts, also those only imported lazily, and startup has a CPU time limit.
  */
 // Node's `URL`, not the global one: this module is also type-checked in the Worker project, where the global is workerd's.
 import { URL, fileURLToPath } from "node:url";

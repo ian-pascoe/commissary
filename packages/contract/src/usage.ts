@@ -1,8 +1,8 @@
 /**
  * `GET /v9/management/observability/usage/summary` (token totals), `/series` (totals per time bucket) and `/records`
- * (the request log, newest first, keyset-paged) from the D1 usage history (`apps/app/src/management/usage-routes.ts`, `apps/app/src/usage/d1.ts`
- * `summarizeUsage` / `summarizeUsageSeries` / `listUsageRecords` / `rowToPayload`). Shared with the browser: imports
- * `effect` only.
+ * (the request log, newest first, keyset-paged) from the D1 usage history (`apps/app/src/management/usage-routes.ts`,
+ * `apps/app/src/usage/d1.ts` `summarizeUsage` / `summarizeUsageSeries` / `listUsageRecords` / `rowToPayload`). Shared
+ * with the browser: imports `effect` only.
  */
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
@@ -135,8 +135,9 @@ const tokenBreakdown = Schema.Struct({
 });
 
 /**
- * One request-log record (`rowToPayload` in `apps/app/src/usage/d1.ts`). Only the fields the panel reads are listed: the payload
- * carries more (`tokens`, `source`, `parent_session_id`, ...), and `Schema.Struct` ignores excess keys when decoding.
+ * One request-log record (`rowToPayload` in `apps/app/src/usage/d1.ts`). Only the fields the panel reads are listed:
+ * the payload carries more (`tokens`, `source`, `parent_session_id`, ...), and `Schema.Struct` ignores excess keys when
+ * decoding.
  */
 export const UsageRecord = Schema.Struct({
   /** ISO 8601 request time. */

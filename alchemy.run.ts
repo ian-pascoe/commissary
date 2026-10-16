@@ -37,18 +37,19 @@ export default Alchemy.Stack(
     const cache = yield* Cloudflare.KV.Namespace("Cache");
     const usage = yield* Cloudflare.D1.Database("Usage", { migrations: "./migrations" });
 
-    // Key of the keyed `auth_index` (apps/app/src/management/auth-index.ts): 32 random bytes minted on the first deploy of a
-    // stage and kept in the (encrypted) stack state, so every later deploy binds the same secret with no manual step.
-    // `alchemy dev` (loopback only, no Access) uses a fixed key so local panel links survive a wiped local state.
+    // Key of the keyed `auth_index` (apps/app/src/management/auth-index.ts): 32 random bytes minted on the first deploy
+    // of a stage and kept in the (encrypted) stack state, so every later deploy binds the same secret with no manual
+    // step. `alchemy dev` (loopback only, no Access) uses a fixed key so local panel links survive a wiped local state.
     const authIndexKey = dev
       ? DEV_AUTH_INDEX_KEY
       : yield* Alchemy.makeRandom("AuthIndexKey", { bytes: 32 });
 
-    // Secrets key (apps/app/src/secrets/): wraps every org's data key, which seals the stored auth files and config entries. Minted
-    // like the auth index key, one `Random` per generation: raising SECRETS_KEY_GENERATION mints a new one, and during
-    // the rotation the previous generation is bound as SECRETS_KEY_PREVIOUS (docs/DEPLOY.md). Every generation up to the
-    // current one stays declared: Alchemy deletes an undeclared resource with its state, and a `Random` exists only
-    // there, so an old key must never drop out of the stack. Losing a key loses every secret it still protects.
+    // Secrets key (apps/app/src/secrets/): wraps every org's data key, which seals the stored auth files and config
+    // entries. Minted like the auth index key, one `Random` per generation: raising SECRETS_KEY_GENERATION mints a new
+    // one, and during the rotation the previous generation is bound as SECRETS_KEY_PREVIOUS (docs/DEPLOY.md). Every
+    // generation up to the current one stays declared: Alchemy deletes an undeclared resource with its state, and a
+    // `Random` exists only there, so an old key must never drop out of the stack. Losing a key loses every secret it
+    // still protects.
     const secretsKeys = new Map<number, Effect.Success<ReturnType<typeof Alchemy.makeRandom>>>();
 
     if (!dev) {
@@ -66,9 +67,9 @@ export default Alchemy.Stack(
         ? undefined
         : secretsKeys.get(settings.secretsKeyPreviousGeneration);
 
-    // `alchemy dev` serves the Worker on localhost without Access: the dev bypass (apps/app/src/access/config.ts) makes every
-    // loopback request an admin. Deployed Workers never get it and require the Access JWT (or an API key on the client
-    // API).
+    // `alchemy dev` serves the Worker on localhost without Access: the dev bypass (apps/app/src/access/config.ts) makes
+    // every loopback request an admin. Deployed Workers never get it and require the Access JWT (or an API key on the
+    // client API).
     const { hosted } = settings;
 
     const access: AccessWiring =

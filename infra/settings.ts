@@ -69,8 +69,8 @@ export interface Settings {
   /** Local development identity (`alchemy dev` only). */
   readonly devBypass: string;
   /**
-   * Generation of the stage's secrets key (`SECRETS_KEY`, apps/app/src/secrets/): raising it mints a new key on the next deploy
-   * (a rotation, docs/DEPLOY.md). Starts at 1.
+   * Generation of the stage's secrets key (`SECRETS_KEY`, apps/app/src/secrets/): raising it mints a new key on the
+   * next deploy (a rotation, docs/DEPLOY.md). Starts at 1.
    */
   readonly secretsKeyGeneration: number;
   /**

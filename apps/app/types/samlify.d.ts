@@ -1,6 +1,6 @@
 /**
  * The part of samlify's API the Worker program uses, in place of samlify's own declarations (`paths` in
- * tsconfig.worker.json). Those import `@xmldom/xmldom`, whose `/// <reference lib="dom" />` would put the browser's
+ * tsconfig.json). Those import `@xmldom/xmldom`, whose `/// <reference lib="dom" />` would put the browser's
  * globals into the Worker program and break its Web Crypto and fetch types. samlify is reached through Better Auth's
  * SSO plugin (`src/hosted/auth.ts`, which never names it) and plays a test identity provider in
  * `test/hosted/identity-providers.ts`; nothing else.

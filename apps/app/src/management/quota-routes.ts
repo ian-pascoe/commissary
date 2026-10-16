@@ -1,7 +1,7 @@
 /**
- * `POST /v9/management/credentials/quota` (`checkQuota` in @commissary/contract/credentials): checks one account's allowance
- * at the provider's usage endpoint now and answers with the stored report. The account is an auth file (by file name)
- * or a listed provider key (OpenCode Go, by the `auth_index` the list names it with).
+ * `POST /v9/management/credentials/quota` (`checkQuota` in @commissary/contract/credentials): checks one account's
+ * allowance at the provider's usage endpoint now and answers with the stored report. The account is an auth file (by
+ * file name) or a listed provider key (OpenCode Go, by the `auth_index` the list names it with).
  *
  * `POST /v9/management/credentials/quota/all` (`checkAllQuotas`): the panel's "Check all quotas", the cron task's
  * sweep run now (`sweepQuotas`: every enabled auth file and listed config key of a supported provider,

@@ -1,5 +1,6 @@
-// Spend limits through the management routes (src/management/spend-routes.ts, @commissary/contract/spend): what an org admin and
-// a plain member see and write, revisions, the calendar and the Access gate. Through the router with real ControlPlanes.
+// Spend limits through the management routes (src/management/spend-routes.ts, @commissary/contract/spend): what an org
+// admin and a plain member see and write, revisions, the calendar and the Access gate. Through the router with real
+// ControlPlanes.
 import { Schema } from "effect";
 import { afterAll, describe, expect, it } from "vitest";
 import { SpendView, SpendLimitView } from "@commissary/contract/spend";

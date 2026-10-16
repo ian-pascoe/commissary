@@ -1,7 +1,7 @@
 /**
- * The model catalog's status and its on-demand refresh (`apps/app/src/management/catalog-routes.ts`, `apps/app/src/registry/refresh.ts`): the
- * models.dev document every provider's models are built from (ADR 0020). Workers addition, no Go counterpart. Shared
- * with the browser: imports `effect` only.
+ * The model catalog's status and its on-demand refresh (`apps/app/src/management/catalog-routes.ts`,
+ * `apps/app/src/registry/refresh.ts`): the models.dev document every provider's models are built from (ADR 0020).
+ * Workers addition, no Go counterpart. Shared with the browser: imports `effect` only.
  *
  * The catalog refreshes by itself every 3 hours (cron) and on demand (`POST /models/catalog/refresh`, the Models
  * page's "Refresh catalog"). Both run the same operation: download, validate, trim, store; a refresh that fails keeps

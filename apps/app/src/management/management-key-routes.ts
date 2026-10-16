@@ -1,6 +1,6 @@
 /**
- * `/v9/management/management-keys` (`ManagementKeysGroup` in @commissary/contract/management-keys): the keys scripts send on
- * the management API (ADR 0026), on every deployment. Workers addition, no Go counterpart.
+ * `/v9/management/management-keys` (`ManagementKeysGroup` in @commissary/contract/management-keys): the keys scripts
+ * send on the management API (ADR 0026), on every deployment. Workers addition, no Go counterpart.
  *
  * Org admins (and platform admins) use these routes (`access/policy.ts`). A key holds a role no higher than its
  * issuer's, and a management key issues none (giving a key a role is for people and service tokens). A revoked key is

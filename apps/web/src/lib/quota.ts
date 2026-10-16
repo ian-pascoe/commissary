@@ -1,6 +1,7 @@
 // Quota windows of an account: from the server's quota check (`quota_report`, apps/app/src/quota/) or from the upstream
-// rate-limit headers the Worker last observed for it (`quota.signals`, apps/app/src/credentials/cooldown/quota-signals.ts),
-// whichever is fresher, and from its cooldowns. Pure: no DOM, tested in test/quota.test.ts.
+// rate-limit headers the Worker last observed for it (`quota.signals`,
+// apps/app/src/credentials/cooldown/quota-signals.ts), whichever is fresher, and from its cooldowns. Pure: no DOM,
+// tested in test/quota.test.ts.
 import type { CredentialEntry } from "@commissary/contract/credentials";
 
 export type QuotaLevel = "ok" | "near" | "out";

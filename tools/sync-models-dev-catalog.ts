@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Regenerates the bundled models.dev snapshot (`apps/app/src/registry/catalog/models-dev.json`): the providers Commissary reads
- * from the models.dev document, trimmed to the fields it uses (ADR 0020). The catalog additions
+ * Regenerates the bundled models.dev snapshot (`apps/app/src/registry/catalog/models-dev.json`): the providers
+ * Commissary reads from the models.dev document, trimmed to the fields it uses (ADR 0020). The catalog additions
  * (`apps/app/src/registry/catalog/additions.json`) are maintained by hand and untouched.
  *
  * Usage: `pnpm catalog:sync [source]`, where `source` is an http(s) URL or a local file (for instance a saved

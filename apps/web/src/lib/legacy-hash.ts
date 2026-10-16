@@ -1,7 +1,7 @@
 // Bookmarks of the upstream panel. It was a HashRouter app at `/management.html` (`#/auth-files`, `#/quota`, ...);
-// the Worker now redirects that path to `/` (apps/app/src/management/web-panel.ts `LEGACY_PANEL_REDIRECT`) and the browser
-// keeps the fragment, so `/#/auth-files` reaches the panel. `legacyHashTarget` names the page that replaced the old
-// one (routes of Cli-Proxy-API-Management-Center src/router/MainRoutes.tsx); the router applies it on boot.
+// the Worker now redirects that path to `/` (apps/app/src/management/web-panel.ts `LEGACY_PANEL_REDIRECT`) and the
+// browser keeps the fragment, so `/#/auth-files` reaches the panel. `legacyHashTarget` names the page that replaced the
+// old one (routes of Cli-Proxy-API-Management-Center src/router/MainRoutes.tsx); the router applies it on boot.
 
 /** Upstream route (lower-cased, no trailing slash) to the panel page that replaced it. */
 const TARGETS: ReadonlyArray<readonly [prefix: string, target: string]> = [

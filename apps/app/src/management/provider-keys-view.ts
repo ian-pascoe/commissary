@@ -1,7 +1,7 @@
 /**
- * `GET /v9/management/provider-keys` (`@commissary/contract/provider-keys` `ProviderKeysList`): the config's `api-keys` groups joined with
- * the runtime state of the credentials they produced. Built inside the ControlPlane Durable Object so the config
- * version and the runtime state are one snapshot.
+ * `GET /v9/management/provider-keys` (`@commissary/contract/provider-keys` `ProviderKeysList`): the config's `api-keys`
+ * groups joined with the runtime state of the credentials they produced. Built inside the ControlPlane Durable Object
+ * so the config version and the runtime state are one snapshot.
  *
  * Workers addition, no Go counterpart (Go's panel reads raw keys from `GET /config` and masks them in the browser;
  * here the browser never sees them, PRODUCT.md). Nothing secret is included: keys become `[redacted]…abcd`

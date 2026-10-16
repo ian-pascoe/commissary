@@ -1,7 +1,7 @@
 /**
- * Sign-in on Commissary Cloud (ADR 0026, `apps/app/src/hosted/`): what the panel's sign-in page needs before anyone is signed in.
- * Outside `/v9/management` (no caller yet), so not part of `ManagementApi`. Workers addition, no Go counterpart. Shared
- * with the browser: imports `effect` only.
+ * Sign-in on Commissary Cloud (ADR 0026, `apps/app/src/hosted/`): what the panel's sign-in page needs before anyone is
+ * signed in. Outside `/v9/management` (no caller yet), so not part of `ManagementApi`. Workers addition, no Go
+ * counterpart. Shared with the browser: imports `effect` only.
  */
 import { Schema } from "effect";
 

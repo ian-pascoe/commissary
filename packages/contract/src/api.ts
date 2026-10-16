@@ -1,8 +1,9 @@
 /**
- * The management API contract (`@commissary/contract`) shared by the Worker, its tests and the control panel (`apps/web`): endpoint paths, query
- * schemas, response and error bodies of the `/v9/management` routes the panel uses. The handlers themselves stay plain
- * router handlers (`apps/app/src/management/routes.ts`); `apps/app/test/management-contract.test.ts` checks their real responses against these
- * schemas through the generated client.
+ * The management API contract (`@commissary/contract`) shared by the Worker, its tests and the control panel
+ * (`apps/web`): endpoint paths, query schemas, response and error bodies of the `/v9/management` routes the panel uses.
+ * The handlers themselves stay plain router handlers (`apps/app/src/management/routes.ts`);
+ * `apps/app/test/management-contract.test.ts` checks their real responses against these schemas through the generated
+ * client.
  *
  * Browser-safe: its modules import `effect` and each other only.
  */

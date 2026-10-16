@@ -51,7 +51,7 @@ such as `src/...` and `test/...` in the rest of this document are relative to `a
     test/                     vitest suites in workerd (+ fixtures generated from the Go code)
   apps/web/                   @commissary/web: control panel served at / (React, Effect Atom, TanStack Router; built
                               into apps/web/dist, the Worker's assets), its tests in Node.js
-  packages/contract/          @commissary/contract: the management API's Effect HttpApi schemas (browser-safe)
+  packages/contract/          @commissary/contract: the management API's Effect HttpApi schemas and addressing (browser-safe)
   tools/fixturegen/           Go programs (own module, root go.work) that emit golden fixtures from the Go code
   tools/sync-reference-repos.sh  clones/updates the reference repositories in .repos/ (pnpm install, pnpm repos:sync)
   .repos/CLIProxyAPI/         read-only Go reference checkout (git-ignored)

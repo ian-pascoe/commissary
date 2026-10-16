@@ -11,13 +11,12 @@
       ]
     },
     "test": {
-      "description": "The tests import the root's infra files and D1 migrations; the test Worker serves the panel's build as its assets",
+      "description": "The tests import the root's infra files and D1 migrations",
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/infra/bundle.ts",
         "$TURBO_ROOT$/infra/settings.ts",
-        "$TURBO_ROOT$/migrations/**",
-        "$TURBO_ROOT$/apps/web/dist/**"
+        "$TURBO_ROOT$/migrations/**"
       ]
     }
   }

@@ -1,6 +1,7 @@
 /**
- * `/v9/management/members`, `/membership`, `/teams` and `/service-tokens` (`MembersGroup` in @commissary/contract/members): an
- * org's members, teams and service tokens (ADR 0022). Workers addition, no Go counterpart.
+ * `/v9/management/members`, `/membership`, `/teams` and `/service-tokens` (`MembersGroup` in
+ * @commissary/contract/members): an org's members, teams and service tokens (ADR 0022). Workers addition, no Go
+ * counterpart.
  *
  * The Access gate lets only org admins in (`access/policy.ts`); the ControlPlane checks each write against the actor's
  * role (`members/store.ts`, `members/roles.ts`): org admins manage plain members, org owners everyone and every role,

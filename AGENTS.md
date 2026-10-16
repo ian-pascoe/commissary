@@ -1,6 +1,6 @@
 # AGENTS.md
 
-TypeScript + Effect v4 (`effect@4.0.2`) port of [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) on plain Cloudflare Workers, behind Cloudflare Access. A pnpm + Turborepo workspace: the Worker is `apps/app`, the control panel served at `/` is `apps/web` (React + Effect Atom, talks to the management API through `packages/contract`, imported as `@commissary/contract/*`; design system in `DESIGN.md`, product context in `PRODUCT.md`, surface briefs in `.impeccable/`). Design: `docs/ARCHITECTURE.md` (layout, per-subsystem behaviour, where it differs from Go); developer notes: `docs/DEVELOPMENT.md`.
+TypeScript + Effect v4 (`effect@4.0.4`) port of [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) on plain Cloudflare Workers, behind Cloudflare Access. A pnpm + Turborepo workspace: the Worker is `apps/app`, the control panel served at `/` is `apps/web` (React + Effect Atom, talks to the management API through `packages/contract`, imported as `@commissary/contract/*`; design system in `DESIGN.md`, product context in `PRODUCT.md`, surface briefs in `.impeccable/`). Design: `docs/ARCHITECTURE.md` (layout, per-subsystem behaviour, where it differs from Go); developer notes: `docs/DEVELOPMENT.md`.
 
 ## Commands
 
