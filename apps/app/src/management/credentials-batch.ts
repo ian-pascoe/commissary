@@ -63,7 +63,7 @@ const batchCredentials = Effect.gen(function* () {
   const viewer = yield* currentViewer;
 
   const results = yield* modelsControlPlane("batchCredentials", (stub) =>
-    stub.batchCredentials(action, names, viewer),
+    stub.models().batchCredentials(action, names, viewer),
   );
 
   const succeeded = results.filter((result) => result.ok).length;

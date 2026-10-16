@@ -23,6 +23,7 @@ import {
   wrapDataKeyUnder,
   wrappedDataKey,
 } from "./support/secrets.ts";
+import { withModelsPart } from "./support/models-part.ts";
 
 const newOrg = (): OrgId => OrgId.make(`secrets-${crypto.randomUUID().slice(0, 8)}`);
 
@@ -69,10 +70,12 @@ const orgWithSecrets = async () => {
   const org = newOrg();
   const stub = controlPlane(org);
 
-  expect(await stub.importAuthFile("claude-a.json", AUTH_FILE, {}, FULL_ACCESS)).toMatchObject({
-    ok: true,
+  await withModelsPart(stub, async (part) => {
+    expect(await part.importAuthFile("claude-a.json", AUTH_FILE, {}, FULL_ACCESS)).toMatchObject({
+      ok: true,
+    });
+    expect(await part.importConfig(CONFIG, "test")).toMatchObject({ ok: true });
   });
-  expect(await stub.importConfig(CONFIG, "test")).toMatchObject({ ok: true });
 
   return { org, stub };
 };
@@ -81,19 +84,24 @@ const orgWithSecrets = async () => {
 const readThroughControlPlane = async (stub: ReturnType<typeof controlPlane>, org: OrgId) => {
   const index = orgAuthIndexer(env, org);
 
-  const credentials = (await stub.listCredentials(FULL_ACCESS)).map(({ id }) => ({
-    id,
-    index: index(id),
-  }));
+  return await withModelsPart(stub, async (part) => {
+    const credentials = (await part.listCredentials(FULL_ACCESS)).map(({ id }) => ({
+      id,
+      index: index(id),
+    }));
 
-  const picked: PickResult = await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" });
+    const picked: PickResult = await part.pick({
+      providers: ["claude"],
+      model: "claude-sonnet-4-5",
+    });
 
-  return {
-    credentials: credentials.toSorted((a, b) => a.id.localeCompare(b.id)),
-    file: await stub.getCredentialFile("claude-a.json", FULL_ACCESS),
-    document: (await stub.getConfig()).document,
-    token: picked.ok ? picked.credential.metadata.access_token : picked.failure.code,
-  };
+    return {
+      credentials: credentials.toSorted((a, b) => a.id.localeCompare(b.id)),
+      file: await part.getCredentialFile("claude-a.json", FULL_ACCESS),
+      document: (await part.getConfig()).document,
+      token: picked.ok ? picked.credential.metadata.access_token : picked.failure.code,
+    };
+  });
 };
 
 /**
@@ -291,12 +299,14 @@ describe("ControlPlane stored secrets", () => {
 
     await inStartedControlPlane(b.stub, async (plane) => {
       await expect(
-        outcomeOf(() => plane.getCredentialFile("claude-a.json", FULL_ACCESS)),
+        outcomeOf(() => plane.models().getCredentialFile("claude-a.json", FULL_ACCESS)),
       ).rejects.toThrow(
         /credentials\/claude-a\.json: the sealed value does not open with the org's data key/,
       );
     });
-    expect(await a.stub.getCredentialFile("claude-a.json", FULL_ACCESS)).toEqual(AUTH_FILE);
+    expect(await a.stub.models().getCredentialFile("claude-a.json", FULL_ACCESS)).toEqual(
+      AUTH_FILE,
+    );
   });
 
   it("does not start under another SECRETS_KEY, instead of reading garbage", async () => {
@@ -309,14 +319,16 @@ describe("ControlPlane stored secrets", () => {
     );
 
     await inStartedControlPlane(stub, async (plane) => {
-      await expect(outcomeOf(() => plane.listCredentials(FULL_ACCESS))).rejects.toThrow(refusal);
-      await expect(outcomeOf(() => plane.getConfig())).rejects.toThrow(refusal);
+      await expect(outcomeOf(() => plane.models().listCredentials(FULL_ACCESS))).rejects.toThrow(
+        refusal,
+      );
+      await expect(outcomeOf(() => plane.models().getConfig())).rejects.toThrow(refusal);
     });
     // Every later start fails the same way (nothing was rewritten under the wrong key).
     await restart(stub);
     await inStartedControlPlane(stub, async (plane) => {
       await expect(
-        outcomeOf(() => plane.getCredentialFile("claude-a.json", FULL_ACCESS)),
+        outcomeOf(() => plane.models().getCredentialFile("claude-a.json", FULL_ACCESS)),
       ).rejects.toThrow(refusal);
     });
   });
@@ -337,10 +349,10 @@ describe("ControlPlane stored secrets", () => {
         });
 
         await refused.started;
-        await expect(outcomeOf(() => refused.listCredentials(FULL_ACCESS))).rejects.toThrow(
-          refusal,
-        );
-        await expect(outcomeOf(() => refused.getConfig())).rejects.toThrow(refusal);
+        await expect(
+          outcomeOf(() => refused.models().listCredentials(FULL_ACCESS)),
+        ).rejects.toThrow(refusal);
+        await expect(outcomeOf(() => refused.models().getConfig())).rejects.toThrow(refusal);
       }
     });
   });
@@ -418,11 +430,8 @@ describe("ControlPlane stored secrets", () => {
   it("seals what a ControlPlane stored before encryption on its first start, keeping auth indexes", async () => {
     const { org, stub } = await orgWithSecrets();
     expect(
-      await stub.importAuthFile(
-        "claude-b.json",
-        { ...AUTH_FILE, email: "b@x.com" },
-        {},
-        FULL_ACCESS,
+      await withModelsPart(stub, (part) =>
+        part.importAuthFile("claude-b.json", { ...AUTH_FILE, email: "b@x.com" }, {}, FULL_ACCESS),
       ),
     ).toMatchObject({ ok: true });
     const before = await readThroughControlPlane(stub, org);

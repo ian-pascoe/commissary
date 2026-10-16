@@ -257,7 +257,7 @@ describe("model routes with the real ControlPlane", () => {
 
   it("lists models of imported credentials (prefix, plan tier, exclusions) and hides disabled ones", async () => {
     const stub = env.CONTROL_PLANE.getByName("global");
-    await stub.importConfig(
+    await stub.models().importConfig(
       `
 oauth:
   excluded-models:
@@ -268,7 +268,7 @@ oauth:
 `,
       "test",
     );
-    await stub.importAuthFile(
+    await stub.models().importAuthFile(
       "claude-a.json",
       JSON.stringify({
         type: "claude",
@@ -280,7 +280,7 @@ oauth:
       {},
       FULL_ACCESS,
     );
-    await stub.importAuthFile(
+    await stub.models().importAuthFile(
       "codex-a.json",
       JSON.stringify({
         type: "codex",
@@ -291,14 +291,16 @@ oauth:
       {},
       FULL_ACCESS,
     );
-    await stub.importAuthFile(
-      "claude-off.json",
-      JSON.stringify({ type: "claude", email: "off@x.com", access_token: "t", disabled: true }),
-      {},
-      FULL_ACCESS,
-    );
+    await stub
+      .models()
+      .importAuthFile(
+        "claude-off.json",
+        JSON.stringify({ type: "claude", email: "off@x.com", access_token: "t", disabled: true }),
+        {},
+        FULL_ACCESS,
+      );
 
-    const sources = await stub.listModelSources(FULL_ACCESS);
+    const sources = await stub.models().listModelSources(FULL_ACCESS);
     expect(JSON.stringify(sources)).not.toContain("secret");
     expect(sources.find((candidate) => candidate.id === "codex-a.json")).toMatchObject({
       provider: "codex",

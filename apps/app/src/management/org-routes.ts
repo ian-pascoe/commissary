@@ -362,15 +362,15 @@ const exportOrg = Effect.gen(function* () {
 
   // The Models section of the export goes through Models' view of the ControlPlane.
   const prices = yield* modelsControlPlane("priceOverrideEntries", (stub) =>
-    stub.priceOverrideEntries(),
+    stub.models().priceOverrideEntries(),
   );
 
   const credentials = yield* modelsControlPlane("listCredentialEntries", (stub) =>
-    stub.listCredentialEntries(viewer),
+    stub.models().listCredentialEntries(viewer),
   );
 
   const members = yield* controlPlane("listMembers", (stub) => stub.listMembers());
-  const grants = yield* modelsControlPlane("grantEntries", (stub) => stub.grantEntries());
+  const grants = yield* modelsControlPlane("grantEntries", (stub) => stub.models().grantEntries());
   const teams = yield* controlPlane("listTeams", (stub) => stub.listTeams());
   const tokens = yield* controlPlane("listServiceTokens", (stub) => stub.listServiceTokens());
   const iso = (at: number) => new Date(at).toISOString();

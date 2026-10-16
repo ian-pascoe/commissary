@@ -22,7 +22,7 @@ const KEY_B = "AIzaSy-ORACLE-KEY-TWO-7373";
 const wrongGuess = (secret: string): string => `X${secret.slice(1)}`;
 
 const seed = async (document: Record<string, unknown>): Promise<number> => {
-  const result = await controlPlane().importConfig(JSON.stringify(document), "test");
+  const result = await controlPlane().models().importConfig(JSON.stringify(document), "test");
 
   if (!result.ok) throw new Error(result.message);
 
@@ -48,7 +48,7 @@ const comparableReply = (response: Awaited<ReturnType<typeof json>>): string => 
  * marker that tells groups apart whatever their keys, then its keys' secrets. `-` is no marker.
  */
 const storedSecrets = async (family = "gemini"): Promise<string[][]> => {
-  const { document } = await controlPlane().getConfig();
+  const { document } = await controlPlane().models().getConfig();
 
   // SAFETY: the stored document is a serialized JSON object of the config shape (this test seeds it).
   const parsed = JSON.parse(document ?? "{}") as {
@@ -349,7 +349,7 @@ describe("provider-keys writes: a typed key equal to a stored one", () => {
       ["-", KEY_A],
       ["-", KEY_A, KEY_B],
     ]);
-    expect((await controlPlane().getConfig()).version).toBe(refused.version);
+    expect((await controlPlane().models().getConfig()).version).toBe(refused.version);
   });
 
   it("applies the same rule to vertex keys (unique by key and base-url)", async () => {

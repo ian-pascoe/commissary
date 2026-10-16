@@ -25,12 +25,14 @@ const fakeControlPlane = (sources: () => ReadonlyArray<ModelSource>, calls: { co
       CACHE: new FakeKv() as unknown as KVNamespace,
       CONTROL_PLANE: {
         getByName: () => ({
-          listModelSources: async () => {
-            calls.count += 1;
+          models: () => ({
+            listModelSources: async () => {
+              calls.count += 1;
 
-            return sources();
-          },
-          grantTable: () => ({ version: 1, grants: [], teams: [] }),
+              return sources();
+            },
+            grantTable: () => ({ version: 1, grants: [], teams: [] }),
+          }),
         }),
       },
     } as unknown as Env),

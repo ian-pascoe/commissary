@@ -16,7 +16,6 @@ import type {
 } from "../credentials/selection/types.ts";
 import type { RetryPlan, RetryQuery } from "../credentials/selection/retry.ts";
 import { CurrentOrg, type OrgId } from "@commissary/core";
-import { controlPlaneOf } from "../platform/org.ts";
 import { ExecutionError } from "./errors.ts";
 import {
   CredentialPicker,
@@ -24,7 +23,7 @@ import {
   type PickRequest,
   type PickResult,
 } from "./picker.ts";
-import { type ModelsBindings, ModelsEnv } from "../models/env.ts";
+import { type ModelsBindings, ModelsEnv, modelsPartOf } from "../models/env.ts";
 
 /** The slice of the ControlPlane RPC surface the picker needs (tests substitute an in-memory implementation). */
 export interface ControlPlaneApi {
@@ -210,5 +209,5 @@ const stripPrefix = (model: string, prefix: string | undefined): string => {
 /** Production picker: the ControlPlane Durable Object of the request's org. */
 export const ControlPlanePickerLayer = Layer.succeed(
   CredentialPicker,
-  makeControlPlanePicker(controlPlaneOf),
+  makeControlPlanePicker(modelsPartOf),
 );

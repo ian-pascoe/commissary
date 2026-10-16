@@ -46,7 +46,7 @@ export class ConfigSource extends Context.Service<
           const stub = yield* currentModelsControlPlane;
 
           return yield* Effect.tryPromise({
-            try: async () => await stub.getConfig(sinceVersion),
+            try: async () => await stub.models().getConfig(sinceVersion),
             catch: (cause) =>
               new ConfigStoreError({ message: "failed to read config from ControlPlane", cause }),
           });

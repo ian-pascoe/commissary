@@ -8,6 +8,7 @@ import { CredentialStore } from "../src/credentials/store.ts";
 import { GLOBAL_ORG, OrgId } from "@commissary/core";
 import { SqliteSessionTable } from "../src/oauth/session-store.ts";
 import { controlPlane, makeHarness } from "./support/management.ts";
+import { withModelsPart } from "./support/models-part.ts";
 import { orgDataKey, restart, storedText } from "./support/secrets.ts";
 
 const harness = makeHarness();
@@ -47,7 +48,7 @@ describe("accounts stored before ownership", () => {
     const checkShared = async () => {
       await restart(stub);
 
-      const listed = await stub.listCredentials(FULL_ACCESS);
+      const listed = await withModelsPart(stub, (part) => part.listCredentials(FULL_ACCESS));
 
       expect(listed.map((entry) => entry.id).toSorted()).toEqual(["old-a.json", "old-b.json"]);
 
@@ -62,11 +63,19 @@ describe("accounts stored before ownership", () => {
       });
 
       // Shared means: an org admin manages it in full, a plain member does not see it.
-      expect(await stub.credentialAccess("old-a.json", { member: "m-1", admin: true })).toEqual({
+      expect(
+        await withModelsPart(stub, (part) =>
+          part.credentialAccess("old-a.json", { member: "m-1", admin: true }),
+        ),
+      ).toEqual({
         access: "full",
         private: false,
       });
-      expect(await stub.credentialAccess("old-a.json", { member: "m-2", admin: false })).toEqual({
+      expect(
+        await withModelsPart(stub, (part) =>
+          part.credentialAccess("old-a.json", { member: "m-2", admin: false }),
+        ),
+      ).toEqual({
         access: "none",
         private: false,
       });
@@ -174,17 +183,19 @@ describe("private provider keys", () => {
 
     await stub.setMembershipSettings({ privateCredentials: true });
 
-    const written = await stub.writePrivateKeyGroup(
-      {
-        family: "claude",
-        revision: 0,
-        group: {
-          "base-url": "https://api.example.test/v1",
-          keys: [{ "api-key": "sk-ant-secret-private-key" }],
+    const written = await withModelsPart(stub, (part) =>
+      part.writePrivateKeyGroup(
+        {
+          family: "claude",
+          revision: 0,
+          group: {
+            "base-url": "https://api.example.test/v1",
+            keys: [{ "api-key": "sk-ant-secret-private-key" }],
+          },
         },
-      },
-      "member-1",
-      { member: "member-1", admin: false },
+        "member-1",
+        { member: "member-1", admin: false },
+      ),
     );
 
     expect(written.ok).toBe(true);

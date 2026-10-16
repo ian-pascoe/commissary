@@ -66,11 +66,13 @@ const pickForCaller = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
 
   const picked = yield* Effect.promise(async () => {
-    const answer = await controlPlaneOf(env, identity.org).pick({
-      providers: ["claude"],
-      model: "claude-sonnet-4-5",
-      ...(identity.memberId === undefined ? {} : { memberId: identity.memberId }),
-    });
+    const answer = await controlPlaneOf(env, identity.org)
+      .models()
+      .pick({
+        providers: ["claude"],
+        model: "claude-sonnet-4-5",
+        ...(identity.memberId === undefined ? {} : { memberId: identity.memberId }),
+      });
 
     return answer.ok ? { credential: answer.credential.id } : { refused: true };
   });

@@ -74,7 +74,7 @@ const record = (id: string, outcome: QuotaOutcome, options: RecordOptions) =>
     const checkedAt = yield* Clock.currentTimeMillis;
 
     const stored = yield* call("recordQuotaReport", (stub) =>
-      stub.recordQuotaReport(id, outcome, checkedAt, {
+      stub.models().recordQuotaReport(id, outcome, checkedAt, {
         ...(options.credentialVersion === undefined
           ? {}
           : { credentialVersion: options.credentialVersion }),
@@ -119,7 +119,7 @@ export const checkCredentialQuota = (
 > =>
   Effect.gen(function* () {
     const target = yield* call("quotaProbeTarget", (stub) =>
-      stub.quotaProbeTarget(ref, { sweep: options.sweep === true }, options.viewer),
+      stub.models().quotaProbeTarget(ref, { sweep: options.sweep === true }, options.viewer),
     );
 
     if (target.ok) {
@@ -176,7 +176,9 @@ export const LEASE_RENEW_INTERVAL_MS = 30_000;
 
 /** Renews the sweep's lease after an account whose check stored no report. */
 const renew = (token: string) =>
-  call("renewQuotaSweepLease", (stub) => stub.renewQuotaSweepLease(token)).pipe(Effect.ignore);
+  call("renewQuotaSweepLease", (stub) => stub.models().renewQuotaSweepLease(token)).pipe(
+    Effect.ignore,
+  );
 
 /** One account's outcome as a sweep reports it; a failed check is a result, never a failed sweep. */
 const checkForSweep = (token: string, viewer: Scope) => (id: string) =>
@@ -251,7 +253,7 @@ const keepLease = (token: string): Effect.Effect<void, never, ModelsEnv | Curren
       yield* Effect.sleep(Duration.millis(LEASE_RENEW_INTERVAL_MS));
 
       const held = yield* call("renewQuotaSweepLease", (stub) =>
-        stub.renewQuotaSweepLease(token),
+        stub.models().renewQuotaSweepLease(token),
       ).pipe(Effect.orElseSucceed(() => true));
 
       if (!held) return;
@@ -281,7 +283,7 @@ export const sweepQuotas = (
       const hold = yield* holdInvocation;
 
       const taken = yield* call("takeQuotaSweepLease", (stub) =>
-        stub.takeQuotaSweepLease(source),
+        stub.models().takeQuotaSweepLease(source),
       ).pipe(Effect.onError(() => Effect.sync(hold)));
 
       return { hold, taken };
@@ -292,7 +294,9 @@ export const sweepQuotas = (
       const { token, startedAt } = taken.lease;
 
       const sweep = Effect.gen(function* () {
-        const ids = yield* call("quotaCheckTargets", (stub) => stub.quotaCheckTargets(viewer));
+        const ids = yield* call("quotaCheckTargets", (stub) =>
+          stub.models().quotaCheckTargets(viewer),
+        );
 
         const results = yield* Effect.forEach(ids, checkForSweep(token, viewer), {
           concurrency: SWEEP_CONCURRENCY,
@@ -311,7 +315,7 @@ export const sweepQuotas = (
     ({ hold, taken }) =>
       (taken.ok
         ? call("releaseQuotaSweepLease", (stub) =>
-            stub.releaseQuotaSweepLease(taken.lease.token),
+            stub.models().releaseQuotaSweepLease(taken.lease.token),
           ).pipe(Effect.ignore)
         : Effect.void
       ).pipe(Effect.ensuring(Effect.sync(hold))),

@@ -102,7 +102,7 @@ const written = (result: WriteResult<{ readonly id: string; readonly revision: n
 };
 
 const list = Effect.gen(function* () {
-  const wire = yield* modelsControlPlane("grantEntries", (stub) => stub.grantEntries());
+  const wire = yield* modelsControlPlane("grantEntries", (stub) => stub.models().grantEntries());
 
   return jsonReply(200, wire);
 });
@@ -112,7 +112,7 @@ const create = Effect.gen(function* () {
   const { principalId } = yield* AccessPrincipal;
 
   const result = yield* modelsControlPlane("writeGrant", (stub) =>
-    stub.writeGrant({ revision: 0, value: grant }, principalId),
+    stub.models().writeGrant({ revision: 0, value: grant }, principalId),
   );
 
   return yield* written(result);
@@ -125,7 +125,7 @@ const replace = Effect.gen(function* () {
   const { principalId } = yield* AccessPrincipal;
 
   const result = yield* modelsControlPlane("writeGrant", (stub) =>
-    stub.writeGrant({ id, revision, value: grant }, principalId),
+    stub.models().writeGrant({ id, revision, value: grant }, principalId),
   );
 
   return yield* written(result);
@@ -137,7 +137,7 @@ const remove = Effect.gen(function* () {
   const { principalId } = yield* AccessPrincipal;
 
   const result = yield* modelsControlPlane("writeGrant", (stub) =>
-    stub.writeGrant({ id, revision, value: null }, principalId),
+    stub.models().writeGrant({ id, revision, value: null }, principalId),
   );
 
   return yield* written(result);

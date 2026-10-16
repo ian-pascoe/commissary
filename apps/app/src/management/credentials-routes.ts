@@ -82,7 +82,7 @@ const refuseConfigKey = (name: string) =>
     const viewer = yield* currentViewer;
 
     const config = yield* modelsControlPlane("isConfigKey", (stub) =>
-      stub.isConfigKey(name, viewer),
+      stub.models().isConfigKey(name, viewer),
     );
 
     if (config) {
@@ -108,7 +108,7 @@ const listCredentials = Effect.gen(function* () {
   const viewer = yield* currentViewer;
 
   const entries = yield* modelsControlPlane("listCredentialEntries", (stub) =>
-    stub.listCredentialEntries(viewer),
+    stub.models().listCredentialEntries(viewer),
   );
 
   const now = yield* Clock.currentTimeMillis;
@@ -179,7 +179,7 @@ const storeUpload = (upload: Upload, wantPrivate: boolean) =>
     const viewer = yield* currentViewer;
 
     const result = yield* modelsControlPlane("importAuthFile", (stub) =>
-      stub.importAuthFile(name, upload.content, { private: wantPrivate }, viewer),
+      stub.models().importAuthFile(name, upload.content, { private: wantPrivate }, viewer),
     );
 
     if (result.ok) return undefined;
@@ -318,7 +318,7 @@ const deleteCredentials = Effect.gen(function* () {
     const viewer = yield* currentViewer;
 
     const entries = yield* modelsControlPlane("listCredentialEntries", (stub) =>
-      stub.listCredentialEntries(viewer),
+      stub.models().listCredentialEntries(viewer),
     );
 
     // "All" is the caller's own: an org admin does not remove the private credentials of members they merely see.
@@ -327,7 +327,7 @@ const deleteCredentials = Effect.gen(function* () {
       .map((entry) => text(entry.id));
 
     const removed = yield* modelsControlPlane("removeCredentials", (stub) =>
-      stub.removeCredentials(ids, viewer),
+      stub.models().removeCredentials(ids, viewer),
     );
 
     return jsonReply(200, { status: "ok", deleted: removed.length });
@@ -343,7 +343,7 @@ const deleteCredentials = Effect.gen(function* () {
   const viewer = yield* currentViewer;
 
   const removed = yield* modelsControlPlane("removeCredentials", (stub) =>
-    stub.removeCredentials(safe, viewer),
+    stub.models().removeCredentials(safe, viewer),
   );
 
   if (names.length === 1) {
@@ -359,7 +359,7 @@ const deleteCredentials = Effect.gen(function* () {
     (name) =>
       unsafeName(name)
         ? Effect.succeed({ name, error: "invalid name" })
-        : modelsControlPlane("isConfigKey", (stub) => stub.isConfigKey(name, viewer)).pipe(
+        : modelsControlPlane("isConfigKey", (stub) => stub.models().isConfigKey(name, viewer)).pipe(
             Effect.map((config) => ({
               name,
               error: config ? "config_credential" : "auth file not found",
@@ -394,7 +394,7 @@ const downloadCredential = Effect.gen(function* () {
 
   // A private credential is its owner's alone: not even an org admin with the sensitive powers downloads it.
   const { access, private: isPrivate } = yield* modelsControlPlane("credentialAccess", (stub) =>
-    stub.credentialAccess(name, viewer),
+    stub.models().credentialAccess(name, viewer),
   );
 
   if (access === "limited") {
@@ -413,7 +413,7 @@ const downloadCredential = Effect.gen(function* () {
   if (unsafeName(name)) return yield* replyError(400, "invalid name");
 
   const file = yield* modelsControlPlane("getCredentialFile", (stub) =>
-    stub.getCredentialFile(name, viewer),
+    stub.models().getCredentialFile(name, viewer),
   );
 
   if (file === undefined) {
@@ -443,7 +443,7 @@ const credentialModels = Effect.gen(function* () {
   // derived from its key, so answering for one would confirm guesses. The models of a private credential are its
   // owner's to see, and of a shared one an org admin's.
   const { access } = yield* modelsControlPlane("credentialAccess", (stub) =>
-    stub.credentialAccess(name, viewer),
+    stub.models().credentialAccess(name, viewer),
   );
 
   const file =
@@ -454,7 +454,7 @@ const credentialModels = Effect.gen(function* () {
     file || !/^[0-9a-f]{16}$/i.test(name)
       ? undefined
       : yield* modelsControlPlane("credentialIdOfAuthIndex", (stub) =>
-          stub.credentialIdOfAuthIndex(name.toLowerCase(), viewer),
+          stub.models().credentialIdOfAuthIndex(name.toLowerCase(), viewer),
         );
 
   const id =
@@ -499,7 +499,9 @@ const patchStatus = Effect.gen(function* () {
 
   const result = yield* modelsControlPlane("setCredentialDisabledByRef", (stub) =>
     // SAFETY: typeof body.disabled === "boolean" was checked above; the narrowing is lost inside the callback.
-    stub.setCredentialDisabledByRef(refOf(body), body.disabled as boolean, principalId, viewer),
+    stub
+      .models()
+      .setCredentialDisabledByRef(refOf(body), body.disabled as boolean, principalId, viewer),
   );
 
   // A provider key is disabled through its excluded-models (`*`), like Go answers.
@@ -543,7 +545,7 @@ const patchFields = Effect.gen(function* () {
   const viewer = yield* currentViewer;
 
   const result = yield* modelsControlPlane("patchCredentialFields", (stub) =>
-    stub.patchCredentialFields({ name }, fields, viewer),
+    stub.models().patchCredentialFields({ name }, fields, viewer),
   );
 
   if (result.ok) return jsonReply(200, { status: "ok" });
@@ -579,7 +581,7 @@ const refreshCredentials = Effect.gen(function* () {
 
   if (all) {
     const results = yield* modelsControlPlane("refreshAllCredentials", (stub) =>
-      stub.refreshAllCredentials(viewer),
+      stub.models().refreshAllCredentials(viewer),
     );
 
     return jsonReply(200, { ok: true, results });
@@ -591,7 +593,7 @@ const refreshCredentials = Effect.gen(function* () {
   if (name === "") return yield* replyError(400, "name or all=true is required");
 
   const result = yield* modelsControlPlane("refreshCredential", (stub) =>
-    stub.refreshCredential({ name, ...(authIndex === "" ? {} : { authIndex }) }, viewer),
+    stub.models().refreshCredential({ name, ...(authIndex === "" ? {} : { authIndex }) }, viewer),
   );
 
   if (result.ok) return jsonReply(200, { ok: true, auth: result.entry });
@@ -614,7 +616,7 @@ const resetCooldown = Effect.gen(function* () {
   const viewer = yield* currentViewer;
 
   const result = yield* modelsControlPlane("resetCredentialCooldown", (stub) =>
-    stub.resetCredentialCooldown({ authIndex }, viewer),
+    stub.models().resetCredentialCooldown({ authIndex }, viewer),
   );
 
   if (!result.ok) return yield* replyError(404, "auth not found");

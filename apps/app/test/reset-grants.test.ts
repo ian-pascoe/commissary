@@ -479,7 +479,9 @@ beforeEach(async () => {
 const INDEX = authIndexOf("claude-a.json");
 
 const seed = async (name = "claude-a.json", file: Record<string, unknown> = claudeFile()) => {
-  const result = await controlPlane().importAuthFile(name, JSON.stringify(file), {}, FULL_ACCESS);
+  const result = await controlPlane()
+    .models()
+    .importAuthFile(name, JSON.stringify(file), {}, FULL_ACCESS);
 
   expect(result.ok).toBe(true);
 };
@@ -504,7 +506,7 @@ const listed = async (name = "claude-a.json") => {
 
 /** The grant mark the ControlPlane hands out now (what a status read started now would be stored under). */
 const markOf = async (authIndex = INDEX) => {
-  const target = await controlPlane().resetGrantTarget({ authIndex }, FULL_ACCESS);
+  const target = await controlPlane().models().resetGrantTarget({ authIndex }, FULL_ACCESS);
 
   if (!target.ok) throw new Error("no reset grant target");
 
@@ -513,12 +515,14 @@ const markOf = async (authIndex = INDEX) => {
 
 /** Starts a claim of `claude-a.json` as another tab would (in flight, unanswered). */
 const beginElsewhere = async (requestId: string) => {
-  const started = await controlPlane().beginResetGrantClaim(
-    "claude-a.json",
-    ORGANIZATION,
-    { grantId: "g1", requestId, resetsLeft: 2 },
-    await markOf(),
-  );
+  const started = await controlPlane()
+    .models()
+    .beginResetGrantClaim(
+      "claude-a.json",
+      ORGANIZATION,
+      { grantId: "g1", requestId, resetsLeft: 2 },
+      await markOf(),
+    );
 
   expect(started.ok).toBe(true);
 };
@@ -529,10 +533,10 @@ const BUSY =
 /** Puts the account in a model cooldown (a 429 reported for its lease). */
 const coolDown = async (): Promise<void> => {
   const stub = controlPlane();
-  const picked = await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" });
+  const picked = await stub.models().pick({ providers: ["claude"], model: "claude-sonnet-4-5" });
 
   if (!picked.ok) throw new Error("pick failed");
-  await stub.report(picked.lease, {
+  await stub.models().report(picked.lease, {
     success: false,
     httpStatus: 429,
     error: { message: "limit", retryable: true },
@@ -805,7 +809,7 @@ describe("claim races and failures", () => {
     // Another tab's claim starts and is answered while this claim's status read is on the wire.
     onStatus = async () => {
       await beginElsewhere("other-tab");
-      await controlPlane().settleResetGrantClaim("claude-a.json", "other-tab", "reset");
+      await controlPlane().models().settleResetGrantClaim("claude-a.json", "other-tab", "reset");
     };
 
     expect(await claim()).toMatchObject({
@@ -822,7 +826,7 @@ describe("claim races and failures", () => {
 
   it("refuses claims on a disabled account; reads stay allowed", async () => {
     await seed();
-    await controlPlane().setCredentialDisabled("claude-a.json", true, FULL_ACCESS);
+    await controlPlane().models().setCredentialDisabled("claude-a.json", true, FULL_ACCESS);
 
     expect(await claim()).toMatchObject({
       status: 409,
@@ -830,12 +834,14 @@ describe("claim races and failures", () => {
     });
     expect(harness.requests).toHaveLength(0);
     expect(
-      await controlPlane().beginResetGrantClaim(
-        "claude-a.json",
-        ORGANIZATION,
-        { grantId: "g1", requestId: "r" },
-        await markOf(),
-      ),
+      await controlPlane()
+        .models()
+        .beginResetGrantClaim(
+          "claude-a.json",
+          ORGANIZATION,
+          { grantId: "g1", requestId: "r" },
+          await markOf(),
+        ),
     ).toEqual({ ok: false, error: "disabled" });
     expect((await readGrants()).status).toBe(200);
   });
@@ -849,7 +855,7 @@ describe("claim races and failures", () => {
     if (newer === undefined || older === undefined) throw new Error("bad status");
 
     const record = (status: ResetGrantStatus) =>
-      controlPlane().recordResetGrantStatus("claude-a.json", status, mark);
+      controlPlane().models().recordResetGrantStatus("claude-a.json", status, mark);
 
     expect(await record(newer)).toBe("stored");
     expect(await record(older)).toBe("older");
@@ -864,7 +870,7 @@ describe("claim races and failures", () => {
 
     // Removed and re-created under the same name during a claim's read: no claim is sent.
     onStatus = async () => {
-      await controlPlane().removeCredential("claude-a.json", FULL_ACCESS);
+      await controlPlane().models().removeCredential("claude-a.json", FULL_ACCESS);
       await seed();
     };
 
@@ -989,12 +995,14 @@ describe("claim races and failures", () => {
     expect(sent(CLAIM_URL)).toHaveLength(0);
 
     // Another organization is not blocked.
-    const other = await controlPlane().beginResetGrantClaim(
-      "claude-b.json",
-      "00000000-0000-4000-8000-000000000000",
-      { grantId: "g1", requestId: "other-org" },
-      await markOf(indexB),
-    );
+    const other = await controlPlane()
+      .models()
+      .beginResetGrantClaim(
+        "claude-b.json",
+        "00000000-0000-4000-8000-000000000000",
+        { grantId: "g1", requestId: "other-org" },
+        await markOf(indexB),
+      );
 
     expect(other).toMatchObject({ ok: true, retry: false });
   });
@@ -1010,7 +1018,7 @@ describe("claim races and failures", () => {
     expect(sent(CLAIM_URL)).toHaveLength(0);
 
     // Removed, then the organization is added again under another name: still busy.
-    await controlPlane().removeCredential("claude-a.json", FULL_ACCESS);
+    await controlPlane().models().removeCredential("claude-a.json", FULL_ACCESS);
     await seed("claude-b.json", claudeFile({ access_token: "sk-ant-oat-second-file" }));
     const indexB = authIndexOf("claude-b.json");
 
@@ -1021,7 +1029,7 @@ describe("claim races and failures", () => {
 
     // The answer of the request on the wire is still recorded, which frees the organization.
     expect(
-      await controlPlane().settleResetGrantClaim("claude-a.json", "on-the-wire", "reset"),
+      await controlPlane().models().settleResetGrantClaim("claude-a.json", "on-the-wire", "reset"),
     ).toEqual({ cooldownCleared: false });
     harness.requests.length = 0;
     expect((await claim(indexB)).body).toMatchObject({ outcome: "reset", retried: false });
@@ -1032,9 +1040,9 @@ describe("claim races and failures", () => {
     await seed();
     await readGrants();
     await beginElsewhere("on-the-wire");
-    expect(await controlPlane().removeCredentials(["claude-a.json"], FULL_ACCESS)).toEqual([
-      "claude-a.json",
-    ]);
+    expect(await controlPlane().models().removeCredentials(["claude-a.json"], FULL_ACCESS)).toEqual(
+      ["claude-a.json"],
+    );
 
     // The status is gone with the credential; the claim in flight still holds its organization.
     await seed();
@@ -1052,7 +1060,7 @@ describe("claim races and failures", () => {
     // claude-a's claim starts and is answered (its journal is gone) while claude-b's status read is on the wire.
     onStatus = async () => {
       await beginElsewhere("file-a");
-      await controlPlane().settleResetGrantClaim("claude-a.json", "file-a", "reset");
+      await controlPlane().models().settleResetGrantClaim("claude-a.json", "file-a", "reset");
     };
 
     harness.requests.length = 0;
@@ -1072,16 +1080,12 @@ describe("claim races and failures", () => {
     // Meanwhile another tab's resend gets the answer, and a new claim is started and left unanswered.
     onStatus = async () => {
       const stub = controlPlane();
-      await stub.beginResetGrantClaim(
-        "claude-a.json",
-        ORGANIZATION,
-        undefined,
-        await markOf(),
-        seen,
-      );
-      await stub.settleResetGrantClaim("claude-a.json", seen, "already_used");
+      await stub
+        .models()
+        .beginResetGrantClaim("claude-a.json", ORGANIZATION, undefined, await markOf(), seen);
+      await stub.models().settleResetGrantClaim("claude-a.json", seen, "already_used");
       await beginElsewhere("newer-claim");
-      await stub.settleResetGrantClaim("claude-a.json", "newer-claim", "unknown");
+      await stub.models().settleResetGrantClaim("claude-a.json", "newer-claim", "unknown");
     };
 
     harness.requests.length = 0;
@@ -1099,13 +1103,10 @@ describe("claim races and failures", () => {
     const requestId = String(sent(CLAIM_URL)[0]?.json().request_id);
 
     onStatus = async () => {
-      await controlPlane().beginResetGrantClaim(
-        "claude-a.json",
-        ORGANIZATION,
-        undefined,
-        await markOf(),
-      );
-      await controlPlane().settleResetGrantClaim("claude-a.json", requestId, "reset");
+      await controlPlane()
+        .models()
+        .beginResetGrantClaim("claude-a.json", ORGANIZATION, undefined, await markOf());
+      await controlPlane().models().settleResetGrantClaim("claude-a.json", requestId, "reset");
     };
 
     harness.requests.length = 0;

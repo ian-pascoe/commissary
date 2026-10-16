@@ -70,7 +70,7 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
     run: Effect.gen(function* () {
       const plane = yield* currentModelsControlPlane;
 
-      return yield* Effect.promise(() => plane.refreshDevinStatus());
+      return yield* Effect.promise(() => plane.models().refreshDevinStatus());
     }),
   },
   // Expired API keys are deleted, not kept marked (ADR 0027): a listing or issue deletes them too, this covers an org
@@ -92,7 +92,7 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
     scope: "org",
     run: Effect.gen(function* () {
       const plane = yield* currentModelsControlPlane;
-      yield* Effect.promise(() => plane.sweepRefresh());
+      yield* Effect.promise(() => plane.models().sweepRefresh());
     }),
   },
   // Quota check (Workers addition, src/quota): provider usage windows of every enabled account that has a usage

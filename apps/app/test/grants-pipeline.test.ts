@@ -81,7 +81,7 @@ beforeAll(async () => {
     return stream(body.model ?? "");
   };
 
-  await stub().importAuthFile("sub-a.json", claudeFile(), {}, FULL_ACCESS);
+  await stub().models().importAuthFile("sub-a.json", claudeFile(), {}, FULL_ACCESS);
 
   const ids = await listed();
   SONNET = ids.find((id) => id.startsWith("claude-sonnet-")) ?? "";
@@ -94,17 +94,21 @@ afterAll(() => {
 
 /** Replaces the default grant with `everyone, all shared credentials, models`. */
 const restrictTo = async (models: ReadonlyArray<string>) => {
-  for (const grant of (await stub().grantEntries()).grants) {
-    await stub().writeGrant({ id: grant.id, revision: grant.revision, value: null }, "test");
+  for (const grant of (await stub().models().grantEntries()).grants) {
+    await stub()
+      .models()
+      .writeGrant({ id: grant.id, revision: grant.revision, value: null }, "test");
   }
 
-  const written = await stub().writeGrant(
-    {
-      revision: 0,
-      value: { subject: { kind: "everyone" }, scope: { kind: "all" }, models: [...models] },
-    },
-    "test",
-  );
+  const written = await stub()
+    .models()
+    .writeGrant(
+      {
+        revision: 0,
+        value: { subject: { kind: "everyone" }, scope: { kind: "all" }, models: [...models] },
+      },
+      "test",
+    );
 
   expect(written.ok).toBe(true);
   // The routing view rebuilds the registry now (`fresh`), so the next list does not wait for the 5 s snapshot TTL.

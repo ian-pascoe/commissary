@@ -88,7 +88,9 @@ const written = (result: WriteResult<{ readonly id: string; readonly revision: n
 const list = Effect.gen(function* () {
   return jsonReply(
     200,
-    yield* modelsControlPlane("priceOverrideEntries", (stub) => stub.priceOverrideEntries()),
+    yield* modelsControlPlane("priceOverrideEntries", (stub) =>
+      stub.models().priceOverrideEntries(),
+    ),
   );
 });
 
@@ -97,7 +99,7 @@ const create = Effect.gen(function* () {
   const { principalId } = yield* AccessPrincipal;
 
   const result = yield* modelsControlPlane("writePriceOverride", (stub) =>
-    stub.writePriceOverride({ revision: 0, value: price }, principalId),
+    stub.models().writePriceOverride({ revision: 0, value: price }, principalId),
   );
 
   return yield* written(result);
@@ -110,7 +112,7 @@ const replace = Effect.gen(function* () {
   const { principalId } = yield* AccessPrincipal;
 
   const result = yield* modelsControlPlane("writePriceOverride", (stub) =>
-    stub.writePriceOverride({ id, revision, value: price }, principalId),
+    stub.models().writePriceOverride({ id, revision, value: price }, principalId),
   );
 
   return yield* written(result);
@@ -122,7 +124,7 @@ const remove = Effect.gen(function* () {
   const { principalId } = yield* AccessPrincipal;
 
   const result = yield* modelsControlPlane("writePriceOverride", (stub) =>
-    stub.writePriceOverride({ id, revision, value: null }, principalId),
+    stub.models().writePriceOverride({ id, revision, value: null }, principalId),
   );
 
   return yield* written(result);

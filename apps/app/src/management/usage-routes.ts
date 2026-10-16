@@ -188,7 +188,7 @@ const parseFilter = (params: URLSearchParams) =>
 
       // A live credential narrows D1 to its id directly; only other indexes read the distinct ids (`resolveAuthIds`).
       const live = yield* modelsControlPlane("credentialIdOfAuthIndex", (stub) =>
-        stub.credentialIdOfAuthIndex(authIndex.toLowerCase(), viewerOf(identity)),
+        stub.models().credentialIdOfAuthIndex(authIndex.toLowerCase(), viewerOf(identity)),
       );
 
       if (live !== undefined) filter.liveAuthId = live;

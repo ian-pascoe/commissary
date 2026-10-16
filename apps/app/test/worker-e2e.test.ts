@@ -73,7 +73,7 @@ const controlPlane = () => env.CONTROL_PLANE.getByName("global");
 
 /** Counters the ControlPlane keeps for the provider key (written by `report`). */
 const reportedCounts = async () => {
-  const entry = (await controlPlane().listCredentials(FULL_ACCESS)).find((summary) =>
+  const entry = (await controlPlane().models().listCredentials(FULL_ACCESS)).find((summary) =>
     summary.id.startsWith(CONFIG_KEY_ID),
   );
 
@@ -151,7 +151,7 @@ beforeAll(async () => {
     return await upstream(request);
   };
 
-  const stored = await controlPlane().importConfig(YAML, "test");
+  const stored = await controlPlane().models().importConfig(YAML, "test");
   expect(stored.ok).toBe(true);
 });
 
@@ -274,7 +274,7 @@ describe("production Worker end to end", () => {
     expect(await reportedCounts()).toEqual({ success: before.success, failed: before.failed + 1 });
     expect(stream.state.cancelled).toBe(true);
 
-    const summary = (await controlPlane().listCredentials(FULL_ACCESS)).find((entry) =>
+    const summary = (await controlPlane().models().listCredentials(FULL_ACCESS)).find((entry) =>
       entry.id.startsWith(CONFIG_KEY_ID),
     );
 

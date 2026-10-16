@@ -49,24 +49,30 @@ const spendingOrg = async () => {
   };
 
   const limit = async (kind: "member" | "key" | "org", subject: string) => {
-    const made = await stub.createSpendLimit(
-      viewer,
-      { kind, subject, period: "day", amountMicros: 100 * USD },
-      "test@example.com",
-    );
+    const made = await stub
+      .models()
+      .createSpendLimit(
+        viewer,
+        { kind, subject, period: "day", amountMicros: 100 * USD },
+        "test@example.com",
+      );
 
     if (!made.ok) throw new Error(`${made.error}: ${made.message}`);
   };
 
   const spend = async (memberId: string, apiKeyId: string) => {
-    const picked = await stub.pick({ ...REQUEST, memberId, apiKeyId });
+    const picked = await stub.models().pick({ ...REQUEST, memberId, apiKeyId });
 
     if (!picked.ok) throw new Error(picked.failure.code);
-    await stub.report(picked.lease, { success: true, httpStatus: 200, costMicros: USD });
+    await stub.models().report(picked.lease, { success: true, httpStatus: 200, costMicros: USD });
   };
 
   expect(
-    (await stub.importAuthFile("claude-a.json", JSON.stringify(claudeFile()), {}, FULL_ACCESS)).ok,
+    (
+      await stub
+        .models()
+        .importAuthFile("claude-a.json", JSON.stringify(claudeFile()), {}, FULL_ACCESS)
+    ).ok,
   ).toBe(true);
 
   const aliceKey = await key(alice, "alice laptop");

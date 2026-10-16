@@ -35,7 +35,7 @@ const must = <A>(value: A | undefined): A => {
 const decoded = (document: string | undefined) =>
   Effect.runSync(decodeConfig(JSON.parse(document ?? "{}") as Json));
 
-const current = async () => decoded((await controlPlane().getConfig()).document);
+const current = async () => decoded((await controlPlane().models().getConfig()).document);
 
 // A Go config document with a bit of everything: v8 key groups with ids to derive, a disabled OpenAI-compatible
 // endpoint, a key-less one, model rules, payload rules, settings and keys that do nothing on Workers.
@@ -84,7 +84,7 @@ const DOCUMENT = {
 describe("config import", () => {
   it("stores the same config as decoding the document and names the not-applied keys", async () => {
     const before = Effect.runSync(decodeConfig(DOCUMENT as unknown as Json));
-    const result = await controlPlane().importConfig(JSON.stringify(DOCUMENT), "test");
+    const result = await controlPlane().models().importConfig(JSON.stringify(DOCUMENT), "test");
 
     expect(result).toMatchObject({ ok: true });
     // Org members and roles replace the config admin lists: an import names them as not applied.
@@ -106,24 +106,28 @@ describe("config import", () => {
   });
 
   it("refuses an import based on a change counter another write moved, and stores nothing", async () => {
-    const { version } = await controlPlane().getConfig();
+    const { version } = await controlPlane().models().getConfig();
 
-    await controlPlane().writeSettings(
-      [{ id: "routing.strategy", revision: 0, value: "fill-first" }],
-      "other",
-    );
-    const result = await controlPlane().importConfig("request-retry: 7\n", "test", version);
+    await controlPlane()
+      .models()
+      .writeSettings([{ id: "routing.strategy", revision: 0, value: "fill-first" }], "other");
+
+    const result = await controlPlane()
+      .models()
+      .importConfig("request-retry: 7\n", "test", version);
 
     expect(result).toMatchObject({ ok: false, error: "conflict" });
     expect((await current()).routing.strategy).toBe("fill-first");
     expect(
-      await controlPlane().importConfig("request-retry: 7\n", "test", version + 1),
+      await controlPlane()
+        .models()
+        .importConfig("request-retry: 7\n", "test", version + 1),
     ).toMatchObject({ ok: true });
   });
 
   it("refuses an invalid document and keeps the entries", async () => {
-    await controlPlane().importConfig("routing:\n  strategy: fill-first\n", "test");
-    const result = await controlPlane().importConfig("routing: [", "test");
+    await controlPlane().models().importConfig("routing:\n  strategy: fill-first\n", "test");
+    const result = await controlPlane().models().importConfig("routing: [", "test");
 
     expect(result).toMatchObject({ ok: false, error: "invalid" });
     expect((await current()).routing.strategy).toBe("fill-first");
@@ -180,7 +184,7 @@ describe("migration of a stored config document", () => {
       );
     });
 
-    const snapshot = await stub.getConfig();
+    const snapshot = await stub.models().getConfig();
     // The change counter continues after the document's version, so every cached view is rebuilt.
     expect(snapshot.version).toBe(42);
     const after = decoded(snapshot.document);
@@ -195,7 +199,7 @@ describe("migration of a stored config document", () => {
       .filter((id) => id !== undefined)
       .toSorted((a, b) => a.localeCompare(b));
 
-    const live = (await stub.listCredentials(FULL_ACCESS))
+    const live = (await stub.models().listCredentials(FULL_ACCESS))
       .filter((entry) => entry.source === "config")
       .map((entry) => entry.id)
       .toSorted((a, b) => a.localeCompare(b));
@@ -218,12 +222,12 @@ describe("migration of a stored config document", () => {
     });
 
     // Idempotent: the next start finds the entries and imports nothing again.
-    expect((await stub.getConfig()).version).toBe(42);
+    expect((await stub.models().getConfig()).version).toBe(42);
   });
 
   it("starts empty without a stored document", async () => {
     const stub = controlPlane(OrgId.make(`fresh-${crypto.randomUUID().slice(0, 8)}`));
-    const snapshot = await stub.getConfig();
+    const snapshot = await stub.models().getConfig();
 
     expect(snapshot.version).toBe(0);
     expect(comparable(decoded(snapshot.document))).toEqual(
@@ -235,14 +239,12 @@ describe("migration of a stored config document", () => {
 describe("entry revisions", () => {
   it("lets concurrent edits of two different settings both succeed", async () => {
     const [a, b] = await Promise.all([
-      controlPlane().writeSettings(
-        [{ id: "routing.strategy", revision: 0, value: "fill-first" }],
-        "a",
-      ),
-      controlPlane().writeSettings(
-        [{ id: "routing.session-affinity", revision: 0, value: true }],
-        "b",
-      ),
+      controlPlane()
+        .models()
+        .writeSettings([{ id: "routing.strategy", revision: 0, value: "fill-first" }], "a"),
+      controlPlane()
+        .models()
+        .writeSettings([{ id: "routing.session-affinity", revision: 0, value: true }], "b"),
     ]);
 
     expect(a.ok && b.ok).toBe(true);
@@ -252,20 +254,21 @@ describe("entry revisions", () => {
   });
 
   it("refuses a stale revision with conflict and stores nothing", async () => {
-    const first = await controlPlane().writeSettings(
-      [{ id: "routing.strategy", revision: 0, value: "fill-first" }],
-      "a",
-    );
+    const first = await controlPlane()
+      .models()
+      .writeSettings([{ id: "routing.strategy", revision: 0, value: "fill-first" }], "a");
 
     expect(first.ok).toBe(true);
 
-    const stale = await controlPlane().writeSettings(
-      [
-        { id: "routing.strategy", revision: 0, value: "round-robin" },
-        { id: "routing.session-affinity", revision: 0, value: true },
-      ],
-      "b",
-    );
+    const stale = await controlPlane()
+      .models()
+      .writeSettings(
+        [
+          { id: "routing.strategy", revision: 0, value: "round-robin" },
+          { id: "routing.session-affinity", revision: 0, value: true },
+        ],
+        "b",
+      );
 
     expect(stale).toMatchObject({ ok: false, error: "conflict" });
     const config = await current();
@@ -275,33 +278,35 @@ describe("entry revisions", () => {
   });
 
   it("refuses a write that names a setting twice", async () => {
-    const { version } = await controlPlane().getConfig();
+    const { version } = await controlPlane().models().getConfig();
 
-    const twice = await controlPlane().writeSettings(
-      [
-        { id: "routing.strategy", revision: 0, value: "fill-first" },
-        { id: "routing.strategy", revision: 0, value: "round-robin" },
-      ],
-      "a",
-    );
+    const twice = await controlPlane()
+      .models()
+      .writeSettings(
+        [
+          { id: "routing.strategy", revision: 0, value: "fill-first" },
+          { id: "routing.strategy", revision: 0, value: "round-robin" },
+        ],
+        "a",
+      );
 
     expect(twice).toMatchObject({ ok: false, error: "invalid" });
     expect((await current()).routing.strategy).toBe("round-robin");
-    expect((await controlPlane().getConfig()).version).toBe(version);
+    expect((await controlPlane().models().getConfig()).version).toBe(version);
   });
 
   it("never repeats a revision for an entry deleted and created again", async () => {
-    const created = await controlPlane().writeChannelRule("exclusions", "codex", 0, ["a"], "t");
+    const created = await controlPlane()
+      .models()
+      .writeChannelRule("exclusions", "codex", 0, ["a"], "t");
 
-    const removed = await controlPlane().writeChannelRule(
-      "exclusions",
-      "codex",
-      created.ok ? created.revision : -1,
-      null,
-      "t",
-    );
+    const removed = await controlPlane()
+      .models()
+      .writeChannelRule("exclusions", "codex", created.ok ? created.revision : -1, null, "t");
 
-    const again = await controlPlane().writeChannelRule("exclusions", "codex", 0, ["b"], "t");
+    const again = await controlPlane()
+      .models()
+      .writeChannelRule("exclusions", "codex", 0, ["b"], "t");
 
     expect(removed).toMatchObject({ ok: true, revision: 0 });
     expect(again.ok && created.ok && again.revision > created.revision).toBe(true);
@@ -401,17 +406,19 @@ const keysList = async (): Promise<ProviderKeysList> => {
 
 describe("Provider key groups", () => {
   beforeEach(async () => {
-    await controlPlane().importConfig(
-      JSON.stringify({
-        "api-keys": {
-          claude: [
-            { keys: [{ "api-key": "sk-ant-first-1111" }] },
-            { keys: [{ "api-key": "sk-ant-second-2222" }] },
-          ],
-        },
-      }),
-      "test",
-    );
+    await controlPlane()
+      .models()
+      .importConfig(
+        JSON.stringify({
+          "api-keys": {
+            claude: [
+              { keys: [{ "api-key": "sk-ant-first-1111" }] },
+              { keys: [{ "api-key": "sk-ant-second-2222" }] },
+            ],
+          },
+        }),
+        "test",
+      );
   });
 
   it("keeps a key's auth index when its secret changes", async () => {
@@ -419,7 +426,7 @@ describe("Provider key groups", () => {
     const authIndex = must(group.group.keys[0]?.auth_index);
 
     const credentials = async () =>
-      (await controlPlane().listCredentials(FULL_ACCESS)).filter(
+      (await controlPlane().models().listCredentials(FULL_ACCESS)).filter(
         (entry) => entry.source === "config",
       );
 
@@ -507,29 +514,35 @@ describe("Provider key groups", () => {
   });
 
   it("refuses a group write that would let the normaliser drop a key another group stored since", async () => {
-    await controlPlane().importConfig(
-      JSON.stringify({ "api-keys": { gemini: [{ keys: [{ "api-key": "AIza-first" }] }] } }),
-      "test",
-    );
+    await controlPlane()
+      .models()
+      .importConfig(
+        JSON.stringify({ "api-keys": { gemini: [{ keys: [{ "api-key": "AIza-first" }] }] } }),
+        "test",
+      );
     const first = must((await keysList()).families.gemini[0]);
 
     // Another admin adds a group holding a key; this write was checked against a read without it.
-    const added = await controlPlane().writeKeyGroup(
-      { family: "gemini", revision: 0, group: { keys: [{ "api-key": "AIza-shared" }] } },
-      "other",
-    );
+    const added = await controlPlane()
+      .models()
+      .writeKeyGroup(
+        { family: "gemini", revision: 0, group: { keys: [{ "api-key": "AIza-shared" }] } },
+        "other",
+      );
 
     expect(added.ok).toBe(true);
 
-    const raced = await controlPlane().writeKeyGroup(
-      {
-        family: "gemini",
-        id: first.id,
-        revision: first.revision,
-        group: { keys: [{ "api-key": "AIza-first" }, { "api-key": "AIza-shared" }] },
-      },
-      "test",
-    );
+    const raced = await controlPlane()
+      .models()
+      .writeKeyGroup(
+        {
+          family: "gemini",
+          id: first.id,
+          revision: first.revision,
+          group: { keys: [{ "api-key": "AIza-first" }, { "api-key": "AIza-shared" }] },
+        },
+        "test",
+      );
 
     expect(raced).toMatchObject({ ok: false, error: "conflict" });
     expect((await keysList()).families.gemini.map((group) => group.group.keys.length)).toEqual([

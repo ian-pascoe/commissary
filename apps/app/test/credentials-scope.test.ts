@@ -75,17 +75,19 @@ describe("a viewer's reach", () => {
     const stub = controlPlane(org);
 
     await stub.setMembershipSettings({ privateCredentials: true });
-    await stub.importAuthFile("shared.json", JSON.stringify(claudeFile()), {}, admin);
+    await stub.models().importAuthFile("shared.json", JSON.stringify(claudeFile()), {}, admin);
 
-    await stub.importAuthFile(
-      "alice.json",
-      JSON.stringify(claudeFile({ email: "alice@x.com" })),
-      {},
-      alice,
-    );
+    await stub
+      .models()
+      .importAuthFile(
+        "alice.json",
+        JSON.stringify(claudeFile({ email: "alice@x.com" })),
+        {},
+        alice,
+      );
 
     const names = async (viewer: Viewer | typeof FULL_ACCESS) =>
-      (await stub.listCredentials(viewer)).map((entry) => entry.id).toSorted();
+      (await stub.models().listCredentials(viewer)).map((entry) => entry.id).toSorted();
 
     expect(await names(FULL_ACCESS)).toEqual(["alice.json", "shared.json"]);
     expect(await names(alice)).toEqual(["alice.json"]);
@@ -93,24 +95,24 @@ describe("a viewer's reach", () => {
     expect(await names(admin)).toEqual(["alice.json", "shared.json"]);
 
     // Another member removes or disables nothing of hers.
-    expect(await stub.removeCredential("alice.json", bob)).toEqual({ removed: false });
-    expect(await stub.setCredentialDisabled("alice.json", true, bob)).toEqual({
+    expect(await stub.models().removeCredential("alice.json", bob)).toEqual({ removed: false });
+    expect(await stub.models().setCredentialDisabled("alice.json", true, bob)).toEqual({
       ok: false,
       error: "not_found",
     });
-    expect(await stub.removeCredentials(["alice.json"], bob)).toEqual([]);
+    expect(await stub.models().removeCredentials(["alice.json"], bob)).toEqual([]);
 
     // Nor does a plain member reach the org's shared credential.
-    expect(await stub.removeCredential("shared.json", alice)).toEqual({ removed: false });
+    expect(await stub.models().removeCredential("shared.json", alice)).toEqual({ removed: false });
 
     // Model sources carry the owner: the registry reads them all as the system and narrows them itself.
     const sources = async (viewer: Viewer | typeof FULL_ACCESS) =>
-      (await stub.listModelSources(viewer)).map((source) => source.id).toSorted();
+      (await stub.models().listModelSources(viewer)).map((source) => source.id).toSorted();
 
     expect(await sources(FULL_ACCESS)).toEqual(["alice.json", "shared.json"]);
     expect(await sources(bob)).toEqual([]);
     expect(await sources(alice)).toEqual(["alice.json"]);
 
-    expect(await stub.removeCredential("alice.json", alice)).toEqual({ removed: true });
+    expect(await stub.models().removeCredential("alice.json", alice)).toEqual({ removed: true });
   });
 });

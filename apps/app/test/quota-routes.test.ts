@@ -55,12 +55,9 @@ beforeEach(async () => {
 });
 
 const seedClaude = async (name = "claude-a.json"): Promise<void> => {
-  const result = await controlPlane().importAuthFile(
-    name,
-    JSON.stringify(claudeFile()),
-    {},
-    FULL_ACCESS,
-  );
+  const result = await controlPlane()
+    .models()
+    .importAuthFile(name, JSON.stringify(claudeFile()), {}, FULL_ACCESS);
 
   expect(result.ok).toBe(true);
 };
@@ -159,18 +156,20 @@ describe("POST /credentials/quota", () => {
   });
 
   it("answers 422 for a provider without a usage endpoint, without calling upstream", async () => {
-    const imported = await controlPlane().importAuthFile(
-      "qwen-a.json",
-      JSON.stringify({
-        type: "qwen",
-        email: "q@x.com",
-        access_token: "ya29.secret",
-        refresh_token: "r",
-        expired: "2999-01-01T00:00:00Z",
-      }),
-      {},
-      FULL_ACCESS,
-    );
+    const imported = await controlPlane()
+      .models()
+      .importAuthFile(
+        "qwen-a.json",
+        JSON.stringify({
+          type: "qwen",
+          email: "q@x.com",
+          access_token: "ya29.secret",
+          refresh_token: "r",
+          expired: "2999-01-01T00:00:00Z",
+        }),
+        {},
+        FULL_ACCESS,
+      );
 
     expect(imported.ok).toBe(true);
     const { status, body } = await check("qwen-a.json");
@@ -185,17 +184,19 @@ describe("POST /credentials/quota", () => {
     await check("claude-a.json");
     expect(await listedReport("claude-a.json")).toBeDefined();
 
-    await controlPlane().importAuthFile(
-      "claude-a.json",
-      JSON.stringify(claudeFile({ access_token: "sk-ant-oat-other-account" })),
-      {},
-      FULL_ACCESS,
-    );
+    await controlPlane()
+      .models()
+      .importAuthFile(
+        "claude-a.json",
+        JSON.stringify(claudeFile({ access_token: "sk-ant-oat-other-account" })),
+        {},
+        FULL_ACCESS,
+      );
 
     expect(await listedReport("claude-a.json")).toBeUndefined();
 
     await check("claude-a.json");
-    await controlPlane().removeCredential("claude-a.json", FULL_ACCESS);
+    await controlPlane().models().removeCredential("claude-a.json", FULL_ACCESS);
     await seedClaude();
 
     expect(await listedReport("claude-a.json")).toBeUndefined();
@@ -248,12 +249,14 @@ describe("checkQuota contract", () => {
   it.effect("decodes 404 and 422 into ManagementError", () =>
     Effect.gen(function* () {
       yield* Effect.promise(async () => {
-        await controlPlane().importAuthFile(
-          "qwen-a.json",
-          JSON.stringify({ type: "qwen", access_token: "t", expired: "2999-01-01T00:00:00Z" }),
-          {},
-          FULL_ACCESS,
-        );
+        await controlPlane()
+          .models()
+          .importAuthFile(
+            "qwen-a.json",
+            JSON.stringify({ type: "qwen", access_token: "t", expired: "2999-01-01T00:00:00Z" }),
+            {},
+            FULL_ACCESS,
+          );
       });
       const api = yield* client;
 
@@ -279,18 +282,22 @@ describe("quota-check cron task", () => {
     Effect.gen(function* () {
       yield* Effect.promise(async () => {
         await seedClaude("claude-a.json");
-        await controlPlane().importAuthFile(
-          "claude-off.json",
-          JSON.stringify(claudeFile({ disabled: true })),
-          {},
-          FULL_ACCESS,
-        );
-        await controlPlane().importAuthFile(
-          "qwen-a.json",
-          JSON.stringify({ type: "qwen", access_token: "t", expired: "2999-01-01T00:00:00Z" }),
-          {},
-          FULL_ACCESS,
-        );
+        await controlPlane()
+          .models()
+          .importAuthFile(
+            "claude-off.json",
+            JSON.stringify(claudeFile({ disabled: true })),
+            {},
+            FULL_ACCESS,
+          );
+        await controlPlane()
+          .models()
+          .importAuthFile(
+            "qwen-a.json",
+            JSON.stringify({ type: "qwen", access_token: "t", expired: "2999-01-01T00:00:00Z" }),
+            {},
+            FULL_ACCESS,
+          );
       });
 
       const outbound = mockHttp(

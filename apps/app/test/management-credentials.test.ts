@@ -400,12 +400,11 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
   });
 
   it("toggles provider keys through excluded-models and refuses compat keys", async () => {
-    await controlPlane().importConfig(
-      "api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-x }]\n",
-      "test",
-    );
+    await controlPlane()
+      .models()
+      .importConfig("api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-x }]\n", "test");
 
-    const entries = await controlPlane().listCredentials(FULL_ACCESS);
+    const entries = await controlPlane().models().listCredentials(FULL_ACCESS);
     const id = entries.find((entry) => entry.source === "config")!.id;
     const authIndex = authIndexOf(id);
 
@@ -427,7 +426,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     });
 
     const claudeKeyDisabled = async () => {
-      const view = (await controlPlane().providerKeysView(FULL_ACCESS)) as unknown as {
+      const view = (await controlPlane().models().providerKeysView(FULL_ACCESS)) as unknown as {
         families: { claude: Array<{ group: { keys: Array<{ disabled: boolean }> } }> };
       };
 
@@ -437,7 +436,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     // The id (and so auth_index) is unchanged: excluded-models is not part of the identity.
     // SAFETY: the assembled config document is a JSON object with the canonical v8 `api-keys` map.
     const stored = (
-      JSON.parse((await controlPlane().getConfig()).document ?? "{}") as {
+      JSON.parse((await controlPlane().models().getConfig()).document ?? "{}") as {
         "api-keys": {
           claude: Array<{ keys: Array<{ auth_index?: string; "excluded-models"?: string[] }> }>;
         };
@@ -447,7 +446,7 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     expect(stored[0]!.keys[0]).toMatchObject({ "excluded-models": ["*"] });
     expect(stored[0]!.keys[0]!.auth_index).toBeUndefined();
     expect(
-      (await controlPlane().listCredentials(FULL_ACCESS)).find(
+      (await controlPlane().models().listCredentials(FULL_ACCESS)).find(
         (entry) => entry.source === "config",
       )!.id,
     ).toBe(id);
@@ -465,12 +464,14 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     expect((await list()).files).toEqual([]);
 
     // An OpenAI-compatible endpoint is disabled as a whole.
-    await controlPlane().importConfig(
-      "openai-compatibility:\n  - name: acme\n    base-url: https://api.acme.test/v1\n    api-key-entries: [{ api-key: sk-acme }]\n",
-      "test",
-    );
+    await controlPlane()
+      .models()
+      .importConfig(
+        "openai-compatibility:\n  - name: acme\n    base-url: https://api.acme.test/v1\n    api-key-entries: [{ api-key: sk-acme }]\n",
+        "test",
+      );
 
-    const compat = (await controlPlane().listCredentials(FULL_ACCESS)).find(
+    const compat = (await controlPlane().models().listCredentials(FULL_ACCESS)).find(
       (e) => e.source === "config",
     )!;
 
@@ -695,9 +696,9 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
     expect(one.status).toBe(200);
     expect(one.body).toMatchObject({ ok: true, auth: { name: "x.json" } });
     expect(JSON.stringify(one.body)).not.toContain("new-access");
-    expect((await controlPlane().getCredentialFile("x.json", FULL_ACCESS))?.access_token).toBe(
-      "new-access",
-    );
+    expect(
+      (await controlPlane().models().getCredentialFile("x.json", FULL_ACCESS))?.access_token,
+    ).toBe("new-access");
 
     const viaQuery = await json("/v9/management/credentials/refresh?name=y.json", {
       method: "POST",
@@ -750,10 +751,10 @@ describe("management credentials: status, fields, refresh, cooldown", () => {
   it("resets cooldown state by auth_index", async () => {
     await upload("x.json", claudeFile());
     const stub = controlPlane();
-    const picked = await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" });
+    const picked = await stub.models().pick({ providers: ["claude"], model: "claude-sonnet-4-5" });
 
     if (!picked.ok) throw new Error("pick failed");
-    await stub.report(picked.lease, {
+    await stub.models().report(picked.lease, {
       success: false,
       httpStatus: 429,
       error: { message: "limit", retryable: true },

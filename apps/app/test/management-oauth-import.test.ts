@@ -107,7 +107,11 @@ describe("POST /v9/management/oauth/import", () => {
         location: "us-central1",
       },
     });
-    const stored = await controlPlane().getCredentialFile("vertex-my-proj_1.json", FULL_ACCESS);
+
+    const stored = await controlPlane()
+      .models()
+      .getCredentialFile("vertex-my-proj_1.json", FULL_ACCESS);
+
     expect(stored).toMatchObject({
       type: "vertex",
       project_id: "my proj/1",
@@ -139,7 +143,7 @@ describe("POST /v9/management/oauth/import", () => {
 
     expect(fromQuery.body).toMatchObject({ location: "europe-west4" });
     const name = (fromQuery.body as { "auth-file": string })["auth-file"];
-    await controlPlane().patchCredentialFields({ name }, { priority: 7 }, FULL_ACCESS);
+    await controlPlane().models().patchCredentialFields({ name }, { priority: 7 }, FULL_ACCESS);
 
     const fromForm = await json(
       `${IMPORT}?provider=vertex&location=ignored`,
@@ -147,7 +151,7 @@ describe("POST /v9/management/oauth/import", () => {
     );
 
     expect(fromForm.body).toMatchObject({ location: "asia-east1" });
-    expect(await controlPlane().getCredentialFile(name, FULL_ACCESS)).toMatchObject({
+    expect(await controlPlane().models().getCredentialFile(name, FULL_ACCESS)).toMatchObject({
       location: "asia-east1",
       type: "vertex",
       priority: 7,

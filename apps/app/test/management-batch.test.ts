@@ -70,7 +70,7 @@ beforeAll(() => {
 });
 
 const takeLease = async (source: LeaseSource): Promise<TakeLease> =>
-  await controlPlane().takeQuotaSweepLease(source);
+  await controlPlane().models().takeQuotaSweepLease(source);
 
 /** Runs SQL inside the global ControlPlane (the lease row has no RPC to set its times). */
 const leaseSql = async (query: string, ...bindings: number[]): Promise<void> => {
@@ -115,12 +115,9 @@ afterAll(async () => {
 });
 
 const seed = async (name: string, extra: Record<string, unknown> = {}): Promise<void> => {
-  const result = await controlPlane().importAuthFile(
-    name,
-    JSON.stringify(claudeFile(extra)),
-    {},
-    FULL_ACCESS,
-  );
+  const result = await controlPlane()
+    .models()
+    .importAuthFile(name, JSON.stringify(claudeFile(extra)), {}, FULL_ACCESS);
 
   expect(result.ok).toBe(true);
 };
@@ -173,12 +170,11 @@ describe("POST /credentials/batch", () => {
 
   it("reports unknown names and provider keys as not_found next to the ones that succeeded", async () => {
     await seed("a.json");
-    await controlPlane().importConfig(
-      "api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-x }]\n",
-      "test",
-    );
+    await controlPlane()
+      .models()
+      .importConfig("api-keys:\n  claude:\n    - keys: [{ api-key: sk-ant-x }]\n", "test");
 
-    const configKey = (await controlPlane().listCredentials(FULL_ACCESS)).find(
+    const configKey = (await controlPlane().models().listCredentials(FULL_ACCESS)).find(
       (entry) => entry.source === "config",
     );
 
@@ -216,7 +212,9 @@ describe("POST /credentials/batch", () => {
       ],
     });
     expect(
-      (await controlPlane().listCredentials(FULL_ACCESS)).some((entry) => entry.id === configId),
+      (await controlPlane().models().listCredentials(FULL_ACCESS)).some(
+        (entry) => entry.id === configId,
+      ),
     ).toBe(true);
   });
 
@@ -291,12 +289,14 @@ describe("POST /credentials/batch", () => {
 
   it("refreshes tokens per account; an account without a refresh token is skipped", async () => {
     await seed("a.json");
-    await controlPlane().importAuthFile(
-      "noref.json",
-      JSON.stringify({ type: "claude", email: "n@x.com", access_token: "t" }),
-      {},
-      FULL_ACCESS,
-    );
+    await controlPlane()
+      .models()
+      .importAuthFile(
+        "noref.json",
+        JSON.stringify({ type: "claude", email: "n@x.com", access_token: "t" }),
+        {},
+        FULL_ACCESS,
+      );
 
     const ok = await batch({ action: "refresh", names: ["a.json", "noref.json"] });
 
@@ -316,9 +316,9 @@ describe("POST /credentials/batch", () => {
       failed: 0,
       skipped: 1,
     });
-    expect((await controlPlane().getCredentialFile("a.json", FULL_ACCESS))?.access_token).toBe(
-      "new-access",
-    );
+    expect(
+      (await controlPlane().models().getCredentialFile("a.json", FULL_ACCESS))?.access_token,
+    ).toBe("new-access");
   });
 
   it("a failed refresh gives a fixed reason and the status, never the upstream body", async () => {
@@ -493,12 +493,14 @@ describe("POST /credentials/quota/all", () => {
     await seed("a.json");
     await seed("broken.json", { access_token: "sk-ant-oat-broken" });
     await seed("off.json", { disabled: true });
-    await controlPlane().importAuthFile(
-      "qwen-a.json",
-      JSON.stringify({ type: "qwen", access_token: "t", expired: "2999-01-01T00:00:00Z" }),
-      {},
-      FULL_ACCESS,
-    );
+    await controlPlane()
+      .models()
+      .importAuthFile(
+        "qwen-a.json",
+        JSON.stringify({ type: "qwen", access_token: "t", expired: "2999-01-01T00:00:00Z" }),
+        {},
+        FULL_ACCESS,
+      );
 
     const { status, body } = await harness.json(QUOTA_ALL, { method: "POST" });
 
@@ -541,7 +543,7 @@ describe("POST /credentials/quota/all", () => {
     expect((body as { message: string }).message).toContain("the scheduled check");
     expect(harness.requests).toHaveLength(0);
 
-    if (held.ok) await controlPlane().releaseQuotaSweepLease(held.lease.token);
+    if (held.ok) await controlPlane().models().releaseQuotaSweepLease(held.lease.token);
     expect((await harness.json(QUOTA_ALL, { method: "POST" })).status).toBe(200);
   });
 
@@ -637,7 +639,9 @@ describe("POST /credentials/quota/all", () => {
       assert.isFalse(again.ok);
 
       if (held.ok)
-        yield* Effect.promise(() => controlPlane().releaseQuotaSweepLease(held.lease.token));
+        yield* Effect.promise(() =>
+          controlPlane().models().releaseQuotaSweepLease(held.lease.token),
+        );
     }).pipe(Effect.provideService(CurrentOrg, GLOBAL_ORG)),
   );
 });
@@ -646,7 +650,7 @@ describe("recordQuotaReport", () => {
   it("drops an outcome for tokens replaced during the check, as a refresh result is dropped", async () => {
     await seed("a.json");
 
-    const version = (await controlPlane().listCredentials(FULL_ACCESS)).find(
+    const version = (await controlPlane().models().listCredentials(FULL_ACCESS)).find(
       (entry) => entry.id === "a.json",
     )?.credentialVersion;
 
@@ -654,30 +658,38 @@ describe("recordQuotaReport", () => {
     const outcome = { ok: true as const, windows: [] };
 
     // A re-login meanwhile bumps the version: the old check says nothing about the new tokens.
-    await controlPlane().importAuthFile(
-      "a.json",
-      JSON.stringify(claudeFile({ access_token: "sk-ant-oat-new" })),
-      {},
-      FULL_ACCESS,
-    );
+    await controlPlane()
+      .models()
+      .importAuthFile(
+        "a.json",
+        JSON.stringify(claudeFile({ access_token: "sk-ant-oat-new" })),
+        {},
+        FULL_ACCESS,
+      );
 
     expect(
-      await controlPlane().recordQuotaReport("a.json", outcome, Date.now(), {
-        credentialVersion: version ?? 0,
-      }),
+      await controlPlane()
+        .models()
+        .recordQuotaReport("a.json", outcome, Date.now(), {
+          credentialVersion: version ?? 0,
+        }),
     ).toEqual({ kind: "stale" });
-    expect(await controlPlane().getCredentialFile("a.json", FULL_ACCESS)).toBeDefined();
+    expect(await controlPlane().models().getCredentialFile("a.json", FULL_ACCESS)).toBeDefined();
 
-    const current = (await controlPlane().listCredentials(FULL_ACCESS)).find(
+    const current = (await controlPlane().models().listCredentials(FULL_ACCESS)).find(
       (entry) => entry.id === "a.json",
     )?.credentialVersion;
 
     expect(
-      await controlPlane().recordQuotaReport("a.json", outcome, Date.now(), {
-        credentialVersion: current ?? 0,
-      }),
+      await controlPlane()
+        .models()
+        .recordQuotaReport("a.json", outcome, Date.now(), {
+          credentialVersion: current ?? 0,
+        }),
     ).toMatchObject({ kind: "stored" });
-    expect(await controlPlane().recordQuotaReport("ghost.json", outcome, Date.now())).toEqual({
+    expect(
+      await controlPlane().models().recordQuotaReport("ghost.json", outcome, Date.now()),
+    ).toEqual({
       kind: "gone",
     });
   });
@@ -688,9 +700,11 @@ describe("recordQuotaReport", () => {
 
     assert(taken.ok);
     await ageLease(LEASE_TTL_MS - 1_000);
-    await controlPlane().recordQuotaReport("a.json", { ok: false, error: "x" }, Date.now(), {
-      sweepLease: taken.lease.token,
-    });
+    await controlPlane()
+      .models()
+      .recordQuotaReport("a.json", { ok: false, error: "x" }, Date.now(), {
+        sweepLease: taken.lease.token,
+      });
     await ageLease(5_000);
     // Renewed a moment ago: still held.
     expect((await takeLease("panel")).ok).toBe(false);
@@ -771,8 +785,10 @@ const fakePlane = (behaviour: {
     },
   };
 
-  // SAFETY: `sweepQuotas` reaches the ControlPlane only through these methods of `getByName("global")`.
-  const fakeEnv = { CONTROL_PLANE: { getByName: () => stub } } as unknown as Env;
+  // SAFETY: `sweepQuotas` reaches the ControlPlane only through these methods of `getByName("global").models()`.
+  const fakeEnv = {
+    CONTROL_PLANE: { getByName: () => ({ models: () => stub }) },
+  } as unknown as Env;
 
   return { calls, fakeEnv };
 };
@@ -997,7 +1013,9 @@ describe("batch and checkAllQuotas contract", () => {
       assert.isString(running.message);
 
       if (held.ok)
-        yield* Effect.promise(() => controlPlane().releaseQuotaSweepLease(held.lease.token));
+        yield* Effect.promise(() =>
+          controlPlane().models().releaseQuotaSweepLease(held.lease.token),
+        );
     }).pipe(through(harness)),
   );
 });

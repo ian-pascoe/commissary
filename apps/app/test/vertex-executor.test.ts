@@ -99,15 +99,17 @@ describe("vertex service account", () => {
       membershipIndex: async () => await env.CONTROL_PLANE.getByName(name).membershipIndex(),
       markIndexSynced: async (counter: number) =>
         await env.CONTROL_PLANE.getByName(name).markIndexSynced(counter),
-      ensureFresh: async (id: string) => {
-        ensured.push(id);
+      models: () => ({
+        ensureFresh: async (id: string) => {
+          ensured.push(id);
 
-        return result(id);
-      },
-      refreshNow: async () => ({
-        ok: false,
-        error: { code: "not_refreshable", message: "no" },
-        terminal: false,
+          return result(id);
+        },
+        refreshNow: async () => ({
+          ok: false,
+          error: { code: "not_refreshable", message: "no" },
+          terminal: false,
+        }),
       }),
     }),
   });

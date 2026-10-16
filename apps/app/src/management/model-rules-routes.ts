@@ -91,7 +91,7 @@ const put = (kind: ChannelRuleKind) =>
     const { principalId } = yield* AccessPrincipal;
 
     const result = yield* modelsControlPlane("writeChannelRule", (stub) =>
-      stub.writeChannelRule(kind, channel, revision, value, principalId),
+      stub.models().writeChannelRule(kind, channel, revision, value, principalId),
     );
 
     return yield* written(result);
@@ -104,7 +104,7 @@ const remove = (kind: ChannelRuleKind) =>
     const { principalId } = yield* AccessPrincipal;
 
     const result = yield* modelsControlPlane("writeChannelRule", (stub) =>
-      stub.writeChannelRule(kind, channel, revision, null, principalId),
+      stub.models().writeChannelRule(kind, channel, revision, null, principalId),
     );
 
     return yield* written(result);

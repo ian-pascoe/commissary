@@ -68,7 +68,9 @@ const stored = async (requestId: string) => {
 };
 
 const override = async (value: PriceOverrideValue, org = GLOBAL_ORG) => {
-  const result = await controlPlane(org).writePriceOverride({ revision: 0, value }, "test");
+  const result = await controlPlane(org)
+    .models()
+    .writePriceOverride({ revision: 0, value }, "test");
 
   if (!result.ok) throw new Error(result.message);
 
@@ -190,14 +192,16 @@ describe("the cost of a record at write time", () => {
 
     expect(old).toEqual({ cost_micros: 100 * 2 + 30 * 20, unpriced: 0 });
 
-    const changed = await controlPlane().writePriceOverride(
-      {
-        id: first.id,
-        revision: first.revision,
-        value: { provider: "codex", model: "gpt-5", input: 100, output: 100 },
-      },
-      "test",
-    );
+    const changed = await controlPlane()
+      .models()
+      .writePriceOverride(
+        {
+          id: first.id,
+          revision: first.revision,
+          value: { provider: "codex", model: "gpt-5", input: 100, output: 100 },
+        },
+        "test",
+      );
 
     expect(changed.ok).toBe(true);
     await publish(sampleRecord({ requestId: "new" }));
@@ -206,10 +210,9 @@ describe("the cost of a record at write time", () => {
     expect(await stored("new")).toEqual({ cost_micros: 100 * 100 + 30 * 100, unpriced: 0 });
 
     if (changed.ok)
-      await controlPlane().writePriceOverride(
-        { id: first.id, revision: changed.revision, value: null },
-        "test",
-      );
+      await controlPlane()
+        .models()
+        .writePriceOverride({ id: first.id, revision: changed.revision, value: null }, "test");
     await publish(sampleRecord({ requestId: "catalog" }));
 
     expect(await stored("old")).toEqual(old);

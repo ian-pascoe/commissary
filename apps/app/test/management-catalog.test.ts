@@ -56,16 +56,15 @@ describe("GET /models/catalog", () => {
   });
 
   it("names the source mode and the host of a custom source", async () => {
-    await controlPlane().importConfig(
-      "models:\n  catalog: https://catalog.example.test/api.json\n",
-      "test",
-    );
+    await controlPlane()
+      .models()
+      .importConfig("models:\n  catalog: https://catalog.example.test/api.json\n", "test");
     expect(await status()).toMatchObject({ mode: "custom", source_host: "catalog.example.test" });
 
-    await controlPlane().importConfig("models:\n  catalog: embed\n", "test");
+    await controlPlane().models().importConfig("models:\n  catalog: embed\n", "test");
     expect(await status()).toMatchObject({ mode: "embed" });
 
-    await controlPlane().importConfig("models:\n  catalog: disabled\n", "test");
+    await controlPlane().models().importConfig("models:\n  catalog: disabled\n", "test");
     expect(await status()).toMatchObject({ mode: "disabled" });
   });
 
@@ -73,7 +72,7 @@ describe("GET /models/catalog", () => {
     await post();
     expect(await status()).toMatchObject({ mode: "official", stored: true });
 
-    await controlPlane().importConfig("models:\n  catalog: embed\n", "test");
+    await controlPlane().models().importConfig("models:\n  catalog: embed\n", "test");
     const embedded = await status();
 
     expect(embedded).toMatchObject({ mode: "embed", stored: false });
@@ -82,10 +81,9 @@ describe("GET /models/catalog", () => {
   });
 
   it("says why an address that is not http(s) is not used", async () => {
-    await controlPlane().importConfig(
-      "models:\n  catalog: ftp://catalog.example.test/api.json\n",
-      "test",
-    );
+    await controlPlane()
+      .models()
+      .importConfig("models:\n  catalog: ftp://catalog.example.test/api.json\n", "test");
     const body = await status();
 
     expect(body).toMatchObject({
@@ -190,7 +188,7 @@ describe("POST /models/catalog/refresh", () => {
 
   it("uses the custom source of models.catalog", async () => {
     const custom = "https://catalog.example.test/api.json";
-    await controlPlane().importConfig(`models:\n  catalog: ${custom}\n`, "test");
+    await controlPlane().models().importConfig(`models:\n  catalog: ${custom}\n`, "test");
 
     const body = (await post()).body as CatalogRefresh;
 
@@ -203,7 +201,7 @@ describe("POST /models/catalog/refresh", () => {
     ["embed", "Embedded copy"],
     ["disabled", "Off"],
   ])("is refused while models.catalog is %s", async (value, name) => {
-    await controlPlane().importConfig(`models:\n  catalog: ${value}\n`, "test");
+    await controlPlane().models().importConfig(`models:\n  catalog: ${value}\n`, "test");
 
     const refused = await post();
 

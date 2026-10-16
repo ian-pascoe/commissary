@@ -2,6 +2,7 @@
 import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { env } from "cloudflare:workers";
 import { evictDurableObject } from "cloudflare:test";
+import { withModelsPart } from "./support/models-part.ts";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { makeControlPlanePicker } from "../src/executor/control-plane-picker.ts";
@@ -36,12 +37,12 @@ const fail = (httpStatus: number, extra: Record<string, unknown> = {}) => ({
 describe("ControlPlane report -> cooldown (Workers pool)", () => {
   it("cools a rate-limited credential per model and answers model_cooldown with Retry-After", async () => {
     const stub = plane();
-    await stub.importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
+    await stub.models().importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
     const request = { providers: ["claude"], model: "claude-sonnet-4-5" };
-    const first = picked(await stub.pick(request));
-    await stub.report(first.lease, fail(429, { retryAfterMs: 90_000 }));
+    const first = picked(await stub.models().pick(request));
+    await stub.models().report(first.lease, fail(429, { retryAfterMs: 90_000 }));
 
-    const blocked = await stub.pick(request);
+    const blocked = await stub.models().pick(request);
     expect(blocked).toMatchObject({
       ok: false,
       failure: { code: "model_cooldown", httpStatus: 429 },
@@ -53,20 +54,32 @@ describe("ControlPlane report -> cooldown (Workers pool)", () => {
       error: { code: "model_cooldown" },
     });
     // Another model of the same credential is unaffected.
-    expect((await stub.pick({ providers: ["claude"], model: "claude-opus-4-1" })).ok).toBe(true);
+    expect((await stub.models().pick({ providers: ["claude"], model: "claude-opus-4-1" })).ok).toBe(
+      true,
+    );
 
-    const [summary] = await stub.listCredentials(FULL_ACCESS);
+    const [summary] = await stub.models().listCredentials(FULL_ACCESS);
     expect(summary).toMatchObject({ failed: 1, lastError: { httpStatus: 429 } });
   });
 
   it("credential-scoped failures block every model and success of a request-scoped failure changes nothing", async () => {
     const stub = plane();
-    await stub.importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
-    const first = picked(await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" }));
-    await stub.report(first.lease, fail(400, { requestScoped: true }));
-    expect((await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" })).ok).toBe(true);
-    await stub.report(first.lease, fail(429, { retryAfterMs: 60_000, credentialScoped: true }));
-    expect(await stub.pick({ providers: ["claude"], model: "claude-opus-4-1" })).toMatchObject({
+    await stub.models().importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
+
+    const first = picked(
+      await stub.models().pick({ providers: ["claude"], model: "claude-sonnet-4-5" }),
+    );
+
+    await stub.models().report(first.lease, fail(400, { requestScoped: true }));
+    expect(
+      (await stub.models().pick({ providers: ["claude"], model: "claude-sonnet-4-5" })).ok,
+    ).toBe(true);
+    await stub
+      .models()
+      .report(first.lease, fail(429, { retryAfterMs: 60_000, credentialScoped: true }));
+    expect(
+      await stub.models().pick({ providers: ["claude"], model: "claude-opus-4-1" }),
+    ).toMatchObject({
       ok: false,
       failure: { code: "model_cooldown" },
     });
@@ -74,9 +87,13 @@ describe("ControlPlane report -> cooldown (Workers pool)", () => {
 
   it("planRetry answers over RPC", async () => {
     const stub = plane();
-    await stub.importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
-    const first = picked(await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" }));
-    await stub.report(first.lease, fail(429, { retryAfterMs: 20_000 }));
+    await stub.models().importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
+
+    const first = picked(
+      await stub.models().pick({ providers: ["claude"], model: "claude-sonnet-4-5" }),
+    );
+
+    await stub.models().report(first.lease, fail(429, { retryAfterMs: 20_000 }));
 
     const query = {
       providers: ["claude"],
@@ -88,11 +105,13 @@ describe("ControlPlane report -> cooldown (Workers pool)", () => {
       maxWaitMs: 60_000,
     };
 
-    const plan = await stub.planRetry(query);
+    const plan = await stub.models().planRetry(query);
     expect(plan.retry).toBe(true);
     expect(plan.retry && plan.waitMs).toBeGreaterThan(10_000);
-    expect(await stub.planRetry({ ...query, maxWaitMs: 0 })).toMatchObject({ retry: false });
-    expect(await stub.planRetry({ ...query, round: 1 })).toEqual({ retry: false });
+    expect(await stub.models().planRetry({ ...query, maxWaitMs: 0 })).toMatchObject({
+      retry: false,
+    });
+    expect(await stub.models().planRetry({ ...query, round: 1 })).toEqual({ retry: false });
   });
 
   it("keeps cooldowns across Durable Object evictions, whatever save-cooldown-status says", async () => {
@@ -103,14 +122,23 @@ describe("ControlPlane report -> cooldown (Workers pool)", () => {
     ]) {
       const name = crypto.randomUUID();
       const stub = plane(name);
-      await stub.importConfig(yaml, "test");
-      await stub.importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
-      const first = picked(await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" }));
-      await stub.report(first.lease, fail(500));
+
+      await withModelsPart(stub, async (part) => {
+        await part.importConfig(yaml, "test");
+        await part.importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
+
+        const first = picked(
+          await part.pick({ providers: ["claude"], model: "claude-sonnet-4-5" }),
+        );
+
+        await part.report(first.lease, fail(500));
+      });
       await evictDurableObject(stub);
 
       expect(
-        await plane(name).pick({ providers: ["claude"], model: "claude-sonnet-4-5" }),
+        await plane(name)
+          .models()
+          .pick({ providers: ["claude"], model: "claude-sonnet-4-5" }),
       ).toMatchObject({
         ok: false,
         failure: { code: "auth_unavailable", httpStatus: 503 },
@@ -121,30 +149,39 @@ describe("ControlPlane report -> cooldown (Workers pool)", () => {
   it("keeps a model-level cooldown across an eviction: only that model of the key cools", async () => {
     const name = crypto.randomUUID();
     const stub = plane(name);
-    await stub.importConfig(
-      "api-keys:\n  opencode-zen:\n    - keys: [{ api-key: sk-zen-evict }]\n",
-      "test",
-    );
     const request = { providers: ["opencode-zen"], model: "claude-haiku-4-5" };
-    const first = picked(await stub.pick(request));
-    await stub.report(first.lease, {
-      success: false,
-      httpStatus: 403,
-      retryAfterMs: 30 * 60_000,
-      error: {
-        message: "Model access is disabled",
-        retryable: false,
-        code: "model_not_found",
+
+    await withModelsPart(stub, async (part) => {
+      await part.importConfig(
+        "api-keys:\n  opencode-zen:\n    - keys: [{ api-key: sk-zen-evict }]\n",
+        "test",
+      );
+      const first = picked(await part.pick(request));
+      await part.report(first.lease, {
+        success: false,
         httpStatus: 403,
-      },
+        retryAfterMs: 30 * 60_000,
+        error: {
+          message: "Model access is disabled",
+          retryable: false,
+          code: "model_not_found",
+          httpStatus: 403,
+        },
+      });
     });
     await evictDurableObject(stub);
 
-    expect(await plane(name).pick(request)).toMatchObject({
+    expect(await plane(name).models().pick(request)).toMatchObject({
       ok: false,
       failure: { code: "auth_unavailable" },
     });
-    expect((await plane(name).pick({ ...request, model: "glm-5.3-flash" })).ok).toBe(true);
+    expect(
+      (
+        await plane(name)
+          .models()
+          .pick({ ...request, model: "glm-5.3-flash" })
+      ).ok,
+    ).toBe(true);
   });
 });
 
@@ -152,7 +189,7 @@ describe("ControlPlane picker adapter (Workers pool)", () => {
   it("maps picks, model_cooldown failures and reports through the Durable Object", async () => {
     const name = crypto.randomUUID();
     const stub = plane(name);
-    await stub.importConfig(
+    await stub.models().importConfig(
       `
 api-keys:
   openai-compatibility:
@@ -164,7 +201,10 @@ api-keys:
 `,
       "test",
     );
-    const picker = makeControlPlanePicker((workerEnv) => workerEnv.CONTROL_PLANE.getByName(name));
+
+    const picker = makeControlPlanePicker((workerEnv) =>
+      workerEnv.CONTROL_PLANE.getByName(name).models(),
+    );
 
     const run = <A, E>(effect: Effect.Effect<A, E, EnvServices | CurrentOrg>) =>
       Effect.runPromise(

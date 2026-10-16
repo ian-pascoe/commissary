@@ -242,7 +242,7 @@ export const makeAntigravityExecutor = (
       if (env !== undefined) {
         yield* Effect.tryPromise(
           async () =>
-            await controlPlaneOf(env, org).patchCredentialMetadata(context.credential.id, {
+            await controlPlaneOf(env, org).models().patchCredentialMetadata(context.credential.id, {
               project_id: project,
             }),
         ).pipe(Effect.ignore);

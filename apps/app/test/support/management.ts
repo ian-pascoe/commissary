@@ -67,19 +67,18 @@ export const resetControlPlane = async (): Promise<void> => {
 /** Restores a pristine ControlPlane of `org` (no credentials, default config). */
 export const resetOrgControlPlane = async (org: OrgId): Promise<void> => {
   const stub = controlPlane(org);
-  const entries = await stub.listCredentials(FULL_ACCESS);
-  await stub.removeCredentials(
+  const entries = await stub.models().listCredentials(FULL_ACCESS);
+  await stub.models().removeCredentials(
     entries.map((entry) => entry.id),
     FULL_ACCESS,
   );
-  await stub.importConfig("", "test");
+  await stub.models().importConfig("", "test");
 
   // An import leaves the price overrides alone.
-  for (const override of (await stub.priceOverrideEntries()).overrides)
-    await stub.writePriceOverride(
-      { id: override.id, revision: override.revision, value: null },
-      "test",
-    );
+  for (const override of (await stub.models().priceOverrideEntries()).overrides)
+    await stub
+      .models()
+      .writePriceOverride({ id: override.id, revision: override.revision, value: null }, "test");
 };
 
 export interface Harness {

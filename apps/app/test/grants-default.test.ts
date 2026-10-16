@@ -5,6 +5,7 @@ import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { DEFAULT_GRANT } from "../src/grants/grant.ts";
 import { OrgId } from "@commissary/core";
 import { claudeFile, controlPlane, makeHarness } from "./support/management.ts";
+import { withModelsPart } from "./support/models-part.ts";
 import { restart } from "./support/secrets.ts";
 
 const harness = makeHarness();
@@ -19,14 +20,16 @@ type Stub = ReturnType<typeof controlPlane>;
 const newOrg = async (): Promise<Stub> => {
   const stub = controlPlane(freshOrg());
 
-  await stub.importAuthFile("new-a.json", claudeFile(), {}, FULL_ACCESS);
+  await withModelsPart(stub, (part) =>
+    part.importAuthFile("new-a.json", claudeFile(), {}, FULL_ACCESS),
+  );
 
   return stub;
 };
 
 const picks = async (stub: Stub, member: string | undefined, model = "claude-opus-4-1") =>
   (
-    await stub.pick({
+    await stub.models().pick({
       providers: ["claude"],
       model,
       ...(member === undefined ? {} : { memberId: member }),
@@ -37,7 +40,7 @@ describe("a new org", () => {
   it("starts with the default grant, so its members reach what its admins add", async () => {
     const stub = await newOrg();
 
-    const { grants } = await stub.grantEntries();
+    const { grants } = await stub.models().grantEntries();
 
     expect(grants).toHaveLength(1);
     expect(grants[0]).toMatchObject(DEFAULT_GRANT);
@@ -49,32 +52,34 @@ describe("a new org", () => {
   it("is seeded once: restarting changes neither the grant nor its revision", async () => {
     const stub = await newOrg();
 
-    const first = await stub.grantEntries();
+    const first = await withModelsPart(stub, (part) => part.grantEntries());
 
     for (let restarts = 0; restarts < 2; restarts += 1) {
       await restart(stub);
 
-      expect(await stub.grantEntries()).toEqual(first);
+      expect(await withModelsPart(stub, (part) => part.grantEntries())).toEqual(first);
     }
   });
 
   it("does not bring back a default grant an org admin removed", async () => {
     const stub = await newOrg();
 
-    const [initial] = (await stub.grantEntries()).grants;
+    const [initial] = (await withModelsPart(stub, (part) => part.grantEntries())).grants;
 
     expect(initial).toBeDefined();
 
-    const removed = await stub.writeGrant(
-      { id: initial?.id ?? "", revision: initial?.revision ?? 0, value: null },
-      "admin-1",
+    const removed = await withModelsPart(stub, (part) =>
+      part.writeGrant(
+        { id: initial?.id ?? "", revision: initial?.revision ?? 0, value: null },
+        "admin-1",
+      ),
     );
 
     expect(removed.ok).toBe(true);
 
     await restart(stub);
 
-    expect((await stub.grantEntries()).grants).toEqual([]);
+    expect((await stub.models().grantEntries()).grants).toEqual([]);
     expect(await picks(stub, "member-1")).toBe(false);
   });
 });

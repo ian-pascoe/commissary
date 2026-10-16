@@ -100,7 +100,7 @@ describe("price override routes", () => {
     );
 
     expect(stale.status).toBe(409);
-    const [stored] = (await controlPlane().priceOverrideEntries()).overrides;
+    const [stored] = (await controlPlane().models().priceOverrideEntries()).overrides;
 
     expect(stored).toMatchObject({ id: saved.id, input: 2 });
   });
@@ -161,7 +161,7 @@ describe("price override routes", () => {
       expect(response.body).toMatchObject({ error: "invalid_config" });
     }
 
-    expect((await controlPlane().priceOverrideEntries()).overrides).toEqual([]);
+    expect((await controlPlane().models().priceOverrideEntries()).overrides).toEqual([]);
   });
 
   it("keeps each org's overrides to that org", async () => {

@@ -74,7 +74,7 @@ beforeEach(async () => {
   usageReply = { status: 200, body: USAGE };
   harness.requests.length = 0;
   await resetControlPlane();
-  const stored = await controlPlane().importConfig(CONFIG, "test");
+  const stored = await controlPlane().models().importConfig(CONFIG, "test");
   expect(stored.ok).toBe(true);
 });
 
@@ -192,7 +192,9 @@ describe("POST /credentials/quota for an OpenCode Go key", () => {
   });
 
   it("answers 404 for the raw credential id and for other config keys", async () => {
-    const ids = (await controlPlane().listCredentials(FULL_ACCESS)).map((entry) => entry.id);
+    const ids = (await controlPlane().models().listCredentials(FULL_ACCESS)).map(
+      (entry) => entry.id,
+    );
 
     expect(ids.length).toBeGreaterThan(0);
 
@@ -237,7 +239,10 @@ describe("an edited OpenCode Go key", () => {
     expect((await checkQuota(oldIndex)).status).toBe(200);
     expect(await reportRows()).toHaveLength(1);
 
-    const stored = await controlPlane().importConfig(CONFIG.replace(GO_KEY, GO_EDITED_KEY), "test");
+    const stored = await controlPlane()
+      .models()
+      .importConfig(CONFIG.replace(GO_KEY, GO_EDITED_KEY), "test");
+
     expect(stored.ok).toBe(true);
 
     expect((await checkQuota(oldIndex)).status).toBe(404);
@@ -260,7 +265,10 @@ describe("an edited OpenCode Go key", () => {
 
     expect(summary).toEqual({ checked: 1, failed: 0 });
 
-    const ids = (await controlPlane().listCredentials(FULL_ACCESS)).map((entry) => entry.id);
+    const ids = (await controlPlane().models().listCredentials(FULL_ACCESS)).map(
+      (entry) => entry.id,
+    );
+
     const rows = await reportRows();
 
     expect(rows).toHaveLength(1);

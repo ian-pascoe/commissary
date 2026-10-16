@@ -30,12 +30,9 @@ const get = (path: string, base = "http://localhost:8787") =>
 describe("control panel in the application", () => {
   it("loads the panel and lists credentials like the panel does", async () => {
     await resetControlPlane();
-    await env.CONTROL_PLANE.getByName("global").importAuthFile(
-      "claude-a.json",
-      JSON.stringify(claudeFile()),
-      {},
-      FULL_ACCESS,
-    );
+    await env.CONTROL_PLANE.getByName("global")
+      .models()
+      .importAuthFile("claude-a.json", JSON.stringify(claudeFile()), {}, FULL_ACCESS);
 
     // The only org of the caller opens at its own address.
     const root = await get("/");

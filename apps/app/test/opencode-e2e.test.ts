@@ -1,6 +1,7 @@
 // OpenCode model-level cooldowns end to end: the production Worker (`exports.default.fetch`) with the real ControlPlane
 // picker and `markResult`; only the gateway is mocked, through the global `fetch`.
 import { evictDurableObject } from "cloudflare:test";
+import { withModelsPart } from "./support/models-part.ts";
 import { env, exports } from "cloudflare:workers";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -94,7 +95,7 @@ beforeAll(async () => {
     return await upstream(request);
   };
 
-  const stored = await controlPlane().importConfig(YAML, "test");
+  const stored = await withModelsPart(controlPlane(), (part) => part.importConfig(YAML, "test"));
   expect(stored.ok).toBe(true);
 });
 
