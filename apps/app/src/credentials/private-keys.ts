@@ -21,7 +21,7 @@ import {
   type Json,
   type JsonObject,
   jsonEquals,
-} from "../json/index.ts";
+} from "@commissary/json";
 import type { Sealer } from "../secrets/cipher.ts";
 import { freshEntryId, GROUP_ID_KIND } from "./key-ids.ts";
 import { providerKeyIdKind } from "./synthesize.ts";

@@ -9,13 +9,13 @@
  *  - {@link normalizeCodexToolIntegerTypes}: `number` -> `integer` for the numeric fields of the Codex CLI's own
  *    tools; part of the payload barrier for Codex clients targeting non-Codex executors (see `payload.ts`).
  */
-import { asString, get, isJsonArray, isJsonObject, type Json, set } from "../../json/index.ts";
+import { asString, get, isJsonArray, isJsonObject, type Json, set } from "@commissary/json";
 import type { HeaderInput } from "../../config/payload/index.ts";
 import {
   hasUnsupportedUnicodePropertyEscape,
   SCHEMA_MAP_KEYWORDS,
   SCHEMA_VALUE_KEYWORDS,
-} from "../../translator/common/schema.ts";
+} from "@commissary/translation";
 
 /** Minimum union branches before a pure-constant union is rewritten into an enum. */
 const COMPLEX_UNION_BRANCH_THRESHOLD = 8;

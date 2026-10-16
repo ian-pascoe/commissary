@@ -13,7 +13,7 @@ import {
 } from "../src/executor/meta/errors.ts";
 import { makeMetaExecutor } from "../src/executor/meta/executor.ts";
 import { sanitizeMetaWebSearchTools } from "../src/executor/meta/request.ts";
-import type { Json } from "../src/json/index.ts";
+import type { Json } from "@commissary/json";
 import {
   collectStream,
   credential,

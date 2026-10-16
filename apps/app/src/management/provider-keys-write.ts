@@ -19,7 +19,7 @@
  * the edit makes equal to a key of another group (by its prefix alone) is a plain `422`.
  * Workers deviation: documented in docs/ARCHITECTURE.md, "Provider keys".
  */
-import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "@commissary/json";
 import { DEDUPED_FAMILIES, type DedupedFamily } from "../config/normalize.ts";
 import { typedDuplicates, withoutKeys } from "./key-duplicates.ts";
 import type { AuthIndexer } from "./auth-index.ts";

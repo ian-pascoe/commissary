@@ -21,7 +21,7 @@ import {
   isJsonObject,
   type Json,
   type JsonObject,
-} from "../../../json/index.ts";
+} from "@commissary/json";
 
 export const REQUEST_TYPE_CREATE = "response.create";
 

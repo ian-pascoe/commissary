@@ -9,7 +9,7 @@
  *  - 429 with `free-usage-exhausted` / "included free usage" carries a 24 h cooldown hint.
  *  - Speech 404s that do not say the model is unavailable (e.g. an unknown voice id) are request-scoped.
  */
-import { asString, get, type Json, tryParseJson } from "../../json/index.ts";
+import { asString, get, type Json, tryParseJson } from "@commissary/json";
 import { ExecutionError, withErrorFields } from "../errors.ts";
 
 /** `xaiFreeUsageExhaustedCooldown`: the rolling free-tier window advertised by the chat proxy. */

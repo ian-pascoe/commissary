@@ -1,4 +1,4 @@
-// Command jsonpath emits golden fixtures for the TypeScript gjson/sjson path engine (apps/app/src/json).
+// Command jsonpath emits golden fixtures for the TypeScript gjson/sjson path engine (packages/json).
 //
 // Every case is executed against the real tidwall/gjson and tidwall/sjson versions used by the Go server, so the
 // TypeScript tests can verify behavioural parity. Run from the repository root:
@@ -110,7 +110,7 @@ type setSpec struct {
 }
 
 // Complex set paths (#, |, *, ?, @) are intentionally absent: sjson rewrites existing matches there, the
-// TypeScript port rejects them (see apps/app/src/json/set.ts).
+// TypeScript port rejects them (see packages/json/src/set.ts).
 var setSpecs = []setSpec{
 	{`{"a":1}`, "a", "value", `2`},
 	{`{"a":1}`, "b", "value", `"x"`},
@@ -248,7 +248,7 @@ func runSet(spec setSpec) setCase {
 }
 
 func main() {
-	outPath := flag.String("out", "apps/app/test/fixtures/json-path.json", "output file")
+	outPath := flag.String("out", "packages/json/test/fixtures/json-path.json", "output file")
 	flag.Parse()
 
 	var fx fixtures

@@ -15,7 +15,7 @@ import { HttpRouter } from "effect/http";
 import { AccessPrincipal } from "../access/principal.ts";
 import { decodeConfig } from "../config/codec.ts";
 import type { ChannelRuleKind, WriteResult } from "../config/store.ts";
-import { isJsonArray, type Json } from "../json/index.ts";
+import { isJsonArray, type Json } from "@commissary/json";
 import { bodyJson, handled, ifMatch, jsonReply, replyError } from "./http.ts";
 import { modelsControlPlane } from "../models/env.ts";
 

@@ -5,9 +5,9 @@ import {
   normalizeApplyPatchResponses,
   ApplyPatchResponsesState,
 } from "../src/executor/helps/apply-patch-responses.ts";
-import { type Json, tryParseJson } from "../src/json/index.ts";
+import { type Json, tryParseJson } from "@commissary/json";
 import fixtures from "./fixtures/applypatch.json";
-import { expandEmbeddedJson } from "./support/structural.ts";
+import { expandEmbeddedJson } from "@commissary/translation/testing";
 
 /** Structural form of an output: JSON values are parsed, SSE data lines keep their prefix and framing. */
 const canonical = (text: string): Json => {

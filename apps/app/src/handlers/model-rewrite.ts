@@ -7,7 +7,7 @@
  * rewriteForceMappedStreamChunk). Executors emit complete client chunks (one JSON object, or framed
  * `event:`/`data:` text), so the Go pending-buffer for partial SSE events is not needed.
  */
-import { exists, set, type Json, tryParseJson } from "../json/index.ts";
+import { exists, set, type Json, tryParseJson } from "@commissary/json";
 
 const MODEL_FIELD_PATHS = [
   "model",

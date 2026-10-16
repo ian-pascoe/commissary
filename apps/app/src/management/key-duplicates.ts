@@ -12,7 +12,7 @@
  * `typedDuplicates` and `withoutKeys` are pure functions over a document and the ids of `keyIdentities`
  * (`config/normalize.ts`).
  */
-import { isJsonObject, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type JsonObject } from "@commissary/json";
 
 /** Which keys of the groups, `[group][key]`, were typed by the caller (a stored one is kept by reference). */
 export type TypedKeys = ReadonlyArray<ReadonlyArray<boolean>>;

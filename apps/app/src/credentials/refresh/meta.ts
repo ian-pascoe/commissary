@@ -7,7 +7,7 @@
  */
 import { Effect } from "effect";
 import { HttpClientRequest } from "effect/http";
-import type { JsonObject } from "../../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { refreshError } from "./error.ts";
 import { clipBody, parseJsonObject, rfc3339, send, str } from "./http.ts";
 import type { RefreshContext, RefreshProtocolEffect } from "./types.ts";

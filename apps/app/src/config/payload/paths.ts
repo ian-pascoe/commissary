@@ -4,7 +4,7 @@
  * Go source: internal/runtime/executor/helps/payload_helpers.go (resolvePayloadRulePaths, splitPayloadRulePath,
  * parsePayloadQueryPathPart, payloadQueryMatches). Queries support `&&` and `||` on top of gjson comparison terms.
  */
-import { get, isJsonArray, type Json } from "../../json/index.ts";
+import { get, isJsonArray, type Json } from "@commissary/json";
 
 /** Splits on `.` outside parentheses and quotes. */
 const splitPayloadRulePath = (path: string): string[] => {

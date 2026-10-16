@@ -2,12 +2,11 @@
 // compared with the Go fixtures (go run ./tools/fixturegen/tokens).
 import { describe, expect, it } from "vitest";
 import { makeOpenAICompatExecutor } from "../src/executor/openai-compat/executor.ts";
-import { tryParseJson } from "../src/json/index.ts";
-import { applyClaudeInputTokens, countClaudeInputTokens } from "../src/tokenizer/claude-input.ts";
-import { builtinTranslators } from "../src/translator/builtin.ts";
-import { makeTranslationState } from "../src/translator/registry.ts";
+import { tryParseJson } from "@commissary/json";
+import { applyClaudeInputTokens, countClaudeInputTokens } from "@commissary/translation/tokenizer";
+import { builtinTranslators, makeTranslationState } from "@commissary/translation";
 import { collectStream, credential, harness, options } from "./support/executor-run.ts";
-import fixtures from "./fixtures/tokens.json";
+import { tokenFixtures as fixtures } from "@commissary/translation/testing";
 
 const start = (n: number) =>
   `event: message_start\ndata: {"type":"message_start","message":{"usage":{"input_tokens":${n}}}}\n\n`;

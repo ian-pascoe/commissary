@@ -236,7 +236,7 @@ More Access-specific answers: [ACCESS.md#troubleshooting](docs/ACCESS.md#trouble
 | OpenAI-compatible upstreams (provider key)                           | every client protocol                                    | Configured as `api-keys.openai-compatibility` groups                                                       |
 
 The matrix is indicative: which (client protocol, provider) pairs work follows the registered translators in
-`apps/app/src/translator/builtin.ts`; an unsupported pair answers with a 4xx/501 error.
+`packages/translation/src/translator/builtin.ts`; an unsupported pair answers with a 4xx/501 error.
 
 ## Known limitations
 

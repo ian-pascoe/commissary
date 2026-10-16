@@ -12,7 +12,7 @@
  * All methods are synchronous so read-modify-write sequences are atomic under the Durable Object input gate.
  */
 import { Effect, Result, Schema } from "effect";
-import type { JsonObject } from "../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import type { StoredCredential } from "./derive.ts";
 import { credentialsChanged, mergeExistingMetadata } from "./merge.ts";
 import { CredentialState } from "./model.ts";

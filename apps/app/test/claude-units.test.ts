@@ -1,7 +1,7 @@
 // Unit tests for the Claude executor building blocks: xxHash64, CCH signing, betas, cache control, MCP aliases,
 // rate-limit classification, sanitising and cloaking helpers.
 import { describe, expect, it } from "vitest";
-import type { JsonObject, Json } from "../src/json/index.ts";
+import type { JsonObject, Json } from "@commissary/json";
 import {
   BETA,
   claudeCodeCLIBetas,
@@ -530,7 +530,7 @@ describe("Responses reasoning replay", () => {
     const {
       convertOpenAIResponsesRequestToClaude,
       convertOpenAIResponsesRequestToClaudeWithCompat,
-    } = await import("../src/translator/claude/openai/responses/request.ts");
+    } = await import("@commissary/translation");
 
     const input = (signature: string): JsonObject => ({
       model: "gpt-5",

@@ -7,7 +7,7 @@
  * time and `updated` what the protocol returned. Executor changes win unless the user changed the same key
  * concurrently; token lifecycle keys always take the refreshed value. `proxy_url` is not honoured on Workers.
  */
-import { jsonEquals, type JsonObject } from "../../json/index.ts";
+import { jsonEquals, type JsonObject } from "@commissary/json";
 import { isTokenPayloadKey } from "../merge.ts";
 
 const SKIPPED_KEY = "proxy_url";

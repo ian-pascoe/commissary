@@ -21,7 +21,7 @@ import { decodeStoredConfig } from "../config/store.ts";
 import { keyIdentities } from "../config/normalize.ts";
 import type { WriteResult } from "../config/store.ts";
 import { configKeyIds } from "../credentials/key-ids.ts";
-import { isJsonObject, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type JsonObject } from "@commissary/json";
 import { probeProviderKey } from "./provider-keys-probe.ts";
 import { currentAuthIndexer } from "./auth-index.ts";
 import {

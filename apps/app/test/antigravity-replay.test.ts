@@ -30,8 +30,8 @@ import {
 import { replaySessionKey } from "../src/executor/antigravity/replay/scope.ts";
 import type { CredentialSnapshot } from "../src/executor/picker.ts";
 import type { ExecutorRequest } from "../src/executor/types.ts";
-import type { Json, JsonObject } from "../src/json/index.ts";
-import { geminiClaudeToolUseID } from "../src/translator/common/claude-util.ts";
+import type { Json, JsonObject } from "@commissary/json";
+import { geminiClaudeToolUseID } from "@commissary/translation";
 import { options } from "./support/executor-run.ts";
 
 const MODEL = "gemini-3-flash";

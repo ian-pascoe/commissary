@@ -11,9 +11,8 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 import type { Config } from "../../config/schema.ts";
-import { cloneJson, get, type Json, type JsonObject } from "../../json/index.ts";
-import { isClaudeCodeAttributionSystemText } from "../../translator/common/claude-messages.ts";
-import { isArr, isObj, str } from "../../translator/common/gjson.ts";
+import { cloneJson, get, type Json, type JsonObject } from "@commissary/json";
+import { isClaudeCodeAttributionSystemText, isArr, isObj, str } from "@commissary/translation";
 import type { CredentialSnapshot } from "../picker.ts";
 import { isExplicitPromptCacheMode, stripCacheControlTTL, textBlock } from "./cache-control.ts";
 import {

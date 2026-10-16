@@ -4,8 +4,8 @@
  * Go source: internal/runtime/executor/claude_executor_request.go (claudeCodeCLIBetas, claudeCountTokensBetasForCredential,
  * with*Beta helpers, isManagedClaudeBeta, claudeRequestedBetas, extractAndRemoveBetas).
  */
-import { get, type Json, type JsonObject } from "../../json/index.ts";
-import { isArr, isObj, str, toArray } from "../../translator/common/gjson.ts";
+import { get, type Json, type JsonObject } from "@commissary/json";
+import { isArr, isObj, str, toArray } from "@commissary/translation";
 import { payloadHas1hTTL } from "./cache-control.ts";
 import {
   hasPerTurnEffort,

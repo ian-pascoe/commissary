@@ -5,9 +5,9 @@
  * openAICompatErrorEvent, openAICompatStreamDataError). Pure state machine: feed upstream lines with `push`, call
  * `end` at EOF; every step reports the client chunks to emit, an optional terminal error and whether to stop reading.
  */
-import { asInt, get, type Json, tryParseJson } from "../../json/index.ts";
-import { Formats, type Format } from "../../translator/formats.ts";
-import type { ResponseContext, TranslatorRegistry } from "../../translator/registry.ts";
+import { asInt, get, type Json, tryParseJson } from "@commissary/json";
+import { Formats, type Format } from "@commissary/translation/formats";
+import type { ResponseContext, TranslatorRegistry } from "@commissary/translation";
 import { ExecutionError } from "../errors.ts";
 
 /** Go `helps.ApplyPatchUpstreamErrorMessage` (retained tool-input translation failure). */

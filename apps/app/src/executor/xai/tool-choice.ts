@@ -7,7 +7,7 @@
  * xaiResolveClientWebSearchAlias, aliasXAIClientWebSearchFunction, aliasXAIClientWebSearchInput).
  * All functions mutate the parsed body in place.
  */
-import { asString, del, get, isJsonArray, isJsonObject, type Json, set } from "../../json/index.ts";
+import { asString, del, get, isJsonArray, isJsonObject, type Json, set } from "@commissary/json";
 import {
   hasFunctionToolNamed,
   type NamespaceRefs,

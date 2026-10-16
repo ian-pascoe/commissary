@@ -6,7 +6,7 @@
  * Durable Object RPC boundary.
  */
 import type { Schema } from "effect";
-import type { Json } from "../json/index.ts";
+import type { Json } from "@commissary/json";
 import type { Credential } from "../credentials/model.ts";
 import type { RefreshTarget } from "../credentials/pool.ts";
 import type { AuthIndexer } from "./auth-index.ts";

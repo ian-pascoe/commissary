@@ -23,7 +23,7 @@ import {
   type Json,
   type JsonObject,
   tryParseJson,
-} from "../../../json/index.ts";
+} from "@commissary/json";
 import { isCompleteToolCall } from "./tool-cache.ts";
 import { isToolCallType } from "./normalize.ts";
 

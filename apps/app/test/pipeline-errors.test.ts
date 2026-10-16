@@ -11,7 +11,7 @@ import {
   responsesStreamFailedChunk,
 } from "../src/http/errors.ts";
 import { filterUpstreamHeaders, mergeUpstreamHeaders } from "../src/http/headers.ts";
-import { compactJson, stableStringify } from "../src/http/json-text.ts";
+import { compactJson, stableStringify } from "@commissary/json";
 
 describe("openAIErrorBody", () => {
   it.each([

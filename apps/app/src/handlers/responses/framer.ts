@@ -10,7 +10,7 @@
  */
 import { ExecutionError } from "../../executor/errors.ts";
 import { responsesStreamErrorChunk, responsesStreamFailedChunk } from "../../http/errors.ts";
-import { SSE_KEEP_ALIVE } from "../../http/sse.ts";
+import { SSE_KEEP_ALIVE } from "@commissary/translation/sse";
 import { statusText } from "../../http/status.ts";
 import {
   asInt,
@@ -21,7 +21,7 @@ import {
   type Json,
   set,
   tryParseJson,
-} from "../../json/index.ts";
+} from "@commissary/json";
 import type { StreamFramer } from "../framing.ts";
 
 const ERROR_EVENTS = new Set(["response.failed", "response.error", "error"]);

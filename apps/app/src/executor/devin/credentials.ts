@@ -15,7 +15,7 @@ import {
 } from "../../session-state/client.ts";
 import type { SessionAddress } from "../../session-state/protocol.ts";
 import { ExecutionError } from "../errors.ts";
-import type { Json } from "../../json/index.ts";
+import type { Json } from "@commissary/json";
 import type { CredentialSnapshot } from "../picker.ts";
 import { DEVIN_DEFAULT_BASE_URL } from "./wire.ts";
 import { normalizeDevinUuid } from "./interactions.ts";

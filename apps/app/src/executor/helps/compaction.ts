@@ -8,7 +8,7 @@
  * plaintext = {"summary","model","created_at"})`), produced and opened with WebCrypto. The key is the fixed Go secret
  * on purpose: capsules must stay interchangeable with the Go server and between Workers deployments.
  */
-import { sseEvent } from "../../http/sse.ts";
+import { sseEvent } from "@commissary/translation/sse";
 import {
   asInt,
   asString,
@@ -20,7 +20,7 @@ import {
   type Json,
   type JsonObject,
   set,
-} from "../../json/index.ts";
+} from "@commissary/json";
 import { parseOpenAIUsage } from "../../usage/record.ts";
 
 export const COMPACTION_CAPSULE_PREFIX = "cpa-ag-compact-v1:";

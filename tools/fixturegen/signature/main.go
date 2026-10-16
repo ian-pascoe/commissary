@@ -1,4 +1,4 @@
-// Command signature emits golden fixtures for the TypeScript signature decision table (apps/app/src/signature).
+// Command signature emits golden fixtures for the TypeScript signature decision table (packages/translation/src/signature).
 //
 // A corpus of synthetic signature envelopes (Claude E/R/Q/CAIS, Gemini, GPT, SWE, prefixed and malformed values) is
 // run through the real internal/signature functions: provider detection, compatibility decisions for every target
@@ -272,7 +272,7 @@ func buildGeminiCases(samples []namedSignature) []geminiCase {
 }
 
 func main() {
-	out := flag.String("out", "apps/app/test/fixtures/signature.json", "output file")
+	out := flag.String("out", "packages/translation/test/fixtures/signature.json", "output file")
 	flag.Parse()
 
 	infra1, infra2 := uint64(1), uint64(2)

@@ -7,7 +7,7 @@ import type { Config } from "../src/config/schema.ts";
 import type { CredentialSnapshot } from "../src/executor/picker.ts";
 import { OPENCODE_USER_AGENT } from "../src/executor/opencode/headers.ts";
 import { ModelProviders } from "../src/handlers/model-providers.ts";
-import type { Json } from "../src/json/index.ts";
+import type { Json } from "@commissary/json";
 import { fixedPicker, type PickerLog } from "./support/codex.ts";
 import {
   jsonResponse,

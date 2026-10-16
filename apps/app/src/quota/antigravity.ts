@@ -10,7 +10,7 @@
  * display name when it does not already contain it ("Gemini Pro · 5h"); `used_percent` is
  * `(1 - remainingFraction) * 100`. The subscription tier (`loadCodeAssist`) is not requested.
  */
-import type { Json } from "../json/index.ts";
+import type { Json } from "@commissary/json";
 import type { QuotaWindow } from "@commissary/contract/credentials";
 import {
   FIVE_HOURS,

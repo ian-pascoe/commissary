@@ -20,7 +20,7 @@
  * format (`codex-client-models.ts`).
  */
 import { Result, Schema } from "effect";
-import type { Json } from "../json/index.ts";
+import type { Json } from "@commissary/json";
 
 const optional = Schema.optionalKey;
 

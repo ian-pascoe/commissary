@@ -8,7 +8,7 @@
  */
 import { Effect } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
-import { isJsonObject, tryParseJson } from "../../json/index.ts";
+import { isJsonObject, tryParseJson } from "@commissary/json";
 import { ModelsEnv } from "../../models/env.ts";
 
 export const ANTIGRAVITY_FALLBACK_VERSION = "2.9.1";

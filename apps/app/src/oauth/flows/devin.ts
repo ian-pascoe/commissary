@@ -8,7 +8,7 @@
  */
 import { Effect } from "effect";
 import { HttpClientRequest } from "effect/http";
-import type { JsonObject } from "../../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { generatePkce, queryEscape, sha256Hex } from "../encoding.ts";
 import { buildUserStatusRequest, parseUserStatus } from "./devin-status.ts";
 import { call, parseJsonObject, str, tryCall, tryCallBytes } from "./http.ts";

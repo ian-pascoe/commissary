@@ -16,13 +16,13 @@ import {
   type Json,
   type JsonObject,
   set,
-} from "../../json/index.ts";
-import { renameKey } from "../../translator/gemini/gemini/gemini.ts";
+} from "@commissary/json";
 import {
+  renameKey,
   cleanJsonSchemaForAntigravityResponse,
   cleanJsonSchemaForAntigravityTool,
-} from "../../translator/gemini/util/json-schema.ts";
-import { lookupModelInfo } from "../../translator/model-info.ts";
+  lookupModelInfo,
+} from "@commissary/translation";
 
 export const ANTIGRAVITY_BASE_URL_DAILY = "https://daily-cloudcode-pa.googleapis.com";
 

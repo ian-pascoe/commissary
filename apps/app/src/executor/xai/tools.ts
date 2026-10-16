@@ -20,9 +20,9 @@ import {
   type JsonObject,
   set,
   tryParseJson,
-} from "../../json/index.ts";
+} from "@commissary/json";
 import { inlineLocalRefs } from "../helps/inline-refs.ts";
-import { parseSuffix } from "../suffix.ts";
+import { parseSuffix } from "@commissary/translation/thinking";
 
 export const XAI_MAX_TOOLS = 200;
 

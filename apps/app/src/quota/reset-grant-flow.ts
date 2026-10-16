@@ -20,7 +20,7 @@
  */
 import { Clock, Effect, Result } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
-import { type Json, tryParseJson } from "../json/index.ts";
+import { type Json, tryParseJson } from "@commissary/json";
 import type {
   PendingResetClaim,
   QuotaReport,

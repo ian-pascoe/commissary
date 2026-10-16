@@ -1,9 +1,11 @@
-// Command translator emits golden fixtures for the TypeScript translators (apps/app/src/translator).
+// Command translator emits golden fixtures for the TypeScript translators (@commissary/translation).
 //
 // Every corpus case is run through the real Go translator registry (sdk/translator with the built-in
 // internal/translator registrations): the client request is translated to the provider format, every upstream
 // response line is fed to the stream translator with one shared per-request state, and the upstream body to the
-// non-stream translator. Provider slices only add corpus files. Run from the repository root:
+// non-stream translator. Provider slices only add corpus files. Each corpus file becomes one fixture file of
+// translation's tests (-out); the cases with an executor context go to one file of the Worker's tests instead
+// (-executor-out), since the executor-level rewrites live in the Worker. Run from the repository root:
 //
 //	go run ./tools/fixturegen/translator
 package main
@@ -154,7 +156,8 @@ func run(registry *sdktranslator.Registry, c corpusCase) (fixtureCase, error) {
 
 func main() {
 	corpusDir := flag.String("corpus", "tools/fixturegen/translator/corpus", "directory with corpus *.json files")
-	outDir := flag.String("out", "apps/app/test/fixtures/translator", "output directory")
+	outDir := flag.String("out", "packages/translation/test/fixtures/translator", "output directory")
+	executorOut := flag.String("executor-out", "apps/app/test/fixtures/translator-executor.json", "output file of the cases with an executor context")
 	flag.Parse()
 
 	files, err := filepath.Glob(filepath.Join(*corpusDir, "*.json"))
@@ -168,6 +171,7 @@ func main() {
 		os.Exit(1)
 	}
 	registry := builtin.Registry()
+	executorFixtures := []fixtureCase{}
 	for _, file := range files {
 		data, errRead := os.ReadFile(file)
 		if errRead != nil {
@@ -190,18 +194,28 @@ func main() {
 				fmt.Fprintf(os.Stderr, "%s: %s: %v\n", file, c.Name, errRun)
 				os.Exit(1)
 			}
-			fixtures = append(fixtures, fixture)
+			if c.Executor != nil {
+				executorFixtures = append(executorFixtures, fixture)
+			} else {
+				fixtures = append(fixtures, fixture)
+			}
 		}
-		encoded, errMarshal := json.MarshalIndent(fixtures, "", " ")
-		if errMarshal != nil {
-			fmt.Fprintln(os.Stderr, errMarshal)
-			os.Exit(1)
+		if len(fixtures) > 0 {
+			writeFixtures(filepath.Join(*outDir, filepath.Base(file)), fixtures)
 		}
-		target := filepath.Join(*outDir, filepath.Base(file))
-		if errWrite := os.WriteFile(target, append(encoded, '\n'), 0o644); errWrite != nil {
-			fmt.Fprintln(os.Stderr, errWrite)
-			os.Exit(1)
-		}
-		fmt.Printf("wrote %d translator cases to %s\n", len(fixtures), target)
 	}
+	writeFixtures(*executorOut, executorFixtures)
+}
+
+func writeFixtures(target string, fixtures []fixtureCase) {
+	encoded, errMarshal := json.MarshalIndent(fixtures, "", " ")
+	if errMarshal != nil {
+		fmt.Fprintln(os.Stderr, errMarshal)
+		os.Exit(1)
+	}
+	if errWrite := os.WriteFile(target, append(encoded, '\n'), 0o644); errWrite != nil {
+		fmt.Fprintln(os.Stderr, errWrite)
+		os.Exit(1)
+	}
+	fmt.Printf("wrote %d translator cases to %s\n", len(fixtures), target)
 }

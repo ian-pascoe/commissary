@@ -15,7 +15,7 @@ import { HttpRouter } from "effect/http";
 import { AccessPrincipal } from "../access/principal.ts";
 import type { WriteResult } from "../config/store.ts";
 import type { GrantScope, GrantSubject, GrantValue } from "../grants/grant.ts";
-import { isJsonObject, type Json } from "../json/index.ts";
+import { isJsonObject, type Json } from "@commissary/json";
 import { ModelRegistry } from "../registry/service.ts";
 import { bodyJson, handled, ifMatch, jsonReply, replyError } from "./http.ts";
 import { modelsControlPlane } from "../models/env.ts";

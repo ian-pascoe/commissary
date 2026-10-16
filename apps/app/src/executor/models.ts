@@ -13,7 +13,7 @@
 import type { Config, OpenAICompatGroup } from "../config/schema.ts";
 import { resolveClaudeKeyConfig } from "./claude/credentials.ts";
 import type { CredentialSnapshot } from "./picker.ts";
-import { parseSuffix, preserveSuffix } from "./suffix.ts";
+import { parseSuffix, preserveSuffix } from "@commissary/translation/thinking";
 
 const OPENAI_COMPATIBLE_PREFIX = "openai-compatible-";
 

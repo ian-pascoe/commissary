@@ -20,7 +20,8 @@ import {
   type Json,
   set,
   tryParseJson,
-} from "../../json/index.ts";
+  stableStringify,
+} from "@commissary/json";
 import {
   type BackendResolver,
   bestEffort,
@@ -29,7 +30,6 @@ import {
   resolveBackend,
 } from "../../session-state/client.ts";
 import type { SessionAddress } from "../../session-state/protocol.ts";
-import { stableStringify } from "../../http/json-text.ts";
 import type { CredentialSnapshot } from "../picker.ts";
 import type { ExecutorOptions, ExecutorRequest } from "../types.ts";
 

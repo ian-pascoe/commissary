@@ -9,9 +9,9 @@
 import type { Effect, Stream } from "effect";
 import type { HttpClient } from "effect/http";
 import type { Config } from "../config/schema.ts";
-import type { Json } from "../json/index.ts";
-import type { ModelInfoLookup, ThinkingModelInfo } from "../thinking/index.ts";
-import type { Format } from "../translator/formats.ts";
+import type { Json } from "@commissary/json";
+import type { ModelInfoLookup, ThinkingModelInfo } from "@commissary/translation/thinking";
+import type { Format } from "@commissary/translation/formats";
 import type { UsageReporter } from "../usage/reporter.ts";
 import type { ExecutionError } from "./errors.ts";
 import type { CredentialSnapshot } from "./picker.ts";

@@ -13,7 +13,7 @@
  */
 import { createHash } from "node:crypto";
 import { Effect } from "effect";
-import { asString, get, isJsonArray, type Json, tryParseJson } from "../../json/index.ts";
+import { asString, get, isJsonArray, type Json, tryParseJson } from "@commissary/json";
 import {
   type BackendResolver,
   bestEffort,
@@ -22,7 +22,7 @@ import {
   resolveBackend,
 } from "../../session-state/client.ts";
 import type { SessionAddress } from "../../session-state/protocol.ts";
-import { isValidGrokEncryptedContent } from "../../signature/grok.ts";
+import { isValidGrokEncryptedContent } from "@commissary/translation/signature";
 import {
   alignToolCallIds,
   comparableCallIds,
@@ -30,7 +30,7 @@ import {
   replaySessionKey,
   toolCallKeys,
 } from "../codex/replay.ts";
-import { parseSuffix } from "../suffix.ts";
+import { parseSuffix } from "@commissary/translation/thinking";
 
 const CACHE_TTL_MS = 60 * 60 * 1000;
 

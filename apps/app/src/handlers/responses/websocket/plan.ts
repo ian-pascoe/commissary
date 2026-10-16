@@ -14,8 +14,8 @@
  * model changes.
  */
 import { Data } from "effect";
-import { asString, cloneJson, type Json, type JsonObject } from "../../../json/index.ts";
-import { parseSuffix } from "../../../executor/suffix.ts";
+import { asString, cloneJson, type Json, type JsonObject } from "@commissary/json";
+import { parseSuffix } from "@commissary/translation/thinking";
 import {
   inputContainsFullTranscript,
   normalizeCreateRequest,

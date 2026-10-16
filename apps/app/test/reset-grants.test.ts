@@ -14,7 +14,7 @@ import { authIndexOf } from "./support/auth-index.ts";
 import { ManagementApi } from "@commissary/contract/api";
 import { CredentialEntry, type ResetGrantStatus } from "@commissary/contract/credentials";
 import { ManagementError } from "@commissary/contract/errors";
-import type { Json } from "../src/json/index.ts";
+import type { Json } from "@commissary/json";
 import { runQuotaSweep } from "../src/quota/check.ts";
 import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/quota/claude.ts";
 import { claimResetGrant } from "../src/quota/reset-grant-flow.ts";

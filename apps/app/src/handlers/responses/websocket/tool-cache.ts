@@ -21,7 +21,7 @@ import {
   type Json,
   type JsonObject,
   tryParseJson,
-} from "../../../json/index.ts";
+} from "@commissary/json";
 import {
   dedupeInputItems,
   isToolCallOutputType,

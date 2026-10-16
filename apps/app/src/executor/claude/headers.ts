@@ -9,8 +9,8 @@
  */
 import { createHash } from "node:crypto";
 import type { Config } from "../../config/schema.ts";
-import { get, type JsonObject } from "../../json/index.ts";
-import { str } from "../../translator/common/gjson.ts";
+import { get, type JsonObject } from "@commissary/json";
+import { str } from "@commissary/translation";
 import { applyCustomHeaders } from "../helps/custom-headers.ts";
 import type { CredentialSnapshot } from "../picker.ts";
 import {

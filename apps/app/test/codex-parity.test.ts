@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import { resolveCodexModelIsCompat } from "../src/executor/codex/compat.ts";
 import { makeCodexExecutor } from "../src/executor/codex/executor.ts";
 import { modelOverrideHeaders } from "../src/executor/helps/model-headers.ts";
-import type { ThinkingModelInfo } from "../src/thinking/index.ts";
+import type { ThinkingModelInfo } from "@commissary/translation/thinking";
 import { providerKeyCredential } from "./support/codex.ts";
 import { execute, harness, json, loadConfig, options } from "./support/executor-run.ts";
-import type { Json } from "../src/json/index.ts";
+import type { Json } from "@commissary/json";
 
 const compatYaml = `
 api-keys:

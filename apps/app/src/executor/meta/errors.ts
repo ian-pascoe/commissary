@@ -4,7 +4,7 @@
  * Go source: internal/runtime/executor/meta_executor.go (`parseMetaRetryAfter`, `isMetaSubscriptionQuota`),
  * meta_executor_execute.go (`wrapMetaUpstreamError`, `metaStreamEventError`, `metaNotFoundCooldown`).
  */
-import { asInt, asString, get, type Json, tryParseJson } from "../../json/index.ts";
+import { asInt, asString, get, type Json, tryParseJson } from "@commissary/json";
 import { ExecutionError } from "../errors.ts";
 
 /** `metaNotFoundCooldown`: a 404 without a usable `resets_at` cools the model for five minutes. */

@@ -16,7 +16,7 @@ import {
   isJsonObject,
   type Json,
   type JsonObject,
-} from "../../json/index.ts";
+} from "@commissary/json";
 
 interface TranscriptReset {
   readonly payload: JsonObject;

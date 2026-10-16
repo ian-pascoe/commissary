@@ -20,7 +20,7 @@ import type {
   RequestScopedErrorRule,
 } from "../config/schema.ts";
 import { normalizeHeaders, normalizeModelPrefix } from "../config/normalize.ts";
-import type { JsonObject } from "../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { type Credential, openAICompatibleProviderKey } from "./model.ts";
 import { normalizeExclusions } from "./selection/model-name.ts";
 import { DEFAULT_WEIGHT } from "./weight.ts";

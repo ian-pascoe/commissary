@@ -21,7 +21,7 @@
  *   `GET /credentials` shows) keeps the stored value; any other value containing `[redacted` or `[new secret` is
  *   refused, so a masked secret is never stored as a value nor copied to another header.
  */
-import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "@commissary/json";
 import { extractHeaders } from "./derive.ts";
 import { canonicalMetadataKey } from "./import.ts";
 import { isTokenPayloadKey } from "./merge.ts";

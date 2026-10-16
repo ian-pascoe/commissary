@@ -5,9 +5,8 @@
  * InitializeApplyPatchStream, EndApplyPatchStream). The guards only act when the client declared a winning custom
  * `apply_patch` tool; the error text deliberately excludes upstream JSON and patch text.
  */
-import type { Json } from "../../json/index.ts";
-import { responsesToolReverseIdentityMap } from "../../translator/gemini/openai/responses/tools.ts";
-import type { TranslationState } from "../../translator/registry.ts";
+import type { Json } from "@commissary/json";
+import { responsesToolReverseIdentityMap, type TranslationState } from "@commissary/translation";
 import { APPLY_PATCH_UPSTREAM_ERROR_MESSAGE } from "./apply-patch-responses.ts";
 import { ExecutionError } from "../errors.ts";
 

@@ -24,7 +24,7 @@ import {
   type Json,
   type JsonObject,
   tryParseJson,
-} from "../../json/index.ts";
+} from "@commissary/json";
 
 const SPAWN_AGENT_DESCRIPTION_MARKER = "Spawns an agent";
 

@@ -1,0 +1,12 @@
+{
+  // Translation and its tests, run by Node.js (Vitest). No Workers types, so a `cloudflare:*` import or a Workers
+  // global fails typecheck; the Node.js types are there for `node:crypto` (the one Node.js module translation uses),
+  // the Vitest config and the shared tools/vitest settings.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "resolveJsonModule": true
+  },
+  "include": ["src", "test", "vitest.config.ts"]
+}

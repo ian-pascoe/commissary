@@ -7,7 +7,7 @@
  * Derivation is pure so global config changes (exclusions) are applied by re-deriving, never by rewriting files.
  */
 import type { Config, OAuthModelAlias } from "../config/schema.ts";
-import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "@commissary/json";
 import { decodeJwtClaims } from "./expiry.ts";
 import { type Credential } from "./model.ts";
 import { normalizeExclusions } from "./selection/model-name.ts";

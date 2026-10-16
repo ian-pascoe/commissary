@@ -3,7 +3,7 @@
 import { Effect } from "effect";
 import type { HttpClient } from "effect/http";
 import { TestClock } from "effect/testing";
-import type { JsonObject } from "../../src/json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { sha256 } from "../../src/oauth/encoding.ts";
 import { base64Url } from "../../src/oauth/encoding.ts";
 import { type CredentialSink } from "../../src/oauth/record.ts";

@@ -5,10 +5,9 @@
  * Go source: internal/runtime/executor/claude_executor_stream.go (ExecuteStream goroutine, validateClaudeStreamingResponse),
  * claude_executor_diagnostics.go (observeClaudeStreamLine).
  */
-import { get, tryParseJson } from "../../json/index.ts";
-import { str } from "../../translator/common/gjson.ts";
-import type { Format } from "../../translator/formats.ts";
-import type { ResponseContext, TranslatorRegistry } from "../../translator/registry.ts";
+import { get, tryParseJson } from "@commissary/json";
+import { str, type ResponseContext, type TranslatorRegistry } from "@commissary/translation";
+import type { Format } from "@commissary/translation/formats";
 import { responseModelOf, ssePayloadObject, type UsageDetail } from "../../usage/record.ts";
 import { ExecutionError } from "../errors.ts";
 import { ensureResponsesUsageDetails } from "../codex/output.ts";

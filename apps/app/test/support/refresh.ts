@@ -11,7 +11,7 @@ import {
 import type { Config } from "../../src/config/schema.ts";
 import { decodeStoredConfig } from "../../src/config/store.ts";
 import { ALLOW_ALL } from "../../src/grants/reach.ts";
-import type { JsonObject, Json } from "../../src/json/index.ts";
+import type { JsonObject, Json } from "@commissary/json";
 import type { StoredCredential } from "../../src/credentials/derive.ts";
 import { mergeExistingMetadata, credentialsChanged } from "../../src/credentials/merge.ts";
 import type { CredentialState } from "../../src/credentials/model.ts";

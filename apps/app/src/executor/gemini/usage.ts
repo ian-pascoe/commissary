@@ -6,7 +6,7 @@
  * FilterSSEUsageMetadata, StripUsageMetadataFromJSON, JSONPayload). The parsers (with the v2 token breakdown:
  * separate-reasoning accounting, `inconsistent` for invalid sums) live in `usage/parsers.ts` and are re-exported here.
  */
-import { asString, del, get, set, tryParseJson } from "../../json/index.ts";
+import { asString, del, get, set, tryParseJson } from "@commissary/json";
 
 export {
   parseGeminiFamilyNode as parseGeminiFamilyUsageDetail,

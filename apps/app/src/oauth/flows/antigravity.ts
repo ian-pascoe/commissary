@@ -14,7 +14,7 @@ import {
   ANTIGRAVITY_CLIENT_SECRET,
   ANTIGRAVITY_TOKEN_URL,
 } from "../../credentials/refresh/antigravity.ts";
-import { isJsonObject, type Json, type JsonObject } from "../../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "@commissary/json";
 import { encodeQuery } from "../encoding.ts";
 import { call, parseJsonObject, rfc3339, seconds, str } from "./http.ts";
 import { type CallbackFlow, type FlowFailure, flowFailure } from "./types.ts";

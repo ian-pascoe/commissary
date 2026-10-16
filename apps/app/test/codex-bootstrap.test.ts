@@ -2,7 +2,7 @@
 // injected clock, the Go duration parser, and end-to-end failover through the conductor (Go
 // codex_executor_stream_*_test.go scenarios).
 import { Effect, Layer, Result, Stream } from "effect";
-import type { Json, JsonObject } from "../src/json/index.ts";
+import type { Json, JsonObject } from "@commissary/json";
 import type { HttpServerRequest } from "effect/http";
 import { describe, expect, it } from "vitest";
 import { AccessPrincipal } from "../src/access/principal.ts";
@@ -22,9 +22,8 @@ import { Thinking } from "../src/executor/thinking.ts";
 import { executeStream } from "../src/handlers/execute.ts";
 import { ModelCapabilities } from "../src/handlers/model-capabilities.ts";
 import { ModelProviders } from "../src/handlers/model-providers.ts";
-import { builtinTranslators } from "../src/translator/builtin.ts";
-import { Formats } from "../src/translator/formats.ts";
-import { makeTranslationState } from "../src/translator/registry.ts";
+import { builtinTranslators, makeTranslationState } from "@commissary/translation";
+import { Formats } from "@commissary/translation/formats";
 import { UsageReporter } from "../src/usage/reporter.ts";
 import type { UsageRecord } from "../src/usage/record.ts";
 import { UsageSink } from "../src/usage/sink.ts";

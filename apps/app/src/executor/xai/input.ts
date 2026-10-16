@@ -18,8 +18,8 @@ import {
   set,
   parseJsonOrText,
   tryParseJson,
-} from "../../json/index.ts";
-import { isValidGrokEncryptedContent } from "../../signature/grok.ts";
+} from "@commissary/json";
+import { isValidGrokEncryptedContent } from "@commissary/translation/signature";
 import { hasFunctionToolNamed, qualifyNamespaceToolName } from "./tools.ts";
 
 const trimmed = (value: Json | undefined, path: string): string =>

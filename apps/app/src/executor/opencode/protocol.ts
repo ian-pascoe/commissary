@@ -21,7 +21,7 @@ import {
   protocolForNpm,
 } from "../../registry/opencode-catalog.ts";
 import type { CredentialSnapshot } from "../picker.ts";
-import { parseSuffix } from "../suffix.ts";
+import { parseSuffix } from "@commissary/translation/thinking";
 import { OPENCODE_SPECS, OPENCODE_ZEN, type OpenCodeProvider } from "./providers.ts";
 
 export interface OpenCodeKeyConfig {

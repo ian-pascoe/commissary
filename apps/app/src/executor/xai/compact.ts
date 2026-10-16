@@ -14,8 +14,8 @@ import {
   isJsonObject,
   type Json,
   type JsonObject,
-} from "../../json/index.ts";
-import { sseEvent } from "../../http/sse.ts";
+} from "@commissary/json";
+import { sseEvent } from "@commissary/translation/sse";
 import { ensureResponsesUsageDetails } from "../codex/output.ts";
 
 /** Fields of the prepared request echoed into the synthetic response objects. */

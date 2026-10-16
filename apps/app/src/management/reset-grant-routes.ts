@@ -11,7 +11,7 @@
  * was read, or the account is disabled.
  */
 import { Effect } from "effect";
-import type { Json } from "../json/index.ts";
+import type { Json } from "@commissary/json";
 import {
   claimResetGrant,
   readResetGrants,

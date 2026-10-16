@@ -1,0 +1,29 @@
+{
+  "name": "@commissary/translation",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Request/response translation between client and provider formats, the thinking pipeline, thinking signatures and token counting; pure, tested in Node.js",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./thinking": "./src/thinking/index.ts",
+    "./signature": "./src/signature/index.ts",
+    "./tokenizer": "./src/tokenizer/index.ts",
+    "./formats": "./src/translator/formats.ts",
+    "./sse": "./src/sse.ts",
+    "./testing": "./test/testing.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@commissary/json": "workspace:*",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

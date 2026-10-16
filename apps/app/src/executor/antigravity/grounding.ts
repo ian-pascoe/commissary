@@ -11,13 +11,13 @@
  */
 import { Effect } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
-import { asString, get, isJsonArray, type Json, set, tryParseJson } from "../../json/index.ts";
-import { Formats, type Format } from "../../translator/formats.ts";
-import { hasResponsesWebSearchTool } from "../../translator/gemini/openai/responses/web-search.ts";
+import { asString, get, isJsonArray, type Json, set, tryParseJson } from "@commissary/json";
+import { Formats, type Format } from "@commissary/translation/formats";
 import {
+  hasResponsesWebSearchTool,
   hasAntigravityGoogleSearchTool,
   hasClaudeTypedWebSearchTool,
-} from "../../translator/antigravity/claude/web-search.ts";
+} from "@commissary/translation";
 
 const REDIRECT_HOST = "vertexaisearch.cloud.google.com";
 

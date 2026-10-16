@@ -3,7 +3,7 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import type { CredentialSnapshot } from "../src/executor/picker.ts";
-import type { Json, JsonObject } from "../src/json/index.ts";
+import type { Json, JsonObject } from "@commissary/json";
 import { inlineLocalRefs } from "../src/executor/helps/inline-refs.ts";
 import {
   isCliChatProxyBaseUrl,

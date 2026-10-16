@@ -1,0 +1,11 @@
+{
+  // The JSON path engine and its tests, run by Node.js (Vitest). No DOM or Workers types; the Node.js types cover the
+  // Vitest config and the shared tools/vitest settings.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "resolveJsonModule": true
+  },
+  "include": ["src", "test", "vitest.config.ts"]
+}

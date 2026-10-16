@@ -5,8 +5,8 @@
  * NormalizeOpenAIMaxTokens), helps/payload_mutations.go (SetBoolIfDifferent).
  */
 import type { ModelEntry, OpenAICompatGroup } from "../../config/schema.ts";
-import { type Json, del, exists, get, set } from "../../json/index.ts";
-import { parseSuffix } from "../suffix.ts";
+import { type Json, del, exists, get, set } from "@commissary/json";
+import { parseSuffix } from "@commissary/translation/thinking";
 
 const normalizeName = (model: string | undefined): string =>
   parseSuffix((model ?? "").trim()).modelName.trim();

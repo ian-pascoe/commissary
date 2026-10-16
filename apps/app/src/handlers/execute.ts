@@ -18,8 +18,8 @@ import { ExecutionError, withErrorFields } from "../executor/errors.ts";
 import type { CredentialSnapshot } from "../executor/picker.ts";
 import type { ExecutionMetadata, ExecutorOptions, WebsocketExecution } from "../executor/types.ts";
 import { filterUpstreamHeaders } from "../http/headers.ts";
-import { get, type Json } from "../json/index.ts";
-import type { Format } from "../translator/formats.ts";
+import { get, type Json } from "@commissary/json";
+import type { Format } from "@commissary/translation/formats";
 import { CurrentOrg } from "../platform/org.ts";
 import {
   type Attempt,

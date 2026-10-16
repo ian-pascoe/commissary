@@ -6,7 +6,7 @@ import { normalizePrivateKey } from "../src/credentials/refresh/vertex.ts";
 import fixtures from "./fixtures/session.json";
 import { controlPlane, makeHarness, resetControlPlane } from "./support/management.ts";
 import { makeServiceAccount, type TestServiceAccount } from "./support/vertex.ts";
-import type { Json } from "../src/json/index.ts";
+import type { Json } from "@commissary/json";
 
 const harness = makeHarness();
 

@@ -18,7 +18,7 @@
  * {@link OPENCODE_LIMIT_DEFAULT_COOLDOWN_MS}, and never more than {@link OPENCODE_LIMIT_MAX_COOLDOWN_MS}. Pure functions
  * over the answer; no usage fetch on the hot path (the quota check refreshes the windows).
  */
-import { asString, get, type Json, tryParseJson } from "../../json/index.ts";
+import { asString, get, type Json, tryParseJson } from "@commissary/json";
 import { parseRetryAfterMs } from "../helps/retry-after.ts";
 
 /** Cooldown when neither `Retry-After` nor the message says when the window resets: half an hour, then a retry. */

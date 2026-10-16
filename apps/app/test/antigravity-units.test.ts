@@ -55,7 +55,7 @@ import {
   resetAntigravityVersionCache,
   resolveStoredVersion,
 } from "../src/executor/antigravity/version.ts";
-import { asString, get, type Json } from "../src/json/index.ts";
+import { asString, get, type Json } from "@commissary/json";
 import { applyAntigravityHints } from "../src/registry/antigravity-hints.ts";
 import { embeddedCatalogs, sectionModels } from "../src/registry/catalog.ts";
 import {
@@ -65,14 +65,11 @@ import {
   withSignatureContext,
   getCachedSignature,
   cacheSignature,
-} from "../src/signature/cache.ts";
-import {
   flushSignatureWrites,
   makeMemorySignatureStore,
   prefetchSignatures,
-} from "../src/signature/store.ts";
-import { builtinTranslators } from "../src/translator/builtin.ts";
-import { makeTranslationState } from "../src/translator/registry.ts";
+} from "@commissary/translation/signature";
+import { builtinTranslators, makeTranslationState } from "@commissary/translation";
 import { mockHttpClient, type UpstreamCall } from "./support/pipeline.ts";
 import { CurrentOrg, GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 import { envContext } from "../src/worker-env.ts";

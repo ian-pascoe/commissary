@@ -42,7 +42,7 @@ import {
   withoutEntryIds,
   withStoredKeyIds,
 } from "../credentials/key-ids.ts";
-import { type Json, type JsonObject, jsonEquals } from "../json/index.ts";
+import { type Json, type JsonObject, jsonEquals } from "@commissary/json";
 import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 import { isSealed, type Sealer } from "../secrets/cipher.ts";
 import { decodeConfig, decodeRawConfig, encodeConfig, parseConfigYaml } from "./codec.ts";

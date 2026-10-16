@@ -16,7 +16,7 @@ import {
   type JsonObject,
   set,
   tryParseJson,
-} from "../../json/index.ts";
+} from "@commissary/json";
 import {
   emptyUsageDetail,
   hasUsageFields,

@@ -8,7 +8,7 @@
  * message hash) and conductor_execution.go (`syncMetadataSessionToContext`: the identity recorded in usage).
  */
 import type { SessionInfo } from "../handlers/session.ts";
-import type { Json } from "../json/index.ts";
+import type { Json } from "@commissary/json";
 import { extractCanonicalTurns, prepareFingerprints, type LcpPrepared } from "./canonical.ts";
 import { boundSessionIdentity, deriveId, hasExplicitSession, messageHashIds } from "./identity.ts";
 

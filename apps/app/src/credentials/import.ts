@@ -5,7 +5,7 @@
  * (`synthesizeFileAuths`: skipped files, provider type), sdk/auth/filestore.go. Docs: credentials.md §2-3.
  * A file is one flat JSON object that is kept verbatim as credential metadata (unknown keys are preserved).
  */
-import { isJsonObject, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type JsonObject } from "@commissary/json";
 import { parseWeightValue } from "./weight.ts";
 
 /** Legacy dashed spellings -> canonical snake_case (`CanonicalCredentialMetadataKey`). */

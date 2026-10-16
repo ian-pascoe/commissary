@@ -2,7 +2,7 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { decodeConfig } from "../src/config/codec.ts";
-import type { JsonObject } from "../src/json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { resetCooldownState } from "../src/credentials/cooldown-reset.ts";
 import { synthesizeConfigCredentials } from "../src/credentials/synthesize.ts";
 import { applyFieldPatch } from "../src/credentials/field-patch.ts";

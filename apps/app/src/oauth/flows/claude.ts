@@ -9,7 +9,7 @@
  */
 import { Effect } from "effect";
 import { HttpClientRequest } from "effect/http";
-import { isJsonObject, type Json, type JsonObject } from "../../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "@commissary/json";
 import {
   CLAUDE_CLIENT_ID,
   CLAUDE_OAUTH_SCOPE,

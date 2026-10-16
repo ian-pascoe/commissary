@@ -7,7 +7,7 @@
  * A re-login keeps the user's settings of the previous file (never its tokens) and a Claude login migrates the legacy
  * `claude-<email>.json` / account-hashed file into the organization-hashed name.
  */
-import type { JsonObject } from "../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { mergeExistingMetadata } from "../credentials/merge.ts";
 import { claudeFileName } from "./flows/claude.ts";
 import type { CredentialRecord } from "./flows/types.ts";

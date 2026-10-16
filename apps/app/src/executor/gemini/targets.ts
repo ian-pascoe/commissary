@@ -6,8 +6,8 @@
  * vertexBaseURL, vertexInteractionsURL, isNativeVertexInteractionsAuth, shouldExecuteVertexInteractions).
  */
 import { Effect } from "effect";
-import type { JsonObject } from "../../json/index.ts";
-import { Formats } from "../../translator/formats.ts";
+import type { JsonObject } from "@commissary/json";
+import { Formats } from "@commissary/translation/formats";
 import { ExecutionError } from "../errors.ts";
 
 import type { ExecutionContext } from "../types.ts";

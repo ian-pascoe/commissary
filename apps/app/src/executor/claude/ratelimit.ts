@@ -6,7 +6,7 @@
  * (classifyClaudeUpstreamErrorWithCooling, claudeBodyIndicatesFastModeCredits).
  */
 import { randomInt } from "node:crypto";
-import { asString, get, tryParseJson } from "../../json/index.ts";
+import { asString, get, tryParseJson } from "@commissary/json";
 import { ExecutionError, headersRecord } from "../errors.ts";
 
 const FUZZ_MIN_SECONDS = 1;

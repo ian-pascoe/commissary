@@ -11,7 +11,7 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { routeServices } from "../../http/route-services.ts";
 import { invalidRequestBody } from "../../http/errors.ts";
 import { mergeUpstreamHeaders } from "../../http/headers.ts";
-import { asString, get, isJsonObject, type Json, type JsonObject } from "../../json/index.ts";
+import { asString, get, isJsonObject, type Json, type JsonObject } from "@commissary/json";
 import { executeNonStream, type ExecutionInput } from "../execute.ts";
 import { currentConfig, type ClientApiServices, readRequestBody } from "../request.ts";
 import { errorResponse } from "../respond.ts";

@@ -18,8 +18,8 @@ import {
   type Json,
   type JsonObject,
   tryParseJson,
-} from "../../json/index.ts";
-import { sseEvent } from "../../http/sse.ts";
+} from "@commissary/json";
+import { sseEvent } from "@commissary/translation/sse";
 import { ExecutionError } from "../../executor/errors.ts";
 
 export const DEFAULT_XAI_IMAGES_MODEL = "grok-imagine-image";

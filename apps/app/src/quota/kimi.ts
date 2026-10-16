@@ -10,7 +10,7 @@
  * limit are dropped); ids are `five_hour`/`weekly`/… for `limits[]` entries with a window length (else `limit_<n>`),
  * `weekly` for the `usage` summary and `monthly` for `usages.limit_month_total`.
  */
-import type { Json, JsonObject } from "../json/index.ts";
+import type { Json, JsonObject } from "@commissary/json";
 import type { QuotaWindow } from "@commissary/contract/credentials";
 import {
   DAY,

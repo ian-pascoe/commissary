@@ -5,10 +5,12 @@
  * shouldSanitizeClaudeMessagesForUpstream, sanitizeClaudeWebSearchDomains). Signature handling is the full
  * `internal/signature` port (`signature/claude-messages.ts`); the report logging of Go is not ported.
  */
-import type { JsonObject } from "../../json/index.ts";
-import { isArr, isObj, str } from "../../translator/common/gjson.ts";
-import { sanitizeClaudeMessagesForClaudeUpstream } from "../../signature/claude-messages.ts";
-import { signatureProviderFromModelName } from "../../signature/provider.ts";
+import type { JsonObject } from "@commissary/json";
+import { isArr, isObj, str } from "@commissary/translation";
+import {
+  sanitizeClaudeMessagesForClaudeUpstream,
+  signatureProviderFromModelName,
+} from "@commissary/translation/signature";
 
 /** `sanitizeClaudeWebSearchDomains`: empty domain lists are rejected upstream. */
 export const sanitizeWebSearchDomains = (body: JsonObject): void => {

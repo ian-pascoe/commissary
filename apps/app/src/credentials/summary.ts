@@ -2,7 +2,7 @@
  * Management-facing credential views (never contain token material) and executor snapshots (do).
  */
 import type { Schema } from "effect";
-import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "@commissary/json";
 import { isSecretHeader } from "@commissary/contract/headers";
 import type { RecentBucket } from "./cooldown/recent-requests.ts";
 import { accessTokenExpiry } from "./expiry.ts";

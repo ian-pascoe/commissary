@@ -11,7 +11,7 @@
  * (`protocol.ts` falls back to chat there).
  */
 import { Clock, Effect, Stream } from "effect";
-import type { TranslatorRegistry } from "../../translator/registry.ts";
+import type { TranslatorRegistry } from "@commissary/translation";
 import type { ExecutionError } from "../errors.ts";
 import { makeGoogleExecutor } from "../gemini/google.ts";
 import type { ProviderExecutor } from "../types.ts";

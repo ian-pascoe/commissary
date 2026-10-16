@@ -1,6 +1,6 @@
 // /v9/management/settings through the router, Access gate and real ControlPlane: the Settings page's view and writes.
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import type { Json } from "../src/json/index.ts";
+import type { Json } from "@commissary/json";
 import type { SettingsView } from "@commissary/contract/settings";
 import {
   controlPlane,

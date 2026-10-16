@@ -12,7 +12,7 @@ import {
   serviceToken,
   token,
 } from "./support/management.ts";
-import type { Json } from "../src/json/index.ts";
+import type { Json } from "@commissary/json";
 
 // The ControlPlane talks to providers through Effect's FetchHttpClient, which resolves `globalThis.fetch` once:
 // install one stable fetch that delegates to the current test's upstream table.

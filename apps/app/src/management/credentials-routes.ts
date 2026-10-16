@@ -21,7 +21,7 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { AccessPrincipal } from "../access/principal.ts";
 import { isHosted } from "../hosted/mode.ts";
 import { holdsSensitivePowers } from "../members/roles.ts";
-import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "@commissary/json";
 import { ModelRegistry } from "../registry/service.ts";
 import { currentViewer } from "./viewer.ts";
 import {

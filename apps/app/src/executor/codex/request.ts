@@ -16,12 +16,14 @@ import {
   isJsonObject,
   type Json,
   set,
-} from "../../json/index.ts";
-import { isValidGptReasoningSignature } from "../../signature/gpt.ts";
-import { detectSignatureProvider } from "../../signature/provider.ts";
+} from "@commissary/json";
+import {
+  isValidGptReasoningSignature,
+  detectSignatureProvider,
+} from "@commissary/translation/signature";
 import { uuidV5Oid } from "../helps/uuid.ts";
 import type { CredentialSnapshot } from "../picker.ts";
-import { parseSuffix } from "../suffix.ts";
+import { parseSuffix } from "@commissary/translation/thinking";
 import { isCodexResponsesLiteRequest } from "./headers.ts";
 import { claudeCodeExecutionScope } from "./replay.ts";
 

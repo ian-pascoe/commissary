@@ -3,7 +3,7 @@
  *
  * Go source: internal/registry/model_registry.go (`ModelInfo`, `ThinkingSupport`, `ModelConfig`, `NativeCapabilities`,
  * `cloneModelInfo`). `ModelInfo` is the camelCase counterpart of the Go struct and structurally satisfies
- * `ThinkingModelInfo` (src/thinking), so it can be handed to the thinking pipeline as is.
+ * `ThinkingModelInfo` (`@commissary/translation/thinking`), so it can be handed to the thinking pipeline as is.
  *
  * Go zero values mean "absent" for every optional field (`omitempty`, `> 0` checks), so consumers test truthiness
  * instead of `=== undefined`.

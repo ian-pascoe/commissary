@@ -10,7 +10,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import { Effect } from "effect";
-import { isJsonObject, type Json, tryParseJson } from "../../json/index.ts";
+import { isJsonObject, type Json, tryParseJson } from "@commissary/json";
 import {
   type BackendResolver,
   bestEffort,

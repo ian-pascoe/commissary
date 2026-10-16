@@ -6,7 +6,7 @@
  * the raw bytes are used. Workers' `DecompressionStream` has no zstd, so the pure-JS `fzstd` decoder is used, bounded
  * to {@link MAX_DECODED_BODY_BYTES} (Workers deviation: Go reads the decoded body without a limit).
  */
-import { isValidJson } from "./json-text.ts";
+import { isValidJson } from "@commissary/json";
 import { DecodedBodyTooLargeError, inflateZstd } from "./zstd.ts";
 
 /** Upper bound of a decoded (decompressed) request body; larger bodies answer 413. */

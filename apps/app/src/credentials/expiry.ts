@@ -7,7 +7,7 @@
  * first parseable of `expired, expire, expires_at, expiresAt, expiry, expires`; then `expires_in` + `timestamp`;
  * then the same inside a nested `token`/`Token` object. A token the upstream rejected counts as expired at epoch 0.
  */
-import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "@commissary/json";
 
 const EXPIRE_KEYS = ["expired", "expire", "expires_at", "expiresAt", "expiry", "expires"] as const;
 

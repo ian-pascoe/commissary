@@ -7,8 +7,8 @@
  * `"model"` string and removing the members `max_tokens`, `fallbacks` and `fallback_credit_token` without
  * re-serialising.
  */
-import type { JsonObject } from "../../json/index.ts";
-import { isArr, isObj } from "../../translator/common/gjson.ts";
+import type { JsonObject } from "@commissary/json";
+import { isArr, isObj } from "@commissary/translation";
 import { textBlock } from "./cache-control.ts";
 import { isAnthropicUpstreamBase, isClaudeOAuthToken } from "./credentials.ts";
 import { xxh64 } from "./xxhash64.ts";

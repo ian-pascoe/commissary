@@ -9,7 +9,7 @@
  * the official API. `/responses/compact` and `/tts` never go to the chat proxy (it answers 404 and a 404 would cool
  * the whole credential pool down).
  */
-import type { Json } from "../../json/index.ts";
+import type { Json } from "@commissary/json";
 import type { CredentialSnapshot } from "../picker.ts";
 
 export const XAI_PROVIDER = "xai";

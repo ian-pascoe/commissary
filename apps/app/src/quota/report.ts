@@ -10,7 +10,7 @@
  * Workers deviation: Go has no server-side usage probing (the upstream panel calls the provider usage endpoints from
  * the browser through Go's `POST /requests/api-call`, not ported); see docs/ARCHITECTURE.md "Quota check".
  */
-import type { JsonObject } from "../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import type { QuotaReport, QuotaWindow, ResetGrantStatus } from "@commissary/contract/credentials";
 
 /** Executor keys (`executorKey`) with a usage endpoint. */

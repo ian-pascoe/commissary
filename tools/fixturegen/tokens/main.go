@@ -1,9 +1,9 @@
 // Command tokens emits the tokenizer assets and golden fixtures for the TypeScript token counting code
-// (apps/app/src/tokenizer, apps/app/src/executor/helps/token-count.ts).
+// (packages/translation/src/tokenizer, apps/app/src/executor/helps/token-count.ts).
 //
-//   - apps/app/src/tokenizer/ranks/{o200k_base,cl100k_base}.bin: the vocabularies of the Go tokenizer
+//   - packages/translation/src/tokenizer/ranks/{o200k_base,cl100k_base}.bin: the vocabularies of the Go tokenizer
 //     (tiktoken-go/tokenizer) in rank order, so the TypeScript BPE uses exactly the ranks Go uses.
-//   - apps/app/test/fixtures/tokens.json: token counts of a text corpus per encoding, the model -> encoding mapping of
+//   - packages/translation/test/fixtures/tokens.json: token counts of a text corpus per encoding, the model -> encoding mapping of
 //     helps.TokenizerForModel, the real Go executors' CountTokens answers (Codex, OpenAI-compatibility, xAI, Meta,
 //     Claude local estimate), the Claude input estimate over request corpora and the Claude stream message_start
 //     patching (helps.TranslateStreamWithClaudeInputTokens).
@@ -81,8 +81,8 @@ type fixtures struct {
 }
 
 func main() {
-	outPath := flag.String("out", "apps/app/test/fixtures/tokens.json", "fixture output file")
-	ranksDir := flag.String("ranks", "apps/app/src/tokenizer/ranks", "rank asset output directory")
+	outPath := flag.String("out", "packages/translation/test/fixtures/tokens.json", "fixture output file")
+	ranksDir := flag.String("ranks", "packages/translation/src/tokenizer/ranks", "rank asset output directory")
 	flag.Parse()
 
 	if err := writeRanks(*ranksDir); err != nil {

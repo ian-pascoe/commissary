@@ -24,10 +24,9 @@ import {
   type JsonObject,
   set,
   tryParseJson,
-} from "../../json/index.ts";
-import { isValidGptReasoningSignature } from "../../signature/gpt.ts";
-import { sanitizeClaudeToolId } from "../../translator/common/tool-names.ts";
-import { shortenCodexCallIdIfNeeded } from "../../translator/codex/claude/request.ts";
+} from "@commissary/json";
+import { isValidGptReasoningSignature } from "@commissary/translation/signature";
+import { sanitizeClaudeToolId, shortenCodexCallIdIfNeeded } from "@commissary/translation";
 import {
   type BackendResolver,
   bestEffort,

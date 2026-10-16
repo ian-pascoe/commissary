@@ -6,7 +6,7 @@ import type { PickResult, ReportResult } from "../src/credentials/selection/type
 import type { CredentialPool } from "../src/credentials/pool.ts";
 import { extractCanonicalTurns, prepareFingerprints } from "../src/session-routing/canonical.ts";
 import { prepareSessionRouting } from "../src/session-routing/routing.ts";
-import type { Json } from "../src/json/index.ts";
+import type { Json } from "@commissary/json";
 import { makePool } from "./support/pool.ts";
 
 const key = (name: string) => `

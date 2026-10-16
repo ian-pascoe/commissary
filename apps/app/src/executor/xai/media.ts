@@ -9,9 +9,9 @@
  * base URL (OAuth: the CLI chat proxy), speech the official API only. Payload rules (protocol `openai`) are applied last.
  */
 import { Effect } from "effect";
-import { asString, cloneJson, get, type Json, tryParseJson } from "../../json/index.ts";
+import { asString, cloneJson, get, type Json, tryParseJson } from "@commissary/json";
 import { responseModelOf } from "../../usage/record.ts";
-import { EntryOnlyFormats } from "../../translator/formats.ts";
+import { EntryOnlyFormats } from "@commissary/translation/formats";
 import { ExecutionError } from "../errors.ts";
 import type {
   ExecutionContext,

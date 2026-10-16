@@ -5,7 +5,7 @@
  * `CredentialsChanged` in conductor_refresh.go). Docs: credentials.md §11.
  * A re-login (or re-import) overwrites the token material but keeps the user's settings from the previous file.
  */
-import type { JsonObject } from "../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { canonicalMetadataKey } from "./import.ts";
 
 const TOKEN_KEYS = new Set([

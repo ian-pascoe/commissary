@@ -1,4 +1,4 @@
-/** Synthetic provider signatures that satisfy the strict validators of `src/signature`. */
+/** Synthetic provider signatures that satisfy the strict validators of `@commissary/translation/signature`. */
 
 const field = (num: number, bytes: number[]): number[] => [(num << 3) | 2, bytes.length, ...bytes];
 

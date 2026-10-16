@@ -6,8 +6,8 @@
  * stripClaudeCacheControlTTL, normalizeCacheControlTTL, isExplicitPromptCacheMode, stripPromptCacheOptions,
  * shouldEnsureCacheControl, countCacheControls). Functions mutate the parsed body in place.
  */
-import { get, type Json, type JsonObject } from "../../json/index.ts";
-import { isArr, isObj, str } from "../../translator/common/gjson.ts";
+import { get, type Json, type JsonObject } from "@commissary/json";
+import { isArr, isObj, str } from "@commissary/translation";
 
 export const CACHE_TTL_1H = "1h";
 

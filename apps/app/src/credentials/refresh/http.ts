@@ -5,7 +5,7 @@
  */
 import { Effect } from "effect";
 import { HttpClient, type HttpClientRequest } from "effect/http";
-import { isJsonObject, type Json, type JsonObject, tryParseJson } from "../../json/index.ts";
+import { isJsonObject, type Json, type JsonObject, tryParseJson } from "@commissary/json";
 import { refreshError, type RefreshError } from "./error.ts";
 
 export interface HttpReply {

@@ -6,7 +6,7 @@
  *
  * New in the Workers port; the Go usage record keeps the body (`Fail.Body`), which the export no longer carries.
  */
-import { get, isJsonObject, type Json, tryParseJson } from "../json/index.ts";
+import { get, isJsonObject, type Json, tryParseJson } from "@commissary/json";
 
 /** The identifying part of a failure; the status code is the record's own. */
 export interface FailureDetail {

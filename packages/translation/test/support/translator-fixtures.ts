@@ -1,0 +1,163 @@
+/**
+ * The harness of the golden translator fixtures (`go run ./tools/fixturegen/translator`): translation's own cases
+ * (`test/fixtures/translator/`) and the Worker's executor-rewrite cases run through it. Outputs compare structurally
+ * (Go's key order and HTML escaping are not part of the contract); SSE framing and non-JSON text stay exact.
+ */
+import { expect } from "vitest";
+import type { Json } from "@commissary/json";
+import { builtinTranslators } from "../../src/translator/builtin.ts";
+import { makeTranslationState, type RequestEnvelope } from "../../src/translator/registry.ts";
+import { expandEmbeddedJson } from "./structural.ts";
+
+export interface TranslatorFixtureCase {
+  readonly name: string;
+  readonly from: string;
+  readonly to: string;
+  readonly model: string;
+  readonly stream: boolean;
+  readonly needs?: ReadonlyArray<string>;
+  readonly alt?: string;
+  /** Executor-level context (compat request variants, Codex multi-agent v2 / orphan delegation rewriting). */
+  readonly executor?: {
+    readonly headers?: Record<string, string>;
+    readonly compat?: boolean;
+    readonly optimizeMultiAgentV2?: boolean;
+    readonly orphanDelegation?: boolean;
+  };
+  readonly request: Json;
+  readonly responseLines?: ReadonlyArray<string>;
+  readonly responseBodyText?: string;
+  readonly tokenCount?: number;
+  readonly tokenCountUsage?: Json;
+  readonly translatedRequest: string;
+  readonly requestError?: string;
+  readonly streamOutputs?: ReadonlyArray<ReadonlyArray<string>>;
+  readonly nonStreamOutput?: string;
+  readonly tokenCountOutput?: string;
+}
+
+/**
+ * Capabilities implemented on the TypeScript side. Cases that need anything else are skipped (e.g. the thinking
+ * slice adds "thinking-summary" once the summary hooks are wired into the registry).
+ */
+const SUPPORTED_NEEDS = new Set<string>(["thinking-summary"]);
+
+/** The `needs` of `c` that are not implemented: the case is skipped while any is left. */
+export const missingNeeds = (c: TranslatorFixtureCase): ReadonlyArray<string> =>
+  (c.needs ?? []).filter((need) => !SUPPORTED_NEEDS.has(need));
+
+/** Wall-clock fields the Go translators stamp with `time.Now()`; their values cannot match across runs. */
+const normalizeClock = (value: Json): Json => {
+  if (Array.isArray(value)) return value.map(normalizeClock);
+
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        (key === "created" || key === "created_at" || key === "completed_at") &&
+        typeof item === "number" &&
+        item > 1e9
+          ? 0
+          : (key === "createTime" || key === "created" || key === "updated") &&
+              typeof item === "string" &&
+              /^\d{4}-\d\d-\d\dT/.test(item)
+            ? "<time>"
+            : typeof item === "string" && /^(interaction|msg)_\d{15,}$/.test(item)
+              ? item.replace(/\d+$/, "<n>")
+              : normalizeClock(item),
+      ]),
+    );
+  }
+
+  return value;
+};
+
+const parseJson = (text: string): Json | undefined => {
+  try {
+    return expandEmbeddedJson(normalizeClock(JSON.parse(text)));
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Parses the JSON payload so the comparison is structural (Go's key order and HTML escaping are not part of the
+ * contract), while SSE framing (`event:` / `data:` lines, blank-line separators) and non-JSON text stay exact.
+ */
+const normalizeChunk = (text: string): Json => {
+  const whole = parseJson(text);
+
+  if (whole !== undefined) return { json: whole };
+
+  return text.split("\n").map((line) => {
+    if (!line.startsWith("data:")) return line;
+    const json = parseJson(line.slice(5).trim());
+
+    return json === undefined ? line : { data: json };
+  });
+};
+
+/**
+ * Runs one case: `translateRequest` translates the request (the registry, or the Worker's executor-level rewrites),
+ * the built-in translators the responses and token counts.
+ */
+export const checkTranslatorFixture = (
+  c: TranslatorFixtureCase,
+  translateRequest: (c: TranslatorFixtureCase, envelope: RequestEnvelope) => RequestEnvelope,
+): void => {
+  const requestEnvelope = {
+    format: c.from,
+    model: c.model,
+    stream: c.stream,
+    body: structuredClone(c.request),
+  };
+
+  const envelope = translateRequest(c, requestEnvelope);
+
+  expect(envelope.error?.message).toBe(c.requestError);
+  expect(expandEmbeddedJson(envelope.body)).toEqual(parseJson(c.translatedRequest));
+
+  if (c.responseLines !== undefined) {
+    const context = {
+      model: c.model,
+      originalRequest: c.request,
+      translatedRequest: envelope.body,
+      // The Go corpus runs the raw translators; the Claude input token estimate has its own fixtures.
+      state: { ...makeTranslationState(), claudeInputTokensHandled: true },
+      ...(c.alt !== undefined ? { alt: c.alt } : {}),
+    };
+
+    const outputs = c.responseLines.map((line) =>
+      builtinTranslators.translateStream(c.from, c.to, context, line).map(normalizeChunk),
+    );
+
+    expect(outputs).toEqual((c.streamOutputs ?? []).map((chunks) => chunks.map(normalizeChunk)));
+  }
+
+  if (c.responseBodyText !== undefined) {
+    const context = {
+      model: c.model,
+      originalRequest: c.request,
+      translatedRequest: envelope.body,
+      state: makeTranslationState(),
+      ...(c.alt !== undefined ? { alt: c.alt } : {}),
+    };
+
+    const out = builtinTranslators.translateNonStream(c.from, c.to, context, c.responseBodyText);
+
+    expect(out === undefined ? undefined : normalizeChunk(out)).toEqual(
+      c.nonStreamOutput === undefined ? undefined : normalizeChunk(c.nonStreamOutput),
+    );
+  }
+
+  if (c.tokenCount !== undefined) {
+    const out = builtinTranslators.translateTokenCount(
+      c.from,
+      c.to,
+      c.tokenCount,
+      JSON.stringify(c.tokenCountUsage ?? null),
+    );
+
+    expect(normalizeChunk(out)).toEqual(normalizeChunk(c.tokenCountOutput ?? ""));
+  }
+};

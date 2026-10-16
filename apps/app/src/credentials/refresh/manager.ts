@@ -13,7 +13,7 @@
  */
 import { Effect, type Layer } from "effect";
 import type { HttpClient } from "effect/http";
-import type { JsonObject } from "../../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { accessTokenExpiry, accessTokenOf } from "../expiry.ts";
 import { credentialsChanged } from "../merge.ts";
 import { type Credential, executorKey } from "../model.ts";

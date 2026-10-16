@@ -4,7 +4,7 @@
 // to models.dev, pinned from the `sections` of test/fixtures/registry.json; it does not follow the reference checkout).
 import { describe, expect, it } from "vitest";
 import goServed from "./fixtures/go-catalog-served.json";
-import { asString, get, type JsonObject, tryParseJson } from "../src/json/index.ts";
+import { asString, get, type JsonObject, tryParseJson } from "@commissary/json";
 import { parseCatalogAdditions } from "../src/registry/catalog-additions.ts";
 import {
   buildModelsCatalog,
@@ -23,7 +23,7 @@ import {
 import type { ModelInfo } from "../src/registry/model-info.ts";
 import type { ModelsDevModel } from "../src/registry/models-dev.ts";
 import { MODELS_DEV_PROVIDERS, trimModelsDev } from "../src/registry/models-dev.ts";
-import { applyThinking } from "../src/thinking/index.ts";
+import { applyThinking } from "@commissary/translation/thinking";
 import { documentObject, documentText, mdModel } from "./support/models-dev.ts";
 
 const trimmed = (text: string) => {

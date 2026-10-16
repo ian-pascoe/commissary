@@ -12,6 +12,7 @@
     "pnpm-lock.yaml",
     "worker-configuration.d.ts",
     "apps/app/test/fixtures",
+    "packages/*/test/fixtures",
     "apps/app/src/registry/catalog",
     // Design decision records written by the impeccable tooling
     ".impeccable",

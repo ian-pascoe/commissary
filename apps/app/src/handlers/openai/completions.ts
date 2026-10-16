@@ -15,7 +15,7 @@ import {
   type Json,
   type JsonObject,
   tryParseJson,
-} from "../../json/index.ts";
+} from "@commissary/json";
 
 /** `convertCompletionsRequestToChatCompletions`: the prompt (string, or raw JSON text otherwise) becomes one user message. */
 export const completionsRequestToChat = (body: Json): JsonObject => {

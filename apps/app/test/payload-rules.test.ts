@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import { asString, exists, get, type Json } from "../src/json/index.ts";
+import { asString, exists, get, type Json } from "@commissary/json";
 import {
   applyPayloadRules,
   type DisableImageGenerationMode,

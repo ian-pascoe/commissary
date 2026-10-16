@@ -33,7 +33,7 @@ import {
   OPENCODE_SESSION_HEADER,
   OPENCODE_USER_AGENT,
 } from "../executor/opencode/headers.ts";
-import { isJsonObject, type Json, tryParseJson } from "../json/index.ts";
+import { isJsonObject, type Json, tryParseJson } from "@commissary/json";
 import { DEFAULT_BASE_URLS } from "./provider-keys-view.ts";
 import type { ProviderKeyFamily, ProbeResult } from "@commissary/contract/provider-keys";
 

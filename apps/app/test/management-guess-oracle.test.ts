@@ -3,7 +3,7 @@
 // over typed ones. The state after the write is asserted, not only the reply, through
 // the router and the real ControlPlane.
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import type { JsonObject } from "../src/json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { controlPlane, jsonInit, makeHarness, resetControlPlane } from "./support/management.ts";
 
 const harness = makeHarness();

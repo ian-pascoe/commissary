@@ -19,9 +19,9 @@ import {
   type Json,
   type JsonObject,
   tryParseJson,
-} from "../../json/index.ts";
-import { Formats } from "../../translator/formats.ts";
-import type { ResponseContext, TranslatorRegistry } from "../../translator/registry.ts";
+} from "@commissary/json";
+import { Formats } from "@commissary/translation/formats";
+import type { ResponseContext, TranslatorRegistry } from "@commissary/translation";
 import { responseModelOf } from "../../usage/record.ts";
 import type { UsageReporter } from "../../usage/reporter.ts";
 import { isResponsesTokenEvent } from "../../usage/ttft.ts";

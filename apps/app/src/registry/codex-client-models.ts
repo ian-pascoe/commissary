@@ -8,7 +8,7 @@
  * Every public model becomes a catalog entry: models with a template in `codex_client_models.json` clone it, every other
  * model clones the `gpt-5.5` template with compact instructions. Bodies are plain `JSON.stringify` output.
  */
-import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "@commissary/json";
 import { compareStrings } from "./compare.ts";
 import type { ModelInfo, ThinkingSupport } from "./model-info.ts";
 

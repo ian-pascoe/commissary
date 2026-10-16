@@ -6,8 +6,8 @@
  * (the Claude relay notice + image parts of the following user message) are replaced by a short marker.
  */
 import type { ModelEntry, OpenAICompatGroup } from "../../config/schema.ts";
-import { asString, isJsonArray, isJsonObject, type Json, set } from "../../json/index.ts";
-import { parseSuffix } from "../suffix.ts";
+import { asString, isJsonArray, isJsonObject, type Json, set } from "@commissary/json";
+import { parseSuffix } from "@commissary/translation/thinking";
 
 const IMAGE_OMITTED_TEXT = "[image omitted: unsupported by upstream]";
 

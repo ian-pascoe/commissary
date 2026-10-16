@@ -10,8 +10,7 @@
  */
 import { createHash } from "node:crypto";
 import { Effect } from "effect";
-import { stableStringify } from "../../http/json-text.ts";
-import { get, type Json, type JsonObject, tryParseJson } from "../../json/index.ts";
+import { stableStringify, get, type Json, type JsonObject, tryParseJson } from "@commissary/json";
 import {
   type BackendResolver,
   bestEffort,
@@ -20,7 +19,7 @@ import {
   resolveBackend,
 } from "../../session-state/client.ts";
 import type { SessionAddress } from "../../session-state/protocol.ts";
-import { isArr, isObj, str } from "../../translator/common/gjson.ts";
+import { isArr, isObj, str } from "@commissary/translation";
 import { ssePayloadObject } from "../../usage/record.ts";
 
 const TTL_MS = 3 * 3600_000;

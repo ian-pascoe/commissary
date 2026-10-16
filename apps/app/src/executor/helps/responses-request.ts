@@ -14,9 +14,9 @@
  */
 import { modelIsCompat, translateRequestForExecutor } from "./translate.ts";
 import { Effect } from "effect";
-import { cloneJson, del, type Json } from "../../json/index.ts";
-import { Formats } from "../../translator/formats.ts";
-import type { TranslatorRegistry } from "../../translator/registry.ts";
+import { cloneJson, del, type Json } from "@commissary/json";
+import { Formats } from "@commissary/translation/formats";
+import type { TranslatorRegistry } from "@commissary/translation";
 import { ExecutionError } from "../errors.ts";
 import {
   normalizeCodexInstructions,
@@ -25,7 +25,7 @@ import {
 } from "../codex/request.ts";
 import { ApplyPatchResponsesState, normalizeApplyPatchResponses } from "./apply-patch-responses.ts";
 import { finalizePayload } from "./payload.ts";
-import { parseSuffix } from "../suffix.ts";
+import { parseSuffix } from "@commissary/translation/thinking";
 import { Thinking } from "../thinking.ts";
 import {
   type ExecutionContext,

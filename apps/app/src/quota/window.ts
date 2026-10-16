@@ -7,7 +7,7 @@
  * `parseUnixToMs`, `parseOffsetSecondsToMs`). The panel keeps windows without a percentage (rendered as "-"); the
  * server report drops them because `used_percent` is required by the contract.
  */
-import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "@commissary/json";
 import type { QuotaWindow } from "@commissary/contract/credentials";
 
 export const FIVE_HOURS = 18_000;

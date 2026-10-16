@@ -14,8 +14,8 @@ import {
   type AttemptResult,
   type CredentialSnapshot,
 } from "../src/executor/picker.ts";
-import { asString, type JsonObject } from "../src/json/index.ts";
-import { setModelInfoLookup } from "../src/translator/model-info.ts";
+import { asString, type JsonObject } from "@commissary/json";
+import { setModelInfoLookup } from "@commissary/translation";
 import {
   jsonResponse,
   loadConfig,

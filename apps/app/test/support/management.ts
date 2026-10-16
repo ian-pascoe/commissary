@@ -22,7 +22,7 @@ import {
   userClaims,
 } from "./access.ts";
 import { type MockHandler, mockHttp } from "./refresh.ts";
-import type { Json } from "../../src/json/index.ts";
+import type { Json } from "@commissary/json";
 import { requestContext } from "../../src/worker-env.ts";
 
 export const key = await makeKey("management-kid");

@@ -17,7 +17,7 @@ import { WorkerExecutionContext } from "../src/platform/env.ts";
 import { LEASE_RENEW_INTERVAL_MS, runQuotaSweep, sweepQuotas } from "../src/quota/check.ts";
 import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/quota/claude.ts";
 import { RESET_GRANT_STATUS_URL } from "../src/quota/reset-grants.ts";
-import type { Json } from "../src/json/index.ts";
+import type { Json } from "@commissary/json";
 import {
   LEASE_TTL_MS,
   mayTake,

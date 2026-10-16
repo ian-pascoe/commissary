@@ -10,7 +10,7 @@
  * held back until the first real event, so a capacity/rate-limit rejection smuggled into an HTTP 200 stream can fail
  * the attempt before the client sees anything and the conductor retries it on another credential.
  */
-import { asString, get, isJsonArray, type Json, tryParseJson } from "../../json/index.ts";
+import { asString, get, isJsonArray, type Json, tryParseJson } from "@commissary/json";
 import type { ExecutionError } from "../errors.ts";
 import { isCodexModelCapacityError, newCodexStatusError } from "./errors.ts";
 

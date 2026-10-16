@@ -5,7 +5,7 @@
  * a hint: integer seconds or an HTTP date in `Retry-After`, else a 60 s fallback for explicit tokens-per-minute
  * limit errors; otherwise none (the conductor backs off on its own).
  */
-import { get, tryParseJson } from "../../json/index.ts";
+import { get, tryParseJson } from "@commissary/json";
 
 const TPM_FALLBACK_MS = 60_000;
 

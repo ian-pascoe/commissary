@@ -15,7 +15,7 @@ import {
   type Json,
   type JsonObject,
   set,
-} from "../json/index.ts";
+} from "@commissary/json";
 import { PROVIDER_KEY_FAMILIES } from "./schema.ts";
 import { ConfigValidationError } from "./errors.ts";
 

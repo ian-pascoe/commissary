@@ -8,7 +8,7 @@
 import { Effect } from "effect";
 import { HttpClientRequest } from "effect/http";
 import { KIMI_CLIENT_ID } from "../../credentials/refresh/kimi.ts";
-import type { JsonObject } from "../../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { call, clipBody, parseJsonObject, rfc3339, seconds, str, tryCall } from "./http.ts";
 import { type DeviceFlow, flowFailure } from "./types.ts";
 

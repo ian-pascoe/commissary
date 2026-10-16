@@ -10,7 +10,7 @@ import { documentOfEntries, entriesOfConfig, type EntryRows } from "../../src/co
 import { NOT_APPLIED_RULES } from "../../src/config/not-applied.ts";
 import { Config } from "../../src/config/schema.ts";
 import { assignEntryIds, withoutEntryIds } from "../../src/credentials/key-ids.ts";
-import { get, isJsonArray, isJsonObject, type Json, set } from "../../src/json/index.ts";
+import { get, isJsonArray, isJsonObject, type Json, set } from "@commissary/json";
 
 /** The config an import of `config` assembles (entry ids included). */
 export const importedConfig = (config: Config): Config => {

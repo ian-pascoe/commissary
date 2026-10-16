@@ -5,7 +5,7 @@
  * sdk/cliproxy/auth/api_key_model_capabilities.go (CodexAPIKeyModelIsCompat).
  */
 import type { Config, ModelEntry } from "../../config/schema.ts";
-import { parseSuffix } from "../suffix.ts";
+import { parseSuffix } from "@commissary/translation/thinking";
 import type { CredentialSnapshot } from "../picker.ts";
 import type { ExecutorRequest } from "../types.ts";
 

@@ -4,7 +4,7 @@
  * Go source: internal/credentialweight/weight.go. Weights are integers; non-positive values are valid and normalise
  * to 0 (excluded from weighted round-robin); values above 1,000,000 are rejected; absent/empty means 1.
  */
-import type { Json } from "../json/index.ts";
+import type { Json } from "@commissary/json";
 
 export const DEFAULT_WEIGHT = 1;
 

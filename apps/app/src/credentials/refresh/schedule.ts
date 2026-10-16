@@ -7,7 +7,7 @@
  * Pure functions of (now, credential, state): the DO alarm takes the minimum of `nextRefreshCheckAt` over all
  * credentials, which replaces the Go min-heap.
  */
-import type { Json, JsonObject } from "../../json/index.ts";
+import type { Json, JsonObject } from "@commissary/json";
 import { accessTokenOf, expirationFromMetadata, parseJwtExp, parseTimeValue } from "../expiry.ts";
 import type { CredentialState } from "../model.ts";
 import { hasUnauthorizedFailure } from "../selection/availability.ts";

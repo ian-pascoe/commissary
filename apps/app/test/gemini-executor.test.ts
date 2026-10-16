@@ -10,7 +10,7 @@ import {
   sseResponse,
   type UpstreamResponder,
 } from "./support/pipeline.ts";
-import type { Json } from "../src/json/index.ts";
+import type { Json } from "@commissary/json";
 
 const YAML = `
 requests:

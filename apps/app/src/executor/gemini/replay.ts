@@ -2,15 +2,15 @@
  * Request-scoped Gemini text-signature cache over the `SessionState` Durable Object.
  *
  * Go source: internal/cache/antigravity_reasoning_replay_cache.go (entries keyed by `(model, key)`, TTL 1 h). The
- * translators read and write the cache synchronously (`translator/gemini/openai/responses/replay-cache.ts`), so the
- * executor hydrates this cache with one batched read before translating the request (`prefetch`) and writes the
- * entries the response translation produced with one batched write (`flush`), once per translated chunk that stored
- * something. One Durable Object instance per caller scope holds the entries (message ids are unguessable, and a
+ * translators read and write the cache synchronously (translation's
+ * `translator/gemini/openai/responses/replay-cache.ts`), so the executor hydrates this cache with one batched read
+ * before translating the request (`prefetch`) and writes the entries the response translation produced with one
+ * batched write (`flush`), once per translated chunk that stored something. One Durable Object instance per caller scope holds the entries (message ids are unguessable, and a
  * caller's turns reuse one instance, so a request needs a single round trip each way). The Go 10240-entry bound
  * applies per caller.
  */
 import { Effect } from "effect";
-import { isJsonArray, type Json, tryParseJson } from "../../json/index.ts";
+import { isJsonArray, type Json, tryParseJson } from "@commissary/json";
 import {
   type BackendResolver,
   bestEffort,
@@ -25,7 +25,7 @@ import {
   type ReplayCache,
   replayCacheKey,
   replayItemsAcceptable,
-} from "../../translator/gemini/openai/responses/replay-cache.ts";
+} from "@commissary/translation";
 
 const STORE_NAME = "gemini-replay";
 

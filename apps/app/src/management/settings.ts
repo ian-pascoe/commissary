@@ -14,8 +14,7 @@ import { Result, Schema } from "effect";
 import { parseGoDuration } from "../config/accessors.ts";
 import { encodeConfig } from "../config/codec.ts";
 import { Config } from "../config/schema.ts";
-import { isJsonObject, type Json, type JsonObject, jsonEquals } from "../json/index.ts";
-import { setOwn } from "../json/value.ts";
+import { isJsonObject, type Json, type JsonObject, jsonEquals, setOwn } from "@commissary/json";
 import type { Revisions } from "@commissary/contract/config";
 import {
   SETTINGS_TREE,

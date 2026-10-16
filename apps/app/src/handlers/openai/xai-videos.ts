@@ -15,7 +15,7 @@ import {
   isJsonObject,
   type Json,
   type JsonObject,
-} from "../../json/index.ts";
+} from "@commissary/json";
 import { modelParts } from "./xai-images.ts";
 
 export const DEFAULT_OPENAI_VIDEOS_MODEL = "sora-2";

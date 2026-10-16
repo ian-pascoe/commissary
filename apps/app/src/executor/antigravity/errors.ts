@@ -5,7 +5,7 @@
  * internal/runtime/executor/antigravity_executor_credits.go (`decideAntigravity429`, `newAntigravityStatusErr`,
  * `antigravityHasExplicitCreditsBalanceExhaustedReason`).
  */
-import { asString, get, isJsonArray, tryParseJson } from "../../json/index.ts";
+import { asString, get, isJsonArray, tryParseJson } from "@commissary/json";
 import { ExecutionError, headersRecord } from "../errors.ts";
 
 export const INSTANT_RETRY_THRESHOLD_MS = 3_000;

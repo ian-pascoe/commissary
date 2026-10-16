@@ -40,13 +40,13 @@ import {
   type JsonObject,
   set,
   tryParseJson,
-} from "../../json/index.ts";
+} from "@commissary/json";
 import { emptyUsageDetail, responseModelOf, type UsageDetail } from "../../usage/record.ts";
 import { isResponsesTokenEvent } from "../../usage/ttft.ts";
 import { ExecutionError } from "../errors.ts";
 import { restoreCodexMultiAgentV2Response } from "../helps/codex-multi-agent-v2.ts";
 import { finalizePayload } from "../helps/payload.ts";
-import { parseSuffix } from "../suffix.ts";
+import { parseSuffix } from "@commissary/translation/thinking";
 import type { Thinking } from "../thinking.ts";
 import type {
   ExecutionContext,

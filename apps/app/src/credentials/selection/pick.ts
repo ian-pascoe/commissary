@@ -9,7 +9,7 @@
  * Multiple providers are selected from one ID-sorted union (the Go "mixed" legacy path); the scheduler fast path's
  * per-provider slot cursor is not reproduced.
  */
-import type { Json } from "../../json/index.ts";
+import type { Json } from "@commissary/json";
 import type { RoutingStrategy } from "../../config/schema.ts";
 import { boundSessionIdentity } from "../../session-routing/identity.ts";
 import type { SpendGate } from "../../spend/model.ts";

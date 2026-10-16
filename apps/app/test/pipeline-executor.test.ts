@@ -17,11 +17,14 @@ import {
 } from "../src/executor/openai-compat/stream.ts";
 import { CredentialPicker, type CredentialSnapshot } from "../src/executor/picker.ts";
 import { StaticCredentialPickerLayer } from "../src/executor/static-picker.ts";
-import { parseSuffix } from "../src/executor/suffix.ts";
-import { LineSplitter } from "../src/http/sse.ts";
-import { builtinTranslators } from "../src/translator/builtin.ts";
-import { Formats } from "../src/translator/formats.ts";
-import { makeTranslationState, TranslatorRegistry } from "../src/translator/registry.ts";
+import { parseSuffix } from "@commissary/translation/thinking";
+import { LineSplitter } from "@commissary/translation/sse";
+import {
+  builtinTranslators,
+  makeTranslationState,
+  TranslatorRegistry,
+} from "@commissary/translation";
+import { Formats } from "@commissary/translation/formats";
 import { loadConfig, staticConfigReader } from "./support/pipeline.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 import { type EnvServices, envContext } from "../src/worker-env.ts";

@@ -9,7 +9,7 @@
  * `limit_window_seconds` ("5-hour", "Weekly", "Monthly" for 28–31 days, else a duration); a window without a length
  * is labelled "Primary"/"Secondary". The panel's optional subscription and reset-credit calls are not made.
  */
-import type { Json, JsonObject } from "../json/index.ts";
+import type { Json, JsonObject } from "@commissary/json";
 import type { QuotaWindow } from "@commissary/contract/credentials";
 import {
   num,

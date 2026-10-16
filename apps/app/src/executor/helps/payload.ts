@@ -7,7 +7,7 @@
  */
 import { applyPayloadRules, type PayloadRequest } from "../../config/payload/index.ts";
 import type { Config } from "../../config/schema.ts";
-import type { Json } from "../../json/index.ts";
+import type { Json } from "@commissary/json";
 import { isCodexUserAgent, normalizeCodexToolIntegerTypes } from "./codex-tool-schema.ts";
 
 const isCodexTargetExecutor = (executor: string): boolean => {

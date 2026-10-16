@@ -16,7 +16,7 @@ import {
   isJsonObject,
   type Json,
   tryParseJson,
-} from "../../../json/index.ts";
+} from "@commissary/json";
 import {
   buildFunctionCallPartItem,
   buildThoughtSignatureItem,

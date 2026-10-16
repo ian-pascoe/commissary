@@ -13,16 +13,16 @@ import {
   HttpClientRequest,
   type HttpClientResponse,
 } from "effect/http";
-import { cloneJson, type Json } from "../../json/index.ts";
+import { cloneJson, type Json } from "@commissary/json";
 import {
   makeTranslationState,
   type ResponseContext,
   type TranslatorRegistry,
-} from "../../translator/registry.ts";
+} from "@commissary/translation";
 import { ExecutionError } from "../errors.ts";
 import { finalizePayload } from "../helps/payload.ts";
 import { modelIsCompat, translateRequestForExecutor } from "../helps/translate.ts";
-import { parseSuffix } from "../suffix.ts";
+import { parseSuffix } from "@commissary/translation/thinking";
 import { Thinking } from "../thinking.ts";
 import type { ExecutionContext, ExecutorOptions, ExecutorRequest } from "../types.ts";
 import { openCodeUpstreamError } from "./errors.ts";

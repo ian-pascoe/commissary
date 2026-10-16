@@ -19,7 +19,7 @@
  * sweep that lost its lease midway (not renewed for its lifetime) stops and answers `409 quota_check_lost`.
  */
 import { Effect } from "effect";
-import type { Json } from "../json/index.ts";
+import type { Json } from "@commissary/json";
 import { checkCredentialQuota, sweepQuotas } from "../quota/check.ts";
 import { bodyObject, handled, jsonReply, replyError } from "./http.ts";
 import { currentViewer } from "./viewer.ts";

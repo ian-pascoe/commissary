@@ -7,8 +7,8 @@
  * of `validateMidSystemMessageModel`; it runs right after the thinking step, before cloaking.
  */
 import type { Config } from "../../config/schema.ts";
-import type { Json, JsonObject } from "../../json/index.ts";
-import { isArr, isObj, str } from "../../translator/common/gjson.ts";
+import type { Json, JsonObject } from "@commissary/json";
+import { isArr, isObj, str } from "@commissary/translation";
 import type { CredentialSnapshot } from "../picker.ts";
 import { resolveClaudeKeyConfig } from "./credentials.ts";
 

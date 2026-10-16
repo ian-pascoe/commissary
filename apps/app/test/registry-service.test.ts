@@ -6,11 +6,15 @@ import { CatalogStore } from "../src/registry/catalog-store.ts";
 import { lookupStaticModelInfo } from "../src/registry/catalog.ts";
 import { ModelRegistry, ModelRegistryError, SNAPSHOT_TTL_MS } from "../src/registry/service.ts";
 import type { ModelSource } from "../src/registry/source.ts";
-import { applyThinking, type ModelInfoLookup } from "../src/thinking/index.ts";
+import {
+  applyThinking,
+  type ModelInfoLookup,
+  type ThinkingModelInfo,
+} from "@commissary/translation/thinking";
 import { catalogs, canonOf } from "./support/registry.ts";
 import { FakeKv, fakeConfig } from "./support/registry-refresh.ts";
 import { source } from "./support/registry-sources.ts";
-import { fixture as thinkingFixture } from "./support/thinking.ts";
+import { thinkingFixture } from "@commissary/translation/testing";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 import { envContext } from "../src/worker-env.ts";
 
@@ -204,6 +208,16 @@ describe("ModelRegistry service", () => {
   });
 });
 
+/** The thinking capabilities of a model (the fixture also records web search support, for translation's tests). */
+const thinkingFields = (info: ThinkingModelInfo | undefined) => ({
+  id: info?.id,
+  type: info?.type,
+  userDefined: info?.userDefined,
+  supportConfigurationUpdate: info?.supportConfigurationUpdate,
+  maxCompletionTokens: info?.maxCompletionTokens,
+  thinking: info?.thinking,
+});
+
 describe("static lookups agree with the thinking fixtures' Go catalog", () => {
   it("returns the same capabilities for every catalog model", () => {
     const ids = Object.keys(thinkingFixture.catalog);
@@ -214,17 +228,8 @@ describe("static lookups agree with the thinking fixtures' Go catalog", () => {
       const expected = thinkingFixture.catalog[id];
       const actual = lookupStaticModelInfo(catalogs, id);
       expect(actual, id).toBeDefined();
-      expect(
-        canonOf({
-          id: actual?.id,
-          type: actual?.type,
-          userDefined: actual?.userDefined,
-          supportConfigurationUpdate: actual?.supportConfigurationUpdate,
-          maxCompletionTokens: actual?.maxCompletionTokens,
-          thinking: actual?.thinking,
-        }),
-        id,
-      ).toEqual(canonOf(expected));
+
+      expect(canonOf(thinkingFields(actual)), id).toEqual(canonOf(thinkingFields(expected)));
     }
   });
 });

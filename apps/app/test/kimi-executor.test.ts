@@ -20,7 +20,7 @@ import {
   normalizeKimiTools,
 } from "../src/executor/kimi/request.ts";
 import { makeKimiReplayStore } from "../src/executor/kimi/replay.ts";
-import type { JsonObject, Json } from "../src/json/index.ts";
+import type { JsonObject, Json } from "@commissary/json";
 import {
   collectStream,
   credential,

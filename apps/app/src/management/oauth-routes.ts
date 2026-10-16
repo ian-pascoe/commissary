@@ -11,7 +11,7 @@
  */
 import { Effect } from "effect";
 import { HttpRouter } from "effect/http";
-import { isJsonObject, type Json } from "../json/index.ts";
+import { isJsonObject, type Json } from "@commissary/json";
 import { isValidOAuthState } from "../oauth/names.ts";
 import { bodyJson, handled, jsonReply, queryParams, replyError } from "./http.ts";
 import { oauthImportRoutes } from "./oauth-import.ts";

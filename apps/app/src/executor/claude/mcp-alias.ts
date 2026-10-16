@@ -9,8 +9,8 @@
  * (`thread.type=continue`).
  */
 import { createHmac } from "node:crypto";
-import { get, type Json, type JsonObject, tryParseJson } from "../../json/index.ts";
-import { isArr, isObj, str } from "../../translator/common/gjson.ts";
+import { get, type Json, type JsonObject, tryParseJson } from "@commissary/json";
+import { isArr, isObj, str } from "@commissary/translation";
 import { BIP39_WORDS } from "./bip39-words.ts";
 
 export const DEFAULT_ALIAS_SECRET = "cpa-claude-mcp-default-caller";

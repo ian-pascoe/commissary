@@ -22,8 +22,8 @@ import {
   jsonEquals,
   type Json,
   type JsonObject,
-} from "../json/index.ts";
-import { setOwn } from "../json/value.ts";
+  setOwn,
+} from "@commissary/json";
 import { SETTINGS_TREE } from "@commissary/contract/settings";
 import { encodeConfig } from "./codec.ts";
 import { PROVIDER_KEY_FAMILIES, type ProviderKeyFamily, Config } from "./schema.ts";
