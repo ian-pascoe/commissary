@@ -269,7 +269,8 @@ export const People = ({
       title: `Remove ${member.email}?`,
       body: (
         <p>
-          They lose access to this org on their next request.{" "}
+          They lose access to this org on their next request, and their API keys stop working within
+          30 seconds.{" "}
           {member.role === "member"
             ? "You can add them again later."
             : `They are ${roleAs(member.role)} now; adding them back as one is for an owner.`}

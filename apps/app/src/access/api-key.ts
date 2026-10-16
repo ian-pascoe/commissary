@@ -6,7 +6,7 @@
  * A key names its org (`api-keys/key.ts`), so verification asks that org's ControlPlane only, never another org's.
  * Before that, the Platform registry confirms that the org exists (at most every {@link VERIFIED_KEY_TTL_MS} per org
  * and isolate), so a made-up org id never instantiates a ControlPlane. Verified keys are cached per isolate for {@link VERIFIED_KEY_TTL_MS} (never past
- * the key's expiry), so a revocation applies within that time everywhere, and at once in the isolate that revoked it.
+ * the key's expiry), so a revoked key may keep working for that long in every isolate of every Worker: revocation clears no cache.
  */
 import { Clock, Effect } from "effect";
 import { InternalError, UnauthorizedError } from "../errors.ts";

@@ -878,7 +878,7 @@ describe("the verified-key cache", () => {
   effectIt.effect("refuses the keys of a deleted org once the window has passed", () =>
     run(
       Effect.gen(function* () {
-        // Deleting an org wipes its usage rows too.
+        // Deleting an org wipes its usage rows (D1), which needs the table the usage tests create.
         yield* Effect.promise(async () => await resetUsageDb());
 
         const { slug, alice, platformAdmin } = yield* Effect.promise(
