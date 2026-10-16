@@ -15,7 +15,6 @@
 import { Clock, Data, Effect, Match } from "effect";
 import { HttpRouter } from "effect/http";
 import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
-import { forgetOrgApiKeys } from "../access/api-key.ts";
 import { roleAtLeast } from "../members/roles.ts";
 import type { JsonObject } from "../json/index.ts";
 import { deleteSignInAccount, endSessions } from "../hosted/session.ts";
@@ -481,8 +480,6 @@ const deleteOrgRoute = Effect.gen(function* () {
     catch: (cause) => new DeletionThrew({ cause }),
   }).pipe(Effect.catch(deletionFailed(org.id)));
 
-  forgetOrgApiKeys(org.id);
-
   if (outcome.state === "incomplete") {
     yield* Effect.logWarning("org deletion incomplete").pipe(
       Effect.annotateLogs({ org: org.id, step: outcome.step }),
@@ -565,8 +562,6 @@ const deleteAccount = Effect.gen(function* () {
         try: async () => await deleteOrgData(state, models, org.id, { now }),
         catch: (cause) => new DeletionThrew({ cause }),
       }).pipe(Effect.catch(deletionFailed(org.id)));
-
-      forgetOrgApiKeys(org.id);
 
       if (outcome.state === "incomplete")
         return yield* replyError(503, "deletion_incomplete", {

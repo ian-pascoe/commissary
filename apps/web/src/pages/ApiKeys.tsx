@@ -364,8 +364,8 @@ const Keys = ({ caller }: { readonly caller: Caller }) => {
       body: (
         <p>
           {key.mine ? "" : `It belongs to ${memberName(key)}. `}
-          Anything that sends {key.prefix}… is refused from its next request on. This cannot be
-          undone; create a new key to replace it.
+          Anything that sends {key.prefix}… is refused within 30 seconds. This cannot be undone;
+          create a new key to replace it.
         </p>
       ),
       action: "Revoke key",

@@ -63,7 +63,7 @@ export class ApiKeysGroup extends HttpApiGroup.make("apiKeys").add(
     success: CreatedApiKey.pipe(HttpApiSchema.status(201)),
     error: managementErrors,
   }),
-  /** Refused from the next request on; `404 api_key_not_found` for another member's key unless an org admin asks. */
+  /** Refused within 30 seconds (the verified-key cache lifetime); `404 api_key_not_found` for another member's key unless an org admin asks. */
   HttpApiEndpoint.delete("revoke", "/api-keys/:id", {
     ...idParam,
     success: ApiKeyView,

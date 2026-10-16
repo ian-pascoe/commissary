@@ -2104,9 +2104,10 @@ Workers addition replacing the Go server's client keys (`access.api-keys`, impor
   wins over everything else, including an Access JWT. Verification asks the Platform registry whether the org exists (the
   answer is trusted for 30 s per isolate) (so a made-up org id never creates a ControlPlane), then the org's ControlPlane, which compares
   hashes in constant time and answers the member's id, email and role. The answer is cached per isolate for 30 s (never
-  past the key's expiry, at most 1024 keys): revocation applies at once in the isolate that served it and within 30 s
-  elsewhere, a deliberate trade against a ControlPlane round trip on every request (ADR 0027 asks for "at once"; the
-  member and role checks of Access sign-ins stay per request).
+  past the key's expiry, at most 1024 keys): a revoked key, a removed member's keys and the keys of a deleted org may keep working for up to 30 s. The management
+  routes that revoke do not clear this cache: the client API may run in its own Worker (ADR 0030), where they could not
+  reach it, so the window is the same in every isolate. A deliberate trade against a ControlPlane round trip on every
+  request (ADR 0027 asks for "at once"; the member and role checks of Access sign-ins stay per request).
 - **Principal** `{kind: "key", keyId, memberId, email}`: usage records and logs store `key:<key id>` and the member id; the
   caller scope of session state is the member's (`user:<email>`), so a member's keys and their Access-era sessions share
   state. A key is never a platform admin, and the management zone never reads keys.

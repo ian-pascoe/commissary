@@ -6,7 +6,7 @@
  * A key names its org (`api-keys/key.ts`), so verification asks that org's ControlPlane only, never another org's.
  * Before that, the Platform registry confirms that the org exists (at most every {@link VERIFIED_KEY_TTL_MS} per org
  * and isolate), so a made-up org id never instantiates a ControlPlane. Verified keys are cached per isolate for {@link VERIFIED_KEY_TTL_MS} (never past
- * the key's expiry), so a revocation applies within that time everywhere, and at once in the isolate that revoked it.
+ * the key's expiry), so a revoked key may keep working for that long in every isolate of every Worker: revocation clears no cache.
  */
 import { Clock, Effect } from "effect";
 import { InternalError, UnauthorizedError } from "../errors.ts";
@@ -79,24 +79,6 @@ const verified = new Map<string, CachedKey>();
 
 /** Orgs the Platform registry confirmed, with the epoch ms until which the answer is trusted. */
 const knownOrgs = new Map<OrgId, number>();
-
-/** Forgets a revoked key of `org` in this isolate, so it is refused here at once. */
-export const forgetVerifiedApiKey = (org: OrgId, keyId: string): void => {
-  for (const [hash, cached] of verified)
-    if (cached.key.org === org && cached.key.keyId === keyId) verified.delete(hash);
-};
-
-/** Forgets the keys of a member who left the org, so this isolate refuses them at once. */
-export const forgetVerifiedApiKeysOf = (org: OrgId, memberId: string): void => {
-  for (const [hash, cached] of verified)
-    if (cached.key.org === org && cached.key.memberId === memberId) verified.delete(hash);
-};
-
-/** Forgets every key and the existence of `org` in this isolate (the org was deleted), so it refuses them at once. */
-export const forgetOrgApiKeys = (org: OrgId): void => {
-  for (const [hash, cached] of verified) if (cached.key.org === org) verified.delete(hash);
-  knownOrgs.delete(org);
-};
 
 /** Empties the caches, for tests. */
 export const resetApiKeyCaches = (): void => {

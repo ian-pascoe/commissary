@@ -21,7 +21,7 @@ Access cannot carry clients for many orgs. An account holds at most 50 service t
 - Browsers do not attach proxy keys on their own, so cross-site request forgery stops being a risk for the proxy routes. The defences stay for the Access-gated routes.
 - The Go server's client keys are still accepted on import and never enforced; proxy keys are a new kind of key, not a revival of them.
 - A key is the member who holds it: requests made with it carry that member, so the member's private credentials (ADR 0023) serve them and nobody else's.
-- The Worker remembers a verified key for 30 seconds, so a key revoked or a member removed in one isolate is refused there at once, and in other isolates within that window. Checking every request against the org's ControlPlane would cost a round trip per request; the window bounds the exposure instead.
+- The Worker remembers a verified key for 30 seconds, so a key revoked or a member removed is refused within that window (see the amendment on revocation latency). Checking every request against the org's ControlPlane would cost a round trip per request; the window bounds the exposure instead.
 
 ## Amendment: Access sign-ins in `global` during the move to proxy keys
 
@@ -33,3 +33,7 @@ The exception is transitional and narrow:
 - It covers Access JWTs only. Service token headers stop working on the proxy routes with the deploy that takes them out of Access, since nothing there turns them into a JWT any more; those clients move to proxy keys first.
 - A presented proxy key always wins: a bad key is refused even when the request also carries an Access sign-in.
 - Once every client sends a proxy key (`docs/MIGRATION.md`), an org owner turns the setting off, and the proxy key check is again the proxy routes' only gate.
+
+## Amendment: revocation latency
+
+Revoking a key, removing a member and deleting an org no longer clear the verified-key cache of the isolate that served the request. The client API may run in its own Worker (ADR 0030), whose caches the management routes cannot reach, and pushing revocations to it over RPC was rejected. A revoked key may therefore keep working for up to 30 seconds, the same bound other isolates already had.

@@ -214,10 +214,10 @@ characters>`), its member, its name and when it was created, last used (to the m
   member's tools share it. A key is never a platform admin.
 - `GET /api-keys` lists the caller's keys (an org admin's: every key of the org, with `member_email`); `DELETE
   /api-keys/<id>` revokes one (`404 api_key_not_found` for another member's key unless an org admin asks). A revoked
-  key is **deleted** (the answer still says when it was revoked), and is refused from the next request on in the isolate
-  that revoked it and within 30 seconds everywhere (each isolate trusts a verified key for at most 30 seconds, and never
-  past its expiry). An expired key is deleted too: by the next listing or new key of the org, by a request that
-  presents it, and by a scheduled sweep for an org nobody opens. Removing a member deletes their keys, private
+  key is **deleted** (the answer still says when it was revoked), and a revoked key may keep working for up to 30 seconds
+  (each isolate of each Worker trusts a verified key for at most 30 seconds, and never past its expiry; revocation does
+  not clear those caches). An expired key is deleted too: by the next listing or new key of the org, by a request that
+  presents it, and by a scheduled sweep for an org nobody opens. Removing a member deletes their keys (which may keep working for up to 30 seconds), private
   accounts, private provider key groups and unfinished sign-ins (ADR 0027). A member holds at most 100 keys; revoking or
   waiting out one frees its place.
 - API keys are never accepted on the management API or the panel: those stay behind Access.
@@ -377,8 +377,8 @@ Commissary keeps as little as it can and deletes at once; there is no grace peri
   when one is checked, and by the cron task `api-key-expiry`); a deleted key's Spend limits and counters go with it.
 - **Deleting an org** (`DELETE /org` with `{"name": "<the org's name>"}`; a person who is an org owner or a platform admin, never a service
   token: `403 person_required`) removes its usage
-  records, replay state, cached keys, credentials, config, members, API keys and registry entry at once and frees the
-  slug. `global` is never deleted. A big org may answer `503 deletion_incomplete`: send the request again. Download the
+  records, replay state, cached keys, credentials, config, members, API keys and registry entry and frees the
+  slug (its API keys may keep working for up to 30 seconds). `global` is never deleted. A big org may answer `503 deletion_incomplete`: send the request again. Download the
   export first (`GET /export`: settings, shared config, price overrides, credential summaries, grants, members, teams and
   service tokens, every secret as a preview; usage records come from the usage routes).
 - **Deleting an account** (`DELETE /me` with the caller's own email; people only) removes the person from every org with
