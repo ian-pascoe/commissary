@@ -127,10 +127,9 @@ export type MemberResult<A> = { readonly ok: true; readonly value: A } | MemberR
  * Who added the platform admins `seedPlatformAdmins` made owners of `global`. The text is stored in `added_by` (and
  * shown), so it stays `migration` for the rows already written.
  */
-export const SEED_ACTOR = "migration";
+export const PLATFORM_ADMIN_SEED_ACTOR = "migration";
 
 /** Who added the members an auto-join created. */
-
 export const AUTO_JOIN_ACTOR = "auto-join";
 
 /** Who added a person who joined through the org's single sign-on (`joinThroughSso`). */
@@ -328,7 +327,8 @@ export class MemberStore {
           if (!validEmail(email)) continue;
           const existing = this.#memberByEmail(email);
 
-          if (existing === undefined) this.#insertMember(email, "owner", now, SEED_ACTOR);
+          if (existing === undefined)
+            this.#insertMember(email, "owner", now, PLATFORM_ADMIN_SEED_ACTOR);
           else this.#sql.exec(`UPDATE members SET role = ? WHERE id = ?`, "owner", existing.id);
         }
 

@@ -156,7 +156,7 @@ the Worker asks on every request: a removed member, or a member whose role was l
 
 - **Grants** (ADR 0023): a member uses a shared credential only through a grant (a member, a team or everyone; one
   account, every account of a provider or all of them; model patterns). Access is the union of the grants that name the
-  member; there is no deny. A new org, and every org that existed before grants, starts with the grant "everyone, all
+  member; there is no deny. Every org starts with the grant "everyone, all
   shared credentials, every model": delete it and add narrower ones to restrict. A model a member has no grant for answers
   `400 model_not_found`, like an unknown model, and is left out of their model lists; a request without a member (a service
   token) is served by the grants for everyone only. Private credentials are never granted: they are their owner's alone.
@@ -369,8 +369,7 @@ put a server-side client in between.
 Commissary keeps as little as it can and deletes at once; there is no grace period, no soft delete and no restore.
 
 - **Usage records** keep an upstream failure's status, type and code but not its body, and are pruned after the org's
-  **retention period** (`usage_retention_days`, in days; `null` keeps them). A new org starts at 90 days; `global` and
-  every org that existed before keep records until an org admin sets a period, so upgrading deletes no history. The cron
+  **retention period** (`usage_retention_days`, in days; `null` keeps them). A new org starts at 90 days; `global` keeps records until an org admin sets a period. The cron
   task `usage-retention` applies each org's period.
 - **Removing a member** (`DELETE /members/<id>`) deletes their API keys, private accounts and provider key groups, the
   OAuth logins they started in that org, and their Spend limits and counters and those of their API keys.

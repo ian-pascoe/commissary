@@ -1540,8 +1540,7 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   model, with a revision like every entry) so a Go-document import, which replaces the other entry tables, leaves them
   alone; the table is created idempotently with the rest of the schema. Rates must be finite, from 0 to 100,000.
 - **Retention** (`retention.ts`, cron task `usage-retention`, ADR 0027): deletes each org's records older than that org's
-  `usage_retention_days` (a column of the Platform registry's `orgs` table, added idempotently when the registry starts;
-  `null` keeps them; new orgs start at 90, `global` and existing orgs at `null`) in bounded batches (a deployment-wide cron
+  `usage_retention_days` (a column of the Platform registry's `orgs` table; `null` keeps them; new orgs start at 90, `global` at `null`) in bounded batches (a deployment-wide cron
   task). The deployment variable `USAGE_RETENTION_DAYS` (default 30) is gone: the period belongs to the org and an org admin
   sets it (`PATCH /org`). `usage-statistics-enabled` and `redis-usage-queue-retention-seconds` are not used:
   persistence is always on when the `USAGE` binding exists.
@@ -2036,8 +2035,7 @@ error codes are in `docs/ACCESS.md` "Members, roles and teams".
   (`syncOrgIndex`: `membershipIndex` → `replaceOrgIndex` → `markIndexSynced(counter)`), and admission retries a push that
   failed. A service token belongs to one org: registering one the registry indexes for another org answers
   `409 service_token_taken`.
-- **Platform admins in `global`** (`MemberStore.seedPlatformAdmins`, once per ControlPlane, before member calls, a settings
-  write or a config import): the first time `global` is used, the emails in `PLATFORM_ADMIN_EMAILS` become org owners
+- **Platform admins in `global`** (`MemberStore.seedPlatformAdmins`, once per ControlPlane, before member calls): the first time `global` is used, the emails in `PLATFORM_ADMIN_EMAILS` become org owners
   of it, so a platform admin has a member id there (API keys, private credentials) without adding themselves; another
   org only records that it ran (the stored flag is the `membership` column `admins_migrated`, and the rows say
   `added_by = "migration"`, names kept so stages that stored them do not seed again). Taking an email out of the variable

@@ -9,8 +9,9 @@
  * existed before orgs, so upgrading needs no settings and moves no data.
  *
  * An org also has its usage retention period here (`usage_retention_days`, ADR 0027), the one org setting the scheduled
- * usage job reads for every org at once: a number of days, or NULL for none (keep records forever). `global` starts with
- * none; an org created afterwards gets {@link DEFAULT_USAGE_RETENTION_DAYS}. Removing an org or a person deletes their rows.
+ * usage job reads for every org at once: a number of days, or NULL for none (keep records forever). `global` starts
+ * with none; an org created afterwards gets {@link DEFAULT_USAGE_RETENTION_DAYS}. Removing an org or a person deletes
+ * their rows.
  *
  * Commissary Cloud (ADR 0026) also keeps its people here: who signed up (and the Personal org they got), how many orgs
  * each may own, and who a platform admin suspended; orgs record who created them and whether they are suspended.

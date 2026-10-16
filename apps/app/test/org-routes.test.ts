@@ -73,7 +73,7 @@ describe("the org list", () => {
           slug: "default",
           name: "Default",
           created_at: expect.stringMatching(/^\d{4}-\d\d-\d\dT/),
-          // The deployment that existed before the setting keeps its history.
+          // `global` keeps its history.
           usage_retention_days: null,
         },
       ],

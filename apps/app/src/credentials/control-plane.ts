@@ -493,15 +493,11 @@ export class ControlPlane extends DurableObject<Env> {
    * `unchanged: true` answer instead of the full document.
    */
   getConfig(sinceVersion?: number): ConfigSnapshotWire {
-    this.#seedPlatformAdmins();
-
     return this.#config.snapshot(sinceVersion);
   }
 
   /** The assembled config document with the revision of every entry (what the management routes edit). */
   configEntries(): ConfigEntriesWire {
-    this.#seedPlatformAdmins();
-
     return this.#config.entries();
   }
 
@@ -526,8 +522,6 @@ export class ControlPlane extends DurableObject<Env> {
     changes: ReadonlyArray<SettingChange>,
     by: string,
   ): WriteResult<{ readonly revisions: Readonly<Record<string, number>> }> {
-    this.#seedPlatformAdmins();
-
     return this.#config.writeSettings(changes, by);
   }
 
@@ -556,8 +550,6 @@ export class ControlPlane extends DurableObject<Env> {
    * (`conflict` when another write landed since).
    */
   importConfig(text: string, by: string, basedOn?: number): ImportResult {
-    this.#seedPlatformAdmins();
-
     return this.#config.importDocument(text, by, basedOn);
   }
 
