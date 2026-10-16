@@ -2,9 +2,8 @@
 // the gate on the management API: a key works there with its role in its org only, never downloads a credential,
 // never gives a key or a service token a role, never reaches another org or a client API route, and is refused once revoked.
 import { afterAll, describe, expect, it } from "vitest";
-import { parseManagementKey } from "../src/management-keys/key.ts";
+import { parseApiKey, parseManagementKey } from "@commissary/auth";
 import { GLOBAL_ORG, OrgId } from "@commissary/core";
-import { parseApiKey } from "../src/api-keys/key.ts";
 import {
   ADMIN,
   isolatedPlatform,

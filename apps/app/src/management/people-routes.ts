@@ -6,10 +6,10 @@
  */
 import { Clock, Effect } from "effect";
 import { HttpRouter } from "effect/http";
-import { AccessPrincipal } from "../access/principal.ts";
+import { AccessPrincipal, forgetStanding } from "@commissary/auth";
+import { ownedOrgLimit } from "../hosted/owned-orgs.ts";
 import { hostedOnly } from "../hosted/only.ts";
 import { endSessions } from "../hosted/session.ts";
-import { forgetStanding, ownedOrgLimit } from "../hosted/standing.ts";
 import { MAX_ORG_LIMIT, type PersonRecord } from "../platform/registry-store.ts";
 import type { PersonView } from "@commissary/contract/people";
 import { handled, jsonReply, replyError } from "@commissary/core";

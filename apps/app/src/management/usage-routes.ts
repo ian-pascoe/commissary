@@ -16,12 +16,12 @@
  * lists the provider and model pairs that had no price. Every route reads the records of the request's org only (ADR 0021).
  *
  * Members (ADR 0022): `member` and `team` filter by member id or by a team's members, `group_by=member` groups the
- * summary by member id. A plain member may read `records`, `summary` and `series` (`access/policy.ts`), and only their
+ * summary by member id. A plain member may read `records`, `summary` and `series` (`policy.ts`), and only their
  * own records: by their member id, or their Access principal for records from before members existed.
  */
 import { Clock, Effect } from "effect";
 import { HttpRouter } from "effect/http";
-import { AccessPrincipal } from "../access/principal.ts";
+import { AccessPrincipal } from "@commissary/auth";
 import { CurrentOrg, handled, jsonReply, queryParams, replyError } from "@commissary/core";
 import { currentAuthIndexer } from "./auth-index.ts";
 import {

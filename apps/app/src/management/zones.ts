@@ -1,12 +1,13 @@
-// Route policy: which paths need Cloudflare Access authentication (mirrors the Go route groups in
-// internal/api/server_routes.go that use AuthMiddleware) and which need an administrator. Also the org addresses of the
-// management zone (ADR 0021), which are new in the Workers port.
+// Path zones: which paths need a caller (mirrors the Go route groups in internal/api/server_routes.go that use
+// AuthMiddleware), on the client API or the management API and panel. Also the org addresses of the management zone
+// (ADR 0021), which are new in the Workers port. The Access gate (`access/middleware.ts`) classifies each request here
+// and passes what `@commissary/auth` needs of it (the org a URL addresses, the role it needs: `policy.ts`).
 import { Schema } from "effect";
 import { OrgSlug } from "@commissary/core";
 
 /**
  * Paths under these prefixes require a caller: an API key or, where the org still accepts them, an Access sign-in on
- * the client API (`authenticate.ts`), an Access sign-in on `/v9/management`. `/v1` also covers `/v1beta*` and
+ * the client API (`@commissary/auth` `authenticateClient`), an Access sign-in on `/v9/management`. `/v1` also covers `/v1beta*` and
  * `/v1internal`;
  * `/chat/completions`, `/completions` and `/responses` are the unprefixed aliases of the `/v1` routes (not in Go, see
  * handlers/openai/routes.ts).

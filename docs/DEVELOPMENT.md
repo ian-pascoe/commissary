@@ -65,16 +65,25 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
 `ARCHITECTURE.md` ("Layout" plus one section per subsystem) is the map. The repository is a pnpm workspace
 (`pnpm-workspace.yaml`): Workers and the panel in `apps/`, libraries in `packages/`, under the scope `@commissary/*`.
 
-- `apps/app` (`@commissary/app`): the one Worker. `src/access` (Access JWT gate), `src/http` (router, CORS),
+- `apps/app` (`@commissary/app`): the one Worker. `src/access` (the gate middleware over `@commissary/auth`),
+  `src/http` (router, CORS),
   `src/handlers` (inbound protocols and the shared execution pipeline), `src/executor` (one directory per provider),
   `src/control-plane.ts` (the ControlPlane Durable Object: the org-wide base in `src/state` composed with the Models
   part in `src/models`), `src/credentials` (credential pool, selection, token refresh), `src/session-state` (SessionState Durable Object), `src/registry` (model catalogs and `/models`),
   `src/management` and `src/oauth` (management API, panel serving, provider logins), `src/usage` and
   `src/observability` (D1 usage records, trace ids); `test/` (workerd tests and golden fixtures).
 - `apps/web` (`@commissary/web`): the control panel (below).
+- `packages/auth` (`@commissary/auth`): request-side authentication (#132). The principal and `AccessPrincipal`, roles,
+  Access JWT verification, the cross-site checks, API and management keys (their text and the per-isolate caches of
+  verified keys), admission and `syncOrgIndex`, Commissary Cloud's standing and rate limit, and the two gates behind
+  the entry points `authenticateClient` and `authenticateManagement`; `./sso` holds the pure parts of single sign-on,
+  `./testing` the Access test helpers and an in-memory `AuthDirectory`. It reads `AuthConfig` and reaches state through
+  its `AuthDirectory` service (the Worker's adapter: `src/state/auth-directory.ts`), never through bindings or the
+  stores; the Worker passes in what its routes say (path zones, role table, org addressing: `src/management/zones.ts`,
+  `policy.ts`, `org-address.ts`). It may import `@commissary/core`, `@commissary/contract`, `effect` and `jose` only.
 - `packages/contract` (`@commissary/contract`): the management API contract, shared by the Worker and the panel.
 - `packages/core` (`@commissary/core`): the foundation without bindings, for code that two or more packages or apps
-  need (today the Worker imports it). `src/org.ts` (the org model: `OrgId`, `newOrgId`, `OrgSlug`, `GLOBAL_ORG`,
+  need (today auth and the Worker import it). `src/org.ts` (the org model: `OrgId`, `newOrgId`, `OrgSlug`, `GLOBAL_ORG`,
   `DEFAULT_ORG_SLUG`, `CurrentOrg`, org-scoped names), `src/errors.ts` (the shared tagged errors), `src/hash.ts`
   (`sha256Hex`), `src/logging.ts` (`redactHeaders`), `src/observability/` (`causeSummary`, the Workers Logs logger),
   `src/http/management.ts` (the management replies and the text, query and `If-Match` readers, `handled`),
@@ -111,8 +120,8 @@ are pinned once in the `catalog:` of `pnpm-workspace.yaml`.
 adds `typecheck:root` (the deploy code) and `lint:root` (one `oxlint`/`oxfmt` run over the repository). The packages
 depend on each other's sources, not on build output, so every package task depends on `transit`, a task with no script whose
 hash covers a package's files and those of its dependencies (Turborepo's transit-node pattern): a change in
-`packages/contract` re-runs the panel's and the Worker's tasks, one in `packages/json` re-runs translation's and the
-Worker's, and one in `packages/core` re-runs the Worker's. The root `typecheck` and `test` tasks also hash `tools/vitest/` (the packages' Vitest configs import it); a
+`packages/contract` re-runs the panel's, auth's and the Worker's tasks, one in `packages/json` re-runs translation's and the
+Worker's, one in `packages/core` re-runs auth's and the Worker's, and one in `packages/auth` re-runs the Worker's. The root `typecheck` and `test` tasks also hash `tools/vitest/` (the packages' Vitest configs import it); a
 package's `turbo.json` appends the root files its tasks read (`"$TURBO_EXTENDS$"`; `apps/app`: `infra/bundle.ts`,
 `infra/settings.ts`, `migrations/`). The cache is local
 (`.turbo/cache`, one per git worktree: `cacheDir` keeps a worktree from writing into the main checkout's); there is
@@ -147,7 +156,7 @@ cover the DOM-free modules of `src/lib` and run in Node.js, in UTC. Design conte
 Local loop: `pnpm dev` in one terminal, `pnpm --filter @commissary/web dev` in another, open http://localhost:5173 (the
 dev Access bypass applies). The build output in `apps/web/dist/` is gitignored; `pnpm dev` and `pnpm smoke` build it
 first, CI before smoke and deploy. A new top-level page needs its path segment in `PANEL_SECTIONS`
-(`apps/app/src/access/routes.ts`) so the Worker serves `index.html` for it.
+(`apps/app/src/management/zones.ts`) so the Worker serves `index.html` for it.
 
 ## Tests
 
@@ -260,7 +269,7 @@ assertion that cannot be removed carries a `// SAFETY: <invariant>` comment on t
 
 - TypeScript 7 (native `tsc`). Each program has its own tsconfig extending `tsconfig.base.json`: `apps/app/tsconfig.json`
   (Worker, workerd types), `apps/web/tsconfig.app.json` (panel, DOM types) and `tsconfig.node.json` (its Node.js side),
-  `packages/contract/tsconfig.json` (no runtime types), `packages/core`, `packages/json` and `packages/translation` (Node.js types,
+  `packages/contract/tsconfig.json` (no runtime types), `packages/auth`, `packages/core`, `packages/json` and `packages/translation` (Node.js types,
   no Workers types) and the root's `tsconfig.infra.json` (deploy code, Node.js types). `tsc` only checks (`noEmit`); Turborepo caches it. `capnp-es` (via Alchemy) declares a TypeScript 5/6 peer
   range; it only ships types, so the peer warning is harmless.
 - `@cloudflare/vitest-plugin` (successor of `@cloudflare/vitest-pool-workers`) is used because it supports vitest 5,

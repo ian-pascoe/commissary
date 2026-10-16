@@ -2,13 +2,16 @@
  * The Worker's bindings as its code reads them (#134 "How packages get their bindings"): every future package reads
  * only its own view ({@link AuthConfig}, {@link StateEnv}, {@link ModelsEnv}; `core` reads none), and the code that
  * stays in the Worker reads {@link AppEnv}. The request context provides each of them from the invocation's `env`, which
- * satisfies every view (`WorkerBindings`).
+ * satisfies every view (`WorkerBindings`), and the ports `@commissary/auth` reaches state and Better Auth's sessions
+ * through (`AuthDirectory`, `SignInSessions`).
  */
 import { Context } from "effect";
-import { type AuthBindings, AuthConfig } from "./auth/config.ts";
+import { type AuthBindings, AuthConfig, AuthDirectory, SignInSessions } from "@commissary/auth";
 import type { SignInBindings } from "./hosted/auth.ts";
+import { signInSessions } from "./hosted/session.ts";
 import { type ModelsBindings, ModelsEnv } from "./models/env.ts";
 import { WorkerExecutionContext, CurrentOrg, GLOBAL_ORG } from "@commissary/core";
+import { stateAuthDirectory } from "./state/auth-directory.ts";
 import { type StateBindings, StateEnv } from "./state/env.ts";
 
 /**
@@ -22,7 +25,7 @@ export interface AppBindings extends SignInBindings {
   readonly APP_DOMAIN?: string;
   /** The API host (`http/hosts.ts`, ADR 0028). */
   readonly API_DOMAIN?: string;
-  /** Hosted: how many orgs a person may own unless a platform admin raised their limit (`hosted/standing.ts`). */
+  /** Hosted: how many orgs a person may own unless a platform admin raised their limit (`hosted/owned-orgs.ts`). */
   readonly OWNED_ORG_LIMIT?: string;
   /** Hosted: Cloudflare Turnstile widget keys guarding sign-in and sign-up (`hosted/routes.ts`). */
   readonly TURNSTILE_SITE_KEY?: string;
@@ -39,15 +42,29 @@ export class AppEnv extends Context.Service<AppEnv, AppBindings>()("commissary/w
 export type WorkerBindings = AuthBindings & StateBindings & ModelsBindings & AppBindings;
 
 /** The services {@link envContext} provides. */
-export type EnvServices = AuthConfig | StateEnv | ModelsEnv | AppEnv;
+export type EnvServices =
+  | AuthConfig
+  | StateEnv
+  | ModelsEnv
+  | AppEnv
+  | AuthDirectory
+  | SignInSessions;
 
-/** Each view of `env`, as its service. */
-export const envContext = (env: WorkerBindings): Context.Context<EnvServices> =>
-  Context.make(AuthConfig, env).pipe(
+/**
+ * Each view of `env`, as its service, and auth's ports over it: the directory over the Durable Object stubs
+ * (`state/auth-directory.ts`) and Better Auth's sessions (`hosted/session.ts`).
+ */
+export const envContext = (env: WorkerBindings): Context.Context<EnvServices> => {
+  const directory = stateAuthDirectory(env);
+
+  return Context.make(AuthConfig, env).pipe(
     Context.add(StateEnv, env),
     Context.add(ModelsEnv, env),
     Context.add(AppEnv, env),
+    Context.add(AuthDirectory, directory),
+    Context.add(SignInSessions, signInSessions(env, directory)),
   );
+};
 
 /**
  * Builds the per-request context passed as the second argument of the web handler. Every request belongs to the org

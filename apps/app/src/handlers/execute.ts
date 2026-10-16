@@ -11,7 +11,7 @@
  */
 import { Cause, Effect, Exit, Pull, Scope, Stream } from "effect";
 import type { HttpServerRequest } from "effect/http";
-import { AccessPrincipal } from "../access/principal.ts";
+import { AccessPrincipal } from "@commissary/auth";
 import { ConfigReader } from "../config/reader.ts";
 import type { Config } from "../config/schema.ts";
 import { ExecutionError, withErrorFields } from "../executor/errors.ts";

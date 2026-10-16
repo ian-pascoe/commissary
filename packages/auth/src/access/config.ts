@@ -2,9 +2,9 @@
 // New in the Workers port (Go used `access.api-keys`); see docs/ARCHITECTURE.md "Authentication".
 import { Data, Effect } from "effect";
 import { ConfigurationError } from "@commissary/core";
-import type { Principal } from "./principal.ts";
-import type { AuthBindings } from "../auth/config.ts";
-import { isHosted } from "../hosted/mode.ts";
+import type { Principal } from "../principal.ts";
+import type { AuthBindings } from "../config.ts";
+import { isHosted } from "../mode.ts";
 
 export interface AccessConfig {
   /** Issuer expected in `iss`, e.g. `https://team.cloudflareaccess.com`. */

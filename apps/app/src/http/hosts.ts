@@ -2,7 +2,7 @@
 // client API routes there only, and the panel, sign-in and management API on its app host (`APP_DOMAIN`) only. Without
 // `API_DOMAIN` one hostname serves everything. Decided before the router from the request's hostname and path, so a
 // request on the wrong host never reaches the Access gate or a handler.
-import { classifyPath, normalizedPath } from "../access/routes.ts";
+import { classifyPath, normalizedPath } from "../management/zones.ts";
 import type { AppBindings } from "../worker-env.ts";
 
 /** Served on every host: the health check (`src/http/routes.ts`). */

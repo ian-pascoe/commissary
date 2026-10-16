@@ -1,33 +1,25 @@
 /**
- * The Worker's side of membership (ADR 0022): admitting a principal into an org through the org's ControlPlane, and
- * keeping the Platform registry's index (which orgs each person and service token belong to) in step with it. New in
- * the Workers port, no Go counterpart.
+ * Admitting a principal into an org through the org's ControlPlane (ADR 0022), and keeping the Platform registry's
+ * index (which orgs each person and service token belong to) in step with it, both through `AuthDirectory`. New in the
+ * Workers port, no Go counterpart.
  *
  * The ControlPlane is authoritative and checked on every request, so a removed member loses access on their next
  * request. The registry's index only lists the orgs of a caller (the panel's org switcher): after a change the
  * ControlPlane marks it stale, and {@link syncOrgIndex} pushes the org's lists to the registry, then tells the
  * ControlPlane which change the registry holds. A failed push is logged and retried with the next change or admission.
  */
-import { Data, Effect } from "effect";
-import type { AdmissiblePrincipal } from "../access/principal.ts";
-import { isHosted } from "../hosted/mode.ts";
-import { AuthConfig } from "../auth/config.ts";
+import { Effect } from "effect";
 import { GLOBAL_ORG, type OrgId } from "@commissary/core";
-import { controlPlaneOf } from "../platform/org.ts";
-import { platformOf } from "../platform/registry.ts";
-import { StateEnv } from "../state/env.ts";
-import type { ClientsUseApiKeys } from "../api-keys/store.ts";
-import type { Admission, PrincipalRef } from "./store.ts";
-
-/** The org's ControlPlane could not be asked; the message names the call. */
-export class MembershipUnavailable extends Data.TaggedError("MembershipUnavailable")<{
-  readonly message: string;
-}> {}
-
-const failure = (label: string) => (cause: unknown) =>
-  new MembershipUnavailable({
-    message: `${label}: ${cause instanceof Error ? cause.message : "unknown error"}`,
-  });
+import { AuthConfig } from "./config.ts";
+import {
+  type Admission,
+  AuthDirectory,
+  type ClientsUseApiKeys,
+  type DirectoryUnavailable,
+  type PrincipalRef,
+} from "./directory.ts";
+import { isHosted } from "./mode.ts";
+import type { AdmissiblePrincipal } from "./principal.ts";
 
 export const principalRef = (principal: AdmissiblePrincipal): PrincipalRef =>
   principal.kind === "service"
@@ -38,25 +30,16 @@ export const principalRef = (principal: AdmissiblePrincipal): PrincipalRef =>
  * Pushes the org's members and service tokens to the Platform registry when its index is behind; never fails (a
  * failure is logged, the next change or admission tries again).
  */
-export const syncOrgIndex = (org: OrgId): Effect.Effect<void, never, StateEnv> =>
+export const syncOrgIndex = (org: OrgId): Effect.Effect<void, never, AuthDirectory> =>
   Effect.gen(function* () {
-    const env = yield* StateEnv;
-    const stub = controlPlaneOf(env, org);
-
-    const index = yield* Effect.tryPromise({
-      try: async () => await stub.membershipIndex(),
-      catch: failure("membershipIndex"),
-    });
+    const directory = yield* AuthDirectory;
+    const index = yield* directory.membershipIndex(org);
 
     if (index.synced) return;
 
-    const repaired = yield* Effect.tryPromise({
-      try: async () =>
-        await platformOf(env).replaceOrgIndex(org, {
-          emails: index.emails,
-          serviceTokens: index.serviceTokens,
-        }),
-      catch: failure("replaceOrgIndex"),
+    const repaired = yield* directory.replaceOrgIndex(org, {
+      emails: index.emails,
+      serviceTokens: index.serviceTokens,
     });
 
     if (!repaired.ok)
@@ -69,10 +52,7 @@ export const syncOrgIndex = (org: OrgId): Effect.Effect<void, never, StateEnv> =
         Effect.annotateLogs({ org, tokens: repaired.conflicts.length }),
       );
 
-    yield* Effect.tryPromise({
-      try: async () => await stub.markIndexSynced(index.counter),
-      catch: failure("markIndexSynced"),
-    });
+    yield* directory.markIndexSynced(org, index.counter);
   }).pipe(
     Effect.catch((error) =>
       Effect.logWarning(`membership index not synced: ${error.message}`).pipe(
@@ -94,17 +74,13 @@ export const admitPrincipal = (
   client = false,
 ): Effect.Effect<
   Admission | ClientsUseApiKeys | undefined,
-  MembershipUnavailable,
-  AuthConfig | StateEnv
+  DirectoryUnavailable,
+  AuthConfig | AuthDirectory
 > =>
   Effect.gen(function* () {
     const joins = autoJoin && !(org === GLOBAL_ORG && isHosted(yield* AuthConfig));
-    const env = yield* StateEnv;
-
-    const admission = yield* Effect.tryPromise({
-      try: async () => await controlPlaneOf(env, org).admit(principalRef(principal), joins, client),
-      catch: failure("admit"),
-    });
+    const directory = yield* AuthDirectory;
+    const admission = yield* directory.admit(org, principalRef(principal), joins, client);
 
     if (admission !== undefined && "indexStale" in admission && admission.indexStale)
       yield* syncOrgIndex(org);

@@ -8,7 +8,7 @@
  * bytes, 256 bits, as 64 hex characters) are refused too. The ControlPlane reads them when it starts (and logs a
  * refusal, `OrgSecrets`), so a stage without its key has no ControlPlane that starts.
  */
-import { isDeployedStage } from "../access/config.ts";
+import { isDeployedStage } from "@commissary/auth";
 import { DEV_SECRETS_KEY, MIN_DEPLOYED_SECRETS_KEY_LENGTH, MIN_SECRETS_KEY_LENGTH } from "./key.ts";
 
 /** Thrown for a missing, short or refused secrets key, and for one that opens no data key. */

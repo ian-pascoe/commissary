@@ -18,7 +18,14 @@ import { CredentialRefresher } from "../../src/executor/helps/credential-refresh
 import { RootRoutes } from "../../src/http/routes.ts";
 import type { UsageRecord } from "../../src/usage/record.ts";
 import { UsageSink } from "../../src/usage/sink.ts";
-import { AUD, fakeJwksLayer, makeFakeJwks, makeKey, signToken, userClaims } from "./access.ts";
+import {
+  AUD,
+  fakeJwksLayer,
+  makeFakeJwks,
+  makeKey,
+  signToken,
+  userClaims,
+} from "@commissary/auth/testing";
 import type { Json } from "@commissary/json";
 import { requestContext } from "../../src/worker-env.ts";
 

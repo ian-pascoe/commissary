@@ -100,7 +100,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      // The Worker refuses management calls whose Origin is another host (apps/app/src/access/csrf.ts); present the
+      // The Worker refuses management calls whose Origin is another host (packages/auth/src/csrf.ts); present the
       // Worker's own origin, as the deployed panel does.
       "/v9": {
         target: workerUrl,

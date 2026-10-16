@@ -6,7 +6,7 @@
 import { Effect } from "effect";
 import { HttpServerRequest } from "effect/http";
 import type { OrgSlug } from "@commissary/core";
-import { scopedUrl } from "./routes.ts";
+import { scopedUrl } from "./zones.ts";
 
 /** The org slug a request addresses, if its URL has one. */
 export const addressedSlug = (request: HttpServerRequest.HttpServerRequest): OrgSlug | undefined =>

@@ -6,7 +6,7 @@
  */
 import { Effect } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { AccessPrincipal } from "../access/principal.ts";
+import { AccessPrincipal } from "@commissary/auth";
 import { buildCodexClientModels, supportsApplyPatchProviders } from "./codex-client-models.ts";
 import {
   respondGeminiDetail,

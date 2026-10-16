@@ -13,32 +13,7 @@
  * All methods are synchronous; refusals are plain data. Times are the caller's clock (epoch milliseconds).
  */
 import type { Sealer } from "../secrets/cipher.ts";
-import { normalizeDomain } from "./domain.ts";
-
-/** An OpenID Connect provider: its issuer, Commissary's client there, and the endpoints its discovery document named. */
-export interface OidcSettings {
-  readonly kind: "oidc";
-  readonly issuer: string;
-  readonly clientId: string;
-  readonly clientSecret: string;
-  readonly authorizationEndpoint: string;
-  readonly tokenEndpoint: string;
-  readonly jwksEndpoint: string;
-  readonly userInfoEndpoint?: string;
-  /** How the client authenticates at the token endpoint; HTTP Basic unless the issuer supports only the form post. */
-  readonly tokenEndpointAuthentication?: "client_secret_post";
-}
-
-/** A SAML 2.0 identity provider: where to send people, its entity id, and the certificate it signs assertions with. */
-export interface SamlSettings {
-  readonly kind: "saml";
-  readonly entryPoint: string;
-  readonly idpEntityId: string;
-  /** PEM (or bare base64 DER) X.509 certificate. */
-  readonly certificate: string;
-}
-
-export type IdpSettings = OidcSettings | SamlSettings;
+import { type IdpSettings, normalizeDomain } from "@commissary/auth/sso";
 
 export interface StoredIdp {
   readonly settings: IdpSettings;
@@ -50,7 +25,7 @@ export interface StoredIdp {
 export interface SsoDomain {
   /** Lowercased, no trailing dot. */
   readonly domain: string;
-  /** The value the TXT record must carry (`domain.ts` `challengeRecord`). */
+  /** The value the TXT record must carry (`@commissary/auth/sso` `challengeRecord`). */
   readonly token: string;
   readonly addedAt: number;
   /** When the TXT record was found; absent while the domain is unverified. */
@@ -76,15 +51,6 @@ export type SsoErrorCode =
 export type SsoResult<A> =
   | { readonly ok: true; readonly value: A }
   | { readonly ok: false; readonly error: SsoErrorCode; readonly message: string };
-
-/** What a sign-in through the org's identity provider did to its membership (`ControlPlane.admitThroughSso`). */
-export type SsoAdmission =
-  | { readonly ok: true; readonly joined: boolean; readonly indexStale: boolean }
-  | {
-      readonly ok: false;
-      /** No provider; the email's domain is not a verified domain of the org; an org admin removed the person. */
-      readonly error: "provider_missing" | "domain_unverified" | "removed";
-    };
 
 /** At most this many domains per org, so an org cannot fill its storage. */
 export const MAX_SSO_DOMAINS = 20;

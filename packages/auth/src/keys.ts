@@ -1,11 +1,13 @@
 /**
- * The text of an API key (ADR 0022): `cms_<orgId>_<keyId>_<secret>`. New in the Workers port, no Go counterpart.
+ * The text of an API key (ADR 0022): `cms_<orgId>_<keyId>_<secret>`, and of a management key (ADR 0026):
+ * `cmsm_<orgId>_<keyId>_<secret>`, shaped alike. New in the Workers port, no Go counterpart.
  *
- * The key names its org (the permanent org id, not the renamable slug), so the Worker reaches the org's ControlPlane
+ * The key names its org (the permanent org id, not the renamable slug), so the gate reaches the org's ControlPlane
  * without a global lookup, and its id, so the ControlPlane finds the stored entry without searching by hash. The
  * secret is 36 random bytes (288 bits, base64url). Only the SHA-256 of the whole key is stored; a key is shown once,
- * when it is created. Pure functions only: the Worker's gate (`access/api-key.ts`) and the ControlPlane's store
- * (`store.ts`) share them.
+ * when it is created. The prefix tells the two kinds apart, so neither is ever taken for the other. Pure functions
+ * only: the gates (`api-key.ts`, `management-key.ts`) and the ControlPlane's stores (the Worker's
+ * `api-keys/store.ts`, `management-keys/store.ts`) share them.
  */
 import { Schema } from "effect";
 import { sha256Hex, OrgId } from "@commissary/core";
@@ -56,7 +58,7 @@ const randomHex = (bytes: number): string =>
 
 /**
  * A new key of `org` with a fresh id and secret, its text starting with `prefix`: `cms_` for an API key, `cmsm_` for a
- * management key (`management-keys/key.ts`), which has the same shape.
+ * management key, which has the same shape.
  */
 export const mintOrgKey = (prefix: string, org: OrgId): MintedApiKey => {
   const keyId = randomHex(10);
@@ -93,3 +95,17 @@ export const mintApiKey = (org: OrgId): MintedApiKey => mintOrgKey(API_KEY_PREFI
 /** The org, id and hash of a key, `undefined` when the text is not a well-formed API key. */
 export const parseApiKey = (text: string): ParsedApiKey | undefined =>
   parseOrgKey(API_KEY_PREFIX, text);
+
+export const MANAGEMENT_KEY_PREFIX = "cmsm_";
+
+/** Whether a credential is meant as a management key (it may still be malformed). */
+export const looksLikeManagementKey = (value: string): boolean =>
+  value.startsWith(MANAGEMENT_KEY_PREFIX);
+
+/** A new management key of `org`. */
+export const mintManagementKey = (org: OrgId): MintedApiKey =>
+  mintOrgKey(MANAGEMENT_KEY_PREFIX, org);
+
+/** The org, id and hash of a management key, `undefined` when the text is not one well formed. */
+export const parseManagementKey = (text: string): ParsedApiKey | undefined =>
+  parseOrgKey(MANAGEMENT_KEY_PREFIX, text);

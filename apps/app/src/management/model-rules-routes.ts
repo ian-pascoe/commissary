@@ -12,7 +12,7 @@
  */
 import { Effect } from "effect";
 import { HttpRouter } from "effect/http";
-import { AccessPrincipal } from "../access/principal.ts";
+import { AccessPrincipal } from "@commissary/auth";
 import { decodeConfig } from "../config/codec.ts";
 import type { ChannelRuleKind, WriteResult } from "../config/store.ts";
 import { isJsonArray, type Json } from "@commissary/json";

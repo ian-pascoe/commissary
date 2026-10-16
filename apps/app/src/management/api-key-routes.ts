@@ -2,15 +2,14 @@
  * `/v9/management/api-keys` (`ApiKeysGroup` in @commissary/contract/api-keys): the API keys clients send instead of an
  * Access sign-in (ADR 0022). Workers addition, no Go counterpart.
  *
- * Any member of the org may use these routes (`access/policy.ts`): a member creates keys for themselves and lists and
+ * Any member of the org may use these routes (`policy.ts`): a member creates keys for themselves and lists and
  * revokes their own; an org admin (or a platform admin) lists and revokes every key of the org. Keys are issued to
  * members only, so a caller without a member id in the org (a service token, a platform admin from outside) cannot
- * create one. A revoked key is forgotten by this isolate's cache at once (`access/api-key.ts`).
+ * create one. A revoked key is forgotten by this isolate's cache at once (`@commissary/auth` `api-key.ts`).
  */
 import { Clock, Effect, Schema } from "effect";
 import { HttpRouter, type HttpServerResponse } from "effect/http";
-import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
-import { roleAtLeast } from "../members/roles.ts";
+import { type AccessIdentity, AccessPrincipal, roleAtLeast } from "@commissary/auth";
 import type { ApiKeyErrorCode, ApiKeyListing, ApiKeyResult } from "../api-keys/store.ts";
 import { CreateApiKey, type ApiKeyView } from "@commissary/contract/api-keys";
 import { handled, jsonReply, type Reply, replyError } from "@commissary/core";

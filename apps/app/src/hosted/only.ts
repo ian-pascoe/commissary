@@ -4,8 +4,7 @@
  */
 import { Effect } from "effect";
 import { HttpServerError, HttpServerRequest } from "effect/http";
-import { isHosted } from "./mode.ts";
-import { AuthConfig } from "../auth/config.ts";
+import { AuthConfig, isHosted } from "@commissary/auth";
 
 /** Answers like a path the router does not know. */
 export const routeNotFound = Effect.gen(function* () {

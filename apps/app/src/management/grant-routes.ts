@@ -12,7 +12,7 @@
  */
 import { Effect } from "effect";
 import { HttpRouter } from "effect/http";
-import { AccessPrincipal } from "../access/principal.ts";
+import { AccessPrincipal } from "@commissary/auth";
 import type { WriteResult } from "../config/store.ts";
 import type { GrantScope, GrantSubject, GrantValue } from "../grants/grant.ts";
 import { isJsonObject, type Json } from "@commissary/json";

@@ -16,7 +16,7 @@ import {
   HttpServerResponse,
 } from "effect/http";
 import { routeServices, CurrentOrg } from "@commissary/core";
-import { AccessPrincipal } from "../../access/principal.ts";
+import { AccessPrincipal } from "@commissary/auth";
 import { CODEX_DEFAULT_BASE_URL, codexCreds } from "../../executor/codex/headers.ts";
 import { ExecutionError } from "../../executor/errors.ts";
 import { applyCustomHeaders } from "../../executor/helps/custom-headers.ts";

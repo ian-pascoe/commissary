@@ -1,8 +1,9 @@
-// API keys (ADR 0022, issue #67): the key text, the management routes that issue and revoke keys, and the gate on
+// API keys (ADR 0022, issue #67): the management routes that issue and revoke keys, and the gate on
 // the client API: each header form a client sends keys in, the refusals (all `Invalid API key`), that a key only ever
 // reaches its own org's ControlPlane and serves its member's private credentials, revocation within the cache window,
 // and the Access sign-ins a client API route still takes while the org's `access_clients` setting is on. Through the router with the real ControlPlanes and a Platform
-// registry of its own; the cache window through `authenticateRequest` with `TestClock`.
+// registry of its own; the cache window through `authenticateRequest` with `TestClock`. The key text is tested in
+// packages/auth (keys.test.ts).
 import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { assert, it as effectIt } from "@effect/vitest";
@@ -11,15 +12,24 @@ import { HttpRouter, HttpServerResponse } from "effect/http";
 import { TestClock } from "effect/testing";
 import { afterAll, describe, expect, it } from "vitest";
 import { authenticateRequest } from "../src/access/authenticate.ts";
-import type { AccessJwks } from "../src/access/jwks.ts";
-import { AccessPrincipal } from "../src/access/principal.ts";
-import { VERIFIED_KEY_TTL_MS } from "../src/access/api-key.ts";
+import {
+  type AccessJwks,
+  AccessPrincipal,
+  mintApiKey,
+  parseApiKey,
+  VERIFIED_KEY_TTL_MS,
+} from "@commissary/auth";
 import { scheduledTasks } from "../src/scheduled.ts";
 import { type CurrentOrg, GLOBAL_ORG, OrgId } from "@commissary/core";
 import { controlPlaneOf } from "../src/platform/org.ts";
-import { mintApiKey, parseApiKey } from "../src/api-keys/key.ts";
 import { MAX_KEYS_PER_MEMBER } from "../src/api-keys/store.ts";
-import { fakeJwksLayer, makeFakeJwks, makeKey, signToken, userClaims } from "./support/access.ts";
+import {
+  fakeJwksLayer,
+  makeFakeJwks,
+  makeKey,
+  signToken,
+  userClaims,
+} from "@commissary/auth/testing";
 import { resetUsageDb } from "./support/usage.ts";
 import {
   ADMIN,
@@ -194,33 +204,6 @@ const createKeyDirect = async (
 /** A client API route called with `headers` only: no Access sign-in. */
 const clientApi = async (path: string, headers: Record<string, string>, method = "GET") =>
   await harness.json(path, { method, headers, auth: false });
-
-describe("the key text", () => {
-  it("names its org and id, carries at least 256 bits of secret, and parses back", () => {
-    const org = OrgId.make("acme-1");
-    const minted = mintApiKey(org);
-    const [, orgPart, id, secret] = /^cms_([a-z0-9-]+)_([0-9a-f]{20})_(.+)$/.exec(minted.key) ?? [];
-
-    expect(orgPart).toBe("acme-1");
-    expect(id).toBe(minted.keyId);
-    // base64url: 6 bits per character.
-    expect((secret ?? "").length * 6).toBeGreaterThanOrEqual(256);
-    expect(minted.prefix).toBe(`cms_acme-1_${minted.keyId}_${(secret ?? "").slice(0, 4)}`);
-    expect(parseApiKey(minted.key)).toEqual({ org, keyId: minted.keyId, hash: minted.hash });
-    expect(mintApiKey(org).key).not.toBe(minted.key);
-
-    for (const malformed of [
-      "cms_",
-      "cms_acme-1",
-      `cms_acme-1_${minted.keyId}`,
-      `cms_Acme_${minted.keyId}_${secret}`,
-      `cms_acme-1_${minted.keyId.slice(1)}_${secret}`,
-      `cms_acme-1_${minted.keyId}_${(secret ?? "").slice(1)}`,
-      `sk-${minted.key}`,
-    ])
-      expect(parseApiKey(malformed), malformed).toBeUndefined();
-  });
-});
 
 describe("issuing keys", () => {
   it("shows a new key once and lists it by its prefix only", async () => {

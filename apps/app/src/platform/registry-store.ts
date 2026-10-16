@@ -22,6 +22,7 @@
  * ControlPlane stays authoritative for its identity provider and its domains (`sso/store.ts`).
  */
 import { Schema } from "effect";
+import type { IndexRepair, OrgIndex, SsoDomainRecord, Standing } from "@commissary/auth";
 import { DEFAULT_ORG_SLUG, GLOBAL_ORG, newOrgId, OrgId, OrgSlug } from "@commissary/core";
 
 /** An org as the registry lists it. */
@@ -85,23 +86,6 @@ export type OrgRemoval =
       readonly message: string;
     };
 
-/** What a repair of one org's index changed. */
-export type IndexRepair =
-  | {
-      readonly ok: true;
-      readonly members: number;
-      readonly serviceTokens: number;
-      /** Service tokens the org lists that another org already holds: kept with that org, not moved. */
-      readonly conflicts: ReadonlyArray<string>;
-    }
-  | { readonly ok: false; readonly error: "not_found" };
-
-/** The org list and index of one org as its ControlPlane states them. */
-export interface OrgIndex {
-  readonly emails: ReadonlyArray<string>;
-  readonly serviceTokens: ReadonlyArray<string>;
-}
-
 /** A person of Commissary Cloud, as platform admins see them. */
 export interface PersonRecord {
   /** Lowercased. */
@@ -132,18 +116,6 @@ export type SignInState =
   | { readonly kind: "suspended" }
   | { readonly kind: "ready" }
   | { readonly kind: "personal"; readonly org: OrgRecord };
-
-/** Where an org and a person stand for a key or a session of Commissary Cloud. */
-export interface Standing {
-  readonly org: "active" | "suspended" | "missing";
-  readonly person: "active" | "suspended";
-}
-
-/** A verified single sign-on domain: the org that verified it and whether that org requires single sign-on for it. */
-export interface SsoDomainRecord {
-  readonly org: OrgId;
-  readonly requireSso: boolean;
-}
 
 /** What claiming a verified domain for an org did. */
 export type SsoDomainClaim =

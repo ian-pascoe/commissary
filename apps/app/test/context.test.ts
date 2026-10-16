@@ -5,7 +5,7 @@ import { HttpRouter, HttpServerResponse } from "effect/http";
 import { expect } from "vitest";
 import { CorsLayer } from "../src/http/cors.ts";
 import { WorkerExecutionContext } from "@commissary/core";
-import { AuthConfig } from "../src/auth/config.ts";
+import { AuthConfig } from "@commissary/auth";
 import { ModelsEnv } from "../src/models/env.ts";
 import { StateEnv } from "../src/state/env.ts";
 import { AppEnv, requestContext } from "../src/worker-env.ts";

@@ -1,7 +1,7 @@
 import { Layer } from "effect";
 import { HttpRouter } from "effect/http";
 import { AccessLayer, withAccess } from "../access/layer.ts";
-import { orgAddressing } from "../access/org-address.ts";
+import { orgAddressing } from "../management/org-address.ts";
 import { ClientApiLayer } from "../handlers/layer.ts";
 import { HostedRoutes } from "../hosted/routes.ts";
 import { ManagementRoutesLive } from "../management/routes.ts";

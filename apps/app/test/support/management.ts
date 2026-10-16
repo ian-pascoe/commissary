@@ -4,8 +4,8 @@ import { env } from "cloudflare:workers";
 import { Context, Layer } from "effect";
 import { HttpRouter } from "effect/http";
 import { makeAccessLayer, makeWithAccess } from "../../src/access/layer.ts";
-import type { AccessPrincipal } from "../../src/access/principal.ts";
-import { orgAddressing } from "../../src/access/org-address.ts";
+import type { AccessPrincipal } from "@commissary/auth";
+import { orgAddressing } from "../../src/management/org-address.ts";
 import { RootRoutes } from "../../src/http/routes.ts";
 import { ManagementRoutes } from "../../src/management/routes.ts";
 import { OAuthCallbackRoutes } from "../../src/oauth/public-routes.ts";
@@ -21,7 +21,7 @@ import {
   serviceClaims,
   signToken,
   userClaims,
-} from "./access.ts";
+} from "@commissary/auth/testing";
 import { type MockHandler, mockHttp } from "./refresh.ts";
 import type { Json } from "@commissary/json";
 import { requestContext } from "../../src/worker-env.ts";

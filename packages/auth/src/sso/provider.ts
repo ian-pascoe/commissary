@@ -1,16 +1,16 @@
 /**
  * An org's identity provider as Better Auth's SSO plugin sees it (issue #76): one provider per org, `sso-<org id>`,
- * built on each use from what the org's ControlPlane stores (`store.ts`) and never written to Better Auth's database
- * (`hosted/auth.ts` answers the plugin's `ssoProvider` reads with it). New in the Workers port.
+ * built on each use from what the org's ControlPlane stores (`settings.ts`) and never written to Better Auth's database
+ * (the Worker's `hosted/auth.ts` answers the plugin's `ssoProvider` reads with it). New in the Workers port.
  *
  * Its domains are the org's verified domains; the plugin refuses a provider without one (`domainVerified`). OIDC uses
  * PKCE besides the client secret, and SAML takes only signed assertions for this deployment (its entity id, the audience),
  * sent to its assertion consumer service in answer to a request it made.
  */
 import { Schema } from "effect";
-import { AUTH_BASE_PATH } from "../hosted/auth.ts";
+import { AUTH_BASE_PATH } from "@commissary/contract/sign-in";
 import { OrgId } from "@commissary/core";
-import type { IdpSettings } from "./store.ts";
+import type { IdpSettings } from "./settings.ts";
 
 const PREFIX = "sso-";
 

@@ -11,7 +11,7 @@
  */
 import { Effect } from "effect";
 import { HttpRouter } from "effect/http";
-import { AccessPrincipal } from "../access/principal.ts";
+import { AccessPrincipal } from "@commissary/auth";
 import type { PriceOverrideValue, WriteResult } from "../config/store.ts";
 import { isJsonObject, type Json } from "@commissary/json";
 import { handled, ifMatch, jsonReply, replyError } from "@commissary/core";

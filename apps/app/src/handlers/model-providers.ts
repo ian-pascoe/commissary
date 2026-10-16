@@ -6,7 +6,7 @@
  * availability/quota state); the service interface stays the same.
  */
 import { Context, Effect, Layer, Option } from "effect";
-import { AccessPrincipal } from "../access/principal.ts";
+import { AccessPrincipal } from "@commissary/auth";
 import { ConfigReader } from "../config/reader.ts";
 import { configCredentials, openAICompatModelIds } from "../executor/config-credentials.ts";
 import { ExecutionError } from "../executor/errors.ts";

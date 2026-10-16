@@ -1,7 +1,7 @@
 // Port of corsMiddleware (internal/api/server_middleware.go:25-143).
 import { Effect, Predicate } from "effect";
 import { HttpRouter, HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { classifyPath } from "../access/routes.ts";
+import { classifyPath } from "../management/zones.ts";
 
 /** Mirrors `corsExposedResponseHeaders` in internal/api/server_middleware.go. */
 export const CORS_EXPOSED_RESPONSE_HEADERS = [

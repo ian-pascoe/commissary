@@ -1,7 +1,7 @@
 // The `apps/web` control panel: `index.html` for `/` and every page path, bundle files under `/assets`, all behind the
-// Access admin gate (src/management/web-panel.ts, src/access/routes.ts).
+// Access admin gate (src/management/web-panel.ts, src/management/zones.ts).
 import { afterAll, describe, expect, it } from "vitest";
-import { classifyPath } from "../src/access/routes.ts";
+import { classifyPath } from "../src/management/zones.ts";
 import { PANEL_CSP, PANEL_NOT_BUILT } from "../src/management/web-panel.ts";
 import { isolatedPlatform, makeHarness, token } from "./support/management.ts";
 

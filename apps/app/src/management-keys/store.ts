@@ -9,12 +9,11 @@
  *
  * All methods are synchronous; refusals are plain data. Times are the caller's clock (epoch milliseconds).
  */
-import type { OrgRole } from "../members/roles.ts";
+import type { OrgRole } from "@commissary/contract/members";
+import { isKeyId, type ManagementKeyVerdict, mintManagementKey } from "@commissary/auth";
 import type { OrgId } from "@commissary/core";
 import { cleanName, MAX_NAME_LENGTH } from "../platform/registry-store.ts";
-import { isKeyId } from "../api-keys/key.ts";
 import { LAST_USED_RESOLUTION_MS } from "../api-keys/store.ts";
-import { mintManagementKey } from "./key.ts";
 
 export interface ManagementKeyRecord {
   readonly id: string;
@@ -34,16 +33,6 @@ export type ManagementKeyErrorCode = "invalid_name" | "too_many_keys" | "managem
 export type ManagementKeyResult<A> =
   | { readonly ok: true; readonly value: A }
   | { readonly ok: false; readonly error: ManagementKeyErrorCode; readonly message: string };
-
-/** The ControlPlane's answer to a presented key; the client sees the same `Invalid API key` for every refusal. */
-export type ManagementKeyVerdict =
-  | {
-      readonly ok: true;
-      readonly name: string;
-      readonly role: OrgRole;
-      readonly ownerEmail?: string;
-    }
-  | { readonly ok: false };
 
 /** At most this many keys per org, so an org cannot fill its storage. */
 export const MAX_MANAGEMENT_KEYS = 100;

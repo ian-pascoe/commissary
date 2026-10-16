@@ -2,16 +2,19 @@
  * `/v9/management/management-keys` (`ManagementKeysGroup` in @commissary/contract/management-keys): the keys scripts
  * send on the management API (ADR 0026), on every deployment. Workers addition, no Go counterpart.
  *
- * Org admins (and platform admins) use these routes (`access/policy.ts`). A key holds a role no higher than its
+ * Org admins (and platform admins) use these routes (`policy.ts`). A key holds a role no higher than its
  * issuer's, and a management key issues none (giving a key a role is for people and service tokens). A revoked key is
- * forgotten by this isolate's cache at once (`access/management-key.ts`).
+ * forgotten by this isolate's cache at once (`@commissary/auth` `management-key.ts`).
  */
 import { Clock, Effect, Schema } from "effect";
 import { HttpRouter, type HttpServerResponse } from "effect/http";
-import { forgetVerifiedManagementKey } from "../access/management-key.ts";
-import { AccessPrincipal, type Principal } from "../access/principal.ts";
+import {
+  AccessPrincipal,
+  forgetVerifiedManagementKey,
+  type Principal,
+  roleAtLeast,
+} from "@commissary/auth";
 import type { ManagementKeyErrorCode, ManagementKeyRecord } from "../management-keys/store.ts";
-import { roleAtLeast } from "../members/roles.ts";
 import { CreateManagementKey, type ManagementKeyView } from "@commissary/contract/management-keys";
 import { handled, jsonReply, type Reply, replyError } from "@commissary/core";
 import { bodyJson, controlPlane } from "./http.ts";

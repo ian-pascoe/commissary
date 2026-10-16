@@ -15,10 +15,9 @@
  * All methods are synchronous; refusals are plain data (`ApiKeyRefused`). Times are the caller's clock (epoch
  * milliseconds), so the Worker's `Clock` drives them.
  */
-import type { OrgRole } from "../members/roles.ts";
+import { type ApiKeyRejection, isKeyId, mintApiKey } from "@commissary/auth";
 import { GLOBAL_ORG, type OrgId } from "@commissary/core";
 import { cleanName, MAX_NAME_LENGTH } from "../platform/registry-store.ts";
-import { isKeyId, mintApiKey } from "./key.ts";
 
 export interface ApiKeyRecord {
   readonly id: string;
@@ -48,9 +47,6 @@ export interface ApiKeyRefused {
 
 export type ApiKeyResult<A> = { readonly ok: true; readonly value: A } | ApiKeyRefused;
 
-/** Why a presented key was refused; the client sees the same `Invalid API key` for each. */
-export type ApiKeyRejection = "unknown" | "expired";
-
 export type ApiKeyCheck =
   | { readonly ok: true; readonly memberId: string; readonly expiresAt?: number }
   | { readonly ok: false; readonly reason: ApiKeyRejection };
@@ -65,23 +61,6 @@ export interface MemberNotFound {
   readonly ok: false;
   readonly error: "member_not_found";
   readonly message: string;
-}
-
-/** The ControlPlane's answer to a presented key: its live member and their role, or why it is refused. */
-export type ApiKeyVerdict =
-  | {
-      readonly ok: true;
-      readonly memberId: string;
-      readonly email: string;
-      readonly role: OrgRole;
-      /** When the key expires (epoch ms), so a cache of verified keys never keeps it longer. */
-      readonly expiresAt?: number;
-    }
-  | { readonly ok: false; readonly reason: ApiKeyRejection };
-
-/** The org accepts only API keys on its client API routes: an Access sign-in is not admitted there. */
-export interface ClientsUseApiKeys {
-  readonly apiKeysOnly: true;
 }
 
 /** At most this many keys per member, so a member cannot fill the org's storage. */
@@ -282,8 +261,8 @@ export class ApiKeyStore {
 
   /**
    * Revokes a key at once by deleting it: the next request with it is refused (the Worker's cache of verified keys
-   * keeps it for at most its short lifetime, `access/api-key.ts`). `memberId` limits the call to that member's keys:
-   * another member's key answers as unknown. The answer is the key as it was, marked revoked at `now`; revoking it
+   * keeps it for at most its short lifetime, `@commissary/auth` `api-key.ts`). `memberId` limits the call to that
+   * member's keys: another member's key answers as unknown. The answer is the key as it was, marked revoked at `now`; revoking it
    * again finds nothing.
    */
   revoke(id: string, now: number, memberId?: string): ApiKeyResult<ApiKeyRecord> {

@@ -6,7 +6,7 @@
  */
 import { Effect } from "effect";
 import { RateLimitedError, type OrgId } from "@commissary/core";
-import { AuthConfig } from "../auth/config.ts";
+import { AuthConfig } from "./config.ts";
 
 /** The binding's period: the limit counts requests per minute. */
 export const RATE_LIMIT_PERIOD_SECONDS = 60;

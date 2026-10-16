@@ -1,6 +1,6 @@
 import { Layer } from "effect";
 import { CorsLayer } from "../http/cors.ts";
-import { AccessJwks } from "./jwks.ts";
+import { AccessJwks } from "@commissary/auth";
 import { AccessGate } from "./middleware.ts";
 
 /**
@@ -21,8 +21,8 @@ export const AccessLayer = makeAccessLayer();
 
 /**
  * Marks route layers as consumers of `AccessPrincipal`: `withAccess(routes)` discharges that requirement at the type
- * level. Authentication itself is global (gated by path prefix, see `routes.ts`), so routes under a protected prefix
- * are authenticated whether or not they use this helper; it only makes `yield* AccessPrincipal` compile and keeps the
- * Worker handler's context free of it.
+ * level. Authentication itself is global (gated by path prefix, see `management/zones.ts`), so routes under a
+ * protected prefix are authenticated whether or not they use this helper; it only makes `yield* AccessPrincipal`
+ * compile and keeps the Worker handler's context free of it.
  */
 export const withAccess = makeWithAccess(AccessLayer);

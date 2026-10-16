@@ -9,7 +9,7 @@
  * than overwriting a change the view did not show.
  */
 import { Clock, Effect } from "effect";
-import { AccessPrincipal } from "../access/principal.ts";
+import { AccessPrincipal } from "@commissary/auth";
 import { routingView } from "../registry/routing-view.ts";
 import { ModelRegistry } from "../registry/service.ts";
 import { currentAuthIndexer } from "./auth-index.ts";

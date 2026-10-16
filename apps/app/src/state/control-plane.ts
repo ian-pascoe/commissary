@@ -1,15 +1,22 @@
 import { DurableObject } from "cloudflare:workers";
+import type {
+  Admission,
+  ApiKeyVerdict,
+  ClientsUseApiKeys,
+  ManagementKeyVerdict,
+  MembershipIndex,
+  PrincipalRef,
+  SsoAdmission,
+} from "@commissary/auth";
+import { type Actor, isHosted, platformAdminLists } from "@commissary/auth";
+import { emailDomain, type IdpSettings } from "@commissary/auth/sso";
+import type { OrgRole } from "@commissary/contract/members";
 import {
   type ManagementKeyRecord,
   type ManagementKeyResult,
   ManagementKeyStore,
-  type ManagementKeyVerdict,
 } from "../management-keys/store.ts";
-import { isHosted } from "../hosted/mode.ts";
-import { emailDomain } from "../sso/domain.ts";
 import {
-  type IdpSettings,
-  type SsoAdmission,
   type SsoDomain,
   type SsoResult,
   type SsoState,
@@ -22,28 +29,21 @@ import { orgOfControlPlane } from "../platform/org.ts";
 import type { SecretCipher, Sealer } from "../secrets/cipher.ts";
 import { OrgSecrets } from "../secrets/data-key.ts";
 import { deploymentSecretsKeys } from "../secrets/deployment-keys.ts";
-import { platformAdminLists } from "../access/config.ts";
-import type { Actor, OrgRole } from "../members/roles.ts";
 import {
   type AccountStanding,
-  type Admission,
   MemberStore,
   type MemberRecord,
   type MemberResult,
-  type MembershipIndex,
   type MembershipSettingsWire,
-  type PrincipalRef,
   type ServiceTokenRecord,
   type TeamRecord,
 } from "../members/store.ts";
 import {
-  type ClientsUseApiKeys,
   type MemberNotFound,
   type ApiKeyListing,
   type ApiKeyRecord,
   type ApiKeyResult,
   ApiKeyStore,
-  type ApiKeyVerdict,
 } from "../api-keys/store.ts";
 
 /**
@@ -660,7 +660,7 @@ export class OrgControlPlane<
     this.#members.withdrawToken(clientId);
   }
 
-  /** Who the Platform registry should index for the org, and whether it has caught up (`members/admission.ts`). */
+  /** Who the Platform registry should index for the org, and whether it has caught up (`syncOrgIndex`). */
   membershipIndex(): MembershipIndex {
     this.#seedPlatformAdmins();
 

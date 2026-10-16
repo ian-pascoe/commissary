@@ -18,7 +18,7 @@ import {
   makeKey,
   signToken,
   userClaims,
-} from "./support/access.ts";
+} from "@commissary/auth/testing";
 import { catalogs } from "./support/registry.ts";
 import { configOf, source } from "./support/registry-sources.ts";
 

@@ -6,7 +6,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Exit, Fiber, Layer, Scope, Stream } from "effect";
 import type { HttpServerRequest } from "effect/http";
 import { TestClock } from "effect/testing";
-import { type AccessIdentity, AccessPrincipal } from "../src/access/principal.ts";
+import { type AccessIdentity, AccessPrincipal } from "@commissary/auth";
 import type { ConfigReader } from "../src/config/reader.ts";
 import { ExecutionError } from "../src/executor/errors.ts";
 import { CredentialRefresher } from "../src/executor/helps/credential-refresh.ts";

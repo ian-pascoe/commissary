@@ -15,7 +15,7 @@
  */
 import { Effect, Schema } from "effect";
 import { HttpRouter, type HttpServerRequest } from "effect/http";
-import { AccessPrincipal } from "../access/principal.ts";
+import { AccessPrincipal } from "@commissary/auth";
 import { decodeConfig, decodeRawConfig } from "../config/codec.ts";
 import { decodeStoredConfig } from "../config/store.ts";
 import { keyIdentities } from "../config/normalize.ts";

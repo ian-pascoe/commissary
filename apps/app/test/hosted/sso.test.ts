@@ -3,7 +3,7 @@
 // through it (OIDC or SAML) and become members; GitHub and Google are refused for a domain that requires single
 // sign-on. The DNS resolver and the identity providers are fakes behind the global `fetch`.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { resetStandingCaches } from "../../src/hosted/standing.ts";
+import { resetStandingCaches } from "@commissary/auth";
 import { DOH_URL } from "../../src/sso/dns.ts";
 import {
   OIDC_CLIENT_ID,

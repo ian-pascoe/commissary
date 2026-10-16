@@ -11,7 +11,7 @@
  */
 import { X509Certificate } from "node:crypto";
 import { Effect } from "effect";
-import type { IdpSettings, OidcSettings, SamlSettings } from "./store.ts";
+import type { IdpSettings, OidcSettings, SamlSettings } from "@commissary/auth/sso";
 
 /** Why a provider was refused or failed its test; `message` is safe to show the org owner. */
 export interface IdpProblem {
