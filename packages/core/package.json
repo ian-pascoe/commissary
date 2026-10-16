@@ -2,7 +2,7 @@
   "name": "@commissary/core",
   "version": "0.0.0",
   "private": true,
-  "description": "The foundation without bindings that auth, state, Models and the apps share: the org model, shared errors, hashing, log-safe helpers, management replies, the invocation's execution context; tested in Node.js",
+  "description": "The foundation without bindings: the org model, shared errors, hashing, log-safe helpers, management replies and the invocation's execution context; tested in Node.js",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"

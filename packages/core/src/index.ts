@@ -1,5 +1,5 @@
 /**
- * `@commissary/core`: the foundation without bindings that auth, state, Models and the apps share (#134). The org
+ * `@commissary/core`: the foundation without bindings, for code that two or more packages or apps need. The org
  * model, the shared tagged errors, hashing, log-safe helpers, the management reply and body helpers, the route-layer
  * services and the invocation's execution context. Imports `effect` (and `node:crypto`) only.
  */

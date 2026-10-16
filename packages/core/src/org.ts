@@ -6,8 +6,7 @@
  * `global` every derived name (KV keys, SessionState addresses, caller scopes, `auth_index` keys, OAuth states) stays
  * what it was before orgs existed; other orgs get names of their own ({@link orgScopedName}).
  *
- * The pure part: ids, slugs, the current org and org-scoped names. The Durable Object stubs an org addresses
- * (`controlPlaneOf`) stay with the code that holds the bindings.
+ * The pure part: ids, slugs, the current org and org-scoped names.
  */
 import { Context, Schema } from "effect";
 
