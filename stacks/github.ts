@@ -111,7 +111,7 @@ export default Alchemy.Stack(
           }).pipe(Effect.provideService(ConfigProvider.ConfigProvider, cloudFile));
 
     const [owner = "", repository = ""] = (yield* Config.String("GITHUB_REPOSITORY").pipe(
-      Config.withDefault("ian-pascoe/commissary"),
+      Config.withDefault("spiritledsoftware/commissary"),
     )).split("/");
 
     const repo = { owner, repository };

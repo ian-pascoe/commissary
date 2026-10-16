@@ -60,7 +60,7 @@ secrets Commissary holds for outside services are **credentials**, and a model p
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/ian-pascoe/commissary.git
+git clone https://github.com/spiritledsoftware/commissary.git
 cd commissary
 pnpm install
 ```
