@@ -41,7 +41,7 @@ import {
 import { handled, jsonReply, type Reply, replyError } from "@commissary/core";
 import { bodyJson } from "./http.ts";
 import { storedConfig } from "./settings-routes.ts";
-import { currentViewer } from "./viewer.ts";
+import { currentViewer } from "@commissary/auth";
 import { modelsControlPlane } from "../models/env.ts";
 
 const BASE = "/v9/management/provider-keys";

@@ -8,7 +8,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { AccessPrincipal } from "@commissary/auth";
 import { unknownModelBody } from "../src/credentials/selection/failures.ts";
 import { GLOBAL_ORG } from "@commissary/core";
-import { controlPlaneOf } from "../src/platform/org.ts";
+import { controlPlaneOf } from "@commissary/state";
 import {
   ADMIN,
   claudeFile,

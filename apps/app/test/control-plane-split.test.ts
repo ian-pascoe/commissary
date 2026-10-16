@@ -9,29 +9,12 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it, vi } from "vitest";
 import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { OrgId } from "@commissary/core";
-import { storedText } from "./support/secrets.ts";
+import { alarmOf, ORG_WIDE_TABLES, storedText, tablesOf } from "@commissary/state/testing";
 import { withModelsPart } from "./support/models-part.ts";
 
 const OWNER = { role: "owner", sensitive: true } as const;
 
 const HOUR_MS = 60 * 60_000;
-
-/** The org-wide base's tables, as the ControlPlane named them before the split. */
-const BASE_TABLES = [
-  "api_key_settings",
-  "api_keys",
-  "management_keys",
-  "members",
-  "membership",
-  "org_data_key",
-  "removed_principals",
-  "service_tokens",
-  "session_instances",
-  "sso_domains",
-  "sso_provider",
-  "team_members",
-  "teams",
-];
 
 /** The Models part's tables, as the ControlPlane named them before the split. */
 const MODELS_TABLES = [
@@ -62,20 +45,6 @@ const fresh = () =>
   env.CONTROL_PLANE.getByName(OrgId.make(`split-${crypto.randomUUID().slice(0, 8)}`));
 
 type Stub = ReturnType<typeof fresh>;
-
-/** The object's tables (not SQLite's or the runtime's own), by name. */
-const tablesOf = (stub: Stub): Promise<string[]> =>
-  runInDurableObject(stub, (_instance, state) =>
-    state.storage.sql
-      .exec<{ name: string }>(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY name",
-      )
-      .toArray()
-      .map((row) => row.name),
-  );
-
-const alarmOf = (stub: Stub) =>
-  runInDurableObject(stub, (_instance, state) => state.storage.getAlarm());
 
 const claudeFile = (expiresAt: number) => ({
   type: "claude",
@@ -135,7 +104,7 @@ describe("the ControlPlane's Models part", () => {
   it("keeps every table of the ControlPlane under its name, the base's and the part's", async () => {
     const { stub } = await populated();
 
-    expect(await tablesOf(stub)).toEqual([...BASE_TABLES, ...MODELS_TABLES].toSorted());
+    expect(await tablesOf(stub)).toEqual([...ORG_WIDE_TABLES, ...MODELS_TABLES].toSorted());
   });
 
   it("reads back what the object stored, unchanged, after a restart", async () => {
@@ -175,7 +144,7 @@ describe("the ControlPlane's Models part", () => {
       plane.models().wipe();
     });
 
-    expect(await tablesOf(stub)).toEqual(BASE_TABLES);
+    expect(await tablesOf(stub)).toEqual(ORG_WIDE_TABLES);
   });
 });
 

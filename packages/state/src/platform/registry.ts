@@ -3,7 +3,7 @@
  * into a `Platform` stub, as `controlPlaneOf` is for an org's ControlPlane.
  */
 import { Data, Effect } from "effect";
-import { type StateBindings, StateEnv } from "../state/env.ts";
+import { type StateBindings, StateEnv } from "../env.ts";
 import type { Platform } from "./platform.ts";
 
 export type PlatformStub = DurableObjectStub<Platform>;

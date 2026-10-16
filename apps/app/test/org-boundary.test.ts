@@ -8,8 +8,7 @@ import type { SettingsView } from "@commissary/contract/settings";
 import { ConfigReader, ConfigSource } from "../src/config/reader.ts";
 import { makeControlPlanePicker } from "../src/executor/control-plane-picker.ts";
 import { CurrentOrg, GLOBAL_ORG, OrgId } from "@commissary/core";
-import { controlPlaneOf, orgOfControlPlane } from "../src/platform/org.ts";
-import { resolveBackend } from "../src/session-state/client.ts";
+import { controlPlaneOf, resolveBackend } from "@commissary/state";
 import { loadVideoBinding, saveVideoBinding } from "../src/handlers/openai/video-binding.ts";
 import { insertUsageRecord } from "../src/usage/d1.ts";
 import { authIndexOf } from "./support/auth-index.ts";
@@ -358,14 +357,6 @@ describe("fail closed", () => {
     );
 
     expect(exit._tag).toBe("Failure");
-  });
-
-  it("a ControlPlane not named by an org id has no org (its constructor throws)", () => {
-    expect(() => orgOfControlPlane(env.CONTROL_PLANE.newUniqueId())).toThrow(
-      /not named by an org id/,
-    );
-    expect(() => orgOfControlPlane(env.CONTROL_PLANE.idFromName("Not_An_Org"))).toThrow();
-    expect(orgOfControlPlane(env.CONTROL_PLANE.idFromName("acme"))).toBe("acme");
   });
 
   it("another org's config read fails while global's config cannot be read", async () => {

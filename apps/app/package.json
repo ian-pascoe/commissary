@@ -15,6 +15,7 @@
     "@commissary/contract": "workspace:*",
     "@commissary/core": "workspace:*",
     "@commissary/json": "workspace:*",
+    "@commissary/state": "workspace:*",
     "@commissary/translation": "workspace:*",
     "better-auth": "1.7.7",
     "effect": "catalog:",

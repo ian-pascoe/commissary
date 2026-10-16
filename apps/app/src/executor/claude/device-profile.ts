@@ -8,7 +8,8 @@
  * package/runtime versions) which is then reused for that credential, so the upstream sees one stable identity;
  * unconfirmed clients always get the configured baseline. Go keeps the profiles in a per-process map (7 d TTL); here
  * they live in the `SessionState` Durable Object (one instance per credential scope, sliding 7 d TTL, compare-and-swap
- * upgrades) with the per-isolate fallback of `session-state/client.ts`. The Home KV mode is not ported.
+ * upgrades) with the per-isolate fallback of `@commissary/state`'s `session-state/client.ts`. The Home KV mode is not
+ * ported.
  */
 import { createHash } from "node:crypto";
 import { Effect } from "effect";
@@ -22,9 +23,9 @@ import {
   makeMemoryBackend,
   putValue,
   resolveBackend,
+  type SessionAddress,
   updateEntry,
-} from "../../session-state/client.ts";
-import type { SessionAddress } from "../../session-state/protocol.ts";
+} from "@commissary/state";
 import type { CredentialSnapshot } from "../picker.ts";
 import { defaultDeviceProfile, type DeviceProfile } from "./headers.ts";
 

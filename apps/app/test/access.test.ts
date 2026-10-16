@@ -21,8 +21,7 @@ import {
 import { classifyPath } from "../src/management/zones.ts";
 import { env } from "cloudflare:workers";
 import { GLOBAL_ORG, type OrgId } from "@commissary/core";
-import { controlPlaneOf } from "../src/platform/org.ts";
-import { platformOf } from "../src/platform/registry.ts";
+import { controlPlaneOf, platformOf } from "@commissary/state";
 import { requestContext } from "../src/worker-env.ts";
 
 const NOW_MS = 1_700_000_000_000;

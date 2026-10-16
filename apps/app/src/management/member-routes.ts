@@ -4,7 +4,7 @@
  * counterpart.
  *
  * The Access gate lets only org admins in (`policy.ts`); the ControlPlane checks each write against the actor's
- * role (`members/store.ts`, `@commissary/auth` `roles.ts`): org admins manage plain members, org owners everyone and every role,
+ * role (`@commissary/state`'s `MemberStore`, `@commissary/auth` `roles.ts`): org admins manage plain members, org owners everyone and every role,
  * and a service token gets a role above member only from a service token that is an org owner, or a platform admin
  * (ADR 0006's rule per org). Changing auto-join is for org owners. After a change of who belongs to the org, the
  * Platform registry's index is brought up to date (`@commissary/auth` `syncOrgIndex`).
@@ -20,15 +20,16 @@ import {
   roleAtLeast,
   syncOrgIndex,
 } from "@commissary/auth";
-import type {
-  MemberErrorCode,
-  MemberRecord,
-  MemberResult,
-  MembershipSettingsWire,
-  ServiceTokenRecord,
-  TeamRecord,
-} from "../members/store.ts";
-import type { StateEnv } from "../state/env.ts";
+import {
+  controlPlane,
+  type MemberErrorCode,
+  type MemberRecord,
+  type MemberResult,
+  type MembershipSettingsWire,
+  type ServiceTokenRecord,
+  type StateEnv,
+  type TeamRecord,
+} from "@commissary/state";
 import {
   GLOBAL_ORG,
   type OrgId,
@@ -50,7 +51,7 @@ import {
   UpdateMember,
   UpdateServiceToken,
 } from "@commissary/contract/members";
-import { bodyJson, controlPlane } from "./http.ts";
+import { bodyJson } from "./http.ts";
 import { registry } from "./org-routes.ts";
 
 const BASE = "/v9/management";

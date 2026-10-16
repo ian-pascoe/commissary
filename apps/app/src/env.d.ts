@@ -34,9 +34,9 @@ interface __BaseEnv_Env {
    */
   AUTH_INDEX_KEY: string;
   /**
-   * Secrets key of the stage (src/secrets/): wraps every org's data key, which seals the stored secrets. Deployed: an
-   * Alchemy `Random` per key generation (alchemy.run.ts); tests and `alchemy dev` use their own. Missing: no
-   * ControlPlane starts.
+   * Secrets key of the stage (`@commissary/state`'s `secrets/`): wraps every org's data key, which seals the stored
+   * secrets. Deployed: an Alchemy `Random` per key generation (alchemy.run.ts); tests and `alchemy dev` use their own.
+   * Missing: no ControlPlane starts.
    */
   SECRETS_KEY: string;
   /** During a rotation, the secrets key `SECRETS_KEY` replaces: data keys still wrapped by it are wrapped again. */
@@ -63,7 +63,7 @@ interface __BaseEnv_Env {
   ORG_RATE_LIMIT?: RateLimit;
   CONTROL_PLANE: DurableObjectNamespace<import("./index").ControlPlane>;
   SESSION_STATE: DurableObjectNamespace<import("./index").SessionState>;
-  /** The Platform registry: one object per deployment (`platformOf`, src/platform/registry.ts). */
+  /** The Platform registry: one object per deployment (`platformOf`, `@commissary/state`). */
   PLATFORM: DurableObjectNamespace<import("./index").Platform>;
 }
 

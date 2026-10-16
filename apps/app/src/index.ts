@@ -2,9 +2,8 @@ import { ControlPlane } from "./control-plane.ts";
 import { makeWebHandler } from "./http/app.ts";
 import { misdirected } from "./http/hosts.ts";
 import { requestContext } from "./worker-env.ts";
-import { Platform } from "./platform/platform.ts";
+import { Platform, SessionState } from "@commissary/state";
 import { dispatchScheduled } from "./scheduled.ts";
-import { SessionState } from "./session-state/durable-object.ts";
 
 // The handler (and its router) is built once per isolate; `env`/`ctx` are provided per request.
 const { handler } = makeWebHandler();

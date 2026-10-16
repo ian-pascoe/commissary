@@ -1,6 +1,6 @@
 /**
  * API keys (ADR 0022; `apps/app/src/management/api-key-routes.ts`, the ControlPlane's `ApiKeyStore` in
- * `apps/app/src/api-keys`): the keys clients send on the client API instead of an Access sign-in. Workers addition, no
+ * `packages/state/src/api-keys`): the keys clients send on the client API instead of an Access sign-in. Workers addition, no
  * Go counterpart. Shared with the browser: imports `effect` only.
  *
  * Every member creates, lists and revokes their own keys; org admins list and revoke every key in the org. A key is

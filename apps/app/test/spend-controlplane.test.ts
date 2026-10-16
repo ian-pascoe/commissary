@@ -4,10 +4,11 @@
 // boundaries of periods are tested with an injected clock in spend-pool.test.ts).
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { FULL_ACCESS, type Viewer } from "../src/credentials/ownership.ts";
+import type { Viewer } from "@commissary/auth";
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { orgAuthIndexer } from "../src/management/auth-index.ts";
 import { OrgId } from "@commissary/core";
-import { controlPlaneOf } from "../src/platform/org.ts";
+import { controlPlaneOf } from "@commissary/state";
 import type { NewSpendLimit, SpendEntry } from "../src/spend/service.ts";
 import { claudeFile } from "./support/management.ts";
 import { USD } from "./support/spend.ts";

@@ -25,10 +25,10 @@
  * and moves the version readers rebuild on, but an import of a Go config document leaves them alone (Go's config has
  * no prices). The table is created when missing, so a ControlPlane that predates it gains it on its next start.
  *
- * Every entry's value is a sealed value (`secrets/cipher.ts`): encrypted with the org's data key before it is written and
- * opened on read, so provider keys, headers and any other secret an entry holds are never stored in plain text. Ids,
- * positions, revisions and writers stay readable. `sealPlaintext` seals what was written before encryption (the legacy
- * document included). Price overrides hold no secret and stay readable.
+ * Every entry's value is a sealed value (`@commissary/state` `secrets/cipher.ts`): encrypted with the org's data key
+ * before it is written and opened on read, so provider keys, headers and any other secret an entry holds are never
+ * stored in plain text. Ids, positions, revisions and writers stay readable. `sealPlaintext` seals what was written
+ * before encryption (the legacy document included). Price overrides hold no secret and stay readable.
  *
  * Deployment settings (`DEPLOYMENT_SETTINGS`) decide something every org shares; only the `global` org stores them.
  * Another org's store refuses a write or an import that sets one (`invalid`), so a setting never looks applied when it
@@ -44,7 +44,7 @@ import {
 } from "../credentials/key-ids.ts";
 import { type Json, type JsonObject, jsonEquals } from "@commissary/json";
 import { GLOBAL_ORG, type OrgId } from "@commissary/core";
-import { isSealed, type Sealer } from "../secrets/cipher.ts";
+import { isSealed, type Sealer } from "@commissary/state";
 import { decodeConfig, decodeRawConfig, encodeConfig, parseConfigYaml } from "./codec.ts";
 import {
   atPath,

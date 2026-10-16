@@ -18,7 +18,13 @@ import { hostedOnly } from "../hosted/only.ts";
 import { endDomainSessions } from "../hosted/session.ts";
 import { lookupTxt } from "../sso/dns.ts";
 import { type IdpInput, type IdpProblem, resolveIdp, testIdp } from "../sso/idp.ts";
-import type { SsoDomain, SsoErrorCode, SsoResult, StoredIdp } from "../sso/store.ts";
+import {
+  controlPlane,
+  type SsoDomain,
+  type SsoErrorCode,
+  type SsoResult,
+  type StoredIdp,
+} from "@commissary/state";
 import {
   AddSsoDomain,
   SsoProviderInput,
@@ -28,7 +34,7 @@ import {
   UpdateSsoDomain,
 } from "@commissary/contract/sso";
 import { handled, jsonReply, type Reply, replyError } from "@commissary/core";
-import { bodyJson, controlPlane } from "./http.ts";
+import { bodyJson } from "./http.ts";
 import { registry } from "./org-routes.ts";
 import { AppEnv } from "../worker-env.ts";
 

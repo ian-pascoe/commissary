@@ -1,10 +1,10 @@
-// The general-purpose lease store (src/state/lease.ts) on a Durable Object's real SQLite storage: one lease per name,
+// The general-purpose lease store (src/lease.ts) on a Durable Object's real SQLite storage: one lease per name,
 // held until given back with its token or abandoned, on the object's own clock; and the leases stored before leases
 // had names (the ControlPlane's quota sweep lease, the Platform's catalog refresh lease) read back unchanged.
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { assert, describe, expect, it } from "vitest";
-import { LEASE_TTL_MS, LeaseStore, mayTake } from "../src/state/lease.ts";
+import { LEASE_TTL_MS, LeaseStore, mayTake } from "../src/index.ts";
 
 /** Runs `body` on the SQLite storage of a fresh ControlPlane (any Durable Object with SQLite storage would do). */
 const onFreshStorage = (body: (sql: SqlStorage) => void): Promise<void> =>

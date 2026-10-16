@@ -12,8 +12,8 @@ import {
   bestEffort,
   isolateMemoryBackend,
   resolveBackend,
-} from "../../session-state/client.ts";
-import type { SessionAddress } from "../../session-state/protocol.ts";
+  type SessionAddress,
+} from "@commissary/state";
 import { ExecutionError } from "../errors.ts";
 import type { Json } from "@commissary/json";
 import type { CredentialSnapshot } from "../picker.ts";

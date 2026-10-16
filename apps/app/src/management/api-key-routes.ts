@@ -11,10 +11,15 @@
 import { Clock, Effect, Schema } from "effect";
 import { HttpRouter, type HttpServerResponse } from "effect/http";
 import { type AccessIdentity, AccessPrincipal, roleAtLeast } from "@commissary/auth";
-import type { ApiKeyErrorCode, ApiKeyListing, ApiKeyResult } from "../api-keys/store.ts";
+import {
+  type ApiKeyErrorCode,
+  type ApiKeyListing,
+  type ApiKeyResult,
+  controlPlane,
+} from "@commissary/state";
 import { CreateApiKey, type ApiKeyView } from "@commissary/contract/api-keys";
 import { handled, jsonReply, type Reply, replyError } from "@commissary/core";
-import { bodyJson, controlPlane } from "./http.ts";
+import { bodyJson } from "./http.ts";
 
 const BASE = "/v9/management";
 

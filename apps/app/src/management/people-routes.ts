@@ -10,7 +10,7 @@ import { AccessPrincipal, forgetStanding } from "@commissary/auth";
 import { ownedOrgLimit } from "../hosted/owned-orgs.ts";
 import { hostedOnly } from "../hosted/only.ts";
 import { endSessions } from "../hosted/session.ts";
-import { MAX_ORG_LIMIT, type PersonRecord } from "../platform/registry-store.ts";
+import { MAX_ORG_LIMIT, type PersonRecord } from "@commissary/state";
 import type { PersonView } from "@commissary/contract/people";
 import { handled, jsonReply, replyError } from "@commissary/core";
 import { bodyObject } from "./http.ts";

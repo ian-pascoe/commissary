@@ -1,6 +1,7 @@
 /**
- * An org's identity provider settings (issue #76): what the org's ControlPlane stores (`apps/app/src/sso/store.ts`,
- * sealed) and what a sign-in builds Better Auth's provider from (`provider.ts`). New in the Workers port.
+ * An org's identity provider settings (issue #76): what the org's ControlPlane stores (`@commissary/state`
+ * `sso/store.ts`, sealed) and what a sign-in builds Better Auth's provider from (`provider.ts`). New in the Workers
+ * port.
  */
 
 /** An OpenID Connect provider: its issuer, Commissary's client there, and the endpoints its discovery document named. */

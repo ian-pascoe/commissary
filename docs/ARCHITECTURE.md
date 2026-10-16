@@ -26,8 +26,8 @@ A pnpm workspace run by Turborepo: Workers and the panel in `apps/`, libraries i
 source-only: they export TypeScript and whatever imports them compiles it). The deploy code stays at the root. Paths
 such as `src/...` and `test/...` in the rest of this document are relative to `apps/app/`; translation's modules are
 cited as `translation/...` (relative to `packages/translation/src/`), core's as `core/...` (relative to
-`packages/core/src/`), auth's as `auth/...` (relative to `packages/auth/src/`) and the JSON path engine as
-`packages/json`.
+`packages/core/src/`), auth's as `auth/...` (relative to `packages/auth/src/`), state's as `state/...` (relative to
+`packages/state/src/`) and the JSON path engine as `packages/json`.
 
 ```
 .                             workspace root and deploy root (Alchemy, no Wrangler config); turbo.json
@@ -37,10 +37,9 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
   apps/app/                   @commissary/app: the one Worker (client API, management API, panel serving)
     src/
       index.ts                Worker entry: fetch, scheduled, DO class exports
-      control-plane.ts        the ControlPlane Durable Object: the org-wide base composed with the Models part
-      state/                  the org-wide ControlPlane base (members, keys, SSO, data key; one alarm), leases
+      control-plane.ts        the ControlPlane Durable Object: @commissary/state's base composed with the Models part
       models/                 the ControlPlane's Models part (config, credentials, grants, Spend, quota, OAuth)
-      platform/               Cloudflare bindings as Effect services (Env, KV, D1, DO stubs)
+      platform/               org deletion (every area's step, then the state's)
       http/                   router, CORS, error formatting per protocol, SSE framing, streaming helpers
       access/                 the Access gate middleware: @commissary/auth's entry points with the Worker's routes
       config/                 config schema (Effect Schema), storage, payload rules
@@ -50,7 +49,6 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
       signature/              the CACHE KV store of the thinking-signature cache
       handlers/               inbound protocol handlers (openai, responses, claude, gemini, interactions, ...)
       management/             /v9/management API, panel serving, OAuth flows; path zones, role table, org addressing
-      state/                  state bindings, the lease store, the AuthDirectory adapter over the Durable Objects
       usage/                  usage records, D1 persistence
       quota/                  server-side quota check: provider usage endpoints, stored per-credential reports
     test/                     vitest suites in workerd (+ fixtures generated from the Go code)
@@ -59,6 +57,9 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
   packages/auth/              @commissary/auth: request-side authentication (principals, Access JWTs, API and
                               management keys, roles, admission, Cloud suspension checks, the gates), state
                               through AuthDirectory
+  packages/state/             @commissary/state: the org-wide state on Durable Objects (the ControlPlane's org-wide
+                              base and its stores, composeControlPlane, Platform registry, leases, SessionState,
+                              the stub helpers, the AuthDirectory adapter), tested in workerd
   packages/contract/          @commissary/contract: the management API's Effect HttpApi schemas and addressing (browser-safe)
   packages/core/              @commissary/core: the foundation without bindings (org model, shared errors, hashing,
                               log-safe helpers, management replies, route services, the execution context)
@@ -83,7 +84,7 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
   serves the client API (the Access zone `protected` of `classifyPath`) and `/healthz`, every other host (the app host
   `APP_DOMAIN`) everything else; a request on the wrong host answers `404 {"error": "Not found: …"}` naming the right
   one. Without `API_DOMAIN` nothing is decided there. `GET /me` reports the API host as `api_url` for the panel.
-- **Orgs** (ADR 0021, `core/org.ts`; the ControlPlane stubs in `src/platform/org.ts`): one deployment serves many orgs, and every request and scheduled job
+- **Orgs** (ADR 0021, `core/org.ts`; the ControlPlane stubs in `state/org.ts`): one deployment serves many orgs, and every request and scheduled job
   belongs to exactly one. The per-request `CurrentOrg` service carries its id (`OrgId`: lowercase letters, digits and
   inner hyphens); `requestContext` provides it next to the env views as `global`, the org of the
   deployment that existed before orgs, and the Access gate replaces it with the org an org-scoped management URL
@@ -99,16 +100,16 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
   serving `global`). The Worker talks to it through JS RPC methods (e.g.
   `pick`, `report`, `getConfig`). The org `global` keeps the object it always had (`getByName("global")`), so upgrading
   moves no data.
-  - **Base and parts** (#134 "How an area's ControlPlane part works", #148): the class `ControlPlane`
-    (`src/control-plane.ts`) is the org-wide base (`src/state/control-plane.ts`: members, teams, service tokens, the
+  - **Base and parts** (#134 "How an area's ControlPlane part works", #148, #149): the class `ControlPlane`
+    (`src/control-plane.ts`) is the org-wide base (`state/control-plane.ts`: members, teams, service tokens, the
     membership index and settings, API keys, management keys, SSO, `SessionState` instances, the org's data key)
-    composed with the Models part (`src/models/control-plane-part.ts`: config, credentials, selection, refresh, grants,
+    composed (`composeControlPlane`, `state/compose.ts`, which gives each part a method of its name) with the Models part (`src/models/control-plane-part.ts`: config, credentials, selection, refresh, grants,
     Spend limits, quota, reset grants, OAuth logins). The part is an `RpcTarget` constructed once per object with the
     base's in-object view (`OrgCore`: org id, member and team lookups, data key, the alarm), creates its own tables and
     is reached through a method, `stub.models().pick(…)`: one pipelined round trip. A getter (`stub.models.pick(…)`) was
     the first plan; vitest-pool-workers answers a getter of a Durable Object stub with a function, so the pipelined call
-    fails there (it works in plain workerd). The base imports nothing from Models code (`.oxlintrc.json` checks the
-    direct imports); it tells the part what changed in the org (`ControlPlanePart`: a member left, a team was deleted,
+    fails there (it works in plain workerd). The base imports nothing from Models code (it lives in `@commissary/state`,
+    which imports nothing from `apps/`); it tells the part what changed in the org (`ControlPlanePart`: a member left, a team was deleted,
     API keys were deleted, …), calls its `wipe()` from `wipeOrg`, seals its plain-text secrets on the first start, and
     owns the object's one alarm: each part reports its next wake-up, the alarm is set to the earliest and calls the parts
     that are due (a part not heard from since the object started is called too). Tables and storage are the same as
@@ -123,7 +124,7 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
   (`orgAuthIndexer`; `global` keeps the deployment key, so existing handles and panel links do not change). Worker-side
   caches of org data (the `ConfigReader` snapshots, the registry snapshots, the per-isolate signature cache and
   Antigravity state) are keyed by org.
-- **`Platform` Durable Object** (the Platform registry, `src/platform/{platform,registry,registry-store}.ts`; one object
+- **`Platform` Durable Object** (the Platform registry, `state/platform/{platform,registry,registry-store}.ts`; one object
   per deployment, `platformOf(env)` = `getByName("platform")`, SQLite storage, tables `CREATE IF NOT EXISTS` on
   construction so a deployment gains it without a migration): what spans orgs. The list of orgs (`orgs`: permanent `id`,
   unique `slug`, `name`, `created_at`; `global` is seeded as slug `default`, name `Default` and left alone afterwards, so
@@ -175,11 +176,11 @@ client -> Cloudflare Access -> Worker
 - TypeScript strict mode, ESM, `effect@4` (HTTP via `effect/http` `HttpRouter.toWebHandler`; per-request Cloudflare
   `env`/`ctx` are provided as services through the handler's per-request `Context`).
 - Each package reads its own view of `env` (#134): `AuthConfig` (`auth/config.ts`: Access, platform admins,
-  dev bypass, hosted mode, rate limiter), `StateEnv` (`src/state/env.ts`: the Durable Object namespaces, typed through
-  their classes), `ModelsEnv` (`src/models/env.ts`: `CACHE`, `USAGE`, `SESSION_STATE`, `AUTH_INDEX_KEY`,
+  dev bypass, hosted mode, rate limiter), `StateEnv` (`state/env.ts`: the Durable Object namespaces, typed through
+  their classes; the classes read `StateObjectEnv`, the bindings plus platform admins, mode and secrets keys), `ModelsEnv` (`src/models/env.ts`: `CACHE`, `USAGE`, `SESSION_STATE`, `AUTH_INDEX_KEY`,
   `META_MINT_URL`, and `CONTROL_PLANE` typed as objects with `models()`, the Models part's methods Models calls); `core` reads none. Code that stays in the
   Worker reads `AppEnv` (`src/worker-env.ts`). `requestContext` provides each from the invocation's `env`, plus auth's
-  ports over it: `AuthDirectory` (`src/state/auth-directory.ts`, the Durable Object stubs) and `SignInSessions`
+  ports over it: `AuthDirectory` (`state/auth-directory.ts`, the Durable Object stubs) and `SignInSessions`
   (`src/hosted/session.ts`, Better Auth); the global
   `Env` appears only in the entry (`index.ts`, `scheduled.ts`), the Durable Object classes and tests.
 - Use Effect at boundaries and for orchestration: services (`Context.Service`) + `Layer`s, `Schema` for config,
@@ -191,7 +192,7 @@ client -> Cloudflare Access -> Worker
   top of each ported module.
 - Payload rules remain the final semantic mutation before the upstream request in every executor path (see AGENTS.md).
 - No wall-clock sleeps in tests; use Effect `TestClock`.
-- Tests: `vitest` + `@effect/vitest`; Worker/Durable Object integration tests with `@cloudflare/vitest-plugin` (successor of `@cloudflare/vitest-pool-workers`).
+- Tests: `vitest` + `@effect/vitest`; Worker/Durable Object integration tests with `@cloudflare/vitest-plugin` (successor of `@cloudflare/vitest-pool-workers`). `@commissary/state` tests its Durable Object classes on real SQLite storage in a test Worker of its own (`packages/state/test/worker.ts`: the base composed with two dummy area parts, the Platform registry and SessionState).
   Translators and the thinking pipeline are verified against golden fixtures produced by `tools/fixturegen`
   from the Go implementation (`go run ./tools/fixturegen`), checked in under `test/fixtures/`.
 - Never log tokens, provider keys or JWTs.
@@ -248,7 +249,7 @@ client -> Cloudflare Access -> Worker
   content hash of each key, so auth indexes do not change), the counter continues after the document's version (every
   cached view rebuilds), the old row is kept, and the entries it writes have `updated_by = "migration"`. Not-applied keys
   are dropped, as on import.
-- **Stored secrets** (`src/secrets/`): every value the ControlPlane stores that can hold a secret is a _sealed value_:
+- **Stored secrets** (`state/secrets/`): every value the ControlPlane stores that can hold a secret is a _sealed value_:
   the JSON of each auth file (`credentials.metadata`) and the value of every config entry (settings, key groups with
   their headers, provider keys, model rules, payload rules; and the legacy `config` document). Ids, positions, revisions,
   writers, `credential_state`, price overrides (`config_price_overrides`, prices only) and the usage tables stay
@@ -375,7 +376,7 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
     a private credential is a candidate only when `credential.owner === memberId` (`servesMember`), so a request of another
     member, of an org admin or of a service token never reaches it. For its owner it competes with the shared credentials
     in the same tiers and strategies.
-  - **Management** (`Viewer` = member id + whether an org admin, handed by every credential route to the ControlPlane;
+  - **Management** (`Viewer` = member id + whether an org admin, `auth/viewer.ts`, handed by every credential route to the ControlPlane;
     `accessTo` answers `full`, `limited` or `none`): the owner reads and changes everything of their private credential.
     An org admin gets `limited`: `GET /credentials` lists it in `others` (`LimitedCredentialEntry`: provider, label, owner,
     `disabled`; no file fields, quota, models or state) and `PATCH /credentials/status` (disable, enable) and `DELETE`
@@ -1771,7 +1772,7 @@ ADR 0027: deleting something deletes it at once, and Commissary keeps no content
   ControlPlane is reached.
 - **`SessionState` registration**: a `SessionState` instance is named by its store, caller scope and session, which hold no
   org id to enumerate. So the instance registers itself with its org's ControlPlane when it first writes
-  (`session-state/instances.ts`, from the org-scoped store name; table `session_instances` with the expiry of the data, at
+  (`state/session-state/instances.ts`, from the org-scoped store name; table `session_instances` with the expiry of the data, at
   most seven days) and org deletion wipes the registered ones. Instances written before this change are not registered: they
   hold replay state only, which expires on its own within seven days.
 - **Export** (`GET /export`, `export-view.ts`): the panel offers it before an org is deleted. It assembles what the org has
@@ -1786,7 +1787,7 @@ ADR 0027: deleting something deletes it at once, and Commissary keeps no content
   person (`hosted/session.ts` `deleteSignInAccount`: Better Auth's user with its sessions and linked accounts, in one D1
   batch; the registry's `people` row goes with `removePerson`, so a later sign-in is a new sign-up).
 
-## SessionState Durable Object (`src/session-state/`)
+## SessionState Durable Object (`state/session-state/`)
 
 Replaces the per-process maps of `internal/cache` (and the Home KV): `SESSION_STATE.getByName(<store>:<sha256(scope, session)[:32]>)`
 is one instance per store, caller scope and session key (session keys are caller-isolated by their store, either by hashing the
@@ -1844,7 +1845,7 @@ two orgs never share an instance.
   instead of global; a miss no longer reserves a tombstone (the generation of the absent entry fences concurrent writers).
 - **Retention and deletion** (ADR 0027): an instance keeps its entries for at most seven days (`session-state` TTLs are
   unchanged). It registers itself with its org's ControlPlane on its first write so that deleting the org can wipe it
-  (`session-state/instances.ts`, `SessionState.wipe`); see "Zero data retention".
+  (`state/session-state/instances.ts`, `SessionState.wipe`); see "Zero data retention".
 
 ## Local token counting (`translation/tokenizer/`, `src/executor/helps/token-count.ts`)
 
@@ -2045,12 +2046,12 @@ org and shows the **chooser** (the orgs of `/me`, and for a platform admin a for
 redirect, so a platform admin of one org can reach the form. Bookmarks and clients of the unscoped management API are
 unaffected.
 
-## Members, roles and teams (`src/members/`, `auth/roles.ts`, `src/management/policy.ts`, `src/management/member-routes.ts`)
+## Members, roles and teams (`state/members/`, `auth/roles.ts`, `src/management/policy.ts`, `src/management/member-routes.ts`)
 
 Workers addition, no Go counterpart (Go has one management key for everything); ADR 0022. The permission matrix and the
 error codes are in `docs/ACCESS.md` "Members, roles and teams".
 
-- **Store** (`members/store.ts` `MemberStore`, in each org's ControlPlane, SQLite, tables `CREATE IF NOT EXISTS`): `members`
+- **Store** (`state/members/store.ts` `MemberStore`, in each org's ControlPlane, SQLite, tables `CREATE IF NOT EXISTS`): `members`
   (permanent `mem-…` id, lowercased unique email, role, who added them), `teams` and `team_members`, `service_tokens` (Client
   ID, name, role) and one `membership` row (auto-join, whether the platform admins were seeded, a change counter and the
   change the registry's index holds) and the org setting `private_credentials` (members may connect private credentials: `1`
@@ -2122,7 +2123,7 @@ credentials a subject may use; selection and the model registry read it (_Creden
   selection on the next request. Model lists lag by the registry's 5 s snapshot TTL. Grants never apply to private
   credentials, and Spend limits are separate (ADR 0024, _Spend limits_).
 
-## API keys (`src/api-keys/`, `auth/api-key.ts`, `src/management/api-key-routes.ts`)
+## API keys (`state/api-keys/`, `auth/api-key.ts`, `src/management/api-key-routes.ts`)
 
 Workers addition replacing the Go server's client keys (`access.api-keys`, imported but never enforced); ADR 0022. User docs:
 `docs/ACCESS.md` "API keys", `docs/CLIENTS.md`.
@@ -2262,7 +2263,7 @@ prices each attempt, the ControlPlane counts and decides.
   keeps the router middleware. Auth reads `AuthConfig` (raw variables, parsed per request) and reaches state only through
   `AuthDirectory`, a narrow Effect service of the ControlPlane and Platform calls it makes (`auth/directory.ts`, which
   also holds the types crossing it, such as `ApiKeyVerdict`, `Admission` and `Standing`, that the stores import); the
-  Worker's adapter over the Durable Object stubs is `src/state/auth-directory.ts`, an in-memory one is
+  adapter over the Durable Object stubs is `state/auth-directory.ts`, an in-memory one is
   `@commissary/auth/testing`. Better Auth's session lookup stays in the Worker behind auth's `SignInSessions` port. Auth
   imports `@commissary/core`, `@commissary/contract`, `effect` and `jose` only, and tests in Node.js.
 - Clients of the client API send API keys ("API keys" above). Scripts on the management API use Access service
@@ -2271,14 +2272,14 @@ prices each attempt, the ControlPlane counts and decides.
   code is involved). User docs: `README.md` and `ACCESS.md`, `CLIENTS.md`, `MIGRATION.md`,
   `DEVELOPMENT.md` in this directory.
 
-## Management keys (`src/management-keys/`, `auth/management-key.ts`, `src/management/management-key-routes.ts`)
+## Management keys (`state/management-keys/`, `auth/management-key.ts`, `src/management/management-key-routes.ts`)
 
 Workers addition, no Go counterpart (Go's single `remote-management.secret-key` is not ported); ADR 0026. User docs:
 `docs/ACCESS.md` "Management keys".
 
 - **Format** (`auth/keys.ts`): `cmsm_<org id>_<key id>_<secret>`, minted and parsed by the API keys' code
   (`mintOrgKey`/`parseOrgKey`) with its own prefix, so neither kind is ever taken for the other.
-- **Store** (`management-keys/store.ts`): table `management_keys` in each org's ControlPlane (`CREATE IF NOT EXISTS`):
+- **Store** (`state/management-keys/store.ts`): table `management_keys` in each org's ControlPlane (`CREATE IF NOT EXISTS`):
   name, role, issuer, hash, prefix, created and last used (no expiry; revoking deletes the row); at most 100 rows per org
   (`409 too_many_keys`).
 - **Gate**: `Authorization: Bearer cmsm_…` on the management zone of either mode, before the session or Access JWT. The
@@ -2318,7 +2319,7 @@ Access one, unchanged. User docs: `docs/ACCESS.md` "Commissary Cloud", `docs/DEP
   where a suspension is made; suspending also deletes the person's (or the org members') sessions.
 - **Per-org single sign-on** (`src/sso/`, `@commissary/auth/sso`, `sso-adapter.ts`, `management/sso-routes.ts`; issue #76): each org's one
   identity provider (OIDC or SAML, sealed with the org's data key) and its email domains live in its ControlPlane
-  (`sso/store.ts`); the Platform registry keeps the index of verified domains (`sso_domains`, one org per domain, with
+  (`state/sso/store.ts`); the Platform registry keeps the index of verified domains (`sso_domains`, one org per domain, with
   `require_sso`) that a sign-in looks up. A domain is proved by a DNS TXT record read over DNS over HTTPS (`sso/dns.ts`).
   Better Auth's SSO plugin runs the OIDC (PKCE) and SAML flows, but its `ssoProvider` model is never in D1: the adapter
   wrapper answers it from the org's ControlPlane by provider id (`sso-<org id>`, `auth/sso/provider.ts`), so no migration is

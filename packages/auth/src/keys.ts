@@ -6,7 +6,7 @@
  * without a global lookup, and its id, so the ControlPlane finds the stored entry without searching by hash. The
  * secret is 36 random bytes (288 bits, base64url). Only the SHA-256 of the whole key is stored; a key is shown once,
  * when it is created. The prefix tells the two kinds apart, so neither is ever taken for the other. Pure functions
- * only: the gates (`api-key.ts`, `management-key.ts`) and the ControlPlane's stores (the Worker's
+ * only: the gates (`api-key.ts`, `management-key.ts`) and the ControlPlane's stores (`@commissary/state`'s
  * `api-keys/store.ts`, `management-keys/store.ts`) share them.
  */
 import { Schema } from "effect";

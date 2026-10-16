@@ -21,12 +21,11 @@ import {
   type OrgId,
 } from "@commissary/core";
 import { currentModelsControlPlane, type ModelsEnv } from "./models/env.ts";
-import { platform } from "./platform/registry.ts";
+import { currentControlPlane, platform, type StateEnv } from "@commissary/state";
 import { runQuotaSweep } from "./quota/check.ts";
 import { CatalogStore } from "./registry/catalog-store.ts";
 import { refreshXaiClientVersion } from "./executor/xai/version.ts";
 import { refreshCatalogs } from "./registry/refresh.ts";
-import { currentControlPlane, type StateEnv } from "./state/env.ts";
 import { pruneExpiredUsage } from "./usage/retention.ts";
 import { envContext } from "./worker-env.ts";
 
@@ -97,7 +96,7 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
   },
   // Quota check (Workers addition, src/quota): provider usage windows of every enabled account that has a usage
   // endpoint (auth files, and the listed provider keys: OpenCode Go), stored as the credential's `quota_report`.
-  // Skipped while the panel's "Check all quotas" holds the sweep lease (`quota_sweep`, src/state/lease.ts).
+  // Skipped while the panel's "Check all quotas" holds the sweep lease (`quota_sweep`, `@commissary/state` `lease.ts`).
   { name: "quota-check", scope: "org", run: runQuotaSweep },
 ];
 

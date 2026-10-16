@@ -8,7 +8,7 @@
  * `USAGE_RETENTION_DAYS` variable it replaces is gone: the period belongs to the org.
  */
 import { Clock, Effect } from "effect";
-import { platform } from "../platform/registry.ts";
+import { platform } from "@commissary/state";
 import { pruneUsageRecords } from "./d1.ts";
 import { ModelsEnv } from "../models/env.ts";
 

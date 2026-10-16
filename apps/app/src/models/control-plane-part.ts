@@ -28,7 +28,6 @@ import {
   FULL_ACCESS,
   isFullAccess,
   type Scope,
-  type Viewer,
 } from "../credentials/ownership.ts";
 import {
   RefreshManager,
@@ -103,6 +102,7 @@ import {
   mergeQuotaReport,
   type QuotaOutcome,
 } from "../quota/report.ts";
+import type { Viewer } from "@commissary/auth";
 import type { OrgId } from "@commissary/core";
 import { QuotaReportStore } from "../quota/store.ts";
 import type { SpendSettings } from "../spend/model.ts";
@@ -114,7 +114,14 @@ import {
   type SpendServiceResult,
 } from "../spend/service.ts";
 import { type SpendResult, SpendStore } from "../spend/store.ts";
-import { type LeaseSource, LeaseStore, type TakeLease } from "../state/lease.ts";
+import {
+  type ControlPlanePart,
+  type LeaseSource,
+  LeaseStore,
+  type OrgCore,
+  type SecretCipher,
+  type TakeLease,
+} from "@commissary/state";
 import {
   type PutStatusResult,
   type ResetGrantMark,
@@ -131,8 +138,6 @@ import {
   settleClaim,
 } from "../quota/reset-grants.ts";
 import { buildQuotaTarget, type QuotaTargetResult } from "../quota/target.ts";
-import type { SecretCipher } from "../secrets/cipher.ts";
-import type { ControlPlanePart, OrgCore } from "../state/control-plane.ts";
 
 const decodePickRequest = Schema.decodeUnknownSync(PickRequest);
 
@@ -170,7 +175,7 @@ const GRANT_SWEEP_TTL_MS = 6 * 60 * 60_000;
 /** How long the cron sweep trusts a stored "not eligible" status (new grants can make the account eligible). */
 const GRANT_INELIGIBLE_TTL_MS = 24 * 60 * 60_000;
 
-/** The lease (src/state/lease.ts) that keeps one check of every quota at a time: table `quota_sweep_lease`. */
+/** The lease (`@commissary/state` `lease.ts`) that keeps one check of every quota at a time: `quota_sweep_lease`. */
 const QUOTA_SWEEP_LEASE = "quota_sweep";
 
 const decodeLease = Schema.decodeUnknownSync(Lease);
@@ -450,7 +455,7 @@ export class ModelsPart extends RpcTarget implements ControlPlanePart {
     });
   }
 
-  // --- the org-wide base's calls (`ControlPlanePart`, src/state/control-plane.ts) -------------------------------------
+  // --- the org-wide base's calls (`ControlPlanePart`, `@commissary/state`) ------------------------------------
 
   /** Seals the auth files and config entries stored in plain text before encryption (the object's first start). */
   sealPlaintext(cipher: SecretCipher): number {
@@ -1780,8 +1785,8 @@ export class ModelsPart extends RpcTarget implements ControlPlanePart {
   }
 
   /**
-   * Takes the lease of a check of every quota (`quota_sweep`, src/state/lease.ts) at this object's own time; refused
-   * while a live sweep holds it.
+   * Takes the lease of a check of every quota (`quota_sweep`, `@commissary/state` `lease.ts`) at this object's own
+   * time; refused while a live sweep holds it.
    */
   takeQuotaSweepLease(source: LeaseSource): TakeLease {
     return this.#leases.take(QUOTA_SWEEP_LEASE, source);

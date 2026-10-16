@@ -6,8 +6,8 @@
 import { type AuthDirectoryService, DirectoryUnavailable } from "@commissary/auth";
 import type { OrgId } from "@commissary/core";
 import { Effect } from "effect";
-import { controlPlaneOf } from "../platform/org.ts";
-import { platformOf } from "../platform/registry.ts";
+import { controlPlaneOf } from "./org.ts";
+import { platformOf } from "./platform/registry.ts";
 import type { StateBindings } from "./env.ts";
 
 /** Runs one RPC; RPC results are plain data after `await`. */

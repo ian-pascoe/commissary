@@ -9,7 +9,8 @@ import { GLOBAL_ORG, OrgId } from "@commissary/core";
 import { SqliteSessionTable } from "../src/oauth/session-store.ts";
 import { controlPlane, makeHarness } from "./support/management.ts";
 import { withModelsPart } from "./support/models-part.ts";
-import { orgDataKey, restart, storedText } from "./support/secrets.ts";
+import { storedText } from "@commissary/state/testing";
+import { orgDataKey, restart } from "./support/secrets.ts";
 
 const harness = makeHarness();
 

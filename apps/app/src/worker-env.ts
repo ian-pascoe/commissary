@@ -11,8 +11,7 @@ import type { SignInBindings } from "./hosted/auth.ts";
 import { signInSessions } from "./hosted/session.ts";
 import { type ModelsBindings, ModelsEnv } from "./models/env.ts";
 import { WorkerExecutionContext, CurrentOrg, GLOBAL_ORG } from "@commissary/core";
-import { stateAuthDirectory } from "./state/auth-directory.ts";
-import { type StateBindings, StateEnv } from "./state/env.ts";
+import { stateAuthDirectory, type StateBindings, StateEnv } from "@commissary/state";
 
 /**
  * What the Worker's own code reads (the panel's assets, its hosts, Better Auth's sign-in, the owned-org limit): code
@@ -52,7 +51,7 @@ export type EnvServices =
 
 /**
  * Each view of `env`, as its service, and auth's ports over it: the directory over the Durable Object stubs
- * (`state/auth-directory.ts`) and Better Auth's sessions (`hosted/session.ts`).
+ * (`@commissary/state`'s `stateAuthDirectory`) and Better Auth's sessions (`hosted/session.ts`).
  */
 export const envContext = (env: WorkerBindings): Context.Context<EnvServices> => {
   const directory = stateAuthDirectory(env);

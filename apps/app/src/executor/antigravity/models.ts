@@ -19,7 +19,7 @@ import {
   tryParseJson,
 } from "@commissary/json";
 import { CurrentOrg, type OrgId, orgScopedName } from "@commissary/core";
-import { controlPlaneOf } from "../../platform/org.ts";
+import { controlPlaneOf } from "@commissary/state";
 import {
   type AntigravityModelHints,
   normalizeFetchedModelId,

@@ -15,8 +15,8 @@ import {
   fixedBackend,
   makeMemoryBackend,
   resolveBackend,
-} from "../../../session-state/client.ts";
-import type { SessionAddress } from "../../../session-state/protocol.ts";
+  type SessionAddress,
+} from "@commissary/state";
 
 export const REPLAY_TTL_MS = 60 * 60 * 1000;
 

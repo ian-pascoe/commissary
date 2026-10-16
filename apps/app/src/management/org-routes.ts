@@ -1,7 +1,7 @@
 /**
  * `GET /v9/management/me` and `GET|POST /v9/management/orgs`, `PATCH /v9/management/orgs/:slug` (`OrgsGroup` in
- * @commissary/contract/orgs): who the caller is, and the org list of the Platform registry (`src/platform`) with its
- * creation and rename. Workers addition, no Go counterpart.
+ * @commissary/contract/orgs): who the caller is, and the org list of the Platform registry (`@commissary/state`) with
+ * its creation and rename. Workers addition, no Go counterpart.
  *
  * The org list, creation and rename are platform-level: they belong to no org, and only a platform admin
  * (`PLATFORM_ADMIN_*`, `AccessIdentity.platformAdmin`) may use them (`403 platform_admin_required`). `GET /me` is for
@@ -29,18 +29,23 @@ import { deleteSignInAccount, endSessions } from "../hosted/session.ts";
 import { apiOrigin } from "../http/hosts.ts";
 import { ModelsEnv, modelsControlPlane } from "../models/env.ts";
 import { GLOBAL_ORG, newOrgId, handled, jsonReply, replyError, type Reply } from "@commissary/core";
-import { controlPlaneOf } from "../platform/org.ts";
+import {
+  controlPlane,
+  controlPlaneOf,
+  type OrgRecord,
+  type OrgWriteResult,
+  platform,
+  type PlatformStub,
+  StateEnv,
+} from "@commissary/state";
 import { deleteOrg as deleteOrgData } from "../platform/org-deletion.ts";
-import { platform, type PlatformStub } from "../platform/registry.ts";
-import type { OrgRecord, OrgWriteResult } from "../platform/registry-store.ts";
 import type { OrgView } from "@commissary/contract/orgs";
 import type { GrantSubject } from "../grants/grant.ts";
-import { StateEnv } from "../state/env.ts";
 import { AppEnv } from "../worker-env.ts";
 import { maskConfigSecrets } from "./export-view.ts";
-import { bodyObject, controlPlane } from "./http.ts";
+import { bodyObject } from "./http.ts";
 import { storedConfig } from "./settings-routes.ts";
-import { currentViewer } from "./viewer.ts";
+import { currentViewer } from "@commissary/auth";
 
 const BASE = "/v9/management";
 

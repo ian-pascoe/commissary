@@ -1,11 +1,11 @@
-// Stored secrets (src/secrets/): the raw rows of a ControlPlane, and the states it can start from (before encryption,
-// a data key wrapped by another secrets key), reached through its storage and a restart (`evictDurableObject`).
+// Stored secrets (`@commissary/state`'s `secrets/`): the raw rows of a ControlPlane, and the states it can start from
+// (before encryption, a data key wrapped by another secrets key), reached through its storage and a restart
+// (`evictDurableObject`).
 import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import type { ControlPlane } from "../../src/index.ts";
 import type { OrgId } from "@commissary/core";
-import { openDataKey } from "../../src/secrets/data-key.ts";
-import { deploymentSecretsKeys, type SecretsKeys } from "../../src/secrets/deployment-keys.ts";
+import { deploymentSecretsKeys, openDataKey, type SecretsKeys } from "@commissary/state";
 
 type Stub = DurableObjectStub<ControlPlane>;
 
@@ -44,26 +44,6 @@ export const orgDataKey = (state: DurableObjectState, org: OrgId) =>
 export const restart = async (stub: Stub): Promise<void> => {
   await evictDurableObject(stub);
 };
-
-/** Every row of every table of the ControlPlane, as JSON text (what browsing its storage shows). */
-export const storedText = (stub: Stub): Promise<string> =>
-  runInDurableObject(stub, (_instance, state) => {
-    const tables = state.storage.sql
-      .exec<{ name: string }>(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'",
-      )
-      .toArray()
-      .map(({ name }) => name);
-
-    return JSON.stringify(
-      Object.fromEntries(
-        tables.map((table) => [
-          table,
-          state.storage.sql.exec(`SELECT * FROM "${table}"`).toArray(),
-        ]),
-      ),
-    );
-  });
 
 /** The stored (wrapped) data key of the ControlPlane. */
 export const wrappedDataKey = (stub: Stub): Promise<string | undefined> =>

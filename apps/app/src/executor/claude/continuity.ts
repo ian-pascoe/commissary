@@ -19,9 +19,9 @@ import {
   makeMemoryBackend,
   putValue,
   resolveBackend,
+  type SessionAddress,
   updateEntry,
-} from "../../session-state/client.ts";
-import type { SessionAddress } from "../../session-state/protocol.ts";
+} from "@commissary/state";
 
 const TTL_MS = 60 * 60 * 1000;
 

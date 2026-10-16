@@ -4,14 +4,10 @@
  * A credential belongs to the org (a shared credential: `owner` unset) or to one member (a private credential:
  * `owner` is that member's id). Selection offers a private credential only to requests of its owner; management
  * gives the owner full control, lets an org admin see that it exists (provider, owner, label) and disable or remove
- * it, and shows nobody else anything. A shared credential is for org admins only, as before.
+ * it, and shows nobody else anything. A shared credential is for org admins only, as before. Who asks is
+ * `@commissary/auth`'s {@link Viewer}.
  */
-
-/** Who asks: the member of the request (none for a service token) and whether they are an org admin. */
-export interface Viewer {
-  readonly member?: string | undefined;
-  readonly admin: boolean;
-}
+import type { Viewer } from "@commissary/auth";
 
 /**
  * The ControlPlane itself (a cron sweep, an internal caller, a migration): it reaches every credential. Every method that

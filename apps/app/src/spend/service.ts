@@ -11,7 +11,7 @@
  * Plain data in and out, so the ControlPlane can hand it across Durable Object RPC. The ControlPlane supplies the
  * {@link SpendDirectory} (members, teams, keys, shared credentials) and the clock.
  */
-import type { Viewer } from "../credentials/ownership.ts";
+import type { Viewer } from "@commissary/auth";
 import { SpendLedger } from "./ledger.ts";
 import {
   type LimitSource,
