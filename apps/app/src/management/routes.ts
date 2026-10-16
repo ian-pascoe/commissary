@@ -22,7 +22,7 @@ import { LEGACY_PANEL_PATH } from "./zones.ts";
 import {
   ManagementRoutes as ModelsManagementRoutes,
   ManagementServicesLive as ModelsManagementServicesLive,
-} from "../models/management/routes.ts";
+} from "../models/management.ts";
 import { memberRoutes } from "./member-routes.ts";
 import { orgRoutes } from "./org-routes.ts";
 import { peopleRoutes } from "./people-routes.ts";

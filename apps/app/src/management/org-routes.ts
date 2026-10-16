@@ -27,7 +27,6 @@ import { ownedOrgLimit } from "../hosted/owned-orgs.ts";
 import type { JsonObject } from "@commissary/json";
 import { deleteSignInAccount, endSessions } from "../hosted/session.ts";
 import { apiOrigin } from "../http/hosts.ts";
-import { orgDeletionStep as modelsOrgDeletionStep } from "../models/org-deletion.ts";
 import { GLOBAL_ORG, newOrgId, handled, jsonReply, replyError, type Reply } from "@commissary/core";
 import {
   controlPlane,
@@ -42,7 +41,10 @@ import {
 import { deleteOrg as deleteOrgData } from "../platform/org-deletion.ts";
 import type { OrgView } from "@commissary/contract/orgs";
 import { AppEnv } from "../worker-env.ts";
-import { exportSection as modelsExportSection } from "../models/management/export-view.ts";
+import {
+  exportSection as modelsExportSection,
+  orgDeletionStep as modelsOrgDeletionStep,
+} from "../models/management.ts";
 
 const BASE = "/v9/management";
 

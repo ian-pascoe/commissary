@@ -20,11 +20,12 @@ import {
   type ScheduledTask,
 } from "@commissary/core";
 import { currentControlPlane, platform, type StateBindings, StateEnv } from "@commissary/state";
-import { type ModelsBindings, ModelsEnv } from "../models/env.ts";
 import {
+  type ModelsBindings,
+  ModelsEnv,
   scheduledTasks as modelsTasks,
   ScheduledTaskLayer as ModelsTaskLayer,
-} from "../models/scheduled-tasks.ts";
+} from "../models/api.ts";
 
 /** The bindings the runner and the areas it mounts read: the state's and each area's view of `env`. */
 export type ScheduledBindings = StateBindings & ModelsBindings;

@@ -2,13 +2,11 @@ import { Layer } from "effect";
 import { HttpRouter } from "effect/http";
 import { AccessLayer, withAccess } from "../access/layer.ts";
 import { orgAddressing } from "../management/org-address.ts";
-import { ClientApiLayer } from "../models/handlers/layer.ts";
 import { HostedRoutes } from "../hosted/routes.ts";
 import { ManagementRoutesLive } from "../management/routes.ts";
 import { WorkersLoggerLayer } from "@commissary/core";
-import { TraceLayer } from "../models/observability/trace.ts";
-import { OAuthCallbackRoutes } from "../models/oauth/public-routes.ts";
-import { ModelRoutesLive } from "../models/registry/live.ts";
+import { ClientApiLayer, TraceLayer } from "../models/api.ts";
+import { OAuthCallbackRoutes } from "../models/management.ts";
 import { RootRoutes } from "./routes.ts";
 
 /**
@@ -23,7 +21,6 @@ export const AppLayer = Layer.mergeAll(
   HostedRoutes,
   AccessLayer,
   withAccess(ClientApiLayer),
-  withAccess(ModelRoutesLive),
   withAccess(ManagementRoutesLive),
   // Request trace id header and structured request logs (src/models/observability).
   TraceLayer,

@@ -4,7 +4,7 @@
  * #148). Today that is the Models part only, reached as `stub.models().x(…)`.
  */
 import { composeControlPlane } from "@commissary/state";
-import { ModelsPart, type ModelsPartEnv } from "./models/control-plane-part.ts";
+import { ModelsPart, type ModelsPartEnv } from "./models/state.ts";
 
 export class ControlPlane extends composeControlPlane({
   models: (ctx, env: ModelsPartEnv, core) => new ModelsPart(ctx, env, core),
