@@ -9,7 +9,7 @@
 import { Clock, Effect, Option } from "effect";
 import { get, tryParseJson } from "../../json/index.ts";
 import { HttpClient, HttpClientRequest } from "effect/http";
-import { WorkerEnv } from "../../platform/env.ts";
+import { ModelsEnv } from "../../models/env.ts";
 
 /** Stable Grok CLI version used when npm resolution fails (`DefaultXAIFallbackClientVersion`). */
 export const XAI_FALLBACK_CLIENT_VERSION = "1.0.46";
@@ -57,7 +57,7 @@ export const currentXaiClientVersion: Effect.Effect<string> = Effect.gen(functio
   const now = yield* Clock.currentTimeMillis;
 
   if (cached !== undefined && now - cached.loadedAt < LOCAL_CACHE_MS) return cached.version;
-  const env = yield* Effect.serviceOption(WorkerEnv);
+  const env = yield* Effect.serviceOption(ModelsEnv);
   let version = XAI_FALLBACK_CLIENT_VERSION;
 
   if (Option.isSome(env)) {
@@ -79,10 +79,10 @@ export const currentXaiClientVersion: Effect.Effect<string> = Effect.gen(functio
  */
 export const refreshXaiClientVersion = (
   registryUrl: string = XAI_NPM_REGISTRY_URL,
-): Effect.Effect<string | undefined, never, HttpClient.HttpClient | WorkerEnv> =>
+): Effect.Effect<string | undefined, never, HttpClient.HttpClient | ModelsEnv> =>
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient;
-    const env = yield* WorkerEnv;
+    const env = yield* ModelsEnv;
 
     const request = HttpClientRequest.get(registryUrl).pipe(
       HttpClientRequest.setHeaders({ accept: "application/json", "user-agent": "CLIProxyAPI" }),

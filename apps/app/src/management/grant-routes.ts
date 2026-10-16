@@ -17,7 +17,8 @@ import type { WriteResult } from "../config/store.ts";
 import type { GrantScope, GrantSubject, GrantValue } from "../grants/grant.ts";
 import { isJsonObject, type Json } from "../json/index.ts";
 import { ModelRegistry } from "../registry/service.ts";
-import { bodyJson, controlPlane, handled, ifMatch, jsonReply, replyError } from "./http.ts";
+import { bodyJson, handled, ifMatch, jsonReply, replyError } from "./http.ts";
+import { modelsControlPlane } from "../models/env.ts";
 
 const BASE = "/v9/management/grants";
 
@@ -100,7 +101,7 @@ const written = (result: WriteResult<{ readonly id: string; readonly revision: n
 };
 
 const list = Effect.gen(function* () {
-  const wire = yield* controlPlane("grantEntries", (stub) => stub.grantEntries());
+  const wire = yield* modelsControlPlane("grantEntries", (stub) => stub.grantEntries());
 
   return jsonReply(200, wire);
 });
@@ -109,7 +110,7 @@ const create = Effect.gen(function* () {
   const grant = yield* value;
   const { principalId } = yield* AccessPrincipal;
 
-  const result = yield* controlPlane("writeGrant", (stub) =>
+  const result = yield* modelsControlPlane("writeGrant", (stub) =>
     stub.writeGrant({ revision: 0, value: grant }, principalId),
   );
 
@@ -122,7 +123,7 @@ const replace = Effect.gen(function* () {
   const grant = yield* value;
   const { principalId } = yield* AccessPrincipal;
 
-  const result = yield* controlPlane("writeGrant", (stub) =>
+  const result = yield* modelsControlPlane("writeGrant", (stub) =>
     stub.writeGrant({ id, revision, value: grant }, principalId),
   );
 
@@ -134,7 +135,7 @@ const remove = Effect.gen(function* () {
   const revision = yield* ifMatch;
   const { principalId } = yield* AccessPrincipal;
 
-  const result = yield* controlPlane("writeGrant", (stub) =>
+  const result = yield* modelsControlPlane("writeGrant", (stub) =>
     stub.writeGrant({ id, revision, value: null }, principalId),
   );
 

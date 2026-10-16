@@ -24,7 +24,7 @@ import type {
   ServiceTokenRecord,
   TeamRecord,
 } from "../members/store.ts";
-import type { WorkerEnv } from "../platform/env.ts";
+import type { StateEnv } from "../state/env.ts";
 import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 import {
   AddMember,
@@ -304,7 +304,7 @@ const tokenTaken = () =>
 /** Whether the registry indexes the service token for an org other than the caller's. */
 const takenElsewhere = (
   clientId: string,
-): Effect.Effect<boolean, Reply, WorkerEnv | AccessPrincipal> =>
+): Effect.Effect<boolean, Reply, StateEnv | AccessPrincipal> =>
   Effect.gen(function* () {
     const identity = yield* AccessPrincipal;
 

@@ -6,7 +6,7 @@ import { Duration, Effect, Layer } from "effect";
 import { beforeEach, describe, expect, it } from "vitest";
 import { ConfigReader } from "../src/config/reader.ts";
 import type { PriceOverrideValue } from "../src/config/store.ts";
-import { WorkerEnv, WorkerExecutionContext } from "../src/platform/env.ts";
+import { WorkerExecutionContext } from "../src/platform/env.ts";
 import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 import { CatalogStore } from "../src/registry/catalog-store.ts";
 import {
@@ -23,6 +23,7 @@ import { UsageSink } from "../src/usage/sink.ts";
 import { authIndexOf } from "./support/auth-index.ts";
 import { controlPlane, resetControlPlane, resetOrgControlPlane } from "./support/management.ts";
 import { resetUsageDb, sampleRecord } from "./support/usage.ts";
+import { envContext } from "../src/worker-env.ts";
 
 let db: D1Database;
 
@@ -51,7 +52,7 @@ const publish = async (record: UsageRecord): Promise<void> => {
     yield* (yield* UsageSink).publish(record);
   }).pipe(
     Effect.provide(sink),
-    Effect.provideService(WorkerEnv, env),
+    Effect.provideContext(envContext(env)),
     Effect.provideService(WorkerExecutionContext, ctx),
     Effect.runPromise,
   );
@@ -249,7 +250,7 @@ describe("the cost of a record at write time", () => {
       yield* (yield* UsageSink).publish(sampleRecord({ requestId: "kept" }));
     }).pipe(
       Effect.provide(D1UsageSink.pipe(Layer.provide(failing))),
-      Effect.provideService(WorkerEnv, env),
+      Effect.provideContext(envContext(env)),
       Effect.provideService(WorkerExecutionContext, ctx),
       Effect.runPromise,
     );
@@ -278,7 +279,7 @@ describe("costing for a Spend limit (issue #71)", () => {
   const costOf = async (record: UsageRecord) =>
     await Effect.gen(function* () {
       return yield* (yield* UsageSink).cost(record);
-    }).pipe(Effect.provide(sink), Effect.provideService(WorkerEnv, env), Effect.runPromise);
+    }).pipe(Effect.provide(sink), Effect.provideContext(envContext(env)), Effect.runPromise);
 
   it("prices a record with the prices that are stored, and writes none", async () => {
     expect(await costOf(sampleRecord({ requestId: "spend-a" }))).toEqual({
@@ -308,7 +309,7 @@ describe("costing for a Spend limit (issue #71)", () => {
       return yield* (yield* UsageSink).cost(sampleRecord({ requestId: "spend-d" }));
     }).pipe(
       Effect.provide(D1UsageSink.pipe(Layer.provide(failing))),
-      Effect.provideService(WorkerEnv, env),
+      Effect.provideContext(envContext(env)),
       Effect.runPromise,
     );
 

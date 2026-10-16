@@ -15,7 +15,6 @@ import { HttpRouter, HttpServerRequest, type HttpServerResponse } from "effect/h
 import { AccessPrincipal, type Principal } from "../access/principal.ts";
 import { hostedOnly } from "../hosted/only.ts";
 import { endDomainSessions } from "../hosted/session.ts";
-import { WorkerEnv } from "../platform/env.ts";
 import { roleAtLeast } from "../members/roles.ts";
 import { challengeRecord } from "../sso/domain.ts";
 import { lookupTxt } from "../sso/dns.ts";
@@ -32,6 +31,7 @@ import {
 } from "@commissary/contract/sso";
 import { bodyJson, controlPlane, handled, jsonReply, type Reply, replyError } from "./http.ts";
 import { registry } from "./org-routes.ts";
+import { AppEnv } from "../worker-env.ts";
 
 const BASE = "/v9/management";
 
@@ -291,7 +291,7 @@ const updateDomain = Effect.gen(function* () {
 
   // GitHub and Google sessions of the domain's people would outlive the requirement: end them all.
   if (updated.requireSso) {
-    const env = yield* WorkerEnv;
+    const env = yield* AppEnv;
 
     const ended = yield* Effect.tryPromise(() => endDomainSessions(env, updated.domain)).pipe(
       Effect.catch((error) =>

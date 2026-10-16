@@ -2,7 +2,7 @@
  * Worker-side client of the `SessionState` Durable Object plus the in-process fallback.
  *
  * Stores (the replay modules under `executor/`) talk to a {@link SessionStateBackend}: the Durable Object one in production
- * (resolved per request from `WorkerEnv`, never captured in a layer), a per-isolate in-memory one when the binding is
+ * (resolved per request from `StateEnv`, never captured in a layer), a per-isolate in-memory one when the binding is
  * absent (unit tests, local runs without the binding) and explicit in-memory ones in tests. Both run the same
  * {@link StateEngine}, so the semantics (TTL, compare-and-swap, bounds) are identical. {@link resolveBackend} scopes
  * every address to the request's org (`orgScopedName` on the store name: unchanged for `global`), so two orgs never
@@ -10,11 +10,11 @@
  */
 import { createHash } from "node:crypto";
 import { Clock, Data, Effect, Option, Schema } from "effect";
-import { optionalRequestOrg, WorkerEnv } from "../platform/env.ts";
 import { GLOBAL_ORG, type OrgId, orgScopedName } from "../platform/org.ts";
 import type { SessionState } from "./durable-object.ts";
 import { MemoryStateTable, StateEngine } from "./engine.ts";
 import type { SessionAddress, StateOp, StateResult } from "./protocol.ts";
+import { optionalRequestOrg, StateEnv } from "../state/env.ts";
 
 /** The Durable Object could not be reached or answered unusably. Stores treat it as a cache miss. */
 export class SessionStateError extends Schema.TaggedError<SessionStateError>()(
@@ -104,7 +104,7 @@ export const orgBackend = (backend: SessionStateBackend, org: OrgId): SessionSta
       };
 
 /**
- * The backend of the current request's org: the Durable Object when `WorkerEnv` binds it, else `fallback`. Both
+ * The backend of the current request's org: the Durable Object when `StateEnv` binds it, else `fallback`. Both
  * services are optional so stores also run outside a request (unit tests); a request without its org is a defect
  * (`optionalRequestOrg`).
  */
@@ -112,7 +112,7 @@ export const resolveBackend = (
   fallback: SessionStateBackend = isolateMemoryBackend,
 ): Effect.Effect<SessionStateBackend> =>
   Effect.gen(function* () {
-    const env = yield* Effect.serviceOption(WorkerEnv);
+    const env = yield* Effect.serviceOption(StateEnv);
     const org = yield* optionalRequestOrg;
 
     const backend =

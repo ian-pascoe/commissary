@@ -15,8 +15,8 @@
 import { Clock, Context, Effect, Exit } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { AuthIndexKeyError, orgAuthIndexer } from "../management/auth-index.ts";
-import { WorkerEnv } from "../platform/env.ts";
 import { CurrentOrg } from "../platform/org.ts";
+import { ModelsEnv } from "../models/env.ts";
 
 export const CPA_TRACE_ID_HEADER = "X-CPA-TRACE-ID";
 
@@ -58,7 +58,7 @@ export const newTraceState = (): RequestTraceState => ({
  */
 const loggedAuthIndex = (credentialId: string) =>
   Effect.gen(function* () {
-    const env = yield* WorkerEnv;
+    const env = yield* ModelsEnv;
     const org = yield* CurrentOrg;
 
     try {

@@ -4,15 +4,19 @@
  */
 import { Effect } from "effect";
 import { syncOrgIndex } from "../members/admission.ts";
-import { WorkerEnv } from "../platform/env.ts";
 import { controlPlaneOf, GLOBAL_ORG } from "../platform/org.ts";
 import { platformOf } from "../platform/registry.ts";
 import { emailDomain } from "../sso/domain.ts";
 import { betterAuthProvider, orgOfProviderId } from "../sso/provider.ts";
+import { type StateBindings, StateEnv } from "../state/env.ts";
 import type { SsoAdmission } from "../sso/store.ts";
-import { AUTH_TABLES, hostedAuth, type HostedAuth, type SignInRefusal } from "./auth.ts";
-
-type SessionEnv = Env;
+import {
+  AUTH_TABLES,
+  hostedAuth,
+  type HostedAuth,
+  type SignInBindings,
+  type SignInRefusal,
+} from "./auth.ts";
 
 /** Why a sign-in through an org's identity provider was refused, as the sign-in page shows it. */
 const SSO_REFUSALS: Readonly<Record<Exclude<SsoAdmission, { ok: true }>["error"], SignInRefusal>> =
@@ -36,7 +40,7 @@ const SSO_REFUSALS: Readonly<Record<Exclude<SsoAdmission, { ok: true }>["error"]
  * The identity provider of the org `providerId` names, as Better Auth's SSO plugin reads it: with the domains the org
  * verified that the Platform registry also gives it (one org per domain), `undefined` without one.
  */
-const ssoProvider = (env: SessionEnv, origin: string) => async (providerId: string) => {
+const ssoProvider = (env: StateBindings, origin: string) => async (providerId: string) => {
   const org = orgOfProviderId(providerId);
 
   if (org === undefined) return undefined;
@@ -62,7 +66,7 @@ const ssoProvider = (env: SessionEnv, origin: string) => async (providerId: stri
  * before their session starts (so the sign-up does not give them a Personal org instead, `standing.ts`).
  */
 const admitThroughSso =
-  (env: SessionEnv) =>
+  (env: StateBindings) =>
   async (providerId: string, email: string): Promise<SignInRefusal | undefined> => {
     const org = orgOfProviderId(providerId);
     const domain = emailDomain(email);
@@ -76,7 +80,7 @@ const admitThroughSso =
     if (!admission.ok) return SSO_REFUSALS[admission.error];
 
     if (admission.joined || admission.indexStale)
-      await Effect.runPromise(syncOrgIndex(org).pipe(Effect.provideService(WorkerEnv, env)));
+      await Effect.runPromise(syncOrgIndex(org).pipe(Effect.provideService(StateEnv, env)));
 
     return undefined;
   };
@@ -85,16 +89,22 @@ const admitThroughSso =
  * The deployment's Better Auth instance: a suspended person cannot start a session; the orgs' identity providers sign
  * people in, and GitHub or Google cannot for a domain that requires single sign-on.
  */
-export const signedInAuth = (env: SessionEnv, origin: string): Promise<HostedAuth> =>
+export const signedInAuth = (
+  env: SignInBindings,
+  state: StateBindings,
+  origin: string,
+): Promise<HostedAuth> =>
   hostedAuth(env, origin, {
     maySignIn: async (email) =>
-      (await platformOf(env).standing(GLOBAL_ORG, email)).person !== "suspended",
-    ssoProvider: ssoProvider(env, origin),
-    admitThroughSso: admitThroughSso(env),
+      (await platformOf(state).standing(GLOBAL_ORG, email)).person !== "suspended",
+    ssoProvider: ssoProvider(state, origin),
+    admitThroughSso: admitThroughSso(state),
     ssoRequired: async (email) => {
       const domain = emailDomain(email);
 
-      return domain !== undefined && (await platformOf(env).ssoDomain(domain))?.requireSso === true;
+      return (
+        domain !== undefined && (await platformOf(state).ssoDomain(domain))?.requireSso === true
+      );
     },
   });
 
@@ -103,7 +113,7 @@ export const signedInAuth = (env: SessionEnv, origin: string): Promise<HostedAut
  * accounts stay: nothing is deleted.
  */
 export const endSessions = (
-  env: Pick<Env, "USAGE">,
+  env: Pick<SignInBindings, "USAGE">,
   emails: ReadonlyArray<string>,
 ): Effect.Effect<number> => {
   const unique = [...new Set(emails.map((email) => email.toLowerCase()))];
@@ -140,7 +150,7 @@ export const endSessions = (
  * sign in again, through the org's identity provider. Answers how many sessions it ended; a D1 failure rejects.
  */
 export const endDomainSessions = async (
-  env: Pick<Env, "USAGE">,
+  env: Pick<SignInBindings, "USAGE">,
   domain: string,
 ): Promise<number> => {
   // A normalized domain (`sso/domain.ts`) holds only letters, digits, `-` and `.`: nothing `LIKE` treats specially.
@@ -160,7 +170,7 @@ export const endDomainSessions = async (
  * (0 once it is gone, so a repeated deletion succeeds); a D1 failure rejects.
  */
 export const deleteSignInAccount = async (
-  env: Pick<Env, "USAGE">,
+  env: Pick<SignInBindings, "USAGE">,
   email: string,
 ): Promise<number> => {
   const address = email.toLowerCase();
@@ -188,7 +198,8 @@ export interface SignedInPerson {
  * and for an email the provider has not verified (Better Auth never creates those, `auth.ts`).
  */
 export const signedInPerson = (
-  env: SessionEnv,
+  env: SignInBindings,
+  state: StateBindings,
   origin: string,
   headers: Readonly<Record<string, string | undefined>>,
 ): Effect.Effect<SignedInPerson | undefined> => {
@@ -197,7 +208,7 @@ export const signedInPerson = (
   if (cookie === "") return Effect.succeed(undefined);
 
   return Effect.tryPromise(async () => {
-    const auth = await signedInAuth(env, origin);
+    const auth = await signedInAuth(env, state, origin);
 
     const session = await auth.api.getSession({
       headers: new Headers({ cookie }),

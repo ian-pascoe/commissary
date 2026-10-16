@@ -16,11 +16,11 @@ import { ModelCapabilities } from "../../src/handlers/model-capabilities.ts";
 import { ModelProviders } from "../../src/handlers/model-providers.ts";
 import { CredentialRefresher } from "../../src/executor/helps/credential-refresh.ts";
 import { RootRoutes } from "../../src/http/routes.ts";
-import { requestContext } from "../../src/platform/env.ts";
 import type { UsageRecord } from "../../src/usage/record.ts";
 import { UsageSink } from "../../src/usage/sink.ts";
 import { AUD, fakeJwksLayer, makeFakeJwks, makeKey, signToken, userClaims } from "./access.ts";
 import type { Json } from "../../src/json/index.ts";
+import { requestContext } from "../../src/worker-env.ts";
 
 export interface UpstreamCall {
   readonly url: string;

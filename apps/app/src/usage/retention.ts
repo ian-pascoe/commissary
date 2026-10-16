@@ -8,9 +8,9 @@
  * `USAGE_RETENTION_DAYS` variable it replaces is gone: the period belongs to the org.
  */
 import { Clock, Effect } from "effect";
-import { WorkerEnv } from "../platform/env.ts";
 import { platform } from "../platform/registry.ts";
 import { pruneUsageRecords } from "./d1.ts";
+import { ModelsEnv } from "../models/env.ts";
 
 const DAY_MS = 86_400_000;
 
@@ -19,7 +19,7 @@ const DAY_MS = 86_400_000;
  * reached nothing is deleted (the failure is the job's), since without it no org's period is known.
  */
 export const pruneExpiredUsage = Effect.gen(function* () {
-  const env = yield* WorkerEnv;
+  const env = yield* ModelsEnv;
   const orgs = yield* platform("listOrgs", (stub) => stub.listOrgs());
   const now = yield* Clock.currentTimeMillis;
   let total = 0;

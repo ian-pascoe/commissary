@@ -16,12 +16,12 @@ import type { RefreshResult } from "../../credentials/refresh/index.ts";
 import { metaNeedsMint } from "../../credentials/refresh/meta.ts";
 import { ANTIGRAVITY_REQUEST_SAFETY_MS } from "../../credentials/refresh/schedule.ts";
 import type { JsonObject } from "../../json/index.ts";
-import { WorkerEnv } from "../../platform/env.ts";
 import { controlPlaneOf, CurrentOrg, type OrgId } from "../../platform/org.ts";
 import { toExecutorSnapshot } from "../control-plane-picker.ts";
 import { ExecutionError, withErrorFields } from "../errors.ts";
 import type { CredentialSnapshot } from "../picker.ts";
 import type { ExecutionContext } from "../types.ts";
+import { type ModelsBindings, ModelsEnv } from "../../models/env.ts";
 
 /** The slice of the ControlPlane RPC surface used here (tests substitute their own). */
 export interface RefreshApi {
@@ -38,19 +38,19 @@ export class CredentialRefresher extends Context.Service<
     readonly refreshNow: (
       credentialId: string,
       rejectedAccessToken?: string,
-    ) => Effect.Effect<RefreshResult, never, WorkerEnv | CurrentOrg>;
+    ) => Effect.Effect<RefreshResult, never, ModelsEnv | CurrentOrg>;
     readonly ensureFresh: (
       credentialId: string,
-    ) => Effect.Effect<RefreshResult, never, WorkerEnv | CurrentOrg>;
+    ) => Effect.Effect<RefreshResult, never, ModelsEnv | CurrentOrg>;
   }
 >()("commissary/executor/CredentialRefresher") {
   /**
    * Calls the ControlPlane through `api(env, org)`; transport failures become structured `refresh_failed` results.
    */
-  static readonly layerFor = (api: (env: Env, org: OrgId) => RefreshApi) => {
+  static readonly layerFor = (api: (env: ModelsBindings, org: OrgId) => RefreshApi) => {
     const call = (run: (api: RefreshApi) => PromiseLike<RefreshResult>) =>
       Effect.gen(function* () {
-        const env = yield* WorkerEnv;
+        const env = yield* ModelsEnv;
         const org = yield* CurrentOrg;
 
         return yield* Effect.tryPromise({

@@ -13,7 +13,7 @@ import { classifyPath, isPanelAssetPath, isPanelPagePath, normalizedPath } from 
 import { authenticateHosted } from "../hosted/gate.ts";
 import { isHosted } from "../hosted/mode.ts";
 import { SIGN_IN_PAGE_PATH } from "@commissary/contract/sign-in";
-import { WorkerEnv } from "../platform/env.ts";
+import { AuthConfig } from "../auth/config.ts";
 
 const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
 
@@ -120,7 +120,7 @@ const signInRedirect = (
  */
 export const AccessGate = HttpRouter.middleware<{ provides: AccessPrincipal }>()(
   Effect.gen(function* () {
-    // Resolved when the layer is built (once per isolate); `WorkerEnv` stays a per-request service.
+    // Resolved when the layer is built (once per isolate); `AuthConfig` stays a per-request service.
     const jwks = yield* AccessJwks;
 
     return (app) =>
@@ -128,7 +128,7 @@ export const AccessGate = HttpRouter.middleware<{ provides: AccessPrincipal }>()
         const request = yield* HttpServerRequest.HttpServerRequest;
         const zone = classifyPath(request.originalUrl);
 
-        const hosted = isHosted(yield* WorkerEnv);
+        const hosted = isHosted(yield* AuthConfig);
 
         // Commissary Cloud's sign-in page loads the panel's bundle before anyone is signed in; the bundle holds no data.
         if (zone === "public" || (hosted && isPanelAssetPath(request.originalUrl))) {

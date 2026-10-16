@@ -9,8 +9,8 @@
  */
 import { createHash } from "node:crypto";
 import { Effect } from "effect";
-import { WorkerEnv } from "../../platform/env.ts";
 import { CurrentOrg, type OrgId, orgScopedName } from "../../platform/org.ts";
+import { ModelsEnv } from "../../models/env.ts";
 
 export interface VideoBinding {
   readonly authId: string;
@@ -34,7 +34,7 @@ export const saveVideoBinding = (videoId: string, binding: VideoBinding, ttlMs: 
     const authId = binding.authId.trim();
 
     if (id === "" || authId === "") return;
-    const env = yield* WorkerEnv;
+    const env = yield* ModelsEnv;
     const org = yield* CurrentOrg;
     yield* Effect.tryPromise(() =>
       env.CACHE.put(keyOf(org, id), JSON.stringify({ authId, model: binding.model.trim() }), {
@@ -54,7 +54,7 @@ export const loadVideoBinding = (videoId: string) =>
     const id = videoId.trim();
 
     if (id === "") return undefined;
-    const env = yield* WorkerEnv;
+    const env = yield* ModelsEnv;
     const org = yield* CurrentOrg;
 
     const stored = yield* Effect.tryPromise(() => env.CACHE.get(keyOf(org, id))).pipe(

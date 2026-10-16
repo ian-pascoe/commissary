@@ -2,7 +2,6 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { TestClock } from "effect/testing";
 import { expect } from "vitest";
-import { WorkerEnv } from "../src/platform/env.ts";
 import { CatalogStore } from "../src/registry/catalog-store.ts";
 import { lookupStaticModelInfo } from "../src/registry/catalog.ts";
 import { ModelRegistry, ModelRegistryError, SNAPSHOT_TTL_MS } from "../src/registry/service.ts";
@@ -13,22 +12,25 @@ import { FakeKv, fakeConfig } from "./support/registry-refresh.ts";
 import { source } from "./support/registry-sources.ts";
 import { fixture as thinkingFixture } from "./support/thinking.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { envContext } from "../src/worker-env.ts";
 
 /** An env whose ControlPlane stub serves `sources()`; counts the RPCs. */
 const fakeControlPlane = (sources: () => ReadonlyArray<ModelSource>, calls: { count: number }) =>
-  Layer.succeed(WorkerEnv, {
-    CACHE: new FakeKv() as unknown as KVNamespace,
-    CONTROL_PLANE: {
-      getByName: () => ({
-        listModelSources: async () => {
-          calls.count += 1;
+  Layer.succeedContext(
+    envContext({
+      CACHE: new FakeKv() as unknown as KVNamespace,
+      CONTROL_PLANE: {
+        getByName: () => ({
+          listModelSources: async () => {
+            calls.count += 1;
 
-          return sources();
-        },
-        grantTable: () => ({ version: 1, grants: [], teams: [] }),
-      }),
-    },
-  } as unknown as Env);
+            return sources();
+          },
+          grantTable: () => ({ version: 1, grants: [], teams: [] }),
+        }),
+      },
+    } as unknown as Env),
+  );
 
 const serviceLayer = (yaml = "") =>
   ModelRegistry.layer.pipe(Layer.provide(Layer.mergeAll(fakeConfig(yaml), CatalogStore.layer)));

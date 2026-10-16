@@ -15,7 +15,6 @@ import { nextSessionTurnIndex, resetSessionTurnIndex } from "../src/executor/dev
 import { makeRequestReplayCache } from "../src/executor/gemini/replay.ts";
 import { makeSessionStateKimiReplayStore } from "../src/executor/kimi/replay.ts";
 import { makeSessionStateXaiReplayStore } from "../src/executor/xai/replay.ts";
-import { WorkerEnv } from "../src/platform/env.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 import {
   addressName,
@@ -26,13 +25,14 @@ import {
 } from "../src/session-state/client.ts";
 import type { SessionAddress } from "../src/session-state/protocol.ts";
 import { grokCiphertext } from "./support/xai.ts";
+import { envContext } from "../src/worker-env.ts";
 
 const workerEnv = env;
 
 /** One Worker invocation: the effect runs with its own request context (the bindings of `env`). */
 const invocation = <A, E>(effect: Effect.Effect<A, E>): Effect.Effect<A, E> =>
   effect.pipe(
-    Effect.provideService(WorkerEnv, workerEnv),
+    Effect.provideContext(envContext(workerEnv)),
     Effect.provideService(CurrentOrg, GLOBAL_ORG),
   );
 

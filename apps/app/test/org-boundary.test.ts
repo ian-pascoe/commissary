@@ -7,7 +7,6 @@ import { ConfigStoreError } from "../src/config/errors.ts";
 import type { SettingsView } from "@commissary/contract/settings";
 import { ConfigReader, ConfigSource } from "../src/config/reader.ts";
 import { makeControlPlanePicker } from "../src/executor/control-plane-picker.ts";
-import { WorkerEnv } from "../src/platform/env.ts";
 import {
   controlPlaneOf,
   CurrentOrg,
@@ -23,6 +22,7 @@ import { insertUsageRecord } from "../src/usage/d1.ts";
 import { authIndexOf } from "./support/auth-index.ts";
 import { claudeFile, makeHarness, resetOrgControlPlane } from "./support/management.ts";
 import { resetUsageDb, sampleRecord } from "./support/usage.ts";
+import { type EnvServices, envContext } from "../src/worker-env.ts";
 
 /** Fresh orgs per test file run: their ControlPlanes start empty. */
 const ACME = OrgId.make(`acme-${crypto.randomUUID().slice(0, 8)}`);
@@ -144,9 +144,9 @@ api-keys:
 
   const inOrg =
     (org: OrgId) =>
-    <A, E>(effect: Effect.Effect<A, E, WorkerEnv | CurrentOrg>) =>
+    <A, E>(effect: Effect.Effect<A, E, EnvServices | CurrentOrg>) =>
       Effect.runPromise(
-        effect.pipe(Effect.provideService(WorkerEnv, env), Effect.provideService(CurrentOrg, org)),
+        effect.pipe(Effect.provideContext(envContext(env)), Effect.provideService(CurrentOrg, org)),
       );
 
   it("a cooldown in one org leaves the same credential of another org usable", async () => {
@@ -320,7 +320,7 @@ describe("the shared model catalog", () => {
         return yield* reader.get;
       }).pipe(
         Effect.provide(ConfigReader.layerControlPlane()),
-        Effect.provideService(WorkerEnv, env),
+        Effect.provideContext(envContext(env)),
         Effect.provideService(CurrentOrg, ACME),
       ),
     );
@@ -333,9 +333,9 @@ describe("the shared model catalog", () => {
 describe("session state and video bindings", () => {
   const inOrg =
     (org: OrgId) =>
-    <A, E>(effect: Effect.Effect<A, E, WorkerEnv | CurrentOrg>) =>
+    <A, E>(effect: Effect.Effect<A, E, EnvServices | CurrentOrg>) =>
       Effect.runPromise(
-        effect.pipe(Effect.provideService(WorkerEnv, env), Effect.provideService(CurrentOrg, org)),
+        effect.pipe(Effect.provideContext(envContext(env)), Effect.provideService(CurrentOrg, org)),
       );
 
   it("one org's session entries and video pins are invisible to another", async () => {
@@ -367,7 +367,7 @@ describe("session state and video bindings", () => {
 describe("fail closed", () => {
   it("a request without its org is a defect, not a read of global's session state", async () => {
     const exit = await Effect.runPromiseExit(
-      resolveBackend().pipe(Effect.provideService(WorkerEnv, env)),
+      resolveBackend().pipe(Effect.provideContext(envContext(env))),
     );
 
     expect(exit._tag).toBe("Failure");
@@ -399,7 +399,7 @@ describe("fail closed", () => {
     const read = await Effect.runPromiseExit(
       ConfigReader.use((reader) => reader.get).pipe(
         Effect.provide(ConfigReader.layer().pipe(Layer.provide(failing))),
-        Effect.provideService(WorkerEnv, env),
+        Effect.provideContext(envContext(env)),
         Effect.provideService(CurrentOrg, ACME),
       ),
     );

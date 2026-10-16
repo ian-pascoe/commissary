@@ -23,9 +23,9 @@ import type { JsonObject } from "../json/index.ts";
 import type { RetryPlan, RetryQuery } from "../credentials/selection/retry.ts";
 import type { Lease, ReportResult, ResolvedSession } from "../credentials/selection/types.ts";
 import type { LcpPrepared } from "../session-routing/canonical.ts";
-import type { WorkerEnv } from "../platform/env.ts";
 import type { CurrentOrg } from "../platform/org.ts";
 import type { ExecutionError } from "./errors.ts";
+import type { ModelsEnv } from "../models/env.ts";
 
 /** Read-only view of one credential (Go `cliproxyauth.Auth`). */
 export interface CredentialSnapshot {
@@ -129,13 +129,13 @@ export class CredentialPicker extends Context.Service<
   {
     readonly pick: (
       request: PickRequest,
-    ) => Effect.Effect<PickResult, ExecutionError, WorkerEnv | CurrentOrg>;
+    ) => Effect.Effect<PickResult, ExecutionError, ModelsEnv | CurrentOrg>;
     readonly report: (
       lease: Lease,
       result: AttemptResult,
-    ) => Effect.Effect<void, never, WorkerEnv | CurrentOrg>;
+    ) => Effect.Effect<void, never, ModelsEnv | CurrentOrg>;
     readonly planRetry: (
       query: RetryQuery,
-    ) => Effect.Effect<RetryPlan, never, WorkerEnv | CurrentOrg>;
+    ) => Effect.Effect<RetryPlan, never, ModelsEnv | CurrentOrg>;
   }
 >()("commissary/executor/CredentialPicker") {}

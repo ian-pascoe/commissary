@@ -5,7 +5,6 @@ import { afterAll, describe, expect, it } from "vitest";
 import { makeAccessLayer, makeWithAccess } from "../src/access/layer.ts";
 import { AccessPrincipal } from "../src/access/principal.ts";
 import { RootRoutes } from "../src/http/routes.ts";
-import { requestContext } from "../src/platform/env.ts";
 import {
   AUD,
   fakeJwksLayer,
@@ -15,6 +14,7 @@ import {
   signToken,
   userClaims,
 } from "./support/access.ts";
+import { requestContext } from "../src/worker-env.ts";
 
 const key = await makeKey("router-kid");
 

@@ -4,11 +4,11 @@ import { Effect, Layer } from "effect";
 import { ExecutionError } from "../src/executor/errors.ts";
 import { ModelCapabilities } from "../src/handlers/model-capabilities.ts";
 import { ModelProviders } from "../src/handlers/model-providers.ts";
-import { WorkerEnv } from "../src/platform/env.ts";
 import { embeddedCatalogs } from "../src/registry/catalog.ts";
 import { buildSnapshot, ModelRegistry, ModelRegistryError } from "../src/registry/service.ts";
 import { configOf, source } from "./support/registry-sources.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { envContext } from "../src/worker-env.ts";
 
 const snapshot = (yaml = "") =>
   buildSnapshot({
@@ -37,7 +37,7 @@ const failingRegistry = Layer.succeed(
   ModelRegistry.of({ snapshot: unavailable, fresh: unavailable }),
 );
 
-const env = Layer.succeed(WorkerEnv, {} as Env);
+const env = Layer.succeedContext(envContext({} as Env));
 
 describe("ModelProviders.registryLayer", () => {
   it.effect("resolves providers and the auto model from the registry snapshot", () =>

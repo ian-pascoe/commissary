@@ -1,7 +1,7 @@
 /**
  * Wiring of the client API routes and their services.
  *
- * Services are built once per isolate (the web handler's layer scope); per-request bindings (`WorkerEnv`) and the
+ * Services are built once per isolate (the web handler's layer scope); per-request bindings (`ModelsEnv`) and the
  * Access principal are provided per request. Tests swap the upstream transport, config source, usage sink or
  * credential picker through {@link makeClientApiRoutes}.
  */

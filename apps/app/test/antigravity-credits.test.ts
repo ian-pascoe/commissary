@@ -14,7 +14,6 @@ import { Thinking } from "../src/executor/thinking.ts";
 import { executeNonStream } from "../src/handlers/execute.ts";
 import { ModelCapabilities } from "../src/handlers/model-capabilities.ts";
 import { ModelProviders } from "../src/handlers/model-providers.ts";
-import { WorkerEnv } from "../src/platform/env.ts";
 import { Formats } from "../src/translator/formats.ts";
 import type { UsageRecord } from "../src/usage/record.ts";
 import { UsageSink } from "../src/usage/sink.ts";
@@ -27,6 +26,7 @@ import {
 } from "./support/pipeline.ts";
 import { makePool, poolPickerLayer } from "./support/pool.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { envContext } from "../src/worker-env.ts";
 
 const identity = {
   principal: { kind: "user", email: "dev@example.com", sub: "sub" },
@@ -117,7 +117,7 @@ const run = async (
     }).pipe(
       Effect.provide(layer),
       Effect.provideService(AccessPrincipal, identity),
-      Effect.provideService(WorkerEnv, {} as Env),
+      Effect.provideContext(envContext({} as Env)),
       Effect.provideService(CurrentOrg, GLOBAL_ORG),
       Effect.result,
     ),

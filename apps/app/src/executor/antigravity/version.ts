@@ -9,7 +9,7 @@
 import { Effect } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { isJsonObject, tryParseJson } from "../../json/index.ts";
-import { WorkerEnv } from "../../platform/env.ts";
+import { ModelsEnv } from "../../models/env.ts";
 
 export const ANTIGRAVITY_FALLBACK_VERSION = "2.9.1";
 
@@ -147,7 +147,7 @@ export const currentAntigravityVersion = (
 
 /** Cron task: fetches the Hub manifest and stores the version; a failure keeps the stored value until it expires. */
 export const refreshAntigravityVersion = Effect.gen(function* () {
-  const env = yield* WorkerEnv;
+  const env = yield* ModelsEnv;
   const client = yield* HttpClient.HttpClient;
   const now = Date.now();
 

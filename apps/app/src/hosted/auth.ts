@@ -37,15 +37,16 @@ export const AUTH_TABLES = {
 /** The refusal Better Auth reports (`?error=`) when a provider has not verified the email. */
 export const EMAIL_NOT_VERIFIED = "email_not_verified";
 
-type AuthEnv = Pick<
-  Env,
-  | "USAGE"
-  | "BETTER_AUTH_SECRET"
-  | "SIGN_IN_GITHUB_CLIENT_ID"
-  | "SIGN_IN_GITHUB_CLIENT_SECRET"
-  | "SIGN_IN_GOOGLE_CLIENT_ID"
-  | "SIGN_IN_GOOGLE_CLIENT_SECRET"
->;
+/** The bindings and variables Better Auth reads. */
+export interface SignInBindings {
+  /** Better Auth's tables ({@link AUTH_TABLES}) live in the usage database. */
+  readonly USAGE: D1Database;
+  readonly BETTER_AUTH_SECRET?: string;
+  readonly SIGN_IN_GITHUB_CLIENT_ID?: string;
+  readonly SIGN_IN_GITHUB_CLIENT_SECRET?: string;
+  readonly SIGN_IN_GOOGLE_CLIENT_ID?: string;
+  readonly SIGN_IN_GOOGLE_CLIENT_SECRET?: string;
+}
 
 const setting = (value: string | undefined): string | undefined => {
   const trimmed = value?.trim() ?? "";
@@ -54,11 +55,11 @@ const setting = (value: string | undefined): string | undefined => {
 };
 
 /** The providers whose OAuth client the deployment configured (both the id and the secret). */
-export const enabledProviders = (env: AuthEnv): ReadonlyArray<SignInProvider> =>
+export const enabledProviders = (env: SignInBindings): ReadonlyArray<SignInProvider> =>
   SIGN_IN_PROVIDERS.filter((provider) => providerClient(env, provider) !== undefined);
 
 const providerClient = (
-  env: AuthEnv,
+  env: SignInBindings,
   provider: SignInProvider,
 ): { readonly clientId: string; readonly clientSecret: string } | undefined => {
   const [id, secret] =
@@ -78,7 +79,7 @@ const providerClient = (
 export const MIN_SECRET_LENGTH = 32;
 
 /** What the deployment is missing for sign-in, `undefined` when nothing is. */
-export const authConfigurationProblem = (env: AuthEnv): string | undefined => {
+export const authConfigurationProblem = (env: SignInBindings): string | undefined => {
   if ((setting(env.BETTER_AUTH_SECRET)?.length ?? 0) < MIN_SECRET_LENGTH)
     return `BETTER_AUTH_SECRET is missing or shorter than ${MIN_SECRET_LENGTH} characters`;
 
@@ -116,7 +117,7 @@ export interface AuthHooks {
 const SSO_METHODS = new Set(["sso-oidc", "sso-saml"]);
 
 /** Better Auth's options for the deployment at `origin` (`https://<host>`). */
-export const authOptions = (env: AuthEnv, origin: string, hooks: AuthHooks = {}) =>
+export const authOptions = (env: SignInBindings, origin: string, hooks: AuthHooks = {}) =>
   ({
     appName: "commissary",
     baseURL: origin,
@@ -248,7 +249,11 @@ export interface HostedAuth {
  * Better Auth with the SSO plugin: identity providers from `hooks.ssoProvider` (none without it), domains the orgs
  * verified themselves (`sso-routes.ts`), SAML only signed, timed and in answer to Commissary's own request.
  */
-const buildAuth = async (env: AuthEnv, origin: string, hooks: AuthHooks): Promise<HostedAuth> => {
+const buildAuth = async (
+  env: SignInBindings,
+  origin: string,
+  hooks: AuthHooks,
+): Promise<HostedAuth> => {
   const [{ betterAuth: make }, { sso }, { getAdapter }] = await Promise.all([
     import("better-auth"),
     import("@better-auth/sso"),
@@ -276,14 +281,14 @@ const buildAuth = async (env: AuthEnv, origin: string, hooks: AuthHooks): Promis
   return make({ ...options, plugins, database: () => ssoAwareAdapter(base, lookup) });
 };
 
-const instances = new WeakMap<AuthEnv, Map<string, Promise<HostedAuth>>>();
+const instances = new WeakMap<SignInBindings, Map<string, Promise<HostedAuth>>>();
 
 /**
  * The Better Auth instance of the deployment at `origin`, built once per isolate (and per `env` object: tests swap
  * bindings). Call {@link authConfigurationProblem} first.
  */
 export const hostedAuth = (
-  env: AuthEnv,
+  env: SignInBindings,
   origin: string,
   hooks: AuthHooks = {},
 ): Promise<HostedAuth> => {

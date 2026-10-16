@@ -12,12 +12,12 @@ import { Clock, Effect } from "effect";
 import { ForbiddenError, InternalError, NotFoundError, UnauthorizedError } from "../errors.ts";
 import { looksLikeManagementKey, parseManagementKey } from "../management-keys/key.ts";
 import { roleAtLeast, type OrgRole } from "../members/roles.ts";
-import { WorkerEnv } from "../platform/env.ts";
 import { controlPlaneOf, type OrgId } from "../platform/org.ts";
 import { platform } from "../platform/registry.ts";
 import type { RouteAccess } from "./policy.ts";
 import { type AccessIdentity, makeIdentity } from "./principal.ts";
 import { orgExists, VERIFIED_KEY_TTL_MS } from "./api-key.ts";
+import { StateEnv } from "../state/env.ts";
 
 export interface VerifiedManagementKey {
   readonly org: OrgId;
@@ -68,7 +68,7 @@ export const verifyManagementKey = Effect.fnUntraced(function* (text: string) {
   verified.delete(parsed.hash);
 
   if (!(yield* orgExists(parsed.org, now))) return yield* invalid;
-  const env = yield* WorkerEnv;
+  const env = yield* StateEnv;
 
   const verdict = yield* Effect.tryPromise({
     try: async () =>
@@ -111,7 +111,7 @@ export const managementKeyIdentity = (
 ): Effect.Effect<
   { readonly identity: AccessIdentity; readonly key: VerifiedManagementKey },
   UnauthorizedError | ForbiddenError | NotFoundError | InternalError,
-  WorkerEnv
+  StateEnv
 > =>
   Effect.gen(function* () {
     const key = yield* verifyManagementKey(text);

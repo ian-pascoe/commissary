@@ -15,7 +15,6 @@ import { Thinking } from "../../src/executor/thinking.ts";
 import { ModelProviders } from "../../src/handlers/model-providers.ts";
 import { makeClientApiRoutes } from "../../src/handlers/layer.ts";
 import { RootRoutes } from "../../src/http/routes.ts";
-import { requestContext } from "../../src/platform/env.ts";
 import type { UsageRecord } from "../../src/usage/record.ts";
 import { UsageSink } from "../../src/usage/sink.ts";
 import { AUD, fakeJwksLayer, makeFakeJwks, makeKey, signToken, userClaims } from "./access.ts";
@@ -25,6 +24,7 @@ import {
   type UpstreamCall,
   type UpstreamResponder,
 } from "./pipeline.ts";
+import { requestContext } from "../../src/worker-env.ts";
 
 const key = await makeKey("gemini-kid");
 

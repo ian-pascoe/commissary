@@ -18,7 +18,7 @@ import { Clock, Data, Effect, Result, Stream } from "effect";
 import type { HttpClientResponse } from "effect/http";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { ConfigReader } from "../config/reader.ts";
-import { holdInvocation, WorkerEnv } from "../platform/env.ts";
+import { holdInvocation } from "../platform/env.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../platform/org.ts";
 import { platformOf } from "../platform/registry.ts";
 import type { SweepLease } from "../quota/sweep-lease.ts";
@@ -37,6 +37,8 @@ import {
   writeRefreshStatus,
 } from "./catalog-store.ts";
 import { type ModelsDevCatalog, trimModelsDev } from "./models-dev.ts";
+import { ModelsEnv } from "../models/env.ts";
+import { type StateBindings, StateEnv } from "../state/env.ts";
 
 /** The three-hourly cron trigger (`CRONS` in alchemy.run.ts) runs this refresh. */
 export const MODELS_REFRESH_INTERVAL_HOURS = 3;
@@ -177,13 +179,13 @@ export const modelChanges = (previous: ModelCatalogs, next: ModelCatalogs): Mode
  */
 const refreshNow = (
   configured: string,
-): Effect.Effect<RefreshOutcome, never, HttpClient.HttpClient | WorkerEnv | CatalogStore> =>
+): Effect.Effect<RefreshOutcome, never, HttpClient.HttpClient | ModelsEnv | CatalogStore> =>
   Effect.gen(function* (): Effect.fn.Return<
     RefreshOutcome,
     never,
-    HttpClient.HttpClient | WorkerEnv | CatalogStore
+    HttpClient.HttpClient | ModelsEnv | CatalogStore
   > {
-    const env = yield* WorkerEnv;
+    const env = yield* ModelsEnv;
     const store = yield* CatalogStore;
     const client = yield* HttpClient.HttpClient;
     const source = resolveSource(configured);
@@ -263,16 +265,16 @@ const refreshNow = (
  * The model catalog is shared by every org, so its refresh lease is deployment-wide: it lives in the Platform registry
  * (it was in the `global` org's ControlPlane before the registry existed, which no other org should have to reach).
  */
-const catalogLeaseHolder = (env: Env) => platformOf(env);
+const catalogLeaseHolder = (env: StateBindings) => platformOf(env);
 
 type Taken =
   | { readonly kind: "taken"; readonly token: string }
   | { readonly kind: "held"; readonly held: SweepLease }
   | { readonly kind: "unavailable" };
 
-const takeLease = (trigger: RefreshTrigger): Effect.Effect<Taken, never, WorkerEnv> =>
+const takeLease = (trigger: RefreshTrigger): Effect.Effect<Taken, never, StateEnv> =>
   Effect.gen(function* () {
-    const env = yield* WorkerEnv;
+    const env = yield* StateEnv;
 
     return yield* Effect.tryPromise(async (): Promise<Taken> => {
       const taken = await catalogLeaseHolder(env).takeCatalogRefreshLease(trigger);
@@ -283,18 +285,18 @@ const takeLease = (trigger: RefreshTrigger): Effect.Effect<Taken, never, WorkerE
     }).pipe(Effect.orElseSucceed((): Taken => ({ kind: "unavailable" })));
   });
 
-const releaseLease = (token: string): Effect.Effect<void, never, WorkerEnv> =>
+const releaseLease = (token: string): Effect.Effect<void, never, StateEnv> =>
   Effect.gen(function* () {
-    const env = yield* WorkerEnv;
+    const env = yield* StateEnv;
 
     yield* Effect.tryPromise(() => catalogLeaseHolder(env).releaseCatalogRefreshLease(token)).pipe(
       Effect.ignore,
     );
   });
 
-const record = (outcome: RefreshOutcome): Effect.Effect<void, never, WorkerEnv> =>
+const record = (outcome: RefreshOutcome): Effect.Effect<void, never, ModelsEnv> =>
   Effect.gen(function* () {
-    const env = yield* WorkerEnv;
+    const env = yield* ModelsEnv;
     const now = yield* Clock.currentTimeMillis;
 
     if (outcome.status === "failed")
@@ -337,7 +339,11 @@ const record = (outcome: RefreshOutcome): Effect.Effect<void, never, WorkerEnv> 
 export const refreshModelsDev = (
   configured: string,
   trigger: RefreshTrigger,
-): Effect.Effect<RefreshOutcome, never, HttpClient.HttpClient | WorkerEnv | CatalogStore> => {
+): Effect.Effect<
+  RefreshOutcome,
+  never,
+  HttpClient.HttpClient | ModelsEnv | StateEnv | CatalogStore
+> => {
   const source = resolveSource(configured);
 
   if (source.mode !== "fetch") return refreshNow(configured).pipe(Effect.tap(record));
@@ -351,7 +357,7 @@ export const refreshModelsDev = (
     }),
     ({
       taken,
-    }): Effect.Effect<RefreshOutcome, never, HttpClient.HttpClient | WorkerEnv | CatalogStore> => {
+    }): Effect.Effect<RefreshOutcome, never, HttpClient.HttpClient | ModelsEnv | CatalogStore> => {
       if (taken.kind === "unavailable")
         return Effect.succeed(failed("platform registry unavailable")).pipe(Effect.tap(record));
 
@@ -380,7 +386,7 @@ export const refreshModelsDev = (
 export const refreshCatalogs: Effect.Effect<
   RefreshOutcome,
   never,
-  HttpClient.HttpClient | WorkerEnv | ConfigReader | CatalogStore
+  HttpClient.HttpClient | ModelsEnv | StateEnv | ConfigReader | CatalogStore
 > = Effect.gen(function* () {
   const configured = yield* ConfigReader.use((reader) => reader.get).pipe(
     Effect.provideService(CurrentOrg, GLOBAL_ORG),

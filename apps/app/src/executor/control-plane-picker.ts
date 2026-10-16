@@ -3,7 +3,7 @@
  *
  * Selection, cooldowns, quota and session affinity live in the DO (credentials.md §6, §8); this adapter only maps
  * between the DO wire types and the executor-facing contract. The DO stub is resolved from the per-request
- * `WorkerEnv` and `CurrentOrg` on every call, never captured in a layer.
+ * `ModelsEnv` and `CurrentOrg` on every call, never captured in a layer.
  */
 import { Effect, Layer } from "effect";
 import type {
@@ -15,7 +15,6 @@ import type {
   ReportResult,
 } from "../credentials/selection/types.ts";
 import type { RetryPlan, RetryQuery } from "../credentials/selection/retry.ts";
-import { WorkerEnv } from "../platform/env.ts";
 import { controlPlaneOf, CurrentOrg, type OrgId } from "../platform/org.ts";
 import { ExecutionError } from "./errors.ts";
 import {
@@ -24,6 +23,7 @@ import {
   type PickRequest,
   type PickResult,
 } from "./picker.ts";
+import { type ModelsBindings, ModelsEnv } from "../models/env.ts";
 
 /** The slice of the ControlPlane RPC surface the picker needs (tests substitute an in-memory implementation). */
 export interface ControlPlaneApi {
@@ -87,11 +87,11 @@ const unavailable = (cause: unknown) =>
     cause,
   });
 
-export const makeControlPlanePicker = (api: (env: Env, org: OrgId) => ControlPlaneApi) =>
+export const makeControlPlanePicker = (api: (env: ModelsBindings, org: OrgId) => ControlPlaneApi) =>
   CredentialPicker.of({
     pick: (request: PickRequest) =>
       Effect.gen(function* () {
-        const env = yield* WorkerEnv;
+        const env = yield* ModelsEnv;
         const org = yield* CurrentOrg;
 
         const wire: WirePickRequest = {
@@ -176,7 +176,7 @@ export const makeControlPlanePicker = (api: (env: Env, org: OrgId) => ControlPla
       }),
     report: (lease, result) =>
       Effect.gen(function* () {
-        const env = yield* WorkerEnv;
+        const env = yield* ModelsEnv;
         const org = yield* CurrentOrg;
         yield* Effect.tryPromise({
           try: async () => await api(env, org).report(lease, result),
@@ -187,7 +187,7 @@ export const makeControlPlanePicker = (api: (env: Env, org: OrgId) => ControlPla
       }),
     planRetry: (query) =>
       Effect.gen(function* () {
-        const env = yield* WorkerEnv;
+        const env = yield* ModelsEnv;
         const org = yield* CurrentOrg;
 
         return yield* Effect.tryPromise({

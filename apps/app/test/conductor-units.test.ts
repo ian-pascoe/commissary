@@ -12,7 +12,6 @@ import {
 } from "../src/executor/classify.ts";
 import { ExecutionError } from "../src/executor/errors.ts";
 import { CredentialRefresher, needsPreparation } from "../src/executor/helps/credential-refresh.ts";
-import { WorkerEnv } from "../src/platform/env.ts";
 import type { CredentialSnapshot } from "../src/executor/picker.ts";
 import { makeLiveThinking } from "../src/executor/thinking.ts";
 import { compatModelInfo } from "../src/handlers/model-capabilities.ts";
@@ -23,6 +22,7 @@ import { Formats } from "../src/translator/formats.ts";
 import type { JsonObject } from "../src/json/index.ts";
 import { loadConfig } from "./support/pool.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { envContext } from "../src/worker-env.ts";
 
 const headers = (init: Record<string, string>) => new Headers(init);
 
@@ -631,7 +631,7 @@ describe("CredentialRefresher over the ControlPlane", () => {
           ensureFresh: () => Promise.reject(new Error("rpc down")),
         })),
       ),
-      Effect.provideService(WorkerEnv, {} as Env),
+      Effect.provideContext(envContext({} as Env)),
     ),
   );
 });

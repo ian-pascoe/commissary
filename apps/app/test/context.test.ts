@@ -4,8 +4,12 @@ import { Context, Effect, Layer } from "effect";
 import { HttpRouter, HttpServerResponse } from "effect/http";
 import { expect } from "vitest";
 import { CorsLayer } from "../src/http/cors.ts";
-import { requestContext, WorkerEnv, WorkerExecutionContext } from "../src/platform/env.ts";
+import { WorkerExecutionContext } from "../src/platform/env.ts";
 import { redactHeaders } from "../src/platform/logging.ts";
+import { AuthConfig } from "../src/auth/config.ts";
+import { ModelsEnv } from "../src/models/env.ts";
+import { StateEnv } from "../src/state/env.ts";
+import { AppEnv, requestContext } from "../src/worker-env.ts";
 
 // Only `waitUntil`/`passThroughOnException` are exercised; the rest of the interface is runtime-internal.
 const executionContext = {
@@ -14,10 +18,13 @@ const executionContext = {
   props: {},
 } as unknown as ExecutionContext;
 
-it.effect("requestContext provides WorkerEnv and WorkerExecutionContext", () =>
+it.effect("requestContext provides each env view and WorkerExecutionContext", () =>
   Effect.sync(() => {
     const context = requestContext(env, executionContext);
-    expect(Context.get(context, WorkerEnv)).toBe(env);
+    expect(Context.get(context, AuthConfig)).toBe(env);
+    expect(Context.get(context, StateEnv)).toBe(env);
+    expect(Context.get(context, ModelsEnv)).toBe(env);
+    expect(Context.get(context, AppEnv)).toBe(env);
     expect(Context.get(context, WorkerExecutionContext)).toBe(executionContext);
   }),
 );
@@ -28,7 +35,7 @@ it.effect("web handler routes see per-request env/ctx services", () =>
       "GET",
       "/binding",
       Effect.gen(function* () {
-        const bindings = yield* WorkerEnv;
+        const bindings = yield* ModelsEnv;
         const ctx = yield* WorkerExecutionContext;
 
         return HttpServerResponse.text(`${typeof bindings.CACHE.get}:${ctx === executionContext}`);

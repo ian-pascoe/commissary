@@ -19,12 +19,12 @@ import { CredentialPicker, type CredentialSnapshot } from "../src/executor/picke
 import { StaticCredentialPickerLayer } from "../src/executor/static-picker.ts";
 import { parseSuffix } from "../src/executor/suffix.ts";
 import { LineSplitter } from "../src/http/sse.ts";
-import { WorkerEnv } from "../src/platform/env.ts";
 import { builtinTranslators } from "../src/translator/builtin.ts";
 import { Formats } from "../src/translator/formats.ts";
 import { makeTranslationState, TranslatorRegistry } from "../src/translator/registry.ts";
 import { loadConfig, staticConfigReader } from "./support/pipeline.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { type EnvServices, envContext } from "../src/worker-env.ts";
 
 describe("LineSplitter", () => {
   it("splits on \\n only, drops trailing \\r and flushes the last line", () => {
@@ -327,14 +327,14 @@ api-keys:
       keys: [{ api-key: b1 }]
 `;
 
-  const run = <A, E>(effect: Effect.Effect<A, E, CredentialPicker | WorkerEnv>) =>
+  const run = <A, E>(effect: Effect.Effect<A, E, CredentialPicker | EnvServices>) =>
     Effect.gen(function* () {
       const config = yield* Effect.promise(() => loadConfig(yaml));
 
       return yield* effect.pipe(
         Effect.provide(StaticCredentialPickerLayer),
         Effect.provide(staticConfigReader(config)),
-        Effect.provideService(WorkerEnv, {} as Env),
+        Effect.provideContext(envContext({} as Env)),
       );
     });
 

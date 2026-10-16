@@ -1,10 +1,10 @@
 import { env } from "cloudflare:workers";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
-import { WorkerEnv } from "../src/platform/env.ts";
 import { CurrentOrg, GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 import { platformOf } from "../src/platform/registry.ts";
 import { runScheduledTasks, type ScheduledTask, scheduledTasks } from "../src/scheduled.ts";
+import { ModelsEnv } from "../src/models/env.ts";
 
 const ctx = {} as unknown as ExecutionContext;
 
@@ -24,7 +24,7 @@ describe("scheduled dispatch", () => {
         name: "last",
         scope: "deployment",
         run: Effect.gen(function* () {
-          const bindings = yield* WorkerEnv;
+          const bindings = yield* ModelsEnv;
           log.push(bindings === env ? "last:env" : "last:other-env");
         }),
       },

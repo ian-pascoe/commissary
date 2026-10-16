@@ -8,7 +8,6 @@ import { JWKS_REFRESH_COOLDOWN_MS } from "../src/access/jwks.ts";
 import { callerScope, makeIdentity, principalId } from "../src/access/principal.ts";
 import { classifyPath } from "../src/access/routes.ts";
 import { verifyAccessJwt } from "../src/access/verify.ts";
-import { requestContext } from "../src/platform/env.ts";
 import {
   AUD,
   fakeJwksLayer,
@@ -24,6 +23,7 @@ import type { FakeJwks, TestKey } from "./support/access.ts";
 import { env } from "cloudflare:workers";
 import { controlPlaneOf, GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
 import { platformOf } from "../src/platform/registry.ts";
+import { requestContext } from "../src/worker-env.ts";
 
 const NOW_MS = 1_700_000_000_000;
 
@@ -267,7 +267,7 @@ describe("authenticateRequest", () => {
     body: Effect.Effect<
       A,
       E,
-      | import("../src/platform/env.ts").WorkerEnv
+      | import("../src/worker-env.ts").EnvServices
       | import("../src/access/jwks.ts").AccessJwks
       | import("../src/platform/org.ts").CurrentOrg
     >,
@@ -429,7 +429,7 @@ describe("authenticateRequest and orgs", () => {
     body: Effect.Effect<
       A,
       E,
-      | import("../src/platform/env.ts").WorkerEnv
+      | import("../src/worker-env.ts").EnvServices
       | import("../src/access/jwks.ts").AccessJwks
       | import("../src/platform/org.ts").CurrentOrg
     >,

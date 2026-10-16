@@ -9,7 +9,6 @@ import {
   type RateLimitedError,
   UnauthorizedError,
 } from "../errors.ts";
-import { WorkerEnv } from "../platform/env.ts";
 import { admitPrincipal } from "../members/admission.ts";
 import { roleAtLeast } from "../members/roles.ts";
 import { CurrentOrg, type OrgId, type OrgSlug } from "../platform/org.ts";
@@ -23,6 +22,8 @@ import type { AccessJwks } from "./jwks.ts";
 import { routeAccess, type RouteAccess } from "./policy.ts";
 import { type AccessZone, scopedUrl } from "./routes.ts";
 import { verifyAccessJwt } from "./verify.ts";
+import { AuthConfig } from "../auth/config.ts";
+import type { StateEnv } from "../state/env.ts";
 
 export const ACCESS_JWT_HEADER = "cf-access-jwt-assertion";
 
@@ -149,9 +150,9 @@ export const authenticateRequest = (
   requestUrl: string,
   zone: Exclude<AccessZone, "public">,
   method = "GET",
-): Effect.Effect<AccessIdentity, AccessError, WorkerEnv | CurrentOrg | AccessJwks> =>
+): Effect.Effect<AccessIdentity, AccessError, AuthConfig | StateEnv | CurrentOrg | AccessJwks> =>
   Effect.gen(function* () {
-    const env = yield* WorkerEnv;
+    const env = yield* AuthConfig;
     const slug = zone === "management" ? scopedUrl(requestUrl)?.slug : undefined;
 
     const credentials =

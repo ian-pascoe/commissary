@@ -8,7 +8,6 @@ import { env } from "cloudflare:workers";
 import { Effect, Schema } from "effect";
 import { afterAll, beforeEach, expect } from "vitest";
 import { CredentialEntry } from "@commissary/contract/credentials";
-import { WorkerEnv } from "../src/platform/env.ts";
 import { runQuotaSweep } from "../src/quota/check.ts";
 import {
   controlPlane,
@@ -21,6 +20,7 @@ import {
 } from "./support/management.ts";
 import { type MockReply, mockHttp, routes } from "./support/refresh.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { envContext } from "../src/worker-env.ts";
 
 const GO_KEY = "sk-go-routes-0001";
 
@@ -253,7 +253,7 @@ describe("an edited OpenCode Go key", () => {
         Effect.provide(
           mockHttp(routes({ [`GET ${USAGE_URL}`]: { status: 200, body: USAGE } })).layer,
         ),
-        Effect.provideService(WorkerEnv, env),
+        Effect.provideContext(envContext(env)),
         Effect.provideService(CurrentOrg, GLOBAL_ORG),
       ),
     );
@@ -333,7 +333,7 @@ describe("quota-check cron task with OpenCode Go keys", () => {
 
       const summary = yield* runQuotaSweep.pipe(
         Effect.provide(outbound.layer),
-        Effect.provideService(WorkerEnv, env),
+        Effect.provideContext(envContext(env)),
         Effect.provideService(CurrentOrg, GLOBAL_ORG),
       );
 

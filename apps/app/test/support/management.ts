@@ -9,7 +9,6 @@ import { orgAddressing } from "../../src/access/org-address.ts";
 import { RootRoutes } from "../../src/http/routes.ts";
 import { ManagementRoutes } from "../../src/management/routes.ts";
 import { OAuthCallbackRoutes } from "../../src/oauth/public-routes.ts";
-import { requestContext } from "../../src/platform/env.ts";
 import { controlPlaneOf, CurrentOrg, GLOBAL_ORG, type OrgId } from "../../src/platform/org.ts";
 import { CatalogStore } from "../../src/registry/catalog-store.ts";
 import { ModelRegistryLive } from "../../src/registry/live.ts";
@@ -24,6 +23,7 @@ import {
 } from "./access.ts";
 import { type MockHandler, mockHttp } from "./refresh.ts";
 import type { Json } from "../../src/json/index.ts";
+import { requestContext } from "../../src/worker-env.ts";
 
 export const key = await makeKey("management-kid");
 

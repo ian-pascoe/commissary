@@ -13,7 +13,7 @@ import { HttpApiClient } from "effect/http-api";
 import { afterAll, beforeAll, beforeEach, expect } from "vitest";
 import { ManagementApi } from "@commissary/contract/api";
 import { ManagementError } from "@commissary/contract/errors";
-import { WorkerEnv, WorkerExecutionContext } from "../src/platform/env.ts";
+import { WorkerExecutionContext } from "../src/platform/env.ts";
 import { LEASE_RENEW_INTERVAL_MS, runQuotaSweep, sweepQuotas } from "../src/quota/check.ts";
 import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/quota/claude.ts";
 import { RESET_GRANT_STATUS_URL } from "../src/quota/reset-grants.ts";
@@ -38,6 +38,7 @@ import { emptyState } from "../src/credentials/model.ts";
 import { makePool, MemoryPoolStore } from "./support/pool.ts";
 import { type MockReply, mockHttp, routes } from "./support/refresh.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { envContext } from "../src/worker-env.ts";
 
 const BATCH = "/v9/management/credentials/batch";
 
@@ -624,7 +625,7 @@ describe("POST /credentials/quota/all", () => {
 
       const summary = yield* runQuotaSweep.pipe(
         Effect.provide(outbound.layer),
-        Effect.provideService(WorkerEnv, env),
+        Effect.provideContext(envContext(env)),
       );
 
       assert.deepStrictEqual(summary, { checked: 0, failed: 0, skipped: true });
@@ -886,7 +887,7 @@ describe("sweepQuotas gives the lease back", () => {
 
       const failed = yield* sweepQuotas("panel", FULL_ACCESS).pipe(
         Effect.provide(mockHttp(() => ({ status: 500 })).layer),
-        Effect.provideService(WorkerEnv, plane.fakeEnv),
+        Effect.provideContext(envContext(plane.fakeEnv)),
         Effect.provideService(WorkerExecutionContext, ctx),
         Effect.flip,
       );
@@ -913,7 +914,7 @@ describe("sweepQuotas gives the lease back", () => {
 
       const fiber = yield* sweepQuotas("panel", FULL_ACCESS).pipe(
         Effect.provide(hanging.layer),
-        Effect.provideService(WorkerEnv, plane.fakeEnv),
+        Effect.provideContext(envContext(plane.fakeEnv)),
         Effect.provideService(WorkerExecutionContext, ctx),
         Effect.forkChild,
       );
@@ -938,7 +939,7 @@ describe("sweepQuotas gives the lease back", () => {
 
         const fiber = yield* sweepQuotas("panel", FULL_ACCESS).pipe(
           Effect.provide(mockHttp(() => ({ status: 500 })).layer),
-          Effect.provideService(WorkerEnv, plane.fakeEnv),
+          Effect.provideContext(envContext(plane.fakeEnv)),
           Effect.provideService(WorkerExecutionContext, ctx),
           Effect.forkChild,
         );
@@ -977,7 +978,7 @@ describe("sweepQuotas keeps its lease", () => {
 
         const fiber = yield* sweepQuotas("panel", FULL_ACCESS).pipe(
           Effect.provide(mockHttp(() => ({ status: 500 })).layer),
-          Effect.provideService(WorkerEnv, plane.fakeEnv),
+          Effect.provideContext(envContext(plane.fakeEnv)),
           Effect.provideService(WorkerExecutionContext, recordingContext().ctx),
           Effect.forkChild,
         );

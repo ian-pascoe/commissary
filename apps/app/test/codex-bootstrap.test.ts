@@ -22,7 +22,6 @@ import { Thinking } from "../src/executor/thinking.ts";
 import { executeStream } from "../src/handlers/execute.ts";
 import { ModelCapabilities } from "../src/handlers/model-capabilities.ts";
 import { ModelProviders } from "../src/handlers/model-providers.ts";
-import { WorkerEnv } from "../src/platform/env.ts";
 import { builtinTranslators } from "../src/translator/builtin.ts";
 import { Formats } from "../src/translator/formats.ts";
 import { makeTranslationState } from "../src/translator/registry.ts";
@@ -37,6 +36,7 @@ import {
 } from "./support/pipeline.ts";
 import { makePool, poolPickerLayer } from "./support/pool.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { envContext } from "../src/worker-env.ts";
 
 const data = (event: Json): string => `data: ${JSON.stringify(event)}`;
 
@@ -406,7 +406,7 @@ describe("bootstrap failover through the conductor", () => {
       ).pipe(
         Effect.provide(layer),
         Effect.provideService(AccessPrincipal, identity),
-        Effect.provideService(WorkerEnv, {} as Env),
+        Effect.provideContext(envContext({} as Env)),
         Effect.provideService(CurrentOrg, GLOBAL_ORG),
         Effect.result,
       ),

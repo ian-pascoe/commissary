@@ -13,7 +13,6 @@ import {
   XAI_FALLBACK_CLIENT_VERSION,
   XAI_VERSION_KV_KEY,
 } from "../src/executor/xai/version.ts";
-import { WorkerEnv } from "../src/platform/env.ts";
 import { scheduledTasks } from "../src/scheduled.ts";
 import {
   jsonResponse,
@@ -23,6 +22,7 @@ import {
   type UpstreamResponder,
 } from "./support/pipeline.ts";
 import { xaiKey, xaiModels, xaiOauth, xaiPicker, type XaiPickerLog } from "./support/xai.ts";
+import { type EnvServices, envContext } from "../src/worker-env.ts";
 
 let config: Config;
 
@@ -452,11 +452,11 @@ const registry = (respond: () => Response) =>
 
 describe("client version task", () => {
   const run = <A>(
-    effect: Effect.Effect<A, never, HttpClient.HttpClient | WorkerEnv>,
+    effect: Effect.Effect<A, never, HttpClient.HttpClient | EnvServices>,
     respond: () => Response,
   ) =>
     Effect.runPromise(
-      effect.pipe(Effect.provide(registry(respond)), Effect.provideService(WorkerEnv, env)),
+      effect.pipe(Effect.provide(registry(respond)), Effect.provideContext(envContext(env))),
     );
 
   it("is registered in the cron task list", () => {
@@ -466,7 +466,7 @@ describe("client version task", () => {
   it("stores an acceptable npm version in KV and serves it to request handling", async () => {
     resetXaiClientVersionCache();
     expect(
-      await Effect.runPromise(currentXaiClientVersion.pipe(Effect.provideService(WorkerEnv, env))),
+      await Effect.runPromise(currentXaiClientVersion.pipe(Effect.provideContext(envContext(env)))),
     ).toBe(XAI_FALLBACK_CLIENT_VERSION);
 
     const stored = await run(refreshXaiClientVersion("https://registry.test/latest"), () =>
@@ -477,7 +477,7 @@ describe("client version task", () => {
     expect(await env.CACHE.get(XAI_VERSION_KV_KEY)).toBe("1.2.3");
     resetXaiClientVersionCache();
     expect(
-      await Effect.runPromise(currentXaiClientVersion.pipe(Effect.provideService(WorkerEnv, env))),
+      await Effect.runPromise(currentXaiClientVersion.pipe(Effect.provideContext(envContext(env)))),
     ).toBe("1.2.3");
     await env.CACHE.delete(XAI_VERSION_KV_KEY);
     resetXaiClientVersionCache();

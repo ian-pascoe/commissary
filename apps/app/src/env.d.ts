@@ -1,5 +1,7 @@
 // Bindings and variables of the Worker. Deployed values come from `alchemy.run.ts` (the Worker's `env` plus the
 // `ASSETS` binding created by `assets`); keep both in sync. Tests bind the same names in `vitest.config.ts`.
+// `Env` is read only by the entry (`index.ts`, `scheduled.ts`), the Durable Object classes and tests; other code reads
+// its package's view (`AuthConfig`, `StateEnv`, `ModelsEnv`, `AppEnv`: `worker-env.ts`), which `Env` must satisfy.
 interface __BaseEnv_Env {
   /** Model catalogs, signature cache, Antigravity state (Workers KV). */
   CACHE: KVNamespace;

@@ -5,9 +5,9 @@ import { evictDurableObject } from "cloudflare:test";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { makeControlPlanePicker } from "../src/executor/control-plane-picker.ts";
-import { WorkerEnv } from "../src/platform/env.ts";
 import type { PickResult } from "../src/credentials/selection/types.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { type EnvServices, envContext } from "../src/worker-env.ts";
 
 const plane = (name: string = crypto.randomUUID()) => env.CONTROL_PLANE.getByName(name);
 
@@ -166,10 +166,10 @@ api-keys:
     );
     const picker = makeControlPlanePicker((workerEnv) => workerEnv.CONTROL_PLANE.getByName(name));
 
-    const run = <A, E>(effect: Effect.Effect<A, E, WorkerEnv | CurrentOrg>) =>
+    const run = <A, E>(effect: Effect.Effect<A, E, EnvServices | CurrentOrg>) =>
       Effect.runPromise(
         effect.pipe(
-          Effect.provideService(WorkerEnv, env),
+          Effect.provideContext(envContext(env)),
           Effect.provideService(CurrentOrg, GLOBAL_ORG),
         ),
       );

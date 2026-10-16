@@ -23,13 +23,16 @@ import { forgetStanding, ownedOrgLimit } from "../hosted/standing.ts";
 import { isHosted } from "../hosted/mode.ts";
 import { apiOrigin } from "../http/hosts.ts";
 import { syncOrgIndex } from "../members/admission.ts";
-import { WorkerEnv } from "../platform/env.ts";
+import { AuthConfig } from "../auth/config.ts";
+import { ModelsEnv } from "../models/env.ts";
 import { controlPlaneOf, GLOBAL_ORG, newOrgId } from "../platform/org.ts";
 import { deleteOrg as deleteOrgData } from "../platform/org-deletion.ts";
 import { platform, type PlatformStub } from "../platform/registry.ts";
 import type { OrgRecord, OrgWriteResult } from "../platform/registry-store.ts";
 import type { OrgView } from "@commissary/contract/orgs";
 import type { GrantSubject } from "../grants/grant.ts";
+import { StateEnv } from "../state/env.ts";
+import { AppEnv } from "../worker-env.ts";
 import { maskConfigSecrets } from "./export-view.ts";
 import { bodyObject, controlPlane, handled, jsonReply, replyError, type Reply } from "./http.ts";
 import { storedConfig } from "./settings-routes.ts";
@@ -41,7 +44,7 @@ const BASE = "/v9/management";
 export const registry = <R>(
   label: string,
   call: (stub: PlatformStub) => R,
-): Effect.Effect<Awaited<R>, Reply, WorkerEnv> =>
+): Effect.Effect<Awaited<R>, Reply, StateEnv> =>
   platform(label, call).pipe(
     Effect.catchTag("PlatformUnavailable", (error) =>
       Effect.logError(`management ${error.message}`).pipe(
@@ -65,7 +68,7 @@ const view = (org: OrgRecord): OrgView => ({
  */
 export const openableOrgs = (
   identity: AccessIdentity,
-): Effect.Effect<ReadonlyArray<OrgRecord>, Reply, WorkerEnv> =>
+): Effect.Effect<ReadonlyArray<OrgRecord>, Reply, StateEnv> =>
   Effect.gen(function* () {
     if (identity.platformAdmin) return yield* registry("listOrgs", (stub) => stub.listOrgs());
     const { principal } = identity;
@@ -102,13 +105,12 @@ const requirePlatformAdmin = Effect.gen(function* () {
 /** On Commissary Cloud, how many orgs a person (not a platform admin) owns and may own. */
 const ownedOrgs = (identity: AccessIdentity) =>
   Effect.gen(function* () {
-    const env = yield* WorkerEnv;
     const { principal } = identity;
 
-    if (!isHosted(env)) return {};
+    if (!isHosted(yield* AuthConfig)) return {};
 
     if (identity.platformAdmin || principal.kind !== "user") return { hosted: true };
-    const limit = ownedOrgLimit(env);
+    const limit = ownedOrgLimit(yield* AppEnv);
     const person = yield* registry("person", (stub) => stub.person(principal.email, limit));
 
     return { hosted: true, org_limit: person.orgLimit, owned_orgs: person.ownedOrgs };
@@ -117,7 +119,7 @@ const ownedOrgs = (identity: AccessIdentity) =>
 const me = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
   const orgs = yield* openableOrgs(identity);
-  const api = apiOrigin(yield* WorkerEnv);
+  const api = apiOrigin(yield* AppEnv);
 
   const settings =
     identity.role === undefined
@@ -185,14 +187,13 @@ const refused = (result: Extract<OrgWriteResult, { ok: false }>): Reply =>
  */
 const creator = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
-  const env = yield* WorkerEnv;
   const { principal } = identity;
 
   if (identity.platformAdmin) return undefined;
 
-  if (!isHosted(env) || principal.kind !== "user") return yield* requirePlatformAdmin;
+  if (!isHosted(yield* AuthConfig) || principal.kind !== "user") return yield* requirePlatformAdmin;
 
-  return { email: principal.email.toLowerCase(), defaultLimit: ownedOrgLimit(env) };
+  return { email: principal.email.toLowerCase(), defaultLimit: ownedOrgLimit(yield* AppEnv) };
 });
 
 const create = Effect.gen(function* () {
@@ -207,7 +208,7 @@ const create = Effect.gen(function* () {
   if (slug === undefined || name === undefined) return yield* replyError(400, "invalid body");
   const now = yield* Clock.currentTimeMillis;
   const id = newOrgId();
-  const env = yield* WorkerEnv;
+  const env = yield* StateEnv;
 
   // The creator chooses whether members of the new org may connect private credentials (off unless asked). The org's
   // ControlPlane takes the choice before the org exists in the registry: a failure here creates nothing (a retry is safe),
@@ -253,7 +254,7 @@ const create = Effect.gen(function* () {
  */
 const suspendOrg = (slug: string, suspended: boolean) =>
   Effect.gen(function* () {
-    const env = yield* WorkerEnv;
+    const env = yield* AppEnv;
     const now = yield* Clock.currentTimeMillis;
 
     const result = yield* registry("setOrgSuspended", (stub) =>
@@ -278,13 +279,13 @@ const suspendOrg = (slug: string, suspended: boolean) =>
 
 const update = Effect.gen(function* () {
   yield* requirePlatformAdmin;
-  const env = yield* WorkerEnv;
+  const hosted = isHosted(yield* AuthConfig);
   const { slug: current } = yield* HttpRouter.params;
   const body = yield* bodyObject;
   const { suspended, ...renamed } = body;
 
   // Suspension exists on Commissary Cloud only; elsewhere the field is an unknown one.
-  if (suspended !== undefined && (!isHosted(env) || typeof suspended !== "boolean"))
+  if (suspended !== undefined && (!hosted || typeof suspended !== "boolean"))
     return yield* replyError(400, "invalid body");
   const patch = yield* stringFields(renamed, ["slug", "name"]);
 
@@ -467,11 +468,12 @@ const deleteOrgRoute = Effect.gen(function* () {
       message: "type the org's name exactly to confirm that it is deleted with everything in it",
     });
 
-  const env = yield* WorkerEnv;
+  const state = yield* StateEnv;
+  const models = yield* ModelsEnv;
   const now = yield* Clock.currentTimeMillis;
 
   const outcome = yield* Effect.tryPromise({
-    try: async () => await deleteOrgData(env, org.id, { now }),
+    try: async () => await deleteOrgData(state, models, org.id, { now }),
     catch: (cause) => new DeletionThrew({ cause }),
   }).pipe(Effect.catch(deletionFailed(org.id)));
 
@@ -526,13 +528,14 @@ const deleteAccount = Effect.gen(function* () {
       message: "type your own email address to confirm that your account is deleted",
     });
 
-  const env = yield* WorkerEnv;
+  const state = yield* StateEnv;
+  const models = yield* ModelsEnv;
   const now = yield* Clock.currentTimeMillis;
   const orgs = yield* registry("orgsOfEmail", (stub) => stub.orgsOfEmail(email));
 
   const standings = yield* Effect.forEach(orgs, (org) =>
     Effect.tryPromise({
-      try: async () => await controlPlaneOf(env, org.id).accountStanding(email),
+      try: async () => await controlPlaneOf(state, org.id).accountStanding(email),
       catch: (cause) => new DeletionThrew({ cause }),
     }).pipe(
       Effect.catch(planeFailed("accountStanding", org.id)),
@@ -555,7 +558,7 @@ const deleteAccount = Effect.gen(function* () {
   for (const { org, standing } of standings) {
     if (standing.alone && org.id !== GLOBAL_ORG) {
       const outcome = yield* Effect.tryPromise({
-        try: async () => await deleteOrgData(env, org.id, { now }),
+        try: async () => await deleteOrgData(state, models, org.id, { now }),
         catch: (cause) => new DeletionThrew({ cause }),
       }).pipe(Effect.catch(deletionFailed(org.id)));
 
@@ -568,7 +571,7 @@ const deleteAccount = Effect.gen(function* () {
       deleted.push(org.slug);
     } else if (standing.member) {
       yield* Effect.tryPromise({
-        try: async () => await controlPlaneOf(env, org.id).leaveOrg(email),
+        try: async () => await controlPlaneOf(state, org.id).leaveOrg(email),
         catch: (cause) => new DeletionThrew({ cause }),
       }).pipe(Effect.catch(planeFailed("leaveOrg", org.id)));
       yield* syncOrgIndex(org.id);
@@ -576,11 +579,14 @@ const deleteAccount = Effect.gen(function* () {
     }
   }
 
-  if (isHosted(env))
+  if (isHosted(yield* AuthConfig)) {
+    const signIn = yield* AppEnv;
+
     yield* Effect.tryPromise({
-      try: async () => await deleteSignInAccount(env, email),
+      try: async () => await deleteSignInAccount(signIn, email),
       catch: (cause) => new DeletionThrew({ cause }),
     }).pipe(Effect.catch(signInDeletionFailed));
+  }
 
   yield* registry("removePerson", (stub) => stub.removePerson(email));
   forgetStanding({ email });

@@ -30,7 +30,7 @@ Effect v4 APIs differ from Effect 3.
 
 - Infrastructure is Alchemy v2 (`alchemy.run.ts`, `infra/`); there is no Wrangler config. A new binding/variable goes in the Worker `env` in `alchemy.run.ts`, `apps/app/src/env.d.ts` and `apps/app/vitest.config.ts` together.
 - The Worker's tests (`apps/app/test/`) run in workerd via `@cloudflare/vitest-plugin` (`exports.default.fetch` from `cloudflare:workers`); use `@effect/vitest` for Effect code. The panel's tests (`apps/web/test/`) run in Node.js.
-- Per-request `env`/`ctx` are provided as `WorkerEnv`/`WorkerExecutionContext` services via the web handler's `Context` (`requestContext`); layers stay free of them.
+- Per-request `env`/`ctx` are provided as services via the web handler's `Context` (`requestContext` in `apps/app/src/worker-env.ts`); layers stay free of them. Code reads its package's view of `env` (`AuthConfig`, `StateEnv`, `ModelsEnv`, or `AppEnv` for code that stays in the Worker), never the global `Env`: a binding a view needs goes into that interface too.
 - Translators/thinking/payload rules are pure sync functions over parsed JSON; cite the Go source path at the top of each module that copies Go. Payload rules stay the final mutation before upstream requests.
 - Lint (`docs/DEVELOPMENT.md` "Lint and format") must have zero errors; fix findings instead of silencing them. An unavoidable type assertion gets a `// SAFETY: <invariant>` comment before it.
 - Redact tokens/API keys/JWTs in logs (`redactHeaders`); drive time in tests with `TestClock`; justify every `any` with a comment.

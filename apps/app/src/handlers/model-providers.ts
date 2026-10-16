@@ -11,9 +11,9 @@ import { ConfigReader } from "../config/reader.ts";
 import { configCredentials, openAICompatModelIds } from "../executor/config-credentials.ts";
 import { ExecutionError } from "../executor/errors.ts";
 import type { SpawnAgentSource } from "../executor/helps/codex-multi-agent-v2.ts";
-import type { WorkerEnv } from "../platform/env.ts";
 import type { CurrentOrg } from "../platform/org.ts";
 import { ModelRegistry } from "../registry/service.ts";
+import type { ModelsEnv } from "../models/env.ts";
 
 export class ModelProviders extends Context.Service<
   ModelProviders,
@@ -21,12 +21,12 @@ export class ModelProviders extends Context.Service<
     /** Providers able to serve exactly this model id, in preference order (Go `GetModelProviders`). */
     readonly providersFor: (
       model: string,
-    ) => Effect.Effect<ReadonlyArray<string>, ExecutionError, WorkerEnv | CurrentOrg>;
+    ) => Effect.Effect<ReadonlyArray<string>, ExecutionError, ModelsEnv | CurrentOrg>;
     /** First available model of any provider (Go `GetFirstAvailableModel("")`), used for `auto`. */
     readonly firstAvailableModel: Effect.Effect<
       string | undefined,
       ExecutionError,
-      WorkerEnv | CurrentOrg
+      ModelsEnv | CurrentOrg
     >;
     /**
      * Registry type of `model` (`registry.LookupModelInfo(model).Type`, e.g. `openai-image`); `undefined` when the
@@ -34,7 +34,7 @@ export class ModelProviders extends Context.Service<
      */
     readonly modelType?: (
       model: string,
-    ) => Effect.Effect<string | undefined, ExecutionError, WorkerEnv | CurrentOrg>;
+    ) => Effect.Effect<string | undefined, ExecutionError, ModelsEnv | CurrentOrg>;
     /**
      * The registry data behind the `spawn_agent` model list of Codex multi-agent v2 requests (available models, the
      * Codex client catalog, model lookups). Optional like `modelType`.
@@ -42,7 +42,7 @@ export class ModelProviders extends Context.Service<
     readonly spawnAgentSource?: Effect.Effect<
       SpawnAgentSource,
       ExecutionError,
-      WorkerEnv | CurrentOrg
+      ModelsEnv | CurrentOrg
     >;
   }
 >()("commissary/handlers/ModelProviders") {

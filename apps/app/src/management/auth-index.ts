@@ -31,13 +31,13 @@
 import { createHmac, createSecretKey, type KeyObject } from "node:crypto";
 import { Effect } from "effect";
 import { isDeployedStage } from "../access/config.ts";
-import { WorkerEnv } from "../platform/env.ts";
 import { CurrentOrg, GLOBAL_ORG, type OrgId } from "../platform/org.ts";
 import {
   DEV_AUTH_INDEX_KEY,
   MIN_AUTH_INDEX_KEY_LENGTH,
   MIN_DEPLOYED_AUTH_INDEX_KEY_LENGTH,
 } from "./auth-index-key.ts";
+import { ModelsEnv } from "../models/env.ts";
 
 /** Hex characters of an `auth_index`. */
 export const AUTH_INDEX_LENGTH = 16;
@@ -81,7 +81,7 @@ export class AuthIndexKeyError extends Error {
 /**
  * The indexer of `secret` (the `AUTH_INDEX_KEY` binding), cached per isolate. Fails closed: throws
  * `AuthIndexKeyError` unless `secret` is a string of at least 16 characters (a binding missing at runtime is
- * `undefined` whatever `Env` says).
+ * `undefined` whatever the env type says).
  */
 export const authIndexer = (secret: string | undefined): AuthIndexer => {
   if (typeof secret !== "string" || secret.length < MIN_AUTH_INDEX_KEY_LENGTH)
@@ -167,7 +167,7 @@ export const orgAuthIndexer = (env: AuthIndexKeyEnv, org: OrgId): AuthIndexer =>
 };
 
 /** The indexer of the current Worker invocation's org ({@link orgAuthIndexer}). */
-export const currentAuthIndexer: Effect.Effect<AuthIndexer, never, WorkerEnv | CurrentOrg> =
+export const currentAuthIndexer: Effect.Effect<AuthIndexer, never, ModelsEnv | CurrentOrg> =
   Effect.gen(function* () {
-    return orgAuthIndexer(yield* WorkerEnv, yield* CurrentOrg);
+    return orgAuthIndexer(yield* ModelsEnv, yield* CurrentOrg);
   });

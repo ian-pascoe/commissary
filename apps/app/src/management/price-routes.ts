@@ -14,7 +14,8 @@ import { HttpRouter } from "effect/http";
 import { AccessPrincipal } from "../access/principal.ts";
 import type { PriceOverrideValue, WriteResult } from "../config/store.ts";
 import { isJsonObject, type Json } from "../json/index.ts";
-import { bodyJson, controlPlane, handled, ifMatch, jsonReply, replyError } from "./http.ts";
+import { bodyJson, handled, ifMatch, jsonReply, replyError } from "./http.ts";
+import { modelsControlPlane } from "../models/env.ts";
 
 const BASE = "/v9/management/price-overrides";
 
@@ -86,7 +87,7 @@ const written = (result: WriteResult<{ readonly id: string; readonly revision: n
 const list = Effect.gen(function* () {
   return jsonReply(
     200,
-    yield* controlPlane("priceOverrideEntries", (stub) => stub.priceOverrideEntries()),
+    yield* modelsControlPlane("priceOverrideEntries", (stub) => stub.priceOverrideEntries()),
   );
 });
 
@@ -94,7 +95,7 @@ const create = Effect.gen(function* () {
   const price = yield* value;
   const { principalId } = yield* AccessPrincipal;
 
-  const result = yield* controlPlane("writePriceOverride", (stub) =>
+  const result = yield* modelsControlPlane("writePriceOverride", (stub) =>
     stub.writePriceOverride({ revision: 0, value: price }, principalId),
   );
 
@@ -107,7 +108,7 @@ const replace = Effect.gen(function* () {
   const price = yield* value;
   const { principalId } = yield* AccessPrincipal;
 
-  const result = yield* controlPlane("writePriceOverride", (stub) =>
+  const result = yield* modelsControlPlane("writePriceOverride", (stub) =>
     stub.writePriceOverride({ id, revision, value: price }, principalId),
   );
 
@@ -119,7 +120,7 @@ const remove = Effect.gen(function* () {
   const revision = yield* ifMatch;
   const { principalId } = yield* AccessPrincipal;
 
-  const result = yield* controlPlane("writePriceOverride", (stub) =>
+  const result = yield* modelsControlPlane("writePriceOverride", (stub) =>
     stub.writePriceOverride({ id, revision, value: null }, principalId),
   );
 

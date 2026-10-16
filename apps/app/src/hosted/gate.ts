@@ -20,8 +20,10 @@ import type { AccessIdentity, Principal } from "../access/principal.ts";
 import { presentedCredentials } from "../access/api-key.ts";
 import { type AccessZone, scopedUrl } from "../access/routes.ts";
 import { UnauthorizedError } from "../errors.ts";
-import { WorkerEnv } from "../platform/env.ts";
+import { AuthConfig } from "../auth/config.ts";
 import type { CurrentOrg } from "../platform/org.ts";
+import { StateEnv } from "../state/env.ts";
+import { AppEnv } from "../worker-env.ts";
 import { limitOrgRate } from "./rate-limit.ts";
 import { signedInPerson } from "./session.ts";
 import { ensureSignedUp, requireStanding } from "./standing.ts";
@@ -43,10 +45,8 @@ export const authenticateHosted = (
   requestUrl: string,
   zone: Exclude<AccessZone, "public">,
   method = "GET",
-): Effect.Effect<AccessIdentity, AccessError, WorkerEnv | CurrentOrg> =>
+): Effect.Effect<AccessIdentity, AccessError, AuthConfig | StateEnv | AppEnv | CurrentOrg> =>
   Effect.gen(function* () {
-    const env = yield* WorkerEnv;
-
     if (zone === "protected") {
       const credentials = presentedCredentials(headers, requestUrl);
 
@@ -79,7 +79,12 @@ export const authenticateHosted = (
       return identity;
     }
 
-    const person = yield* signedInPerson(env, originOf(requestUrl), headers);
+    const person = yield* signedInPerson(
+      yield* AppEnv,
+      yield* StateEnv,
+      originOf(requestUrl),
+      headers,
+    );
 
     if (person === undefined) return yield* new UnauthorizedError({ message: NOT_SIGNED_IN });
     yield* ensureSignedUp(person.email);
@@ -90,7 +95,7 @@ export const authenticateHosted = (
       sub: `hosted:${person.userId}`,
     };
 
-    const platformAdmin = platformAdminLists(env).adminEmails.has(person.email);
+    const platformAdmin = platformAdminLists(yield* AuthConfig).adminEmails.has(person.email);
     const org = yield* targetOrg(scopedUrl(requestUrl)?.slug, platformAdmin);
 
     // A platform admin still reaches a suspended org, to look at it and unsuspend it.

@@ -1,6 +1,6 @@
 /**
  * Usage record sink. Records are collected per attempt by `UsageReporter` and handed to the sink once; the production
- * sink (`d1-sink.ts`) persists them to D1 through `ctx.waitUntil`. It reads the per-request `WorkerEnv` and
+ * sink (`d1-sink.ts`) persists them to D1 through `ctx.waitUntil`. It reads the per-request `ModelsEnv` and
  * `WorkerExecutionContext` from the fiber context when publishing (never captured in the layer); the requirement is
  * deliberately not part of the type so the conductor's attempt plumbing stays unchanged.
  */

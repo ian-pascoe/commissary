@@ -10,11 +10,11 @@ import { AccessPrincipal } from "../access/principal.ts";
 import { hostedOnly } from "../hosted/only.ts";
 import { endSessions } from "../hosted/session.ts";
 import { forgetStanding, ownedOrgLimit } from "../hosted/standing.ts";
-import { WorkerEnv } from "../platform/env.ts";
 import { MAX_ORG_LIMIT, type PersonRecord } from "../platform/registry-store.ts";
 import type { PersonView } from "@commissary/contract/people";
 import { bodyObject, handled, jsonReply, replyError } from "./http.ts";
 import { registry } from "./org-routes.ts";
+import { AppEnv } from "../worker-env.ts";
 
 const BASE = "/v9/management";
 
@@ -34,7 +34,7 @@ const view = (person: PersonRecord): PersonView => ({
 
 /** The person of the path, after the hosted and platform admin checks. */
 const addressed = Effect.gen(function* () {
-  const env = yield* WorkerEnv;
+  const env = yield* AppEnv;
   const identity = yield* AccessPrincipal;
 
   if (!identity.platformAdmin)

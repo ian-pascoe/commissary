@@ -67,7 +67,7 @@ such as `src/...` and `test/...` in the rest of this document are relative to `a
   one. Without `API_DOMAIN` nothing is decided there. `GET /me` reports the API host as `api_url` for the panel.
 - **Orgs** (ADR 0021, `src/platform/org.ts`): one deployment serves many orgs, and every request and scheduled job
   belongs to exactly one. The per-request `CurrentOrg` service carries its id (`OrgId`: lowercase letters, digits and
-  inner hyphens); `requestContext` provides it next to `WorkerEnv` as `global`, the org of the
+  inner hyphens); `requestContext` provides it next to the env views as `global`, the org of the
   deployment that existed before orgs, and the Access gate replaces it with the org an org-scoped management URL
   addresses or the org an API key names. `CurrentOrg`
   is a required service, not a default: code that reaches org state without an org does not compile, and where a type
@@ -141,6 +141,12 @@ client -> Cloudflare Access -> Worker
 
 - TypeScript strict mode, ESM, `effect@4` (HTTP via `effect/http` `HttpRouter.toWebHandler`; per-request Cloudflare
   `env`/`ctx` are provided as services through the handler's per-request `Context`).
+- Each future package reads its own view of `env` (#134): `AuthConfig` (`src/auth/config.ts`: Access, platform admins,
+  dev bypass, hosted mode, rate limiter), `StateEnv` (`src/state/env.ts`: the Durable Object namespaces, typed through
+  their classes), `ModelsEnv` (`src/models/env.ts`: `CACHE`, `USAGE`, `SESSION_STATE`, `AUTH_INDEX_KEY`,
+  `META_MINT_URL`, and `CONTROL_PLANE` typed through the methods Models calls); `core` reads none. Code that stays in the
+  Worker reads `AppEnv` (`src/worker-env.ts`). `requestContext` provides each from the invocation's `env`; the global
+  `Env` appears only in the entry (`index.ts`, `scheduled.ts`), the Durable Object classes and tests.
 - Use Effect at boundaries and for orchestration: services (`Context.Service`) + `Layer`s, `Schema` for config,
   credentials and external payloads, tagged errors, `Stream` for upstream/downstream streaming, `HttpClient`
   (`FetchHttpClient`) for upstream calls so tests can swap the transport.
@@ -262,7 +268,7 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
 - **Per org**: each org's ControlPlane (`controlPlaneOf(env, org)`, see Runtime topology) holds that org's config,
   credentials, cooldowns, quota state, session affinity and OAuth logins; nothing below is shared between orgs. The
   Worker-side picker (`ControlPlanePickerLayer`) and refresher (`CredentialRefresher.controlPlane`) resolve the stub
-  from `WorkerEnv` and `CurrentOrg` on every call, so the same credential name in two orgs is two credentials with
+  from `ModelsEnv` and `CurrentOrg` on every call, so the same credential name in two orgs is two credentials with
   separate cooldowns, and its `auth_index` differs between them (`orgAuthIndexer`).
 - **Sources** (`src/credentials/`): auth JSON files imported through `importAuthFile`/`upsertCredential` (stored verbatim, sealed
   with the org's data key (_Stored secrets_ above), in the DO's SQLite `credentials` table; the file _is_ the metadata) and provider keys synthesised from `api-keys` config with
@@ -550,7 +556,7 @@ WebSocket transports"). Reuses the Codex translators
   The CLI identity headers (`X-XAI-Token-Auth`, `x-grok-client-version`, `xai-grok-workspace/<ver>` UA, ...) are only sent for
   `POST /responses` against the proxy. The client version comes from KV `CACHE` key `xai/client-version` (fallback `1.0.46`),
   written by the cron task `xai-client-version-refresh` (npm `@xai-official/grok/latest`, strict `x.y.z` >= 1.0.13) and read through
-  `Effect.serviceOption(WorkerEnv)` with a one-minute per-isolate cache, so executor signatures stay unchanged.
+  `Effect.serviceOption(ModelsEnv)` with a one-minute per-isolate cache, so executor signatures stay unchanged.
 - **Responses shaping** (`executor.ts` `prepare`): translate -> `Thinking.apply` (target format `xai`) -> model/stream -> tool
   normalisation (`tools.ts`, `tool-choice.ts`: namespace flattening or folding into dispatcher functions above 200 tools,
   `custom` -> `function`, `$ref` inlining, schema simplification, `additional_tools` promotion, hosted-tool choices, orphaned
@@ -1512,7 +1518,7 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   member id of the request (it was dropped before).
   `D1UsageSink` (default in `makeClientApiRoutes`) inserts through `ctx.waitUntil` (awaits when
   `waitUntil` throws), logs failures with request id and message only and never fails the request. The sink reads
-  `WorkerEnv`/`WorkerExecutionContext` from the fiber context at publish time (not part of its type, so the conductor's
+  `ModelsEnv`/`WorkerExecutionContext` from the fiber context at publish time (not part of its type, so the conductor's
   attempt plumbing is unchanged). `migrations/` is applied by Alchemy on every deploy
   (`D1.Database` `migrations` in `alchemy.run.ts`). Failure bodies are truncated to 2 KiB.
 - **Cost** (`pricing.ts`, `pricing-service.ts`, `migrations/0004_usage_cost.sql`; Workers addition, ADR 0024): each record
@@ -1761,8 +1767,8 @@ two orgs never share an instance.
   backend and unit tests. Expiry is lazy (an expired entry reads as absent) plus an alarm armed at the earliest expiry that
   deletes expired entries and, when nothing is left, the whole instance storage (`deleteAll`, tables re-created). Bounds: TTL
   clamp 1 s .. 7 d, value <= 20 Mi units, `maxEntries` per instance (oldest writes evicted, expired purged first).
-- **Client** (`client.ts`): `SessionStateBackend.run(address, ops)`; `durableObjectBackend` (per-request stubs from `WorkerEnv`,
-  never captured), `makeMemoryBackend(now?)` (bounded to 10240 instances) and `resolveBackend()` = the DO when `WorkerEnv`
+- **Client** (`client.ts`): `SessionStateBackend.run(address, ops)`; `durableObjectBackend` (per-request stubs from `StateEnv`,
+  never captured), `makeMemoryBackend(now?)` (bounded to 10240 instances) and `resolveBackend()` = the DO when `StateEnv`
   binds `SESSION_STATE`, else the per-isolate memory backend (unit tests, local runs without the binding).
   `updateEntry` is the compare-and-swap read-modify-write loop (`known`/`slideTtl` options save the initial read).
   Every store treats a backend failure as a cache miss (`bestEffort`, logged): a request never fails because of replay state.

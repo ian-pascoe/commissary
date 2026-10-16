@@ -6,7 +6,7 @@ import { HttpRouter } from "effect/http";
 import { afterAll, describe, expect, it } from "vitest";
 import { makeAccessLayer, makeWithAccess } from "../src/access/layer.ts";
 import { ConfigReader } from "../src/config/reader.ts";
-import { requestContext } from "../src/platform/env.ts";
+import { requestContext } from "../src/worker-env.ts";
 import { CatalogStore } from "../src/registry/catalog-store.ts";
 import { ModelRoutes } from "../src/registry/routes.ts";
 import { ModelRegistry, ModelRegistryError, buildSnapshot } from "../src/registry/service.ts";

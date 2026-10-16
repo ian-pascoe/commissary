@@ -1,7 +1,7 @@
 import { ControlPlane } from "./credentials/control-plane.ts";
 import { makeWebHandler } from "./http/app.ts";
 import { misdirected } from "./http/hosts.ts";
-import { requestContext } from "./platform/env.ts";
+import { requestContext } from "./worker-env.ts";
 import { Platform } from "./platform/platform.ts";
 import { dispatchScheduled } from "./scheduled.ts";
 import { SessionState } from "./session-state/durable-object.ts";

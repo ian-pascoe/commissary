@@ -15,12 +15,17 @@ import { Clock, Data, Duration, Effect } from "effect";
 import type { HttpClient } from "effect/http";
 import { FULL_ACCESS, type Scope } from "../credentials/ownership.ts";
 import type { AccountResult, QuotaReport } from "@commissary/contract/credentials";
-import { currentControlPlane, holdInvocation, type WorkerEnv } from "../platform/env.ts";
-import type { ControlPlaneStub, CurrentOrg } from "../platform/org.ts";
+import { holdInvocation } from "../platform/env.ts";
+import type { CurrentOrg } from "../platform/org.ts";
 import { probeQuota } from "./probe.ts";
 import type { QuotaOutcome } from "./report.ts";
 import type { SweepLease, SweepSource } from "./sweep-lease.ts";
 import type { ResetGrantMark } from "./reset-grant-store.ts";
+import {
+  currentModelsControlPlane,
+  type ModelsControlPlaneStub,
+  type ModelsEnv,
+} from "../models/env.ts";
 
 /** A ControlPlane RPC failed (the message never carries payloads). */
 export class QuotaControlPlaneError extends Data.TaggedError("QuotaControlPlaneError")<{
@@ -39,10 +44,10 @@ export type QuotaCheckResult =
 /** One RPC to the current org's ControlPlane (also used by `reset-grant-flow.ts`). */
 export const call = <R>(
   operation: string,
-  run: (stub: ControlPlaneStub) => R,
-): Effect.Effect<Awaited<R>, QuotaControlPlaneError, WorkerEnv | CurrentOrg> =>
+  run: (stub: ModelsControlPlaneStub) => R,
+): Effect.Effect<Awaited<R>, QuotaControlPlaneError, ModelsEnv | CurrentOrg> =>
   Effect.gen(function* () {
-    const stub = yield* currentControlPlane;
+    const stub = yield* currentModelsControlPlane;
 
     return yield* Effect.tryPromise({
       // RPC results are promise-pipelining stubs; `await` yields the plain data.
@@ -109,7 +114,7 @@ export const checkCredentialQuota = (
 ): Effect.Effect<
   QuotaCheckResult,
   QuotaControlPlaneError,
-  WorkerEnv | CurrentOrg | HttpClient.HttpClient
+  ModelsEnv | CurrentOrg | HttpClient.HttpClient
 > =>
   Effect.gen(function* () {
     const target = yield* call("quotaProbeTarget", (stub) =>
@@ -239,7 +244,7 @@ const checkForSweep = (token: string, viewer: Scope) => (id: string) =>
  * longer holds the lease; a renewal that fails to reach the ControlPlane is retried at the next tick (the lease
  * lifetime covers a few misses).
  */
-const keepLease = (token: string): Effect.Effect<void, never, WorkerEnv | CurrentOrg> =>
+const keepLease = (token: string): Effect.Effect<void, never, ModelsEnv | CurrentOrg> =>
   Effect.gen(function* () {
     for (;;) {
       yield* Effect.sleep(Duration.millis(LEASE_RENEW_INTERVAL_MS));
@@ -267,7 +272,7 @@ export const sweepQuotas = (
 ): Effect.Effect<
   QuotaSweep,
   QuotaControlPlaneError,
-  WorkerEnv | CurrentOrg | HttpClient.HttpClient
+  ModelsEnv | CurrentOrg | HttpClient.HttpClient
 > =>
   Effect.acquireUseRelease(
     // Uninterruptible: the hold and the lease are both registered or neither.
@@ -322,7 +327,7 @@ export interface QuotaSweepSummary {
 export const runQuotaSweep: Effect.Effect<
   QuotaSweepSummary,
   QuotaControlPlaneError,
-  WorkerEnv | CurrentOrg | HttpClient.HttpClient
+  ModelsEnv | CurrentOrg | HttpClient.HttpClient
 > = Effect.gen(function* () {
   const sweep = yield* sweepQuotas("cron", FULL_ACCESS);
 

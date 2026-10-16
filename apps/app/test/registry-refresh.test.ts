@@ -2,7 +2,6 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Fiber, Layer } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { TestClock } from "effect/testing";
-import { WorkerEnv } from "../src/platform/env.ts";
 import { embeddedCatalogs, embeddedModelsDev } from "../src/registry/catalog.ts";
 import { resetOpenCodeCatalogCache, openCodeCatalogFor } from "../src/registry/opencode-catalog.ts";
 import { CATALOG_CACHE_TTL_MS, CATALOG_KEYS, CatalogStore } from "../src/registry/catalog-store.ts";
@@ -22,6 +21,7 @@ import {
   refreshLayer,
   workerEnv,
 } from "./support/registry-refresh.ts";
+import { envContext } from "../src/worker-env.ts";
 
 const runRefresh = (
   kv: FakeKv,
@@ -316,16 +316,18 @@ describe("refreshCatalogs (cron)", () => {
       const kv = new FakeKv();
       const requested: string[] = [];
 
-      const env = Layer.succeed(WorkerEnv, {
-        CACHE: kv as unknown as KVNamespace,
-        PLATFORM: {
-          getByName: () => ({
-            takeCatalogRefreshLease: async () => {
-              throw new Error("down");
-            },
-          }),
-        },
-      } as unknown as Env);
+      const env = Layer.succeedContext(
+        envContext({
+          CACHE: kv as unknown as KVNamespace,
+          PLATFORM: {
+            getByName: () => ({
+              takeCatalogRefreshLease: async () => {
+                throw new Error("down");
+              },
+            }),
+          },
+        } as unknown as Env),
+      );
 
       const outcome = yield* refreshCatalogs.pipe(
         Effect.provide(

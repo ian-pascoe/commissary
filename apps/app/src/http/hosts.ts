@@ -7,7 +7,11 @@ import { classifyPath, normalizedPath } from "../access/routes.ts";
 /** Served on every host: the health check (`src/http/routes.ts`). */
 const HEALTH_PATH = "/healthz";
 
-type HostEnv = Partial<Pick<Env, "APP_DOMAIN" | "API_DOMAIN">>;
+/** The hosts of the deployment (`AppEnv`). */
+interface HostEnv {
+  readonly APP_DOMAIN?: string | undefined;
+  readonly API_DOMAIN?: string | undefined;
+}
 
 const hostName = (value: string | undefined): string => (value ?? "").trim().toLowerCase();
 

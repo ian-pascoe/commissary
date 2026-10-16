@@ -36,7 +36,7 @@ import {
 } from "../../json/index.ts";
 import { splitLines } from "../../http/sse.ts";
 import { fetchProjectId } from "../../oauth/flows/antigravity.ts";
-import { optionalRequestOrg, WorkerEnv, WorkerExecutionContext } from "../../platform/env.ts";
+import { WorkerExecutionContext } from "../../platform/env.ts";
 import { controlPlaneOf, type OrgId } from "../../platform/org.ts";
 import {
   isolateSignatureCache,
@@ -120,6 +120,8 @@ import {
 import { type AntigravityState, antigravityStateFor } from "./state.ts";
 import { convertStreamToNonStream, JsonAssembler, UsageFilter } from "./stream.ts";
 import { antigravityRequestUserAgent, currentAntigravityVersion } from "./version.ts";
+import { ModelsEnv } from "../../models/env.ts";
+import { optionalRequestOrg } from "../../state/env.ts";
 
 export const ANTIGRAVITY_IDENTIFIER = "antigravity";
 
@@ -200,9 +202,9 @@ export const makeAntigravityExecutor = (
     request: ExecutorRequest,
     options: ExecutorOptions,
   ) {
-    const env = Option.getOrUndefined(yield* Effect.serviceOption(WorkerEnv));
+    const env = Option.getOrUndefined(yield* Effect.serviceOption(ModelsEnv));
     const ctx = Option.getOrUndefined(yield* Effect.serviceOption(WorkerExecutionContext));
-    // Like `WorkerEnv`, optional so the executor runs outside a request (unit tests); a request must carry it.
+    // Like `ModelsEnv`, optional so the executor runs outside a request (unit tests); a request must carry it.
     const org = yield* optionalRequestOrg;
 
     const accessToken =

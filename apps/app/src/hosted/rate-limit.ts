@@ -6,8 +6,8 @@
  */
 import { Effect } from "effect";
 import { RateLimitedError } from "../errors.ts";
-import { WorkerEnv } from "../platform/env.ts";
 import type { OrgId } from "../platform/org.ts";
+import { AuthConfig } from "../auth/config.ts";
 
 /** The binding's period: the limit counts requests per minute. */
 export const RATE_LIMIT_PERIOD_SECONDS = 60;
@@ -18,9 +18,9 @@ export const RATE_LIMITED = "Rate limit exceeded";
  * Counts a request of `org`; over the limit, `429 Rate limit exceeded` with `Retry-After`. A deployment without the
  * binding has no limit; a failing binding lets the request through (logged), since refusing every org would be worse.
  */
-export const limitOrgRate = (org: OrgId): Effect.Effect<void, RateLimitedError, WorkerEnv> =>
+export const limitOrgRate = (org: OrgId): Effect.Effect<void, RateLimitedError, AuthConfig> =>
   Effect.gen(function* () {
-    const { ORG_RATE_LIMIT: limiter } = yield* WorkerEnv;
+    const { ORG_RATE_LIMIT: limiter } = yield* AuthConfig;
 
     if (limiter === undefined) return;
 
