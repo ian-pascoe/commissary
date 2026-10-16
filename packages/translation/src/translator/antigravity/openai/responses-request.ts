@@ -20,7 +20,6 @@ import {
   applySummaryConfig,
   extractSummaryConfig,
   parseSuffix,
-  type ThinkingModelInfo,
   UNSPECIFIED_SUMMARY,
 } from "../../../thinking/index.ts";
 import { lookupModelInfo } from "../../model-info.ts";
@@ -38,9 +37,7 @@ export const ANTIGRAVITY_WEB_SEARCH_SYSTEM_INSTRUCTION =
 
 /** `antigravitySupportsNativeResponsesWebSearch`: the envelope's model info first, then the Antigravity registry record. */
 const supportsNativeWebSearch = (model: string, envelope: RequestEnvelope): boolean => {
-  // SAFETY: the envelope's modelInfo is the registry ModelInfo record when set, which satisfies ThinkingModelInfo.
-  const explicit = (envelope.modelInfo as ThinkingModelInfo | undefined)?.nativeCapabilities
-    ?.webSearch;
+  const explicit = envelope.modelInfo?.nativeCapabilities?.webSearch;
 
   if (typeof explicit === "boolean") return explicit;
   const base = parseSuffix(model.trim()).modelName.trim();

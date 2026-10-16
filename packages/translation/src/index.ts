@@ -2,7 +2,8 @@
  * `@commissary/translation`: request/response translation between the client and provider formats (the
  * `TranslatorRegistry` and its built-in translators), with the thinking pipeline (`./thinking`), thinking signatures
  * (`./signature`), token counting (`./tokenizer`), the format names (`./formats`) and SSE framing (`./sse`) as
- * subpaths. Pure and synchronous: no Effect services, no Workers APIs.
+ * subpaths. Pure: no Effect services, no Workers APIs; translators are synchronous (the signature store's
+ * prefetch/flush are the only async steps, run by executors around a translation).
  *
  * The first block is the translation API; the rest are translator helpers the Worker's executors reuse.
  */

@@ -90,7 +90,7 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
 ## Workspace and Turborepo
 
 Internal packages are source-only: `package.json` `exports` point at TypeScript in `src/` (`./*` → `./src/*.ts` for
-the contract, named entry points for the others), there is no build step, and whatever imports a package compiles it
+the contract, named entry points for the others; `./testing` at `test/testing.ts`, "Tests" below), there is no build step, and whatever imports a package compiles it
 (Alchemy's bundler, Vite, Vitest). Import a module by its subpath, e.g. `@commissary/contract/api` or
 `@commissary/translation/thinking`. `apps/app` imports nothing from `apps/web`, `apps/web` imports only
 `@commissary/contract` from the workspace, and packages import nothing from `apps/` (lint rule). Versions that several packages share (`effect`, `typescript`, `vitest`, …)

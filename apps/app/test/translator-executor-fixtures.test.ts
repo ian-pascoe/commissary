@@ -4,11 +4,10 @@
 import { builtinTranslators, setModelInfoLookup, summaryHooks } from "@commissary/translation";
 import {
   catalogLookup,
-  checkTranslatorFixture,
-  missingNeeds,
+  itTranslatorFixture,
   type TranslatorFixtureCase,
 } from "@commissary/translation/testing";
-import { describe, it } from "vitest";
+import { describe } from "vitest";
 import { translateRequestForExecutor } from "../src/executor/helps/translate.ts";
 import cases from "./fixtures/translator-executor.json";
 import { configOf } from "./support/registry-sources.ts";
@@ -20,24 +19,20 @@ describe("translator golden fixtures", () => {
   describe("translator-executor.json", () => {
     // SAFETY: the generated fixture file holds translator fixture cases.
     for (const c of cases as ReadonlyArray<TranslatorFixtureCase>) {
-      const missing = missingNeeds(c);
-      const test = missing.length > 0 ? it.skip : it;
-      test(missing.length > 0 ? `${c.name} (needs ${missing.join(", ")})` : c.name, () =>
-        checkTranslatorFixture(c, (fixture, envelope) =>
-          translateRequestForExecutor(
-            builtinTranslators,
-            fixture.from,
-            fixture.to,
-            envelope,
-            summaryHooks,
-            {
-              headers: new Headers(fixture.executor?.headers ?? {}),
-              config: configOf(
-                `client:\n  codex:\n    optimize-multi-agent-v2: ${fixture.executor?.optimizeMultiAgentV2 === true}\nupstream:\n  codex:\n    orphan-delegation-compatibility: ${fixture.executor?.orphanDelegation === true}\n`,
-              ),
-              isCompat: fixture.executor?.compat === true,
-            },
-          ),
+      itTranslatorFixture(c, (fixture, envelope) =>
+        translateRequestForExecutor(
+          builtinTranslators,
+          fixture.from,
+          fixture.to,
+          envelope,
+          summaryHooks,
+          {
+            headers: new Headers(fixture.executor?.headers ?? {}),
+            config: configOf(
+              `client:\n  codex:\n    optimize-multi-agent-v2: ${fixture.executor?.optimizeMultiAgentV2 === true}\nupstream:\n  codex:\n    orphan-delegation-compatibility: ${fixture.executor?.orphanDelegation === true}\n`,
+            ),
+            isCompat: fixture.executor?.compat === true,
+          },
         ),
       );
     }

@@ -6,11 +6,7 @@ export { expandEmbeddedJson, structuralBody } from "./support/structural.ts";
 
 export { catalogLookup, fixture as thinkingFixture } from "./support/thinking.ts";
 
-export {
-  checkTranslatorFixture,
-  missingNeeds,
-  type TranslatorFixtureCase,
-} from "./support/translator-fixtures.ts";
+export { itTranslatorFixture, type TranslatorFixtureCase } from "./support/translator-fixtures.ts";
 
 /** The token counting fixtures (`go run ./tools/fixturegen/tokens`). */
 export { default as tokenFixtures } from "./fixtures/tokens.json";

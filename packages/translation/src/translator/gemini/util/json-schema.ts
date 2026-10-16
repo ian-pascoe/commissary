@@ -4,7 +4,7 @@
  * Go source: internal/util/gemini_schema.go (cleanJSONSchema and its passes, CleanJSONSchemaForGemini,
  * CleanJSONSchemaForGeminiJSONSchema, CleanJSONSchemaForAntigravity*, InlineLocalRefs) and internal/util/translator.go
  * (Walk). The Go code rewrites a JSON string through gjson/sjson paths; this port keeps the same path based passes on
- * a parsed document (`Doc`) using the gjson/sjson engine of `src/json`. Pass one single schema, never a request.
+ * a parsed document (`Doc`) using the gjson/sjson engine of `@commissary/json`. Pass one single schema, never a request.
  *
  * Differences: hint texts embed `JSON.stringify` of objects/arrays (Go keeps the original raw text).
  */

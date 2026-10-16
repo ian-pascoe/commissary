@@ -102,6 +102,10 @@
           {
             "patterns": [
               {
+                "regex": "^@commissary/[^/]+/testing$",
+                "message": "A package's ./testing helpers are for test files only (docs/DEVELOPMENT.md, \"Tests\")."
+              },
+              {
                 "regex": "(^|/)apps/",
                 "message": "Packages import nothing from apps/*: an app depends on packages, never the reverse."
               }
@@ -111,16 +115,12 @@
       }
     },
     {
-      "files": ["packages/*/src/**"],
+      "files": ["packages/*/test/**"],
       "rules": {
         "no-restricted-imports": [
           "error",
           {
             "patterns": [
-              {
-                "regex": "^@commissary/[^/]+/testing$",
-                "message": "A package's ./testing helpers are for test files only (docs/DEVELOPMENT.md, \"Tests\")."
-              },
               {
                 "regex": "(^|/)apps/",
                 "message": "Packages import nothing from apps/*: an app depends on packages, never the reverse."

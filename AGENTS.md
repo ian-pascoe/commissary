@@ -5,7 +5,7 @@ TypeScript + Effect v4 (`effect@4.0.4`) port of [CLIProxyAPI](https://github.com
 ## Commands
 
 - Run before finishing: `pnpm typecheck && pnpm lint && pnpm test && pnpm smoke`; `pnpm format` formats.
-- `typecheck`, `lint`, `test` and `build` run through Turborepo (`turbo.json`, local cache; `pnpm exec turbo run <task> --force` re-runs). Workspace layout and task graph: `docs/DEVELOPMENT.md` ("Workspace and Turborepo"); docs for the installed version: `node_modules/turbo/docs/`. Packages are source-only (`exports` point at `src/*.ts`, no build).
+- `typecheck`, `lint`, `test` and `build` run through Turborepo (`turbo.json`, local cache; `pnpm exec turbo run <task> --force` re-runs). Workspace layout and task graph: `docs/DEVELOPMENT.md` ("Workspace and Turborepo"); docs for the installed version: `node_modules/turbo/docs/`. Packages are source-only (`exports` point at `src/*.ts`, plus `./testing` at `test/testing.ts`; no build).
 - Never run `pnpm run deploy`/`pnpm destroy` (Alchemy) against a real account unless asked. CI deploys previews (`pr-<number>`) and, from `main`, production (`prod`, self-hosted) and Commissary Cloud (`cloud`): `docs/DEPLOY.md`.
 - Commits follow Conventional Commits (`feat:`, `fix:`, `chore:`, …); Husky hooks format/lint staged files, check commit messages and run `pnpm typecheck && pnpm lint` before push. Fix hook failures instead of bypassing them.
 - Put git worktrees in `.worktrees/<name>` (gitignored, outside lint): `git worktree add .worktrees/<name> -b <branch>`. Run `pnpm install` in it before checks or hooks (it also links `.repos/` to the main checkout's clones), and `git worktree remove` it when done.

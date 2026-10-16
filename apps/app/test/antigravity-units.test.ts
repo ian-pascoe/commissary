@@ -59,6 +59,7 @@ import { asString, get, type Json } from "@commissary/json";
 import { applyAntigravityHints } from "../src/registry/antigravity-hints.ts";
 import { embeddedCatalogs, sectionModels } from "../src/registry/catalog.ts";
 import {
+  DEFAULT_SIGNATURE_SCOPE,
   MemorySignatureCache,
   SIGNATURE_CACHE_TTL_MS,
   signatureStoreKey,
@@ -684,6 +685,8 @@ describe("signature cache", () => {
   });
 
   it("scopes the ambient cache to a synchronous call and persists writes best-effort through the store", async () => {
+    // The global org's cache is the isolate default the translators read outside an attempt.
+    expect(DEFAULT_SIGNATURE_SCOPE).toBe(GLOBAL_ORG);
     const cache = new MemorySignatureCache();
     withSignatureContext({ cache }, () => {
       expect(cacheSignature("claude-x", "thought", LONG_SIGNATURE)).toBe(true);

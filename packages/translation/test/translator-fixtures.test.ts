@@ -6,11 +6,7 @@ import { builtinTranslators } from "../src/translator/builtin.ts";
 import { setModelInfoLookup } from "../src/translator/model-info.ts";
 import { summaryHooks } from "../src/translator/summary-hooks.ts";
 import { catalogLookup } from "./support/thinking.ts";
-import {
-  checkTranslatorFixture,
-  missingNeeds,
-  type TranslatorFixtureCase,
-} from "./support/translator-fixtures.ts";
+import { itTranslatorFixture, type TranslatorFixtureCase } from "./support/translator-fixtures.ts";
 
 // Translators that consult the model registry (e.g. Claude adaptive thinking) use the Go static catalog.
 setModelInfoLookup(catalogLookup);
@@ -26,12 +22,8 @@ describe("translator golden fixtures", () => {
   for (const [file, module] of Object.entries(files)) {
     describe(file.replace("./fixtures/translator/", ""), () => {
       for (const c of module.default) {
-        const missing = missingNeeds(c);
-        const test = missing.length > 0 ? it.skip : it;
-        test(missing.length > 0 ? `${c.name} (needs ${missing.join(", ")})` : c.name, () =>
-          checkTranslatorFixture(c, (fixture, envelope) =>
-            builtinTranslators.translateRequest(fixture.from, fixture.to, envelope, summaryHooks),
-          ),
+        itTranslatorFixture(c, (fixture, envelope) =>
+          builtinTranslators.translateRequest(fixture.from, fixture.to, envelope, summaryHooks),
         );
       }
     });

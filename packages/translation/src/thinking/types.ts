@@ -6,7 +6,7 @@
  * thinking pipeline reads.
  *
  * Bodies are parsed JSON values (`undefined` stands for an empty or unparsable Go body). Appliers and strip helpers
- * mutate the body in place and return the root, like `src/json` `set`/`del`.
+ * mutate the body in place and return the root, like `@commissary/json` `set`/`del`.
  */
 import type { Json } from "@commissary/json";
 

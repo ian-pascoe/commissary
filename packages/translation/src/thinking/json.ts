@@ -1,5 +1,5 @@
 /**
- * Small helpers over `src/json` shared by the thinking modules.
+ * Small helpers over `@commissary/json` shared by the thinking modules.
  *
  * Go ignores sjson errors (`result, _ := sjson.SetBytes(...)`); the safe wrappers do the same for path errors so a
  * body of an unexpected shape (e.g. an array root) is left unchanged instead of throwing.

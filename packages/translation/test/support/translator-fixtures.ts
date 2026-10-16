@@ -3,7 +3,7 @@
  * (`test/fixtures/translator/`) and the Worker's executor-rewrite cases run through it. Outputs compare structurally
  * (Go's key order and HTML escaping are not part of the contract); SSE framing and non-JSON text stay exact.
  */
-import { expect } from "vitest";
+import { expect, it } from "vitest";
 import type { Json } from "@commissary/json";
 import { builtinTranslators } from "../../src/translator/builtin.ts";
 import { makeTranslationState, type RequestEnvelope } from "../../src/translator/registry.ts";
@@ -43,7 +43,7 @@ export interface TranslatorFixtureCase {
 const SUPPORTED_NEEDS = new Set<string>(["thinking-summary"]);
 
 /** The `needs` of `c` that are not implemented: the case is skipped while any is left. */
-export const missingNeeds = (c: TranslatorFixtureCase): ReadonlyArray<string> =>
+const missingNeeds = (c: TranslatorFixtureCase): ReadonlyArray<string> =>
   (c.needs ?? []).filter((need) => !SUPPORTED_NEEDS.has(need));
 
 /** Wall-clock fields the Go translators stamp with `time.Now()`; their values cannot match across runs. */
@@ -101,7 +101,7 @@ const normalizeChunk = (text: string): Json => {
  * Runs one case: `translateRequest` translates the request (the registry, or the Worker's executor-level rewrites),
  * the built-in translators the responses and token counts.
  */
-export const checkTranslatorFixture = (
+const checkTranslatorFixture = (
   c: TranslatorFixtureCase,
   translateRequest: (c: TranslatorFixtureCase, envelope: RequestEnvelope) => RequestEnvelope,
 ): void => {
@@ -160,4 +160,21 @@ export const checkTranslatorFixture = (
 
     expect(normalizeChunk(out)).toEqual(normalizeChunk(c.tokenCountOutput ?? ""));
   }
+};
+
+/** Declares the test of one case, skipped (with the missing `needs` in its name) until its capabilities land. */
+export const itTranslatorFixture = (
+  c: TranslatorFixtureCase,
+  translateRequest: (c: TranslatorFixtureCase, envelope: RequestEnvelope) => RequestEnvelope,
+): void => {
+  const missing = missingNeeds(c);
+
+  if (missing.length > 0) {
+    it.skip(`${c.name} (needs ${missing.join(", ")})`, () =>
+      checkTranslatorFixture(c, translateRequest));
+
+    return;
+  }
+
+  it(c.name, () => checkTranslatorFixture(c, translateRequest));
 };

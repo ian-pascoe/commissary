@@ -18,6 +18,7 @@ import { cloneJson, get, type Json, set } from "@commissary/json";
 import { applyClaudeInputTokens, type ClaudeInputTokenState } from "../tokenizer/claude-input.ts";
 import type { SummaryConfig } from "../thinking/index.ts";
 import { Formats, type Format } from "./formats.ts";
+import type { ThinkingModelInfo } from "../thinking/types.ts";
 
 /** A request translator refused the request (Go `RequestEnvelope.Err`); maps to a request-scoped 400. */
 export class TranslationError extends Error {
@@ -39,7 +40,7 @@ export interface RequestEnvelope {
   readonly stream: boolean;
   readonly body: Json;
   /** Resolved model info for envelope transforms that need it (Go `RequestEnvelope.ModelInfo`). */
-  readonly modelInfo?: unknown;
+  readonly modelInfo?: ThinkingModelInfo | undefined;
   /** Set by translators/normalisers that changed Responses `configuration_update` items. */
   readonly configurationUpdatesChanged?: boolean;
   /** Request-scoped refusal raised by the transform. */
