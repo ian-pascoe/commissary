@@ -6,7 +6,7 @@
  * Workers additions (no Go counterpart): OpenCode keys without a secret are dropped, and a model entry's `protocol`
  * (OpenCode-only) is dropped in every other provider section.
  */
-import { tryParseJson } from "../json/index.ts";
+import { tryParseJson } from "@commissary/json";
 import type {
   ProviderKeyEntry,
   ProviderKeyFamily,

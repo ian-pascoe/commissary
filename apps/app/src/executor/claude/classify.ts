@@ -6,8 +6,8 @@
  * IsClaudeSubagentRequest, ClaudeSubagentRequests1h, IsClaudeNewPromptTurn, ExtractClaudeBillingTags),
  * claude_executor_request.go / claude_executor_cloaking.go (model family predicates).
  */
-import { get, isJsonObject, tryParseJson, type Json, type JsonObject } from "../../json/index.ts";
-import { isArr, isObj, str, toArray } from "../../translator/common/gjson.ts";
+import { get, isJsonObject, tryParseJson, type Json, type JsonObject } from "@commissary/json";
+import { isArr, isObj, str, toArray } from "@commissary/translation";
 import { payloadHas1hTTL } from "./cache-control.ts";
 
 export const DEFAULT_USER_AGENT = "claude-cli/2.1.280 (external, cli)";

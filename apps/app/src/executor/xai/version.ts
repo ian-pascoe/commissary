@@ -7,7 +7,7 @@
  * isolate for a minute) with the compiled-in fallback when KV has nothing.
  */
 import { Clock, Effect, Option } from "effect";
-import { get, tryParseJson } from "../../json/index.ts";
+import { get, tryParseJson } from "@commissary/json";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { ModelsEnv } from "../../models/env.ts";
 

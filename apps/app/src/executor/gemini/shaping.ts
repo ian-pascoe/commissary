@@ -8,17 +8,8 @@
  */
 import { Buffer } from "node:buffer";
 import { deflateSync } from "node:zlib";
-import {
-  asInt,
-  asString,
-  del,
-  exists,
-  get,
-  isJsonArray,
-  type Json,
-  set,
-} from "../../json/index.ts";
-import { lookupModelInfo } from "../../translator/gemini/util/model-info.ts";
+import { asInt, asString, del, exists, get, isJsonArray, type Json, set } from "@commissary/json";
+import { lookupModelInfo } from "./model-info.ts";
 
 // --- white image (fixGeminiImageAspectRatio) ---------------------------------------------------------------------------
 

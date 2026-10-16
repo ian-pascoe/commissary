@@ -7,7 +7,7 @@
  * catalog as fallback.
  */
 import { Match } from "effect";
-import { parseSuffix } from "../suffix.ts";
+import { parseSuffix } from "@commissary/translation/thinking";
 
 /** Exact model UID suffixes that mean "already resolved". */
 const KNOWN_SUFFIXES = [

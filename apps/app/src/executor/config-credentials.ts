@@ -7,7 +7,7 @@
  * buildConfiguredModelInfo, applyModelPrefixes). Ids are derived from config positions (never from key material).
  */
 import type { Config, OpenAICompatGroup, RequestScopedErrorRule } from "../config/schema.ts";
-import type { JsonObject } from "../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { claudeConfigCredentials } from "./claude/config-credentials.ts";
 import { openAICompatibleProviderKey } from "./models.ts";
 import type { CredentialSnapshot } from "./picker.ts";

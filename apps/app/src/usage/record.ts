@@ -5,7 +5,7 @@
  * (ParseOpenAIUsage, ParseOpenAIStreamUsage, parseOpenAIStyleUsageNode, extractResponseServiceTier). The v2 token
  * breakdown lives in `accounting.ts`; the other protocols' parsers in `parsers.ts`.
  */
-import { get, isJsonObject, type Json, tryParseJson } from "../json/index.ts";
+import { get, isJsonObject, type Json, tryParseJson } from "@commissary/json";
 import {
   partialSubsetTokenBreakdown,
   subsetTokenBreakdown,

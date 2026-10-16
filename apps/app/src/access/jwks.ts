@@ -5,7 +5,7 @@ import { Clock, Context, Effect, Layer, Result, Schema } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/http";
 import { importJWK } from "jose";
 import type { JWK } from "jose";
-import { isJsonArray, isJsonObject } from "../json/index.ts";
+import { isJsonArray, isJsonObject } from "@commissary/json";
 
 /** Keys are considered fresh for this long (same default as jose's `createRemoteJWKSet`). */
 export const JWKS_MAX_AGE_MS = 600_000;

@@ -15,8 +15,8 @@ import {
   isJsonObject,
   type Json,
   type JsonObject,
-} from "../../json/index.ts";
-import { extractResponsesCallID } from "../../translator/common/responses.ts";
+} from "@commissary/json";
+import { extractResponsesCallID } from "@commissary/translation";
 import { inlineLocalRefs } from "../helps/inline-refs.ts";
 
 export const KIMI_REASONING_UNAVAILABLE = "[reasoning unavailable]";

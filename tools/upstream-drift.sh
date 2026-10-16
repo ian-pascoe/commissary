@@ -20,10 +20,15 @@ for generator in tools/fixturegen/*/; do
 done
 
 commits="$(git -C "$reference" log --no-merges --format='- [`%h`](https://github.com/router-for-me/CLIProxyAPI/commit/%H) %s' "$ported..$head")"
-results="$(mktemp)"
-pnpm --filter @commissary/app exec vitest run --reporter=json --outputFile="$results" >/dev/null 2>&1 || true
-failing="$(jq -r --arg root "$PWD/" '.testResults[] | select(.status != "passed") | "- `" + (.name | ltrimstr($root)) + "`"' "$results")"
-rm -f "$results"
+# The packages whose tests read fixtures (tools/fixturegen writes into each of them).
+failing=""
+for package in @commissary/json @commissary/translation @commissary/app; do
+  results="$(mktemp)"
+  pnpm --filter "$package" exec vitest run --reporter=json --outputFile="$results" >/dev/null 2>&1 || true
+  failing+="$(jq -r --arg root "$PWD/" '.testResults[] | select(.status != "passed") | "- `" + (.name | ltrimstr($root)) + "`"' "$results")"$'\n'
+  rm -f "$results"
+done
+failing="$(printf '%s' "$failing" | sed '/^$/d')"
 
 if [[ -z "$commits" && -z "$failing" ]]; then
   echo "No upstream drift: the fixtures match ${head:0:8}." >"$report"

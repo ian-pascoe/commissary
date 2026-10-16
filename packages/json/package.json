@@ -1,0 +1,19 @@
+{
+  "name": "@commissary/json",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The gjson/sjson path engine over parsed JSON, the Json types and the JSON text helpers; pure, tested in Node.js",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

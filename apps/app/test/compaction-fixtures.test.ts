@@ -14,7 +14,7 @@ import {
   sealCompaction,
   unsealCompaction,
 } from "../src/executor/helps/compaction.ts";
-import { type JsonObject, tryParseJson } from "../src/json/index.ts";
+import { type JsonObject, tryParseJson } from "@commissary/json";
 import fixtures from "./fixtures/compaction.json";
 import { credential, makeGeminiHarness } from "./support/gemini.ts";
 import {

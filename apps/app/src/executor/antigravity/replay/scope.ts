@@ -7,8 +7,14 @@
  * scope (like the xAI/Kimi/Claude stores) so two callers never share a ledger.
  */
 import { createHash } from "node:crypto";
-import { asString, get, isJsonArray, isJsonObject, type Json } from "../../../json/index.ts";
-import { stableStringify } from "../../../http/json-text.ts";
+import {
+  asString,
+  get,
+  isJsonArray,
+  isJsonObject,
+  type Json,
+  stableStringify,
+} from "@commissary/json";
 import { claudeCodeExecutionScope } from "../../codex/replay.ts";
 import { stableSessionId } from "../envelope.ts";
 

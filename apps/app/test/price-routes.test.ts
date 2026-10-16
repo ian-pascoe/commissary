@@ -5,7 +5,7 @@ import { Effect, Layer } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { HttpApiClient } from "effect/http-api";
 import { afterAll, beforeEach, expect } from "vitest";
-import type { Json } from "../src/json/index.ts";
+import type { Json } from "@commissary/json";
 import { ManagementApi } from "@commissary/contract/api";
 import { ManagementError } from "@commissary/contract/errors";
 import { OrgId } from "../src/platform/org.ts";

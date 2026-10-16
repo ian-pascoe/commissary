@@ -45,14 +45,14 @@ import {
 } from "../executor/antigravity/credits.ts";
 import { antigravityStateFor, creditsAvailable } from "../executor/antigravity/state.ts";
 import { ExecutorRegistry } from "../executor/registry.ts";
-import { parseSuffix } from "../executor/suffix.ts";
+import { parseSuffix } from "@commissary/translation/thinking";
 import type {
   ExecutionContext,
   ExecutorOptions,
   ExecutorRequest,
   ProviderExecutor,
 } from "../executor/types.ts";
-import type { Json } from "../json/index.ts";
+import type { Json } from "@commissary/json";
 import { holdInvocation } from "../platform/env.ts";
 import { CurrentOrg, type OrgId } from "../platform/org.ts";
 import { noteSelection, notePrincipal, RequestTrace } from "../observability/trace.ts";

@@ -14,7 +14,7 @@
  * rather than a pin: the chat proxy answers 426 to versions below its floor, billing included.
  */
 import { XAI_TOKEN_AUTH_VALUE } from "../executor/xai/headers.ts";
-import type { Json, JsonObject } from "../json/index.ts";
+import type { Json, JsonObject } from "@commissary/json";
 import type { QuotaWindow } from "@commissary/contract/credentials";
 import { isoInstant, num, quotaWindow, record } from "./window.ts";
 

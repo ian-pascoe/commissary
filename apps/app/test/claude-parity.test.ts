@@ -19,7 +19,7 @@ import {
   threadContinuationNeedsAliasState,
   threadNotFoundError,
 } from "../src/executor/claude/thread.ts";
-import { asString, type Json, type JsonObject } from "../src/json/index.ts";
+import { asString, type Json, type JsonObject } from "@commissary/json";
 import { credential, execute, harness, json, loadConfig, options } from "./support/executor-run.ts";
 
 const obj = (value: Json): JsonObject => value as JsonObject;

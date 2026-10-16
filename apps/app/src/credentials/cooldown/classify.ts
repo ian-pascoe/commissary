@@ -9,7 +9,7 @@
  * Errors are described by {@link ClassifiableError}: `status` is the upstream HTTP status (0 when the failure happened
  * before an HTTP answer), `message` the upstream body or error text, `code` one of the conductor codes.
  */
-import { isJsonObject, type Json, type JsonObject, tryParseJson } from "../../json/index.ts";
+import { isJsonObject, type Json, type JsonObject, tryParseJson } from "@commissary/json";
 
 /** Well-known error codes (sdk/cliproxy/auth/errors.go). */
 export const ErrorCode = {

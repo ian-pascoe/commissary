@@ -8,7 +8,7 @@
  * TLS fingerprinting (uTLS) cannot be reproduced on Workers; the official client headers are the only mitigation.
  */
 import type { Config } from "../../config/schema.ts";
-import { get, type Json } from "../../json/index.ts";
+import { get, type Json } from "@commissary/json";
 import { applyCustomHeaders, customHeaders } from "../helps/custom-headers.ts";
 import type { CredentialSnapshot } from "../picker.ts";
 

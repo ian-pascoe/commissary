@@ -4,7 +4,7 @@
  * Go source: internal/runtime/executor/helps/gemini_content_turns.go (EnsureGeminiLeadingUserContent,
  * EnsureGeminiTrailingUserContent, EnsureGeminiBoundaryUserContent).
  */
-import { asString, exists, get, isJsonArray, type Json } from "../../json/index.ts";
+import { asString, exists, get, isJsonArray, type Json } from "@commissary/json";
 
 const emptyUserTurn = (): Json => ({ role: "user", parts: [{ text: "" }] });
 

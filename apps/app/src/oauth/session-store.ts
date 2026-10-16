@@ -7,7 +7,7 @@
  * `OAuthSessions` over the tiny `SessionTable` interface so they run against a `Map` in unit tests.
  * Secrets of a flow (PKCE verifier, device code) are kept in `data` and wiped as soon as the session ends.
  */
-import type { JsonObject } from "../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import type { OAuthProvider } from "./names.ts";
 
 /** `oauthSessionTTL`: must cover the 30 minute xAI device flow. */

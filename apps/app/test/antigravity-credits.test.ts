@@ -14,7 +14,7 @@ import { Thinking } from "../src/executor/thinking.ts";
 import { executeNonStream } from "../src/handlers/execute.ts";
 import { ModelCapabilities } from "../src/handlers/model-capabilities.ts";
 import { ModelProviders } from "../src/handlers/model-providers.ts";
-import { Formats } from "../src/translator/formats.ts";
+import { Formats } from "@commissary/translation/formats";
 import type { UsageRecord } from "../src/usage/record.ts";
 import { UsageSink } from "../src/usage/sink.ts";
 import {

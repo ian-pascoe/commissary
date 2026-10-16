@@ -11,7 +11,7 @@
  */
 import { createHash } from "node:crypto";
 import { Effect, Exit, Stream } from "effect";
-import { cloneJson, type Json, isJsonObject } from "../../json/index.ts";
+import { cloneJson, type Json, isJsonObject } from "@commissary/json";
 import { replayScopeFromRequest } from "../codex/replay.ts";
 import {
   makeMemoryReplayStore,
@@ -24,7 +24,7 @@ import {
   type ThinkingReplayStore,
 } from "../claude/thinking-replay.ts";
 import type { ExecutionError } from "../errors.ts";
-import { parseSuffix } from "../suffix.ts";
+import { parseSuffix } from "@commissary/translation/thinking";
 import type { ExecutorOptions, ExecutorRequest } from "../types.ts";
 import { normalizeKimiUpstreamModel } from "./model.ts";
 

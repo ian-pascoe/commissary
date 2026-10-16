@@ -8,8 +8,8 @@
  * credential id is used instead of generating/fetching and persisting one (the OAuth slice owns the profile lookup).
  */
 import { createHash, randomUUID } from "node:crypto";
-import { get, type Json, type JsonObject, tryParseJson } from "../../json/index.ts";
-import { isObj, str } from "../../translator/common/gjson.ts";
+import { get, type Json, type JsonObject, tryParseJson } from "@commissary/json";
+import { isObj, str } from "@commissary/translation";
 import type { CredentialSnapshot } from "../picker.ts";
 
 const OID_NAMESPACE = "6ba7b812-9dad-11d1-80b4-00c04fd430c8";

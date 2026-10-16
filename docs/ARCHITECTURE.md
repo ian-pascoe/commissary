@@ -24,7 +24,8 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
 
 A pnpm workspace run by Turborepo: Workers and the panel in `apps/`, libraries in `packages/` (scope `@commissary/*`,
 source-only: they export TypeScript and whatever imports them compiles it). The deploy code stays at the root. Paths
-such as `src/...` and `test/...` in the rest of this document are relative to `apps/app/`.
+such as `src/...` and `test/...` in the rest of this document are relative to `apps/app/`; translation's modules are
+cited as `translation/...` (relative to `packages/translation/src/`) and the JSON path engine as `packages/json`.
 
 ```
 .                             workspace root and deploy root (Alchemy, no Wrangler config); turbo.json
@@ -38,12 +39,10 @@ such as `src/...` and `test/...` in the rest of this document are relative to `a
       http/                   router, CORS, error formatting per protocol, SSE framing, streaming helpers
       access/                 Cloudflare Access JWT verification, principals
       config/                 config schema (Effect Schema), storage, payload rules
-      json/                   gjson/sjson-compatible path engine and JSON helpers
       registry/               model catalogs, model info, /models listings
       credentials/            credential model, selection, cooldowns, refresh, ControlPlane Durable Object
-      thinking/               canonical thinking pipeline (port of internal/thinking)
-      translator/             registry + one directory per (client -> provider) pair
       executor/               executor interface + one directory per provider
+      signature/              the CACHE KV store of the thinking-signature cache
       handlers/               inbound protocol handlers (openai, responses, claude, gemini, interactions, ...)
       management/             /v9/management API, panel serving, OAuth flows
       usage/                  usage records, D1 persistence
@@ -52,6 +51,14 @@ such as `src/...` and `test/...` in the rest of this document are relative to `a
   apps/web/                   @commissary/web: control panel served at / (React, Effect Atom, TanStack Router; built
                               into apps/web/dist, the Worker's assets), its tests in Node.js
   packages/contract/          @commissary/contract: the management API's Effect HttpApi schemas and addressing (browser-safe)
+  packages/json/              @commissary/json: gjson/sjson-compatible path engine, Json types, JSON text helpers
+  packages/translation/       @commissary/translation: pure translation, tested in Node.js
+    src/translator/           registry + one directory per (client -> provider) pair
+    src/thinking/             canonical thinking pipeline (port of internal/thinking)
+    src/signature/            thinking-signature validation and cache (port of internal/signature, internal/cache)
+    src/tokenizer/            BPE token counting (ranks in src/tokenizer/ranks/*.bin)
+    src/sse.ts                SSE line splitting and frame builders
+    test/                     Node.js tests + fixtures generated from the Go code; test/testing.ts is ./testing
   tools/fixturegen/           Go programs (own module, root go.work) that emit golden fixtures from the Go code
   tools/sync-reference-repos.sh  clones/updates the reference repositories in .repos/ (pnpm install, pnpm repos:sync)
   .repos/CLIProxyAPI/         read-only Go reference checkout (git-ignored)
@@ -163,7 +170,7 @@ client -> Cloudflare Access -> Worker
 
 ## JSON values, config and payload rules
 
-- **JSON output**: Commissary emits plain `JSON.stringify` output (`src/http/json-text.ts`): no HTML escaping of `<`, `>`,
+- **JSON output**: Commissary emits plain `JSON.stringify` output (`packages/json/src/text.ts`): no HTML escaping of `<`, `>`,
   `&`, U+2028 and U+2029, and keys in the order they are built, not Go's sorted map order (ADR 0019: the Go server is a
   reference, and no client depends on those bytes). `compactJson` still leaves number text verbatim. The one sorted
   serialiser, `stableStringify`, is for text that feeds a hash or an equality check (session-routing fingerprints and
@@ -171,7 +178,7 @@ client -> Cloudflare Access -> Worker
   those must be stable but need not match Go. Golden fixtures from `tools/fixturegen` compare JSON structurally (parsed,
   order-insensitive) while SSE framing and non-JSON text stay exact. The hash keys changed once at the deploy that introduced
   this, which costs one sticky-session, replay and prompt-cache miss per live conversation.
-- **Path engine (`src/json/`)**: gjson/sjson semantics over parsed `JSON.parse` values instead of raw bytes, verified
+- **Path engine (`packages/json`)**: gjson/sjson semantics over parsed `JSON.parse` values instead of raw bytes, verified
   against the real tidwall libraries through golden fixtures (`go run ./tools/fixturegen/jsonpath`). `get`
   returns `undefined` for "does not exist" (`null` exists); `set`, `setRaw` and `del` mutate containers in place and
   return the root; values are inserted by reference (clone shared values). Known differences from Go: integer-like
@@ -243,7 +250,7 @@ client -> Cloudflare Access -> Worker
   the group's), vertex keys by `api-key|base-url` (keys without api-key and models without name or alias are dropped), and
   credential-less entries (a gemini entry with only a base URL) are accepted.
 
-## Thinking pipeline (`src/thinking/`)
+## Thinking pipeline (`translation/thinking/`)
 
 Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central validation → provider applier" shape.
 
@@ -259,7 +266,7 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
   `registry.ModelInfo`); the model registry slice supplies richer records and the lookup.
 - Summary helpers (`extractSummaryConfig`, `applySummaryConfigForProvider`, `applyTranslatedSummaryToClaude`, …) are
   exported for the translator registry (Go calls them from `TranslateRequestEnvelope`).
-- Fixtures: `go run ./tools/fixturegen/thinking` → `test/fixtures/thinking.json` (~2.7 MB; includes the Go
+- Fixtures: `go run ./tools/fixturegen/thinking` → `packages/translation/test/fixtures/thinking.json` (~2.7 MB; includes the Go
   static model catalog used by the lookup). Known Go quirk not mirrored: gjson reads _unparsable_ source JSON
   leniently in `extractCodexConfig`; the Workers port only handles parsed bodies.
 
@@ -372,7 +379,7 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
 
 Core contracts every provider slice implements (Go references in each module header):
 
-- **Translators (`src/translator/`)**: `TranslatorRegistry` keyed by `(client format, provider format)` with named
+- **Translators (`translation/translator/`)**: `TranslatorRegistry` keyed by `(client format, provider format)` with named
   `client`/`provider` arguments (Go's inverted `TranslateStream(from=provider, to=client)` order does not leak).
   Request transforms are pure functions over a private copy of the parsed body (refusals throw `TranslationError`,
   a request-scoped 400); response transforms take raw text (one upstream SSE line, or the whole body) and return
@@ -381,8 +388,10 @@ Core contracts every provider slice implements (Go references in each module hea
   `canFinalize`. Go fallbacks are kept (force `model`; passthrough stream/non-stream; raw usage for token counts).
   The thinking summary hooks are injected (`SummaryHooks`). Pairs are registered in `translator/builtin.ts`;
   golden fixtures come from `go run ./tools/fixturegen/translator` (corpus files under
-  `tools/fixturegen/translator/corpus/`, one fixture file per corpus file, picked up automatically by
-  `test/translator-fixtures.test.ts`; cases may declare `needs` to be skipped until a capability lands).
+  `tools/fixturegen/translator/corpus/`, one fixture file per corpus file under translation's `test/fixtures/translator/`,
+  picked up automatically by its `test/translator-fixtures.test.ts`; the cases with an executor context, which need the
+  Worker's executor-level rewrites, go to `test/fixtures/translator-executor.json` here; cases may declare `needs` to
+  be skipped until a capability lands).
 - **Executors (`src/executor/`)**: `ProviderExecutor { execute, executeStream, countTokens }` over
   `ExecutorRequest`/`ExecutorOptions` (Go `Request`/`Options`, typed `ExecutionMetadata`) and an `ExecutionContext`
   (credential snapshot, config snapshot, `UsageReporter`). Streams are `Stream<string, ExecutionError>` of client
@@ -471,12 +480,12 @@ Core contracts every provider slice implements (Go references in each module hea
     execution-session (WebSocket) metadata ids are not consulted. Go parity is tested with `tools/fixturegen/session`
     (`test/fixtures/session.json`: turns, fingerprints, derive ids, matcher scenarios).
 
-## Codex provider and Responses API (`src/executor/codex/`, `src/translator/codex/`, `src/handlers/responses/`)
+## Codex provider and Responses API (`src/executor/codex/`, `translation/translator/codex/`, `src/handlers/responses/`)
 
 - **Translators** (`translator/codex/<pkg>/{request,response}.ts`, registered by `codex/register.ts`): faithful ports of
   `internal/translator/codex/*` for `openai`, `openai-response`, `claude`, `gemini` and `interactions` -> `codex`. Shared
   helpers are under `translator/common/` (SSE frame builders, `UserTurnDrops`, apply_patch bridge, Responses tool winners,
-  Claude message helpers; the signature checks are `src/signature/`). `TranslationError` may carry the translated `body` (Go returns both
+  Claude message helpers; the signature checks are `translation/signature/`). `TranslationError` may carry the translated `body` (Go returns both
   for unsupported-part refusals). Golden fixtures: `corpus/codex-*.json`; **generate them with `TZ=UTC`** (Gemini timestamps
   use the process time zone in Go). The Interactions `interaction.completed` event embeds the current time, so it is
   covered by a fake-timer unit test instead of a fixture. Request `tool_use.input` text is re-serialised compactly (Go
@@ -852,7 +861,7 @@ URL; Kimi/Claude device/uTLS headers are constants/subsets; Devin's metadata ref
 scheduled) is not ported; `META_MINT_URL` is the Worker var of the same name (`RefreshContext.metaMintUrl`, also used by the Meta
 login); Claude device-profile preparation is the executor's `stabilize-device-profile` store (below); Antigravity project discovery and the credits probe run in the Antigravity executor.
 
-## Claude provider (`src/executor/claude/`, `src/translator/claude/`)
+## Claude provider (`src/executor/claude/`, `translation/translator/claude/`)
 
 Ported from `internal/runtime/executor/claude_executor*.go`, `internal/translator/claude/*` and the helpers they use.
 
@@ -894,7 +903,7 @@ Deviations from Go (all deliberate, documented in code headers):
   slides the 1 h TTL) plus one write only when the prompt id or pinned date changed, `commit` = one compare-and-swap write using
   the generation carried in `ContinuityState` (`planContinuity` computes the arguments, the store is awaited before the
   synchronous `applyCloaking`).
-- Signature handling is the full `internal/signature` port (`src/signature/`, see "Signature validation"):
+- Signature handling is the full `internal/signature` port (`translation/signature/`, see "Signature validation"):
   `sanitizeClaudeMessagesForClaudeUpstream` runs before the Claude upstream request.
 - OpenAI Responses -> Claude: the Codex `apply_patch` custom tool is a strict `{"input": ...}` function upstream and the
   response translator (`claude/openai/responses/response.ts`) decodes it into `custom_tool_call` events
@@ -916,7 +925,7 @@ Deviations from Go (all deliberate, documented in code headers):
   The OpenAI-compatibility executor posts the Responses-format request to `{base-url}/responses/compact` (no chat shaping, `stream`
   removed, reasoning cleartext cleared).
 
-## Gemini, Vertex and Interactions (`src/executor/gemini/`, `src/translator/gemini/`, `src/handlers/gemini/`)
+## Gemini, Vertex and Interactions (`src/executor/gemini/`, `translation/translator/gemini/`, `src/handlers/gemini/`)
 
 - **Providers**: one engine (`executor/gemini/google.ts`) parameterised by a `GoogleVariant` (`targets.ts`): `gemini`
   (provider key, `x-goog-api-key`), `gemini-interactions` (same key, native `POST /v1beta/interactions` with the
@@ -950,15 +959,17 @@ Deviations from Go (all deliberate, documented in code headers):
   response translation stored in one write before the chunk is emitted. One DO instance per caller scope holds the entries (1 h
   TTL, 10240 per caller); a backend failure degrades to the bypass signature, never to an error.
 - **Fixtures**: cases with generated ids/timestamps are tagged `needs: ["id-normalization"]` and run by
-  `test/translator-fixtures-ids.test.ts` (ids and `created_at` masked on both sides; thinking-summary cases apply the
-  real summary hooks); everything else must match the Go bytes exactly (`test/translator-fixtures.test.ts`).
+  translation's `test/translator-fixtures-ids.test.ts` (ids and `created_at` masked on both sides; thinking-summary
+  cases apply the real summary hooks); everything else must match the Go output structurally
+  (`test/translator-fixtures.test.ts`).
 - **Deviations from Go**: `TranslationError.body` returns the partially translated body for fixture parity only;
   `gjson.Raw` whitespace is not preserved (embedded raw JSON is compacted); model capability lookups
-  (`ModelSupportsWebSearch`, `lookupModelInfo`) read the embedded static catalog, not the live registry; Go's
+  (`ModelSupportsWebSearch`, the Claude thinking budget) go through the lookup the executor installs
+  (`withModelInfoLookup`: the attempt's registry snapshot, which falls back to the static catalogs); Go's
   `PrepareAntigravityInteractions` lives in `executor/gemini/antigravity-interactions.ts` (see _SessionState Durable Object_); a Vertex Imagen
   request without a prompt answers 400; logging of signature decisions is dropped. `claude -> interactions` is ported separately (see below).
 
-## Claude clients on Interactions providers (`src/translator/interactions/`)
+## Claude clients on Interactions providers (`translation/translator/interactions/`)
 
 Port of `internal/translator/interactions/claude` (registered as `claude -> interactions` by
 `interactions/register.ts`): Claude Messages requests served by `gemini-interactions` (native `POST /v1beta/interactions`) and Devin.
@@ -979,7 +990,7 @@ Port of `internal/translator/interactions/claude` (registered as `claude -> inte
   the wall-clock `msg_<unixnano>` ids. End-to-end: `test/claude-interactions-pipeline.test.ts` (gemini-interactions through the
   full pipeline, Devin through its executor with a Claude source).
 
-## OpenAI-compatible upstream for every client protocol (`src/translator/openai/`, `src/executor/openai-compat/`)
+## OpenAI-compatible upstream for every client protocol (`translation/translator/openai/`, `src/executor/openai-compat/`)
 
 Port of `internal/translator/openai/{claude,gemini,openai,interactions}` plus the image paths of
 `openai_compat_executor.go` and `openai_images_handlers.go`. `translator/openai/register.ts` registers (client -> provider):
@@ -1807,7 +1818,7 @@ two orgs never share an instance.
   unchanged). It registers itself with its org's ControlPlane on its first write so that deleting the org can wipe it
   (`session-state/instances.ts`, `SessionState.wipe`); see "Zero data retention".
 
-## Local token counting (`src/tokenizer/`, `src/executor/helps/token-count.ts`)
+## Local token counting (`translation/tokenizer/`, `src/executor/helps/token-count.ts`)
 
 Port of the `tiktoken-go/tokenizer` usage in `helps/token_helpers.go`, `codex_executor_tokens.go` (also Meta),
 `xai_executor_tokens.go`, `helps/claude_input_tokens.go` and `claude_executor_tokens.go` (gateway estimate). It replaces the
@@ -1819,7 +1830,7 @@ Port of the `tiktoken-go/tokenizer` usage in `helps/token_helpers.go`, `codex_ex
   (Go's loop is quadratic). Special tokens are plain text, like Go. Encodings: `o200k_base` and `cl100k_base`; model mapping
   `encodingForModel` (`TokenizerForModel`: empty/gpt-4/gpt-3 -> cl100k, everything else o200k) and `encodingForCodexModel`
   (gpt-5/4.1/4o -> o200k, otherwise cl100k).
-- **Ranks** are `src/tokenizer/ranks/{o200k_base,cl100k_base}.bin` (`count:u32le`, then `len:u8,bytes` per token in rank order,
+- **Ranks** are `translation/tokenizer/ranks/{o200k_base,cl100k_base}.bin` (`count:u32le`, then `len:u8,bytes` per token in rank order,
   1.6 MB + 0.7 MB), generated from the Go vocabularies by `go run ./tools/fixturegen/tokens`. They are Workers `Data`
   modules (Alchemy's bundler rule for `*.bin`; `modulesRules` in `vitest.config.ts`), i.e. raw bytes without JavaScript to parse. The `Map` is
   built lazily on the first `count` of an encoding (o200k ~190 ms, cl100k ~80 ms once per isolate, in workerd), so module
@@ -1841,7 +1852,7 @@ Port of the `tiktoken-go/tokenizer` usage in `helps/token_helpers.go`, `codex_ex
   `o200k_base` estimate of the client's original request (`ResponseContext.originalRequest`); the once-per-attempt flag is
   `TranslationState.claudeInputTokensHandled`. Estimation failures leave the chunk untouched. The raw Go translator corpus
   tests set the flag so they keep exercising the bare translators.
-- **Fixtures** (`test/fixtures/tokens.json`, `go run ./tools/fixturegen/tokens`): ~390 texts x 2 encodings (edge cases,
+- **Fixtures** (`packages/translation/test/fixtures/tokens.json`, `go run ./tools/fixturegen/tokens`): ~390 texts x 2 encodings (edge cases,
   scripts, emoji, whitespace/newline/DEL fuzz, long pieces), the model -> encoding table, Claude estimates, 390 `CountTokens`
   answers of the real Go Codex/OpenAI-compat/xAI/Meta/Claude executors, and 21 stream scenarios through
   `helps.TranslateStreamWithClaudeInputTokens` (real translators plus a passthrough format for framing edge cases).
@@ -1852,7 +1863,7 @@ schemas or `1.0` numbers sent by a client count slightly differently); Unicode p
 Go's `unicode` package, so characters assigned after the older table can be classified differently; a stream estimate error is
 silent (Go logs a warning).
 
-## Antigravity provider (`src/executor/antigravity/`, `src/translator/antigravity/`, `src/signature/`)
+## Antigravity provider (`src/executor/antigravity/`, `translation/translator/antigravity/`, `translation/signature/`)
 
 Ported from `antigravity_executor*.go`, `internal/translator/antigravity/*`, `internal/signature`, `internal/cache/signature_cache.go`,
 `internal/misc/antigravity_version.go` and `sdk/cliproxy/antigravity_models.go`.
@@ -1865,10 +1876,10 @@ Ported from `antigravity_executor*.go`, `internal/translator/antigravity/*`, `in
   _carrier_ thinking blocks (`cpa-gemini-carrier-v1:<direction>:<kind>:<b64>`, `claude/carrier.ts`), Claude models keep R/Q-form
   signatures, and `web_search_*` tools map to native Google Search (`claude/web-search.ts`, request building and grounding -> `web_search_tool_result`
   blocks; the capability comes from the registry record, `supportsWebSearch`).
-- **Signatures** (`src/signature/`): `claude.ts` ports the E/R/Q/CAIS validation including the strict protobuf-tree mode
+- **Signatures** (`translation/signature/`): `claude.ts` ports the E/R/Q/CAIS validation including the strict protobuf-tree mode
   (`signature-bypass-strict`, default off) and `compatibleAntigravityClaudeThinkingSignature`; `provider.ts` the provider detection and
   `decideSignatureCompatibility` decision table for every target (claude, gemini, gpt, kimi, swe, grok); the Gemini envelope checks and replay sanitiser live in `gemini.ts` (re-exported by `translator/gemini/common/signature.ts`). `go run ./tools/fixturegen/signature` drives the real Go package over a corpus of
-  synthetic envelopes (`test/fixtures/signature.json`, `test/signature-fixtures.test.ts`).
+  synthetic envelopes (`packages/translation/test/fixtures/signature.json`, its `test/signature-fixtures.test.ts`).
 - **Signature cache** (`cache.ts`, `store.ts`): translators are synchronous, so the cache they read is a bounded per-isolate map with the Go
   semantics (3 h sliding TTL, 50 char minimum, gpt/claude/gemini buckets, Gemini sentinel on a miss). It is installed around the synchronous
   translator calls with `withSignatureContext` (like `withModelInfoLookup`); persistence is the `CACHE` KV namespace behind the
@@ -1920,7 +1931,7 @@ Deviations from Go / not ported: per-credential HTTP pools and proxies; a bare `
 Interactions response translator (as in Go), so the Interactions stream ends with `interaction.completed` only; short-cooldown
 state and signature persistence are KV (eventually consistent), not the Go home KV.
 
-## Signature validation (`src/signature/`)
+## Signature validation (`translation/signature/`)
 
 Full port of `internal/signature`: `claude.ts` (E/R/Q/CAIS validation incl. strict protobuf mode), `gemini.ts` (envelope
 inspection, `sanitizeGeminiRequestThoughtSignatures`, `validateGeminiThoughtSignatures`, `validateGeminiFunctionCallPairing`),
@@ -1929,7 +1940,7 @@ detection by structure, `decideSignatureCompatibility` with Go's `reason` string
 (`sanitizeClaudeMessagesSignaturesForTarget`/`ForModel`/`ForClaudeUpstream`, in place on parsed bodies). The simplified checks of
 the earlier slices (`translator/common/signature.ts`, `openai/common/signature.ts`, `common/gemini-signature.ts`, the decodable-prefix
 test in `executor/claude/sanitize.ts`, Devin's approximation) are gone: the Codex/OpenAI/Claude/Kimi/xAI/Devin paths call this module.
-`go run ./tools/fixturegen/signature` (`test/fixtures/signature.json`) records detection, decisions (incl. reasons),
+`go run ./tools/fixturegen/signature` (`packages/translation/test/fixtures/signature.json`) records detection, decisions (incl. reasons),
 Grok/GPT/recognised checks, Gemini replay, ~500 sanitiser runs over synthetic histories and Gemini validation/pairing cases;
 `test/signature-fixtures.test.ts` compares them with the port (key order included).
 

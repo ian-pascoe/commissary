@@ -16,7 +16,7 @@ import {
   jsonEquals,
   cloneJson,
   parseJsonOrText,
-} from "../../json/index.ts";
+} from "@commissary/json";
 import {
   fieldDouble,
   fieldText,

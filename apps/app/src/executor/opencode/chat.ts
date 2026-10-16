@@ -12,10 +12,10 @@
  * docs/ARCHITECTURE.md "OpenCode Zen and OpenCode Go".
  */
 import { Effect, Stream } from "effect";
-import { splitLines } from "../../http/sse.ts";
-import { get, tryParseJson } from "../../json/index.ts";
-import { encodingForModel, getCodec } from "../../tokenizer/index.ts";
-import { Formats } from "../../translator/formats.ts";
+import { splitLines } from "@commissary/translation/sse";
+import { get, tryParseJson } from "@commissary/json";
+import { encodingForModel, getCodec } from "@commissary/translation/tokenizer";
+import { Formats } from "@commissary/translation/formats";
 import {
   parseOpenAIStreamUsage,
   parseOpenAIUsage,

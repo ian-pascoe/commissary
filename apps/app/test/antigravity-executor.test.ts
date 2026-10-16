@@ -3,7 +3,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Config } from "../src/config/schema.ts";
 import { resetMemoryAntigravityState } from "../src/executor/antigravity/state.ts";
-import type { Json, JsonObject } from "../src/json/index.ts";
+import type { Json, JsonObject } from "@commissary/json";
 import { credential, makeGeminiHarness } from "./support/gemini.ts";
 import {
   jsonResponse,

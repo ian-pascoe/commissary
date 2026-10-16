@@ -19,8 +19,8 @@ import {
   isJsonObject,
   type Json,
   type JsonObject,
-} from "../../../json/index.ts";
-import { stableStringify } from "../../../http/json-text.ts";
+  stableStringify,
+} from "@commissary/json";
 
 export const SIGNATURE_PATHS = [
   "thoughtSignature",

@@ -29,7 +29,7 @@ import {
   type Json,
   type JsonObject,
   tryParseJson,
-} from "../../json/index.ts";
+} from "@commissary/json";
 import { statusText } from "../../http/status.ts";
 import { responseModelOf } from "../../usage/record.ts";
 import { isResponsesTokenEvent } from "../../usage/ttft.ts";

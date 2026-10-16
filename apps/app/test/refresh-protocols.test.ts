@@ -1,7 +1,7 @@
 // Per-provider refresh request/response shapes against a mocked HttpClient.
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
-import type { JsonObject } from "../src/json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { refreshAntigravity } from "../src/credentials/refresh/antigravity.ts";
 import { refreshClaude } from "../src/credentials/refresh/claude.ts";
 import { refreshCodex } from "../src/credentials/refresh/codex.ts";

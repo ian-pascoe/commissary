@@ -5,7 +5,7 @@
  * payloadFromProtocolMatches, payloadModelCandidates, matchModelPattern, payload*ConditionsMatch) and
  * internal/thinking/suffix.go (ParseSuffix).
  */
-import { get, type Json, jsonEquals } from "../../json/index.ts";
+import { get, type Json, jsonEquals } from "@commissary/json";
 import type { PayloadModelRule } from "./schema.ts";
 import { buildPayloadPath, resolvePayloadRulePaths } from "./paths.ts";
 

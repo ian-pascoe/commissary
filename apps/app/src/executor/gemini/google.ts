@@ -19,32 +19,25 @@ import {
   type HttpClientResponse,
 } from "effect/http";
 import { applyPayloadRules } from "../../config/payload/index.ts";
+import { asInt, del, get, type Json, type JsonObject, set, tryParseJson } from "@commissary/json";
+import { splitLines } from "@commissary/translation/sse";
 import {
-  asInt,
-  del,
-  get,
-  type Json,
-  type JsonObject,
-  set,
-  tryParseJson,
-} from "../../json/index.ts";
-import { splitLines } from "../../http/sse.ts";
-import { builtinTranslators } from "../../translator/builtin.ts";
-import { Formats } from "../../translator/formats.ts";
-import {
+  builtinTranslators,
   makeTranslationState,
   type RequestEnvelope,
   type ResponseContext,
   type TranslatorRegistry,
-} from "../../translator/registry.ts";
-import { sanitizeGeminiRequestThoughtSignatures } from "../../translator/gemini/common/signature.ts";
-import { withReplayCache } from "../../translator/gemini/openai/responses/replay-cache.ts";
-import { textSignatureKeys } from "../../translator/gemini/openai/responses/trailing-signature.ts";
+  sanitizeGeminiRequestThoughtSignatures,
+  withModelInfoLookup,
+  withReplayCache,
+  textSignatureKeys,
+} from "@commissary/translation";
+import { Formats } from "@commissary/translation/formats";
 import { responseModelOf } from "../../usage/record.ts";
 import { ExecutionError, headersRecord, notImplemented } from "../errors.ts";
 import { applyCustomHeaders } from "../helps/custom-headers.ts";
 import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts";
-import { parseSuffix } from "../suffix.ts";
+import { parseSuffix } from "@commissary/translation/thinking";
 import { Thinking } from "../thinking.ts";
 import {
   type ExecutionContext,
@@ -156,6 +149,13 @@ interface Attempt {
   /** Text-signature cache of the request (`SessionState` backed), see `replay.ts`. */
   readonly replay: RequestReplayCache;
 }
+
+/**
+ * Runs one synchronous translator call with the attempt's text-signature cache and model lookup (the Gemini
+ * translators read a model's thinking budget and web search support through it).
+ */
+const translating = <T>(attempt: Attempt, run: () => T): T =>
+  withReplayCache(attempt.replay, () => withModelInfoLookup(attempt.request.modelLookup, run));
 
 const requestError = (envelope: RequestEnvelope) =>
   new ExecutionError({
@@ -380,7 +380,7 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
       };
 
       const translateWithReplay = (body: Json) =>
-        withReplayCache(attempt.replay, () =>
+        translating(attempt, () =>
           translateRequestForExecutor(
             registry,
             from,
@@ -581,7 +581,7 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
 
     if (prepared.continuation !== undefined) yield* prepared.continuation.observe(parsed);
 
-    const out = withReplayCache(attempt.replay, () =>
+    const out = translating(attempt, () =>
       registry.translateNonStream(
         responseFormatOf(options),
         prepared.providerFormat,
@@ -616,7 +616,7 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
     // The text signatures a chunk produced are stored before the chunk reaches the client.
     const translate = (payload: string) =>
       Effect.sync(() =>
-        withReplayCache(attempt.replay, () =>
+        translating(attempt, () =>
           registry.translateStream(responseFormat, prepared.providerFormat, ctx, payload),
         ),
       ).pipe(Effect.tap(() => attempt.replay.flush));
@@ -774,10 +774,12 @@ export const makeGoogleExecutor = (variant: GoogleVariant): ProviderExecutor => 
         const responseFormat = responseFormatOf(attempt.options);
         const payload = jsonPayload(data) ?? data;
 
-        return Stream.fromIterable([
-          ...registry.translateStream(responseFormat, prepared.providerFormat, ctx, payload),
-          ...registry.translateStream(responseFormat, prepared.providerFormat, ctx, "[DONE]"),
-        ]);
+        return Stream.fromIterable(
+          withModelInfoLookup(attempt.request.modelLookup, () => [
+            ...registry.translateStream(responseFormat, prepared.providerFormat, ctx, payload),
+            ...registry.translateStream(responseFormat, prepared.providerFormat, ctx, "[DONE]"),
+          ]),
+        );
       }),
     );
 

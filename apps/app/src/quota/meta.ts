@@ -11,7 +11,7 @@
  * windows. Ids: `window` (the rolling window, labelled from `window_duration_mins`, "Session" without a length) and
  * `weekly`.
  */
-import { isJsonObject, type Json } from "../json/index.ts";
+import { isJsonObject, type Json } from "@commissary/json";
 import type { QuotaWindow } from "@commissary/contract/credentials";
 import { WEEK, num, quotaWindow, record, str, unixIso, windowLabel } from "./window.ts";
 

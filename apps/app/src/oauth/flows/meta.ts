@@ -8,7 +8,7 @@
 import { Effect } from "effect";
 import { HttpClientRequest } from "effect/http";
 import { META_DEFAULT_BASE_URL, metaMintUrl } from "../../credentials/refresh/meta.ts";
-import type { JsonObject } from "../../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { sha256Hex } from "../encoding.ts";
 import { call, clipBody, parseJsonObject, rfc3339, seconds, str, tryCall } from "./http.ts";
 import { type DeviceFlow, flowFailure } from "./types.ts";

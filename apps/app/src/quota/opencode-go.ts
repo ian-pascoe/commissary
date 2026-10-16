@@ -9,7 +9,7 @@
  * (100 %). Parsing is lenient: a window without a usable share (and without a
  * non-ok status) is left out, numeric strings are accepted, and a payload without any window is invalid.
  */
-import type { Json } from "../json/index.ts";
+import type { Json } from "@commissary/json";
 import type { QuotaWindow } from "@commissary/contract/credentials";
 import { DAY, FIVE_HOURS, num, quotaWindow, record, resetIso, str, WEEK } from "./window.ts";
 

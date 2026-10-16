@@ -3,7 +3,7 @@
 // fallback, identity helpers and scripted LCP matcher scenarios.
 import { describe, expect, it } from "vitest";
 import { extractSessionInfo } from "../src/handlers/session.ts";
-import type { Json, JsonObject } from "../src/json/index.ts";
+import type { Json, JsonObject } from "@commissary/json";
 import { derivedAntigravitySessionId } from "../src/executor/antigravity/derived-session.ts";
 import { extractCanonicalTurns, prepareFingerprints } from "../src/session-routing/canonical.ts";
 import {

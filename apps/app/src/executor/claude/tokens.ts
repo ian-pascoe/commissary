@@ -2,10 +2,11 @@
  * count_tokens request validation.
  *
  * Go source: internal/runtime/executor/claude_executor_tokens.go (validateClaudeTokenCountRequest). The local
- * estimate used for third-party gateways (first-party requests are counted by Anthropic) is `src/tokenizer/claude-input.ts`.
+ * estimate used for third-party gateways (first-party requests are counted by Anthropic) is `countClaudeInputTokens`
+ * (`@commissary/translation/tokenizer`).
  */
-import type { Json } from "../../json/index.ts";
-import { isArr, isObj, str } from "../../translator/common/gjson.ts";
+import type { Json } from "@commissary/json";
+import { isArr, isObj, str } from "@commissary/translation";
 
 /** Request-scoped 400 for malformed count_tokens bodies. */
 export class TokenCountValidationError extends Error {

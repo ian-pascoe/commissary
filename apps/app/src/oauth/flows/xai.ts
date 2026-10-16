@@ -15,7 +15,7 @@ import {
   XAI_DEFAULT_BASE_URL,
   XAI_DISCOVERY_URL,
 } from "../../credentials/refresh/xai.ts";
-import type { JsonObject } from "../../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { call, clipBody, parseJsonObject, rfc3339, seconds, str, tryCall } from "./http.ts";
 import { type DeviceFlow, flowFailure } from "./types.ts";
 

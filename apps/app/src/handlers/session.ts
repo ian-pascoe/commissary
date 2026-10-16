@@ -10,7 +10,7 @@
  * Deviation from Go: `X-Opencode-Session` (sent by OpenCode and pi for OpenCode Zen/Go) is an explicit identity in the
  * `X-Session-Affinity` slot (`affinity:<id>`, client type `opencode`); Go ignores it and derives a content hash.
  */
-import { type Json, get } from "../json/index.ts";
+import { type Json, get } from "@commissary/json";
 
 export interface SessionInfo {
   readonly sessionId: string;

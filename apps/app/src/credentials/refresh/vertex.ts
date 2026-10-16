@@ -8,7 +8,7 @@
  */
 import { Effect } from "effect";
 import { HttpClientRequest } from "effect/http";
-import { isJsonObject, type JsonObject } from "../../json/index.ts";
+import { isJsonObject, type JsonObject } from "@commissary/json";
 import { refreshError, type RefreshError } from "./error.ts";
 import { parseJsonObject, send, seconds, statusFailure, str } from "./http.ts";
 import type { RefreshEffect } from "./types.ts";

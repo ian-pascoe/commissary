@@ -20,7 +20,7 @@ import { HttpRouter } from "effect/http";
 import { AccessPrincipal } from "../access/principal.ts";
 import { decodeConfig, parseConfigYaml } from "../config/codec.ts";
 import { decodeStoredConfig } from "../config/store.ts";
-import { isJsonObject, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type JsonObject } from "@commissary/json";
 import { Revisions } from "@commissary/contract/config";
 import { boundedBodyText, bodyJson, handled, jsonReply, replyError } from "./http.ts";
 import { currentViewer } from "./viewer.ts";

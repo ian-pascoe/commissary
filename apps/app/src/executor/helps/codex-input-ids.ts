@@ -6,7 +6,7 @@
  * deterministically (sha256 suffix) without colliding with existing ids.
  */
 import { createHash } from "node:crypto";
-import { asString, get, isJsonArray, isJsonObject, type Json } from "../../json/index.ts";
+import { asString, get, isJsonArray, isJsonObject, type Json } from "@commissary/json";
 
 const ID_LIMIT = 64;
 

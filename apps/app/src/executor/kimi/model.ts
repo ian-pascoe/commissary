@@ -5,7 +5,7 @@
  * internal/runtime/executor/helps/kimi_responses.go (`ResolveKimiBaseURL`, `ResolveKimiChatURL`,
  * `ResolveKimiResponsesURL`, `ResolveKimiClaudeBaseURL`), internal/auth/kimi/kimi.go (domain defaults).
  */
-import { parseSuffix } from "../suffix.ts";
+import { parseSuffix } from "@commissary/translation/thinking";
 import type { CredentialSnapshot } from "../picker.ts";
 
 export const KIMI_COM_BASE_URL = "https://api.kimi.com/coding";

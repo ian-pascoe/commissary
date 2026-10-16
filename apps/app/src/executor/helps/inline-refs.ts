@@ -6,7 +6,7 @@
  * are stripped. Each expansion receives its own copy, sibling keywords override the referenced definition and cycles
  * end as a typed hint instead of recursing. Unlike Go (`json.Marshal` sorts map keys) key order is preserved.
  */
-import { isJsonArray, isJsonObject, type Json, type JsonObject } from "../../json/index.ts";
+import { isJsonArray, isJsonObject, type Json, type JsonObject } from "@commissary/json";
 
 const resolvePointer = (root: Json, ref: string): Json | undefined => {
   let current: Json | undefined = root;

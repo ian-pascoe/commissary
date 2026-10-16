@@ -13,7 +13,7 @@ import { ConfigValidationError } from "../src/config/errors.ts";
 import { yamlMessage } from "../src/config/yaml-message.ts";
 import { Config } from "../src/config/schema.ts";
 import { applyPayloadRules } from "../src/config/payload/index.ts";
-import { get } from "../src/json/index.ts";
+import { get } from "@commissary/json";
 import { assertImportKeeps } from "./support/config-entries.ts";
 
 // Every document these tests decode is also imported as config entries: the import must give the same config

@@ -9,8 +9,8 @@
  */
 import { randomBytes, randomUUID } from "node:crypto";
 import { sha256Hex } from "../../hash.ts";
-import { isJsonObject, tryParseJson } from "../../json/index.ts";
-import { isClaudeCodeAttributionSystemText } from "../../translator/common/claude-messages.ts";
+import { isJsonObject, tryParseJson } from "@commissary/json";
+import { isClaudeCodeAttributionSystemText } from "@commissary/translation";
 import type { SensitiveWordMatcher } from "../claude/cloaking.ts";
 import {
   fieldDouble,

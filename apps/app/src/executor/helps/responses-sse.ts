@@ -10,7 +10,7 @@
  */
 import { Clock, Effect, Stream } from "effect";
 import type { HttpClientError, HttpClientResponse } from "effect/http";
-import { splitLines } from "../../http/sse.ts";
+import { splitLines } from "@commissary/translation/sse";
 import {
   asString,
   cloneJson,
@@ -19,13 +19,13 @@ import {
   type Json,
   type JsonObject,
   tryParseJson,
-} from "../../json/index.ts";
-import { Formats } from "../../translator/formats.ts";
+} from "@commissary/json";
+import { Formats } from "@commissary/translation/formats";
 import {
   makeTranslationState,
   type ResponseContext,
   type TranslatorRegistry,
-} from "../../translator/registry.ts";
+} from "@commissary/translation";
 import { responseModelOf } from "../../usage/record.ts";
 import {
   ensureResponsesUsageDetails,

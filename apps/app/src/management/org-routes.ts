@@ -16,7 +16,7 @@ import { Clock, Data, Effect, Match } from "effect";
 import { HttpRouter } from "effect/http";
 import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
 import { roleAtLeast } from "../members/roles.ts";
-import type { JsonObject } from "../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { deleteSignInAccount, endSessions } from "../hosted/session.ts";
 import { forgetStanding, ownedOrgLimit } from "../hosted/standing.ts";
 import { isHosted } from "../hosted/mode.ts";

@@ -27,7 +27,7 @@
  * maintainers' advice, not upstream code.
  */
 import { Option, Schema } from "effect";
-import type { Json, JsonObject } from "../json/index.ts";
+import type { Json, JsonObject } from "@commissary/json";
 import type {
   PendingResetClaim,
   ResetGrant,

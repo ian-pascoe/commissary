@@ -7,7 +7,7 @@ import { Effect } from "effect";
 import { decodeConfig, encodeConfig } from "../src/config/codec.ts";
 import { MIGRATION_PRINCIPAL } from "../src/config/store.ts";
 import { configKeyIds } from "../src/credentials/key-ids.ts";
-import type { Json } from "../src/json/index.ts";
+import type { Json } from "@commissary/json";
 import type { ProviderKeysList } from "@commissary/contract/provider-keys";
 import type { RoutingModels } from "@commissary/contract/routing";
 import type { SettingsView } from "@commissary/contract/settings";

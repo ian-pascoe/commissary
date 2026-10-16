@@ -6,7 +6,7 @@
  */
 import { Data, Effect, Stream } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
-import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "@commissary/json";
 import { causeSummary } from "../observability/cause.ts";
 import type { CurrentOrg } from "../platform/org.ts";
 import { type ControlPlaneStub, currentControlPlane, type StateEnv } from "../state/env.ts";

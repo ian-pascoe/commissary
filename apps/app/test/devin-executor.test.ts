@@ -9,7 +9,7 @@ import { devinPayloadView } from "../src/executor/devin/payload.ts";
 import { ProtoWriter, readFields } from "../src/executor/devin/protobuf.ts";
 import type { ExecutorRequest } from "../src/executor/types.ts";
 import { ExecutionError } from "../src/executor/errors.ts";
-import { type Json, tryParseJson } from "../src/json/index.ts";
+import { type Json, tryParseJson } from "@commissary/json";
 import {
   collectStream,
   credential,

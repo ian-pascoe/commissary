@@ -3,7 +3,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 import { TestClock } from "effect/testing";
 import { expect } from "vitest";
-import type { JsonObject } from "../src/json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import {
   begin,
   iso,

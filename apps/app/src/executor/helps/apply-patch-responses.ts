@@ -21,21 +21,17 @@ import {
   type Json,
   set,
   tryParseJson,
-} from "../../json/index.ts";
+} from "@commissary/json";
 import {
   isApplyPatchCustomTool,
   unwrapApplyPatchInput,
-} from "../../translator/common/apply-patch.ts";
-import {
   ApplyPatchResponsesBridge,
   normalizeApplyPatchResponsesRequest,
-} from "../../translator/common/apply-patch-responses.ts";
-import {
   collectResponsesToolWinners,
   qualifyResponsesNamespaceToolName,
   type ResponsesToolDescriptor,
-} from "../../translator/common/responses-tools.ts";
-import type { Format } from "../../translator/formats.ts";
+} from "@commissary/translation";
+import type { Format } from "@commissary/translation/formats";
 
 /** `ApplyPatchUpstreamErrorMessage`: deliberately excludes upstream JSON and patch text. */
 export const APPLY_PATCH_UPSTREAM_ERROR_MESSAGE =

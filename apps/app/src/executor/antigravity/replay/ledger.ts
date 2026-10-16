@@ -8,7 +8,7 @@
  * 16 MiB) are the Go ones; the 10240-entry cap is replaced by the per-session instance and the TTL sweep.
  */
 import { Effect } from "effect";
-import { asString, get, isJsonArray, type Json, type JsonObject } from "../../../json/index.ts";
+import { asString, get, isJsonArray, type Json, type JsonObject } from "@commissary/json";
 import {
   type BackendResolver,
   bestEffort,

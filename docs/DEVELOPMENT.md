@@ -21,24 +21,24 @@ Run from the repository root. `typecheck`, `lint`, `test` and `build` run throug
 caches each task: run again with no change, a task replays its logs (and `build` its output) instead of running. See
 "Workspace and Turborepo" below.
 
-| Script                              | Purpose                                                                                                                                                                               |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install`                      | Install dependencies and clone/update the Go reference checkout (`.repos/`)                                                                                                           |
-| `pnpm repos:sync`                   | Clone or fast-forward the reference repositories in `.repos/` (`tools/sync-reference-repos.sh`)                                                                                       |
-| `pnpm dev`                          | Builds the panel, then `alchemy dev`: local Worker in workerd with emulated DO/KV/D1, hot reload (`ALCHEMY_STATE=local` avoids a Cloudflare login)                                    |
-| `pnpm build`                        | Build the control panel (`apps/web`) into `apps/web/dist/` (the Worker's assets, served at `/`)                                                                                       |
-| `pnpm --filter @commissary/web dev` | Vite dev server for the panel on :5173 with hot reload, forwarding `/v9` to `pnpm dev` (`COMMISSARY_DEV_URL`, default :1337)                                                          |
-| `pnpm typecheck`                    | `tsc` over every program: each package's `typecheck` (Worker, panel, contract) and the root's deploy code (`typecheck:root`, `tsconfig.infra.json`)                                   |
-| `pnpm lint`                         | `lint:root`: `oxlint` over the whole repository (type-aware, with type checking, Effect and anti-slop rules) + `oxfmt --check`                                                        |
-| `pnpm format`                       | `oxfmt`                                                                                                                                                                               |
-| `pnpm test`                         | Each package's `vitest run`: the Worker's inside the Workers runtime (`@cloudflare/vitest-plugin`), the panel's in Node.js; arguments go to every run (`pnpm test --shard=1/3`)       |
-| `pnpm smoke`                        | Builds the panel, boots `alchemy dev` with local state, checks a few routes, stops it (bundle + startup check)                                                                        |
-| `pnpm plan`                         | `alchemy plan`: preview infrastructure changes (needs a Cloudflare profile)                                                                                                           |
-| `pnpm run deploy`                   | `alchemy deploy` (`pnpm deploy` is a pnpm built-in; use `run`)                                                                                                                        |
-| `pnpm destroy`                      | `alchemy destroy`: delete every resource of a stage                                                                                                                                   |
-| `pnpm logs`                         | `alchemy logs` (`--tail`)                                                                                                                                                             |
-| `pnpm ci:setup`                     | Deploy `stacks/github.ts`: CI's Cloudflare token, check service token and GitHub environments (`docs/DEPLOY.md`)                                                                      |
-| `pnpm catalog:sync`                 | Regenerate the bundled models.dev snapshot `apps/app/src/registry/catalog/models-dev.json` (`tools/sync-models-dev-catalog.ts [url\|file]`); the catalog additions are edited by hand |
+| Script                              | Purpose                                                                                                                                                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`                      | Install dependencies and clone/update the Go reference checkout (`.repos/`)                                                                                                                       |
+| `pnpm repos:sync`                   | Clone or fast-forward the reference repositories in `.repos/` (`tools/sync-reference-repos.sh`)                                                                                                   |
+| `pnpm dev`                          | Builds the panel, then `alchemy dev`: local Worker in workerd with emulated DO/KV/D1, hot reload (`ALCHEMY_STATE=local` avoids a Cloudflare login)                                                |
+| `pnpm build`                        | Build the control panel (`apps/web`) into `apps/web/dist/` (the Worker's assets, served at `/`)                                                                                                   |
+| `pnpm --filter @commissary/web dev` | Vite dev server for the panel on :5173 with hot reload, forwarding `/v9` to `pnpm dev` (`COMMISSARY_DEV_URL`, default :1337)                                                                      |
+| `pnpm typecheck`                    | `tsc` over every program: each package's `typecheck` (Worker, panel, packages) and the root's deploy code (`typecheck:root`, `tsconfig.infra.json`)                                               |
+| `pnpm lint`                         | `lint:root`: `oxlint` over the whole repository (type-aware, with type checking, Effect and anti-slop rules) + `oxfmt --check`                                                                    |
+| `pnpm format`                       | `oxfmt`                                                                                                                                                                                           |
+| `pnpm test`                         | Each package's `vitest run`: the Worker's inside the Workers runtime (`@cloudflare/vitest-plugin`), the panel's and the packages' in Node.js; arguments go to every run (`pnpm test --shard=1/3`) |
+| `pnpm smoke`                        | Builds the panel, boots `alchemy dev` with local state, checks a few routes, stops it (bundle + startup check)                                                                                    |
+| `pnpm plan`                         | `alchemy plan`: preview infrastructure changes (needs a Cloudflare profile)                                                                                                                       |
+| `pnpm run deploy`                   | `alchemy deploy` (`pnpm deploy` is a pnpm built-in; use `run`)                                                                                                                                    |
+| `pnpm destroy`                      | `alchemy destroy`: delete every resource of a stage                                                                                                                                               |
+| `pnpm logs`                         | `alchemy logs` (`--tail`)                                                                                                                                                                         |
+| `pnpm ci:setup`                     | Deploy `stacks/github.ts`: CI's Cloudflare token, check service token and GitHub environments (`docs/DEPLOY.md`)                                                                                  |
+| `pnpm catalog:sync`                 | Regenerate the bundled models.dev snapshot `apps/app/src/registry/catalog/models-dev.json` (`tools/sync-models-dev-catalog.ts [url\|file]`); the catalog additions are edited by hand             |
 
 ## Infrastructure
 
@@ -65,32 +65,45 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
 `ARCHITECTURE.md` ("Layout" plus one section per subsystem) is the map. The repository is a pnpm workspace
 (`pnpm-workspace.yaml`): Workers and the panel in `apps/`, libraries in `packages/`, under the scope `@commissary/*`.
 
-- `apps/app` (`@commissary/app`): the one Worker. `src/access` (Access JWT gate), `src/http` (router, CORS, SSE),
-  `src/handlers` (inbound protocols and the shared execution pipeline), `src/translator` and `src/thinking` (pure sync
-  translation), `src/executor` (one directory per provider), `src/credentials` (ControlPlane Durable Object, token
+- `apps/app` (`@commissary/app`): the one Worker. `src/access` (Access JWT gate), `src/http` (router, CORS),
+  `src/handlers` (inbound protocols and the shared execution pipeline), `src/executor` (one directory per provider),
+  `src/credentials` (ControlPlane Durable Object, token
   refresh), `src/session-state` (SessionState Durable Object), `src/registry` (model catalogs and `/models`),
   `src/management` and `src/oauth` (management API, panel serving, provider logins), `src/usage` and
   `src/observability` (D1 usage records, trace ids); `test/` (workerd tests and golden fixtures).
 - `apps/web` (`@commissary/web`): the control panel (below).
 - `packages/contract` (`@commissary/contract`): the management API contract, shared by the Worker and the panel.
+- `packages/json` (`@commissary/json`): the gjson/sjson path engine over parsed JSON, the `Json` types, `isValidJson`,
+  `compactJson` and `stableStringify`. Depends on nothing.
+- `packages/translation` (`@commissary/translation`): pure sync translation. `src/translator` (the `TranslatorRegistry`
+  and one directory per format pair), `src/thinking`, `src/signature`, `src/tokenizer` and `src/sse.ts` are internal
+  modules behind the exports `.` (the registry, the built-in translators, the model lookup, the summary hooks and the
+  translator helpers the executors reuse), `./thinking`, `./signature`, `./tokenizer`, `./formats`, `./sse` and
+  `./testing`. It may import `effect`, `@commissary/json` and `node:crypto` only: no Workers APIs, no other workspace
+  package. Executors install the attempt's model lookup and signature cache around each synchronous translator call
+  (`withModelInfoLookup`, `withSignatureContext`); the `CACHE` KV store of signatures stays in the Worker
+  (`src/signature/store.ts`).
 - The root stays the deploy root: `alchemy.run.ts`, `infra/`, `migrations/` (D1 schema), `stacks/`, `tools/` (with
   `tools/fixturegen`, Go programs that emit golden fixtures, see below), `go.work`, `.repos/`, `docs/` and the lint,
   format and commit configs.
 
 ## Workspace and Turborepo
 
-Internal packages are source-only: `package.json` `exports` map `./*` to `./src/*.ts`, there is no build step, and
-whatever imports a package compiles it (Alchemy's bundler, Vite, Vitest). Import a module by its subpath, e.g.
-`@commissary/contract/api`. `apps/app` imports nothing from `apps/web`, and `apps/web` imports only
-`@commissary/contract` from the workspace. Versions that several packages share (`effect`, `typescript`, `vitest`, …)
+Internal packages are source-only: `package.json` `exports` point at TypeScript in `src/` (`./*` → `./src/*.ts` for
+the contract, named entry points for the others; `./testing` at `test/testing.ts`, "Tests" below), there is no build step, and whatever imports a package compiles it
+(Alchemy's bundler, Vite, Vitest). Import a module by its subpath, e.g. `@commissary/contract/api` or
+`@commissary/translation/thinking`. `apps/app` imports nothing from `apps/web`, `apps/web` imports only
+`@commissary/contract` from the workspace, and packages import nothing from `apps/` (lint rule). Versions that several packages share (`effect`, `typescript`, `vitest`, …)
 are pinned once in the `catalog:` of `pnpm-workspace.yaml`.
 
 `turbo.json` declares the tasks: `typecheck`, `test` and `build` run each package's script of that name, and the root
 adds `typecheck:root` (the deploy code) and `lint:root` (one `oxlint`/`oxfmt` run over the repository). The packages
 depend on each other's sources, not on build output, so every package task depends on `transit`, a task with no script whose
 hash covers a package's files and those of its dependencies (Turborepo's transit-node pattern): a change in
-`packages/contract` re-runs the panel's and the Worker's tasks. A package's `turbo.json` adds the root files its tasks
-read (`apps/app`: `infra/bundle.ts`, `infra/settings.ts`, `migrations/`). The cache is local
+`packages/contract` re-runs the panel's and the Worker's tasks, and one in `packages/json` re-runs translation's and the
+Worker's. The root `typecheck` and `test` tasks also hash `tools/vitest/` (the packages' Vitest configs import it); a
+package's `turbo.json` appends the root files its tasks read (`"$TURBO_EXTENDS$"`; `apps/app`: `infra/bundle.ts`,
+`infra/settings.ts`, `migrations/`). The cache is local
 (`.turbo/cache`, one per git worktree: `cacheDir` keeps a worktree from writing into the main checkout's); there is
 no remote cache. `pnpm exec turbo run <task> --force`
 ignores it, `--dry` shows what would run and why.
@@ -125,9 +138,39 @@ dev Access bypass applies). The build output in `apps/web/dist/` is gitignored; 
 first, CI before smoke and deploy. A new top-level page needs its path segment in `PANEL_SECTIONS`
 (`apps/app/src/access/routes.ts`) so the Worker serves `index.html` for it.
 
+## Tests
+
+Every package and app keeps its tests in `test/` (no `*.test.ts` in `src/`) with its own `vitest.config.ts`. A test
+lives in the lowest package that holds all the code it exercises; a test that goes through a Worker's router or `fetch`
+stays with that Worker.
+
+- **Runtime.** A package tests in plain Node.js unless the code under test needs a binding or a Durable Object. The
+  Worker's tests run in workerd (`@cloudflare/vitest-plugin`, two projects: self-hosted and Cloud), the panel's and the
+  packages' in Node.js.
+- **Package config.** A Node.js package's `vitest.config.ts` is `defineConfig(nodePackageTests("<name>"))` from
+  `tools/vitest/node-package.ts`: one project named after the package over `test/**/*.test.ts`, and the `binModules`
+  Vite plugin, which loads `*.bin` imports as the `ArrayBuffer` a Workers `Data` module gives (the Worker bundles them
+  with that module rule, so binary assets behave the same in both runtimes). It sets `passWithNoTests`: CI's shards
+  reach every package, and a package with fewer test files than shards gets none in some. The package's tsconfig
+  includes `src`, `test` and `vitest.config.ts` with Node.js types but no Workers types.
+- **Shared helpers.** A package whose fixtures or helpers its dependants' tests need exports them as `./testing`
+  (`test/testing.ts`), e.g. `@commissary/translation/testing` (the thinking and token fixtures, the structural JSON
+  comparison, the golden translator harness). There is no test-utils package. Lint allows `@commissary/*/testing`
+  imports only in `test/` folders.
+- **Fixtures** sit in the `test/fixtures/` of the package whose tests read them (below). A dependant reads them through
+  `./testing`, never by a relative path into another package.
+- **Runs.** `pnpm test` is `turbo run test`: transit nodes re-run a package's tests and its dependants' when its files
+  change, and an unchanged package is answered from the cache. `pnpm test --shard=N/3` (CI's three jobs) shards
+  every package's run; one package: `pnpm --filter @commissary/<name> exec vitest run [file]`.
+- **Counts.** Tests move with the code they cover, none are dropped: a PR that moves tests lists the counts per project
+  before and after.
+
 ## Golden fixtures (`tools/fixturegen`)
 
-The generators run the real Go code of the reference checkout and write `apps/app/test/fixtures/`. They form their own Go module (`tools/fixturegen/go.mod`, module path under the server's so they
+The generators run the real Go code of the reference checkout and write the `test/fixtures/` of the package whose tests
+read them (`-out` defaults): `packages/json` (`jsonpath`), `packages/translation` (`thinking`, `signature`, `tokens`
+and its rank files, `translator`) and `apps/app` (the others, and the translator cases with an executor context,
+`translator-executor.json`). They form their own Go module (`tools/fixturegen/go.mod`, module path under the server's so they
 may import its `internal/` packages) tied to `.repos/CLIProxyAPI` by a `replace` and the root `go.work`. Run them from the
 repository root, e.g. `go run ./tools/fixturegen/translator` (use `TZ=UTC` for the translator). The model catalogs are no
 longer generated from Go (ADR 0020): `…/registry` only records the listing fixtures, and `apps/app/test/fixtures/go-catalog-served.json`
@@ -181,6 +224,9 @@ Rules downgraded to warnings on purpose (reported, not failing): `effecttsgo/uns
 `exactOptionalPropertyTypes`). In `test/` folders the type-assertion and
 dictionary-type rules are off (fake bindings and loose fixtures).
 
+`no-restricted-imports` enforces the workspace boundaries: `@commissary/*/testing` only in `test/` folders, nothing
+from `apps/` in `packages/`.
+
 Errors fail lint; warnings are reported but do not. Fix findings rather than silencing them: no disable comments. A type
 assertion that cannot be removed carries a `// SAFETY: <invariant>` comment on the line(s) before it.
 
@@ -193,16 +239,16 @@ assertion that cannot be removed carries a `// SAFETY: <invariant>` comment on t
 - Add routes as `HttpRouter.add(...)` layers and merge them into `AppLayer` in `apps/app/src/http/app.ts`.
 - Never log tokens, API keys, JWTs or bodies; use `redactHeaders` when headers must be logged.
 - No wall-clock sleeps in tests; use Effect `TestClock` or injected clocks.
-- The Worker's tests live in `apps/app/test/*.test.ts` and run in workerd. Use `@effect/vitest` (`it.effect`) for Effect code and
-  `exports.default.fetch(...)` (`cloudflare:workers`) for end-to-end Worker requests.
+- The Worker's tests live in `apps/app/test/*.test.ts` and run in workerd ("Tests" above). Use `@effect/vitest`
+  (`it.effect`) for Effect code and `exports.default.fetch(...)` (`cloudflare:workers`) for end-to-end Worker requests.
 - `alchemy.run.ts` keeps `workersDev: false` (no `workers.dev` or preview URLs) so Cloudflare Access cannot be bypassed.
 
 ## Dependency notes
 
 - TypeScript 7 (native `tsc`). Each program has its own tsconfig extending `tsconfig.base.json`: `apps/app/tsconfig.json`
   (Worker, workerd types), `apps/web/tsconfig.app.json` (panel, DOM types) and `tsconfig.node.json` (its Node.js side),
-  `packages/contract/tsconfig.json` (no runtime types) and the root's `tsconfig.infra.json` (deploy code, Node.js
-  types). `tsc` only checks (`noEmit`); Turborepo caches it. `capnp-es` (via Alchemy) declares a TypeScript 5/6 peer
+  `packages/contract/tsconfig.json` (no runtime types), `packages/json` and `packages/translation` (Node.js types, no
+  Workers types) and the root's `tsconfig.infra.json` (deploy code, Node.js types). `tsc` only checks (`noEmit`); Turborepo caches it. `capnp-es` (via Alchemy) declares a TypeScript 5/6 peer
   range; it only ships types, so the peer warning is harmless.
 - `@cloudflare/vitest-plugin` (successor of `@cloudflare/vitest-pool-workers`) is used because it supports vitest 5,
   which `@effect/vitest@4` requires.

@@ -10,7 +10,7 @@
 import { Schema } from "effect";
 import { encodeConfig } from "../config/codec.ts";
 import { type ProviderKeyFamily, Config } from "../config/schema.ts";
-import { isJsonArray, isJsonObject, type JsonObject } from "../json/index.ts";
+import { isJsonArray, isJsonObject, type JsonObject } from "@commissary/json";
 import { providerKeyIdKind, synthesizeConfigCredentials } from "./synthesize.ts";
 
 const FAMILY_PROVIDERS: Readonly<

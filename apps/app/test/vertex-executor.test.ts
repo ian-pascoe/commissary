@@ -17,7 +17,7 @@ import {
   sseResponse,
   type UpstreamResponder,
 } from "./support/pipeline.ts";
-import type { Json, JsonObject } from "../src/json/index.ts";
+import type { Json, JsonObject } from "@commissary/json";
 
 const YAML = `
 requests:

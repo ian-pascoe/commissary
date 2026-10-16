@@ -12,6 +12,8 @@
     "@better-auth/core": "1.7.7",
     "@better-auth/sso": "1.7.7",
     "@commissary/contract": "workspace:*",
+    "@commissary/json": "workspace:*",
+    "@commissary/translation": "workspace:*",
     "better-auth": "1.7.7",
     "effect": "catalog:",
     "fzstd": "^0.1.1",

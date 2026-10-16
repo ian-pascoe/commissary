@@ -17,12 +17,11 @@
  * `/responses/compact` (501).
  */
 import { Effect } from "effect";
-import { asString, get } from "../../json/index.ts";
-import { getCodec } from "../../tokenizer/index.ts";
+import { asString, get } from "@commissary/json";
+import { getCodec } from "@commissary/translation/tokenizer";
 import { openCodeCatalogFor } from "../../registry/opencode-catalog.ts";
-import { builtinTranslators } from "../../translator/builtin.ts";
-import { EntryOnlyFormats, Formats } from "../../translator/formats.ts";
-import type { TranslatorRegistry } from "../../translator/registry.ts";
+import { builtinTranslators, type TranslatorRegistry } from "@commissary/translation";
+import { EntryOnlyFormats, Formats } from "@commissary/translation/formats";
 import { notImplemented } from "../errors.ts";
 import { prepareResponsesRequest } from "../helps/responses-request.ts";
 import {

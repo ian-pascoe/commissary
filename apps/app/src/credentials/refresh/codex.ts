@@ -8,7 +8,7 @@
  */
 import { Effect } from "effect";
 import { HttpClientRequest } from "effect/http";
-import { isJsonObject, type JsonObject } from "../../json/index.ts";
+import { isJsonObject, type JsonObject } from "@commissary/json";
 import { decodeJwtClaims } from "../expiry.ts";
 import { refreshError } from "./error.ts";
 import { parseJsonObject, rfc3339, send, seconds, statusFailure, str } from "./http.ts";

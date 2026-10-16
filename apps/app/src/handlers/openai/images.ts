@@ -18,7 +18,7 @@ import {
 } from "../../executor/errors.ts";
 import type { Config } from "../../config/schema.ts";
 import { invalidRequestBody, openAIErrorBody } from "../../http/errors.ts";
-import { SSE_KEEP_ALIVE, sseEvent } from "../../http/sse.ts";
+import { SSE_KEEP_ALIVE, sseEvent } from "@commissary/translation/sse";
 import {
   asInt,
   asString,
@@ -28,7 +28,7 @@ import {
   type Json,
   type JsonObject,
   tryParseJson,
-} from "../../json/index.ts";
+} from "@commissary/json";
 import { ModelProviders } from "../model-providers.ts";
 import { CODEX_DEFAULT_IMAGE_TOOL_MODEL } from "../../executor/codex/images.ts";
 import {

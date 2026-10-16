@@ -1,4 +1,4 @@
-// Command thinking emits golden fixtures for the TypeScript thinking pipeline (apps/app/src/thinking).
+// Command thinking emits golden fixtures for the TypeScript thinking pipeline (packages/translation/src/thinking).
 //
 // Every case is executed with the real internal/thinking functions (and the real static model catalog from
 // internal/registry), so the TypeScript tests can verify behavioural parity. Run from the repository root:
@@ -44,6 +44,13 @@ type modelSpec struct {
 	SupportConfigurationUpdate bool       `json:"supportConfigurationUpdate,omitempty"`
 	MaxCompletionTokens        int        `json:"maxCompletionTokens,omitempty"`
 	Thinking                   *thinkSpec `json:"thinking,omitempty"`
+	// Web search support: the Gemini translators read it through the model lookup (ModelSupportsWebSearch).
+	SupportsWebSearch  bool        `json:"supportsWebSearch,omitempty"`
+	NativeCapabilities *nativeSpec `json:"nativeCapabilities,omitempty"`
+}
+
+type nativeSpec struct {
+	WebSearch *bool `json:"webSearch,omitempty"`
 }
 
 func (m *modelSpec) info() *registry.ModelInfo {
@@ -56,6 +63,10 @@ func (m *modelSpec) info() *registry.ModelInfo {
 		UserDefined:                m.UserDefined,
 		SupportConfigurationUpdate: m.SupportConfigurationUpdate,
 		MaxCompletionTokens:        m.MaxCompletionTokens,
+		SupportsWebSearch:          m.SupportsWebSearch,
+	}
+	if m.NativeCapabilities != nil {
+		info.NativeCapabilities = &registry.NativeCapabilities{WebSearch: m.NativeCapabilities.WebSearch}
 	}
 	if m.Thinking != nil {
 		info.Thinking = &registry.ThinkingSupport{
@@ -76,6 +87,10 @@ func specFromInfo(info *registry.ModelInfo) *modelSpec {
 		UserDefined:                info.UserDefined,
 		SupportConfigurationUpdate: info.SupportConfigurationUpdate,
 		MaxCompletionTokens:        info.MaxCompletionTokens,
+		SupportsWebSearch:          info.SupportsWebSearch,
+	}
+	if info.NativeCapabilities != nil && info.NativeCapabilities.WebSearch != nil {
+		spec.NativeCapabilities = &nativeSpec{WebSearch: info.NativeCapabilities.WebSearch}
 	}
 	if info.Thinking != nil {
 		spec.Thinking = &thinkSpec{
@@ -321,7 +336,7 @@ type fixture struct {
 }
 
 func main() {
-	outPath := flag.String("out", "apps/app/test/fixtures/thinking.json", "output file")
+	outPath := flag.String("out", "packages/translation/test/fixtures/thinking.json", "output file")
 	flag.Parse()
 	log.SetOutput(io.Discard)
 

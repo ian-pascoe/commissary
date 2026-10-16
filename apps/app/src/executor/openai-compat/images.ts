@@ -16,7 +16,7 @@ import {
   type JsonObject,
   isJsonArray,
   isJsonObject,
-} from "../../json/index.ts";
+} from "@commissary/json";
 
 export const IMAGES_GENERATIONS_PATH = "/images/generations";
 

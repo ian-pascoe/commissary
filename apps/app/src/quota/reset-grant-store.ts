@@ -22,7 +22,7 @@
  * All methods are synchronous so read-modify-write sequences are atomic under the Durable Object input gate.
  */
 import { Option, Schema } from "effect";
-import { type Json, tryParseJson } from "../json/index.ts";
+import { type Json, tryParseJson } from "@commissary/json";
 import { ResetGrantStatus } from "@commissary/contract/credentials";
 import { ClaimJournal } from "./reset-grants.ts";
 

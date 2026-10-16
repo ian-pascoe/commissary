@@ -36,8 +36,8 @@ import type { WebsocketDuplex } from "../../../executor/types.ts";
 import type { CredentialSnapshot } from "../../../executor/picker.ts";
 import { codexSessionStore, xaiSessionStore } from "../../../executor/websocket/session.ts";
 import { xaiIdStates } from "../../../executor/xai/websocket-ids.ts";
-import { asString, get, isJsonObject, type JsonObject, tryParseJson } from "../../../json/index.ts";
-import { Formats } from "../../../translator/formats.ts";
+import { asString, get, isJsonObject, type JsonObject, tryParseJson } from "@commissary/json";
+import { Formats } from "@commissary/translation/formats";
 import type { ExecutionInput, StreamOutput } from "../../execute.ts";
 import {
   buildErrorPayload,

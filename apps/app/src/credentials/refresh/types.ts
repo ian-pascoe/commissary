@@ -7,7 +7,7 @@
  */
 import type { Effect } from "effect";
 import type { HttpClient } from "effect/http";
-import type { JsonObject } from "../../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import type { RefreshError } from "./error.ts";
 
 export interface RefreshContext {

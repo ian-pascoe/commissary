@@ -17,9 +17,9 @@ import {
   type Json,
   type JsonObject,
   set,
-} from "../../json/index.ts";
-import { sseEventData } from "../../translator/common/bytes.ts";
-import { parseSuffix } from "../suffix.ts";
+} from "@commissary/json";
+import { sseEventData } from "@commissary/translation";
+import { parseSuffix } from "@commissary/translation/thinking";
 import type { OutputItemCollector } from "./output.ts";
 
 export const CODEX_IMAGE_SOURCE_FORMAT = "openai-image";

@@ -17,10 +17,9 @@ import {
   HttpClientRequest,
   type HttpClientResponse,
 } from "effect/http";
-import { asString, get } from "../../json/index.ts";
-import { builtinTranslators } from "../../translator/builtin.ts";
-import { Formats } from "../../translator/formats.ts";
-import type { TranslatorRegistry } from "../../translator/registry.ts";
+import { asString, get } from "@commissary/json";
+import { builtinTranslators, type TranslatorRegistry } from "@commissary/translation";
+import { Formats } from "@commissary/translation/formats";
 import { ExecutionError } from "../errors.ts";
 import { applyCustomHeaders } from "../helps/custom-headers.ts";
 import {
@@ -39,7 +38,7 @@ import type {
 import { META_CLIENT_ID, META_USER_AGENT, requireMetaToken } from "./credentials.ts";
 import { metaStreamEventError, wrapMetaUpstreamError } from "./errors.ts";
 import { buildResponsesUsageJson, countCodexInputTokens } from "../helps/token-count.ts";
-import { getCodec } from "../../tokenizer/index.ts";
+import { getCodec } from "@commissary/translation/tokenizer";
 import { type MetaPrepared, prepareMetaRequest } from "./request.ts";
 
 export const META_PROVIDER = "meta";

@@ -6,22 +6,17 @@
  * `ensureAntigravityGeminiBoundaryUserContent`, `validateAntigravityRequestSignatures`) and
  * antigravity_reasoning_replay.go (`antigravityUsesReasoningReplayCache`).
  */
-import {
-  asString,
-  exists,
-  get,
-  isJsonArray,
-  isJsonObject,
-  type Json,
-  set,
-} from "../../json/index.ts";
+import { asString, exists, get, isJsonArray, isJsonObject, type Json, set } from "@commissary/json";
 import {
   stripEmptySignatureThinkingBlocks,
   stripInvalidBypassSignatureThinkingBlocks,
   stripInvalidGeminiSignatureThinkingBlocks,
-} from "../../translator/antigravity/claude/carrier.ts";
-import { sanitizeGeminiRequestThoughtSignatures } from "../../translator/gemini/common/signature.ts";
-import { signatureBypassStrictMode, signatureCacheEnabled } from "../../signature/cache.ts";
+  sanitizeGeminiRequestThoughtSignatures,
+} from "@commissary/translation";
+import {
+  signatureBypassStrictMode,
+  signatureCacheEnabled,
+} from "@commissary/translation/signature";
 import {
   ensureGeminiBoundaryUserContent,
   ensureGeminiLeadingUserContent,

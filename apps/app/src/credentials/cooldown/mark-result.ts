@@ -8,7 +8,7 @@
  * Pure: `markResult` takes the previous {@link CredentialState}, the clock and the settings and returns the next
  * state. All times are epoch milliseconds, `0` = unset (Go zero time).
  */
-import type { Json } from "../../json/index.ts";
+import type { Json } from "@commissary/json";
 import type {
   Credential,
   CredentialError,

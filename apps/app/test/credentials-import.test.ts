@@ -12,7 +12,7 @@ import { redactSecrets } from "../src/credentials/redact.ts";
 import { StableIdGenerator, synthesizeConfigCredentials } from "../src/credentials/synthesize.ts";
 import { redactMetadata, summarizeCredential } from "../src/credentials/summary.ts";
 import { parseWeightValue } from "../src/credentials/weight.ts";
-import type { JsonObject } from "../src/json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import fixtures from "./fixtures/credentials.json";
 import { cred, state } from "./support/credentials.ts";
 

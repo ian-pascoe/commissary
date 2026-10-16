@@ -13,7 +13,7 @@ import {
   prepareCodexMultiAgentV2Tools,
   rewriteCodexOrphanDelegationInputForConfig,
 } from "../../executor/helps/codex-multi-agent-v2.ts";
-import type { Json } from "../../json/index.ts";
+import type { Json } from "@commissary/json";
 import { currentConfig } from "../request.ts";
 import { ModelProviders } from "../model-providers.ts";
 

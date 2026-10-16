@@ -15,15 +15,15 @@
 import { translateRequestForExecutor } from "../helps/translate.ts";
 import { Clock, Effect, Result, Stream } from "effect";
 import { HttpClient, type HttpClientError, HttpClientRequest } from "effect/http";
-import { splitLines } from "../../http/sse.ts";
-import { asString, cloneJson, get, type Json, set, tryParseJson } from "../../json/index.ts";
-import { builtinTranslators } from "../../translator/builtin.ts";
-import { Formats } from "../../translator/formats.ts";
+import { splitLines } from "@commissary/translation/sse";
+import { asString, cloneJson, get, type Json, set, tryParseJson } from "@commissary/json";
 import {
+  builtinTranslators,
   makeTranslationState,
   type ResponseContext,
   type TranslatorRegistry,
-} from "../../translator/registry.ts";
+} from "@commissary/translation";
+import { Formats } from "@commissary/translation/formats";
 import {
   parseOpenAIStreamUsage,
   parseOpenAIUsage,
@@ -43,7 +43,7 @@ import {
 } from "../helps/apply-patch-responses.ts";
 import { finalizePayload } from "../helps/payload.ts";
 import { TOOL_INPUT_ERROR_MESSAGE } from "../openai-compat/stream.ts";
-import { parseSuffix } from "../suffix.ts";
+import { parseSuffix } from "@commissary/translation/thinking";
 import { Thinking } from "../thinking.ts";
 import {
   type ExecutionContext,

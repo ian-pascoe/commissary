@@ -21,7 +21,7 @@ import { GEMINI_ENDPOINT, VERTEX_DEFAULT_BASE_URL } from "../executor/gemini/tar
 import { META_DEFAULT_BASE_URL } from "../executor/meta/credentials.ts";
 import { XAI_DEFAULT_API_BASE_URL } from "../executor/xai/credentials.ts";
 import { OPENCODE_SPECS } from "../executor/opencode/providers.ts";
-import type { JsonObject } from "../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import type { AuthIndexer } from "./auth-index.ts";
 import { configKeyIds } from "../credentials/key-ids.ts";
 import { cooldownSnapshot, recentRequestBuckets } from "./credential-entry.ts";

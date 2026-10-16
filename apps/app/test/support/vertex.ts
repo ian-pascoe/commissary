@@ -1,5 +1,5 @@
 // Service-account fixtures for the Vertex JWT-bearer flow: a freshly generated RSA key in several PEM spellings.
-import type { JsonObject, Json } from "../../src/json/index.ts";
+import type { JsonObject, Json } from "@commissary/json";
 
 const b64 = (bytes: Uint8Array): string => btoa(String.fromCharCode(...bytes));
 

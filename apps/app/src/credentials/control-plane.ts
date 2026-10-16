@@ -20,7 +20,7 @@ import {
   type SettingChange,
   type WriteResult,
 } from "../config/store.ts";
-import type { JsonObject } from "../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { isTokenPayloadKey } from "./merge.ts";
 import { CredentialPool, type ConfigView, type RefreshTarget, type UpsertResult } from "./pool.ts";
 import { type Credential, type CredentialState, executorKey } from "./model.ts";

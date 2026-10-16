@@ -7,8 +7,8 @@
  * `helps/responses-request.ts`; Meta adds its web-search tool sanitising and passes its executor identifier as the
  * payload-rule protocol (as Go does).
  */
-import { get, isJsonArray, isJsonObject, type Json } from "../../json/index.ts";
-import type { TranslatorRegistry } from "../../translator/registry.ts";
+import { get, isJsonArray, isJsonObject, type Json } from "@commissary/json";
+import type { TranslatorRegistry } from "@commissary/translation";
 import { prepareResponsesRequest, type ResponsesPrepared } from "../helps/responses-request.ts";
 import type { ExecutionContext, ExecutorOptions, ExecutorRequest } from "../types.ts";
 

@@ -17,7 +17,7 @@ import {
   type JsonObject,
   set,
   tryParseJson,
-} from "../../json/index.ts";
+} from "@commissary/json";
 import { ensureUsageDetailsInEvent, type OutputItemCollector } from "../codex/output.ts";
 import { clientToolKey, type NamespaceRefs, qualifyNamespaceToolName } from "./tools.ts";
 

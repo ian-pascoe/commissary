@@ -15,7 +15,7 @@ import {
   type JsonObject,
   set,
   tryParseJson,
-} from "../../json/index.ts";
+} from "@commissary/json";
 import { statusText } from "../../http/status.ts";
 import { ExecutionError } from "../errors.ts";
 

@@ -13,7 +13,7 @@ import type { CredentialPicker } from "../executor/picker.ts";
 import type { ExecutorRegistry } from "../executor/registry.ts";
 import type { Thinking } from "../executor/thinking.ts";
 import { decodeRequestBody, RequestBodyTooLargeError } from "../http/body.ts";
-import { type Json, tryParseJson } from "../json/index.ts";
+import { type Json, tryParseJson } from "@commissary/json";
 import type { UsageSink } from "../usage/sink.ts";
 import type { ModelCapabilities } from "./model-capabilities.ts";
 import type { ModelProviders } from "./model-providers.ts";

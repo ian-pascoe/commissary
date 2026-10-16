@@ -8,8 +8,13 @@
  *
  * Gemini and Interactions handlers reuse the OpenAI-shaped body.
  */
-import { compactJson, isValidJson } from "./json-text.ts";
-import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import {
+  compactJson,
+  isValidJson,
+  isJsonObject,
+  type Json,
+  type JsonObject,
+} from "@commissary/json";
 import { statusText } from "./status.ts";
 
 type JsonRecord = JsonObject;

@@ -16,7 +16,7 @@
  * every header value masked except safe headers and pure client copies (`maskHeaders`, as on the provider keys page), and
  * the account's own exclusions and aliases, without the channel rules.
  */
-import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "@commissary/json";
 import { decodeJwtClaims } from "../credentials/expiry.ts";
 import {
   type RecentBucket,

@@ -26,7 +26,7 @@ import { CredentialPicker, type CredentialSnapshot } from "../../executor/picker
 import type { ExecutionContext } from "../../executor/types.ts";
 import { UsageReporter } from "../../usage/reporter.ts";
 import { allowsCodexAlphaSearch, withCredentialPolicy } from "../../executor/policy-picker.ts";
-import { asString, get, isJsonObject, type Json, tryParseJson } from "../../json/index.ts";
+import { asString, get, isJsonObject, type Json, tryParseJson } from "@commissary/json";
 import { currentConfig, type ClientApiServices, readRequestBody } from "../request.ts";
 import { CurrentOrg } from "../../platform/org.ts";
 

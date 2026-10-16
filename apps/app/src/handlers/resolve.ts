@@ -8,7 +8,7 @@
  */
 import { Effect } from "effect";
 import { ExecutionError } from "../executor/errors.ts";
-import { parseSuffix } from "../executor/suffix.ts";
+import { parseSuffix } from "@commissary/translation/thinking";
 import { unknownModelBody } from "../credentials/selection/failures.ts";
 import { ModelProviders } from "./model-providers.ts";
 

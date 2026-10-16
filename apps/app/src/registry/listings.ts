@@ -5,7 +5,7 @@
  * (`OpenAIModels`), internal/client/claude/models/models.go (`BuildResponse`, ID cloaking),
  * sdk/api/handlers/gemini/gemini_handlers.go (`GeminiModels`, `GeminiGetHandler`), internal/client/grokbuild.
  */
-import type { JsonObject } from "../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { compareStrings } from "./compare.ts";
 import type { ModelInfo } from "./model-info.ts";
 

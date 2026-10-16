@@ -7,7 +7,7 @@
  * things: the model sent upstream, the model name restored in responses, the default attribution block stripping and
  * `count_tokens` always going upstream.
  */
-import { get, type Json, set, tryParseJson } from "../../json/index.ts";
+import { get, type Json, set, tryParseJson } from "@commissary/json";
 
 export interface ClaudeUpstreamProfile {
   /** Rewrites the base model for the upstream (`upstreamModelNormalizer`). */

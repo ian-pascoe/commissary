@@ -5,7 +5,7 @@
  * Provider-key mint itself runs in the ControlPlane (`ensureFresh`, credentials/refresh/meta.ts); the conductor wraps every
  * attempt with it, so the executor only reads the minted key. A `dca:` value is never used as a bearer token.
  */
-import type { Json } from "../../json/index.ts";
+import type { Json } from "@commissary/json";
 import { ExecutionError } from "../errors.ts";
 import type { CredentialSnapshot } from "../picker.ts";
 

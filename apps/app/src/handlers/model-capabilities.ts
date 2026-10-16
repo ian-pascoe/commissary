@@ -12,14 +12,14 @@ import { ConfigReader } from "../config/reader.ts";
 import type { ModelEntry } from "../config/schema.ts";
 import { resolveCompatConfig } from "../executor/models.ts";
 import type { CredentialSnapshot } from "../executor/picker.ts";
-import { parseSuffix } from "../executor/suffix.ts";
+import {
+  parseSuffix,
+  type ModelInfoLookup,
+  type ModelThinkingSupport,
+  type ThinkingModelInfo,
+} from "@commissary/translation/thinking";
 import type { CurrentOrg } from "../platform/org.ts";
 import { ModelRegistry } from "../registry/service.ts";
-import type {
-  ModelInfoLookup,
-  ModelThinkingSupport,
-  ThinkingModelInfo,
-} from "../thinking/index.ts";
 import type { ModelsEnv } from "../models/env.ts";
 
 /** What the thinking pipeline needs to know about the model of one attempt. */

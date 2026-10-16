@@ -8,8 +8,8 @@
  * (`ValidateGeminiFunctionCallPairing`).
  */
 import { createHash } from "node:crypto";
-import { asString, get, isJsonArray, isJsonObject, type Json, del } from "../../../json/index.ts";
-import { isGeminiClaudeToolUseID } from "../../../translator/common/claude-util.ts";
+import { asString, get, isJsonArray, isJsonObject, type Json, del } from "@commissary/json";
+import { isGeminiClaudeToolUseID } from "@commissary/translation";
 import { isModelRole, nativePartThoughtSignature, SKIP_VALIDATOR } from "./request-index.ts";
 
 const contentsOf = (payload: Json): Json[] => {

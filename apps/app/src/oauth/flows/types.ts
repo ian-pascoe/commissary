@@ -7,7 +7,7 @@
  */
 import { Data, type Effect } from "effect";
 import type { HttpClient } from "effect/http";
-import type { JsonObject } from "../../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import type { OAuthProvider } from "../names.ts";
 
 /** A failed step; `message` is what `GET /oauth/status` reports (Go `SetOAuthSessionError` text). */

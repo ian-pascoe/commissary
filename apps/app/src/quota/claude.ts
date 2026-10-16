@@ -12,7 +12,7 @@
  * `seven_day_<model>` windows (the panel only reads the Fable one). The plan is the panel's `plan_*` key without the
  * prefix (`team`, `max`, `pro`, `free`).
  */
-import type { Json, JsonObject } from "../json/index.ts";
+import type { Json, JsonObject } from "@commissary/json";
 import type { QuotaWindow } from "@commissary/contract/credentials";
 import {
   FIVE_HOURS,

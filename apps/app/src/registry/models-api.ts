@@ -5,7 +5,7 @@
  * `geminiModelsHandler`, `geminiGetHandler`), sdk/api/handlers/handlers_interceptors.go (`WriteModelListResponse`
  * with `ModelDetailIDContextKey`).
  */
-import { isJsonArray, type Json, type JsonObject } from "../json/index.ts";
+import { isJsonArray, type Json, type JsonObject } from "@commissary/json";
 import { claudeList, geminiDetail, geminiList, grokList, openaiList } from "./listings.ts";
 import type { ModelInfo } from "./model-info.ts";
 

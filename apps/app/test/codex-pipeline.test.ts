@@ -18,7 +18,7 @@ import {
   type UpstreamResponder,
 } from "./support/pipeline.ts";
 import type { CredentialSnapshot } from "../src/executor/picker.ts";
-import type { Json } from "../src/json/index.ts";
+import type { Json } from "@commissary/json";
 
 const YAML = `
 requests:

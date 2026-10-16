@@ -2,14 +2,14 @@
 // the real Go executors (go run ./tools/fixturegen/tokens).
 import { Effect, Result } from "effect";
 import { describe, expect, it } from "vitest";
-import { isJsonArray, isJsonObject, type Json } from "../src/json/index.ts";
+import { isJsonArray, isJsonObject, type Json } from "@commissary/json";
 import { makeClaudeExecutor } from "../src/executor/claude/executor.ts";
 import { makeCodexExecutor } from "../src/executor/codex/executor.ts";
 import { makeMetaExecutor } from "../src/executor/meta/executor.ts";
 import { makeOpenAICompatExecutor } from "../src/executor/openai-compat/executor.ts";
 import { makeXaiExecutor } from "../src/executor/xai/executor.ts";
 import { credential, harness, options, runFail } from "./support/executor-run.ts";
-import fixtures from "./fixtures/tokens.json";
+import { tokenFixtures as fixtures } from "@commissary/translation/testing";
 
 const executors = new Map([
   [

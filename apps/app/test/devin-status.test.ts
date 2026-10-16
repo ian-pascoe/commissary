@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { applyDevinStatus, refreshDevinStatuses } from "../src/credentials/devin-status.ts";
 import type { Credential, CredentialState } from "../src/credentials/model.ts";
 import { emptyState } from "../src/credentials/model.ts";
-import type { JsonObject } from "../src/json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { parseUserStatus } from "../src/oauth/flows/devin-status.ts";
 import { scheduledTasks } from "../src/scheduled.ts";
 import { recordingClient, type RecordedCall } from "./support/executor-run.ts";

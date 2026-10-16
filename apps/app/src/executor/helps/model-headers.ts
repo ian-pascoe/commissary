@@ -5,7 +5,7 @@
  * (`applyModelHeaderOverrides`). The registry snapshot of the attempt is reachable through `ExecutorRequest.modelLookup`, whose
  * entries are the registry `ModelInfo` objects (they carry `config.overrideHeader`).
  */
-import type { ThinkingModelInfo } from "../../thinking/index.ts";
+import type { ThinkingModelInfo } from "@commissary/translation/thinking";
 
 type Lookup = (modelId: string, provider: string) => ThinkingModelInfo | undefined;
 

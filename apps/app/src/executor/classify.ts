@@ -7,7 +7,7 @@
  * applyRequestScopedActionToResult). Docs: credentials.md §7, §8.3-8.4. The pure classifiers live in
  * `credentials/cooldown/classify.ts` (shared with the ControlPlane); this module adapts `ExecutionError`.
  */
-import { isJsonArray, isJsonObject, type Json } from "../json/index.ts";
+import { isJsonArray, isJsonObject, type Json } from "@commissary/json";
 import type { Config, RequestScopedErrorRule } from "../config/schema.ts";
 import {
   type ClassifiableError,

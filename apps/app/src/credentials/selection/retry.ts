@@ -8,7 +8,7 @@
  */
 import { Schema } from "effect";
 import type { Reach } from "../../grants/reach.ts";
-import type { Json } from "../../json/index.ts";
+import type { Json } from "@commissary/json";
 import { isCredentialRetryRoundStatus } from "../cooldown/classify.ts";
 import { MIN_QUOTA_COOLDOWN_MS } from "../cooldown/mark-result.ts";
 import {

@@ -17,10 +17,9 @@ import {
   isJsonObject,
   type Json,
   type JsonObject,
-} from "../../json/index.ts";
-import { bytesToBinaryString } from "../../signature/base64.ts";
-import { detectSignatureProvider } from "../../signature/provider.ts";
-import { UserRun } from "../../translator/common/parts.ts";
+} from "@commissary/json";
+import { bytesToBinaryString, detectSignatureProvider } from "@commissary/translation/signature";
+import { UserRun } from "@commissary/translation";
 import { uuidV5Oid } from "../helps/uuid.ts";
 import {
   DEVIN_DEFAULT_MAX_TOKENS,

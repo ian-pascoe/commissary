@@ -15,7 +15,7 @@
 import type { Config } from "../config/schema.ts";
 import { sessionAffinityTtlMs } from "../config/accessors.ts";
 import type { Reach } from "../grants/reach.ts";
-import type { JsonObject } from "../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { resetCooldownState } from "./cooldown-reset.ts";
 import { type StoredCredential, deriveFileCredential, sanitizeAliases } from "./derive.ts";
 import { parseAuthFile, type ImportFailureReason } from "./import.ts";

@@ -8,8 +8,7 @@
  * partial bytes. Fingerprints never leave the Durable Object, so only their determinism matters.
  */
 import { createHash } from "node:crypto";
-import { isJsonArray, isJsonObject, type Json } from "../json/index.ts";
-import { stableStringify } from "../http/json-text.ts";
+import { isJsonArray, isJsonObject, type Json, stableStringify } from "@commissary/json";
 import { compareStrings } from "../registry/compare.ts";
 
 const CANONICAL_TURN_VERSION = "cpa-session-turn-v1";

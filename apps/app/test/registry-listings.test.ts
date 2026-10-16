@@ -4,7 +4,7 @@ import {
   supportsApplyPatchProviders,
 } from "../src/registry/codex-client-models.ts";
 import { resolveClaudeModelIdPrefix, ensureClaudeModelIdPrefix } from "../src/registry/listings.ts";
-import { asString, type JsonObject } from "../src/json/index.ts";
+import { asString, type JsonObject } from "@commissary/json";
 import {
   respondGeminiDetail,
   respondGeminiList,

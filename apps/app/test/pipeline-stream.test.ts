@@ -18,13 +18,9 @@ import {
   responsesFramer,
 } from "../src/handlers/framing.ts";
 import { errorResponse, streamResponse } from "../src/handlers/respond.ts";
-import { get, type Json, set } from "../src/json/index.ts";
-import { structuralBody } from "./support/structural.ts";
-import {
-  type SummaryHooks,
-  TranslationError,
-  TranslatorRegistry,
-} from "../src/translator/registry.ts";
+import { get, type Json, set } from "@commissary/json";
+import { structuralBody } from "@commissary/translation/testing";
+import { type SummaryHooks, TranslationError, TranslatorRegistry } from "@commissary/translation";
 
 const decoder = new TextDecoder();
 

@@ -7,8 +7,8 @@
  * splice path that is an optimisation of the sequential one ("retain the exact legacy behavior"); only the sequential
  * semantics are ported (payloads are mutated in place, the index is rebuilt after each applied item).
  */
-import { stableStringify } from "../../../http/json-text.ts";
 import {
+  stableStringify,
   asInt,
   asString,
   cloneJson,
@@ -20,15 +20,13 @@ import {
   type JsonObject,
   jsonEquals,
   tryParseJson,
-} from "../../../json/index.ts";
+} from "@commissary/json";
 import {
   geminiClaudeToolUseID,
   isGeminiClaudeToolUseID,
-} from "../../../translator/common/claude-util.ts";
-import {
   mapSanitizedFunctionName,
   sanitizedFunctionNameMap,
-} from "../../../translator/common/tool-names.ts";
+} from "@commissary/translation";
 import {
   hasNativeThoughtSignature,
   isModelRole,

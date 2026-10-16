@@ -12,7 +12,7 @@
  */
 import { Option, Schema } from "effect";
 import { QuotaReport } from "@commissary/contract/credentials";
-import { tryParseJson } from "../json/index.ts";
+import { tryParseJson } from "@commissary/json";
 
 interface ReportRow {
   id: string;

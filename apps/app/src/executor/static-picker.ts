@@ -11,7 +11,7 @@ import { configCredentials } from "./config-credentials.ts";
 import { ExecutionError } from "./errors.ts";
 import { executionModelCandidates } from "./models.ts";
 import { CredentialPicker, type PickRequest, type PickResult } from "./picker.ts";
-import { parseSuffix } from "./suffix.ts";
+import { parseSuffix } from "@commissary/translation/thinking";
 
 const servesModel = (models: ReadonlySet<string>, model: string): boolean => {
   if (models.has(model)) return true;

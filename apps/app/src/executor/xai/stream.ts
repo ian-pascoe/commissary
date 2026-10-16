@@ -7,8 +7,8 @@
  * normalisation, namespace restore, client function alias restore and the hidden X Search filter before it is handed
  * to the translator. Terminal events get their `response.output` rebuilt from `output_item.done` items.
  */
-import { asString, get, isJsonObject, type Json, tryParseJson } from "../../json/index.ts";
-import type { ResponseContext, TranslatorRegistry } from "../../translator/registry.ts";
+import { asString, get, isJsonObject, type Json, tryParseJson } from "@commissary/json";
+import type { ResponseContext, TranslatorRegistry } from "@commissary/translation";
 import { responseModelOf } from "../../usage/record.ts";
 import { isResponsesTokenEvent } from "../../usage/ttft.ts";
 import type { UsageReporter } from "../../usage/reporter.ts";

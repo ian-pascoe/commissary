@@ -29,7 +29,7 @@ import {
   type Json,
   type JsonObject,
   tryParseJson,
-} from "../../json/index.ts";
+} from "@commissary/json";
 import { executeNonStream, type ExecutionInput, type ExecutionOutput } from "../execute.ts";
 import { currentConfig, type ClientApiServices, readRequestBody } from "../request.ts";
 import { errorResponse, withNonStreamKeepAlive } from "../respond.ts";

@@ -19,7 +19,7 @@ import {
   jsonEquals,
   type Json,
   type JsonObject,
-} from "../json/index.ts";
+} from "@commissary/json";
 import { ConfigValidationError, configPath } from "./errors.ts";
 import { normalizeConfig } from "./normalize.ts";
 import { prepareDocument } from "./document.ts";

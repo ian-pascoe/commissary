@@ -78,7 +78,13 @@ declare namespace Cloudflare {
 
 interface Env extends __BaseEnv_Env {}
 
-// Non-JavaScript modules (Workers module rules; `*.bin` is in src/tokenizer/bin.d.ts).
+// Non-JavaScript modules (Workers module rules).
+// @commissary/translation's tokenizer ranks: `Data` modules (alchemy.run.ts and vitest.config.ts `modulesRules`).
+declare module "*.bin" {
+  const data: ArrayBuffer;
+  export default data;
+}
+
 declare module "*.txt" {
   const value: string;
   export default value;

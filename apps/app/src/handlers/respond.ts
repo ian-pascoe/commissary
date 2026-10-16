@@ -16,7 +16,7 @@ import {
   isCPAReservedResponseHeader,
   mergeUpstreamHeaders,
 } from "../http/headers.ts";
-import { isValidJson } from "../http/json-text.ts";
+import { isValidJson } from "@commissary/json";
 import { statusText } from "../http/status.ts";
 import type { StreamOutput } from "./execute.ts";
 import type { StreamFramer } from "./framing.ts";

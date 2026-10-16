@@ -11,7 +11,7 @@ import {
   type UpstreamResponder,
 } from "./support/pipeline.ts";
 import { xaiModels, xaiOauth, xaiPicker, type XaiPickerLog } from "./support/xai.ts";
-import type { Json, JsonObject } from "../src/json/index.ts";
+import type { Json, JsonObject } from "@commissary/json";
 
 const created = {
   type: "response.created",

@@ -14,7 +14,7 @@ import type {
   ProviderExecutor,
   StreamResult,
 } from "../../src/executor/types.ts";
-import type { Json } from "../../src/json/index.ts";
+import type { Json } from "@commissary/json";
 import { UsageReporter } from "../../src/usage/reporter.ts";
 import { GLOBAL_ORG } from "../../src/platform/org.ts";
 

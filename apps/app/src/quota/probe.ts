@@ -15,7 +15,7 @@ import { Clock, Effect, Result } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 import { fetchDevinUserStatus } from "../credentials/devin-status.ts";
 import { currentXaiClientVersion } from "../executor/xai/version.ts";
-import { type Json, tryParseJson } from "../json/index.ts";
+import { type Json, tryParseJson } from "@commissary/json";
 import type { QuotaWindow, ResetGrantStatus } from "@commissary/contract/credentials";
 import {
   ANTIGRAVITY_HEADERS,

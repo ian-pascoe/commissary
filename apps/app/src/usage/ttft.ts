@@ -5,7 +5,7 @@
  * Go source: internal/runtime/executor/helps/{chat,claude,gemini,responses}_ttft_helpers.go (Is*TokenEvent) and
  * plugin_executor_usage.go (ObservePluginExecutorStreamTTFT protocol dispatch).
  */
-import { get, isJsonArray, type Json, tryParseJson } from "../json/index.ts";
+import { get, isJsonArray, type Json, tryParseJson } from "@commissary/json";
 
 /** gjson `len(x.String()) > 0`: strings must be non-empty, any other existing non-null value counts. */
 const hasText = (value: Json | undefined): boolean =>

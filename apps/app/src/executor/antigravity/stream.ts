@@ -15,7 +15,7 @@ import {
   type JsonObject,
   set,
   tryParseJson,
-} from "../../json/index.ts";
+} from "@commissary/json";
 import { jsonPayload, stripUsageMetadataFromJson } from "../gemini/usage.ts";
 import { ExecutionError } from "../errors.ts";
 import { antigravityStatusError } from "./errors.ts";

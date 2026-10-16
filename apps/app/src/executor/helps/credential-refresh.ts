@@ -15,7 +15,7 @@ import { accessTokenExpiry } from "../../credentials/expiry.ts";
 import type { RefreshResult } from "../../credentials/refresh/index.ts";
 import { metaNeedsMint } from "../../credentials/refresh/meta.ts";
 import { ANTIGRAVITY_REQUEST_SAFETY_MS } from "../../credentials/refresh/schedule.ts";
-import type { JsonObject } from "../../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import { controlPlaneOf, CurrentOrg, type OrgId } from "../../platform/org.ts";
 import { toExecutorSnapshot } from "../control-plane-picker.ts";
 import { ExecutionError, withErrorFields } from "../errors.ts";

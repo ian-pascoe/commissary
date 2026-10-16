@@ -48,7 +48,18 @@
     "anti-slop-effect/no-manual-tagged-construction": "error",
     "anti-slop-effect/no-service-constructor-imports": "warn",
     "anti-slop-effect/prefer-effect-match": "error",
-    "effecttsgo/unstable-api-usage": "warn"
+    "effecttsgo/unstable-api-usage": "warn",
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "regex": "^@commissary/[^/]+/testing$",
+            "message": "A package's ./testing helpers are for test files only (docs/DEVELOPMENT.md, \"Tests\")."
+          }
+        ]
+      }
+    ]
   },
   "ignorePatterns": [
     "node_modules",
@@ -58,6 +69,7 @@
     ".worktrees",
     "worker-configuration.d.ts",
     "apps/app/test/fixtures",
+    "packages/*/test/fixtures",
     ".agent/**",
     ".agents/**",
     ".claude/**",
@@ -78,7 +90,44 @@
         "anti-slop/require-safety-comment-for-type-assertion": "off",
         "anti-slop/no-chained-type-assertions": "off",
         "anti-slop/no-unsafe-dictionary-type": "off",
-        "typescript/no-unsafe-type-assertion": "off"
+        "typescript/no-unsafe-type-assertion": "off",
+        "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["packages/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "^@commissary/[^/]+/testing$",
+                "message": "A package's ./testing helpers are for test files only (docs/DEVELOPMENT.md, \"Tests\")."
+              },
+              {
+                "regex": "(^|/)apps/",
+                "message": "Packages import nothing from apps/*: an app depends on packages, never the reverse."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/*/test/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "regex": "(^|/)apps/",
+                "message": "Packages import nothing from apps/*: an app depends on packages, never the reverse."
+              }
+            ]
+          }
+        ]
       }
     }
   ]

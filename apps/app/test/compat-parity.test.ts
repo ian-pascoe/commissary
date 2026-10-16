@@ -7,7 +7,7 @@ import {
   normalizeToolResultsTextOnly,
   shouldNormalizeToolResults,
 } from "../src/executor/helps/openai-compat-tool-results.ts";
-import { get, type Json } from "../src/json/index.ts";
+import { get, type Json } from "@commissary/json";
 import { credential, execute, harness, json, options } from "./support/executor-run.ts";
 import fixtures from "./fixtures/compat-parity.json";
 

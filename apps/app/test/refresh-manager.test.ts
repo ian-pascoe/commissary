@@ -1,7 +1,7 @@
 // RefreshManager: alarm multiplexing, dedupe, rotation persistence, 401 recovery, back-off, merge semantics,
 // request-time preparation (Meta, Vertex, Antigravity) — against a real CredentialPool and a recording HttpClient.
 import { beforeAll, describe, expect, it } from "vitest";
-import type { JsonObject } from "../src/json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import type { RefreshResult } from "../src/credentials/refresh/index.ts";
 import type { PickResult } from "../src/credentials/selection/types.ts";
 import {

@@ -24,7 +24,7 @@ import {
   jsonEquals,
   set,
   tryParseJson,
-} from "../../json/index.ts";
+} from "@commissary/json";
 import type { PayloadConfig, PayloadRule } from "./schema.ts";
 import {
   type HeaderInput,

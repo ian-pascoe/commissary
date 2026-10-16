@@ -13,7 +13,7 @@ import { decodeJwtClaims } from "../credentials/expiry.ts";
 import type { Credential } from "../credentials/model.ts";
 import { devinCredentials } from "../executor/devin/credentials.ts";
 import { OPENCODE_GO, OPENCODE_SPECS } from "../executor/opencode/providers.ts";
-import { isJsonObject, type Json } from "../json/index.ts";
+import { isJsonObject, type Json } from "@commissary/json";
 import { apiCallToken } from "../management/credential-ops.ts";
 import { kimiUsageUrl } from "./kimi.ts";
 import { isDcaToken } from "./meta.ts";

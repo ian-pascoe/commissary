@@ -7,10 +7,9 @@
  * newlines and counts them with the provider's encoding. "Raw" JSON segments are `JSON.stringify` output (Go keeps
  * the raw bytes, so counts differ only for non-canonical numbers and unusual string escapes).
  */
-import { asString, get, isJsonArray, isJsonObject, type Json } from "../../json/index.ts";
-import { toArray } from "../../translator/common/gjson.ts";
-import type { BpeCodec } from "../../tokenizer/bpe.ts";
-import { goTrimSpace } from "../../tokenizer/text.ts";
+import { asString, get, isJsonArray, isJsonObject, type Json } from "@commissary/json";
+import { toArray } from "@commissary/translation";
+import { type BpeCodec, goTrimSpace } from "@commissary/translation/tokenizer";
 
 const raw = (value: Json): string => JSON.stringify(value);
 

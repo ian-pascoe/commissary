@@ -9,7 +9,7 @@
 import { Effect } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import type { Config } from "../../config/schema.ts";
-import { asString, get, isJsonArray, type Json, set, tryParseJson } from "../../json/index.ts";
+import { asString, get, isJsonArray, type Json, set, tryParseJson } from "@commissary/json";
 import { ExecutionError } from "../errors.ts";
 import type { CredentialSnapshot } from "../picker.ts";
 import { loadCodeAssistBaseUrl } from "./envelope.ts";

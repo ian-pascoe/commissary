@@ -8,7 +8,7 @@
  */
 import { Effect } from "effect";
 import { type HttpClient, HttpClientRequest } from "effect/http";
-import type { Json, JsonObject } from "../../json/index.ts";
+import type { Json, JsonObject } from "@commissary/json";
 import {
   CODEX_CLIENT_ID,
   CODEX_TOKEN_URL,

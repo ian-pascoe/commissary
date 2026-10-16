@@ -12,7 +12,7 @@
  */
 import { createHash } from "node:crypto";
 import { Effect } from "effect";
-import { isJsonObject, type Json, tryParseJson } from "../../json/index.ts";
+import { isJsonObject, type Json, tryParseJson } from "@commissary/json";
 import type { Config } from "../../config/schema.ts";
 import {
   type BackendResolver,

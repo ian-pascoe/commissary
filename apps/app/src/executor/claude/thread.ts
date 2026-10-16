@@ -9,8 +9,8 @@
  * same 1024-entry bound, and expire after 7 days.
  */
 import { Effect } from "effect";
-import { type JsonObject, tryParseJson } from "../../json/index.ts";
-import { isArr, isObj, str } from "../../translator/common/gjson.ts";
+import { type JsonObject, tryParseJson } from "@commissary/json";
+import { isArr, isObj, str } from "@commissary/translation";
 import {
   type BackendResolver,
   bestEffort,

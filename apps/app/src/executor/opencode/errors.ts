@@ -16,7 +16,7 @@
  * 401 (bad key) and 402 (no balance) are credential-scoped, a Go 429 is credential-scoped while a Zen 429 stays
  * model-level, `Retry-After` (seconds or an HTTP date) is honoured on 429 and 5xx answers.
  */
-import { asString, get, type Json, tryParseJson } from "../../json/index.ts";
+import { asString, get, type Json, tryParseJson } from "@commissary/json";
 import { ExecutionError, headersRecord } from "../errors.ts";
 import { openAICompatRetryAfterMs, parseRetryAfterMs } from "../helps/retry-after.ts";
 import { OPENCODE_GO, type OpenCodeProvider } from "./providers.ts";

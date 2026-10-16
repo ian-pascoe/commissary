@@ -6,7 +6,7 @@
  * parseInteractionsUsageDetail, Parse{Claude,Gemini,Interactions,Antigravity}[Stream]Usage),
  * helps/plugin_executor_usage.go (MergeStreamUsageDetail, ObserveMergedStreamUsage).
  */
-import { get, isJsonObject, type Json, tryParseJson } from "../json/index.ts";
+import { get, isJsonObject, type Json, tryParseJson } from "@commissary/json";
 import {
   independentTokenBreakdown,
   inconsistentTokenBreakdown,

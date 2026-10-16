@@ -7,7 +7,7 @@
  * Replay state is an optimisation: backend failures degrade to "no replay this turn", never to a failed request.
  */
 import { Effect } from "effect";
-import type { Json } from "../../../json/index.ts";
+import type { Json } from "@commissary/json";
 import { ExecutionError } from "../../errors.ts";
 import type { ExecutorOptions, ExecutorRequest } from "../../types.ts";
 import { normalizeFunctionResponseRoles, usesReasoningReplay } from "../content.ts";

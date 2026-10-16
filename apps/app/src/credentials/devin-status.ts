@@ -10,7 +10,7 @@ import { Effect, Result } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { devinCredentials } from "../executor/devin/credentials.ts";
 import { generateDeviceFingerprint } from "../executor/devin/wire.ts";
-import type { JsonObject } from "../json/index.ts";
+import type { JsonObject } from "@commissary/json";
 import {
   buildUserStatusRequest,
   type DevinUserStatus,

@@ -10,8 +10,8 @@
  * before the request is sent (AGENTS.md), so nothing may rewrite the body afterwards. The functions are ported (and
  * tested against the Go cases) for callers that apply payload rules earlier.
  */
-import { cloneJson, get, type JsonObject } from "../../json/index.ts";
-import { isArr, isObj, str } from "../../translator/common/gjson.ts";
+import { cloneJson, get, type JsonObject } from "@commissary/json";
+import { isArr, isObj, str } from "@commissary/translation";
 import { textBlock } from "./cache-control.ts";
 import {
   isFable51Model,

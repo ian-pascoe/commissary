@@ -14,9 +14,9 @@ import {
   isJsonObject,
   type Json,
   type JsonObject,
-} from "../json/index.ts";
+  stableStringify,
+} from "@commissary/json";
 import { forEachValue, goTrimSpace, prop } from "./canonical.ts";
-import { stableStringify } from "../http/json-text.ts";
 
 const encoder = new TextEncoder();
 

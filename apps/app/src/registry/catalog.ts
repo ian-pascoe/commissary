@@ -7,7 +7,7 @@
  * (`refresh.ts`, `catalog-store.ts`). The additions are never fetched: a refreshed document is merged with the bundled
  * additions. Static lookups (`lookupStaticModelInfo*`) read the same catalogs.
  */
-import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "@commissary/json";
 import additionsJson from "./catalog/additions.json";
 import codexClientJson from "./catalog/codex_client_models.json";
 import modelsDevJson from "./catalog/models-dev.json";

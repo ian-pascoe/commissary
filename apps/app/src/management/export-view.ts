@@ -5,7 +5,7 @@
  * records are not part of it: the usage routes already page and export them.
  */
 import { maskHeaders, isSecretName, maskSecret } from "../credentials/summary.ts";
-import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
+import { isJsonObject, type Json, type JsonObject } from "@commissary/json";
 
 /** A proxy URL's credentials are secret; the rest of the address is not. */
 const maskProxyUrl = (value: string): string => {

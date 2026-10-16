@@ -9,13 +9,15 @@
       "dependsOn": ["^transit"]
     },
     "typecheck": {
-      "description": "tsc over each program of the package (no emit)",
+      "description": "tsc over each program of the package (no emit); the packages' Vitest configs import tools/vitest",
       "dependsOn": ["transit"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/tools/vitest/**"],
       "outputs": []
     },
     "test": {
-      "description": "Vitest; arguments after `--` (such as CI's --shard=N/3) reach every package's run and its cache key",
+      "description": "Vitest; arguments after `--` (such as CI's --shard=N/3) reach every package's run and its cache key. The packages' Vitest configs import tools/vitest",
       "dependsOn": ["transit"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/tools/vitest/**"],
       "outputs": []
     },
     "build": {
