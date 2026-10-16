@@ -1,0 +1,10 @@
+{
+  // The panel's build and test code, run by Node.js: vite.config.ts, vitest.config.ts and the tests of the DOM-free
+  // modules in src/lib (the tests pull in only the modules they import, so those must not touch the DOM).
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node"]
+  },
+  "include": ["vite.config.ts", "vitest.config.ts", "test"]
+}

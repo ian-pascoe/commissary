@@ -57,7 +57,7 @@
     ".repos",
     ".worktrees",
     "worker-configuration.d.ts",
-    "test/fixtures",
+    "apps/app/test/fixtures",
     ".agent/**",
     ".agents/**",
     ".claude/**",
@@ -73,7 +73,7 @@
   ],
   "overrides": [
     {
-      "files": ["test/**"],
+      "files": ["apps/*/test/**", "packages/*/test/**"],
       "rules": {
         "anti-slop/require-safety-comment-for-type-assertion": "off",
         "anti-slop/no-chained-type-assertions": "off",

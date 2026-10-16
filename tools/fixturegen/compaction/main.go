@@ -1,5 +1,5 @@
 // Command compaction emits golden fixtures for the TypeScript Responses compaction capsules
-// (src/executor/helps/compaction.ts and the Claude/Antigravity executors).
+// (apps/app/src/executor/helps/compaction.ts and the Claude/Antigravity executors).
 //
 // Two kinds of fixtures: (1) the exported helps functions (summary payload preparation, capsule unsealing of
 // Go-sealed capsules, expansion, summary extraction, response/stream builders) and (2) end-to-end scenarios that run
@@ -503,7 +503,7 @@ func normalizePlain(plain string) string {
 }
 
 func main() {
-	outPath := flag.String("out", "test/fixtures/compaction.json", "output file")
+	outPath := flag.String("out", "apps/app/test/fixtures/compaction.json", "output file")
 	flag.Parse()
 	var results []scenarioResult
 	for _, s := range scenarios() {

@@ -171,7 +171,7 @@ Structure comes from hairlines and one ink rule under table headings. There are 
 
 ## Colors
 
-A signage palette: white, sign ink, one route yellow, one danger red, and a fixed stone ramp. These paints are defined once in `web/src/styles/tokens.css`; stylesheets never use them directly but through the semantic tokens below, so the dark theme is a remap of roles, not a second set of rules.
+A signage palette: white, sign ink, one route yellow, one danger red, and a fixed stone ramp. These paints are defined once in `apps/web/src/styles/tokens.css`; stylesheets never use them directly but through the semantic tokens below, so the dark theme is a remap of roles, not a second set of rules.
 
 ### Primary
 
@@ -215,7 +215,7 @@ The night version of the trail sign, for the same operator checking in after dar
 - **Body text** gains a little weight (430) and tracking (0.005em): light text on a dark ground reads thinner.
 - Browser surfaces follow through `color-scheme`: scrollbars, form controls (accent is the text colour), date and select popups, and the `theme-color` (yellow by day, the dark board at night).
 
-**Choosing it.** The theme follows the system (`prefers-color-scheme`) until the operator picks Light or Dark in the shell's theme menu; the choice is kept in `localStorage` and applied before the first paint by a same-origin script (`web/src/theme-boot.ts`), since the CSP allows no inline script.
+**Choosing it.** The theme follows the system (`prefers-color-scheme`) until the operator picks Light or Dark in the shell's theme menu; the choice is kept in `localStorage` and applied before the first paint by a same-origin script (`apps/web/src/theme-boot.ts`), since the CSP allows no inline script.
 
 ### Named Rules
 
@@ -273,7 +273,7 @@ Square signage. Buttons take a 3px radius; meters 1px. Blades have a square tail
 ### Sidebar
 
 - The page links of the caller's role, on the page's own ground, set off from the page by one 1px hairline down its right edge: no fill, no box. It stays in view while the page scrolls (sticky, scrolling itself on a short window).
-- Links in groups (`pageGroupsFor` in `web/src/lib/role.ts`, the only source of the links): Overview and Usage first without a heading, then Providers, People and access, and Org, each under a caption heading (0.8125rem, 600, stone-4); a group the role has no page in is left out. Links are 0.9375rem (500), 2.25rem rows (2.75rem on touch screens), spaced 1.5rem between groups.
+- Links in groups (`pageGroupsFor` in `apps/web/src/lib/role.ts`, the only source of the links): Overview and Usage first without a heading, then Providers, People and access, and Org, each under a caption heading (0.8125rem, 600, stone-4); a group the role has no page in is left out. Links are 0.9375rem (500), 2.25rem rows (2.75rem on touch screens), spaced 1.5rem between groups.
 - The current page (`aria-current="page"`) is set in 750 with a 4px ink underline under its label, hover a 4px hairline one: the filter tabs' underline language turned into a column. Never a coloured side stripe or a fill.
 - **Drawer (below 64rem):** a framed menu square at the bar's left opens the same content in a native modal `<dialog>` along the left edge (raised, 2px text-colour right edge, no shadow, the dialog backdrop; at most 20rem, always leaving a strip of page in view). Its close square lands where the menu square was. Tab wraps inside it, Escape, the close square, the backdrop and following any link close it, and focus returns to the menu square. No slide: the unfold stays the only authored motion.
 

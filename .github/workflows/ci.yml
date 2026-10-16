@@ -161,7 +161,7 @@ jobs:
           # No dependency cache in jobs holding deploy credentials (cache poisoning).
           cache: "false"
       - name: Build the control panel
-        run: pnpm web:build
+        run: pnpm build
       - name: Deploy
         id: deploy
         run: tools/deploy-stage.sh "$STAGE"
@@ -243,7 +243,7 @@ jobs:
           cache: "false"
       - name: Build the control panel
         if: env.CONFIGURED == 'true'
-        run: pnpm web:build
+        run: pnpm build
       - name: Deploy
         id: deploy
         if: env.CONFIGURED == 'true'

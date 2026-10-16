@@ -1,4 +1,4 @@
-// Command session emits golden fixtures for the TypeScript session routing port (src/session-routing):
+// Command session emits golden fixtures for the TypeScript session routing port (apps/app/src/session-routing):
 // canonical turns and fingerprints, the derived content-hash identity, the message-hash fallback, identity helpers and
 // scripted scenarios of the LCP conversation matcher. Everything is produced by the real sdk/cliproxy/session and
 // sdk/cliproxy/auth code. Run from the repository root:
@@ -470,7 +470,7 @@ func run(sc *scenario) {
 }
 
 func main() {
-	out := flag.String("out", "test/fixtures/session.json", "output file")
+	out := flag.String("out", "apps/app/test/fixtures/session.json", "output file")
 	flag.Parse()
 	scs := scenarios()
 	for index := range scs {

@@ -1,4 +1,4 @@
-// Command translator emits golden fixtures for the TypeScript translators (src/translator).
+// Command translator emits golden fixtures for the TypeScript translators (apps/app/src/translator).
 //
 // Every corpus case is run through the real Go translator registry (sdk/translator with the built-in
 // internal/translator registrations): the client request is translated to the provider format, every upstream
@@ -154,7 +154,7 @@ func run(registry *sdktranslator.Registry, c corpusCase) (fixtureCase, error) {
 
 func main() {
 	corpusDir := flag.String("corpus", "tools/fixturegen/translator/corpus", "directory with corpus *.json files")
-	outDir := flag.String("out", "test/fixtures/translator", "output directory")
+	outDir := flag.String("out", "apps/app/test/fixtures/translator", "output directory")
 	flag.Parse()
 
 	files, err := filepath.Glob(filepath.Join(*corpusDir, "*.json"))

@@ -1,5 +1,5 @@
 // Command claudeprofile emits golden fixtures for the TypeScript Claude device profile stabiliser
-// (src/executor/claude/device-profile.ts): sequences of requests resolved by the real
+// (apps/app/src/executor/claude/device-profile.ts): sequences of requests resolved by the real
 // helps.ResolveClaudeDeviceProfile (local cache mode). Run from the repository root:
 //
 //	go run ./tools/fixturegen/claudeprofile
@@ -51,7 +51,7 @@ func h(userAgent string, extra ...string) map[string]string {
 }
 
 func main() {
-	out := flag.String("out", "test/fixtures/claude-profile.json", "output file")
+	out := flag.String("out", "apps/app/test/fixtures/claude-profile.json", "output file")
 	flag.Parse()
 	stable := true
 	base := config.ClaudeHeaderDefaults{StabilizeDeviceProfile: &stable}

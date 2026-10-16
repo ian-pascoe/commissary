@@ -4,7 +4,7 @@
 # Usage: pnpm smoke
 set -eu
 cd "$(dirname "$0")/.."
-pnpm -s web:build >/dev/null
+pnpm -s exec turbo run build --filter=@commissary/web --output-logs=errors-only
 log=$(mktemp)
 ALCHEMY_STATE=local pnpm exec alchemy dev --stage smoke >"$log" 2>&1 &
 pid=$!

@@ -11,7 +11,7 @@ import type { Settings } from "./settings.ts";
 /** Where `alchemy deploy` writes the service token credentials (gitignored, mode 0600). */
 export const SERVICE_TOKENS_FILE = ".alchemy/access-service-tokens.json";
 
-/** Values the Worker needs from the Access setup (see src/access). */
+/** Values the Worker needs from the Access setup (see apps/app/src/access). */
 export interface AccessWiring {
   readonly aud: string | Output.Output<string>;
   readonly adminServiceTokens: string | Output.Output<string>;
@@ -95,9 +95,9 @@ const ApplicationSettings = Alchemy.Action(
 );
 
 /**
- * The client API (`src/access/routes.ts` `PROTECTED_PREFIXES` without `/v9/management`): clients authenticate there
- * with API keys the Worker checks itself (ADR 0022), so Access lets every request through. Access matches a path and
- * its sub-paths (`/v1` covers `/v1/models`), not other paths that start with the same letters, so `/v1beta` and
+ * The client API (`apps/app/src/access/routes.ts` `PROTECTED_PREFIXES` without `/v9/management`): clients authenticate
+ * there with API keys the Worker checks itself (ADR 0022), so Access lets every request through. Access matches a path
+ * and its sub-paths (`/v1` covers `/v1/models`), not other paths that start with the same letters, so `/v1beta` and
  * `/v1internal` are listed on their own.
  */
 export const CLIENT_API_PATHS = [
