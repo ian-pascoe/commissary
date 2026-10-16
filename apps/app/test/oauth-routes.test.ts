@@ -156,7 +156,11 @@ describe("management oauth routes", () => {
       organization_uuid: "org-1",
       disabled: false,
     });
-    const picked = await controlPlane().pick({ providers: ["claude"], model: "claude-sonnet-4-5" });
+
+    const picked = await controlPlane()
+      .models()
+      .pick({ providers: ["claude"], model: "claude-sonnet-4-5" });
+
     expect(picked).toMatchObject({
       ok: true,
       credential: { id: stored, provider: "claude", authKind: "oauth" },
@@ -357,7 +361,11 @@ describe("management oauth routes", () => {
     expect(files.files.map((file) => file.name)).toEqual([
       expect.stringMatching(/^xai-\d+\.json$/),
     ]);
-    expect(await controlPlane().pick({ providers: ["xai"], model: "grok-4" })).toMatchObject({
+    expect(
+      await controlPlane()
+        .models()
+        .pick({ providers: ["xai"], model: "grok-4" }),
+    ).toMatchObject({
       ok: true,
     });
   });

@@ -147,7 +147,7 @@ const SETTLE_FAILED =
 
 const target = (ref: Ref, viewer: Scope) =>
   Effect.map(
-    call("resetGrantTarget", (stub) => stub.resetGrantTarget(ref, viewer)),
+    call("resetGrantTarget", (stub) => stub.models().resetGrantTarget(ref, viewer)),
     (result) => {
       if (result.ok) return result;
 
@@ -170,7 +170,7 @@ const refreshStatus = (id: string, token: string, mark: ResetGrantMark) =>
     if (grants === undefined) return { grants, stored: undefined };
 
     const stored = yield* call("recordResetGrantStatus", (stub) =>
-      stub.recordResetGrantStatus(id, grants, mark),
+      stub.models().recordResetGrantStatus(id, grants, mark),
     );
 
     return { grants, stored };
@@ -251,7 +251,7 @@ export const claimResetGrant = (
       } as const;
 
     const begun = yield* call("beginResetGrantClaim", (stub) =>
-      stub.beginResetGrantClaim(id, organization, fresh, mark, resolved.pendingRequestId),
+      stub.models().beginResetGrantClaim(id, organization, fresh, mark, resolved.pendingRequestId),
     );
 
     if (!begun.ok)
@@ -287,7 +287,7 @@ export const claimResetGrant = (
 
     const settled = yield* Effect.result(
       call("settleResetGrantClaim", (stub) =>
-        stub.settleResetGrantClaim(id, journal.request_id, answer),
+        stub.models().settleResetGrantClaim(id, journal.request_id, answer),
       ),
     );
 

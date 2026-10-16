@@ -1,11 +1,4 @@
-import { DurableObject } from "cloudflare:workers";
-import {
-  type ManagementKeyRecord,
-  type ManagementKeyResult,
-  ManagementKeyStore,
-  type ManagementKeyVerdict,
-} from "../management-keys/store.ts";
-import { isHosted } from "../hosted/mode.ts";
+import { RpcTarget } from "cloudflare:workers";
 import { Effect, Schema } from "effect";
 import { FetchHttpClient, type HttpClient } from "effect/http";
 import {
@@ -21,9 +14,14 @@ import {
   type WriteResult,
 } from "../config/store.ts";
 import type { JsonObject } from "@commissary/json";
-import { isTokenPayloadKey } from "./merge.ts";
-import { CredentialPool, type ConfigView, type RefreshTarget, type UpsertResult } from "./pool.ts";
-import { type Credential, type CredentialState, executorKey } from "./model.ts";
+import { isTokenPayloadKey } from "../credentials/merge.ts";
+import {
+  CredentialPool,
+  type ConfigView,
+  type RefreshTarget,
+  type UpsertResult,
+} from "../credentials/pool.ts";
+import { type Credential, type CredentialState, executorKey } from "../credentials/model.ts";
 import {
   type Access,
   accessTo,
@@ -31,28 +29,32 @@ import {
   isFullAccess,
   type Scope,
   type Viewer,
-} from "./ownership.ts";
+} from "../credentials/ownership.ts";
 import {
   RefreshManager,
   type RefreshOptions,
   type RefreshResult,
   type RunSummary,
-} from "./refresh/index.ts";
-import { type RetryPlan, RetryQuery } from "./selection/retry.ts";
+} from "../credentials/refresh/index.ts";
+import { type RetryPlan, RetryQuery } from "../credentials/selection/retry.ts";
 import {
   Lease,
   PickRequest,
   ReportResult,
   type PickResult,
   type ReportOutcome,
-} from "./selection/types.ts";
-import { CredentialStore } from "./store.ts";
-import type { CredentialSummary } from "./summary.ts";
+} from "../credentials/selection/types.ts";
+import { CredentialStore } from "../credentials/store.ts";
+import type { CredentialSummary } from "../credentials/summary.ts";
 import type { ModelSource } from "../registry/source.ts";
 import { reachOf } from "../grants/reach.ts";
 import type { GrantChange, GrantSubject, GrantTable, GrantsWire } from "../grants/grant.ts";
 import { GrantStore } from "../grants/store.ts";
-import { type AuthIndexer, orgAuthIndexer } from "../management/auth-index.ts";
+import {
+  type AuthIndexer,
+  type AuthIndexKeyEnv,
+  orgAuthIndexer,
+} from "../management/auth-index.ts";
 import {
   type ProviderKeyProbeTargetResult,
   buildProviderKeyProbeTarget,
@@ -60,18 +62,8 @@ import {
 import { buildProviderKeysList } from "../management/provider-keys-view.ts";
 import { locateKey } from "../management/provider-keys-write.ts";
 import { PROVIDER_KEY_FAMILIES } from "../config/schema.ts";
-import { configKeyIds } from "./key-ids.ts";
-import { PrivateKeyStore } from "./private-keys.ts";
-import { emailDomain } from "../sso/domain.ts";
-import {
-  type IdpSettings,
-  type SsoAdmission,
-  type SsoDomain,
-  type SsoResult,
-  type SsoState,
-  SsoStore,
-  type StoredIdp,
-} from "../sso/store.ts";
+import { configKeyIds } from "../credentials/key-ids.ts";
+import { PrivateKeyStore } from "../credentials/private-keys.ts";
 import {
   buildConfigCredentialEntry,
   buildCredentialEntry,
@@ -86,8 +78,8 @@ import {
   type RefreshAllItem,
   type RefreshOneResult,
 } from "../management/credential-ops.ts";
-import { applyFieldPatch } from "./field-patch.ts";
-import { type DevinStatusSummary, refreshDevinStatuses } from "./devin-status.ts";
+import { applyFieldPatch } from "../credentials/field-patch.ts";
+import { type DevinStatusSummary, refreshDevinStatuses } from "../credentials/devin-status.ts";
 import {
   type CallbackInput,
   type CallbackResult,
@@ -98,7 +90,6 @@ import {
   type StatusResult,
 } from "../oauth/service.ts";
 import { OAuthSessions, SqliteSessionTable } from "../oauth/session-store.ts";
-import { SessionInstanceStore } from "../session-state/instances.ts";
 import type {
   AccountResult,
   BatchAction,
@@ -113,9 +104,6 @@ import {
   type QuotaOutcome,
 } from "../quota/report.ts";
 import type { OrgId } from "@commissary/core";
-import { orgOfControlPlane } from "../platform/org.ts";
-import { OrgSecrets } from "../secrets/data-key.ts";
-import { deploymentSecretsKeys } from "../secrets/deployment-keys.ts";
 import { QuotaReportStore } from "../quota/store.ts";
 import type { SpendSettings } from "../spend/model.ts";
 import {
@@ -143,31 +131,38 @@ import {
   settleClaim,
 } from "../quota/reset-grants.ts";
 import { buildQuotaTarget, type QuotaTargetResult } from "../quota/target.ts";
-import { platformAdminLists } from "../access/config.ts";
-import type { Actor, OrgRole } from "../members/roles.ts";
-import {
-  type AccountStanding,
-  type Admission,
-  MemberStore,
-  type MemberRecord,
-  type MemberResult,
-  type MembershipIndex,
-  type MembershipSettingsWire,
-  type PrincipalRef,
-  type ServiceTokenRecord,
-  type TeamRecord,
-} from "../members/store.ts";
-import {
-  type ClientsUseApiKeys,
-  type MemberNotFound,
-  type ApiKeyListing,
-  type ApiKeyRecord,
-  type ApiKeyResult,
-  ApiKeyStore,
-  type ApiKeyVerdict,
-} from "../api-keys/store.ts";
+import type { SecretCipher } from "../secrets/cipher.ts";
+import type { ControlPlanePart, OrgCore } from "../state/control-plane.ts";
 
 const decodePickRequest = Schema.decodeUnknownSync(PickRequest);
+
+/**
+ * Every table the part's stores create, which `wipe` drops (test/control-plane-split.test.ts checks the list against the
+ * tables of a started object).
+ */
+const MODELS_TABLES = [
+  "config_changes",
+  "config_settings",
+  "config_key_groups",
+  "config_provider_keys",
+  "config_model_aliases",
+  "config_model_exclusions",
+  "config_payload_rules",
+  "config_price_overrides",
+  "credentials",
+  "credential_state",
+  "credential_quota_report",
+  "credential_reset_grants",
+  "private_key_groups",
+  "private_key_changes",
+  "grants",
+  "grant_state",
+  "spend_limits",
+  "spend_counters",
+  "spend_settings",
+  "oauth_sessions",
+  "quota_sweep_lease",
+] as const;
 
 /** The cron sweep re-reads a Claude account's reset grants at most this often (see `quotaProbeTarget`). */
 const GRANT_SWEEP_TTL_MS = 6 * 60 * 60_000;
@@ -308,19 +303,30 @@ export type SetDisabledResult =
       readonly message?: string;
     };
 
+/** What the Models part reads from the `env` it is constructed with. */
+export interface ModelsPartEnv extends AuthIndexKeyEnv {
+  /** Overrides the Meta key-mint endpoint (empty: default); refresh and OAuth logins. */
+  readonly META_MINT_URL: string;
+}
+
 /**
- * One Durable Object per org (`controlPlaneOf(env, org)`, named by the org id; ADR 0021): the single writer for the
- * org's config, credentials, cooldown state and refresh scheduling (see docs/ARCHITECTURE.md).
+ * The Models part of an org's ControlPlane (#134 "How an area's ControlPlane part works", #148): the single writer for
+ * the org's config, credentials, cooldown state and refresh scheduling, grants, Spend limits, quota reports, reset grants
+ * and provider OAuth logins (see docs/ARCHITECTURE.md). An `RpcTarget` the composed `ControlPlane` constructs once per
+ * object (`new ModelsPart(ctx, env, core)`); callers reach it as `stub.models().x(…)`, one pipelined round trip.
  *
- * Its stored secrets (auth files, config entries) are sealed with the org's data key (`secrets/`), which it opens when it
- * starts, in `blockConcurrencyWhile`: on the first start it creates the key and seals what was stored in plain text,
- * after a rotation it wraps the key under the new `SECRETS_KEY`, and when the stage's secrets key is missing, refused or
- * opens no data key it does not start at all (every call fails with the reason).
+ * Its stored secrets (auth files, config entries, private key groups) are sealed with the org's data key, which the
+ * org-wide base opens when the object starts (`core.secrets`; `sealPlaintext` seals what was stored in plain text).
  *
  * Implements the config store, the credential store/selection (`pick`, `report`, credential management) and OAuth
- * token refresh (`alarm`, `refreshNow`, `ensureFresh`, `sweepRefresh`; see `refresh/manager.ts`). Methods are exposed to the Worker through JS RPC and exchange plain data only.
+ * token refresh (`alarm`, `refreshNow`, `ensureFresh`, `sweepRefresh`; see `refresh/manager.ts`). Methods are exposed
+ * to the Worker through JS RPC and exchange plain data only.
  */
-export class ControlPlane extends DurableObject<Env> {
+export class ModelsPart extends RpcTarget implements ControlPlanePart {
+  readonly #ctx: DurableObjectState;
+  /** The org-wide ControlPlane: the org, its members and teams, its data key and the one alarm. */
+  readonly #core: OrgCore;
+  readonly #credentials: CredentialStore;
   readonly #config: ConfigStore;
   readonly #pool: CredentialPool;
   readonly #refresh: RefreshManager;
@@ -329,68 +335,43 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #quota: QuotaReportStore;
   readonly #leases: LeaseStore;
   readonly #grants: ResetGrantStore;
-  /** The org's data key: seals and opens the stored secrets once the object started. */
-  readonly #secrets = new OrgSecrets();
-  readonly #members: MemberStore;
   /** Which upstream models of which shared credentials each member may use (ADR 0023). */
   readonly #modelGrants: GrantStore;
   /** The members' private provider key groups (sealed rows of their own, never config entries). */
   readonly #privateKeys: PrivateKeyStore;
-  readonly #apiKeys: ApiKeyStore;
   /** The org's Spend limits (issue #71): what the management API does with them and the ledger the pool checks. */
   readonly #spend: SpendService;
-  /** The `SessionState` instances of the org, so deleting the org can wipe them (`session-state/instances.ts`). */
-  readonly #sessionInstances: SessionInstanceStore;
-  readonly #managementKeys: ManagementKeyStore;
-  /** The org's single sign-on on Commissary Cloud (issue #76): its identity provider and email domains. */
-  readonly #sso: SsoStore;
   /** The org this object serves, from its name. */
   readonly #org: OrgId;
-  /** Set when the org was deleted: the storage is gone (`wipeOrg`), so the stores must not be used again. */
-  #wiped = false;
-  /**
-   * Settles once the org's data key is open, or failed to open (the stores then throw the reason). Only callers that
-   * construct the object themselves (tests) wait on it; RPC calls wait on the input gate.
-   */
-  readonly started: Promise<void>;
+  /** The refresh alarm's next wake-up as last handed to the base (`null`: none). */
+  #wakeUp: number | null = null;
   /**
    * The org's keyed `auth_index` (`orgAuthIndexer`, cached per isolate). Resolved per call so a refused key fails the
    * calls that need an index, not the Durable Object's constructor.
    */
-  readonly #authIndex: AuthIndexer = (credentialId) =>
-    orgAuthIndexer(this.env, this.#org)(credentialId);
+  readonly #authIndex: AuthIndexer;
   #configView: ConfigView | undefined;
 
-  constructor(ctx: DurableObjectState, env: Env) {
-    super(ctx, env);
-    this.#org = orgOfControlPlane(ctx.id);
-    const transaction = <T>(body: () => T): T => ctx.storage.transactionSync(body);
-    const credentials = new CredentialStore(ctx.storage.sql, this.#secrets);
+  constructor(ctx: DurableObjectState, env: ModelsPartEnv, core: OrgCore) {
+    super();
+    this.#ctx = ctx;
+    this.#core = core;
+    this.#org = core.org;
+    this.#authIndex = (credentialId) => orgAuthIndexer(env, this.#org)(credentialId);
+    const transaction = <T>(body: () => T): T => core.transaction(body);
 
-    this.#config = new ConfigStore(ctx.storage.sql, this.#org, transaction, this.#secrets);
-    this.#members = new MemberStore(
-      ctx.storage.sql,
-      this.#org,
-      transaction,
-      Date.now,
-      !isHosted(env),
-    );
+    this.#credentials = new CredentialStore(ctx.storage.sql, core.secrets);
+    this.#config = new ConfigStore(ctx.storage.sql, this.#org, transaction, core.secrets);
     this.#modelGrants = new GrantStore(ctx.storage.sql, transaction);
-    this.#privateKeys = new PrivateKeyStore(ctx.storage.sql, transaction, this.#secrets);
-    this.#apiKeys = new ApiKeyStore(ctx.storage.sql, this.#org, (ids) => {
-      for (const id of ids) this.#spend.forget("key", id);
-    });
-    this.#sessionInstances = new SessionInstanceStore(ctx.storage.sql);
-    this.#managementKeys = new ManagementKeyStore(ctx.storage.sql, this.#org);
-    this.#sso = new SsoStore(ctx.storage.sql, this.#secrets);
+    this.#privateKeys = new PrivateKeyStore(ctx.storage.sql, transaction, core.secrets);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
     this.#leases = new LeaseStore(ctx.storage.sql, () => Date.now());
 
     this.#spend = new SpendService(new SpendStore(ctx.storage.sql), {
-      members: () => this.#members.members(),
-      teams: () => this.#members.teams(),
-      teamsOf: (memberId) => this.#members.member(memberId)?.teams ?? [],
-      keys: () => this.#apiKeys.list(undefined, Date.now()),
+      members: () => core.members(),
+      teams: () => core.teams(),
+      teamsOf: (memberId) => core.member(memberId)?.teams ?? [],
+      keys: () => core.apiKeys(Date.now()),
       credentials: () =>
         this.#pool.entries().flatMap(({ credential }) =>
           credential.owner === undefined
@@ -408,23 +389,24 @@ export class ControlPlane extends DurableObject<Env> {
 
     this.#grants = new ResetGrantStore(ctx.storage.sql);
     this.#pool = new CredentialPool({
-      store: credentials,
+      store: this.#credentials,
       config: () => this.#currentConfig(),
-      privateCredentials: () => this.#members.privateCredentials(),
+      privateCredentials: () => core.privateCredentials(),
       privateKeys: () => this.#privateKeys.owners(),
       reach: (member) =>
         reachOf(this.#modelGrants.entries(), {
           member,
-          teams: member === undefined ? [] : this.#members.teamIdsOf(member),
+          teams: member === undefined ? [] : core.teamIdsOf(member),
         }),
       decorate: (credential) => this.#refresh.decorate(credential),
       spend: this.#spend.ledger(),
     });
     this.#refresh = new RefreshManager({
       host: this.#pool,
+      // The object's one alarm belongs to the org-wide base, which sets it to the earliest wake-up of its parts.
       alarm: {
-        set: (at) => ctx.storage.setAlarm(at),
-        clear: () => ctx.storage.deleteAlarm(),
+        set: (at) => this.#wakeUpAt(at),
+        clear: () => this.#wakeUpAt(null),
       },
       http: FetchHttpClient.layer,
       metaMintUrl: env.META_MINT_URL,
@@ -466,19 +448,77 @@ export class ControlPlane extends DurableObject<Env> {
         },
       },
     });
+  }
 
-    // No call reaches a store before the data key is open; a failure fails every call with the reason until the
-    // object restarts (a deploy with a working SECRETS_KEY restarts it).
-    this.started = ctx.blockConcurrencyWhile(() =>
-      this.#secrets.start({
-        sql: ctx.storage.sql,
-        transaction,
-        org: this.#org,
-        keys: () => deploymentSecretsKeys(env),
-        sealStored: (cipher) =>
-          credentials.sealPlaintext(cipher) + this.#config.sealPlaintext(cipher),
-      }),
-    );
+  // --- the org-wide base's calls (`ControlPlanePart`, src/state/control-plane.ts) -------------------------------------
+
+  /** Seals the auth files and config entries stored in plain text before encryption (the object's first start). */
+  sealPlaintext(cipher: SecretCipher): number {
+    return this.#credentials.sealPlaintext(cipher) + this.#config.sealPlaintext(cipher);
+  }
+
+  /** The object's alarm: refreshes due credentials; answers when the next one is due. */
+  async alarm(_now: number): Promise<number | null> {
+    await this.#refresh.onAlarm();
+
+    return this.#wakeUp;
+  }
+
+  /** The refresh deadlines moved: tells the base when to wake this part next. */
+  async #wakeUpAt(at: number | null): Promise<void> {
+    this.#wakeUp = at;
+    await this.#core.wakeUpChanged(at);
+  }
+
+  /** Deletes the part's tables (their indexes go with them): the org was deleted (`wipeOrg`). */
+  wipe(): void {
+    for (const table of MODELS_TABLES) this.#ctx.storage.sql.exec(`DROP TABLE IF EXISTS ${table}`);
+  }
+
+  /**
+   * Zero data retention (ADR 0027): a member who leaves the org takes with them everything of theirs here: private
+   * accounts (with their cooldown and quota state), private provider key groups, the OAuth logins they started and their
+   * Spend limits. Shared credentials and other members' data stay. A member an org admin removed also takes the grants
+   * that named them: whoever joins again under that email is a new member.
+   */
+  async memberLeft(member: string, how: "left" | "removed"): Promise<void> {
+    this.#spend.forget("member", member);
+
+    const accounts = this.#pool
+      .entries()
+      .filter(({ credential }) => credential.owner === member)
+      .map(({ credential }) => credential.id);
+
+    const removed = this.#removeMany(accounts);
+
+    this.#privateKeys.removeOwner(member);
+    this.#sessions.deleteOwned(member);
+    this.#pool.invalidate();
+
+    if (removed.length > 0) await this.#rearm();
+
+    if (how === "removed") this.#modelGrants.forget({ kind: "member", id: member });
+  }
+
+  /** Grants and Spend limits that named the team go with it. */
+  teamDeleted(team: string): void {
+    this.#modelGrants.forget({ kind: "team", id: team });
+    this.#spend.forget("team", team);
+  }
+
+  /** Who is in which team moved: the members' reach changes with it. */
+  teamMembersChanged(): void {
+    this.#modelGrants.membershipChanged();
+  }
+
+  /** A deleted key takes its Spend limits and counters along. */
+  apiKeysDeleted(ids: ReadonlyArray<string>): void {
+    for (const id of ids) this.#spend.forget("key", id);
+  }
+
+  /** Every private credential turns off or on again at once. */
+  privateCredentialsChanged(): void {
+    this.#pool.invalidate();
   }
 
   /** The config the entries make up, re-assembled only when the change counter moved. */
@@ -557,247 +597,11 @@ export class ControlPlane extends DurableObject<Env> {
     return this.#config.importDocument(text, by, basedOn);
   }
 
-  // --- members, teams and service tokens (ADR 0022, `members/store.ts`) ------------------------------------------
-
-  /**
-   * Makes the platform admins owners of `global` once (`MemberStore.seedPlatformAdmins`). Checked on every call that
-   * reads members or the config, so it runs before either is used; afterwards it is one row read.
-   */
-  #seedPlatformAdmins(): void {
-    if (this.#members.platformAdminsSeeded()) return;
-
-    this.#members.seedPlatformAdmins(platformAdminLists(this.env).adminEmails);
-  }
-
-  /**
-   * The role of a principal in the org (`MemberStore.admit`); `autoJoin` lets a person join when the org allows it.
-   * `client`: the request is for a client API route, where an Access sign-in is accepted only while the org's
-   * `accessClients` setting is on; otherwise the answer is {@link ClientsUseApiKeys} and nobody joins.
-   */
-  admit(
-    principal: PrincipalRef,
-    autoJoin: boolean,
-    client = false,
-  ): Admission | ClientsUseApiKeys | undefined {
-    this.#seedPlatformAdmins();
-
-    if (client && !this.#apiKeys.accessClients()) return { apiKeysOnly: true };
-
-    return this.#members.admit(principal, autoJoin);
-  }
-
-  listMembers(): ReadonlyArray<MemberRecord> {
-    this.#seedPlatformAdmins();
-
-    return this.#members.members();
-  }
-
-  addMember(
-    input: { readonly email: string; readonly role: string },
-    actor: Actor,
-    by: string,
-  ): MemberResult<MemberRecord> {
-    this.#seedPlatformAdmins();
-
-    return this.#members.addMember(input, actor, by);
-  }
-
-  setMemberRole(id: string, role: string, actor: Actor): MemberResult<MemberRecord> {
-    this.#seedPlatformAdmins();
-
-    return this.#members.setMemberRole(id, role, actor);
-  }
-
-  async removeMember(id: string, actor: Actor): Promise<MemberResult<{ readonly email: string }>> {
-    this.#seedPlatformAdmins();
-
-    const removed = this.#members.removeMember(id, actor);
-
-    if (removed.ok) await this.#deleteMemberData(id);
-
-    // Grants that named the member go with them: whoever joins again under that email is a new member.
-    if (removed.ok) this.#modelGrants.forget({ kind: "member", id });
-
-    return removed;
-  }
-
-  /** A person's place in the org (`MemberStore.standingOf`), for deleting their account. */
-  accountStanding(email: string): AccountStanding {
-    this.#seedPlatformAdmins();
-
-    return this.#members.standingOf(email);
-  }
-
-  /**
-   * A person who deletes their account leaves the org with all their data here, and no note of their removal is kept
-   * (`MemberStore.leave`). Answers whether they were a member.
-   */
-  async leaveOrg(email: string): Promise<{ readonly left: boolean }> {
-    this.#seedPlatformAdmins();
-    const id = this.#members.leave(email);
-
-    if (id === undefined) return { left: false };
-    await this.#deleteMemberData(id);
-
-    return { left: true };
-  }
-
-  /**
-   * Zero data retention (ADR 0027): a member who leaves the org takes with them everything of theirs here: API keys,
-   * private accounts (with their cooldown and quota state), private provider key groups and the OAuth logins they started.
-   * Shared credentials and other members' data stay.
-   */
-  async #deleteMemberData(member: string): Promise<void> {
-    // The member's keys take their Spend limits and counters along (the store reports each key it deletes).
-    this.#spend.forget("member", member);
-    this.#apiKeys.removeMemberKeys(member);
-
-    const accounts = this.#pool
-      .entries()
-      .filter(({ credential }) => credential.owner === member)
-      .map(({ credential }) => credential.id);
-
-    const removed = this.#removeMany(accounts);
-
-    this.#privateKeys.removeOwner(member);
-    this.#sessions.deleteOwned(member);
-    this.#pool.invalidate();
-
-    if (removed.length > 0) await this.#rearm();
-  }
-
-  membershipSettings(): MembershipSettingsWire {
-    this.#seedPlatformAdmins();
-
-    return {
-      autoJoin: this.#members.autoJoin(),
-      privateCredentials: this.#members.privateCredentials(),
-      accessClients: this.#apiKeys.accessClients(),
-    };
-  }
-
-  /**
-   * Changes the settings named; the others keep their value. `privateCredentials` turns every private credential off
-   * or on again at once.
-   */
-  setMembershipSettings(settings: Partial<MembershipSettingsWire>): MembershipSettingsWire {
-    this.#seedPlatformAdmins();
-
-    if (settings.autoJoin !== undefined) this.#members.setAutoJoin(settings.autoJoin);
-
-    if (
-      settings.privateCredentials !== undefined &&
-      settings.privateCredentials !== this.#members.privateCredentials()
-    ) {
-      this.#members.setPrivateCredentials(settings.privateCredentials);
-      this.#pool.invalidate();
-    }
-
-    if (settings.accessClients !== undefined)
-      this.#apiKeys.setAccessClients(settings.accessClients);
-
-    return this.membershipSettings();
-  }
-
-  // --- org deletion (ADR 0027) ----------------------------------------------------------------------------------------
-
-  /** A `SessionState` instance of this org tells where it holds entries until `expiresAt` (epoch ms). */
-  registerSessionInstance(name: string, now: number, expiresAt: number): void {
-    if (!this.#wiped) this.#sessionInstances.register(name, now, expiresAt);
-  }
-
-  /** Up to `limit` names of this org's `SessionState` instances that may still hold entries at `now`. */
-  sessionInstances(now: number, limit: number): ReadonlyArray<string> {
-    return this.#wiped ? [] : this.#sessionInstances.list(now, limit);
-  }
-
-  /** The instances named were wiped; forgets them. */
-  forgetSessionInstances(names: ReadonlyArray<string>): void {
-    if (!this.#wiped) this.#sessionInstances.forget(names);
-  }
-
-  /**
-   * Deletes everything this object stores, tables included: the org was deleted (`platform/org-deletion.ts`, ADR 0027).
-   * Its refresh alarm goes with its storage. Nothing reaches this id afterwards (the Platform registry no longer lists
-   * the org, and a new org takes a new id); the object itself is evicted when idle and, if ever started again, finds
-   * an empty org. Until then the object answers the calls a repeated deletion makes (`sessionInstances`, `wipeOrg`) as an
-   * empty org does, and no other.
-   */
-  async wipeOrg(): Promise<void> {
-    this.#wiped = true;
-    await this.ctx.storage.deleteAlarm();
-    await this.ctx.storage.deleteAll();
-    await this.ctx.storage.sync();
-  }
-
-  // --- API keys (ADR 0022, `api-keys/store.ts`) -----------------------------------------------------------------
-
-  /** The org's API keys, or one member's, with the email of the member each belongs to. */
-  listApiKeys(memberId: string | undefined, now: number): ReadonlyArray<ApiKeyListing> {
-    this.#seedPlatformAdmins();
-    const emails = new Map(this.#members.members().map((member) => [member.id, member.email]));
-
-    return this.#apiKeys.list(memberId, now).map((key) => ({
-      ...key,
-      ...(emails.has(key.memberId) ? { memberEmail: emails.get(key.memberId) } : {}),
-    }));
-  }
-
-  /** Issues a key to a member of the org; the answer carries the whole key, shown this once. `now`: epoch ms. */
-  createApiKey(
-    input: { readonly memberId: string; readonly name: string; readonly expiresAt?: number },
-    now: number,
-  ): ApiKeyResult<{ readonly record: ApiKeyRecord; readonly key: string }> | MemberNotFound {
-    this.#seedPlatformAdmins();
-
-    if (this.#members.member(input.memberId) === undefined)
-      return { ok: false, error: "member_not_found", message: "no member has this id" };
-
-    return this.#apiKeys.create(input, now);
-  }
-
-  /** Deletes the keys that have expired at `now` in every member's name (the cron sweep); answers how many. */
-  purgeExpiredApiKeys(now: number): number {
-    this.#seedPlatformAdmins();
-
-    return this.#apiKeys.purgeExpired(now);
-  }
-
-  /** Revokes a key by deleting it; `memberId` limits the call to that member's keys (`ApiKeyStore.revoke`). */
-  revokeApiKey(id: string, now: number, memberId?: string): ApiKeyResult<ApiKeyRecord> {
-    this.#seedPlatformAdmins();
-
-    return this.#apiKeys.revoke(id, now, memberId);
-  }
-
-  /**
-   * Checks a presented API key (its id and the SHA-256 of the whole key) at `now`: the key must be live and its
-   * member still in the org, whose role the answer carries. Asked on every request the Worker has not verified
-   * within its cache's short lifetime.
-   */
-  verifyApiKey(keyId: string, hash: string, now: number): ApiKeyVerdict {
-    this.#seedPlatformAdmins();
-    const checked = this.#apiKeys.check(keyId, hash, now);
-
-    if (!checked.ok) return checked;
-    const member = this.#members.member(checked.memberId);
-
-    if (member === undefined) return { ok: false, reason: "unknown" };
-
-    return {
-      ok: true,
-      memberId: member.id,
-      email: member.email,
-      role: member.role,
-      ...(checked.expiresAt === undefined ? {} : { expiresAt: checked.expiresAt }),
-    };
-  }
-
   // --- Spend limits (issue #71, `spend/service.ts`) -------------------------------------------------------------------
 
   /** The limits `viewer` sees with their Spend so far, and the org's calendar. */
   spendOverview(viewer: Viewer): SpendOverview {
-    this.#seedPlatformAdmins();
+    this.#core.seedPlatformAdmins();
 
     return this.#spend.overview(viewer);
   }
@@ -807,7 +611,7 @@ export class ControlPlane extends DurableObject<Env> {
     input: NewSpendLimit,
     by: string,
   ): SpendServiceResult<SpendEntry> {
-    this.#seedPlatformAdmins();
+    this.#core.seedPlatformAdmins();
 
     return this.#spend.create(viewer, input, by);
   }
@@ -819,13 +623,13 @@ export class ControlPlane extends DurableObject<Env> {
     amountMicros: number,
     by: string,
   ): SpendServiceResult<SpendEntry> {
-    this.#seedPlatformAdmins();
+    this.#core.seedPlatformAdmins();
 
     return this.#spend.update(viewer, id, revision, amountMicros, by);
   }
 
   removeSpendLimit(viewer: Viewer, id: string, revision: number): SpendServiceResult<SpendEntry> {
-    this.#seedPlatformAdmins();
+    this.#core.seedPlatformAdmins();
 
     return this.#spend.remove(viewer, id, revision);
   }
@@ -835,148 +639,9 @@ export class ControlPlane extends DurableObject<Env> {
     readonly timeZone?: string | undefined;
     readonly weekStart?: string | undefined;
   }): SpendResult<SpendSettings> {
-    this.#seedPlatformAdmins();
+    this.#core.seedPlatformAdmins();
 
     return this.#spend.setSettings(settings);
-  }
-
-  // --- management keys (ADR 0026, `management-keys/store.ts`) ----------------------------------------------------
-
-  listManagementKeys(): ReadonlyArray<ManagementKeyRecord> {
-    return this.#managementKeys.list();
-  }
-
-  /** Issues a management key (the Worker checked the role); the answer carries the whole key, shown this once. */
-  createManagementKey(
-    input: {
-      readonly name: string;
-      readonly role: OrgRole;
-      readonly createdBy: string;
-      readonly ownerEmail?: string;
-    },
-    now: number,
-  ): ManagementKeyResult<{ readonly record: ManagementKeyRecord; readonly key: string }> {
-    return this.#managementKeys.create(input, now);
-  }
-
-  revokeManagementKey(id: string): ManagementKeyResult<ManagementKeyRecord> {
-    return this.#managementKeys.revoke(id);
-  }
-
-  /** Checks a presented management key (its id and the SHA-256 of the whole key) at `now`. */
-  verifyManagementKey(keyId: string, hash: string, now: number): ManagementKeyVerdict {
-    return this.#managementKeys.check(keyId, hash, now);
-  }
-
-  // --- single sign-on (issue #76, `sso/store.ts`; hosted proxies) --------------------------------------------------
-
-  /** The identity provider (with its secret: the Worker hands it to Better Auth) and the domains. */
-  ssoState(): SsoState {
-    return this.#sso.state();
-  }
-
-  setSsoProvider(settings: IdpSettings, by: string, now: number): SsoResult<StoredIdp> {
-    return this.#sso.setProvider(settings, by, now);
-  }
-
-  removeSsoProvider(): SsoResult<StoredIdp> {
-    return this.#sso.removeProvider();
-  }
-
-  addSsoDomain(domain: string, now: number): SsoResult<SsoDomain> {
-    return this.#sso.addDomain(domain, now);
-  }
-
-  ssoDomain(domain: string): SsoResult<SsoDomain> {
-    return this.#sso.domain(domain);
-  }
-
-  markSsoDomainVerified(domain: string, now: number): SsoResult<SsoDomain> {
-    return this.#sso.markVerified(domain, now);
-  }
-
-  setSsoDomainRequired(domain: string, required: boolean): SsoResult<SsoDomain> {
-    return this.#sso.setRequired(domain, required);
-  }
-
-  removeSsoDomain(domain: string): SsoResult<SsoDomain> {
-    return this.#sso.removeDomain(domain);
-  }
-
-  /**
-   * A person the org's identity provider signed in: their email's domain must be one the org verified, with the provider
-   * still set; they are a member then, joining now if they were not (`MemberStore.joinThroughSso`). Refused for someone
-   * an org admin removed, until they are added back.
-   */
-  admitThroughSso(email: string): SsoAdmission {
-    this.#seedPlatformAdmins();
-    const domain = emailDomain(email);
-
-    if (this.#sso.provider() === undefined) return { ok: false, error: "provider_missing" };
-
-    if (
-      domain === undefined ||
-      !this.#sso
-        .domains()
-        .some((found) => found.domain === domain && found.verifiedAt !== undefined)
-    )
-      return { ok: false, error: "domain_unverified" };
-    const admission = this.#members.joinThroughSso(email);
-
-    return admission === undefined
-      ? { ok: false, error: "removed" }
-      : { ok: true, joined: admission.joined, indexStale: admission.indexStale };
-  }
-
-  listTeams(): ReadonlyArray<TeamRecord> {
-    this.#seedPlatformAdmins();
-
-    return this.#members.teams();
-  }
-
-  createTeam(name: string): MemberResult<TeamRecord> {
-    this.#seedPlatformAdmins();
-
-    return this.#members.createTeam(name);
-  }
-
-  renameTeam(id: string, name: string): MemberResult<TeamRecord> {
-    this.#seedPlatformAdmins();
-
-    return this.#members.renameTeam(id, name);
-  }
-
-  deleteTeam(id: string): MemberResult<true> {
-    this.#seedPlatformAdmins();
-
-    const deleted = this.#members.deleteTeam(id);
-
-    if (deleted.ok) {
-      this.#modelGrants.forget({ kind: "team", id });
-      this.#spend.forget("team", id);
-    }
-
-    return deleted;
-  }
-
-  addTeamMember(teamId: string, memberId: string): MemberResult<TeamRecord> {
-    this.#seedPlatformAdmins();
-
-    const added = this.#members.addTeamMember(teamId, memberId);
-
-    if (added.ok) this.#modelGrants.membershipChanged();
-
-    return added;
-  }
-
-  removeTeamMember(teamId: string, memberId: string): MemberResult<TeamRecord> {
-    this.#seedPlatformAdmins();
-
-    const removed = this.#members.removeTeamMember(teamId, memberId);
-
-    if (removed.ok) this.#modelGrants.membershipChanged();
-
-    return removed;
   }
 
   // --- grants (ADR 0023, `grants/store.ts`) -----------------------------------------------------------------------
@@ -994,87 +659,30 @@ export class ControlPlane extends DurableObject<Env> {
     change: GrantChange,
     by: string,
   ): WriteResult<{ readonly id: string; readonly revision: number }> {
-    this.#seedPlatformAdmins();
+    this.#core.seedPlatformAdmins();
 
     return this.#modelGrants.write(change, by, (subject) => this.#missingSubject(subject));
   }
 
   #missingSubject(subject: GrantSubject): string | undefined {
     if (subject.kind === "member")
-      return this.#members.member(subject.id) === undefined ? "no such member" : undefined;
+      return this.#core.member(subject.id) === undefined ? "no such member" : undefined;
 
     if (subject.kind === "team")
-      return this.#members.team(subject.id) === undefined ? "no such team" : undefined;
+      return this.#core.team(subject.id) === undefined ? "no such team" : undefined;
 
     return undefined;
   }
 
   /** Everything the Worker needs to compute any member's reach: the grants and who is in each team. */
   grantTable(): GrantTable {
-    this.#seedPlatformAdmins();
+    this.#core.seedPlatformAdmins();
 
     return {
       version: this.#modelGrants.version(),
       grants: this.#modelGrants.entries(),
-      teams: this.#members.teams().map((team) => ({ id: team.id, members: team.members })),
+      teams: this.#core.teams().map((team) => ({ id: team.id, members: team.members })),
     };
-  }
-
-  /** The member ids of a team, `undefined` for an unknown team (usage filters). */
-  teamMemberIds(teamId: string): ReadonlyArray<string> | undefined {
-    this.#seedPlatformAdmins();
-
-    return this.#members.teamMemberIds(teamId);
-  }
-
-  listServiceTokens(): ReadonlyArray<ServiceTokenRecord> {
-    this.#seedPlatformAdmins();
-
-    return this.#members.serviceTokens();
-  }
-
-  registerServiceToken(
-    input: { readonly clientId: string; readonly name?: string | undefined; readonly role: string },
-    actor: Actor,
-    by: string,
-  ): MemberResult<ServiceTokenRecord> {
-    this.#seedPlatformAdmins();
-
-    return this.#members.registerToken(input, actor, by);
-  }
-
-  setServiceTokenRole(
-    clientId: string,
-    role: string,
-    actor: Actor,
-  ): MemberResult<ServiceTokenRecord> {
-    this.#seedPlatformAdmins();
-
-    return this.#members.setTokenRole(clientId, role, actor);
-  }
-
-  removeServiceToken(clientId: string, actor: Actor): MemberResult<true> {
-    this.#seedPlatformAdmins();
-
-    return this.#members.removeToken(clientId, actor);
-  }
-
-  /** Undoes a registration another org won (`MemberStore.withdrawToken`). */
-  withdrawServiceToken(clientId: string): void {
-    this.#seedPlatformAdmins();
-    this.#members.withdrawToken(clientId);
-  }
-
-  /** Who the Platform registry should index for the org, and whether it has caught up (`members/admission.ts`). */
-  membershipIndex(): MembershipIndex {
-    this.#seedPlatformAdmins();
-
-    return this.#members.index();
-  }
-
-  /** The Platform registry holds the index of `counter`. */
-  markIndexSynced(counter: number): void {
-    this.#members.markIndexSynced(counter);
   }
 
   /**
@@ -1180,7 +788,7 @@ export class ControlPlane extends DurableObject<Env> {
       };
     }
 
-    if (!this.#members.privateCredentials()) {
+    if (!this.#core.privateCredentials()) {
       return {
         ok: false,
         failure: {
@@ -1253,7 +861,7 @@ export class ControlPlane extends DurableObject<Env> {
    */
   #removeMany(ids: ReadonlyArray<string>): string[] {
     const removed = this.#pool.removeMany(ids, (write) =>
-      this.ctx.storage.transactionSync(() => {
+      this.#core.transaction(() => {
         const gone = write();
 
         for (const id of gone) {
@@ -1287,11 +895,6 @@ export class ControlPlane extends DurableObject<Env> {
   }
 
   // --- token refresh (refresh/manager.ts) ----------------------------------------------------------------------
-
-  /** Durable Object alarm: refreshes due credentials and re-arms the single multiplexed alarm. */
-  override async alarm(): Promise<void> {
-    await this.#refresh.onAlarm();
-  }
 
   /**
    * Request-time refresh after the upstream answered 401 (`tryRefreshAfterUnauthorized`): pass the access token that
@@ -1400,9 +1003,7 @@ export class ControlPlane extends DurableObject<Env> {
   }
 
   #ownerEmail(credential: Credential): string | undefined {
-    return credential.owner === undefined
-      ? undefined
-      : this.#members.member(credential.owner)?.email;
+    return credential.owner === undefined ? undefined : this.#core.member(credential.owner)?.email;
   }
 
   #fullEntry(
@@ -1614,7 +1215,7 @@ export class ControlPlane extends DurableObject<Env> {
     return this.#privateKeys.owners().configs.flatMap((owned) => {
       if (owned.owner === viewer) return [];
       const ids = configKeyIds(owned.config, { includeDisabledGroups: true });
-      const email = this.#members.member(owned.owner)?.email;
+      const email = this.#core.member(owned.owner)?.email;
 
       return PROVIDER_KEY_FAMILIES.flatMap((family) =>
         owned.config["api-keys"][family].flatMap((group, index): WireJsonObject[] => {
@@ -1672,7 +1273,7 @@ export class ControlPlane extends DurableObject<Env> {
     if (viewer.member === undefined)
       return { ok: false, error: "forbidden", message: "private credentials belong to members" };
 
-    return this.#members.privateCredentials()
+    return this.#core.privateCredentials()
       ? undefined
       : {
           ok: false,
@@ -1856,7 +1457,7 @@ export class ControlPlane extends DurableObject<Env> {
       action === "delete"
         ? this.#removeMany(known)
         : this.#pool.setDisabledMany(known, action === "disable", (write) =>
-            this.ctx.storage.transactionSync(write),
+            this.#core.transaction(write),
           ),
     );
 

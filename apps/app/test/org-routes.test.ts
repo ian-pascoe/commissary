@@ -478,7 +478,7 @@ describe("org-scoped management routes", () => {
 
     // ... it is in that org's ControlPlane, and only there.
     expect(
-      (await controlPlane(OrgId.make(acme.id)).listCredentials(FULL_ACCESS)).map(
+      (await controlPlane(OrgId.make(acme.id)).models().listCredentials(FULL_ACCESS)).map(
         (entry) => entry.id,
       ),
     ).not.toEqual([]);

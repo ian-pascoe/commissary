@@ -1,7 +1,6 @@
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 import { BUNDLE_ALIASES } from "../../infra/bundle.ts";
-import { isProvokedError } from "./test/support/provoked-errors.ts";
 
 /** Bindings of a self-hosted Commissary (`COMMISSARY_MODE` unset), the deployment every test but `test/hosted/` runs against. */
 const SELF_HOSTED_BINDINGS = {
@@ -47,12 +46,11 @@ const HOSTED_BINDINGS = {
 /** Requests per minute an org may send on the client API of the Commissary Cloud test Worker (test/hosted/rate-limit.test.ts). */
 const HOSTED_TEST_RATE_LIMIT = 5;
 
-// The test Worker mirrors the deployed one declared in alchemy.run.ts (same handler and Durable Object classes,
-// compatibility settings and binding names); there is no Wrangler configuration file. Its entry, test/worker.ts,
-// re-exports src/index.ts and adds the Durable Object classes only tests use (`GETTER_PROBE`).
+// The test Worker mirrors the deployed one declared in alchemy.run.ts (same entry, compatibility settings and binding
+// names); there is no Wrangler configuration file.
 const worker = (bindings: Record<string, string>, hosted: boolean) =>
   cloudflareTest({
-    main: "./test/worker.ts",
+    main: "./src/index.ts",
     miniflare: {
       compatibilityDate: "2026-08-01",
       compatibilityFlags: ["nodejs_compat"],
@@ -62,8 +60,6 @@ const worker = (bindings: Record<string, string>, hosted: boolean) =>
         CONTROL_PLANE: { className: "ControlPlane", useSQLite: true },
         SESSION_STATE: { className: "SessionState", useSQLite: true },
         PLATFORM: { className: "Platform", useSQLite: true },
-        // Test-only (test/support/getter-probe.ts): an area part behind a getter, test/getter-pipelining.test.ts.
-        GETTER_PROBE: { className: "GetterProbe", useSQLite: true },
       },
       kvNamespaces: ["CACHE"],
       d1Databases: ["USAGE"],
@@ -94,10 +90,6 @@ export default defineConfig({
     // The first test in each file pays for module transformation inside workerd; keep generous timeouts.
     testTimeout: 30_000,
     hookTimeout: 30_000,
-    // The tests and the Durable Objects share one isolate here, so an error thrown across Durable Object RPC is also
-    // reported as an unhandled rejection of the object's side, after the caller handled it. Only the errors
-    // test/getter-pipelining.test.ts provokes on purpose are ignored; the others still fail the run.
-    onUnhandledError: (error) => !isProvokedError(error.message),
     projects: [
       {
         extends: true,

@@ -98,7 +98,7 @@ export const authIndexer = (secret: string | undefined): AuthIndexer => {
 };
 
 /** The bindings the key check reads; each may be missing at runtime. */
-interface AuthIndexKeyEnv {
+export interface AuthIndexKeyEnv {
   readonly AUTH_INDEX_KEY?: string | undefined;
   readonly ACCESS_TEAM_DOMAIN?: string | undefined;
   readonly ACCESS_AUD?: string | undefined;

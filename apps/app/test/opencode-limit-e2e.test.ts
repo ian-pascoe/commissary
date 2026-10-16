@@ -3,6 +3,7 @@
 // whole until the window resets (Retry-After), so later requests go to the other key without asking the first again,
 // on a chat model and on a Messages model (whose key travels as `x-api-key`).
 import { evictDurableObject } from "cloudflare:test";
+import { withModelsPart } from "./support/models-part.ts";
 import { env, exports } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -136,7 +137,7 @@ beforeAll(async () => {
     return Response.json(key === MESSAGES_SPARE_KEY ? MESSAGE : COMPLETION);
   };
 
-  const stored = await controlPlane().importConfig(YAML, "test");
+  const stored = await withModelsPart(controlPlane(), (part) => part.importConfig(YAML, "test"));
   expect(stored.ok).toBe(true);
 });
 

@@ -611,7 +611,10 @@ describe("model catalog probes", () => {
       }),
     };
 
-    const stubEnv = { ...env, CONTROL_PLANE: { getByName: () => plane } } as unknown as Env;
+    const stubEnv = {
+      ...env,
+      CONTROL_PLANE: { getByName: () => ({ models: () => plane }) },
+    } as unknown as Env;
 
     const results = await Effect.runPromise(
       refreshAntigravityModels.pipe(

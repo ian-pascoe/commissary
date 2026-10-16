@@ -228,7 +228,7 @@ export const refreshAntigravityModels = Effect.gen(function* () {
   const env = yield* ModelsEnv;
   const org = yield* CurrentOrg;
   const plane = controlPlaneOf(env, org);
-  const sources = yield* Effect.promise(() => plane.listModelSources(FULL_ACCESS));
+  const sources = yield* Effect.promise(() => plane.models().listModelSources(FULL_ACCESS));
   const now = Date.now();
   const version = yield* currentAntigravityVersion(env.CACHE, now);
   const results: Array<{ readonly id: string; readonly status: string }> = [];
@@ -242,9 +242,9 @@ export const refreshAntigravityModels = Effect.gen(function* () {
       continue;
     }
 
-    const prepared = yield* Effect.tryPromise(async () => await plane.ensureFresh(source.id)).pipe(
-      Effect.option,
-    );
+    const prepared = yield* Effect.tryPromise(
+      async () => await plane.models().ensureFresh(source.id),
+    ).pipe(Effect.option);
 
     const credential =
       Option.isSome(prepared) && prepared.value.ok ? prepared.value.credential : undefined;

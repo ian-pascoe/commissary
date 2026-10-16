@@ -1,17 +1,17 @@
 /**
  * What the future `@commissary/models` package reads from a Worker's env (#134 "How packages get their bindings"). Each
- * Worker provides its own `env` as {@link ModelsEnv}. Models types `CONTROL_PLANE` through the methods it calls
- * ({@link ModelsControlPlane}); the ControlPlane split replaces them with the Models part's getter.
+ * Worker provides its own `env` as {@link ModelsEnv}. Models types `CONTROL_PLANE` as objects with its part
+ * ({@link ModelsControlPlane}): callers write `stub.models().x(…)`.
  */
 import { Context, Effect } from "effect";
-import type { ControlPlane } from "../credentials/control-plane.ts";
-import { type Reply, CurrentOrg } from "@commissary/core";
+import { type OrgId, type Reply, CurrentOrg } from "@commissary/core";
 import { callControlPlane } from "../management/http.ts";
+import type { ModelsPart } from "./control-plane-part.ts";
 import { controlPlaneOf } from "../platform/org.ts";
 import type { SessionState } from "../session-state/durable-object.ts";
 
-/** The ControlPlane methods Models calls: config, credentials, selection, refresh, quota, grants, spend, OAuth. */
-type ModelsControlPlaneMethod =
+/** The methods of the Models part Models calls: config, credentials, selection, refresh, quota, grants, spend, OAuth. */
+type ModelsPartMethod =
   | "getConfig"
   | "configEntries"
   | "priceOverrideEntries"
@@ -69,9 +69,13 @@ type ModelsControlPlaneMethod =
   | "oauthCallback"
   | "oauthCancel";
 
-/** Models' view of an org's ControlPlane: the methods it calls. */
-export type ModelsControlPlane = Pick<ControlPlane, ModelsControlPlaneMethod> &
-  Rpc.DurableObjectBranded;
+/** The Models part of an org's ControlPlane (`ModelsPart`) as Models sees it: the methods it calls. */
+export type ModelsControlPlanePart = Pick<ModelsPart, ModelsPartMethod> & Rpc.RpcTargetBranded;
+
+/** Models' view of an org's ControlPlane: its part, reached in one pipelined round trip (`stub.models().x(…)`). */
+export interface ModelsControlPlane extends Rpc.DurableObjectBranded {
+  models(): ModelsControlPlanePart;
+}
 
 export type ModelsControlPlaneStub = DurableObjectStub<ModelsControlPlane>;
 
@@ -97,6 +101,9 @@ export interface ModelsBindings {
 export class ModelsEnv extends Context.Service<ModelsEnv, ModelsBindings>()(
   "commissary/models/ModelsEnv",
 ) {}
+
+/** The Models part of `org`'s ControlPlane, reached in one pipelined round trip. */
+export const modelsPartOf = (env: ModelsBindings, org: OrgId) => controlPlaneOf(env, org).models();
 
 /** The ControlPlane of the current org, seen through {@link ModelsControlPlane}. */
 export const currentModelsControlPlane: Effect.Effect<

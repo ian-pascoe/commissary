@@ -32,7 +32,7 @@ const startLogin = Effect.gen(function* () {
 
   // A plain member's login connects their private credential, an org admin's a shared one unless `private=true`.
   const result = yield* modelsControlPlane("oauthStart", (stub) =>
-    stub.oauthStart(
+    stub.models().oauthStart(
       {
         provider: params.get("provider") ?? "",
         ...(domain === undefined ? {} : { domain }),
@@ -64,7 +64,7 @@ const loginStatus = Effect.gen(function* () {
   const viewer = yield* currentViewer;
 
   const result = yield* modelsControlPlane("oauthStatus", (stub) =>
-    stub.oauthStatus(state, viewer),
+    stub.models().oauthStatus(state, viewer),
   );
 
   return jsonReply(200, result);
@@ -79,7 +79,7 @@ const cancelLogin = Effect.gen(function* () {
   const viewer = yield* currentViewer;
 
   const { cancelled } = yield* modelsControlPlane("oauthCancel", (stub) =>
-    stub.oauthCancel(state, viewer),
+    stub.models().oauthCancel(state, viewer),
   );
 
   return jsonReply(200, { status: "ok", cancelled });
@@ -117,7 +117,7 @@ const completeLogin = (parts: CallbackParts & { readonly redirectUrl?: string })
     const viewer = yield* currentViewer;
 
     const result = yield* modelsControlPlane("oauthCallback", (stub) =>
-      stub.oauthCallback(
+      stub.models().oauthCallback(
         {
           ...(parts.provider === "" ? {} : { provider: parts.provider }),
           state,

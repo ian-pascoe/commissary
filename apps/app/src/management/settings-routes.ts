@@ -53,7 +53,7 @@ const failIf = (refused: SettingsProblem | undefined) =>
  * document is an internal error.
  */
 export const storedConfig = Effect.gen(function* () {
-  const wire = yield* modelsControlPlane("configEntries", (stub) => stub.configEntries());
+  const wire = yield* modelsControlPlane("configEntries", (stub) => stub.models().configEntries());
 
   const config = yield* decodeStoredConfig(wire.document).pipe(
     Effect.mapError(() => replyError(500, "invalid_config")),
@@ -76,7 +76,7 @@ const view = Effect.gen(function* () {
   const viewer = yield* currentViewer;
 
   const sources = yield* modelsControlPlane("listModelSources", (stub) =>
-    stub.listModelSources(viewer),
+    stub.models().listModelSources(viewer),
   );
 
   return jsonReply(
@@ -129,7 +129,7 @@ const save = Effect.gen(function* () {
   });
 
   const result = yield* modelsControlPlane("writeSettings", (stub) =>
-    stub.writeSettings(changes, identity.principalId),
+    stub.models().writeSettings(changes, identity.principalId),
   );
 
   if (result.ok)
@@ -160,7 +160,7 @@ const importDocument = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
 
   const result = yield* modelsControlPlane("importConfig", (stub) =>
-    stub.importConfig(text, identity.principalId),
+    stub.models().importConfig(text, identity.principalId),
   );
 
   if (!result.ok && result.error === "conflict")

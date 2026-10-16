@@ -18,7 +18,10 @@ import { modelsControlPlane } from "../models/env.ts";
 
 const routingModels = Effect.gen(function* () {
   const registry = yield* ModelRegistry;
-  const entries = yield* modelsControlPlane("configEntries", (stub) => stub.configEntries());
+
+  const entries = yield* modelsControlPlane("configEntries", (stub) =>
+    stub.models().configEntries(),
+  );
 
   const snapshot = yield* registry.fresh.pipe(
     Effect.catch((error) =>

@@ -26,11 +26,13 @@ const pickForCaller = Effect.gen(function* () {
 
   const answer = yield* Effect.promise(
     async () =>
-      await controlPlaneOf(env, identity.org).pick({
-        providers: ["claude"],
-        model,
-        ...(identity.memberId === undefined ? {} : { memberId: identity.memberId }),
-      }),
+      await controlPlaneOf(env, identity.org)
+        .models()
+        .pick({
+          providers: ["claude"],
+          model,
+          ...(identity.memberId === undefined ? {} : { memberId: identity.memberId }),
+        }),
   );
 
   const body = answer.ok

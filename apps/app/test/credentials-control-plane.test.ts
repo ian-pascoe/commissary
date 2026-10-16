@@ -2,6 +2,7 @@
 import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { env } from "cloudflare:workers";
 import { evictDurableObject } from "cloudflare:test";
+import { withModelsPart } from "./support/models-part.ts";
 import { describe, expect, it } from "vitest";
 import type { PickResult } from "../src/credentials/selection/types.ts";
 
@@ -35,16 +36,18 @@ oauth:
 describe("ControlPlane credentials (Workers pool)", () => {
   it("imports auth files, lists them redacted and returns the full snapshot from pick", async () => {
     const stub = plane();
-    await stub.importConfig(CONFIG, "test");
+    await stub.models().importConfig(CONFIG, "test");
 
-    const imported = await stub.importAuthFile(
-      "claude-a.json",
-      JSON.stringify(
-        claudeFile({ prefix: "team", headers: { "X-Org": "o1" }, priority: 3, weight: 2 }),
-      ),
-      {},
-      FULL_ACCESS,
-    );
+    const imported = await stub
+      .models()
+      .importAuthFile(
+        "claude-a.json",
+        JSON.stringify(
+          claudeFile({ prefix: "team", headers: { "X-Org": "o1" }, priority: 3, weight: 2 }),
+        ),
+        {},
+        FULL_ACCESS,
+      );
 
     expect(imported).toMatchObject({
       ok: true,
@@ -54,7 +57,7 @@ describe("ControlPlane credentials (Workers pool)", () => {
       credentialVersion: 1,
     });
 
-    const list = await stub.listCredentials(FULL_ACCESS);
+    const list = await stub.models().listCredentials(FULL_ACCESS);
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({
       id: "claude-a.json",
@@ -68,7 +71,10 @@ describe("ControlPlane credentials (Workers pool)", () => {
     expect(JSON.stringify(list)).not.toContain("secret-refresh");
     expect(list[0]?.headerNames).toEqual(["X-Org"]);
 
-    const result = picked(await stub.pick({ providers: ["claude"], model: "team/sonnet(8192)" }));
+    const result = picked(
+      await stub.models().pick({ providers: ["claude"], model: "team/sonnet(8192)" }),
+    );
+
     expect(result.credential).toMatchObject({
       id: "claude-a.json",
       provider: "claude",
@@ -97,19 +103,23 @@ describe("ControlPlane credentials (Workers pool)", () => {
   it("persists credentials and failure state across Durable Object evictions", async () => {
     const name = crypto.randomUUID();
     const stub = plane(name);
-    await stub.importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
-    await stub.importAuthFile("claude-b.json", claudeFile({ email: "b@x.com" }), {}, FULL_ACCESS);
-    await stub.setCredentialDisabled("claude-b.json", true, FULL_ACCESS);
-    const result = picked(await stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" }));
-    await stub.report(result.lease, {
-      success: false,
-      httpStatus: 500,
-      error: { message: "boom Bearer abcdefghijklmnop", retryable: true, httpStatus: 500 },
-    });
 
+    await withModelsPart(stub, async (part) => {
+      await part.importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
+      await part.importAuthFile("claude-b.json", claudeFile({ email: "b@x.com" }), {}, FULL_ACCESS);
+      await part.setCredentialDisabled("claude-b.json", true, FULL_ACCESS);
+
+      const result = picked(await part.pick({ providers: ["claude"], model: "claude-sonnet-4-5" }));
+
+      await part.report(result.lease, {
+        success: false,
+        httpStatus: 500,
+        error: { message: "boom Bearer abcdefghijklmnop", retryable: true, httpStatus: 500 },
+      });
+    });
     await evictDurableObject(stub);
     const fresh = plane(name);
-    const list = await fresh.listCredentials(FULL_ACCESS);
+    const list = await fresh.models().listCredentials(FULL_ACCESS);
     expect(list.map((item) => [item.id, item.disabled])).toEqual([
       ["claude-a.json", false],
       ["claude-b.json", true],
@@ -117,10 +127,18 @@ describe("ControlPlane credentials (Workers pool)", () => {
     expect(list[0]).toMatchObject({ failed: 1, lastError: { httpStatus: 500, retryable: true } });
     expect(JSON.stringify(list[0]?.lastError)).not.toContain("abcdefghijklmnop");
     // The 500's model cooldown survives the eviction too (cooldowns are always persisted)...
-    const cooling = await fresh.pick({ providers: ["claude"], model: "claude-sonnet-4-5" });
+
+    const cooling = await fresh
+      .models()
+      .pick({ providers: ["claude"], model: "claude-sonnet-4-5" });
+
     expect(cooling.ok).toBe(false);
     // ...and the disabled credential stays out of selection for another model.
-    const after = picked(await fresh.pick({ providers: ["claude"], model: "claude-opus-4-5" }));
+
+    const after = picked(
+      await fresh.models().pick({ providers: ["claude"], model: "claude-opus-4-5" }),
+    );
+
     expect(after.credential.id).toBe("claude-a.json");
   });
 
@@ -128,16 +146,13 @@ describe("ControlPlane credentials (Workers pool)", () => {
     const stub = plane();
 
     for (const id of ["a", "b", "c"])
-      await stub.importAuthFile(
-        `claude-${id}.json`,
-        claudeFile({ email: `${id}@x.com` }),
-        {},
-        FULL_ACCESS,
-      );
+      await stub
+        .models()
+        .importAuthFile(`claude-${id}.json`, claudeFile({ email: `${id}@x.com` }), {}, FULL_ACCESS);
 
     const results = await Promise.all(
       Array.from({ length: 30 }, () =>
-        stub.pick({ providers: ["claude"], model: "claude-sonnet-4-5" }),
+        stub.models().pick({ providers: ["claude"], model: "claude-sonnet-4-5" }),
       ),
     );
 
@@ -151,7 +166,7 @@ describe("ControlPlane credentials (Workers pool)", () => {
 
   it("synthesises provider keys, applies model aliases and follows config changes", async () => {
     const stub = plane();
-    await stub.importConfig(
+    await stub.models().importConfig(
       `
 routing:
   strategy: fill-first
@@ -170,7 +185,7 @@ api-keys:
     );
 
     const first = picked(
-      await stub.pick({ providers: ["openai-compatible-router"], model: "smart" }),
+      await stub.models().pick({ providers: ["openai-compatible-router"], model: "smart" }),
     );
 
     expect(first.credential).toMatchObject({
@@ -180,18 +195,20 @@ api-keys:
       headers: { "X-Title": "proxy" },
     });
     // fill-first takes the smallest credential id, which is content-addressed (hash order)
-    const ids = (await stub.listCredentials(FULL_ACCESS)).map((item) => item.id);
+    const ids = (await stub.models().listCredentials(FULL_ACCESS)).map((item) => item.id);
     expect(first.credential.id).toBe(ids.toSorted()[0]);
     expect(["key-1", "key-2"]).toContain(first.credential.attributes.api_key);
     expect(first.credential.id).toMatch(/^openai-compatibility:router:[0-9a-f]{12}$/);
     expect(first.route).toMatchObject({ requestedModel: "smart", upstreamModel: "gpt-4o" });
-    expect(JSON.stringify(await stub.listCredentials(FULL_ACCESS))).not.toMatch(/"key-[12]"/); // api keys are masked
+    expect(JSON.stringify(await stub.models().listCredentials(FULL_ACCESS))).not.toMatch(
+      /"key-[12]"/,
+    ); // api keys are masked
 
     // models outside the configured list are not served; config edits take effect immediately
     expect(
-      (await stub.pick({ providers: ["openai-compatible-router"], model: "unknown" })).ok,
+      (await stub.models().pick({ providers: ["openai-compatible-router"], model: "unknown" })).ok,
     ).toBe(false);
-    await stub.importConfig(
+    await stub.models().importConfig(
       `
 routing:
   strategy: fill-first
@@ -206,7 +223,7 @@ api-keys:
     );
 
     const second = picked(
-      await stub.pick({ providers: ["openai-compatible-router"], model: "smart" }),
+      await stub.models().pick({ providers: ["openai-compatible-router"], model: "smart" }),
     );
 
     expect(second.credential.attributes.api_key).toBe("key-3");
@@ -215,7 +232,7 @@ api-keys:
 
   it("rotates the upstream models of a shared alias between requests", async () => {
     const stub = plane();
-    await stub.importConfig(
+    await stub.models().importConfig(
       `
 api-keys:
   openai-compatibility:
@@ -230,7 +247,7 @@ api-keys:
 
     for (let index = 0; index < 4; index += 1) {
       const result = picked(
-        await stub.pick({ providers: ["openai-compatible-pool"], model: "shared" }),
+        await stub.models().pick({ providers: ["openai-compatible-pool"], model: "shared" }),
       );
 
       expect(result.route.upstreamModels.toSorted()).toEqual(["m-a", "m-b"]);
@@ -242,16 +259,18 @@ api-keys:
 
   it("merges on update, bumps the credential version on token changes and discards stale reports", async () => {
     const stub = plane();
-    await stub.importAuthFile(
-      "claude-a.json",
-      claudeFile({ prefix: "team", note: "keep" }),
-      {},
-      FULL_ACCESS,
-    );
-    const before = picked(await stub.pick({ providers: ["claude"], model: "m" }));
+    await stub
+      .models()
+      .importAuthFile(
+        "claude-a.json",
+        claudeFile({ prefix: "team", note: "keep" }),
+        {},
+        FULL_ACCESS,
+      );
+    const before = picked(await stub.models().pick({ providers: ["claude"], model: "m" }));
 
     // A re-login (merge) keeps user settings, replaces tokens and bumps the version.
-    const relogin = await stub.upsertCredential("claude-a.json", {
+    const relogin = await stub.models().upsertCredential("claude-a.json", {
       type: "claude",
       access_token: "new-token",
       refresh_token: "new-r",
@@ -263,7 +282,7 @@ api-keys:
       credentialVersion: 2,
       credentialsChanged: true,
     });
-    const after = picked(await stub.pick({ providers: ["claude"], model: "team/m" }));
+    const after = picked(await stub.models().pick({ providers: ["claude"], model: "team/m" }));
     expect(after.credential.metadata).toMatchObject({
       access_token: "new-token",
       note: "keep",
@@ -271,7 +290,7 @@ api-keys:
     });
 
     // A settings-only update keeps the version.
-    const same = await stub.upsertCredential("claude-a.json", {
+    const same = await stub.models().upsertCredential("claude-a.json", {
       type: "claude",
       access_token: "new-token",
       refresh_token: "new-r",
@@ -281,62 +300,73 @@ api-keys:
     expect(same).toMatchObject({ credentialVersion: 2, credentialsChanged: false });
 
     // Results for the old credential material are ignored.
-    expect(await stub.report(before.lease, { success: false, httpStatus: 401 })).toEqual({
+    expect(await stub.models().report(before.lease, { success: false, httpStatus: 401 })).toEqual({
       ok: true,
       applied: false,
     });
-    expect(await stub.report(after.lease, { success: true })).toEqual({ ok: true, applied: true });
-    expect((await stub.listCredentials(FULL_ACCESS))[0]).toMatchObject({ success: 1, failed: 0 });
+    expect(await stub.models().report(after.lease, { success: true })).toEqual({
+      ok: true,
+      applied: true,
+    });
+    expect((await stub.models().listCredentials(FULL_ACCESS))[0]).toMatchObject({
+      success: 1,
+      failed: 0,
+    });
 
     // A verbatim import replaces the file entirely.
-    await stub.importAuthFile(
-      "claude-a.json",
-      JSON.stringify({ type: "claude", access_token: "x" }),
-      {},
-      FULL_ACCESS,
-    );
-    const replaced = (await stub.listCredentials(FULL_ACCESS))[0];
+    await stub
+      .models()
+      .importAuthFile(
+        "claude-a.json",
+        JSON.stringify({ type: "claude", access_token: "x" }),
+        {},
+        FULL_ACCESS,
+      );
+    const replaced = (await stub.models().listCredentials(FULL_ACCESS))[0];
     expect(replaced?.metadata).not.toHaveProperty("note");
   });
 
   it("setDisabled, remove and import validation", async () => {
     const stub = plane();
-    await stub.importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
-    expect(await stub.setCredentialDisabled("claude-a.json", true, FULL_ACCESS)).toEqual({
+    await stub.models().importAuthFile("claude-a.json", claudeFile(), {}, FULL_ACCESS);
+    expect(await stub.models().setCredentialDisabled("claude-a.json", true, FULL_ACCESS)).toEqual({
       ok: true,
     });
-    const blocked = await stub.pick({ providers: ["claude"], model: "m" });
+    const blocked = await stub.models().pick({ providers: ["claude"], model: "m" });
     expect(blocked).toMatchObject({ ok: false, failure: { code: "auth_not_found" } });
-    expect(await stub.setCredentialDisabled("claude-a.json", false, FULL_ACCESS)).toEqual({
+    expect(await stub.models().setCredentialDisabled("claude-a.json", false, FULL_ACCESS)).toEqual({
       ok: true,
     });
-    expect((await stub.pick({ providers: ["claude"], model: "m" })).ok).toBe(true);
-    expect(await stub.setCredentialDisabled("nope.json", true, FULL_ACCESS)).toEqual({
+    expect((await stub.models().pick({ providers: ["claude"], model: "m" })).ok).toBe(true);
+    expect(await stub.models().setCredentialDisabled("nope.json", true, FULL_ACCESS)).toEqual({
       ok: false,
       error: "not_found",
     });
 
-    expect(await stub.removeCredential("claude-a.json", FULL_ACCESS)).toEqual({ removed: true });
-    expect(await stub.removeCredential("claude-a.json", FULL_ACCESS)).toEqual({ removed: false });
-    expect(await stub.listCredentials(FULL_ACCESS)).toEqual([]);
+    expect(await stub.models().removeCredential("claude-a.json", FULL_ACCESS)).toEqual({
+      removed: true,
+    });
+    expect(await stub.models().removeCredential("claude-a.json", FULL_ACCESS)).toEqual({
+      removed: false,
+    });
+    expect(await stub.models().listCredentials(FULL_ACCESS)).toEqual([]);
 
-    expect(await stub.importAuthFile("bad.json", "{", {}, FULL_ACCESS)).toMatchObject({
+    expect(await stub.models().importAuthFile("bad.json", "{", {}, FULL_ACCESS)).toMatchObject({
       ok: false,
       reason: "invalid_json",
     });
     expect(
-      await stub.importAuthFile(
-        "w.json",
-        JSON.stringify({ type: "claude", weight: 1.5 }),
-        {},
-        FULL_ACCESS,
-      ),
+      await stub
+        .models()
+        .importAuthFile("w.json", JSON.stringify({ type: "claude", weight: 1.5 }), {}, FULL_ACCESS),
     ).toMatchObject({
       ok: false,
       reason: "invalid_weight",
     });
     expect(
-      await stub.importAuthFile("g.json", JSON.stringify({ type: "gemini" }), {}, FULL_ACCESS),
+      await stub
+        .models()
+        .importAuthFile("g.json", JSON.stringify({ type: "gemini" }), {}, FULL_ACCESS),
     ).toMatchObject({
       ok: false,
       reason: "unsupported_type",
@@ -345,33 +375,32 @@ api-keys:
 
   it("never selects an expired OAuth token", async () => {
     const stub = plane();
-    await stub.importAuthFile(
-      "claude-old.json",
-      claudeFile({ expired: "2001-01-01T00:00:00Z" }),
-      {},
-      FULL_ACCESS,
-    );
-    expect(await stub.pick({ providers: ["claude"], model: "m" })).toMatchObject({
+    await stub
+      .models()
+      .importAuthFile(
+        "claude-old.json",
+        claudeFile({ expired: "2001-01-01T00:00:00Z" }),
+        {},
+        FULL_ACCESS,
+      );
+    expect(await stub.models().pick({ providers: ["claude"], model: "m" })).toMatchObject({
       ok: false,
       failure: { code: "auth_unavailable" },
     });
-    await stub.importAuthFile("claude-new.json", claudeFile(), {}, FULL_ACCESS);
-    expect(picked(await stub.pick({ providers: ["claude"], model: "m" })).credential.id).toBe(
-      "claude-new.json",
-    );
+    await stub.models().importAuthFile("claude-new.json", claudeFile(), {}, FULL_ACCESS);
+    expect(
+      picked(await stub.models().pick({ providers: ["claude"], model: "m" })).credential.id,
+    ).toBe("claude-new.json");
   });
 
   it("session affinity binds a session and is released by a credential failure (per caller scope)", async () => {
     const stub = plane();
-    await stub.importConfig("routing: { session-affinity: true }", "test");
+    await stub.models().importConfig("routing: { session-affinity: true }", "test");
 
     for (const id of ["a", "b", "c"])
-      await stub.importAuthFile(
-        `claude-${id}.json`,
-        claudeFile({ email: `${id}@x.com` }),
-        {},
-        FULL_ACCESS,
-      );
+      await stub
+        .models()
+        .importAuthFile(`claude-${id}.json`, claudeFile({ email: `${id}@x.com` }), {}, FULL_ACCESS);
 
     const request = (callerScope: string) => ({
       providers: ["claude"],
@@ -379,21 +408,27 @@ api-keys:
       session: { id: "session-1", callerScope },
     });
 
-    const first = picked(await stub.pick(request("alice")));
+    const first = picked(await stub.models().pick(request("alice")));
 
     for (let index = 0; index < 5; index += 1) {
-      expect(picked(await stub.pick(request("alice"))).credential.id).toBe(first.credential.id);
+      expect(picked(await stub.models().pick(request("alice"))).credential.id).toBe(
+        first.credential.id,
+      );
     }
 
     // Another caller does not share the binding.
-    const bob = picked(await stub.pick(request("bob")));
+    const bob = picked(await stub.models().pick(request("bob")));
     expect(bob.credential.id).not.toBe(first.credential.id);
 
     // A request-scoped failure keeps the binding; a credential failure releases it.
-    await stub.report(first.lease, { success: false, httpStatus: 400, requestScoped: true });
-    expect(picked(await stub.pick(request("alice"))).credential.id).toBe(first.credential.id);
-    await stub.report(first.lease, { success: false, httpStatus: 503 });
-    const rebound = picked(await stub.pick(request("alice")));
+    await stub
+      .models()
+      .report(first.lease, { success: false, httpStatus: 400, requestScoped: true });
+    expect(picked(await stub.models().pick(request("alice"))).credential.id).toBe(
+      first.credential.id,
+    );
+    await stub.models().report(first.lease, { success: false, httpStatus: 503 });
+    const rebound = picked(await stub.models().pick(request("alice")));
     expect(rebound.credential.id).not.toBe(first.credential.id);
   });
 
@@ -409,11 +444,11 @@ api-keys:
       issuedAt: 0,
     };
 
-    expect(await stub.report(lease, { success: true })).toEqual({
+    expect(await stub.models().report(lease, { success: true })).toEqual({
       ok: false,
       error: "unknown_credential",
     });
-    expect(await stub.pick({ providers: [], model: "m" })).toMatchObject({
+    expect(await stub.models().pick({ providers: [], model: "m" })).toMatchObject({
       ok: false,
       failure: { code: "provider_not_found" },
     });

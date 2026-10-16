@@ -62,7 +62,7 @@ const callbackHandler = (provider: OAuthProvider) =>
 
     const result = yield* modelsControlPlane("oauthCallback", (stub) =>
       // The provider's redirect has no Access identity: the state is the secret, and its session knows the owner.
-      stub.oauthCallback({ provider, state, code, error }, FULL_ACCESS),
+      stub.models().oauthCallback({ provider, state, code, error }, FULL_ACCESS),
     ).pipe(
       Effect.provideService(CurrentOrg, org),
       Effect.catch(() => Effect.succeed(undefined)),

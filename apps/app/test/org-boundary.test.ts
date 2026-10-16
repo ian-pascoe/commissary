@@ -119,7 +119,10 @@ api-keys:
       keys: [{ api-key: key-oc }]
 `;
 
-  const picker = makeControlPlanePicker(controlPlaneOf);
+  const picker = makeControlPlanePicker((workerEnv, org) =>
+    controlPlaneOf(workerEnv, org).models(),
+  );
+
   const request = { providers: ["openai-compatible-oc"], model: "shared", callerScope: "s" };
 
   const inOrg =
@@ -130,8 +133,8 @@ api-keys:
       );
 
   it("a cooldown in one org leaves the same credential of another org usable", async () => {
-    await controlPlaneOf(env, ACME).importConfig(CONFIG, "test");
-    await controlPlaneOf(env, GLOBAL_ORG).importConfig(CONFIG, "test");
+    await controlPlaneOf(env, ACME).models().importConfig(CONFIG, "test");
+    await controlPlaneOf(env, GLOBAL_ORG).models().importConfig(CONFIG, "test");
 
     const picked = await inOrg(ACME)(picker.pick(request));
     await inOrg(ACME)(
@@ -281,8 +284,12 @@ describe("the shared model catalog", () => {
   });
 
   it("every org reads, shows and refreshes the catalog under global's setting", async () => {
-    await controlPlaneOf(env, GLOBAL_ORG).importConfig("models:\n  catalog: embed\n", "test");
-    await controlPlaneOf(env, ACME).importConfig("routing:\n  strategy: fill-first\n", "test");
+    await controlPlaneOf(env, GLOBAL_ORG)
+      .models()
+      .importConfig("models:\n  catalog: embed\n", "test");
+    await controlPlaneOf(env, ACME)
+      .models()
+      .importConfig("routing:\n  strategy: fill-first\n", "test");
 
     const status = await acme.json(CATALOG);
     expect(status.status).toBe(200);

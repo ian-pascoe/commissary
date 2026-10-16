@@ -4,7 +4,7 @@
  * {@link StateEnv}; the Durable Object classes read their settings from the `env` they are constructed with.
  */
 import { Context, Effect, Option } from "effect";
-import type { ControlPlane } from "../credentials/control-plane.ts";
+import type { ControlPlane } from "../control-plane.ts";
 import { CurrentOrg, GLOBAL_ORG, type OrgId } from "@commissary/core";
 import { controlPlaneOf } from "../platform/org.ts";
 import type { Platform } from "../platform/platform.ts";

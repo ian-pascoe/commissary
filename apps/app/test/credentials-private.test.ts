@@ -276,7 +276,9 @@ describe("a member's private account", () => {
     );
 
     // Alice no longer gets her own (the shared one serves her); with it gone, nothing does.
-    const aliceNow = await controlPlane(org).pick({ ...CLAUDE, memberId: org.alice.id });
+    const aliceNow = await controlPlane(org)
+      .models()
+      .pick({ ...CLAUDE, memberId: org.alice.id });
 
     expect(aliceNow.ok && aliceNow.credential.id).toBe("shared.json");
 
@@ -292,12 +294,12 @@ describe("a member's private account", () => {
     await upload(org, org.alice, "alice.json");
 
     const plane = controlPlane(org);
-    const owned = await plane.pick({ ...CLAUDE, memberId: org.alice.id });
+    const owned = await plane.models().pick({ ...CLAUDE, memberId: org.alice.id });
 
     expect(owned.ok && owned.credential.id).toBe("alice.json");
 
     for (const memberId of [org.bob.id, org.admin.id, undefined]) {
-      const refused = await plane.pick({
+      const refused = await plane.models().pick({
         ...CLAUDE,
         ...(memberId === undefined ? {} : { memberId }),
       });
@@ -309,7 +311,7 @@ describe("a member's private account", () => {
     await upload(org, org.admin, "shared.json");
 
     for (const memberId of [org.bob.id, org.admin.id]) {
-      const picked = await plane.pick({ ...CLAUDE, memberId });
+      const picked = await plane.models().pick({ ...CLAUDE, memberId });
 
       expect(picked.ok && picked.credential.id).toBe("shared.json");
     }
@@ -416,12 +418,12 @@ describe("a member's private provider keys", () => {
     const plane = controlPlane(org);
     const request = { providers: ["claude"], model: "claude-sonnet-4-5" };
 
-    const owned = await plane.pick({ ...request, memberId: org.alice.id });
+    const owned = await plane.models().pick({ ...request, memberId: org.alice.id });
 
     expect(owned.ok && owned.credential.id).toMatch(/^claude:apikey:/);
 
     for (const memberId of [org.bob.id, org.admin.id, undefined]) {
-      const refused = await plane.pick({
+      const refused = await plane.models().pick({
         ...request,
         ...(memberId === undefined ? {} : { memberId }),
       });
@@ -437,29 +439,29 @@ describe("a member's private provider keys", () => {
 
     const plane = controlPlane(org);
     const request = { providers: ["claude"], model: "claude-sonnet-4-5", memberId: org.alice.id };
-    const picked = await plane.pick(request);
+    const picked = await plane.models().pick(request);
     const id = picked.ok ? picked.credential.id : "";
     const adminViewer = { member: org.admin.id, admin: true };
     const authIndex = orgAuthIndexer(env, OrgId.make(org.id))(id);
 
     expect(id).toMatch(/^claude:apikey:/);
     expect(
-      await plane.setCredentialDisabledByRef({ authIndex }, true, "admin", adminViewer),
+      await plane.models().setCredentialDisabledByRef({ authIndex }, true, "admin", adminViewer),
     ).toEqual({ ok: true, via: "config:excluded-models" });
-    expect((await plane.pick(request)).ok).toBe(false);
+    expect((await plane.models().pick(request)).ok).toBe(false);
 
     // Another member's viewer cannot reach it at all.
     expect(
-      await plane.setCredentialDisabledByRef({ authIndex }, false, "bob", {
+      await plane.models().setCredentialDisabledByRef({ authIndex }, false, "bob", {
         member: org.bob.id,
         admin: false,
       }),
     ).toEqual({ ok: false, error: "not_found" });
 
     expect(
-      await plane.setCredentialDisabledByRef({ authIndex }, false, "admin", adminViewer),
+      await plane.models().setCredentialDisabledByRef({ authIndex }, false, "admin", adminViewer),
     ).toEqual({ ok: true, via: "config:excluded-models" });
-    expect((await plane.pick(request)).ok).toBe(true);
+    expect((await plane.models().pick(request)).ok).toBe(true);
   });
 
   it("are edited by their owner at their revision, and by nobody else", async () => {
@@ -522,21 +524,23 @@ describe("a member's private provider keys", () => {
     await put(on, on.alice, group("alice-ai", SECRET));
     expect(
       (
-        await controlPlane(on).pick({
-          providers: ["claude"],
-          model: "claude-sonnet-4-5",
-          memberId: on.alice.id,
-        })
+        await controlPlane(on)
+          .models()
+          .pick({
+            providers: ["claude"],
+            model: "claude-sonnet-4-5",
+            memberId: on.alice.id,
+          })
       ).ok,
     ).toBe(true);
     await send(on, "/membership", on.admin, "PATCH", { private_credentials: false });
 
     const request = { providers: ["claude"], model: "claude-sonnet-4-5", memberId: on.alice.id };
 
-    expect((await controlPlane(on).pick(request)).ok).toBe(false);
+    expect((await controlPlane(on).models().pick(request)).ok).toBe(false);
 
     await send(on, "/membership", on.admin, "PATCH", { private_credentials: true });
-    const back = await controlPlane(on).pick(request);
+    const back = await controlPlane(on).models().pick(request);
 
     expect(back.ok, JSON.stringify(back)).toBe(true);
   });
@@ -546,8 +550,8 @@ describe("a member's private provider keys", () => {
 
     await put(org, org.alice, group("alice-ai", SECRET));
 
-    const snapshot = await controlPlane(org).getConfig();
-    const entries = await controlPlane(org).configEntries();
+    const snapshot = await controlPlane(org).models().getConfig();
+    const entries = await controlPlane(org).models().configEntries();
 
     for (const text of [JSON.stringify(snapshot), JSON.stringify(entries)]) {
       expect(text).not.toContain("api.example.test");

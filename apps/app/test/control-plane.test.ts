@@ -32,12 +32,12 @@ describe("ControlPlane config storage (Workers pool)", () => {
   it.effect("starts at version 0 with the default config", () =>
     Effect.gen(function* () {
       const stub = controlPlane();
-      const snapshot = yield* Effect.promise(async () => await stub.getConfig());
+      const snapshot = yield* Effect.promise(async () => await stub.models().getConfig());
       assert.strictEqual(snapshot.version, 0);
       assert.isFalse(snapshot.unchanged);
       const config = yield* decodeStoredConfig(snapshot.document ?? "");
       assert.strictEqual(config.routing.strategy, "round-robin");
-      const same = yield* Effect.promise(async () => await stub.getConfig(0));
+      const same = yield* Effect.promise(async () => await stub.models().getConfig(0));
       assert.isTrue(same.unchanged);
       assert.isUndefined(same.document);
     }),
@@ -47,13 +47,13 @@ describe("ControlPlane config storage (Workers pool)", () => {
     Effect.gen(function* () {
       const stub = controlPlane();
       const imported = yield* parseConfigYaml(YAML);
-      const put = yield* Effect.promise(async () => await stub.importConfig(YAML, "test"));
+      const put = yield* Effect.promise(async () => await stub.models().importConfig(YAML, "test"));
       assert.isTrue(put.ok);
 
       if (!put.ok) return;
       assert.strictEqual(put.version, 1);
 
-      const snapshot = yield* Effect.promise(async () => await stub.getConfig());
+      const snapshot = yield* Effect.promise(async () => await stub.models().getConfig());
       assert.strictEqual(snapshot.version, 1);
       const stored = yield* decodeStoredConfig(snapshot.document ?? "");
       assert.deepStrictEqual(comparable(stored), comparable(imported));
@@ -64,21 +64,20 @@ describe("ControlPlane config storage (Workers pool)", () => {
     Effect.gen(function* () {
       const stub = controlPlane();
       yield* Effect.promise(
-        async () => await stub.importConfig("routing: { strategy: fill-first }", "test"),
+        async () => await stub.models().importConfig("routing: { strategy: fill-first }", "test"),
       );
 
       const second = yield* Effect.promise(
         async () =>
-          await stub.writeSettings(
-            [{ id: "routing.strategy", revision: 1, value: "round-robin" }],
-            "t",
-          ),
+          await stub
+            .models()
+            .writeSettings([{ id: "routing.strategy", revision: 1, value: "round-robin" }], "t"),
       );
 
       assert.isTrue(second.ok && second.version === 2);
-      const unchanged = yield* Effect.promise(async () => await stub.getConfig(2));
+      const unchanged = yield* Effect.promise(async () => await stub.models().getConfig(2));
       assert.isTrue(unchanged.unchanged);
-      const changed = yield* Effect.promise(async () => await stub.getConfig(1));
+      const changed = yield* Effect.promise(async () => await stub.models().getConfig(1));
       assert.isFalse(changed.unchanged);
       assert.strictEqual(changed.version, 2);
     }),
@@ -88,11 +87,12 @@ describe("ControlPlane config storage (Workers pool)", () => {
     Effect.gen(function* () {
       const stub = controlPlane();
       yield* Effect.promise(
-        async () => await stub.importConfig("routing: { strategy: fill-first }", "test"),
+        async () => await stub.models().importConfig("routing: { strategy: fill-first }", "test"),
       );
 
       const bad = yield* Effect.promise(
-        async () => await stub.importConfig("routing: { retry: { request-retry: many } }", "test"),
+        async () =>
+          await stub.models().importConfig("routing: { retry: { request-retry: many } }", "test"),
       );
 
       assert.isFalse(bad.ok);
@@ -100,14 +100,13 @@ describe("ControlPlane config storage (Workers pool)", () => {
 
       const badSetting = yield* Effect.promise(
         async () =>
-          await stub.writeSettings(
-            [{ id: "requests.request-retry", revision: 0, value: "many" }],
-            "t",
-          ),
+          await stub
+            .models()
+            .writeSettings([{ id: "requests.request-retry", revision: 0, value: "many" }], "t"),
       );
 
       assert.isFalse(badSetting.ok);
-      const snapshot = yield* Effect.promise(async () => await stub.getConfig());
+      const snapshot = yield* Effect.promise(async () => await stub.models().getConfig());
       assert.strictEqual(snapshot.version, 1);
       const config = yield* decodeStoredConfig(snapshot.document ?? "");
       assert.strictEqual(config.routing.strategy, "fill-first");
@@ -119,14 +118,13 @@ describe("ControlPlane config storage (Workers pool)", () => {
       const name = crypto.randomUUID();
       yield* Effect.promise(
         async () =>
-          await env.CONTROL_PLANE.getByName(name).importConfig(
-            "routing: { strategy: fill-first }",
-            "test",
-          ),
+          await env.CONTROL_PLANE.getByName(name)
+            .models()
+            .importConfig("routing: { strategy: fill-first }", "test"),
       );
 
       const snapshot = yield* Effect.promise(
-        async () => await env.CONTROL_PLANE.getByName(name).getConfig(),
+        async () => await env.CONTROL_PLANE.getByName(name).models().getConfig(),
       );
 
       assert.strictEqual(snapshot.version, 1);
@@ -137,7 +135,11 @@ describe("ControlPlane config storage (Workers pool)", () => {
     Effect.gen(function* () {
       // The reader always talks to getByName("global"); this is the only test that touches it.
       const global = env.CONTROL_PLANE.getByName("global");
-      const put = yield* Effect.promise(async () => await global.importConfig(YAML, "test"));
+
+      const put = yield* Effect.promise(
+        async () => await global.models().importConfig(YAML, "test"),
+      );
+
       assert.isTrue(put.ok);
       const reader = yield* ConfigReader;
 

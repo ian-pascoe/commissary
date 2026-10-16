@@ -139,7 +139,9 @@ const importVertex = Effect.gen(function* () {
   const wantPrivate = (yield* queryParams).get("private") === "true";
 
   const result = yield* modelsControlPlane("importAuthFile", (stub) =>
-    stub.importAuthFile(name, metadata, { mergeExisting: true, private: wantPrivate }, viewer),
+    stub
+      .models()
+      .importAuthFile(name, metadata, { mergeExisting: true, private: wantPrivate }, viewer),
   );
 
   if (!result.ok && result.reason === "forbidden")

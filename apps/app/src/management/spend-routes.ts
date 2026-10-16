@@ -77,7 +77,10 @@ const idParam = Effect.gen(function* () {
 
 const overview = Effect.gen(function* () {
   const viewer = yield* currentViewer;
-  const spend = yield* modelsControlPlane("spendOverview", (stub) => stub.spendOverview(viewer));
+
+  const spend = yield* modelsControlPlane("spendOverview", (stub) =>
+    stub.models().spendOverview(viewer),
+  );
 
   return jsonReply(200, {
     time_zone: spend.settings.timeZone,
@@ -93,7 +96,7 @@ const create = Effect.gen(function* () {
   const input = yield* decode(CreateSpendLimit);
 
   const result = yield* modelsControlPlane("createSpendLimit", (stub) =>
-    stub.createSpendLimit(
+    stub.models().createSpendLimit(
       viewer,
       {
         kind: input.kind,
@@ -116,7 +119,7 @@ const update = Effect.gen(function* () {
   const input = yield* decode(UpdateSpendLimit);
 
   const result = yield* modelsControlPlane("updateSpendLimit", (stub) =>
-    stub.updateSpendLimit(viewer, id, revision, input.amount_micros, principalId),
+    stub.models().updateSpendLimit(viewer, id, revision, input.amount_micros, principalId),
   );
 
   return jsonReply(200, view(yield* orRefuse(result)));
@@ -128,7 +131,7 @@ const remove = Effect.gen(function* () {
   const revision = yield* ifMatch;
 
   const result = yield* modelsControlPlane("removeSpendLimit", (stub) =>
-    stub.removeSpendLimit(viewer, id, revision),
+    stub.models().removeSpendLimit(viewer, id, revision),
   );
 
   return jsonReply(200, view(yield* orRefuse(result)));
@@ -138,7 +141,7 @@ const settings = Effect.gen(function* () {
   const input = yield* decode(UpdateSpendSettings);
 
   const result = yield* modelsControlPlane("setSpendSettings", (stub) =>
-    stub.setSpendSettings({
+    stub.models().setSpendSettings({
       ...(input.time_zone === undefined ? {} : { timeZone: input.time_zone }),
       ...(input.week_start === undefined ? {} : { weekStart: input.week_start }),
     }),

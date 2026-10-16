@@ -243,8 +243,11 @@ export class ModelRegistry extends Context.Service<
         const [catalogs, sources, grants] = yield* Effect.all(
           [
             catalogStore.load(usesEmbeddedCatalog(config.models.catalog)),
-            fromPlane("model sources", async () => await plane.listModelSources(FULL_ACCESS)),
-            fromPlane("grants", async () => await plane.grantTable()),
+            fromPlane(
+              "model sources",
+              async () => await plane.models().listModelSources(FULL_ACCESS),
+            ),
+            fromPlane("grants", async () => await plane.models().grantTable()),
           ],
           { concurrency: "unbounded" },
         );

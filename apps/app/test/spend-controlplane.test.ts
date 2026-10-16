@@ -43,7 +43,7 @@ const freshOrg = async () => {
   };
 
   const create = async (viewer: Viewer, input: NewSpendLimit): Promise<SpendEntry> => {
-    const made = await stub.createSpendLimit(viewer, input, "test@example.com");
+    const made = await stub.models().createSpendLimit(viewer, input, "test@example.com");
 
     if (!made.ok) throw new Error(`${made.error}: ${made.message}`);
 
@@ -51,7 +51,9 @@ const freshOrg = async () => {
   };
 
   const shared = async (name: string) => {
-    const imported = await stub.importAuthFile(name, JSON.stringify(claudeFile()), {}, FULL_ACCESS);
+    const imported = await stub
+      .models()
+      .importAuthFile(name, JSON.stringify(claudeFile()), {}, FULL_ACCESS);
 
     expect(imported.ok).toBe(true);
   };
@@ -66,12 +68,12 @@ describe("Spend limits of the ControlPlane", () => {
     const { stub, adminViewer, alice, shared } = await freshOrg();
 
     await shared("claude-a.json");
-    expect(await stub.spendOverview(adminViewer)).toMatchObject({
+    expect(await stub.models().spendOverview(adminViewer)).toMatchObject({
       settings: { timeZone: "UTC", weekStart: "monday" },
       entries: [],
     });
 
-    const picked = await stub.pick({ ...REQUEST, memberId: alice.id });
+    const picked = await stub.models().pick({ ...REQUEST, memberId: alice.id });
 
     expect(picked.ok).toBe(true);
   });
@@ -102,14 +104,16 @@ describe("Spend limits of the ControlPlane", () => {
     expect(entry.resetsAt).toBeGreaterThan(Date.now());
     expect(new Date(entry.resetsAt).getUTCHours()).toBe(0);
 
-    const picked = await stub.pick({ ...REQUEST, memberId: alice.id });
+    const picked = await stub.models().pick({ ...REQUEST, memberId: alice.id });
 
     if (!picked.ok) throw new Error(picked.failure.code);
 
     expect(picked.lease.spend).toEqual([{ kind: "member", subject: alice.id }]);
-    await stub.report(picked.lease, { success: true, httpStatus: 200, costMicros: 2 * USD });
+    await stub
+      .models()
+      .report(picked.lease, { success: true, httpStatus: 200, costMicros: 2 * USD });
 
-    const after = await stub.spendOverview(adminViewer);
+    const after = await stub.models().spendOverview(adminViewer);
 
     expect(after.entries.map((e) => e.spentMicros)).toEqual([2 * USD]);
   });
@@ -124,12 +128,12 @@ describe("Spend limits of the ControlPlane", () => {
       period: "day",
       amountMicros: USD,
     });
-    const first = await stub.pick({ ...REQUEST, memberId: alice.id });
+    const first = await stub.models().pick({ ...REQUEST, memberId: alice.id });
 
     if (!first.ok) throw new Error(first.failure.code);
-    await stub.report(first.lease, { success: true, httpStatus: 200, costMicros: USD });
+    await stub.models().report(first.lease, { success: true, httpStatus: 200, costMicros: USD });
 
-    const refused = await stub.pick({ ...REQUEST, memberId: alice.id });
+    const refused = await stub.models().pick({ ...REQUEST, memberId: alice.id });
 
     expect(refused).toMatchObject({
       ok: false,
@@ -141,7 +145,7 @@ describe("Spend limits of the ControlPlane", () => {
     expect(refused.failure.message).toContain("daily");
 
     // Nobody else is limited, and the credential was never cooled.
-    expect((await stub.pick({ ...REQUEST, memberId: bob.id })).ok).toBe(true);
+    expect((await stub.models().pick({ ...REQUEST, memberId: bob.id })).ok).toBe(true);
   });
 
   it("keeps a plain member to their own API keys and below an admin's limit on them", async () => {
@@ -164,60 +168,68 @@ describe("Spend limits of the ControlPlane", () => {
 
     // Not above the admin's, not on another member's key, nothing but keys.
     expect(
-      await stub.createSpendLimit(
-        aliceViewer,
-        { ...forKey(aliceKey.id, 11 * USD), period: "day" },
-        "a",
-      ),
+      await stub
+        .models()
+        .createSpendLimit(aliceViewer, { ...forKey(aliceKey.id, 11 * USD), period: "day" }, "a"),
     ).toMatchObject({ ok: false });
-    expect(await stub.updateSpendLimit(aliceViewer, own.id, 1, 11 * USD, "a")).toMatchObject({
+    expect(
+      await stub.models().updateSpendLimit(aliceViewer, own.id, 1, 11 * USD, "a"),
+    ).toMatchObject({
       ok: false,
       error: "exceeds_admin_limit",
     });
-    expect(await stub.createSpendLimit(aliceViewer, forKey(bobKey.id, USD), "a")).toMatchObject({
+    expect(
+      await stub.models().createSpendLimit(aliceViewer, forKey(bobKey.id, USD), "a"),
+    ).toMatchObject({
       ok: false,
       error: "forbidden",
     });
     expect(
-      await stub.createSpendLimit(
-        aliceViewer,
-        { kind: "member", subject: alice.id, period: "day", amountMicros: 1 },
-        "a",
-      ),
+      await stub
+        .models()
+        .createSpendLimit(
+          aliceViewer,
+          { kind: "member", subject: alice.id, period: "day", amountMicros: 1 },
+          "a",
+        ),
     ).toMatchObject({ ok: false, error: "forbidden" });
     expect(
-      await stub.createSpendLimit(
-        aliceViewer,
-        { kind: "org", subject: "", period: "day", amountMicros: 1 },
-        "a",
-      ),
+      await stub
+        .models()
+        .createSpendLimit(
+          aliceViewer,
+          { kind: "org", subject: "", period: "day", amountMicros: 1 },
+          "a",
+        ),
     ).toMatchObject({ ok: false, error: "forbidden" });
 
     // Can edit and delete their own, not the admin's.
-    const lowered = await stub.updateSpendLimit(aliceViewer, own.id, 1, 3 * USD, "a");
+    const lowered = await stub.models().updateSpendLimit(aliceViewer, own.id, 1, 3 * USD, "a");
 
     expect(lowered).toMatchObject({ ok: true, value: { amountMicros: 3 * USD, revision: 2 } });
-    expect(await stub.updateSpendLimit(aliceViewer, own.id, 1, USD, "a")).toMatchObject({
+    expect(await stub.models().updateSpendLimit(aliceViewer, own.id, 1, USD, "a")).toMatchObject({
       ok: false,
       error: "conflict",
     });
 
-    const adminEntry = (await stub.spendOverview(adminViewer)).entries.find(
+    const adminEntry = (await stub.models().spendOverview(adminViewer)).entries.find(
       (e) => e.source === "admin",
     );
 
     expect(adminEntry).toBeDefined();
     expect(
-      await stub.updateSpendLimit(aliceViewer, adminEntry?.id ?? "", 1, 99 * USD, "a"),
+      await stub.models().updateSpendLimit(aliceViewer, adminEntry?.id ?? "", 1, 99 * USD, "a"),
     ).toMatchObject({
       ok: false,
       error: "forbidden",
     });
-    expect(await stub.removeSpendLimit(bobViewer, own.id, 2)).toMatchObject({
+    expect(await stub.models().removeSpendLimit(bobViewer, own.id, 2)).toMatchObject({
       ok: false,
       error: "forbidden",
     });
-    expect(await stub.removeSpendLimit(aliceViewer, own.id, 2)).toMatchObject({ ok: true });
+    expect(await stub.models().removeSpendLimit(aliceViewer, own.id, 2)).toMatchObject({
+      ok: true,
+    });
   });
 
   it("shows a plain member the limits that bind them and nothing else", async () => {
@@ -277,7 +289,7 @@ describe("Spend limits of the ControlPlane", () => {
       amountMicros: 5 * USD,
     });
 
-    const seen = (await stub.spendOverview(aliceViewer)).entries.map((e) => [
+    const seen = (await stub.models().spendOverview(aliceViewer)).entries.map((e) => [
       e.kind,
       e.label,
       e.editable,
@@ -290,14 +302,14 @@ describe("Spend limits of the ControlPlane", () => {
       ["key", expect.stringContaining("laptop"), false],
     ]);
 
-    expect((await stub.spendOverview(adminViewer)).entries).toHaveLength(7);
+    expect((await stub.models().spendOverview(adminViewer)).entries).toHaveLength(7);
   });
 
   it("names a shared credential's limit by its auth_index, never its id, and limits only shared credentials", async () => {
     const { org, stub, adminViewer, create, shared, alice } = await freshOrg();
 
     await shared("claude-a.json");
-    const [credential] = await stub.listCredentials(FULL_ACCESS);
+    const [credential] = await stub.models().listCredentials(FULL_ACCESS);
 
     expect(credential).toBeDefined();
     const authIndex = orgAuthIndexer(env, org)(credential?.id ?? "");
@@ -312,18 +324,22 @@ describe("Spend limits of the ControlPlane", () => {
     });
 
     expect(entry).toMatchObject({ kind: "credential", subject: authIndex });
-    expect(JSON.stringify(await stub.spendOverview(adminViewer))).not.toContain("claude-a.json");
+    expect(JSON.stringify(await stub.models().spendOverview(adminViewer))).not.toContain(
+      "claude-a.json",
+    );
 
     expect(
-      await stub.createSpendLimit(
-        adminViewer,
-        { kind: "credential", subject: "claude-a.json", period: "week", amountMicros: 1 },
-        "a",
-      ),
+      await stub
+        .models()
+        .createSpendLimit(
+          adminViewer,
+          { kind: "credential", subject: "claude-a.json", period: "week", amountMicros: 1 },
+          "a",
+        ),
     ).toMatchObject({ ok: false, error: "subject_not_found" });
 
     // The only shared credential is at its limit: nothing can serve, and it is not a refusal of the member.
-    const picked = await stub.pick({ ...REQUEST, memberId: alice.id });
+    const picked = await stub.models().pick({ ...REQUEST, memberId: alice.id });
 
     expect(picked.ok).toBe(false);
   });
@@ -336,18 +352,20 @@ describe("Spend limits of the ControlPlane", () => {
       { kind: "team", subject: "nobody", period: "day", amountMicros: 1 },
       { kind: "key", subject: "nobody", period: "day", amountMicros: 1 },
     ] as const)
-      expect(await stub.createSpendLimit(adminViewer, input, "a")).toMatchObject({
+      expect(await stub.models().createSpendLimit(adminViewer, input, "a")).toMatchObject({
         ok: false,
         error: "subject_not_found",
       });
 
     for (const amountMicros of [-1, 0.5, Number.NaN])
       expect(
-        await stub.createSpendLimit(
-          adminViewer,
-          { kind: "member", subject: alice.id, period: "day", amountMicros },
-          "a",
-        ),
+        await stub
+          .models()
+          .createSpendLimit(
+            adminViewer,
+            { kind: "member", subject: alice.id, period: "day", amountMicros },
+            "a",
+          ),
       ).toMatchObject({ ok: false, error: "invalid" });
   });
 
@@ -357,12 +375,14 @@ describe("Spend limits of the ControlPlane", () => {
 
     await stub.setMembershipSettings({ privateCredentials: true });
 
-    const imported = await stub.importAuthFile(
-      "claude-private.json",
-      JSON.stringify(claudeFile()),
-      { private: true },
-      { member: alice.id, admin: false },
-    );
+    const imported = await stub
+      .models()
+      .importAuthFile(
+        "claude-private.json",
+        JSON.stringify(claudeFile()),
+        { private: true },
+        { member: alice.id, admin: false },
+      );
 
     expect(imported.ok).toBe(true);
 
@@ -380,37 +400,41 @@ describe("Spend limits of the ControlPlane", () => {
     });
 
     // The member's own limit does not touch their private credential; the key's limit counts it.
-    const picked = await stub.pick({ ...REQUEST, memberId: alice.id, apiKeyId: aliceKey.id });
+    const picked = await stub
+      .models()
+      .pick({ ...REQUEST, memberId: alice.id, apiKeyId: aliceKey.id });
 
     if (!picked.ok) throw new Error(picked.failure.code);
     expect(picked.lease.spend).toEqual([{ kind: "key", subject: aliceKey.id }]);
-    await stub.report(picked.lease, { success: true, httpStatus: 200, costMicros: 3 * USD });
+    await stub
+      .models()
+      .report(picked.lease, { success: true, httpStatus: 200, costMicros: 3 * USD });
 
     expect(
-      await stub.pick({ ...REQUEST, memberId: alice.id, apiKeyId: aliceKey.id }),
+      await stub.models().pick({ ...REQUEST, memberId: alice.id, apiKeyId: aliceKey.id }),
     ).toMatchObject({
       ok: false,
       failure: { code: "spend_limit_reached", httpStatus: 429 },
     });
 
     // The same member without the key is served by the private credential.
-    expect((await stub.pick({ ...REQUEST, memberId: alice.id })).ok).toBe(true);
+    expect((await stub.models().pick({ ...REQUEST, memberId: alice.id })).ok).toBe(true);
   });
 
   it("sets the calendar and refuses an unknown time zone", async () => {
     const { stub, adminViewer } = await freshOrg();
 
-    expect(await stub.setSpendSettings({ timeZone: "Europe/Berlin", weekStart: "sunday" })).toEqual(
-      {
-        ok: true,
-        value: { timeZone: "Europe/Berlin", weekStart: "sunday" },
-      },
-    );
-    expect(await stub.setSpendSettings({ timeZone: "Mars/Base" })).toMatchObject({
+    expect(
+      await stub.models().setSpendSettings({ timeZone: "Europe/Berlin", weekStart: "sunday" }),
+    ).toEqual({
+      ok: true,
+      value: { timeZone: "Europe/Berlin", weekStart: "sunday" },
+    });
+    expect(await stub.models().setSpendSettings({ timeZone: "Mars/Base" })).toMatchObject({
       ok: false,
       error: "invalid",
     });
-    expect((await stub.spendOverview(adminViewer)).settings).toEqual({
+    expect((await stub.models().spendOverview(adminViewer)).settings).toEqual({
       timeZone: "Europe/Berlin",
       weekStart: "sunday",
     });
@@ -442,7 +466,7 @@ describe("Spend limits of the ControlPlane", () => {
 
     expect((await stub.removeMember(alice.id, OWNER)).ok).toBe(true);
     expect((await stub.deleteTeam(team.value.id)).ok).toBe(true);
-    expect((await stub.spendOverview(adminViewer)).entries.map((e) => e.label)).toEqual([
+    expect((await stub.models().spendOverview(adminViewer)).entries.map((e) => e.label)).toEqual([
       "bob@example.com",
     ]);
   });

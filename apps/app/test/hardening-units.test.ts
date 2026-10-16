@@ -54,9 +54,9 @@ describe("notAppliedSettings", () => {
   });
 
   it("is reported by the config import", async () => {
-    const result = await env.CONTROL_PLANE.getByName(
-      `hardening-${crypto.randomUUID().slice(0, 8)}`,
-    ).importConfig(GO_CONFIG, "test");
+    const result = await env.CONTROL_PLANE.getByName(`hardening-${crypto.randomUUID().slice(0, 8)}`)
+      .models()
+      .importConfig(GO_CONFIG, "test");
 
     expect(result.ok && result.notApplied).toContain("access.api-keys");
     // Response steering is ported: an effective key, not reported.

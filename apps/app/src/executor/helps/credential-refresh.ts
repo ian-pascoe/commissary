@@ -17,12 +17,11 @@ import { metaNeedsMint } from "../../credentials/refresh/meta.ts";
 import { ANTIGRAVITY_REQUEST_SAFETY_MS } from "../../credentials/refresh/schedule.ts";
 import type { JsonObject } from "@commissary/json";
 import { CurrentOrg, type OrgId } from "@commissary/core";
-import { controlPlaneOf } from "../../platform/org.ts";
 import { toExecutorSnapshot } from "../control-plane-picker.ts";
 import { ExecutionError, withErrorFields } from "../errors.ts";
 import type { CredentialSnapshot } from "../picker.ts";
 import type { ExecutionContext } from "../types.ts";
-import { type ModelsBindings, ModelsEnv } from "../../models/env.ts";
+import { type ModelsBindings, ModelsEnv, modelsPartOf } from "../../models/env.ts";
 
 /** The slice of the ControlPlane RPC surface used here (tests substitute their own). */
 export interface RefreshApi {
@@ -76,7 +75,7 @@ export class CredentialRefresher extends Context.Service<
   };
 
   /** Production: the ControlPlane Durable Object of the request's org. */
-  static readonly controlPlane = CredentialRefresher.layerFor(controlPlaneOf);
+  static readonly controlPlane = CredentialRefresher.layerFor(modelsPartOf);
 
   /** No refresh support (tests with provider keys only). */
   static readonly none = Layer.succeed(

@@ -47,9 +47,7 @@ credentials) (Alchemy v2, Effect-based); `infra/settings.ts` reads
 the deploy settings (`.env`), `infra/access.ts` provisions Cloudflare Access. There is no Wrangler configuration. When you
 add a binding or variable, change three places together: the Worker's `env` in `alchemy.run.ts`, the `Env` interface in
 `apps/app/src/env.d.ts`, and the test bindings in `apps/app/vitest.config.ts` (which mirrors the deployed Worker: entry, compatibility
-settings, Durable Objects, `*.bin` Data modules). A Durable Object only tests use is the exception: its class is
-exported by the test Worker's entry, `apps/app/test/worker.ts`, and its binding exists only in `vitest.config.ts`
-(tests reach it with a `// SAFETY:` cast of `env`).
+settings, Durable Objects, `*.bin` Data modules).
 
 `apps/app/worker-configuration.d.ts` holds the Workers runtime types for the compatibility date and flags in `alchemy.run.ts`.
 Regenerate it when those change (Wrangler is used only as a type generator here):
@@ -69,8 +67,8 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
 
 - `apps/app` (`@commissary/app`): the one Worker. `src/access` (Access JWT gate), `src/http` (router, CORS),
   `src/handlers` (inbound protocols and the shared execution pipeline), `src/executor` (one directory per provider),
-  `src/credentials` (ControlPlane Durable Object, token
-  refresh), `src/session-state` (SessionState Durable Object), `src/registry` (model catalogs and `/models`),
+  `src/control-plane.ts` (the ControlPlane Durable Object: the org-wide base in `src/state` composed with the Models
+  part in `src/models`), `src/credentials` (credential pool, selection, token refresh), `src/session-state` (SessionState Durable Object), `src/registry` (model catalogs and `/models`),
   `src/management` and `src/oauth` (management API, panel serving, provider logins), `src/usage` and
   `src/observability` (D1 usage records, trace ids); `test/` (workerd tests and golden fixtures).
 - `apps/web` (`@commissary/web`): the control panel (below).
@@ -159,7 +157,9 @@ stays with that Worker.
 
 - **Runtime.** A package tests in plain Node.js unless the code under test needs a binding or a Durable Object. The
   Worker's tests run in workerd (`@cloudflare/vitest-plugin`, two projects: self-hosted and Cloud), the panel's and the
-  packages' in Node.js.
+  packages' in Node.js. A test that restarts a ControlPlane (`evictDurableObject`) first disposes of every stub of its
+  Models part it holds (`const part = await stub.models()` … `part[Symbol.dispose]()`); a pipelined call
+  (`stub.models().x()`) leaves one held until the test ends, and the eviction never finishes.
 - **Package config.** A Node.js package's `vitest.config.ts` is `defineConfig(nodePackageTests("<name>"))` from
   `tools/vitest/node-package.ts`: one project named after the package over `test/**/*.test.ts`, and the `binModules`
   Vite plugin, which loads `*.bin` imports as the `ArrayBuffer` a Workers `Data` module gives (the Worker bundles them
@@ -238,7 +238,7 @@ Rules downgraded to warnings on purpose (reported, not failing): `effecttsgo/uns
 dictionary-type rules are off (fake bindings and loose fixtures).
 
 `no-restricted-imports` enforces the workspace boundaries: `@commissary/*/testing` only in `test/` folders, nothing
-from `apps/` in `packages/`.
+from `apps/` in `packages/`, and nothing from Models code in the org-wide ControlPlane (`apps/app/src/state/control-plane.ts`).
 
 Errors fail lint; warnings are reported but do not. Fix findings rather than silencing them: no disable comments. A type
 assertion that cannot be removed carries a `// SAFETY: <invariant>` comment on the line(s) before it.

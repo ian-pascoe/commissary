@@ -28,7 +28,7 @@ const SECRETS = {
 };
 
 const seed = async (document: Record<string, unknown>): Promise<number> => {
-  const result = await controlPlane().importConfig(JSON.stringify(document), "test");
+  const result = await controlPlane().models().importConfig(JSON.stringify(document), "test");
 
   if (!result.ok) throw new Error(result.message);
 
@@ -52,7 +52,7 @@ const save = async (patch: Json, revisions?: Readonly<Record<string, number>>) =
   );
 
 const storedDocument = async (): Promise<Record<string, unknown>> => {
-  const wire = await controlPlane().getConfig();
+  const wire = await controlPlane().models().getConfig();
 
   // SAFETY: the stored config document is a serialized JSON object.
   return JSON.parse(wire.document ?? "{}") as Record<string, unknown>;
@@ -60,7 +60,7 @@ const storedDocument = async (): Promise<Record<string, unknown>> => {
 
 /** The ids of the stored settings (a setting at its default is not stored). */
 const storedSettings = async (): Promise<ReadonlyArray<string>> =>
-  Object.keys((await controlPlane().configEntries()).revisions.settings).toSorted();
+  Object.keys((await controlPlane().models().configEntries()).revisions.settings).toSorted();
 
 describe("management settings", () => {
   it("requires an Access admin", async () => {

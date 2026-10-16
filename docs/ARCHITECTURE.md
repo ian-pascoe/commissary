@@ -36,12 +36,15 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
   apps/app/                   @commissary/app: the one Worker (client API, management API, panel serving)
     src/
       index.ts                Worker entry: fetch, scheduled, DO class exports
+      control-plane.ts        the ControlPlane Durable Object: the org-wide base composed with the Models part
+      state/                  the org-wide ControlPlane base (members, keys, SSO, data key; one alarm), leases
+      models/                 the ControlPlane's Models part (config, credentials, grants, Spend, quota, OAuth)
       platform/               Cloudflare bindings as Effect services (Env, KV, D1, DO stubs)
       http/                   router, CORS, error formatting per protocol, SSE framing, streaming helpers
       access/                 Cloudflare Access JWT verification, principals
       config/                 config schema (Effect Schema), storage, payload rules
       registry/               model catalogs, model info, /models listings
-      credentials/            credential model, selection, cooldowns, refresh, ControlPlane Durable Object
+      credentials/            credential model, selection, cooldowns, refresh
       executor/               executor interface + one directory per provider
       signature/              the CACHE KV store of the thinking-signature cache
       handlers/               inbound protocol handlers (openai, responses, claude, gemini, interactions, ...)
@@ -91,6 +94,21 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
   serving `global`). The Worker talks to it through JS RPC methods (e.g.
   `pick`, `report`, `getConfig`). The org `global` keeps the object it always had (`getByName("global")`), so upgrading
   moves no data.
+  - **Base and parts** (#134 "How an area's ControlPlane part works", #148): the class `ControlPlane`
+    (`src/control-plane.ts`) is the org-wide base (`src/state/control-plane.ts`: members, teams, service tokens, the
+    membership index and settings, API keys, management keys, SSO, `SessionState` instances, the org's data key)
+    composed with the Models part (`src/models/control-plane-part.ts`: config, credentials, selection, refresh, grants,
+    Spend limits, quota, reset grants, OAuth logins). The part is an `RpcTarget` constructed once per object with the
+    base's in-object view (`OrgCore`: org id, member and team lookups, data key, the alarm), creates its own tables and
+    is reached through a method, `stub.models().pick(…)`: one pipelined round trip. A getter (`stub.models.pick(…)`) was
+    the first plan; vitest-pool-workers answers a getter of a Durable Object stub with a function, so the pipelined call
+    fails there (it works in plain workerd). The base imports nothing from Models code (`.oxlintrc.json` checks the
+    direct imports); it tells the part what changed in the org (`ControlPlanePart`: a member left, a team was deleted,
+    API keys were deleted, …), calls its `wipe()` from `wipeOrg`, seals its plain-text secrets on the first start, and
+    owns the object's one alarm: each part reports its next wake-up, the alarm is set to the earliest and calls the parts
+    that are due (a part not heard from since the object started is called too). Tables and storage are the same as
+    before the split. A test that evicts a ControlPlane first disposes of any stub of the part it holds: a held stub
+    keeps `evictDurableObject` from finishing.
 - **Org-scoped names**: everything the Worker derives for an org outside its ControlPlane is named per org with
   `orgScopedName(org, name)`: unchanged for `global` (so existing KV entries, SessionState instances and live sessions
   survive the upgrade), `org.<org>.<name>` for any other org. That covers the SessionState addresses (the store name),
@@ -154,7 +172,7 @@ client -> Cloudflare Access -> Worker
 - Each future package reads its own view of `env` (#134): `AuthConfig` (`src/auth/config.ts`: Access, platform admins,
   dev bypass, hosted mode, rate limiter), `StateEnv` (`src/state/env.ts`: the Durable Object namespaces, typed through
   their classes), `ModelsEnv` (`src/models/env.ts`: `CACHE`, `USAGE`, `SESSION_STATE`, `AUTH_INDEX_KEY`,
-  `META_MINT_URL`, and `CONTROL_PLANE` typed through the methods Models calls); `core` reads none. Code that stays in the
+  `META_MINT_URL`, and `CONTROL_PLANE` typed as objects with `models()`, the Models part's methods Models calls); `core` reads none. Code that stays in the
   Worker reads `AppEnv` (`src/worker-env.ts`). `requestContext` provides each from the invocation's `env`; the global
   `Env` appears only in the entry (`index.ts`, `scheduled.ts`), the Durable Object classes and tests.
 - Use Effect at boundaries and for orchestration: services (`Context.Service`) + `Layer`s, `Schema` for config,
@@ -198,7 +216,7 @@ client -> Cloudflare Access -> Worker
   Keys that are accepted but have no effect on Workers are listed in `config/not-applied.ts` with a one-line reason (and
   MIGRATION.md); the import names them in its answer (`not_applied`) and stores none of them (ADR 0025), so the Settings
   view carries no such list. `requests.proxy-url` is accepted but ignored. Unknown/inapplicable keys are dropped on import.
-- **Storage** (ADR 0025): the `ControlPlane` DO (`src/credentials/control-plane.ts`) keeps the org's configuration as
+- **Storage** (ADR 0025): the `ControlPlane` DO's Models part (`src/models/control-plane-part.ts`) keeps the org's configuration as
   config entries in SQLite (`ConfigStore`, `src/config/store.ts`; the pure mapping between a `Config` and its rows is
   `src/config/entries.ts`). Every setting (by dotted path, e.g. `routing.strategy`), every provider key group, every provider key
   (its id is its credential id), every channel's model aliases, every channel's model exclusions and every payload rule
@@ -1732,13 +1750,13 @@ ADR 0027: deleting something deletes it at once, and Commissary keeps no content
 
 - **Retention** per org, `usage_retention_days` in the Platform registry (see "Usage accounting"). **Usage failures** keep
   status, type and code, not the body (same section).
-- **Member removal** deletes the member's private data in the ControlPlane (`#deleteMemberData`), and their Spend limits and
-  counters; **API keys** are deleted when revoked or expired ("API keys"), and `ApiKeyStore` reports every key it
+- **Member removal** deletes the member's private data in the ControlPlane (`#deleteMemberData`: their API keys in the
+  base, then the Models part's `memberLeft`), and their Spend limits and counters; **API keys** are deleted when revoked or expired ("API keys"), and `ApiKeyStore` reports every key it
   deletes so the key's Spend limits and counters go with it.
 - **Org deletion** (`deleteOrg`, called by `DELETE /org` and by account deletion) runs, in this order: the org's usage rows in
   D1 (`deleteOrgUsage`, batched), the `SessionState` instances it registered, its `org.<id>.…` keys in the `CACHE` KV
-  namespace, its ControlPlane's whole storage (`ControlPlane.wipeOrg`: SQL tables, the key-value store and the refresh
-  alarm) and last its registry entry, which frees the slug. The registry entry goes last, so a deletion that stops half way
+  namespace, its ControlPlane's whole storage (`ControlPlane.wipeOrg`: the Models part drops its tables, then the rest of the SQL
+  tables, the key-value store and the alarm go) and last its registry entry, which frees the slug. The registry entry goes last, so a deletion that stops half way
   (a Worker invocation has a subrequest limit: `DELETION_BUDGET`, 400 calls; the step is named in the log) is repeated by
   sending the request again: the org is still listed and each earlier step finds less to do. `global` is refused. After the
   wipe the object keeps a `#wiped` flag: a stale in-memory ControlPlane of the deleted org answers empty for session

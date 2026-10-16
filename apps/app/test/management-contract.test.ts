@@ -98,7 +98,9 @@ beforeEach(async () => {
 /** Imports a Claude auth file into the ControlPlane. */
 const seed = (name: string, extra: Record<string, unknown> = {}) =>
   Effect.promise(async () => {
-    await controlPlane().importAuthFile(name, JSON.stringify(claudeFile(extra)), {}, FULL_ACCESS);
+    await controlPlane()
+      .models()
+      .importAuthFile(name, JSON.stringify(claudeFile(extra)), {}, FULL_ACCESS);
   });
 
 describe("management contract", () => {
@@ -165,20 +167,19 @@ describe("management contract", () => {
   it.effect("decodes the credential list", () =>
     Effect.gen(function* () {
       yield* Effect.promise(async () => {
-        await controlPlane().importAuthFile(
-          "claude-a.json",
-          JSON.stringify(claudeFile()),
-          {},
-          FULL_ACCESS,
-        );
-        await controlPlane().importAuthFile(
-          "claude-b.json",
-          JSON.stringify(
-            claudeFile({ email: "b@x.com", priority: 2, note: "backup", disabled: true }),
-          ),
-          {},
-          FULL_ACCESS,
-        );
+        await controlPlane()
+          .models()
+          .importAuthFile("claude-a.json", JSON.stringify(claudeFile()), {}, FULL_ACCESS);
+        await controlPlane()
+          .models()
+          .importAuthFile(
+            "claude-b.json",
+            JSON.stringify(
+              claudeFile({ email: "b@x.com", priority: 2, note: "backup", disabled: true }),
+            ),
+            {},
+            FULL_ACCESS,
+          );
       });
 
       const api = yield* client;
@@ -531,12 +532,14 @@ describe("management contract", () => {
     it.effect("refresh answers the fresh entry without a refresh token", () =>
       Effect.gen(function* () {
         yield* Effect.promise(async () => {
-          await controlPlane().importAuthFile(
-            "noref.json",
-            JSON.stringify({ type: "claude", email: "n@x.com", access_token: "t" }),
-            {},
-            FULL_ACCESS,
-          );
+          await controlPlane()
+            .models()
+            .importAuthFile(
+              "noref.json",
+              JSON.stringify({ type: "claude", email: "n@x.com", access_token: "t" }),
+              {},
+              FULL_ACCESS,
+            );
         });
         const api = yield* client;
         const refreshed = yield* api.credentials.refresh({ payload: { name: "noref.json" } });
@@ -696,7 +699,7 @@ describe("management contract", () => {
 
         yield* Effect.promise(async () => {
           assert.isTrue(
-            (await controlPlane().importConfig("models:\n  catalog: embed\n", "test")).ok,
+            (await controlPlane().models().importConfig("models:\n  catalog: embed\n", "test")).ok,
           );
         });
         const refused = yield* Effect.flip(api.catalog.refresh());
@@ -714,20 +717,22 @@ describe("management contract", () => {
       Effect.gen(function* () {
         yield* seed("claude-a.json");
         yield* Effect.promise(async () => {
-          const result = await controlPlane().importConfig(
-            JSON.stringify({
-              "api-keys": {
-                claude: [
-                  {
-                    "base-url": "https://api.anthropic.com",
-                    "excluded-models": ["claude-opus-*"],
-                    keys: [{ "api-key": "sk-ant-one" }],
-                  },
-                ],
-              },
-            }),
-            "test",
-          );
+          const result = await controlPlane()
+            .models()
+            .importConfig(
+              JSON.stringify({
+                "api-keys": {
+                  claude: [
+                    {
+                      "base-url": "https://api.anthropic.com",
+                      "excluded-models": ["claude-opus-*"],
+                      keys: [{ "api-key": "sk-ant-one" }],
+                    },
+                  ],
+                },
+              }),
+              "test",
+            );
 
           assert.isTrue(result.ok);
         });
@@ -984,41 +989,43 @@ describe("management contract", () => {
 
     const seedKeys = (extra: Record<string, unknown> = {}) =>
       Effect.promise(async () => {
-        await controlPlane().importConfig(
-          JSON.stringify({
-            "api-keys": {
-              claude: [
-                {
-                  name: "main",
-                  "base-url": "https://api.anthropic.com",
-                  "proxy-url": "http://127.0.0.1:9",
-                  headers: {
-                    "X-Api-Key": "hdr-secret-9876",
-                    "X-Team": "blue",
-                    "X-Sid": "$CPA-SESSION-ID-sk-live-1234abcd",
-                    "X-Copy": "$x-team",
+        await controlPlane()
+          .models()
+          .importConfig(
+            JSON.stringify({
+              "api-keys": {
+                claude: [
+                  {
+                    name: "main",
+                    "base-url": "https://api.anthropic.com",
+                    "proxy-url": "http://127.0.0.1:9",
+                    headers: {
+                      "X-Api-Key": "hdr-secret-9876",
+                      "X-Team": "blue",
+                      "X-Sid": "$CPA-SESSION-ID-sk-live-1234abcd",
+                      "X-Copy": "$x-team",
+                    },
+                    keys: [{ "api-key": SECRETS[0] }, { "api-key": SECRETS[1], weight: 3 }],
                   },
-                  keys: [{ "api-key": SECRETS[0] }, { "api-key": SECRETS[1], weight: 3 }],
-                },
-              ],
-              codex: [
-                {
-                  "base-url": "https://codex.test/backend-api/codex",
-                  keys: [{ "api-key": SECRETS[2] }],
-                },
-              ],
-              "openai-compatibility": [
-                {
-                  name: "acme",
-                  "base-url": "https://api.acme.test/v1",
-                  keys: [{ "api-key": SECRETS[3] }],
-                },
-              ],
-              ...extra,
-            },
-          }),
-          "test",
-        );
+                ],
+                codex: [
+                  {
+                    "base-url": "https://codex.test/backend-api/codex",
+                    keys: [{ "api-key": SECRETS[2] }],
+                  },
+                ],
+                "openai-compatibility": [
+                  {
+                    name: "acme",
+                    "base-url": "https://api.acme.test/v1",
+                    keys: [{ "api-key": SECRETS[3] }],
+                  },
+                ],
+                ...extra,
+              },
+            }),
+            "test",
+          );
       });
 
     const claudeGroup = (list: ProviderKeysList): GroupView => {
@@ -1041,7 +1048,7 @@ describe("management contract", () => {
     });
 
     const storedDocument = () =>
-      Effect.promise(async () => (await controlPlane().getConfig()).document ?? "");
+      Effect.promise(async () => (await controlPlane().models().getConfig()).document ?? "");
 
     it.effect("lists groups with runtime state and never a secret", () =>
       Effect.gen(function* () {
@@ -1518,21 +1525,23 @@ describe("management contract", () => {
     it.effect("get decodes the view and save stores a patch", () =>
       Effect.gen(function* () {
         yield* Effect.promise(async () => {
-          await controlPlane().importConfig(
-            JSON.stringify({
-              access: { "api-keys": ["client-secret-key"] },
-              "api-keys": {
-                claude: [
-                  {
-                    prefix: "team",
-                    "base-url": "https://api.anthropic.com",
-                    keys: [{ "api-key": "sk-ant-contract-secret" }],
-                  },
-                ],
-              },
-            }),
-            "test",
-          );
+          await controlPlane()
+            .models()
+            .importConfig(
+              JSON.stringify({
+                access: { "api-keys": ["client-secret-key"] },
+                "api-keys": {
+                  claude: [
+                    {
+                      prefix: "team",
+                      "base-url": "https://api.anthropic.com",
+                      keys: [{ "api-key": "sk-ant-contract-secret" }],
+                    },
+                  ],
+                },
+              }),
+              "test",
+            );
         });
         const api = yield* client;
         const view = yield* api.settings.get();

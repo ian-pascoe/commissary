@@ -17,10 +17,9 @@ const GPT = { provider: "codex", model: "gpt-5", input: 1.25, output: 10 };
 
 /** Creates the override in `options` (GPT by default) and answers its id and revision. */
 const created = async (options: { readonly value?: PriceOverrideValue } = {}) => {
-  const result = await controlPlane().writePriceOverride(
-    { revision: 0, value: options.value ?? GPT },
-    "a",
-  );
+  const result = await controlPlane()
+    .models()
+    .writePriceOverride({ revision: 0, value: options.value ?? GPT }, "a");
 
   if (!result.ok) throw new Error(`expected a created override: ${result.message}`);
 
@@ -29,13 +28,15 @@ const created = async (options: { readonly value?: PriceOverrideValue } = {}) =>
 
 describe("price override entries", () => {
   it("creates an override with an id, a revision and the writer, and lists it", async () => {
-    const result = await controlPlane().writePriceOverride(
-      { revision: 0, value: { ...GPT, cache_read: 0.125 } },
-      "admin@example.com",
-    );
+    const result = await controlPlane()
+      .models()
+      .writePriceOverride(
+        { revision: 0, value: { ...GPT, cache_read: 0.125 } },
+        "admin@example.com",
+      );
 
     expect(result).toMatchObject({ ok: true, id: expect.stringMatching(/^price:[0-9a-f]{24}$/) });
-    const { version, overrides } = await controlPlane().priceOverrideEntries();
+    const { version, overrides } = await controlPlane().models().priceOverrideEntries();
 
     expect(overrides).toEqual([
       {
@@ -50,45 +51,50 @@ describe("price override entries", () => {
     // The write moved the version readers rebuild on, and the snapshot carries the overrides.
     expect(result.ok && result.version).toBe(version);
 
-    const snapshot = await controlPlane().getConfig();
+    const snapshot = await controlPlane().models().getConfig();
 
     expect(snapshot.priceOverrides).toEqual(overrides);
-    expect((await controlPlane().getConfig(snapshot.version)).priceOverrides).toBeUndefined();
+    expect(
+      (await controlPlane().models().getConfig(snapshot.version)).priceOverrides,
+    ).toBeUndefined();
   });
 
   it("stores the provider lower-cased and finds a duplicate however the pair is cased", async () => {
     await created({ value: { ...GPT, provider: " Codex ", model: " GPT-5 " } });
-    const [only] = (await controlPlane().priceOverrideEntries()).overrides;
+    const [only] = (await controlPlane().models().priceOverrideEntries()).overrides;
 
     expect(only).toMatchObject({ provider: "codex", model: "GPT-5" });
 
-    const again = await controlPlane().writePriceOverride(
-      { revision: 0, value: { ...GPT, model: "gpt-5" } },
-      "b",
-    );
+    const again = await controlPlane()
+      .models()
+      .writePriceOverride({ revision: 0, value: { ...GPT, model: "gpt-5" } }, "b");
 
     expect(again).toMatchObject({ ok: false, error: "conflict" });
-    expect((await controlPlane().priceOverrideEntries()).overrides).toHaveLength(1);
+    expect((await controlPlane().models().priceOverrideEntries()).overrides).toHaveLength(1);
   });
 
   it("replaces an override at its revision and refuses a stale one", async () => {
     const first = await created();
 
-    const replaced = await controlPlane().writePriceOverride(
-      { id: first.id, revision: first.revision, value: { ...GPT, input: 2, output: 12 } },
-      "b",
-    );
+    const replaced = await controlPlane()
+      .models()
+      .writePriceOverride(
+        { id: first.id, revision: first.revision, value: { ...GPT, input: 2, output: 12 } },
+        "b",
+      );
 
     expect(replaced).toMatchObject({ ok: true, id: first.id });
     expect(replaced.ok && replaced.revision).toBeGreaterThan(first.revision);
 
-    const stale = await controlPlane().writePriceOverride(
-      { id: first.id, revision: first.revision, value: { ...GPT, input: 3 } },
-      "c",
-    );
+    const stale = await controlPlane()
+      .models()
+      .writePriceOverride(
+        { id: first.id, revision: first.revision, value: { ...GPT, input: 3 } },
+        "c",
+      );
 
     expect(stale).toMatchObject({ ok: false, error: "conflict" });
-    expect((await controlPlane().priceOverrideEntries()).overrides).toMatchObject([
+    expect((await controlPlane().models().priceOverrideEntries()).overrides).toMatchObject([
       { id: first.id, input: 2, output: 12, updated_by: "b" },
     ]);
   });
@@ -97,14 +103,13 @@ describe("price override entries", () => {
     const first = await created();
     const second = await created({ value: { ...GPT, model: "gpt-5-mini" } });
 
-    const moved = await controlPlane().writePriceOverride(
-      { id: second.id, revision: second.revision, value: GPT },
-      "a",
-    );
+    const moved = await controlPlane()
+      .models()
+      .writePriceOverride({ id: second.id, revision: second.revision, value: GPT }, "a");
 
     expect(moved).toMatchObject({ ok: false, error: "conflict" });
     expect(
-      (await controlPlane().priceOverrideEntries()).overrides.map((entry) => entry.id),
+      (await controlPlane().models().priceOverrideEntries()).overrides.map((entry) => entry.id),
     ).toEqual(expect.arrayContaining([first.id, second.id]));
   });
 
@@ -112,39 +117,37 @@ describe("price override entries", () => {
     const first = await created();
 
     expect(
-      await controlPlane().writePriceOverride(
-        { id: first.id, revision: first.revision + 1, value: null },
-        "a",
-      ),
+      await controlPlane()
+        .models()
+        .writePriceOverride({ id: first.id, revision: first.revision + 1, value: null }, "a"),
     ).toMatchObject({ ok: false, error: "conflict" });
 
     expect(
-      await controlPlane().writePriceOverride(
-        { id: first.id, revision: first.revision, value: null },
-        "a",
-      ),
+      await controlPlane()
+        .models()
+        .writePriceOverride({ id: first.id, revision: first.revision, value: null }, "a"),
     ).toMatchObject({ ok: true, id: first.id, revision: 0 });
-    expect((await controlPlane().priceOverrideEntries()).overrides).toEqual([]);
+    expect((await controlPlane().models().priceOverrideEntries()).overrides).toEqual([]);
 
     // A client that read the override before it was deleted conflicts; one that never saw it finds nothing.
     expect(
-      await controlPlane().writePriceOverride(
-        { id: first.id, revision: first.revision, value: GPT },
-        "a",
-      ),
+      await controlPlane()
+        .models()
+        .writePriceOverride({ id: first.id, revision: first.revision, value: GPT }, "a"),
     ).toMatchObject({ ok: false, error: "conflict" });
 
     expect(
-      await controlPlane().writePriceOverride({ id: "price:none", revision: 0, value: null }, "a"),
+      await controlPlane()
+        .models()
+        .writePriceOverride({ id: "price:none", revision: 0, value: null }, "a"),
     ).toMatchObject({ ok: false, error: "not_found" });
   });
 
   it("never reuses a revision for an override created again", async () => {
     const first = await created();
-    await controlPlane().writePriceOverride(
-      { id: first.id, revision: first.revision, value: null },
-      "a",
-    );
+    await controlPlane()
+      .models()
+      .writePriceOverride({ id: first.id, revision: first.revision, value: null }, "a");
 
     const again = await created();
 
@@ -152,7 +155,7 @@ describe("price override entries", () => {
   });
 
   it("refuses a missing name or a price that is not a number from 0 to the cap", async () => {
-    const { version } = await controlPlane().getConfig();
+    const { version } = await controlPlane().models().getConfig();
 
     const bad: ReadonlyArray<object> = [
       { provider: " " },
@@ -165,25 +168,26 @@ describe("price override entries", () => {
     ];
 
     for (const change of bad) {
-      const result = await controlPlane().writePriceOverride(
-        { revision: 0, value: { ...GPT, ...change } },
-        "a",
-      );
+      const result = await controlPlane()
+        .models()
+        .writePriceOverride({ revision: 0, value: { ...GPT, ...change } }, "a");
 
       expect(result, JSON.stringify(change)).toMatchObject({ ok: false, error: "invalid" });
     }
 
-    expect((await controlPlane().priceOverrideEntries()).overrides).toEqual([]);
-    expect((await controlPlane().getConfig()).version).toBe(version);
+    expect((await controlPlane().models().priceOverrideEntries()).overrides).toEqual([]);
+    expect((await controlPlane().models().getConfig()).version).toBe(version);
   });
 
   it("survives an import of a config document, which replaces the config entries", async () => {
     const first = await created();
 
-    const imported = await controlPlane().importConfig("routing:\n  strategy: fill-first\n", "a");
+    const imported = await controlPlane()
+      .models()
+      .importConfig("routing:\n  strategy: fill-first\n", "a");
 
     expect(imported.ok).toBe(true);
-    expect((await controlPlane().priceOverrideEntries()).overrides).toMatchObject([
+    expect((await controlPlane().models().priceOverrideEntries()).overrides).toMatchObject([
       { id: first.id, revision: first.revision },
     ]);
   });
@@ -192,20 +196,19 @@ describe("price override entries", () => {
     const other = OrgId.make(`prices-${crypto.randomUUID().slice(0, 8)}`);
     await created();
 
-    expect((await controlPlane(other).priceOverrideEntries()).overrides).toEqual([]);
+    expect((await controlPlane(other).models().priceOverrideEntries()).overrides).toEqual([]);
   });
 
   it("is added to a ControlPlane that predates the table and keeps what it holds", async () => {
     const org = OrgId.make(`before-${crypto.randomUUID().slice(0, 8)}`);
     const stub = controlPlane(org);
 
-    const before = await stub.writeSettings(
-      [{ id: "routing.strategy", revision: 0, value: "fill-first" }],
-      "a",
-    );
+    const before = await stub
+      .models()
+      .writeSettings([{ id: "routing.strategy", revision: 0, value: "fill-first" }], "a");
 
     expect(before.ok).toBe(true);
-    const made = await stub.writePriceOverride({ revision: 0, value: GPT }, "a");
+    const made = await stub.models().writePriceOverride({ revision: 0, value: GPT }, "a");
 
     expect(made.ok).toBe(true);
 

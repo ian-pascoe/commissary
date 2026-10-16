@@ -133,7 +133,7 @@ const privateStoredConfig = Effect.gen(function* () {
   const viewer = yield* currentViewer;
 
   const wire = yield* modelsControlPlane("privateKeyConfig", (stub) =>
-    stub.privateKeyConfig(viewer),
+    stub.models().privateKeyConfig(viewer),
   );
 
   if (!wire.ok)
@@ -153,7 +153,7 @@ const list = Effect.gen(function* () {
   const viewer = yield* currentViewer;
 
   const view = yield* modelsControlPlane("providerKeysView", (stub) =>
-    stub.providerKeysView(viewer),
+    stub.models().providerKeysView(viewer),
   );
 
   return jsonReply(200, view);
@@ -226,9 +226,11 @@ const putGroup = Effect.gen(function* () {
 
   const result = asPrivate
     ? yield* modelsControlPlane("writePrivateKeyGroup", (stub) =>
-        stub.writePrivateKeyGroup(change, principalId, viewer),
+        stub.models().writePrivateKeyGroup(change, principalId, viewer),
       )
-    : yield* modelsControlPlane("writeKeyGroup", (stub) => stub.writeKeyGroup(change, principalId));
+    : yield* modelsControlPlane("writeKeyGroup", (stub) =>
+        stub.models().writeKeyGroup(change, principalId),
+      );
 
   return yield* written(result);
 });
@@ -242,10 +244,10 @@ const deleteGroup = Effect.gen(function* () {
   const result =
     value.private === true || !viewer.admin
       ? yield* modelsControlPlane("writePrivateKeyGroup", (stub) =>
-          stub.writePrivateKeyGroup(change, principalId, viewer),
+          stub.models().writePrivateKeyGroup(change, principalId, viewer),
         )
       : yield* modelsControlPlane("writeKeyGroup", (stub) =>
-          stub.writeKeyGroup(change, principalId),
+          stub.models().writeKeyGroup(change, principalId),
         );
 
   return yield* written(result);
@@ -260,7 +262,7 @@ const probe = Effect.gen(function* () {
   const viewer = yield* currentViewer;
 
   const resolved = yield* modelsControlPlane("providerKeyProbeTarget", (stub) =>
-    stub.providerKeyProbeTarget(authIndex, viewer),
+    stub.models().providerKeyProbeTarget(authIndex, viewer),
   );
 
   if (!resolved.ok) return yield* replyError(404, "api key not found");
