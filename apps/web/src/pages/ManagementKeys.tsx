@@ -177,8 +177,8 @@ const Keys = () => {
       title: `Revoke ${key.name}?`,
       body: (
         <p>
-          Anything that sends {key.prefix}… is refused from its next request on (other servers
-          within 30 seconds). This cannot be undone; create a new key to replace it.
+          Anything that sends {key.prefix}… is refused within 30 seconds (at once by the server that
+          revokes it). This cannot be undone; create a new key to replace it.
         </p>
       ),
       action: "Revoke key",

@@ -214,9 +214,9 @@ characters>`), its member, its name and when it was created, last used (to the m
   member's tools share it. A key is never a platform admin.
 - `GET /api-keys` lists the caller's keys (an org admin's: every key of the org, with `member_email`); `DELETE
   /api-keys/<id>` revokes one (`404 api_key_not_found` for another member's key unless an org admin asks). A revoked
-  key is **deleted** (the answer still says when it was revoked), and is refused from the next request on in the isolate
-  that revoked it and within 30 seconds everywhere (each isolate trusts a verified key for at most 30 seconds, and never
-  past its expiry). An expired key is deleted too: by the next listing or new key of the org, by a request that
+  key is **deleted** (the answer still says when it was revoked), and a revoked key may keep working for up to 30 seconds
+  (each isolate of each Worker trusts a verified key for at most 30 seconds, and never past its expiry; revocation does
+  not clear those caches). An expired key is deleted too: by the next listing or new key of the org, by a request that
   presents it, and by a scheduled sweep for an org nobody opens. Removing a member deletes their keys, private
   accounts, private provider key groups and unfinished sign-ins (ADR 0027). A member holds at most 100 keys; revoking or
   waiting out one frees its place.

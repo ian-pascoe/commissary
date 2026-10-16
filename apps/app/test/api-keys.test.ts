@@ -19,6 +19,7 @@ import { controlPlaneOf, type CurrentOrg, GLOBAL_ORG, OrgId } from "../src/platf
 import { mintApiKey, parseApiKey } from "../src/api-keys/key.ts";
 import { MAX_KEYS_PER_MEMBER } from "../src/api-keys/store.ts";
 import { fakeJwksLayer, makeFakeJwks, makeKey, signToken, userClaims } from "./support/access.ts";
+import { resetUsageDb } from "./support/usage.ts";
 import {
   ADMIN,
   claudeFile,
@@ -583,22 +584,6 @@ describe("the gate on the client API", () => {
     expect(bKeys.keys.map((key) => key.id)).not.toContain(parsedA.keyId);
   });
 
-  it("refuses a revoked key at once in the isolate that revoked it, and a removed member's keys", async () => {
-    const { slug, admin, alice, bob } = await staffedOrg("gate-revoke");
-    const created = await createKey(slug, alice);
-    const headers = { authorization: `Bearer ${wholeKey(created)}` };
-
-    // Verified, so cached.
-    expect((await clientApi("/v1/models", headers)).status).toBe(200);
-    expect((await send(slug, `/api-keys/${created.id}`, alice, "DELETE")).status).toBe(200);
-    expect((await clientApi("/v1/models", headers)).status).toBe(401);
-
-    const bobs = { "x-api-key": wholeKey(await createKey(slug, bob)) };
-    expect((await clientApi("/v1/models", bobs)).status).toBe(200);
-    expect((await send(slug, `/members/${bob.id}`, admin, "DELETE")).status).toBe(200);
-    expect((await clientApi("/v1/models", bobs)).status).toBe(401);
-  });
-
   it("never takes a key on the management routes", async () => {
     const { slug, alice } = await staffedOrg("gate-management");
     const key = wholeKey(await createKey(slug, alice));
@@ -829,6 +814,84 @@ describe("the verified-key cache", () => {
         assert.strictEqual(refused._tag, "UnauthorizedError");
         assert.strictEqual(refused.message, "Invalid API key");
         assert.isAtMost(VERIFIED_KEY_TTL_MS, 60_000);
+      }),
+    ),
+  );
+
+  /**
+   * Verifies `key` (so this isolate caches it), runs `revoke` (a management request, which never reaches this
+   * isolate's cache: the API Worker verifies and the app Worker revokes), then shows the key still serves for the rest
+   * of its window and is refused the moment the window has passed.
+   */
+  const refusedOnceTheWindowPassed = (key: string, revoke: () => Promise<void>) =>
+    Effect.gen(function* () {
+      const headers = { authorization: `Bearer ${key}` };
+      const url = "https://commissary.test/v1/models";
+
+      yield* authenticateRequest(headers, url, "protected");
+      yield* Effect.promise(revoke);
+
+      yield* TestClock.adjust(VERIFIED_KEY_TTL_MS - 1);
+      yield* authenticateRequest(headers, url, "protected");
+
+      yield* TestClock.adjust(1);
+      const refused = yield* Effect.flip(authenticateRequest(headers, url, "protected"));
+
+      assert.strictEqual(refused._tag, "UnauthorizedError");
+      assert.strictEqual(refused.message, "Invalid API key");
+    });
+
+  effectIt.effect(
+    "refuses a key revoked through the management API once its window has passed",
+    () =>
+      run(
+        Effect.gen(function* () {
+          const { slug, alice } = yield* Effect.promise(
+            async () => await staffedOrg("window-revoke"),
+          );
+
+          const created = yield* Effect.promise(async () => await createKey(slug, alice));
+
+          yield* refusedOnceTheWindowPassed(wholeKey(created), async () => {
+            expect((await send(slug, `/api-keys/${created.id}`, alice, "DELETE")).status).toBe(200);
+          });
+        }),
+      ),
+  );
+
+  effectIt.effect("refuses the keys of a removed member once the window has passed", () =>
+    run(
+      Effect.gen(function* () {
+        const { slug, admin, bob } = yield* Effect.promise(
+          async () => await staffedOrg("window-removed"),
+        );
+
+        const created = yield* Effect.promise(async () => await createKey(slug, bob));
+
+        yield* refusedOnceTheWindowPassed(wholeKey(created), async () => {
+          expect((await send(slug, `/members/${bob.id}`, admin, "DELETE")).status).toBe(200);
+        });
+      }),
+    ),
+  );
+
+  effectIt.effect("refuses the keys of a deleted org once the window has passed", () =>
+    run(
+      Effect.gen(function* () {
+        // Deleting an org wipes its usage rows too.
+        yield* Effect.promise(async () => await resetUsageDb());
+
+        const { slug, alice, platformAdmin } = yield* Effect.promise(
+          async () => await staffedOrg("window-deleted"),
+        );
+
+        const created = yield* Effect.promise(async () => await createKey(slug, alice));
+
+        yield* refusedOnceTheWindowPassed(wholeKey(created), async () => {
+          expect((await send(slug, "/org", platformAdmin, "DELETE", { name: slug })).status).toBe(
+            200,
+          );
+        });
       }),
     ),
   );

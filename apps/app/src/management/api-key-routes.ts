@@ -10,7 +10,6 @@
 import { Clock, Effect, Schema } from "effect";
 import { HttpRouter, type HttpServerResponse } from "effect/http";
 import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
-import { forgetVerifiedApiKey } from "../access/api-key.ts";
 import { roleAtLeast } from "../members/roles.ts";
 import type { ApiKeyErrorCode, ApiKeyListing, ApiKeyResult } from "../api-keys/store.ts";
 import { CreateApiKey, type ApiKeyView } from "@commissary/contract/api-keys";
@@ -121,7 +120,6 @@ const revokeApiKey = Effect.gen(function* () {
   );
 
   const revoked = yield* orRefuse(result);
-  forgetVerifiedApiKey(identity.org, revoked.id);
 
   return jsonReply(200, view(revoked, identity));
 });

@@ -13,7 +13,6 @@ import { managementKeyForbidden } from "./management-key-routes.ts";
 import { Effect, Schema } from "effect";
 import { HttpRouter, type HttpServerResponse } from "effect/http";
 import { type AccessIdentity, AccessPrincipal } from "../access/principal.ts";
-import { forgetVerifiedApiKeysOf } from "../access/api-key.ts";
 import { syncOrgIndex } from "../members/admission.ts";
 import { type Actor, holdsSensitivePowers, roleAtLeast } from "../members/roles.ts";
 import type {
@@ -175,8 +174,7 @@ const removeMember = Effect.gen(function* () {
   const result = yield* controlPlane("removeMember", (stub) => stub.removeMember(id, actor));
 
   yield* orRefuse(result);
-  // Their API keys went with them (ADR 0027); this isolate stops trusting the keys it verified at once.
-  forgetVerifiedApiKeysOf((yield* AccessPrincipal).org, id);
+  // Their API keys went with them (ADR 0027); the Workers that cached one refuse it within the cache lifetime.
   yield* reindex;
 
   return jsonReply(200, { status: "ok" });
