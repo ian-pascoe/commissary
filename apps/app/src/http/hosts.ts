@@ -3,15 +3,12 @@
 // `API_DOMAIN` one hostname serves everything. Decided before the router from the request's hostname and path, so a
 // request on the wrong host never reaches the Access gate or a handler.
 import { classifyPath, normalizedPath } from "../access/routes.ts";
+import type { AppBindings } from "../worker-env.ts";
 
 /** Served on every host: the health check (`src/http/routes.ts`). */
 const HEALTH_PATH = "/healthz";
 
-/** The hosts of the deployment (`AppEnv`). */
-interface HostEnv {
-  readonly APP_DOMAIN?: string | undefined;
-  readonly API_DOMAIN?: string | undefined;
-}
+type HostEnv = Pick<AppBindings, "APP_DOMAIN" | "API_DOMAIN">;
 
 const hostName = (value: string | undefined): string => (value ?? "").trim().toLowerCase();
 

@@ -34,7 +34,7 @@ export interface AppBindings extends SignInBindings {
  * The Worker's own bindings of the current invocation. Provided per request through the `Context` handed to the web
  * handler ({@link requestContext}), never through a long-lived layer: bindings must not be captured across requests.
  */
-export class AppEnv extends Context.Service<AppEnv, AppBindings>()("commissary/AppEnv") {}
+export class AppEnv extends Context.Service<AppEnv, AppBindings>()("commissary/worker/AppEnv") {}
 
 /** Every view of the Worker's `env`; the global `Env` satisfies it. */
 export type WorkerBindings = AuthBindings & StateBindings & ModelsBindings & AppBindings;

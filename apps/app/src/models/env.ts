@@ -31,14 +31,9 @@ type ModelsControlPlaneMethod =
   | "report"
   | "listModelSources"
   | "planRetry"
-  | "listCredentials"
-  | "upsertCredential"
   | "importAuthFile"
-  | "removeCredential"
   | "removeCredentials"
-  | "setCredentialDisabled"
   | "refreshNow"
-  | "forceRefresh"
   | "ensureFresh"
   | "sweepRefresh"
   | "refreshDevinStatus"
@@ -90,7 +85,7 @@ export interface ModelsBindings {
   readonly CONTROL_PLANE: DurableObjectNamespace<ModelsControlPlane>;
   /** Secret HMAC key of `auth_index` (`management/auth-index.ts`). Empty fails closed. */
   readonly AUTH_INDEX_KEY: string;
-  /** Overrides the Meta key-mint endpoint (empty: default). */
+  /** Overrides the Meta key-mint endpoint (empty: default); read by the ControlPlane's Models part (refresh, OAuth). */
   readonly META_MINT_URL: string;
 }
 

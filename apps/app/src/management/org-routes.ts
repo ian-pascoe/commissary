@@ -24,7 +24,7 @@ import { isHosted } from "../hosted/mode.ts";
 import { apiOrigin } from "../http/hosts.ts";
 import { syncOrgIndex } from "../members/admission.ts";
 import { AuthConfig } from "../auth/config.ts";
-import { ModelsEnv } from "../models/env.ts";
+import { ModelsEnv, modelsControlPlane } from "../models/env.ts";
 import { controlPlaneOf, GLOBAL_ORG, newOrgId } from "../platform/org.ts";
 import { deleteOrg as deleteOrgData } from "../platform/org-deletion.ts";
 import { platform, type PlatformStub } from "../platform/registry.ts";
@@ -359,14 +359,18 @@ const exportOrg = Effect.gen(function* () {
   const viewer = yield* currentViewer;
   const now = yield* Clock.currentTimeMillis;
   const config = yield* storedConfig;
-  const prices = yield* controlPlane("priceOverrideEntries", (stub) => stub.priceOverrideEntries());
 
-  const credentials = yield* controlPlane("listCredentialEntries", (stub) =>
+  // The Models section of the export goes through Models' view of the ControlPlane.
+  const prices = yield* modelsControlPlane("priceOverrideEntries", (stub) =>
+    stub.priceOverrideEntries(),
+  );
+
+  const credentials = yield* modelsControlPlane("listCredentialEntries", (stub) =>
     stub.listCredentialEntries(viewer),
   );
 
   const members = yield* controlPlane("listMembers", (stub) => stub.listMembers());
-  const grants = yield* controlPlane("grantEntries", (stub) => stub.grantEntries());
+  const grants = yield* modelsControlPlane("grantEntries", (stub) => stub.grantEntries());
   const teams = yield* controlPlane("listTeams", (stub) => stub.listTeams());
   const tokens = yield* controlPlane("listServiceTokens", (stub) => stub.listServiceTokens());
   const iso = (at: number) => new Date(at).toISOString();
