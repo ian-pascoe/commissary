@@ -1,6 +1,6 @@
 /**
  * The people of Commissary Cloud (ADR 0026, `apps/app/src/management/people-routes.ts`, the Platform registry in
- * `apps/app/src/platform`): a platform admin reads a person's owned-org count and limit, raises the limit, and suspends
+ * `packages/state/src/platform`): a platform admin reads a person's owned-org count and limit, raises the limit, and suspends
  * or unsuspends them. A self-hosted Commissary has no such routes (404). Workers addition, no Go counterpart. Shared
  * with the browser: imports `effect` only.
  */

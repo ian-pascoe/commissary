@@ -22,40 +22,35 @@ export const ORG_WIDE_TABLES: ReadonlyArray<string> = [
   "teams",
 ];
 
+/** The tables of a Durable Object's storage that are its own (not SQLite's or the runtime's), by name. */
+const ownTables = (sql: SqlStorage): string[] =>
+  sql
+    .exec<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY name",
+    )
+    .toArray()
+    .map((row) => row.name);
+
 /** The object's own tables (not SQLite's or the runtime's), by name. */
 export const tablesOf = <O extends Rpc.DurableObjectBranded>(
   stub: DurableObjectStub<O>,
 ): Promise<string[]> =>
-  runInDurableObject(stub, (_instance, state) =>
-    state.storage.sql
-      .exec<{ name: string }>(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY name",
-      )
-      .toArray()
-      .map((row) => row.name),
-  );
+  runInDurableObject(stub, (_instance, state) => ownTables(state.storage.sql));
 
 /** Every row of every table of the object, as JSON text (what browsing its storage shows). */
 export const storedText = <O extends Rpc.DurableObjectBranded>(
   stub: DurableObjectStub<O>,
 ): Promise<string> =>
-  runInDurableObject(stub, (_instance, state) => {
-    const tables = state.storage.sql
-      .exec<{ name: string }>(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'",
-      )
-      .toArray()
-      .map(({ name }) => name);
-
-    return JSON.stringify(
+  runInDurableObject(stub, (_instance, state) =>
+    JSON.stringify(
       Object.fromEntries(
-        tables.map((table) => [
+        ownTables(state.storage.sql).map((table) => [
           table,
           state.storage.sql.exec(`SELECT * FROM "${table}"`).toArray(),
         ]),
       ),
-    );
-  });
+    ),
+  );
 
 /** The object's alarm (epoch ms), `null` when none is set. */
 export const alarmOf = <O extends Rpc.DurableObjectBranded>(

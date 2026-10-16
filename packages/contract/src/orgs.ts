@@ -1,6 +1,6 @@
 /**
  * The orgs of the deployment and what the caller may do with them (`apps/app/src/management/org-routes.ts`, the
- * Platform registry in `apps/app/src/platform`): `GET /me` for the panel's org switcher, and the platform admins' org
+ * Platform registry in `packages/state/src/platform`): `GET /me` for the panel's org switcher, and the platform admins' org
  * list, creation and rename. Workers addition, no Go counterpart. Shared with the browser: imports `effect` only.
  *
  * `/orgs` and `/orgs/:slug` are platform-level. Every other management route also exists once per org, as

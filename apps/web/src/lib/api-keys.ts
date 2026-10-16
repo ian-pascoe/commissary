@@ -1,5 +1,5 @@
 // The API keys page's model: a key's status, how its columns read, the order of the list, the checks that mirror the
-// server's (apps/app/src/api-keys/store.ts) and what a refused write tells the caller. Pure: no DOM, tested in
+// server's (packages/state/src/api-keys/store.ts) and what a refused write tells the caller. Pure: no DOM, tested in
 // test/api-keys.test.ts.
 import type { ApiKeyView } from "@commissary/contract/api-keys";
 import { asSentence } from "./failure.ts";

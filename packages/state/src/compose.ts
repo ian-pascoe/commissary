@@ -36,10 +36,14 @@ export type ComposedControlPlane<P extends ControlPlaneParts, E> = new (
   env: E,
 ) => OrgControlPlane<P> & PartMethods<P>;
 
+/** What the base sets on each instance (`DurableObject`'s `ctx` and `env`, its own fields): a part's method would be hidden. */
+const INSTANCE_MEMBERS: ReadonlySet<string> = new Set(["ctx", "env", "parts", "started"]);
+
 /**
  * The org-wide base with the parts `makers` construct, each reached through a method of its name. Each maker gets the
  * Worker's `env` as its part's view (`E`); the class is constructed with an `env` that is also {@link StateObjectEnv}.
- * A name the base already answers (one of its methods, `alarm`, `constructor`, …) is refused: the part would hide it.
+ * A name the base already answers (one of its methods or fields, `alarm`, `env`, …) is refused: the part would hide it,
+ * or be hidden.
  */
 export const composeControlPlane = <E, M extends PartMakers<E>>(
   makers: M & PartMakers<E>,
@@ -47,7 +51,7 @@ export const composeControlPlane = <E, M extends PartMakers<E>>(
   const names = Object.keys(makers);
 
   for (const name of names)
-    if (name in OrgControlPlane.prototype)
+    if (name in OrgControlPlane.prototype || INSTANCE_MEMBERS.has(name))
       throw new Error(
         `a ControlPlane part cannot be named "${name}": the base has a member of that name`,
       );

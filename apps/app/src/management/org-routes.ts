@@ -1,7 +1,7 @@
 /**
  * `GET /v9/management/me` and `GET|POST /v9/management/orgs`, `PATCH /v9/management/orgs/:slug` (`OrgsGroup` in
- * @commissary/contract/orgs): who the caller is, and the org list of the Platform registry (`src/platform`) with its
- * creation and rename. Workers addition, no Go counterpart.
+ * @commissary/contract/orgs): who the caller is, and the org list of the Platform registry (`@commissary/state`) with
+ * its creation and rename. Workers addition, no Go counterpart.
  *
  * The org list, creation and rename are platform-level: they belong to no org, and only a platform admin
  * (`PLATFORM_ADMIN_*`, `AccessIdentity.platformAdmin`) may use them (`403 platform_admin_required`). `GET /me` is for

@@ -49,7 +49,7 @@ export const memberProblem = (
   }
 };
 
-/** The server's rule (`validEmail`, apps/app/src/members/store.ts): the client never refuses an address the server accepts. */
+/** The server's rule (`validEmail`, packages/state/src/members/store.ts): the client never refuses an address the server accepts. */
 const EMAIL = /^[^\s@,;<>"]+@[^\s@,;<>"]+$/;
 
 export const EMAIL_MAX = 254;

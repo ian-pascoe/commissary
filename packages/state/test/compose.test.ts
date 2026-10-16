@@ -146,7 +146,16 @@ describe("a ControlPlane composed with area parts", () => {
   });
 
   it("refuses a part named after a member of the base, which the part would hide", () => {
-    for (const name of ["admit", "wipeOrg", "alarm", "constructor"])
+    for (const name of [
+      "admit",
+      "wipeOrg",
+      "alarm",
+      "constructor",
+      "ctx",
+      "env",
+      "parts",
+      "started",
+    ])
       expect(() =>
         composeControlPlane({ [name]: (ctx, _env, core) => new DummyPart(ctx, "dummy", core) }),
       ).toThrow(`a ControlPlane part cannot be named "${name}"`);

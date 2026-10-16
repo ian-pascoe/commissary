@@ -57,7 +57,7 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
   packages/auth/              @commissary/auth: request-side authentication (principals, Access JWTs, API and
                               management keys, roles, admission, Cloud suspension checks, the gates), state
                               through AuthDirectory
-  packages/state/              @commissary/state: the org-wide state on Durable Objects (the ControlPlane's org-wide
+  packages/state/             @commissary/state: the org-wide state on Durable Objects (the ControlPlane's org-wide
                               base and its stores, composeControlPlane, Platform registry, leases, SessionState,
                               the stub helpers, the AuthDirectory adapter), tested in workerd
   packages/contract/          @commissary/contract: the management API's Effect HttpApi schemas and addressing (browser-safe)
@@ -2046,7 +2046,7 @@ org and shows the **chooser** (the orgs of `/me`, and for a platform admin a for
 redirect, so a platform admin of one org can reach the form. Bookmarks and clients of the unscoped management API are
 unaffected.
 
-## Members, roles and teams (`src/members/`, `auth/roles.ts`, `src/management/policy.ts`, `src/management/member-routes.ts`)
+## Members, roles and teams (`state/members/`, `auth/roles.ts`, `src/management/policy.ts`, `src/management/member-routes.ts`)
 
 Workers addition, no Go counterpart (Go has one management key for everything); ADR 0022. The permission matrix and the
 error codes are in `docs/ACCESS.md` "Members, roles and teams".
@@ -2123,7 +2123,7 @@ credentials a subject may use; selection and the model registry read it (_Creden
   selection on the next request. Model lists lag by the registry's 5 s snapshot TTL. Grants never apply to private
   credentials, and Spend limits are separate (ADR 0024, _Spend limits_).
 
-## API keys (`src/api-keys/`, `auth/api-key.ts`, `src/management/api-key-routes.ts`)
+## API keys (`state/api-keys/`, `auth/api-key.ts`, `src/management/api-key-routes.ts`)
 
 Workers addition replacing the Go server's client keys (`access.api-keys`, imported but never enforced); ADR 0022. User docs:
 `docs/ACCESS.md` "API keys", `docs/CLIENTS.md`.
@@ -2263,7 +2263,7 @@ prices each attempt, the ControlPlane counts and decides.
   keeps the router middleware. Auth reads `AuthConfig` (raw variables, parsed per request) and reaches state only through
   `AuthDirectory`, a narrow Effect service of the ControlPlane and Platform calls it makes (`auth/directory.ts`, which
   also holds the types crossing it, such as `ApiKeyVerdict`, `Admission` and `Standing`, that the stores import); the
-  adapter over the Durable Object stubs is `@commissary/state`'s `state/auth-directory.ts`, an in-memory one is
+  adapter over the Durable Object stubs is `state/auth-directory.ts`, an in-memory one is
   `@commissary/auth/testing`. Better Auth's session lookup stays in the Worker behind auth's `SignInSessions` port. Auth
   imports `@commissary/core`, `@commissary/contract`, `effect` and `jose` only, and tests in Node.js.
 - Clients of the client API send API keys ("API keys" above). Scripts on the management API use Access service
@@ -2272,7 +2272,7 @@ prices each attempt, the ControlPlane counts and decides.
   code is involved). User docs: `README.md` and `ACCESS.md`, `CLIENTS.md`, `MIGRATION.md`,
   `DEVELOPMENT.md` in this directory.
 
-## Management keys (`src/management-keys/`, `auth/management-key.ts`, `src/management/management-key-routes.ts`)
+## Management keys (`state/management-keys/`, `auth/management-key.ts`, `src/management/management-key-routes.ts`)
 
 Workers addition, no Go counterpart (Go's single `remote-management.secret-key` is not ported); ADR 0026. User docs:
 `docs/ACCESS.md` "Management keys".

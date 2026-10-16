@@ -1,6 +1,6 @@
 /**
  * An org's members, teams and service tokens (ADR 0022; `apps/app/src/management/member-routes.ts`, the ControlPlane's
- * `MemberStore` in `apps/app/src/members`). Workers addition, no Go counterpart. Shared with the browser: imports
+ * `MemberStore` in `packages/state/src/members`). Workers addition, no Go counterpart. Shared with the browser: imports
  * `effect` only.
  *
  * Every route here is for org admins of the org the request addresses; changing a member's role is for org owners, and

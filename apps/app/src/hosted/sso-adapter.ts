@@ -1,7 +1,8 @@
 /**
  * Better Auth's database for Commissary Cloud with per-org single sign-on (issue #76): D1 for people, sessions and
  * verification records, while the SSO plugin's `ssoProvider` model is answered from the orgs' ControlPlanes (an
- * identity provider lives with its org, its secret sealed there: `sso/store.ts`). New in the Workers port.
+ * identity provider lives with its org, its secret sealed there: `@commissary/state`'s `SsoStore`). New in the Workers
+ * port.
  *
  * The plugin reads a provider by its id (`sso-<org id>`) on every step of a sign-in; any other read of the model finds
  * nothing, so a sign-in can only start from a provider id the Worker chose (`routes.ts`). Nothing writes the model:

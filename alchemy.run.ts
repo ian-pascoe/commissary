@@ -17,7 +17,10 @@ import { readSettings } from "./infra/settings.ts";
 import { DEV_AUTH_INDEX_KEY } from "./apps/app/src/management/auth-index-key.ts";
 import { DEV_SECRETS_KEY, secretsKeyResourceId } from "./packages/state/src/secrets/key.ts";
 
-/** Runtime compatibility of the Worker; keep in sync with apps/app/vitest.config.ts and apps/app/worker-configuration.d.ts. */
+/**
+ * Runtime compatibility of the Worker; keep in sync with apps/app/vitest.config.ts, packages/state/vitest.config.ts and
+ * tools/workers/worker-configuration.d.ts.
+ */
 export const COMPATIBILITY = { date: "2026-08-01", flags: ["nodejs_compat"] };
 
 /** Model catalog refresh, credential refresh sweep and usage retention (apps/app/src/scheduled.ts). */

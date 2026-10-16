@@ -51,7 +51,7 @@ export type EnvServices =
 
 /**
  * Each view of `env`, as its service, and auth's ports over it: the directory over the Durable Object stubs
- * (`state/auth-directory.ts`) and Better Auth's sessions (`hosted/session.ts`).
+ * (`@commissary/state`'s `stateAuthDirectory`) and Better Auth's sessions (`hosted/session.ts`).
  */
 export const envContext = (env: WorkerBindings): Context.Context<EnvServices> => {
   const directory = stateAuthDirectory(env);
