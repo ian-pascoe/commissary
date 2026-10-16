@@ -1,5 +1,5 @@
 /**
- * A Durable Object composed like the split ControlPlane will be (#134 "How an area's ControlPlane part works", #148): an
+ * A Durable Object composed as the split ControlPlane will be (#134 "How an area's ControlPlane part works", #148): an
  * org-wide base with an area part, an `RpcTarget` constructed once per object with the base's view (`core`), creating
  * its own tables and called by the base's one alarm. The part is reachable two ways: the cached prototype getter
  * `get dummy()` (callers write `stub.dummy.x()`) and the method `dummyPart()` (`stub.dummyPart().x()`). Test-only: the
@@ -127,7 +127,7 @@ export class DummyPart extends RpcTarget {
 export class GetterProbe extends DurableObject {
   #dummy: DummyPart | undefined;
   #partsConstructed = 0;
-  /** Set by `breakStart`: the object did not start (as the ControlPlane without a usable secrets key), every call fails. */
+  /** Set by `breakStart`: the object did not start (as a ControlPlane without a usable secrets key); calls fail. */
   #startFailure: string | undefined;
 
   constructor(ctx: DurableObjectState, env: Cloudflare.Env) {

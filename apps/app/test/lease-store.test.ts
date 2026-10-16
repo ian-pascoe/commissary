@@ -149,6 +149,25 @@ describe("lease storage", () => {
     });
   });
 
+  it("renews and gives back a lease taken before tokens named their lease, with its bare token", async () => {
+    const clock = { now: 9_000_000 };
+    const bare = "6f1c2a8e-0000-4000-8000-000000000001";
+
+    await onFreshStorage((sql) => {
+      storeUnnamedLease(sql, "quota_sweep_lease", clock.now);
+
+      const store = new LeaseStore(sql, () => clock.now);
+
+      clock.now += LEASE_TTL_MS - 1_000;
+      expect(store.renew(bare)).toBe(true);
+      expect(store.current("quota_sweep")?.renewedAt).toBe(clock.now);
+
+      store.release(bare);
+      expect(store.current("quota_sweep")).toBeUndefined();
+      expect(store.renew(bare)).toBe(false);
+    });
+  });
+
   it("recreates a table from before renewals (no renewed_at), dropping the transient lease it held", async () => {
     await onFreshStorage((sql) => {
       sql.exec("DROP TABLE IF EXISTS quota_sweep_lease");

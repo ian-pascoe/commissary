@@ -10,8 +10,12 @@
 // finishing, so a test that restarts the object disposes of it first.
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { GetterProbe } from "./support/getter-probe.ts";
+import {
+  PROVOKED_ERROR_MARKER as PROVOKED,
+  REFUSED_THROUGH_GETTER,
+} from "./support/provoked-errors.ts";
 
 // SAFETY: vitest.config.ts binds GETTER_PROBE to the test Worker's GetterProbe class (test/worker.ts); the deployed
 // Worker has no such binding, so `Env` does not name it.
@@ -24,16 +28,13 @@ const fresh = () => probes.getByName(crypto.randomUUID());
 const alarmOf = (stub: DurableObjectStub<GetterProbe>) =>
   runInDurableObject(stub, (_instance, state) => state.storage.getAlarm());
 
-/** Errors thrown on purpose carry this marker: vitest.config.ts ignores the unhandled rejections they cause. */
-const PROVOKED = "[getter-probe]";
-
 const HOUR_MS = 60 * 60_000;
 
 describe("an area part behind a getter (`get dummy()`)", () => {
-  // A tripwire: once vitest-pool-workers answers this call, the ControlPlane's tests could reach a getter as #134 planned.
+  // A tripwire: once vitest-pool-workers answers this call, the ControlPlane could use a getter as #134 planned.
   it("is not reached by the pipelined call stub.dummy.x() under vitest-pool-workers", async () => {
     await expect(fresh().dummy.pipelinedThroughGetter()).rejects.toThrow(
-      'The RPC receiver does not implement the method "pipelinedThroughGetter".',
+      `The RPC receiver does not implement the method "${REFUSED_THROUGH_GETTER}".`,
     );
   });
 
@@ -43,6 +44,14 @@ describe("an area part behind a getter (`get dummy()`)", () => {
     expect(await part.pipelinedThroughGetter()).toBe("reached");
     expect(await part.add("a")).toBe(1);
     expect(await part.list()).toEqual(["a"]);
+  });
+
+  it("passes on the getter's own error: the object did not start", async () => {
+    const stub = fresh();
+
+    await stub.breakStart(`${PROVOKED} secrets key missing`);
+
+    await expect(Promise.resolve(stub.dummy)).rejects.toThrow(`${PROVOKED} secrets key missing`);
   });
 });
 
@@ -108,13 +117,10 @@ describe("an area part behind a method (`dummyPart()`)", () => {
     const due = Date.now() - 1;
 
     await stub.dummyPart().wakeAt(due);
+    // An alarm already due may fire on its own before this runs it (then there is none left to run).
+    await runDurableObjectAlarm(stub);
 
-    await vi.waitFor(
-      async () => {
-        expect(await stub.dummyPart().ran()).toEqual([due]);
-      },
-      { timeout: 5_000, interval: 20 },
-    );
+    expect(await stub.dummyPart().ran()).toEqual([due]);
     expect(await stub.dummyPart().alarmCalls()).toBe(1);
     expect(await alarmOf(stub)).toBeNull();
   });

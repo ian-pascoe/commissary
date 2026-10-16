@@ -21,7 +21,7 @@ import { ConfigReader } from "../config/reader.ts";
 import { holdInvocation } from "../platform/env.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../platform/org.ts";
 import { platformOf } from "../platform/registry.ts";
-import type { Lease } from "../state/lease.ts";
+import type { NamedLease } from "../state/lease.ts";
 import {
   catalogsFromModelsDev,
   embeddedCatalogs,
@@ -272,7 +272,7 @@ const CATALOG_REFRESH_LEASE = "catalog_refresh";
 
 type Taken =
   | { readonly kind: "taken"; readonly token: string }
-  | { readonly kind: "held"; readonly held: Lease }
+  | { readonly kind: "held"; readonly held: NamedLease }
   | { readonly kind: "unavailable" };
 
 const takeLease = (trigger: RefreshTrigger): Effect.Effect<Taken, never, StateEnv> =>

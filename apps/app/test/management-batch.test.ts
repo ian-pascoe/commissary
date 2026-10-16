@@ -73,25 +73,22 @@ beforeAll(() => {
 const takeLease = async (source: LeaseSource): Promise<TakeLease> =>
   await controlPlane().takeQuotaSweepLease(source);
 
-/**
- * Runs SQL on the sweep lease's table inside the global ControlPlane (the lease row has no RPC to set its times). The
- * table exists once the lease was first taken (src/state/lease.ts); before that there is nothing to change.
- */
+/** Runs SQL inside the global ControlPlane (the lease row has no RPC to set its times). */
 const leaseSql = async (query: string, ...bindings: number[]): Promise<void> => {
   await runInDurableObject(controlPlane(), (_instance, state) => {
-    const { sql } = state.storage;
-
-    if (
-      sql
-        .exec("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'quota_sweep_lease'")
-        .toArray().length > 0
-    )
-      sql.exec(query, ...bindings);
+    state.storage.sql.exec(query, ...bindings);
   });
 };
 
-/** Frees the sweep lease whatever holds it. */
-const freeLease = () => leaseSql("DELETE FROM quota_sweep_lease");
+/** Frees the sweep lease whatever holds it; nothing does before its table exists (first taken: src/state/lease.ts). */
+const freeLease = async (): Promise<void> => {
+  await runInDurableObject(controlPlane(), (_instance, state) => {
+    const { sql } = state.storage;
+    const table = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'quota_sweep_lease'";
+
+    if (sql.exec(table).toArray().length > 0) sql.exec("DELETE FROM quota_sweep_lease");
+  });
+};
 
 /** Makes the stored lease look last renewed `ms` earlier. */
 const ageLease = (ms: number) =>

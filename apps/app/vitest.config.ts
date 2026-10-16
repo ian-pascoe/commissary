@@ -1,6 +1,7 @@
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 import { BUNDLE_ALIASES } from "../../infra/bundle.ts";
+import { isProvokedError } from "./test/support/provoked-errors.ts";
 
 /** Bindings of a self-hosted Commissary (`COMMISSARY_MODE` unset), the deployment every test but `test/hosted/` runs against. */
 const SELF_HOSTED_BINDINGS = {
@@ -96,11 +97,7 @@ export default defineConfig({
     // The tests and the Durable Objects share one isolate here, so an error thrown across Durable Object RPC is also
     // reported as an unhandled rejection of the object's side, after the caller handled it. Only the errors
     // test/getter-pipelining.test.ts provokes on purpose are ignored; the others still fail the run.
-    onUnhandledError: (error) =>
-      !(
-        error.message.includes("[getter-probe]") ||
-        error.message.includes('the method "pipelinedThroughGetter"')
-      ),
+    onUnhandledError: (error) => !isProvokedError(error.message),
     projects: [
       {
         extends: true,

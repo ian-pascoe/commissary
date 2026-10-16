@@ -15,13 +15,14 @@
  *
  * Each name has its own table, `<name>_lease`, as each lease had before leases were named, so the rows stored then
  * read back. A token names its lease (`<name>:<uuid>`), so renewing and giving it back need only the token; a token
- * stored before that (a bare UUID) still holds its lease until it is abandoned.
+ * from before (a bare UUID, held by a Worker still running the previous version) is looked for in every lease table.
  */
 
 /** Who started the work holding the lease: the scheduled task or the panel. */
 export type LeaseSource = "cron" | "panel";
 
-export interface Lease {
+/** A lease stored under its name (not the credential lease `ControlPlane.pick` hands out, `credentials/selection`). */
+export interface NamedLease {
   readonly token: string;
   readonly source: LeaseSource;
   readonly startedAt: number;
@@ -33,14 +34,17 @@ export interface Lease {
 export const LEASE_TTL_MS = 2 * 60_000;
 
 export type TakeLease =
-  | { readonly ok: true; readonly lease: Lease }
-  | { readonly ok: false; readonly held: Lease };
+  | { readonly ok: true; readonly lease: NamedLease }
+  | { readonly ok: false; readonly held: NamedLease };
 
 /** Whether a new holder may take the lease while `current` is stored (pure): only once it is gone or abandoned. */
-export const mayTake = (current: Lease | undefined, now: number): boolean =>
+export const mayTake = (current: NamedLease | undefined, now: number): boolean =>
   current === undefined || now - current.renewedAt >= LEASE_TTL_MS;
 
-/** A lease name is part of its table's name: lowercase letters, digits and underscores, starting with a letter. */
+/**
+ * A lease name is part of its table's name: lowercase letters, digits and underscores, starting with a letter. Names
+ * are plain strings, checked when used: the store serves any area, and each holder keeps its lease name as a constant.
+ */
 const LEASE_NAME = /^[a-z][a-z0-9_]*$/;
 
 interface LeaseRow {
@@ -62,7 +66,7 @@ export class LeaseStore {
     this.#now = now;
   }
 
-  current(name: string): Lease | undefined {
+  current(name: string): NamedLease | undefined {
     const row = this.#sql
       .exec<LeaseRow>(
         `SELECT token, source, started_at, renewed_at FROM ${this.#table(name)} WHERE id = 1`,
@@ -86,7 +90,7 @@ export class LeaseStore {
 
     if (current !== undefined && !mayTake(current, now)) return { ok: false, held: current };
 
-    const lease: Lease = {
+    const lease: NamedLease = {
       token: `${name}:${crypto.randomUUID()}`,
       source,
       startedAt: now,
@@ -108,31 +112,42 @@ export class LeaseStore {
 
   /** Marks the holder of `token` alive now; `false` when the token no longer holds its lease. */
   renew(token: string): boolean {
-    const table = this.#tableOf(token);
+    const now = this.#now();
 
-    return (
-      table !== undefined &&
-      this.#sql.exec(
-        `UPDATE ${table} SET renewed_at = ? WHERE id = 1 AND token = ?`,
-        this.#now(),
-        token,
-      ).rowsWritten > 0
+    return this.#tablesOf(token).some(
+      (table) =>
+        this.#sql.exec(`UPDATE ${table} SET renewed_at = ? WHERE id = 1 AND token = ?`, now, token)
+          .rowsWritten > 0,
     );
   }
 
   /** Gives the lease back; a token that no longer holds it (taken over after the TTL) changes nothing. */
   release(token: string): void {
-    const table = this.#tableOf(token);
-
-    if (table !== undefined)
+    for (const table of this.#tablesOf(token))
       this.#sql.exec(`DELETE FROM ${table} WHERE id = 1 AND token = ?`, token);
   }
 
-  /** The table of the lease `token` was taken for; `undefined` for a token this store never handed out. */
-  #tableOf(token: string): string | undefined {
-    const name = token.slice(0, Math.max(0, token.indexOf(":")));
+  /**
+   * The tables `token` may hold a lease in: the one of the lease it names, none when it names no valid lease, and for
+   * a bare token (taken before tokens named their lease) every lease table this object holds.
+   */
+  #tablesOf(token: string): ReadonlyArray<string> {
+    const separator = token.indexOf(":");
 
-    return LEASE_NAME.test(name) ? this.#table(name) : undefined;
+    if (separator !== -1) {
+      const name = token.slice(0, separator);
+
+      return LEASE_NAME.test(name) ? [this.#table(name)] : [];
+    }
+
+    return this.#sql
+      .exec<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '%\\_lease' ESCAPE '\\'",
+      )
+      .toArray()
+      .map((row) => row.name.slice(0, -"_lease".length))
+      .filter((name) => LEASE_NAME.test(name))
+      .map((name) => this.#table(name));
   }
 
   /** The table of the lease `name`, created (or brought up to date) the first time this object uses it. */
