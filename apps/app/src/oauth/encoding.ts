@@ -4,7 +4,7 @@
  * Go source: internal/misc/oauth.go (`GenerateRandomState`), internal/auth/{claude,codex,devin}/pkce.go, Go's
  * `url.Values.Encode` (sorted keys, `QueryEscape`). Randomness uses WebCrypto, never `Math.random`.
  */
-import { sha256Hex as sha256HexFull } from "../hash.ts";
+import { sha256Hex as sha256HexFull } from "@commissary/core";
 
 const toHex = (bytes: Uint8Array): string =>
   Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");

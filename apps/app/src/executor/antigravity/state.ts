@@ -13,7 +13,7 @@
 import { createHash } from "node:crypto";
 import type { SessionState } from "../../session-state/durable-object.ts";
 import { addressName } from "../../session-state/client.ts";
-import { type OrgId, orgScopedName } from "../../platform/org.ts";
+import { type OrgId, orgScopedName } from "@commissary/core";
 
 export const CREDITS_TTL_MS = 30 * 60_000;
 

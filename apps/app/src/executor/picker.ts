@@ -23,7 +23,7 @@ import type { JsonObject } from "@commissary/json";
 import type { RetryPlan, RetryQuery } from "../credentials/selection/retry.ts";
 import type { Lease, ReportResult, ResolvedSession } from "../credentials/selection/types.ts";
 import type { LcpPrepared } from "../session-routing/canonical.ts";
-import type { CurrentOrg } from "../platform/org.ts";
+import type { CurrentOrg } from "@commissary/core";
 import type { ExecutionError } from "./errors.ts";
 import type { ModelsEnv } from "../models/env.ts";
 

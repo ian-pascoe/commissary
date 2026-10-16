@@ -13,7 +13,7 @@
  * the Go 10240-entry cap is replaced by the TTL sweep) and session keys are isolated per caller scope.
  */
 import { createHash } from "node:crypto";
-import { sha256Hex } from "../../hash.ts";
+import { sha256Hex } from "@commissary/core";
 import { Effect } from "effect";
 import {
   asString,

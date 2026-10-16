@@ -9,7 +9,7 @@ import {
   isTokenEvent,
   tokenEventProtocolOf,
 } from "../src/usage/ttft.ts";
-import { GLOBAL_ORG } from "../src/platform/org.ts";
+import { GLOBAL_ORG } from "@commissary/core";
 
 describe("token events", () => {
   it("chat completions", () => {

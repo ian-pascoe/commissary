@@ -8,7 +8,7 @@ import members from "../../../../migrations/0005_usage_member.sql?raw";
 import privates from "../../../../migrations/0006_usage_private.sql?raw";
 import failures from "../../../../migrations/0007_usage_failure.sql?raw";
 import hostedAuth from "../../../../migrations/0008_hosted_auth.sql?raw";
-import { GLOBAL_ORG } from "../../src/platform/org.ts";
+import { GLOBAL_ORG } from "@commissary/core";
 import { emptyUsageDetail, type UsageRecord } from "../../src/usage/record.ts";
 
 export const statementsOf = (sql: string): string[] =>

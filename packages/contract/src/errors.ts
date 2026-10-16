@@ -1,6 +1,6 @@
 /**
  * The management API's error body: every handler answers failures as `{"error": "<message>"}` (Go's
- * `c.JSON(status, gin.H{"error": ...})`, see `apps/app/src/management/http.ts`). Some add a human-readable `message`
+ * `c.JSON(status, gin.H{"error": ...})`, see `replyError` in `@commissary/core`). Some add a human-readable `message`
  * (e.g. `422 invalid_config`) and, for a refused setting, the dotted config `path` it concerns; an imported config
  * document that is not valid YAML adds the `line` and `column` of the problem. Shared with the browser: imports
  * `effect` only.

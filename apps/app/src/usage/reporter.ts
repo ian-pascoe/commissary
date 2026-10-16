@@ -11,7 +11,7 @@ import { failureDetail, type UsageFailure } from "./failure.ts";
 import { mergeStreamUsageDetail } from "./parsers.ts";
 import type { UsageDetail, UsageRecord } from "./record.ts";
 import { emptyUsageDetail, hasNonZeroTokenUsage } from "./record.ts";
-import type { OrgId } from "../platform/org.ts";
+import type { OrgId } from "@commissary/core";
 
 export interface UsageReporterInit {
   readonly requestId: string;

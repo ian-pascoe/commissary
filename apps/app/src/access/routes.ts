@@ -2,7 +2,7 @@
 // internal/api/server_routes.go that use AuthMiddleware) and which need an administrator. Also the org addresses of the
 // management zone (ADR 0021), which are new in the Workers port.
 import { Schema } from "effect";
-import { OrgSlug } from "../platform/org.ts";
+import { OrgSlug } from "@commissary/core";
 
 /**
  * Paths under these prefixes require a caller: an API key or, where the org still accepts them, an Access sign-in on

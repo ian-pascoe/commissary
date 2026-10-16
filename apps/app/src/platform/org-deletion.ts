@@ -16,7 +16,8 @@
 import type { ModelsBindings } from "../models/env.ts";
 import type { StateBindings } from "../state/env.ts";
 import { deleteOrgUsage } from "../usage/d1.ts";
-import { controlPlaneOf, GLOBAL_ORG, type OrgId } from "./org.ts";
+import { GLOBAL_ORG, type OrgId } from "@commissary/core";
+import { controlPlaneOf } from "./org.ts";
 import { platformOf } from "./registry.ts";
 
 /** The most Durable Object, KV and D1 calls one deletion makes before it asks to be run again. */

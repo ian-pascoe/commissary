@@ -3,7 +3,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import type { GrantValue } from "../src/grants/grant.ts";
-import { OrgId } from "../src/platform/org.ts";
+import { OrgId } from "@commissary/core";
 import { claudeFile, controlPlane, makeHarness } from "./support/management.ts";
 
 const harness = makeHarness();

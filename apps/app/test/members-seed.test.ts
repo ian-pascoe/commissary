@@ -4,7 +4,7 @@
 import { runInDurableObject } from "cloudflare:test";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { MemberStore } from "../src/members/store.ts";
-import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
+import { GLOBAL_ORG, OrgId } from "@commissary/core";
 import { controlPlane, makeHarness } from "./support/management.ts";
 
 const harness = makeHarness();

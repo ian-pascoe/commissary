@@ -38,7 +38,7 @@ import {
   poolPickerLayer,
   type PoolHarness,
 } from "./support/pool.ts";
-import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { limit, MemorySpendBook, USD } from "./support/spend.ts";
 import { envContext } from "../src/worker-env.ts";
 

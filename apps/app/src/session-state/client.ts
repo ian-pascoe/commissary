@@ -10,7 +10,7 @@
  */
 import { createHash } from "node:crypto";
 import { Clock, Data, Effect, Option, Schema } from "effect";
-import { GLOBAL_ORG, type OrgId, orgScopedName } from "../platform/org.ts";
+import { GLOBAL_ORG, type OrgId, orgScopedName } from "@commissary/core";
 import type { SessionState } from "./durable-object.ts";
 import { MemoryStateTable, StateEngine } from "./engine.ts";
 import type { SessionAddress, StateOp, StateResult } from "./protocol.ts";

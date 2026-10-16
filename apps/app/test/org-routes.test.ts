@@ -6,7 +6,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { ProviderKeysList } from "@commissary/contract/provider-keys";
 import type { RoutingModels } from "@commissary/contract/routing";
 import type { SettingsView } from "@commissary/contract/settings";
-import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
+import { GLOBAL_ORG, OrgId } from "@commissary/core";
 import {
   claudeFile,
   controlPlane,

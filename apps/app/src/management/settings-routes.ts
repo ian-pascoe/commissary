@@ -22,7 +22,8 @@ import { decodeConfig, parseConfigYaml } from "../config/codec.ts";
 import { decodeStoredConfig } from "../config/store.ts";
 import { isJsonObject, type JsonObject } from "@commissary/json";
 import { Revisions } from "@commissary/contract/config";
-import { boundedBodyText, bodyJson, handled, jsonReply, replyError } from "./http.ts";
+import { boundedBodyText, handled, jsonReply, replyError } from "@commissary/core";
+import { bodyJson } from "./http.ts";
 import { currentViewer } from "./viewer.ts";
 import {
   applySettingsPatch,

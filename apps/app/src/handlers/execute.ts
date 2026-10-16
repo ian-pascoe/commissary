@@ -20,7 +20,7 @@ import type { ExecutionMetadata, ExecutorOptions, WebsocketExecution } from "../
 import { filterUpstreamHeaders } from "../http/headers.ts";
 import { get, type Json } from "@commissary/json";
 import type { Format } from "@commissary/translation/formats";
-import { CurrentOrg } from "../platform/org.ts";
+import { CurrentOrg } from "@commissary/core";
 import {
   type Attempt,
   attemptOptions,

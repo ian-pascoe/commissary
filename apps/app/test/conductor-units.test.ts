@@ -21,7 +21,7 @@ import { builtinTranslators } from "@commissary/translation";
 import { Formats } from "@commissary/translation/formats";
 import type { JsonObject } from "@commissary/json";
 import { loadConfig } from "./support/pool.ts";
-import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { envContext } from "../src/worker-env.ts";
 
 const headers = (init: Record<string, string>) => new Headers(init);

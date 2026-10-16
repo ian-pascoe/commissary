@@ -75,6 +75,15 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
   `src/observability` (D1 usage records, trace ids); `test/` (workerd tests and golden fixtures).
 - `apps/web` (`@commissary/web`): the control panel (below).
 - `packages/contract` (`@commissary/contract`): the management API contract, shared by the Worker and the panel.
+- `packages/core` (`@commissary/core`): the foundation without bindings that the other packages and the apps share:
+  the org model (`OrgId`, `OrgSlug`, `GLOBAL_ORG`, `CurrentOrg`, org-scoped names), the shared tagged errors,
+  `sha256Hex`, `redactHeaders`, `causeSummary` and the Workers Logs logger, the management reply and body helpers
+  (`jsonReply`, `Reply`, `replyError`, `bodyText`, `ifMatch`, `queryParams`, `handled`), `routeServices`, and
+  `WorkerExecutionContext` with `holdInvocation` (the execution context is a structural interface, so core needs no
+  Workers types). One entry point, `.`. It may import `effect` and `node:crypto` only: no bindings, no Workers APIs, no
+  other workspace package. The per-request context (`requestContext`, `src/worker-env.ts`) stays in the Worker, which
+  provides its env views, and so do `bodyJson`/`bodyObject` (they return `@commissary/json` values) and the ControlPlane
+  stubs (`controlPlaneOf`, `controlPlane`).
 - `packages/json` (`@commissary/json`): the gjson/sjson path engine over parsed JSON, the `Json` types, `isValidJson`,
   `compactJson` and `stableStringify`. Depends on nothing.
 - `packages/translation` (`@commissary/translation`): pure sync translation. `src/translator` (the `TranslatorRegistry`

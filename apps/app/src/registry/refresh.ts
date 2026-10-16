@@ -18,8 +18,7 @@ import { Clock, Data, Effect, Result, Stream } from "effect";
 import type { HttpClientResponse } from "effect/http";
 import { HttpClient, HttpClientRequest } from "effect/http";
 import { ConfigReader } from "../config/reader.ts";
-import { holdInvocation } from "../platform/env.ts";
-import { CurrentOrg, GLOBAL_ORG } from "../platform/org.ts";
+import { holdInvocation, CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { platformOf } from "../platform/registry.ts";
 import type { NamedLease } from "../state/lease.ts";
 import {

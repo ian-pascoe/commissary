@@ -5,7 +5,8 @@
  */
 import { Context, Effect, Option } from "effect";
 import type { ControlPlane } from "../credentials/control-plane.ts";
-import { controlPlaneOf, CurrentOrg, GLOBAL_ORG, type OrgId } from "../platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG, type OrgId } from "@commissary/core";
+import { controlPlaneOf } from "../platform/org.ts";
 import type { Platform } from "../platform/platform.ts";
 import type { SessionState } from "../session-state/durable-object.ts";
 

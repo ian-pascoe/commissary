@@ -36,8 +36,8 @@ import {
 } from "@commissary/json";
 import { splitLines } from "@commissary/translation/sse";
 import { fetchProjectId } from "../../oauth/flows/antigravity.ts";
-import { WorkerExecutionContext } from "../../platform/env.ts";
-import { controlPlaneOf, type OrgId } from "../../platform/org.ts";
+import { WorkerExecutionContext, type OrgId } from "@commissary/core";
+import { controlPlaneOf } from "../../platform/org.ts";
 import {
   isolateSignatureCache,
   type MemorySignatureCache,

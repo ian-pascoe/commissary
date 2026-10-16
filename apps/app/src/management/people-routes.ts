@@ -12,7 +12,8 @@ import { endSessions } from "../hosted/session.ts";
 import { forgetStanding, ownedOrgLimit } from "../hosted/standing.ts";
 import { MAX_ORG_LIMIT, type PersonRecord } from "../platform/registry-store.ts";
 import type { PersonView } from "@commissary/contract/people";
-import { bodyObject, handled, jsonReply, replyError } from "./http.ts";
+import { handled, jsonReply, replyError } from "@commissary/core";
+import { bodyObject } from "./http.ts";
 import { registry } from "./org-routes.ts";
 import { AppEnv } from "../worker-env.ts";
 

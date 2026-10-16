@@ -17,7 +17,7 @@ import { ConfigReader } from "../config/reader.ts";
 import { usesEmbeddedCatalog } from "../registry/catalog-source.ts";
 import { embeddedModelsDev } from "../registry/catalog.ts";
 import { CatalogStore } from "../registry/catalog-store.ts";
-import { CurrentOrg } from "../platform/org.ts";
+import { CurrentOrg } from "@commissary/core";
 import { ensureTokenBreakdown } from "./accounting.ts";
 import { costOf, findPrice, type PriceSources, type UsageCost } from "./pricing.ts";
 import type { UsageRecord } from "./record.ts";

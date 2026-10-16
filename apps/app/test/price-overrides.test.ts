@@ -3,7 +3,7 @@
 import { runInDurableObject } from "cloudflare:test";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { ConfigStore, type PriceOverrideValue } from "../src/config/store.ts";
-import { OrgId } from "../src/platform/org.ts";
+import { OrgId } from "@commissary/core";
 import { controlPlane, makeHarness, resetControlPlane } from "./support/management.ts";
 import { orgDataKey } from "./support/secrets.ts";
 

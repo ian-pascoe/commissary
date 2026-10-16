@@ -2,7 +2,7 @@
 import { Clock, Effect } from "effect";
 import { decodeProtectedHeader, jwtVerify } from "jose";
 import type { JWTPayload } from "jose";
-import { InternalError, UnauthorizedError } from "../errors.ts";
+import { InternalError, UnauthorizedError } from "@commissary/core";
 import type { AccessConfig } from "./config.ts";
 import { AccessJwks } from "./jwks.ts";
 import type { AdmissiblePrincipal } from "./principal.ts";

@@ -25,7 +25,8 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
 A pnpm workspace run by Turborepo: Workers and the panel in `apps/`, libraries in `packages/` (scope `@commissary/*`,
 source-only: they export TypeScript and whatever imports them compiles it). The deploy code stays at the root. Paths
 such as `src/...` and `test/...` in the rest of this document are relative to `apps/app/`; translation's modules are
-cited as `translation/...` (relative to `packages/translation/src/`) and the JSON path engine as `packages/json`.
+cited as `translation/...` (relative to `packages/translation/src/`), core's as `core/...` (relative to
+`packages/core/src/`) and the JSON path engine as `packages/json`.
 
 ```
 .                             workspace root and deploy root (Alchemy, no Wrangler config); turbo.json
@@ -35,7 +36,7 @@ cited as `translation/...` (relative to `packages/translation/src/`) and the JSO
   apps/app/                   @commissary/app: the one Worker (client API, management API, panel serving)
     src/
       index.ts                Worker entry: fetch, scheduled, DO class exports
-      platform/               Cloudflare bindings as Effect services (Env, ExecutionContext, KV, D1, DO stubs)
+      platform/               Cloudflare bindings as Effect services (Env, KV, D1, DO stubs)
       http/                   router, CORS, error formatting per protocol, SSE framing, streaming helpers
       access/                 Cloudflare Access JWT verification, principals
       config/                 config schema (Effect Schema), storage, payload rules
@@ -51,6 +52,8 @@ cited as `translation/...` (relative to `packages/translation/src/`) and the JSO
   apps/web/                   @commissary/web: control panel served at / (React, Effect Atom, TanStack Router; built
                               into apps/web/dist, the Worker's assets), its tests in Node.js
   packages/contract/          @commissary/contract: the management API's Effect HttpApi schemas and addressing (browser-safe)
+  packages/core/              @commissary/core: the foundation without bindings (org model, shared errors, hashing,
+                              log-safe helpers, management replies, route services, the execution context)
   packages/json/              @commissary/json: gjson/sjson-compatible path engine, Json types, JSON text helpers
   packages/translation/       @commissary/translation: pure translation, tested in Node.js
     src/translator/           registry + one directory per (client -> provider) pair
@@ -72,7 +75,7 @@ cited as `translation/...` (relative to `packages/translation/src/`) and the JSO
   serves the client API (the Access zone `protected` of `classifyPath`) and `/healthz`, every other host (the app host
   `APP_DOMAIN`) everything else; a request on the wrong host answers `404 {"error": "Not found: …"}` naming the right
   one. Without `API_DOMAIN` nothing is decided there. `GET /me` reports the API host as `api_url` for the panel.
-- **Orgs** (ADR 0021, `src/platform/org.ts`): one deployment serves many orgs, and every request and scheduled job
+- **Orgs** (ADR 0021, `core/org.ts`; the ControlPlane stubs in `src/platform/org.ts`): one deployment serves many orgs, and every request and scheduled job
   belongs to exactly one. The per-request `CurrentOrg` service carries its id (`OrgId`: lowercase letters, digits and
   inner hyphens); `requestContext` provides it next to the env views as `global`, the org of the
   deployment that existed before orgs, and the Access gate replaces it with the org an org-scoped management URL
@@ -433,9 +436,9 @@ Core contracts every provider slice implements (Go references in each module hea
   `stop-and-cooldown`) come from credential metadata or `oauth.request-scoped-errors`. Every attempt is reported exactly
   once (`Attempt.finish`: picker report + one usage record), including client aborts (`connection_lifecycle`, no cooldown).
   Each attempt holds the invocation open with `ctx.waitUntil` from its start until `finish` completed (`holdInvocation`,
-  `platform/env.ts`; released by the request scope if `finish` never started), because a cancelled streamed body is finalised
+  `core/execution-context.ts`; released by the request scope if `finish` never started), because a cancelled streamed body is finalised
   after the response and workerd drops pending work of a disconnected client otherwise. Route layers capture their services
-  with `routeServices()` (`http/route-services.ts`), which drops the layer's `Scope`: providing `Effect.context()` of a layer to
+  with `routeServices()` (`core/http/route-services.ts`), which drops the layer's `Scope`: providing `Effect.context()` of a layer to
   a handler replaced the request scope with the isolate-lifetime layer scope, so streamed attempts were never finalised on a
   client disconnect.
   Workers limits (deviation): at most 16 upstream attempts per request and cooldown waits capped at 30 s; a longer recovery
@@ -1586,7 +1589,7 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   no live credential (deleted, or matching nothing) reads the distinct `auth_id`s of the filtered rows
   (`resolveAuthIds`, an index scan bounded by the retained records). The former `auth_id`
   filter answers 400 instead of being ignored.
-- **Trace and logs** (`observability/`): the global `TraceLayer` middleware gives each request a `RequestTrace` (Context
+- **Trace and logs** (`observability/`, `core/observability/`): the global `TraceLayer` middleware gives each request a `RequestTrace` (Context
   reference, `undefined` outside the router) and sets `X-CPA-TRACE-ID` = the request id (a random UUID, also the usage
   records' `trace_id`). Deviation from Go: Go sends `yyyyMMddHHmmss-<auth index>-<request id>` to every API client (none
   when no credential was selected); its unsalted index would let any client confirm key guesses, and even a keyed one
@@ -1596,7 +1599,7 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   `requestId`; `authIndex` is the keyed index) through Effect logging; `WorkersLoggerLayer` (`Logger.consoleStructured`) makes Workers Logs index the
   annotations. Headers, bodies, query strings and credentials are never logged. `principal` is the Access id (`user:<email>`),
   i.e. personal data, documented in ACCESS.md "Logs and personal data" (not hashed so operators can attribute usage). Failure
-  logs of cron jobs and management handlers use `observability/cause.ts` (`causeSummary`: tag + message, URL queries removed,
+  logs of cron jobs and management handlers use `core/observability/cause.ts` (`causeSummary`: tag + message, URL queries removed,
   no stack) instead of `Cause.pretty`.
 
 ## Kimi, Meta and Devin providers (`src/executor/{kimi,meta,devin}/`)

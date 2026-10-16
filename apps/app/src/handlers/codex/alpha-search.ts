@@ -15,7 +15,7 @@ import {
   HttpServerRequest,
   HttpServerResponse,
 } from "effect/http";
-import { routeServices } from "../../http/route-services.ts";
+import { routeServices, CurrentOrg } from "@commissary/core";
 import { AccessPrincipal } from "../../access/principal.ts";
 import { CODEX_DEFAULT_BASE_URL, codexCreds } from "../../executor/codex/headers.ts";
 import { ExecutionError } from "../../executor/errors.ts";
@@ -28,7 +28,6 @@ import { UsageReporter } from "../../usage/reporter.ts";
 import { allowsCodexAlphaSearch, withCredentialPolicy } from "../../executor/policy-picker.ts";
 import { asString, get, isJsonObject, type Json, tryParseJson } from "@commissary/json";
 import { currentConfig, type ClientApiServices, readRequestBody } from "../request.ts";
-import { CurrentOrg } from "../../platform/org.ts";
 
 const MAX_BODY_BYTES = 16 << 20;
 

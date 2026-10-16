@@ -3,7 +3,7 @@
 // default back), and a member's viewer never reaches what the org or another member owns.
 import { afterAll, describe, expect, it } from "vitest";
 import { FULL_ACCESS, type Viewer } from "../src/credentials/ownership.ts";
-import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
+import { GLOBAL_ORG, OrgId } from "@commissary/core";
 import { claudeFile, controlPlane, makeHarness } from "./support/management.ts";
 
 const harness = makeHarness();

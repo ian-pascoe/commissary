@@ -9,7 +9,7 @@
  */
 import { createHash } from "node:crypto";
 import { Effect } from "effect";
-import { CurrentOrg, type OrgId, orgScopedName } from "../../platform/org.ts";
+import { CurrentOrg, type OrgId, orgScopedName } from "@commissary/core";
 import { ModelsEnv } from "../../models/env.ts";
 
 export interface VideoBinding {

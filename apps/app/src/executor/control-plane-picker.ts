@@ -15,7 +15,8 @@ import type {
   ReportResult,
 } from "../credentials/selection/types.ts";
 import type { RetryPlan, RetryQuery } from "../credentials/selection/retry.ts";
-import { controlPlaneOf, CurrentOrg, type OrgId } from "../platform/org.ts";
+import { CurrentOrg, type OrgId } from "@commissary/core";
+import { controlPlaneOf } from "../platform/org.ts";
 import { ExecutionError } from "./errors.ts";
 import {
   CredentialPicker,

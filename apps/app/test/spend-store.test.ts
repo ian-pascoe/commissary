@@ -3,7 +3,7 @@
 // ControlPlane that predates Spend limits (it keeps working, with no limit).
 import { runInDurableObject } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
-import { OrgId } from "../src/platform/org.ts";
+import { OrgId } from "@commissary/core";
 import { SpendLedger } from "../src/spend/ledger.ts";
 import { SpendStore, type SpendResult } from "../src/spend/store.ts";
 import { controlPlane } from "./support/management.ts";

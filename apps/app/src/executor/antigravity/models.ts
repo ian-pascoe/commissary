@@ -18,7 +18,8 @@ import {
   type JsonObject,
   tryParseJson,
 } from "@commissary/json";
-import { controlPlaneOf, CurrentOrg, type OrgId, orgScopedName } from "../../platform/org.ts";
+import { CurrentOrg, type OrgId, orgScopedName } from "@commissary/core";
+import { controlPlaneOf } from "../../platform/org.ts";
 import {
   type AntigravityModelHints,
   normalizeFetchedModelId,

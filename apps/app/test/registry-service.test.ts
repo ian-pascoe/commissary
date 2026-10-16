@@ -15,7 +15,7 @@ import { catalogs, canonOf } from "./support/registry.ts";
 import { FakeKv, fakeConfig } from "./support/registry-refresh.ts";
 import { source } from "./support/registry-sources.ts";
 import { thinkingFixture } from "@commissary/translation/testing";
-import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { envContext } from "../src/worker-env.ts";
 
 /** An env whose ControlPlane stub serves `sources()`; counts the RPCs. */

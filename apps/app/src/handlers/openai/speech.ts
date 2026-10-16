@@ -8,7 +8,7 @@
  */
 import { Effect, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { routeServices } from "../../http/route-services.ts";
+import { routeServices } from "@commissary/core";
 import { invalidRequestBody } from "../../http/errors.ts";
 import { mergeUpstreamHeaders } from "../../http/headers.ts";
 import { asString, get, isJsonObject, type Json, type JsonObject } from "@commissary/json";

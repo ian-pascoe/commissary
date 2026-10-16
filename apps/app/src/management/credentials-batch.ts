@@ -27,7 +27,7 @@
  */
 import { Effect, Option, Schema } from "effect";
 import { BatchAction, batchLimit } from "@commissary/contract/credentials";
-import { boundedBodyText, handled, jsonReply, replyError } from "./http.ts";
+import { boundedBodyText, handled, jsonReply, replyError } from "@commissary/core";
 import { currentViewer } from "./viewer.ts";
 import { modelsControlPlane } from "../models/env.ts";
 

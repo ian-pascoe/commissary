@@ -5,8 +5,7 @@
  * location and is eventually consistent: a ceiling against abuse, not exact accounting. New in the Workers port.
  */
 import { Effect } from "effect";
-import { RateLimitedError } from "../errors.ts";
-import type { OrgId } from "../platform/org.ts";
+import { RateLimitedError, type OrgId } from "@commissary/core";
 import { AuthConfig } from "../auth/config.ts";
 
 /** The binding's period: the limit counts requests per minute. */

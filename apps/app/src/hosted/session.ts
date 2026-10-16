@@ -4,7 +4,8 @@
  */
 import { Effect } from "effect";
 import { syncOrgIndex } from "../members/admission.ts";
-import { controlPlaneOf, GLOBAL_ORG } from "../platform/org.ts";
+import { GLOBAL_ORG } from "@commissary/core";
+import { controlPlaneOf } from "../platform/org.ts";
 import { platformOf } from "../platform/registry.ts";
 import { emailDomain } from "../sso/domain.ts";
 import { betterAuthProvider, orgOfProviderId } from "../sso/provider.ts";

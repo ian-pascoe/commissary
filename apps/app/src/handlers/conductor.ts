@@ -53,8 +53,7 @@ import type {
   ProviderExecutor,
 } from "../executor/types.ts";
 import type { Json } from "@commissary/json";
-import { holdInvocation } from "../platform/env.ts";
-import { CurrentOrg, type OrgId } from "../platform/org.ts";
+import { holdInvocation, CurrentOrg, type OrgId } from "@commissary/core";
 import { noteSelection, notePrincipal, RequestTrace } from "../observability/trace.ts";
 import type { SessionRouting } from "../session-routing/routing.ts";
 import { UsageReporter } from "../usage/reporter.ts";

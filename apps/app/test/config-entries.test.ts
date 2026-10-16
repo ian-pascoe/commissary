@@ -11,7 +11,7 @@ import type { Json } from "@commissary/json";
 import type { ProviderKeysList } from "@commissary/contract/provider-keys";
 import type { RoutingModels } from "@commissary/contract/routing";
 import type { SettingsView } from "@commissary/contract/settings";
-import { OrgId } from "../src/platform/org.ts";
+import { OrgId } from "@commissary/core";
 import { authIndexOf } from "./support/auth-index.ts";
 import { comparable } from "./support/config-entries.ts";
 import { asBeforeEncryption } from "./support/secrets.ts";

@@ -4,7 +4,7 @@ import { evictDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { runInDurableObject } from "cloudflare:test";
-import { DEFAULT_ORG_SLUG, GLOBAL_ORG, newOrgId } from "../src/platform/org.ts";
+import { DEFAULT_ORG_SLUG, GLOBAL_ORG, newOrgId } from "@commissary/core";
 import { DEFAULT_USAGE_RETENTION_DAYS } from "../src/platform/registry-store.ts";
 import { PLATFORM_NAME, platformOf } from "../src/platform/registry.ts";
 

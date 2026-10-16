@@ -5,7 +5,7 @@ import { FULL_ACCESS } from "../src/credentials/ownership.ts";
 import { runInDurableObject } from "cloudflare:test";
 import { afterAll, describe, expect, it } from "vitest";
 import { CredentialStore } from "../src/credentials/store.ts";
-import { GLOBAL_ORG, OrgId } from "../src/platform/org.ts";
+import { GLOBAL_ORG, OrgId } from "@commissary/core";
 import { SqliteSessionTable } from "../src/oauth/session-store.ts";
 import { controlPlane, makeHarness } from "./support/management.ts";
 import { orgDataKey, restart, storedText } from "./support/secrets.ts";

@@ -13,7 +13,7 @@ import { HttpApiClient } from "effect/http-api";
 import { afterAll, beforeAll, beforeEach, expect } from "vitest";
 import { ManagementApi } from "@commissary/contract/api";
 import { ManagementError } from "@commissary/contract/errors";
-import { WorkerExecutionContext } from "../src/platform/env.ts";
+import { WorkerExecutionContext, CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { LEASE_RENEW_INTERVAL_MS, runQuotaSweep, sweepQuotas } from "../src/quota/check.ts";
 import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/quota/claude.ts";
 import { RESET_GRANT_STATUS_URL } from "../src/quota/reset-grants.ts";
@@ -31,7 +31,6 @@ import {
 import { emptyState } from "../src/credentials/model.ts";
 import { makePool, MemoryPoolStore } from "./support/pool.ts";
 import { type MockReply, mockHttp, routes } from "./support/refresh.ts";
-import { CurrentOrg, GLOBAL_ORG } from "../src/platform/org.ts";
 import { envContext } from "../src/worker-env.ts";
 
 const BATCH = "/v9/management/credentials/batch";

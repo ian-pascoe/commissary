@@ -7,7 +7,8 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { afterAll, describe, expect, it } from "vitest";
 import { AccessPrincipal } from "../src/access/principal.ts";
 import { unknownModelBody } from "../src/credentials/selection/failures.ts";
-import { controlPlaneOf, GLOBAL_ORG } from "../src/platform/org.ts";
+import { GLOBAL_ORG } from "@commissary/core";
+import { controlPlaneOf } from "../src/platform/org.ts";
 import {
   ADMIN,
   claudeFile,

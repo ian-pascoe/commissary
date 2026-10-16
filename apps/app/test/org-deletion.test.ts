@@ -4,7 +4,7 @@ import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { deleteOrg, DELETION_BUDGET } from "../src/platform/org-deletion.ts";
-import { orgScopedName, OrgId } from "../src/platform/org.ts";
+import { orgScopedName, OrgId } from "@commissary/core";
 import { addressName } from "../src/session-state/client.ts";
 import { insertUsageRecord } from "../src/usage/d1.ts";
 import {

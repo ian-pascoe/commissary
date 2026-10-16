@@ -20,7 +20,7 @@ import {
   SIGN_IN_PAGE_PATH,
   type SignInOptions,
 } from "@commissary/contract/sign-in";
-import { jsonReply } from "../management/http.ts";
+import { jsonReply } from "@commissary/core";
 import { panelIndex } from "../management/web-panel.ts";
 import { platformOf } from "../platform/registry.ts";
 import { emailDomain } from "../sso/domain.ts";

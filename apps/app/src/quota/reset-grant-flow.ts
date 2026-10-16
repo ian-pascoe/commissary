@@ -28,7 +28,7 @@ import type {
   ResetGrantStatus,
 } from "@commissary/contract/credentials";
 import type { Scope } from "../credentials/ownership.ts";
-import type { CurrentOrg } from "../platform/org.ts";
+import type { CurrentOrg } from "@commissary/core";
 import { call, checkCredentialQuota, type QuotaControlPlaneError } from "./check.ts";
 import type { ResetGrantMark } from "./reset-grant-store.ts";
 import { CLAUDE_HEADERS, CLAUDE_PROFILE_URL } from "./claude.ts";

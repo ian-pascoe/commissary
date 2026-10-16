@@ -4,8 +4,7 @@ import { Context, Effect, Layer } from "effect";
 import { HttpRouter, HttpServerResponse } from "effect/http";
 import { expect } from "vitest";
 import { CorsLayer } from "../src/http/cors.ts";
-import { WorkerExecutionContext } from "../src/platform/env.ts";
-import { redactHeaders } from "../src/platform/logging.ts";
+import { WorkerExecutionContext } from "@commissary/core";
 import { AuthConfig } from "../src/auth/config.ts";
 import { ModelsEnv } from "../src/models/env.ts";
 import { StateEnv } from "../src/state/env.ts";
@@ -57,19 +56,3 @@ it.effect("web handler routes see per-request env/ctx services", () =>
     yield* Effect.promise(dispose);
   }),
 );
-
-it("redactHeaders hides credentials", () => {
-  const redacted = redactHeaders(
-    new Headers({
-      authorization: "Bearer secret",
-      "cf-access-jwt-assertion": "jwt",
-      accept: "*/*",
-    }),
-  );
-
-  expect(redacted).toEqual({
-    authorization: "[redacted]",
-    "cf-access-jwt-assertion": "[redacted]",
-    accept: "*/*",
-  });
-});

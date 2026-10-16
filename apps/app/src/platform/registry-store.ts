@@ -22,7 +22,7 @@
  * ControlPlane stays authoritative for its identity provider and its domains (`sso/store.ts`).
  */
 import { Schema } from "effect";
-import { DEFAULT_ORG_SLUG, GLOBAL_ORG, newOrgId, OrgId, OrgSlug } from "./org.ts";
+import { DEFAULT_ORG_SLUG, GLOBAL_ORG, newOrgId, OrgId, OrgSlug } from "@commissary/core";
 
 /** An org as the registry lists it. */
 export interface OrgRecord {

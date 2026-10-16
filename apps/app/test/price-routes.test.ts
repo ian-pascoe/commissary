@@ -8,7 +8,7 @@ import { afterAll, beforeEach, expect } from "vitest";
 import type { Json } from "@commissary/json";
 import { ManagementApi } from "@commissary/contract/api";
 import { ManagementError } from "@commissary/contract/errors";
-import { OrgId } from "../src/platform/org.ts";
+import { OrgId } from "@commissary/core";
 import {
   controlPlane,
   type Harness,

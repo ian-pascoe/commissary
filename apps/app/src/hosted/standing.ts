@@ -8,9 +8,9 @@
  * isolate that made it (`forgetStanding`). New in the Workers port.
  */
 import { Clock, Effect } from "effect";
-import { ForbiddenError, InternalError } from "../errors.ts";
+import { ForbiddenError, InternalError, type OrgId } from "@commissary/core";
 import { syncOrgIndex } from "../members/admission.ts";
-import { controlPlaneOf, type OrgId } from "../platform/org.ts";
+import { controlPlaneOf } from "../platform/org.ts";
 import { platform } from "../platform/registry.ts";
 import type { Standing } from "../platform/registry-store.ts";
 import { StateEnv } from "../state/env.ts";

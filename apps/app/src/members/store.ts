@@ -15,7 +15,7 @@
  * check it against the target here, so the check and the write are one step under the Durable Object's input gate.
  * All methods are synchronous; refusals are plain data (`MemberRefused`).
  */
-import { GLOBAL_ORG, type OrgId } from "../platform/org.ts";
+import { GLOBAL_ORG, type OrgId } from "@commissary/core";
 import { cleanName, MAX_NAME_LENGTH } from "../platform/registry-store.ts";
 import {
   type Actor,

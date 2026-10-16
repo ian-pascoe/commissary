@@ -9,9 +9,9 @@
  * the key's expiry), so a revoked key may keep working for that long in every isolate of every Worker: revocation clears no cache.
  */
 import { Clock, Effect } from "effect";
-import { InternalError, UnauthorizedError } from "../errors.ts";
+import { InternalError, UnauthorizedError, type OrgId } from "@commissary/core";
 import type { OrgRole } from "../members/roles.ts";
-import { controlPlaneOf, type OrgId } from "../platform/org.ts";
+import { controlPlaneOf } from "../platform/org.ts";
 import { platform } from "../platform/registry.ts";
 import { looksLikeApiKey, parseApiKey } from "../api-keys/key.ts";
 import { StateEnv } from "../state/env.ts";

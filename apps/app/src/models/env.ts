@@ -5,8 +5,9 @@
  */
 import { Context, Effect } from "effect";
 import type { ControlPlane } from "../credentials/control-plane.ts";
-import { callControlPlane, type Reply } from "../management/http.ts";
-import { controlPlaneOf, CurrentOrg } from "../platform/org.ts";
+import { type Reply, CurrentOrg } from "@commissary/core";
+import { callControlPlane } from "../management/http.ts";
+import { controlPlaneOf } from "../platform/org.ts";
 import type { SessionState } from "../session-state/durable-object.ts";
 
 /** The ControlPlane methods Models calls: config, credentials, selection, refresh, quota, grants, spend, OAuth. */

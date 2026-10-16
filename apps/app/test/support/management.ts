@@ -9,7 +9,8 @@ import { orgAddressing } from "../../src/access/org-address.ts";
 import { RootRoutes } from "../../src/http/routes.ts";
 import { ManagementRoutes } from "../../src/management/routes.ts";
 import { OAuthCallbackRoutes } from "../../src/oauth/public-routes.ts";
-import { controlPlaneOf, CurrentOrg, GLOBAL_ORG, type OrgId } from "../../src/platform/org.ts";
+import { CurrentOrg, GLOBAL_ORG, type OrgId } from "@commissary/core";
+import { controlPlaneOf } from "../../src/platform/org.ts";
 import { CatalogStore } from "../../src/registry/catalog-store.ts";
 import { ModelRegistryLive } from "../../src/registry/live.ts";
 import {

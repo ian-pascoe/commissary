@@ -4,7 +4,7 @@
 import { Schema } from "effect";
 import { afterAll, describe, expect, it } from "vitest";
 import { SpendView, SpendLimitView } from "@commissary/contract/spend";
-import { OrgId } from "../src/platform/org.ts";
+import { OrgId } from "@commissary/core";
 import { ADMIN, isolatedPlatform, jsonInit, makeHarness, token } from "./support/management.ts";
 import { USD } from "./support/spend.ts";
 
