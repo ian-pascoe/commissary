@@ -7,16 +7,16 @@ import { AccessPrincipal } from "@commissary/auth";
 import {
   antigravityStateFor,
   resetMemoryAntigravityState,
-} from "../src/executor/antigravity/state.ts";
-import { CredentialRefresher } from "../src/executor/helps/credential-refresh.ts";
-import { ExecutorRegistry } from "../src/executor/registry.ts";
-import { Thinking } from "../src/executor/thinking.ts";
-import { executeNonStream } from "../src/handlers/execute.ts";
-import { ModelCapabilities } from "../src/handlers/model-capabilities.ts";
-import { ModelProviders } from "../src/handlers/model-providers.ts";
+} from "../src/models/executor/antigravity/state.ts";
+import { CredentialRefresher } from "../src/models/executor/helps/credential-refresh.ts";
+import { ExecutorRegistry } from "../src/models/executor/registry.ts";
+import { Thinking } from "../src/models/executor/thinking.ts";
+import { executeNonStream } from "../src/models/handlers/execute.ts";
+import { ModelCapabilities } from "../src/models/handlers/model-capabilities.ts";
+import { ModelProviders } from "../src/models/handlers/model-providers.ts";
 import { Formats } from "@commissary/translation/formats";
-import type { UsageRecord } from "../src/usage/record.ts";
-import { UsageSink } from "../src/usage/sink.ts";
+import type { UsageRecord } from "../src/models/usage/record.ts";
+import { UsageSink } from "../src/models/usage/sink.ts";
 import {
   jsonResponse,
   mockHttpClient,

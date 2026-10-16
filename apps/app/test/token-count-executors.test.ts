@@ -3,11 +3,11 @@
 import { Effect, Result } from "effect";
 import { describe, expect, it } from "vitest";
 import { isJsonArray, isJsonObject, type Json } from "@commissary/json";
-import { makeClaudeExecutor } from "../src/executor/claude/executor.ts";
-import { makeCodexExecutor } from "../src/executor/codex/executor.ts";
-import { makeMetaExecutor } from "../src/executor/meta/executor.ts";
-import { makeOpenAICompatExecutor } from "../src/executor/openai-compat/executor.ts";
-import { makeXaiExecutor } from "../src/executor/xai/executor.ts";
+import { makeClaudeExecutor } from "../src/models/executor/claude/executor.ts";
+import { makeCodexExecutor } from "../src/models/executor/codex/executor.ts";
+import { makeMetaExecutor } from "../src/models/executor/meta/executor.ts";
+import { makeOpenAICompatExecutor } from "../src/models/executor/openai-compat/executor.ts";
+import { makeXaiExecutor } from "../src/models/executor/xai/executor.ts";
 import { credential, harness, options, runFail } from "./support/executor-run.ts";
 import { tokenFixtures as fixtures } from "@commissary/translation/testing";
 

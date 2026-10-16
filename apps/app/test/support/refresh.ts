@@ -8,20 +8,20 @@ import {
   HttpClientResponse,
   type HttpClientRequest,
 } from "effect/http";
-import type { Config } from "../../src/config/schema.ts";
-import { decodeStoredConfig } from "../../src/config/store.ts";
-import { ALLOW_ALL } from "../../src/grants/reach.ts";
+import type { Config } from "../../src/models/config/schema.ts";
+import { decodeStoredConfig } from "../../src/models/config/store.ts";
+import { ALLOW_ALL } from "../../src/models/grants/reach.ts";
 import type { JsonObject, Json } from "@commissary/json";
-import type { StoredCredential } from "../../src/credentials/derive.ts";
-import { mergeExistingMetadata, credentialsChanged } from "../../src/credentials/merge.ts";
-import type { CredentialState } from "../../src/credentials/model.ts";
-import { CredentialPool, type PoolStore } from "../../src/credentials/pool.ts";
+import type { StoredCredential } from "../../src/models/credentials/derive.ts";
+import { mergeExistingMetadata, credentialsChanged } from "../../src/models/credentials/merge.ts";
+import type { CredentialState } from "../../src/models/credentials/model.ts";
+import { CredentialPool, type PoolStore } from "../../src/models/credentials/pool.ts";
 import {
   RefreshManager,
   type AlarmScheduler,
   type RefreshManagerOptions,
-} from "../../src/credentials/refresh/index.ts";
-import type { UpsertOptions, UpsertOutcome } from "../../src/credentials/store.ts";
+} from "../../src/models/credentials/refresh/index.ts";
+import type { UpsertOptions, UpsertOutcome } from "../../src/models/credentials/store.ts";
 
 export interface RecordedRequest {
   readonly method: string;

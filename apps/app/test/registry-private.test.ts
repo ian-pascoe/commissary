@@ -1,8 +1,8 @@
 // A private credential's models are listed to its owner alone (ADR 0023): `visibleTo` is the registry as one caller may
 // list it, while the snapshot itself still resolves the model for routing.
 import { describe, expect, it } from "vitest";
-import { buildSnapshot } from "../src/registry/service.ts";
-import type { ModelSource } from "../src/registry/source.ts";
+import { buildSnapshot } from "../src/models/registry/service.ts";
+import type { ModelSource } from "../src/models/registry/source.ts";
 import { catalogs } from "./support/registry.ts";
 import { configOf, source } from "./support/registry-sources.ts";
 

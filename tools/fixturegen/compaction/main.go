@@ -1,5 +1,5 @@
 // Command compaction emits golden fixtures for the TypeScript Responses compaction capsules
-// (apps/app/src/executor/helps/compaction.ts and the Claude/Antigravity executors).
+// (apps/app/src/models/executor/helps/compaction.ts and the Claude/Antigravity executors).
 //
 // Two kinds of fixtures: (1) the exported helps functions (summary payload preparation, capsule unsealing of
 // Go-sealed capsules, expansion, summary extraction, response/stream builders) and (2) end-to-end scenarios that run

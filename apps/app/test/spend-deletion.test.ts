@@ -4,7 +4,7 @@ import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { Viewer } from "@commissary/auth";
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { deleteOrgModels } from "../src/models/org-deletion.ts";
 import { deleteOrg } from "../src/platform/org-deletion.ts";
 import { OrgId } from "@commissary/core";

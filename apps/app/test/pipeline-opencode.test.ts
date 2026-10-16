@@ -3,10 +3,10 @@
 // gateway headers (auth, session, client identity), error classification and usage records.
 import { Effect, Layer, Logger } from "effect";
 import { afterAll, describe, expect, it } from "vitest";
-import type { Config } from "../src/config/schema.ts";
-import type { CredentialSnapshot } from "../src/executor/picker.ts";
-import { OPENCODE_USER_AGENT } from "../src/executor/opencode/headers.ts";
-import { ModelProviders } from "../src/handlers/model-providers.ts";
+import type { Config } from "../src/models/config/schema.ts";
+import type { CredentialSnapshot } from "../src/models/executor/picker.ts";
+import { OPENCODE_USER_AGENT } from "../src/models/executor/opencode/headers.ts";
+import { ModelProviders } from "../src/models/handlers/model-providers.ts";
 import type { Json } from "@commissary/json";
 import { fixedPicker, type PickerLog } from "./support/codex.ts";
 import {
@@ -57,7 +57,7 @@ const configFor = (gateway: Gateway, models = ""): Promise<Config> =>
         - api-key: ${KEY[gateway]}
 ${models}`);
 
-/** Catalog models per protocol (src/registry/catalog/opencode_models.json, AI SDK package). */
+/** Catalog models per protocol (src/models/registry/catalog/opencode_models.json, AI SDK package). */
 const MODELS: Record<Gateway, { chat: string; responses: string; messages: string }> = {
   "opencode-zen": {
     chat: "deepseek-v4-flash",

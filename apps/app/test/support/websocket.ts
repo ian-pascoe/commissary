@@ -5,7 +5,7 @@ import {
   HandshakeError,
   UpstreamWebSocketConnector,
   wrapWebSocket,
-} from "../../src/executor/websocket/connector.ts";
+} from "../../src/models/executor/websocket/connector.ts";
 import type { Json } from "@commissary/json";
 
 /** One accepted upstream connection as seen by the mock server. */

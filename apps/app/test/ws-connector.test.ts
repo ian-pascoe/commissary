@@ -6,7 +6,7 @@ import {
   fetchConnector,
   HandshakeError,
   websocketUrl,
-} from "../src/executor/websocket/connector.ts";
+} from "../src/models/executor/websocket/connector.ts";
 
 afterEach(() => {
   vi.unstubAllGlobals();

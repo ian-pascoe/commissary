@@ -2,8 +2,8 @@
 // request-time preparation (Meta, Vertex, Antigravity) — against a real CredentialPool and a recording HttpClient.
 import { beforeAll, describe, expect, it } from "vitest";
 import type { JsonObject } from "@commissary/json";
-import type { RefreshResult } from "../src/credentials/refresh/index.ts";
-import type { PickResult } from "../src/credentials/selection/types.ts";
+import type { RefreshResult } from "../src/models/credentials/refresh/index.ts";
+import type { PickResult } from "../src/models/credentials/selection/types.ts";
 import {
   makeFixture,
   T0,

@@ -5,24 +5,24 @@
 import { describe, expect, it } from "vitest";
 import goServed from "./fixtures/go-catalog-served.json";
 import { asString, get, type JsonObject, tryParseJson } from "@commissary/json";
-import { parseCatalogAdditions } from "../src/registry/catalog-additions.ts";
+import { parseCatalogAdditions } from "../src/models/registry/catalog-additions.ts";
 import {
   buildModelsCatalog,
   rawModelsDevThinking,
   SECTIONS,
   SOURCES,
   thinkingFromModelsDev,
-} from "../src/registry/catalog-build.ts";
-import type { Section } from "../src/registry/catalog-build.ts";
+} from "../src/models/registry/catalog-build.ts";
+import type { Section } from "../src/models/registry/catalog-build.ts";
 import {
   catalogAdditions,
   embeddedCatalogs,
   embeddedModelsDev,
   sectionModels,
-} from "../src/registry/catalog.ts";
-import type { ModelInfo } from "../src/registry/model-info.ts";
-import type { ModelsDevModel } from "../src/registry/models-dev.ts";
-import { MODELS_DEV_PROVIDERS, trimModelsDev } from "../src/registry/models-dev.ts";
+} from "../src/models/registry/catalog.ts";
+import type { ModelInfo } from "../src/models/registry/model-info.ts";
+import type { ModelsDevModel } from "../src/models/registry/models-dev.ts";
+import { MODELS_DEV_PROVIDERS, trimModelsDev } from "../src/models/registry/models-dev.ts";
 import { applyThinking } from "@commissary/translation/thinking";
 import { documentObject, documentText, mdModel } from "./support/models-dev.ts";
 

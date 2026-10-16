@@ -1,5 +1,5 @@
 // Command applypatch emits golden fixtures for the TypeScript Responses apply_patch bridge
-// (packages/translation/src/translator/common/apply-patch-responses.ts and apps/app/src/executor/helps/apply-patch-responses.ts).
+// (packages/translation/src/translator/common/apply-patch-responses.ts and apps/app/src/models/executor/helps/apply-patch-responses.ts).
 //
 // The real Go helps.NewApplyPatchResponsesState / helps.NormalizeApplyPatchResponsesRequest run over scripted event
 // sequences (function-call streams, folded xAI dispatchers, sparse terminals, identity conflicts, SSE lines, EOF

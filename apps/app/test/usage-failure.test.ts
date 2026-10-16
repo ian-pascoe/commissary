@@ -1,8 +1,8 @@
 // What a usage record keeps of a failed attempt (ADR 0027): status code, error type and error code; never the body.
 import { describe, expect, it } from "vitest";
-import { failureDetail } from "../src/usage/failure.ts";
+import { failureDetail } from "../src/models/usage/failure.ts";
 import { GLOBAL_ORG } from "@commissary/core";
-import { UsageReporter } from "../src/usage/reporter.ts";
+import { UsageReporter } from "../src/models/usage/reporter.ts";
 
 describe("failureDetail", () => {
   it("reads the type and code of OpenAI, Claude, Codex and Gemini error bodies", () => {

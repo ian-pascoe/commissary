@@ -6,7 +6,7 @@ import { Effect, Layer } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { afterAll, describe, expect, it } from "vitest";
 import { AccessPrincipal } from "@commissary/auth";
-import { unknownModelBody } from "../src/credentials/selection/failures.ts";
+import { unknownModelBody } from "../src/models/credentials/selection/failures.ts";
 import { GLOBAL_ORG } from "@commissary/core";
 import { controlPlaneOf } from "@commissary/state";
 import {

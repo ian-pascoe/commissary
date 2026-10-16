@@ -2,8 +2,8 @@
 // Access, model resolution, the static credential picker, the OpenAI-compatible executor and a mocked upstream.
 import { Effect, Layer } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Config } from "../src/config/schema.ts";
-import { Thinking } from "../src/executor/thinking.ts";
+import type { Config } from "../src/models/config/schema.ts";
+import { Thinking } from "../src/models/executor/thinking.ts";
 import { set } from "@commissary/json";
 import { noopSummaryHooks } from "@commissary/translation";
 import { structuralBody } from "@commissary/translation/testing";

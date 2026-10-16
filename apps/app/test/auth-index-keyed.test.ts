@@ -1,7 +1,7 @@
-// Keyed `auth_index` (src/management/auth-index.ts): HMAC under the deployment key, and no raw config credential id
+// Keyed `auth_index` (src/models/management/auth-index.ts): HMAC under the deployment key, and no raw config credential id
 // or unkeyed hash of key material in any management or client API response. End to end through `exports.default.fetch`
 // (dev bypass on localhost, see vitest.config.ts); only the upstream provider is mocked, through the global `fetch`.
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { runInDurableObject } from "cloudflare:test";
 import { env, exports } from "cloudflare:workers";
 import { Layer, Logger, References } from "effect";
@@ -11,10 +11,10 @@ import {
   AuthIndexKeyError,
   authIndexer,
   deploymentAuthIndexer,
-} from "../src/management/auth-index.ts";
-import { DEV_AUTH_INDEX_KEY } from "../src/management/auth-index-key.ts";
-import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/quota/claude.ts";
-import { RESET_GRANT_STATUS_URL, resetGrantClaimUrl } from "../src/quota/reset-grants.ts";
+} from "../src/models/management/auth-index.ts";
+import { DEV_AUTH_INDEX_KEY } from "../src/models/management/auth-index-key.ts";
+import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/models/quota/claude.ts";
+import { RESET_GRANT_STATUS_URL, resetGrantClaimUrl } from "../src/models/quota/reset-grants.ts";
 import { TraceLayer } from "../src/models/observability/trace.ts";
 import { ControlPlane } from "../src/index.ts";
 import { authIndexOf, emptyKeyAuthIndexOf, unkeyedAuthIndexOf } from "./support/auth-index.ts";

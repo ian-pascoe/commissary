@@ -7,12 +7,12 @@ import {
   matchWildcard,
   parseModelSuffix,
   canonicalModelKey,
-} from "../src/credentials/selection/model-name.ts";
+} from "../src/models/credentials/selection/model-name.ts";
 import {
   resolveModelRoute,
   rotateRoute,
   type RoutingContext,
-} from "../src/credentials/selection/routing.ts";
+} from "../src/models/credentials/selection/routing.ts";
 import { Harness, cred, defaultSettings, entry } from "./support/credentials.ts";
 
 const context = (overrides: Partial<RoutingContext> = {}): RoutingContext => ({

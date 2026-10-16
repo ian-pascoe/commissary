@@ -2,14 +2,14 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import type { JsonObject } from "@commissary/json";
-import { refreshAntigravity } from "../src/credentials/refresh/antigravity.ts";
-import { refreshClaude } from "../src/credentials/refresh/claude.ts";
-import { refreshCodex } from "../src/credentials/refresh/codex.ts";
-import { RefreshError } from "../src/credentials/refresh/error.ts";
-import { refreshKimi } from "../src/credentials/refresh/kimi.ts";
-import { refreshMeta } from "../src/credentials/refresh/meta.ts";
-import type { RefreshContext, RefreshProtocol } from "../src/credentials/refresh/types.ts";
-import { refreshXai } from "../src/credentials/refresh/xai.ts";
+import { refreshAntigravity } from "../src/models/credentials/refresh/antigravity.ts";
+import { refreshClaude } from "../src/models/credentials/refresh/claude.ts";
+import { refreshCodex } from "../src/models/credentials/refresh/codex.ts";
+import { RefreshError } from "../src/models/credentials/refresh/error.ts";
+import { refreshKimi } from "../src/models/credentials/refresh/kimi.ts";
+import { refreshMeta } from "../src/models/credentials/refresh/meta.ts";
+import type { RefreshContext, RefreshProtocol } from "../src/models/credentials/refresh/types.ts";
+import { refreshXai } from "../src/models/credentials/refresh/xai.ts";
 import { jwt, mockHttp, routes, T0, type MockHandler } from "./support/refresh.ts";
 
 const run = async (

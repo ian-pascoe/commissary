@@ -10,7 +10,7 @@ import {
   markResult,
   nextQuotaCooldown,
   quotaCooldownAfterFailure,
-} from "../src/credentials/cooldown/mark-result.ts";
+} from "../src/models/credentials/cooldown/mark-result.ts";
 import {
   isCloudflareChallengeError,
   isConnectionLifecycleError,
@@ -19,13 +19,13 @@ import {
   isRequestInvalidError,
   isTransientTransportError,
   shouldSkipCredentialCooldown,
-} from "../src/credentials/cooldown/classify.ts";
-import { collectQuotaSignals } from "../src/credentials/cooldown/quota-signals.ts";
-import { recentRequestsSnapshot } from "../src/credentials/cooldown/recent-requests.ts";
-import type { CredentialState } from "../src/credentials/model.ts";
-import { emptyState } from "../src/credentials/model.ts";
-import { isBlockedForModel } from "../src/credentials/selection/availability.ts";
-import type { ReportResult } from "../src/credentials/selection/types.ts";
+} from "../src/models/credentials/cooldown/classify.ts";
+import { collectQuotaSignals } from "../src/models/credentials/cooldown/quota-signals.ts";
+import { recentRequestsSnapshot } from "../src/models/credentials/cooldown/recent-requests.ts";
+import type { CredentialState } from "../src/models/credentials/model.ts";
+import { emptyState } from "../src/models/credentials/model.ts";
+import { isBlockedForModel } from "../src/models/credentials/selection/availability.ts";
+import type { ReportResult } from "../src/models/credentials/selection/types.ts";
 import { cred, NOW } from "./support/credentials.ts";
 
 const MIN = 60_000;

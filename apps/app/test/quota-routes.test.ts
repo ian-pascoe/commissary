@@ -1,6 +1,6 @@
 // `POST /v9/management/credentials/quota`: the Worker probes the provider usage endpoint with the credential's token
 // (mocked outbound HTTP) and the ControlPlane stores the report shown in the credential list.
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer, Schema } from "effect";
 import { FetchHttpClient } from "effect/http";
@@ -9,9 +9,9 @@ import { afterAll, beforeEach, expect } from "vitest";
 import { ManagementApi } from "@commissary/contract/api";
 import { CredentialEntry, type QuotaReport } from "@commissary/contract/credentials";
 import { ManagementError } from "@commissary/contract/errors";
-import { runQuotaSweep } from "../src/quota/check.ts";
-import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/quota/claude.ts";
-import { RESET_GRANT_STATUS_URL } from "../src/quota/reset-grants.ts";
+import { runQuotaSweep } from "../src/models/quota/check.ts";
+import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/models/quota/claude.ts";
+import { RESET_GRANT_STATUS_URL } from "../src/models/quota/reset-grants.ts";
 import {
   claudeFile,
   controlPlane,

@@ -2,24 +2,24 @@
 // thinking replay, against a mocked Kimi upstream.
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
-import { makeClaudeExecutor } from "../src/executor/claude/executor.ts";
-import { makeKimiExecutor } from "../src/executor/kimi/executor.ts";
-import { kimiDeviceId } from "../src/executor/kimi/headers.ts";
+import { makeClaudeExecutor } from "../src/models/executor/claude/executor.ts";
+import { makeKimiExecutor } from "../src/models/executor/kimi/executor.ts";
+import { kimiDeviceId } from "../src/models/executor/kimi/headers.ts";
 import {
   kimiBaseUrl,
   kimiChatUrl,
   kimiClaudeBaseUrl,
   kimiResponsesUrl,
   normalizeKimiUpstreamModel,
-} from "../src/executor/kimi/model.ts";
+} from "../src/models/executor/kimi/model.ts";
 import {
   KIMI_REASONING_UNAVAILABLE,
   normalizeKimiResponsesInput,
   normalizeKimiTemperature,
   normalizeKimiToolMessageLinks,
   normalizeKimiTools,
-} from "../src/executor/kimi/request.ts";
-import { makeKimiReplayStore } from "../src/executor/kimi/replay.ts";
+} from "../src/models/executor/kimi/request.ts";
+import { makeKimiReplayStore } from "../src/models/executor/kimi/replay.ts";
 import type { JsonObject, Json } from "@commissary/json";
 import {
   collectStream,

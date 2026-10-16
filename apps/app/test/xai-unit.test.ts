@@ -2,9 +2,9 @@
 // processing, the replay store and local $ref inlining.
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
-import type { CredentialSnapshot } from "../src/executor/picker.ts";
+import type { CredentialSnapshot } from "../src/models/executor/picker.ts";
 import type { Json, JsonObject } from "@commissary/json";
-import { inlineLocalRefs } from "../src/executor/helps/inline-refs.ts";
+import { inlineLocalRefs } from "../src/models/executor/helps/inline-refs.ts";
 import {
   isCliChatProxyBaseUrl,
   xaiChatBaseUrl,
@@ -12,13 +12,13 @@ import {
   xaiCreds,
   xaiSpeechUrl,
   xaiUsingAPI,
-} from "../src/executor/xai/credentials.ts";
+} from "../src/models/executor/xai/credentials.ts";
 import {
   isBadCredentialsBody,
   speechModelUnavailable,
   xaiSpeechStatusError,
   xaiStatusError,
-} from "../src/executor/xai/errors.ts";
+} from "../src/models/executor/xai/errors.ts";
 import {
   mergeAdjacentReasoningSummaries,
   normalizeImageRefs,
@@ -26,8 +26,8 @@ import {
   normalizeInputReasoningItems,
   preserveOutputControls,
   sanitizeInputEncryptedContent,
-} from "../src/executor/xai/input.ts";
-import { OutputItemCollector } from "../src/executor/codex/output.ts";
+} from "../src/models/executor/xai/input.ts";
+import { OutputItemCollector } from "../src/models/executor/codex/output.ts";
 import {
   applyReplayCache,
   cacheReplayFromCompleted,
@@ -36,7 +36,7 @@ import {
   makeInMemoryXaiReplayStore,
   normalizeReplayItems,
   replayScopeFromRequest,
-} from "../src/executor/xai/replay.ts";
+} from "../src/models/executor/xai/replay.ts";
 import {
   EventPipeline,
   InternalXSearchFilter,
@@ -44,7 +44,7 @@ import {
   normalizeReasoningSummaryEvents,
   patchCompletedOutput,
   restoreClientWebSearchName,
-} from "../src/executor/xai/response.ts";
+} from "../src/models/executor/xai/response.ts";
 import {
   aliasClientWebSearchFunction,
   clampToolsLimit,
@@ -54,7 +54,7 @@ import {
   normalizeToolChoiceForTools,
   pruneOrphanedToolChoice,
   resolveClientWebSearchAlias,
-} from "../src/executor/xai/tool-choice.ts";
+} from "../src/models/executor/xai/tool-choice.ts";
 import {
   collectClientDeclaredToolKeys,
   collectNamespaceToolRefs,
@@ -62,8 +62,8 @@ import {
   promoteAdditionalTools,
   supportsNativeImageGeneration,
   totalFlattenedToolsCount,
-} from "../src/executor/xai/tools.ts";
-import { acceptableXaiClientVersion } from "../src/executor/xai/version.ts";
+} from "../src/models/executor/xai/tools.ts";
+import { acceptableXaiClientVersion } from "../src/models/executor/xai/version.ts";
 import { grokCiphertext } from "./support/xai.ts";
 
 const credential = (overrides: Partial<CredentialSnapshot> = {}): CredentialSnapshot => ({

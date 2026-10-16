@@ -1,17 +1,21 @@
 // Test helpers for the credential pool outside the Durable Object: an in-memory PoolStore, an injected clock and a
 // ControlPlane-API facade (`ControlPlaneApi`) so the Worker-side picker/conductor can be tested with deterministic time.
 import { Effect, Layer } from "effect";
-import { parseConfigYaml } from "../../src/config/codec.ts";
-import type { Config } from "../../src/config/schema.ts";
-import { ALLOW_ALL, type Reach } from "../../src/grants/reach.ts";
-import type { StoredCredential } from "../../src/credentials/derive.ts";
-import type { CredentialState } from "../../src/credentials/model.ts";
-import { CredentialPool, type PoolOptions, type PoolStore } from "../../src/credentials/pool.ts";
+import { parseConfigYaml } from "../../src/models/config/codec.ts";
+import type { Config } from "../../src/models/config/schema.ts";
+import { ALLOW_ALL, type Reach } from "../../src/models/grants/reach.ts";
+import type { StoredCredential } from "../../src/models/credentials/derive.ts";
+import type { CredentialState } from "../../src/models/credentials/model.ts";
+import {
+  CredentialPool,
+  type PoolOptions,
+  type PoolStore,
+} from "../../src/models/credentials/pool.ts";
 import {
   type ControlPlaneApi,
   makeControlPlanePicker,
-} from "../../src/executor/control-plane-picker.ts";
-import { CredentialPicker } from "../../src/executor/picker.ts";
+} from "../../src/models/executor/control-plane-picker.ts";
+import { CredentialPicker } from "../../src/models/executor/picker.ts";
 
 export class MemoryPoolStore implements PoolStore {
   readonly credentials = new Map<string, StoredCredential>();
@@ -79,7 +83,7 @@ export const makePool = async (
     readonly clock?: TestNow;
     /** What a member may use; everything unless a test says otherwise. */
     readonly reach?: (member: string | undefined) => Reach;
-    /** The org's Spend limits (`src/spend/ledger.ts`). */
+    /** The org's Spend limits (`src/models/spend/ledger.ts`). */
     readonly spend?: PoolOptions["spend"];
     /** Members' private provider key groups: YAML configs by owner (member id). */
     readonly privateConfigs?: Readonly<Record<string, string>>;

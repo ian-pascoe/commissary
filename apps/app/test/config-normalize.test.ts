@@ -1,7 +1,7 @@
 // Config normalisation gaps against the Go Sanitize* functions (config_normalization.go, vertex_compat.go).
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
-import { parseConfigYaml } from "../src/config/codec.ts";
+import { parseConfigYaml } from "../src/models/config/codec.ts";
 import { assertImportKeeps } from "./support/config-entries.ts";
 
 // Every document these tests decode is also imported as config entries: the import must give the same config

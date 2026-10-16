@@ -1,6 +1,6 @@
 // The shared management contract (packages/contract) against the real handlers: the panel's generated client
 // calls the management routes through the Access gate and must decode what they answer.
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
@@ -11,8 +11,8 @@ import { ManagementApi, scopedApiUrl } from "@commissary/contract/api";
 import type { ProviderKeysList, GroupView } from "@commissary/contract/provider-keys";
 import { ManagementError } from "@commissary/contract/errors";
 import { UsageGroupBy } from "@commissary/contract/usage";
-import { CATALOG_KEYS } from "../src/registry/catalog-store.ts";
-import { GROUP_BY, insertUsageRecord } from "../src/usage/d1.ts";
+import { CATALOG_KEYS } from "../src/models/registry/catalog-store.ts";
+import { GROUP_BY, insertUsageRecord } from "../src/models/usage/d1.ts";
 import {
   claudeFile,
   controlPlane,

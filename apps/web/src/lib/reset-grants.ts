@@ -1,7 +1,7 @@
 // Claude reset grants as the Account page shows them: how many resets are left, each grant's line, whether a reset can
 // be used now (and why not), and what an attempt's outcome means. Operator-facing copy says "reset" and "attempt",
 // never "claim". The server decides and re-checks before every attempt
-// (apps/app/src/quota/reset-grant-flow.ts); this only words its answers. Pure: tested in test/reset-grants.test.ts.
+// (apps/app/src/models/quota/reset-grant-flow.ts); this only words its answers. Pure: tested in test/reset-grants.test.ts.
 import type {
   ResetGrant,
   ResetGrantOutcome,

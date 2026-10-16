@@ -1,15 +1,15 @@
-// Spend limits in an org's ControlPlane (issue #71, src/spend/service.ts): who may write which limit, what each viewer
+// Spend limits in an org's ControlPlane (issue #71, src/models/spend/service.ts): who may write which limit, what each viewer
 // sees with the Spend so far, the credential subject exposed as `auth_index`, and the limits through the real
 // `pick` and `report` of the Durable Object (non-boundary cases: the Durable Object reads the wall clock; the
 // boundaries of periods are tested with an injected clock in spend-pool.test.ts).
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import type { Viewer } from "@commissary/auth";
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
-import { orgAuthIndexer } from "../src/management/auth-index.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
+import { orgAuthIndexer } from "../src/models/management/auth-index.ts";
 import { OrgId } from "@commissary/core";
 import { controlPlaneOf } from "@commissary/state";
-import type { NewSpendLimit, SpendEntry } from "../src/spend/service.ts";
+import type { NewSpendLimit, SpendEntry } from "../src/models/spend/service.ts";
 import { claudeFile } from "./support/management.ts";
 import { USD } from "./support/spend.ts";
 

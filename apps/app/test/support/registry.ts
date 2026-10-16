@@ -7,11 +7,11 @@ import {
   SECTIONS,
   sectionModels,
   type Section,
-} from "../../src/registry/catalog.ts";
-import type { ClientProjection } from "../../src/registry/availability.ts";
-import { compareStrings } from "../../src/registry/compare.ts";
-import { decodeWireModel, fromWire, type ModelInfo } from "../../src/registry/model-info.ts";
-import { type ClientRegistration, ModelRegistryIndex } from "../../src/registry/registry.ts";
+} from "../../src/models/registry/catalog.ts";
+import type { ClientProjection } from "../../src/models/registry/availability.ts";
+import { compareStrings } from "../../src/models/registry/compare.ts";
+import { decodeWireModel, fromWire, type ModelInfo } from "../../src/models/registry/model-info.ts";
+import { type ClientRegistration, ModelRegistryIndex } from "../../src/models/registry/registry.ts";
 import raw from "../fixtures/registry.json?raw";
 
 export interface FixtureClient {

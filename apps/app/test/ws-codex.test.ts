@@ -1,8 +1,8 @@
 // End-to-end tests (workerd) of the Responses WebSocket: a client socket driven through the Worker handler to a mocked
 // upstream WebSocket (Codex) and, for credentials without `websockets`, to a mocked HTTP upstream.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Config } from "../src/config/schema.ts";
-import type { CredentialSnapshot } from "../src/executor/picker.ts";
+import type { Config } from "../src/models/config/schema.ts";
+import type { CredentialSnapshot } from "../src/models/executor/picker.ts";
 import { codexModels, oauthCredential } from "./support/codex.ts";
 import {
   loadConfig,
@@ -13,7 +13,7 @@ import {
 import { connectClient, mockUpstream, type MockUpstreamOptions } from "./support/websocket.ts";
 import { xaiPicker, type XaiPickerLog } from "./support/xai.ts";
 import { Effect } from "effect";
-import { codexSessionStore } from "../src/executor/websocket/session.ts";
+import { codexSessionStore } from "../src/models/executor/websocket/session.ts";
 
 const created = {
   type: "response.created",

@@ -4,9 +4,9 @@
 // credentials-ownership.test.ts; here the same rule is checked end to end.
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { orgAuthIndexer } from "../src/management/auth-index.ts";
+import { orgAuthIndexer } from "../src/models/management/auth-index.ts";
 import { OrgId } from "@commissary/core";
-import { insertUsageRecord } from "../src/usage/d1.ts";
+import { insertUsageRecord } from "../src/models/usage/d1.ts";
 import {
   ADMIN,
   claudeFile,

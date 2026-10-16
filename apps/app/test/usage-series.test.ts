@@ -6,7 +6,7 @@ import { HttpApiClient } from "effect/http-api";
 import { afterAll, beforeEach, expect, it as plain } from "vitest";
 import { ManagementApi } from "@commissary/contract/api";
 import { ManagementError } from "@commissary/contract/errors";
-import { insertUsageRecord } from "../src/usage/d1.ts";
+import { insertUsageRecord } from "../src/models/usage/d1.ts";
 import { type Harness, makeHarness, resetControlPlane } from "./support/management.ts";
 import { authIndexOf } from "./support/auth-index.ts";
 import { resetUsageDb, sampleRecord } from "./support/usage.ts";

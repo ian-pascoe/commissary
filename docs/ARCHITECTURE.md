@@ -221,7 +221,7 @@ client -> Cloudflare Access -> Worker
   and sets/deletes on complex paths (`#`, `|`, `@`, `*`, `?`) throw `JsonPathError` (sjson silently rewrites matches;
   nothing in the Go code relies on it, payload rules expand `#(...)` queries into index paths first). Reads support
   `#`, `#.key`, `#(q)`, `#(q)#`, wildcards, pipes and the modifiers `@this @reverse @keys @values @flatten`.
-- **Config (`src/config/`)**: the canonical document is the v8 layout restricted to keys that apply on Workers
+- **Config (`src/models/config/`)**: the canonical document is the v8 layout restricted to keys that apply on Workers
   (`schema.ts`, kebab-case keys as in YAML). `codec.ts` imports YAML/JSON (v8, legacy flat layout and historical v8
   spellings, see `document.ts`), validates, normalises (`normalize.ts`, port of the Go `Sanitize*` functions) and
   encodes it back to the v8 layout (`encodeConfig`, which config entries are made of). The schema still decodes
@@ -231,8 +231,8 @@ client -> Cloudflare Access -> Worker
   MIGRATION.md); the import names them in its answer (`not_applied`) and stores none of them (ADR 0025), so the Settings
   view carries no such list. `requests.proxy-url` is accepted but ignored. Unknown/inapplicable keys are dropped on import.
 - **Storage** (ADR 0025): the `ControlPlane` DO's Models part (`src/models/control-plane-part.ts`) keeps the org's configuration as
-  config entries in SQLite (`ConfigStore`, `src/config/store.ts`; the pure mapping between a `Config` and its rows is
-  `src/config/entries.ts`). Every setting (by dotted path, e.g. `routing.strategy`), every provider key group, every provider key
+  config entries in SQLite (`ConfigStore`, `src/models/config/store.ts`; the pure mapping between a `Config` and its rows is
+  `src/models/config/entries.ts`). Every setting (by dotted path, e.g. `routing.strategy`), every provider key group, every provider key
   (its id is its credential id), every channel's model aliases, every channel's model exclusions and every payload rule
   is a row of its own with a `revision`, `updated_at` and `updated_by`. One change counter per org (`config_changes`)
   moves on every write and is the config `version`; each entry a write changes takes the counter's new value as its
@@ -245,7 +245,7 @@ client -> Cloudflare Access -> Worker
   `writeSettings`, `writeChannelRule`, `writeKeyGroup` and `importConfig(text, by)` (all return a structured result with
   `invalid` / `conflict` instead of throwing). The ControlPlane assembles the config from the entries (`current()` /
   `snapshot()`) and only re-assembles it when the counter moved. The Worker reads through `ConfigReader`
-  (`src/config/reader.ts`): per-isolate snapshot per org, 5 s TTL then a version check, stale-if-error, so readers still
+  (`src/models/config/reader.ts`): per-isolate snapshot per org, 5 s TTL then a version check, stale-if-error, so readers still
   rebuild their cached views when the version moves. Each org's ControlPlane stores its own entries; deployment settings
   (`DEPLOYMENT_SETTINGS` in `config/store.ts`, today `models.catalog`) are accepted in the `global` org's config only, and
   `ConfigReader` puts `global`'s value into every other org's snapshot.
@@ -276,7 +276,7 @@ client -> Cloudflare Access -> Worker
   not open (changed, copied, plain text after the migration) fails that read with `SealedValueError`, naming the row,
   never the value. Removing an auth file does not open it. Not sealed: provider OAuth login sessions (PKCE verifiers,
   short-lived), `SessionState`, KV caches.
-- **Payload rules (`src/config/payload/`)**: `applyPayloadRules(config, request, payload)` is the single final barrier;
+- **Payload rules (`src/models/config/payload/`)**: `applyPayloadRules(config, request, payload)` is the single final barrier;
   it mutates `payload` in place (callers pass a freshly built body and a distinct `original`). The Codex tool-schema
   integer normalisation that Go performs inside the same function lives in `executor/helps/payload.ts` (`finalizePayload`: normalise
   for Codex clients targeting non-Codex executors, then `applyPayloadRules`); executors call `finalizePayload`.
@@ -312,7 +312,7 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
   Worker-side picker (`ControlPlanePickerLayer`) and refresher (`CredentialRefresher.controlPlane`) resolve the stub
   from `ModelsEnv` and `CurrentOrg` on every call, so the same credential name in two orgs is two credentials with
   separate cooldowns, and its `auth_index` differs between them (`orgAuthIndexer`).
-- **Sources** (`src/credentials/`): auth JSON files imported through `importAuthFile`/`upsertCredential` (stored verbatim, sealed
+- **Sources** (`src/models/credentials/`): auth JSON files imported through `importAuthFile`/`upsertCredential` (stored verbatim, sealed
   with the org's data key (_Stored secrets_ above), in the DO's SQLite `credentials` table; the file _is_ the metadata) and provider keys synthesised from `api-keys` config with
   the Go content-hash ids (`synthesize.ts`, verified against the Go synthesizer via `tools/fixturegen/credentials`).
   `derive.ts` turns a stored file into the immutable `Credential` (priority, weight, prefix, headers, exclusions,
@@ -427,7 +427,7 @@ Core contracts every provider slice implements (Go references in each module hea
   picked up automatically by its `test/translator-fixtures.test.ts`; the cases with an executor context, which need the
   Worker's executor-level rewrites, go to `test/fixtures/translator-executor.json` here; cases may declare `needs` to
   be skipped until a capability lands).
-- **Executors (`src/executor/`)**: `ProviderExecutor { execute, executeStream, countTokens }` over
+- **Executors (`src/models/executor/`)**: `ProviderExecutor { execute, executeStream, countTokens }` over
   `ExecutorRequest`/`ExecutorOptions` (Go `Request`/`Options`, typed `ExecutionMetadata`) and an `ExecutionContext`
   (credential snapshot, config snapshot, `UsageReporter`). Streams are `Stream<string, ExecutionError>` of client
   chunks. All failures are `ExecutionError` (status, upstream body as message, `retryAfterMs`, `credentialScoped`,
@@ -440,7 +440,7 @@ Core contracts every provider slice implements (Go references in each module hea
   for tests (`makePipeline` uses it; `test/support/pool.ts` runs the real `CredentialPool` in-process with an injected
   clock). The route returned by `pick` (`PickedRoute`: upstream model pool, `originalAlias`, `forceMapping`, `pooled`) is
   computed in the DO; `executor/models.ts` is only used by the static picker.
-- **Handlers (`src/handlers/`)**: `execute.ts` runs resolve (`ModelProviders` service: the model registry;
+- **Handlers (`src/models/handlers/`)**: `execute.ts` runs resolve (`ModelProviders` service: the model registry;
   `ModelProviders.configLayer` serves tests without one) -> pick -> executor -> report -> usage (one record per attempt via `UsageSink`, published when the
   stream ends). `respond.ts` peeks the first stream chunk inside the request scope (the web handler keeps the scope
   open for streamed bodies) so pre-stream failures become real HTTP errors, then frames with a per-protocol
@@ -495,7 +495,7 @@ Core contracts every provider slice implements (Go references in each module hea
   `modelLookup = snapshot.lookupModelInfo`, which executors pass to `Thinking.apply`.
 - **Sessions**: `handlers/session.ts` ports `session.ExtractSessionInfo` (headers, Claude `metadata.user_id`, body fields)
   and feeds `PickRequest.session` together with the Access `callerScope`. Requests without an explicit marker are bound by
-  content (`src/session-routing/`, `routing.ts` = `prepareSessionRouting`, only when `routing.session-affinity` is on):
+  content (`src/models/session-routing/`, `routing.ts` = `prepareSessionRouting`, only when `routing.session-affinity` is on):
   - **LCP conversation matcher** (`canonical.ts`, `matcher.ts`; Go `session/lcp.go`, `auth/selector.go pickLCP/OnResult`):
     the request is reduced to canonical turns (five protocols, thinking tags/CRLF/timestamps/UUIDs of system text masked,
     tool parts sorted, >16 KiB values sampled) and a SHA-256 fingerprint per turn. The `MerklePrefixMatcher` (bounded: 1024
@@ -515,7 +515,7 @@ Core contracts every provider slice implements (Go references in each module hea
     execution-session (WebSocket) metadata ids are not consulted. Go parity is tested with `tools/fixturegen/session`
     (`test/fixtures/session.json`: turns, fingerprints, derive ids, matcher scenarios).
 
-## Codex provider and Responses API (`src/executor/codex/`, `translation/translator/codex/`, `src/handlers/responses/`)
+## Codex provider and Responses API (`src/models/executor/codex/`, `translation/translator/codex/`, `src/models/handlers/responses/`)
 
 - **Translators** (`translator/codex/<pkg>/{request,response}.ts`, registered by `codex/register.ts`): faithful ports of
   `internal/translator/codex/*` for `openai`, `openai-response`, `claude`, `gemini` and `interactions` -> `codex`. Shared
@@ -588,7 +588,7 @@ Core contracts every provider slice implements (Go references in each module hea
   translated completed response (same session/socket rules, replay-required for continuations without a live socket).
 - **Not ported (follow-ups)**: the Responses-tool image path being reachable only for non-`gpt-image` models (ported but not routed).
 
-## xAI provider and media endpoints (`src/executor/xai/`, `src/handlers/openai/{videos,speech,xai-*}.ts`)
+## xAI provider and media endpoints (`src/models/executor/xai/`, `src/models/handlers/openai/{videos,speech,xai-*}.ts`)
 
 Port of `xai_executor*.go` (HTTP/SSE; the Responses WebSocket executor is `executor/xai/websocket.ts`, see "Responses
 WebSocket transports"). Reuses the Codex translators
@@ -653,7 +653,7 @@ WebSocket transports"). Reuses the Codex translators
   WebSocket path cannot trigger here: downstream sockets only carry Responses-format requests (`NewClaudeInputTokenState` needs a
   Claude client), and the HTTP path gets it from `TranslatorRegistry.translateStream`.
 
-## Responses WebSocket transports (`src/handlers/responses/websocket/`, `src/executor/websocket/`, `src/executor/{codex,xai}/websocket.ts`)
+## Responses WebSocket transports (`src/models/handlers/responses/websocket/`, `src/models/executor/websocket/`, `src/models/executor/{codex,xai}/websocket.ts`)
 
 Port of `openai_responses_websocket*.go` (inbound `GET /v1/responses` and `GET /backend-api/codex/responses` with
 `Upgrade: websocket`), `codex_websockets_*.go` and `xai_websockets_executor.go`. The Access gate authenticates the
@@ -714,7 +714,7 @@ each planned frame (`handlers/responses/codex-prepare.ts`), the executors do the
 Access cookie makes cross-site WebSocket hijacking possible, see Authentication). CPU limits for
 long-lived sockets follow the Workers platform rules (`limits.cpu_ms`).
 
-## Model registry and `/models` endpoints (`src/registry/`)
+## Model registry and `/models` endpoints (`src/models/registry/`)
 
 Port of `internal/registry` plus the model registration in `sdk/cliproxy/service_models.go`. The Go registry is a mutable
 process-wide singleton that the service keeps in sync with credentials; on Workers it is a pure function of three inputs,
@@ -854,7 +854,7 @@ executor, `supportsApplyPatchProviders`) and `cpa_capabilities.web_search` for `
 Fixtures: the real Go `OpenAIModels` handler over the registry scenarios (`codexClient` section of `test/fixtures/registry.json`:
 per-entry and whole-body hashes of Go's sorted compact bytes, which the test reproduces itself before hashing).
 
-## Token refresh (`src/credentials/refresh/`)
+## Token refresh (`src/models/credentials/refresh/`)
 
 Port of `auto_refresh_loop.go` + `conductor_refresh.go` + the per-provider `Refresh` executors. The `RefreshManager`
 (Cloudflare-free, unit tested with a fake host/alarm/clock) is owned by the `ControlPlane` DO, which is the only writer:
@@ -896,7 +896,7 @@ URL; Kimi/Claude device/uTLS headers are constants/subsets; Devin's metadata ref
 scheduled) is not ported; `META_MINT_URL` is the Worker var of the same name (`RefreshContext.metaMintUrl`, also used by the Meta
 login); Claude device-profile preparation is the executor's `stabilize-device-profile` store (below); Antigravity project discovery and the credits probe run in the Antigravity executor.
 
-## Claude provider (`src/executor/claude/`, `translation/translator/claude/`)
+## Claude provider (`src/models/executor/claude/`, `translation/translator/claude/`)
 
 Ported from `internal/runtime/executor/claude_executor*.go`, `internal/translator/claude/*` and the helpers they use.
 
@@ -960,7 +960,7 @@ Deviations from Go (all deliberate, documented in code headers):
   The OpenAI-compatibility executor posts the Responses-format request to `{base-url}/responses/compact` (no chat shaping, `stream`
   removed, reasoning cleartext cleared).
 
-## Gemini, Vertex and Interactions (`src/executor/gemini/`, `translation/translator/gemini/`, `src/handlers/gemini/`)
+## Gemini, Vertex and Interactions (`src/models/executor/gemini/`, `translation/translator/gemini/`, `src/models/handlers/gemini/`)
 
 - **Providers**: one engine (`executor/gemini/google.ts`) parameterised by a `GoogleVariant` (`targets.ts`): `gemini`
   (provider key, `x-goog-api-key`), `gemini-interactions` (same key, native `POST /v1beta/interactions` with the
@@ -1025,7 +1025,7 @@ Port of `internal/translator/interactions/claude` (registered as `claude -> inte
   the wall-clock `msg_<unixnano>` ids. End-to-end: `test/claude-interactions-pipeline.test.ts` (gemini-interactions through the
   full pipeline, Devin through its executor with a Claude source).
 
-## OpenAI-compatible upstream for every client protocol (`translation/translator/openai/`, `src/executor/openai-compat/`)
+## OpenAI-compatible upstream for every client protocol (`translation/translator/openai/`, `src/models/executor/openai-compat/`)
 
 Port of `internal/translator/openai/{claude,gemini,openai,interactions}` plus the image paths of
 `openai_compat_executor.go` and `openai_images_handlers.go`. `translator/openai/register.ts` registers (client -> provider):
@@ -1377,7 +1377,7 @@ management key is not ported, and the port's per-org management keys (_Managemen
   (_Config entries_ above). Provider keys can be toggled
   (Go answers the same through `excluded-models`); compat keys cannot, only their endpoint.
 
-## Quota check (`src/quota/`, `src/management/quota-routes.ts`)
+## Quota check (`src/models/quota/`, `src/models/management/quota-routes.ts`)
 
 Workers addition with no Go counterpart: the upstream panel asks the provider usage endpoints itself, from the browser,
 through Go's `POST /requests/api-call` (not ported). Here the server does it, so tokens never reach the browser and the
@@ -1460,7 +1460,7 @@ result is stored.
   - Windows without a percentage are dropped (`used_percent` is required).
   - Labels are English and fixed.
 
-## Claude reset grants (`src/quota/reset-grant*.ts`, `src/management/reset-grant-routes.ts`)
+## Claude reset grants (`src/models/quota/reset-grant*.ts`, `src/models/management/reset-grant-routes.ts`)
 
 Workers addition with no Go counterpart (Go has no reset grant code; the upstream panel makes these calls from the
 browser through `POST /requests/api-call`, not ported). A reset grant is Anthropic's `cedar_ember` program: a bundle of
@@ -1524,7 +1524,7 @@ resets, each of which empties the usage windows it `clears` (`five_hour`, `seven
   the panel's three are kept when they look like ids. The weekly `juniper_tide` program is not handled (nor by the
   panel).
 
-## Usage accounting and observability (`src/usage/`, `src/models/observability/`, `src/management/usage-routes.ts`)
+## Usage accounting and observability (`src/models/usage/`, `src/models/observability/`, `src/models/management/usage-routes.ts`)
 
 Port of `sdk/cliproxy/usage` (token accounting v2), `helps/usage_helpers.go` (parsers, `StreamUsageBuffer`, TTFT) and the
 `internal/redisqueue` export shape. One `UsageRecord` per upstream attempt (`UsageReporter` per attempt, `finish` exactly
@@ -1634,7 +1634,7 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   logs of cron jobs and management handlers use `core/observability/cause.ts` (`causeSummary`: tag + message, URL queries removed,
   no stack) instead of `Cause.pretty`.
 
-## Kimi, Meta and Devin providers (`src/executor/{kimi,meta,devin}/`)
+## Kimi, Meta and Devin providers (`src/models/executor/{kimi,meta,devin}/`)
 
 Ported from `kimi_executor.go`/`kimi_thinking_replay.go`, `meta_executor*.go`, `devin_executor.go` and the `helps/devin_*`
 helpers; `oauth_scope_executor.go` is `executor/helps/oauth-scope.ts`.
@@ -1686,7 +1686,7 @@ Devin's models are catalog additions (`devin/<id>` records, no source to fetch);
 the registry snapshot (`modelLookup`, ids `devin/<id>`) before the embedded catalog. Not ported: the Kimi
 `X-Msh-Device-Name/Model` of the real host, request/response debug logs, the developer-only `cmd/fetch_devin_models` live catalog probe.
 
-## OpenCode Zen and OpenCode Go (`src/executor/opencode/`, `src/registry/opencode-*.ts`)
+## OpenCode Zen and OpenCode Go (`src/models/executor/opencode/`, `src/models/registry/opencode-*.ts`)
 
 No Go counterpart: CLIProxyAPI reaches OpenCode only through an `openai-compatibility` entry (chat only). The Workers port has two
 API-key providers, `opencode-zen` (`https://opencode.ai/zen/v1`) and `opencode-go` (`https://opencode.ai/zen/go/v1`), configured
@@ -1737,7 +1737,7 @@ select ("Auto (catalog)" when unset).
   13min", "3 days", "45min", "2h 13m"; read up to the sentence's end or "To continue"), else 30 min, and at most 32
   days (a bogus header cannot park a key for longer than a monthly window): the whole key is cooled (`credential_quota`) until the window resets, so the next request goes to another key or the fallback
   without asking the gateway again. No usage fetch on the request path; the quota check reads the windows.
-- **Quota** (`src/quota/opencode-go.ts`): OpenCode Go keys are listed on the Accounts page as config accounts with the
+- **Quota** (`src/models/quota/opencode-go.ts`): OpenCode Go keys are listed on the Accounts page as config accounts with the
   5-hour, weekly and monthly windows of `GET {base}/usage` (see _Quota check_ and _Management API_ "Credentials").
   OpenCode Zen has no usage endpoint.
 - **Key test** (`management/provider-keys-probe.ts`): the gateways list models without authentication, so the panel's key test
@@ -1854,7 +1854,7 @@ two orgs never share an instance.
   unchanged). It registers itself with its org's ControlPlane on its first write so that deleting the org can wipe it
   (`state/session-state/instances.ts`, `SessionState.wipe`); see "Zero data retention".
 
-## Local token counting (`translation/tokenizer/`, `src/executor/helps/token-count.ts`)
+## Local token counting (`translation/tokenizer/`, `src/models/executor/helps/token-count.ts`)
 
 Port of the `tiktoken-go/tokenizer` usage in `helps/token_helpers.go`, `codex_executor_tokens.go` (also Meta),
 `xai_executor_tokens.go`, `helps/claude_input_tokens.go` and `claude_executor_tokens.go` (gateway estimate). It replaces the
@@ -1899,7 +1899,7 @@ schemas or `1.0` numbers sent by a client count slightly differently); Unicode p
 Go's `unicode` package, so characters assigned after the older table can be classified differently; a stream estimate error is
 silent (Go logs a warning).
 
-## Antigravity provider (`src/executor/antigravity/`, `translation/translator/antigravity/`, `translation/signature/`)
+## Antigravity provider (`src/models/executor/antigravity/`, `translation/translator/antigravity/`, `translation/signature/`)
 
 Ported from `antigravity_executor*.go`, `internal/translator/antigravity/*`, `internal/signature`, `internal/cache/signature_cache.go`,
 `internal/misc/antigravity_version.go` and `sdk/cliproxy/antigravity_models.go`.
@@ -1980,7 +1980,7 @@ test in `executor/claude/sanitize.ts`, Devin's approximation) are gone: the Code
 Grok/GPT/recognised checks, Gemini replay, ~500 sanitiser runs over synthetic histories and Gemini validation/pairing cases;
 `test/signature-fixtures.test.ts` compares them with the port (key order included).
 
-## Codex client rewriting and compat variants (`src/executor/helps/{codex-multi-agent-v2,translate}.ts`)
+## Codex client rewriting and compat variants (`src/models/executor/helps/{codex-multi-agent-v2,translate}.ts`)
 
 - **Multi-agent v2** (`codex-multi-agent-v2.ts`, port of `internal/client/codex/optimize-multi-agent-v2`): for official Codex
   clients (User-Agent allow-list) and `client.codex.optimize-multi-agent-v2`: `prepareCodexMultiAgentV2Tools` lists the available
@@ -2094,7 +2094,7 @@ error codes are in `docs/ACCESS.md` "Members, roles and teams".
   `added_by = "migration"`, names kept so stages that stored them do not seed again). Taking an email out of the variable
   later ends its platform admin rights but not its `global` membership.
 
-## Grants (`src/grants/`, `src/management/grant-routes.ts`)
+## Grants (`src/models/grants/`, `src/models/management/grant-routes.ts`)
 
 Workers addition, no Go counterpart; ADR 0023. A grant says which upstream models of which **shared**
 credentials a subject may use; selection and the model registry read it (_Credentials and selection_, _Model registry_).
@@ -2172,7 +2172,7 @@ Workers addition replacing the Go server's client keys (`access.api-keys`, impor
   a deploy applies it only after the new Worker, which reads `cf-access-token`, is live. `tools/check-deploy.sh` verifies
   both sides after each CI deploy, and that a `cloudflared`-style request (`cf-access-token` plus a dummy key) is served.
 
-## Spend limits (`src/spend/`, `src/management/spend-routes.ts`)
+## Spend limits (`src/models/spend/`, `src/models/management/spend-routes.ts`)
 
 Workers addition, no Go counterpart; ADR 0024. A Spend limit caps the Cost an org's traffic adds up to over a day, week or
 month. Cost is the attempt's token breakdown at the model's price (_Usage accounting and observability_); the Worker
@@ -2350,7 +2350,7 @@ Access one, unchanged. User docs: `docs/ACCESS.md` "Commissary Cloud", `docs/DEP
   validates them). CI deploys a preview as Commissary Cloud while its pull request has the `cloud-preview` label and checks it with
   `tools/check-cloud-deploy.sh`.
 
-## Provider OAuth logins (`src/oauth/`, `src/management/oauth-routes.ts`)
+## Provider OAuth logins (`src/models/oauth/`, `src/models/management/oauth-routes.ts`)
 
 Port of the management OAuth handlers (`auth_files_provider_oauth.go`, `auth_files_devin_oauth.go`, `oauth_callback.go`,
 `oauth_sessions.go`) and `internal/auth/*`. The panel's OAuth page works unchanged: `GET /v9/management/oauth/auth-url?provider=`

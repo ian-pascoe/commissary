@@ -3,17 +3,17 @@
 // error classification) and a mocked upstream.
 import { Effect, Layer } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Config } from "../src/config/schema.ts";
-import { normalizeCchInput } from "../src/executor/claude/signing.ts";
-import { xxh64 } from "../src/executor/claude/xxhash64.ts";
-import { canonicalModelKey } from "../src/credentials/selection/model-name.ts";
-import { ExecutionError } from "../src/executor/errors.ts";
-import { ModelProviders } from "../src/handlers/model-providers.ts";
+import type { Config } from "../src/models/config/schema.ts";
+import { normalizeCchInput } from "../src/models/executor/claude/signing.ts";
+import { xxh64 } from "../src/models/executor/claude/xxhash64.ts";
+import { canonicalModelKey } from "../src/models/credentials/selection/model-name.ts";
+import { ExecutionError } from "../src/models/executor/errors.ts";
+import { ModelProviders } from "../src/models/handlers/model-providers.ts";
 import {
   CredentialPicker,
   type AttemptResult,
   type CredentialSnapshot,
-} from "../src/executor/picker.ts";
+} from "../src/models/executor/picker.ts";
 import { asString, type JsonObject } from "@commissary/json";
 import { setModelInfoLookup } from "@commissary/translation";
 import {

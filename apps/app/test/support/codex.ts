@@ -1,14 +1,14 @@
 // Test helpers for the Codex provider: a fixed-credential picker, a codex-only model lookup and canned upstream streams.
 import { Effect, Layer } from "effect";
-import { ExecutionError } from "../../src/executor/errors.ts";
+import { ExecutionError } from "../../src/models/executor/errors.ts";
 import {
   CredentialPicker,
   type AttemptResult,
   type CredentialSnapshot,
   type PickResult,
-} from "../../src/executor/picker.ts";
-import { ModelProviders } from "../../src/handlers/model-providers.ts";
-import { ConfigReader } from "../../src/config/reader.ts";
+} from "../../src/models/executor/picker.ts";
+import { ModelProviders } from "../../src/models/handlers/model-providers.ts";
+import { ConfigReader } from "../../src/models/config/reader.ts";
 
 export const oauthCredential = (
   overrides: Partial<CredentialSnapshot> = {},

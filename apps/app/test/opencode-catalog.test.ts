@@ -1,13 +1,13 @@
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it } from "vitest";
-import { embeddedModelsDev, modelsDevFromText } from "../src/registry/catalog.ts";
-import { CATALOG_KEYS } from "../src/registry/catalog-store.ts";
+import { embeddedModelsDev, modelsDevFromText } from "../src/models/registry/catalog.ts";
+import { CATALOG_KEYS } from "../src/models/registry/catalog-store.ts";
 import {
   currentOpenCodeCatalog,
   defaultCatalogModels,
   openCodeCatalogFromText,
   resetOpenCodeCatalogCache,
-} from "../src/registry/opencode-catalog.ts";
+} from "../src/models/registry/opencode-catalog.ts";
 import { FakeKv, workerEnv } from "./support/registry-refresh.ts";
 import { documentText, mdModel } from "./support/models-dev.ts";
 

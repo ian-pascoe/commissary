@@ -8,9 +8,9 @@ import {
   applyOAuthModelAliasEntries,
   assembleCredentialModels,
   oauthModelAliasChannel,
-} from "../src/registry/credential-models.ts";
-import { embeddedCatalogs, sectionModels } from "../src/registry/catalog.ts";
-import type { ModelInfo } from "../src/registry/model-info.ts";
+} from "../src/models/registry/credential-models.ts";
+import { embeddedCatalogs, sectionModels } from "../src/models/registry/catalog.ts";
+import type { ModelInfo } from "../src/models/registry/model-info.ts";
 import { ids, options, source } from "./support/registry-sources.ts";
 
 const model = (id: string, extra: Partial<ModelInfo> = {}): ModelInfo => ({

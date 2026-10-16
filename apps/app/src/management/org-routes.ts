@@ -41,11 +41,11 @@ import {
 } from "@commissary/state";
 import { deleteOrg as deleteOrgData } from "../platform/org-deletion.ts";
 import type { OrgView } from "@commissary/contract/orgs";
-import type { GrantSubject } from "../grants/grant.ts";
+import type { GrantSubject } from "../models/grants/grant.ts";
 import { AppEnv } from "../worker-env.ts";
-import { maskConfigSecrets } from "./export-view.ts";
+import { maskConfigSecrets } from "../models/management/export-view.ts";
 import { bodyObject } from "./http.ts";
-import { storedConfig } from "./settings-routes.ts";
+import { storedConfig } from "../models/management/settings-routes.ts";
 import { currentViewer } from "@commissary/auth";
 
 const BASE = "/v9/management";

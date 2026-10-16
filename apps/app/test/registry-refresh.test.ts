@@ -2,15 +2,22 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Fiber, Layer } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { TestClock } from "effect/testing";
-import { embeddedCatalogs, embeddedModelsDev } from "../src/registry/catalog.ts";
-import { resetOpenCodeCatalogCache, openCodeCatalogFor } from "../src/registry/opencode-catalog.ts";
-import { CATALOG_CACHE_TTL_MS, CATALOG_KEYS, CatalogStore } from "../src/registry/catalog-store.ts";
+import { embeddedCatalogs, embeddedModelsDev } from "../src/models/registry/catalog.ts";
+import {
+  resetOpenCodeCatalogCache,
+  openCodeCatalogFor,
+} from "../src/models/registry/opencode-catalog.ts";
+import {
+  CATALOG_CACHE_TTL_MS,
+  CATALOG_KEYS,
+  CatalogStore,
+} from "../src/models/registry/catalog-store.ts";
 import {
   MAX_CATALOG_BYTES,
   MODELS_DEV_URL,
   refreshCatalogs,
   resolveSource,
-} from "../src/registry/refresh.ts";
+} from "../src/models/registry/refresh.ts";
 import { scheduledTasks } from "../src/api/scheduled.ts";
 import { documentText, mdModel } from "./support/models-dev.ts";
 import {

@@ -1,14 +1,14 @@
 // Selection tests ported from sdk/cliproxy/auth/selector_test.go (strategies, priorities, availability, affinity).
 import { describe, expect, it } from "vitest";
-import { SessionCache } from "../src/credentials/selection/affinity.ts";
-import { isBlockedForModel } from "../src/credentials/selection/availability.ts";
+import { SessionCache } from "../src/models/credentials/selection/affinity.ts";
+import { isBlockedForModel } from "../src/models/credentials/selection/availability.ts";
 import {
   MAX_SMOOTH_STATE_ENTRIES,
   RotationState,
   SmoothWeightedState,
   pickSmoothWeighted,
   successorIndex,
-} from "../src/credentials/selection/strategies.ts";
+} from "../src/models/credentials/selection/strategies.ts";
 import {
   NOW,
   Harness,

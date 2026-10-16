@@ -2,10 +2,10 @@
 // socket through the Worker handler to a mocked upstream socket that the executor owns until the client goes away.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Effect, Layer } from "effect";
-import type { Config } from "../src/config/schema.ts";
-import { makeCodexExecutor } from "../src/executor/codex/executor.ts";
-import { codexSessionStore } from "../src/executor/websocket/session.ts";
-import type { CredentialSnapshot } from "../src/executor/picker.ts";
+import type { Config } from "../src/models/config/schema.ts";
+import { makeCodexExecutor } from "../src/models/executor/codex/executor.ts";
+import { codexSessionStore } from "../src/models/executor/websocket/session.ts";
+import type { CredentialSnapshot } from "../src/models/executor/picker.ts";
 import { codexModels, oauthCredential } from "./support/codex.ts";
 import { harness, json, options } from "./support/executor-run.ts";
 import { loadConfig, makePipeline, sseResponse } from "./support/pipeline.ts";

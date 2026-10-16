@@ -9,14 +9,17 @@ import {
   extractAndRemoveBetas,
   requestedBetas,
   withAdvisorToolBeta,
-} from "../src/executor/claude/betas.ts";
+} from "../src/models/executor/claude/betas.ts";
 import {
   enforceCacheControlLimit,
   ensureCacheControl,
   normalizeCacheControlTTL,
   upgradeCacheControlTTL,
-} from "../src/executor/claude/cache-control.ts";
-import { computeFingerprint, generateBillingHeader } from "../src/executor/claude/cloaking.ts";
+} from "../src/models/executor/claude/cache-control.ts";
+import {
+  computeFingerprint,
+  generateBillingHeader,
+} from "../src/models/executor/claude/cloaking.ts";
 import {
   AliasResolver,
   AliasRestoreError,
@@ -25,21 +28,21 @@ import {
   remapToolNames,
   restoreToolNamesInResponse,
   restoreToolNamesInStreamLine,
-} from "../src/executor/claude/mcp-alias.ts";
+} from "../src/models/executor/claude/mcp-alias.ts";
 import {
   classifyUpstreamError,
   headersIndicateUnifiedRejection,
   parseRateLimitResetMs,
-} from "../src/executor/claude/ratelimit.ts";
-import { sanitizeForClaudeUpstream } from "../src/executor/claude/sanitize.ts";
+} from "../src/models/executor/claude/ratelimit.ts";
+import { sanitizeForClaudeUpstream } from "../src/models/executor/claude/sanitize.ts";
 import { claudeSignature } from "./support/signatures.ts";
 import {
   ensureBillingCCHPlaceholder,
   normalizeCchInput,
   serializeAndSign,
-} from "../src/executor/claude/signing.ts";
-import { xxh64 } from "../src/executor/claude/xxhash64.ts";
-import { claudeCodeLocalDate } from "../src/executor/claude/cloaking.ts";
+} from "../src/models/executor/claude/signing.ts";
+import { xxh64 } from "../src/models/executor/claude/xxhash64.ts";
+import { claudeCodeLocalDate } from "../src/models/executor/claude/cloaking.ts";
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 

@@ -1,14 +1,14 @@
 // OpenCode Go keys on the Accounts page: `GET /credentials` lists the config keys whose provider reports quota (named
 // by their auth_index, the key masked), the quota check and the cron sweep probe `{base}/usage` with the key (mocked
 // outbound HTTP), the file-only operations refuse them with `409 config_credential`, and an edited key starts afresh.
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { assert, describe, it } from "@effect/vitest";
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { Effect, Schema } from "effect";
 import { afterAll, beforeEach, expect } from "vitest";
 import { CredentialEntry } from "@commissary/contract/credentials";
-import { runQuotaSweep } from "../src/quota/check.ts";
+import { runQuotaSweep } from "../src/models/quota/check.ts";
 import {
   controlPlane,
   jsonInit,

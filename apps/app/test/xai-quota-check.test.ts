@@ -1,4 +1,4 @@
-// xAI quota check (`src/quota/probe.ts`): the billing calls carry the Grok CLI identity at the version the chat proxy
+// xAI quota check (`src/models/quota/probe.ts`): the billing calls carry the Grok CLI identity at the version the chat proxy
 // accepts (it answers 426 below `XAI_CLIENT_VERSION_FLOOR`), the same version the executor sends.
 import { assert, describe, it } from "@effect/vitest";
 import { env } from "cloudflare:workers";
@@ -10,9 +10,9 @@ import {
   resetXaiClientVersionCache,
   XAI_FALLBACK_CLIENT_VERSION,
   XAI_VERSION_KV_KEY,
-} from "../src/executor/xai/version.ts";
-import { probeQuota } from "../src/quota/probe.ts";
-import { XAI_BILLING_MONTHLY_URL, XAI_BILLING_WEEKLY_URL } from "../src/quota/xai.ts";
+} from "../src/models/executor/xai/version.ts";
+import { probeQuota } from "../src/models/quota/probe.ts";
+import { XAI_BILLING_MONTHLY_URL, XAI_BILLING_WEEKLY_URL } from "../src/models/quota/xai.ts";
 import { envContext } from "../src/worker-env.ts";
 
 interface Seen {

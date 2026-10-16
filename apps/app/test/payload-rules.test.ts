@@ -10,7 +10,7 @@ import {
   type PayloadRulesConfig,
   payloadModelCandidates,
   resolvePayloadRulePaths,
-} from "../src/config/payload/index.ts";
+} from "../src/models/config/payload/index.ts";
 import fixtures from "./fixtures/payload-rules.json";
 
 const decodePayload = Schema.decodeUnknownSync(PayloadConfig);

@@ -41,7 +41,7 @@ const COMPLETION = {
   usage: { prompt_tokens: 5, completion_tokens: 2, total_tokens: 7 },
 };
 
-// The gateway's answer over a Go window (opencode console handler, see src/executor/opencode/usage-limit.ts).
+// The gateway's answer over a Go window (opencode console handler, see src/models/executor/opencode/usage-limit.ts).
 const LIMITED = JSON.stringify({
   type: "error",
   error: {

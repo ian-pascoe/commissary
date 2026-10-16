@@ -7,9 +7,9 @@ import {
   sectionModels,
   staticModelsByChannel,
   validateCodexClientModels,
-} from "../src/registry/catalog.ts";
-import { catalogsFromText } from "../src/registry/catalog-store.ts";
-import codexClient from "../src/registry/catalog/codex_client_models.json";
+} from "../src/models/registry/catalog.ts";
+import { catalogsFromText } from "../src/models/registry/catalog-store.ts";
+import codexClient from "../src/models/registry/catalog/codex_client_models.json";
 import { documentText, mdModel } from "./support/models-dev.ts";
 
 const codexEntry = (overrides: Record<string, unknown> = {}) => ({

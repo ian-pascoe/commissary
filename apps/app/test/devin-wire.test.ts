@@ -5,12 +5,17 @@ import {
   ConnectFrameError,
   ConnectFrameParser,
   inflateFrame,
-} from "../src/executor/devin/connect.ts";
-import { buildSensitiveWordMatcher } from "../src/executor/claude/cloaking.ts";
-import { devinLevelLookup } from "../src/executor/devin/catalog.ts";
-import { resolveDevinChatModelUid } from "../src/executor/devin/models.ts";
-import { devinPayloadView, finalizeDevinPayload } from "../src/executor/devin/payload.ts";
-import { ProtoError, ProtoWriter, readFields, WireType } from "../src/executor/devin/protobuf.ts";
+} from "../src/models/executor/devin/connect.ts";
+import { buildSensitiveWordMatcher } from "../src/models/executor/claude/cloaking.ts";
+import { devinLevelLookup } from "../src/models/executor/devin/catalog.ts";
+import { resolveDevinChatModelUid } from "../src/models/executor/devin/models.ts";
+import { devinPayloadView, finalizeDevinPayload } from "../src/models/executor/devin/payload.ts";
+import {
+  ProtoError,
+  ProtoWriter,
+  readFields,
+  WireType,
+} from "../src/models/executor/devin/protobuf.ts";
 import {
   buildGetChatMessageRequest,
   generateDeviceFingerprint,
@@ -19,7 +24,7 @@ import {
   parseTrailerError,
   sanitizeDevinSystemPrompt,
   wrapConnectEnvelope,
-} from "../src/executor/devin/wire.ts";
+} from "../src/models/executor/devin/wire.ts";
 import fixtures from "./fixtures/devin.json";
 
 const fromHex = (hex: string): Uint8Array =>

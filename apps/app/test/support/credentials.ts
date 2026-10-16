@@ -5,16 +5,16 @@ import {
   type ModelState,
   emptyQuota,
   emptyState,
-} from "../../src/credentials/model.ts";
-import { ALLOW_ALL, type Reach } from "../../src/grants/reach.ts";
+} from "../../src/models/credentials/model.ts";
+import { ALLOW_ALL, type Reach } from "../../src/models/grants/reach.ts";
 import {
   type CredentialEntry,
   type SelectionSettings,
   selectCredential,
-} from "../../src/credentials/selection/pick.ts";
-import { SessionCache } from "../../src/credentials/selection/affinity.ts";
-import { RotationState } from "../../src/credentials/selection/strategies.ts";
-import type { PickRequest } from "../../src/credentials/selection/types.ts";
+} from "../../src/models/credentials/selection/pick.ts";
+import { SessionCache } from "../../src/models/credentials/selection/affinity.ts";
+import { RotationState } from "../../src/models/credentials/selection/strategies.ts";
+import type { PickRequest } from "../../src/models/credentials/selection/types.ts";
 
 export const NOW = 1_800_000_000_000;
 

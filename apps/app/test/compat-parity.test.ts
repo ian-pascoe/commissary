@@ -1,12 +1,12 @@
 // OpenAI-compatible parity (#29 part 2): text-only tool-result normalisation and derived prompt cache keys, against the
 // real Go helpers (`go run ./tools/fixturegen/compatparity`) and through the executor.
 import { describe, expect, it } from "vitest";
-import type { OpenAICompatGroup } from "../src/config/schema.ts";
-import { makeOpenAICompatExecutor } from "../src/executor/openai-compat/executor.ts";
+import type { OpenAICompatGroup } from "../src/models/config/schema.ts";
+import { makeOpenAICompatExecutor } from "../src/models/executor/openai-compat/executor.ts";
 import {
   normalizeToolResultsTextOnly,
   shouldNormalizeToolResults,
-} from "../src/executor/helps/openai-compat-tool-results.ts";
+} from "../src/models/executor/helps/openai-compat-tool-results.ts";
 import { get, type Json } from "@commissary/json";
 import { credential, execute, harness, json, options } from "./support/executor-run.ts";
 import fixtures from "./fixtures/compat-parity.json";

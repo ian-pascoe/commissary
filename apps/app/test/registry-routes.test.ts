@@ -1,15 +1,19 @@
 // /v1/models and /v1beta/models through the router with the Access gate, a faked registry and the real ControlPlane.
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { env } from "cloudflare:workers";
 import { Effect, Layer } from "effect";
 import { HttpRouter } from "effect/http";
 import { afterAll, describe, expect, it } from "vitest";
 import { makeAccessLayer, makeWithAccess } from "../src/access/layer.ts";
-import { ConfigReader } from "../src/config/reader.ts";
+import { ConfigReader } from "../src/models/config/reader.ts";
 import { requestContext } from "../src/worker-env.ts";
-import { CatalogStore } from "../src/registry/catalog-store.ts";
-import { ModelRoutes } from "../src/registry/routes.ts";
-import { ModelRegistry, ModelRegistryError, buildSnapshot } from "../src/registry/service.ts";
+import { CatalogStore } from "../src/models/registry/catalog-store.ts";
+import { ModelRoutes } from "../src/models/registry/routes.ts";
+import {
+  ModelRegistry,
+  ModelRegistryError,
+  buildSnapshot,
+} from "../src/models/registry/service.ts";
 import { RootRoutes } from "../src/http/routes.ts";
 import {
   AUD,

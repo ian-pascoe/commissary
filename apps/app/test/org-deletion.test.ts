@@ -7,7 +7,7 @@ import { deleteOrg, DELETION_BUDGET } from "../src/platform/org-deletion.ts";
 import { type OrgDeletionStep, orgScopedName, OrgId } from "@commissary/core";
 import { addressName } from "@commissary/state";
 import { deleteOrgModels } from "../src/models/org-deletion.ts";
-import { insertUsageRecord } from "../src/usage/d1.ts";
+import { insertUsageRecord } from "../src/models/usage/d1.ts";
 import {
   ADMIN,
   claudeFile,

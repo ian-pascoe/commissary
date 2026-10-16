@@ -1,6 +1,6 @@
 // Token refresh through the ControlPlane Durable Object: alarm arming, alarm-driven refresh, request-time refresh RPC,
 // cron sweep. Upstream endpoints are mocked by replacing `fetch` (the DO runs in the test isolate).
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { runInDurableObject } from "cloudflare:test";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";

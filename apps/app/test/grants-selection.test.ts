@@ -2,8 +2,8 @@
 // grant for before priority tiers, strategy and session affinity look at the candidates. Everything that cannot be
 // reached answers like an unknown model.
 import { describe, expect, it } from "vitest";
-import { planRetry } from "../src/credentials/selection/retry.ts";
-import { ALL_MODELS } from "../src/grants/grant.ts";
+import { planRetry } from "../src/models/credentials/selection/retry.ts";
+import { ALL_MODELS } from "../src/models/grants/grant.ts";
 import {
   Harness,
   NOW,

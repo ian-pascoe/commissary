@@ -1,7 +1,7 @@
 // The Spend ledger (issue #71): which limits a request meets before a credential is chosen, what it is charged to, and
 // when a period resets. Pure over an in-memory book with an explicit `now`.
 import { describe, expect, it } from "vitest";
-import { SpendLedger } from "../src/spend/ledger.ts";
+import { SpendLedger } from "../src/models/spend/ledger.ts";
 import { MemorySpendBook, limit, USD } from "./support/spend.ts";
 
 const at = (iso: string): number => Date.parse(iso);

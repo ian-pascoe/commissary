@@ -4,15 +4,15 @@ import { env } from "cloudflare:workers";
 import { Effect, Layer } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Config } from "../src/config/schema.ts";
-import type { CredentialSnapshot } from "../src/executor/picker.ts";
+import type { Config } from "../src/models/config/schema.ts";
+import type { CredentialSnapshot } from "../src/models/executor/picker.ts";
 import {
   currentXaiClientVersion,
   refreshXaiClientVersion,
   resetXaiClientVersionCache,
   XAI_FALLBACK_CLIENT_VERSION,
   XAI_VERSION_KV_KEY,
-} from "../src/executor/xai/version.ts";
+} from "../src/models/executor/xai/version.ts";
 import { scheduledTasks } from "../src/api/scheduled.ts";
 import {
   jsonResponse,
@@ -503,7 +503,7 @@ describe("client version task", () => {
 
 describe("xAI image edit options (Go drops Codex-only mask / input_fidelity)", () => {
   it("builds the xAI edit body from size/quality/n only", async () => {
-    const { buildEditRequest } = await import("../src/handlers/openai/xai-images.ts");
+    const { buildEditRequest } = await import("../src/models/handlers/openai/xai-images.ts");
 
     const body = buildEditRequest(
       {

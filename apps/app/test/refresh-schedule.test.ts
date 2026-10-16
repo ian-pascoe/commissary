@@ -1,15 +1,18 @@
 // Refresh scheduling math and failure/success state transitions (pure, no I/O).
 import { describe, expect, it } from "vitest";
-import { emptyState } from "../src/credentials/model.ts";
-import { applyRefreshFailure, applyRefreshSuccess } from "../src/credentials/refresh/outcome.ts";
-import { isInvalidGrant, isUnauthorized } from "../src/credentials/refresh/error.ts";
+import { emptyState } from "../src/models/credentials/model.ts";
+import {
+  applyRefreshFailure,
+  applyRefreshSuccess,
+} from "../src/models/credentials/refresh/outcome.ts";
+import { isInvalidGrant, isUnauthorized } from "../src/models/credentials/refresh/error.ts";
 import {
   invalidGrantBackoffMs,
   nextRefreshCheckAt,
   refreshLeadMs,
   shouldRefresh,
-} from "../src/credentials/refresh/schedule.ts";
-import { mergeRefreshedMetadata } from "../src/credentials/refresh/three-way.ts";
+} from "../src/models/credentials/refresh/schedule.ts";
+import { mergeRefreshedMetadata } from "../src/models/credentials/refresh/three-way.ts";
 import { cred, state } from "./support/credentials.ts";
 import { jwt, T0 } from "./support/refresh.ts";
 

@@ -6,30 +6,30 @@ import {
   interactionsCallKey,
   makeInMemoryContinuationStore,
   prepareAntigravityInteractions,
-} from "../src/executor/gemini/antigravity-interactions.ts";
+} from "../src/models/executor/gemini/antigravity-interactions.ts";
 import {
   ReplayAccumulator,
   type ReplayScope,
-} from "../src/executor/antigravity/replay/accumulator.ts";
+} from "../src/models/executor/antigravity/replay/accumulator.ts";
 import {
   makeInMemoryReplayLedger,
   normalizeReplayItems,
   REPLAY_MAX_ITEMS_PER_ENTRY,
   UNLOADED_SNAPSHOT,
-} from "../src/executor/antigravity/replay/ledger.ts";
+} from "../src/models/executor/antigravity/replay/ledger.ts";
 import {
   clearReplayOnInvalidSignature,
   prepareReplayPayload,
-} from "../src/executor/antigravity/replay/prepare.ts";
+} from "../src/models/executor/antigravity/replay/prepare.ts";
 import {
   degradeToolProvenanceIds,
   repairUnsignedFirstFunctionCalls,
   syntheticToolCallId,
   validateFunctionCallPairing,
-} from "../src/executor/antigravity/replay/provenance.ts";
-import { replaySessionKey } from "../src/executor/antigravity/replay/scope.ts";
-import type { CredentialSnapshot } from "../src/executor/picker.ts";
-import type { ExecutorRequest } from "../src/executor/types.ts";
+} from "../src/models/executor/antigravity/replay/provenance.ts";
+import { replaySessionKey } from "../src/models/executor/antigravity/replay/scope.ts";
+import type { CredentialSnapshot } from "../src/models/executor/picker.ts";
+import type { ExecutorRequest } from "../src/models/executor/types.ts";
 import type { Json, JsonObject } from "@commissary/json";
 import { geminiClaudeToolUseID } from "@commissary/translation";
 import { options } from "./support/executor-run.ts";

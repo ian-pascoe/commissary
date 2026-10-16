@@ -2,14 +2,17 @@ import { describe, expect, it } from "vitest";
 import {
   buildCodexClientModels,
   supportsApplyPatchProviders,
-} from "../src/registry/codex-client-models.ts";
-import { resolveClaudeModelIdPrefix, ensureClaudeModelIdPrefix } from "../src/registry/listings.ts";
+} from "../src/models/registry/codex-client-models.ts";
+import {
+  resolveClaudeModelIdPrefix,
+  ensureClaudeModelIdPrefix,
+} from "../src/models/registry/listings.ts";
 import { asString, type JsonObject } from "@commissary/json";
 import {
   respondGeminiDetail,
   respondGeminiList,
   respondModels,
-} from "../src/registry/models-api.ts";
+} from "../src/models/registry/models-api.ts";
 import {
   catalogs,
   fixture,

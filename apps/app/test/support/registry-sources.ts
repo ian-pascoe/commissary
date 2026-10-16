@@ -1,11 +1,11 @@
 /** Builders for registry tests: model sources, decoded configs and catalogs. */
 import { Effect } from "effect";
-import { parseConfigYaml } from "../../src/config/codec.ts";
-import type { Config } from "../../src/config/schema.ts";
-import { emptyState } from "../../src/credentials/model.ts";
-import { embeddedCatalogs, type ModelCatalogs } from "../../src/registry/catalog.ts";
-import type { AssemblyOptions } from "../../src/registry/credential-models.ts";
-import type { ModelSource } from "../../src/registry/source.ts";
+import { parseConfigYaml } from "../../src/models/config/codec.ts";
+import type { Config } from "../../src/models/config/schema.ts";
+import { emptyState } from "../../src/models/credentials/model.ts";
+import { embeddedCatalogs, type ModelCatalogs } from "../../src/models/registry/catalog.ts";
+import type { AssemblyOptions } from "../../src/models/registry/credential-models.ts";
+import type { ModelSource } from "../../src/models/registry/source.ts";
 
 export const configOf = (yaml = ""): Config => Effect.runSync(parseConfigYaml(yaml));
 

@@ -2,18 +2,21 @@
 // test/fixtures/session.json): canonical turns and fingerprints, the derived content-hash identity, the message-hash
 // fallback, identity helpers and scripted LCP matcher scenarios.
 import { describe, expect, it } from "vitest";
-import { extractSessionInfo } from "../src/handlers/session.ts";
+import { extractSessionInfo } from "../src/models/handlers/session.ts";
 import type { Json, JsonObject } from "@commissary/json";
-import { derivedAntigravitySessionId } from "../src/executor/antigravity/derived-session.ts";
-import { extractCanonicalTurns, prepareFingerprints } from "../src/session-routing/canonical.ts";
+import { derivedAntigravitySessionId } from "../src/models/executor/antigravity/derived-session.ts";
+import {
+  extractCanonicalTurns,
+  prepareFingerprints,
+} from "../src/models/session-routing/canonical.ts";
 import {
   boundSessionIdentity,
   deriveId,
   hasExplicitSession,
   messageHashIds,
   normalizeToCanonicalUuid,
-} from "../src/session-routing/identity.ts";
-import { MerklePrefixMatcher } from "../src/session-routing/matcher.ts";
+} from "../src/models/session-routing/identity.ts";
+import { MerklePrefixMatcher } from "../src/models/session-routing/matcher.ts";
 import fixtures from "./fixtures/session.json";
 
 const parse = (body: string): Json => JSON.parse(body) as Json;

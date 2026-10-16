@@ -6,7 +6,7 @@ import {
   parseGeminiUsageBody,
   parseInteractionsStreamUsage,
   parseInteractionsUsageBody,
-} from "../src/executor/gemini/usage.ts";
+} from "../src/models/executor/gemini/usage.ts";
 
 describe("Gemini usage breakdown (usage.ts v2)", () => {
   it("separates reasoning and treats cache as part of the input", () => {

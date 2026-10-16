@@ -33,35 +33,47 @@ import type { AccessPrincipal } from "@commissary/auth";
 import { LEGACY_PANEL_PATH } from "./zones.ts";
 import { routeServices, type CurrentOrg } from "@commissary/core";
 import type { EnvServices } from "../worker-env.ts";
-import { CatalogStore } from "../registry/catalog-store.ts";
-import { ModelRegistryLive } from "../registry/live.ts";
-import type { ModelRegistry } from "../registry/service.ts";
-import { providerKeyProbeHandler, providerKeysRoutes } from "./provider-keys-routes.ts";
-import { catalogRefreshHandler, catalogStatusHandler } from "./catalog-routes.ts";
-import { credentialsBatchHandler } from "./credentials-batch.ts";
-import { credentialModelsHandler, credentialRoutes } from "./credentials-routes.ts";
-import { oauthRoutes } from "./oauth-routes.ts";
+import { CatalogStore } from "../models/registry/catalog-store.ts";
+import { ModelRegistryLive } from "../models/registry/live.ts";
+import type { ModelRegistry } from "../models/registry/service.ts";
+import {
+  providerKeyProbeHandler,
+  providerKeysRoutes,
+} from "../models/management/provider-keys-routes.ts";
+import {
+  catalogRefreshHandler,
+  catalogStatusHandler,
+} from "../models/management/catalog-routes.ts";
+import { credentialsBatchHandler } from "../models/management/credentials-batch.ts";
+import {
+  credentialModelsHandler,
+  credentialRoutes,
+} from "../models/management/credentials-routes.ts";
+import { oauthRoutes } from "../models/management/oauth-routes.ts";
 import { memberRoutes } from "./member-routes.ts";
 import { orgRoutes } from "./org-routes.ts";
-import { grantRoutes, myModelsHandler } from "./grant-routes.ts";
+import { grantRoutes, myModelsHandler } from "../models/management/grant-routes.ts";
 import { peopleRoutes } from "./people-routes.ts";
 import { managementKeyRoutes } from "./management-key-routes.ts";
 import { ssoRoutes } from "./sso-routes.ts";
-import { priceRoutes } from "./price-routes.ts";
+import { priceRoutes } from "../models/management/price-routes.ts";
 import { apiKeyRoutes } from "./api-key-routes.ts";
-import { spendRoutes } from "./spend-routes.ts";
-import { quotaCheckHandler, quotaSweepHandler } from "./quota-routes.ts";
-import { claimResetGrantHandler, resetGrantsHandler } from "./reset-grant-routes.ts";
-import { modelRuleRoutes } from "./model-rules-routes.ts";
-import { routingModelsHandler } from "./routing-models.ts";
-import { settingsRoutes } from "./settings-routes.ts";
+import { spendRoutes } from "../models/management/spend-routes.ts";
+import { quotaCheckHandler, quotaSweepHandler } from "../models/management/quota-routes.ts";
+import {
+  claimResetGrantHandler,
+  resetGrantsHandler,
+} from "../models/management/reset-grant-routes.ts";
+import { modelRuleRoutes } from "../models/management/model-rules-routes.ts";
+import { routingModelsHandler } from "../models/management/routing-models.ts";
+import { settingsRoutes } from "../models/management/settings-routes.ts";
 import {
   LEGACY_PANEL_REDIRECT,
   PANEL_PAGE_PATHS,
   webPanelAsset,
   webPanelPage,
 } from "./web-panel.ts";
-import { usageRoutes } from "./usage-routes.ts";
+import { usageRoutes } from "../models/management/usage-routes.ts";
 
 const BASE = "/v9/management";
 

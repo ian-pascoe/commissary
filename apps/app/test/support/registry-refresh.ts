@@ -1,9 +1,9 @@
 /** Fakes for catalog refresh tests: in-memory KV, scripted HTTP client, config source and an Effect runner. */
 import { Effect, Layer } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
-import { encodeConfig, parseConfigYaml } from "../../src/config/codec.ts";
-import { ConfigReader, ConfigSource } from "../../src/config/reader.ts";
-import { CatalogStore } from "../../src/registry/catalog-store.ts";
+import { encodeConfig, parseConfigYaml } from "../../src/models/config/codec.ts";
+import { ConfigReader, ConfigSource } from "../../src/models/config/reader.ts";
+import { CatalogStore } from "../../src/models/registry/catalog-store.ts";
 import { type EnvServices, envContext } from "../../src/worker-env.ts";
 
 export class FakeKv {

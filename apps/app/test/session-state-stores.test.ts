@@ -5,16 +5,19 @@ import { env } from "cloudflare:workers";
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 import { TestClock } from "effect/testing";
-import { makeSessionStateContinuityStore } from "../src/executor/claude/continuity.ts";
-import { makeSessionStateReplayStore as makeClaudeReplayStore } from "../src/executor/claude/thinking-replay.ts";
+import { makeSessionStateContinuityStore } from "../src/models/executor/claude/continuity.ts";
+import { makeSessionStateReplayStore as makeClaudeReplayStore } from "../src/models/executor/claude/thinking-replay.ts";
 import {
   CODEX_REASONING_REPLAY_TURN_TYPE,
   makeSessionStateReplayStore as makeCodexStore,
-} from "../src/executor/codex/replay.ts";
-import { nextSessionTurnIndex, resetSessionTurnIndex } from "../src/executor/devin/credentials.ts";
-import { makeRequestReplayCache } from "../src/executor/gemini/replay.ts";
-import { makeSessionStateKimiReplayStore } from "../src/executor/kimi/replay.ts";
-import { makeSessionStateXaiReplayStore } from "../src/executor/xai/replay.ts";
+} from "../src/models/executor/codex/replay.ts";
+import {
+  nextSessionTurnIndex,
+  resetSessionTurnIndex,
+} from "../src/models/executor/devin/credentials.ts";
+import { makeRequestReplayCache } from "../src/models/executor/gemini/replay.ts";
+import { makeSessionStateKimiReplayStore } from "../src/models/executor/kimi/replay.ts";
+import { makeSessionStateXaiReplayStore } from "../src/models/executor/xai/replay.ts";
 import { CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import {
   addressName,

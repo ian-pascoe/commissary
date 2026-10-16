@@ -38,7 +38,7 @@ caches each task: run again with no change, a task replays its logs (and `build`
 | `pnpm destroy`                      | `alchemy destroy`: delete every resource of a stage                                                                                                                                               |
 | `pnpm logs`                         | `alchemy logs` (`--tail`)                                                                                                                                                                         |
 | `pnpm ci:setup`                     | Deploy `stacks/github.ts`: CI's Cloudflare token, check service token and GitHub environments (`docs/DEPLOY.md`)                                                                                  |
-| `pnpm catalog:sync`                 | Regenerate the bundled models.dev snapshot `apps/app/src/registry/catalog/models-dev.json` (`tools/sync-models-dev-catalog.ts [url\|file]`); the catalog additions are edited by hand             |
+| `pnpm catalog:sync`                 | Regenerate the bundled models.dev snapshot `apps/app/src/models/registry/catalog/models-dev.json` (`tools/sync-models-dev-catalog.ts [url\|file]`); the catalog additions are edited by hand      |
 
 ## Infrastructure
 
@@ -117,7 +117,7 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
   `./testing`. It may import `effect`, `@commissary/json` and `node:crypto` only: no Workers APIs, no other workspace
   package. Executors install the attempt's model lookup and signature cache around each synchronous translator call
   (`withModelInfoLookup`, `withSignatureContext`); the `CACHE` KV store of signatures stays in the Worker
-  (`src/signature/store.ts`).
+  (`src/models/signature/store.ts`).
 - The root stays the deploy root: `alchemy.run.ts`, `infra/`, `migrations/` (D1 schema), `stacks/`, `tools/` (with
   `tools/fixturegen`, Go programs that emit golden fixtures, see below), `go.work`, `.repos/`, `docs/` and the lint,
   format and commit configs.
@@ -148,14 +148,14 @@ ignores it, `--dry` shows what would run and why.
 ## Model catalog
 
 Every provider's models come from models.dev plus the catalog additions (ADR 0020; `docs/ARCHITECTURE.md`, "Model registry
-and `/models` endpoints"). Three things are checked in under `apps/app/src/registry/catalog/`:
+and `/models` endpoints"). Three things are checked in under `apps/app/src/models/registry/catalog/`:
 
 - `models-dev.json`: the trimmed models.dev snapshot a fresh deploy starts from. `pnpm catalog:sync` regenerates it from
   `https://models.dev/api.json` (or a URL or saved file given as argument); syncing a trimmed file rewrites it unchanged.
   A deployed Worker refreshes its own copy every 3 hours and from the Models page ("Refresh catalog").
 - `additions.json`: what models.dev lacks (models it does not list, facts such as `thinking.dynamicAllowed`, Codex plans,
   `include`/`exclude` patterns). Edited by hand; the format and precedence ("an addition only fills gaps") are in the header
-  of `apps/app/src/registry/catalog-additions.ts`. A wrong value for a model models.dev lists is fixed at models.dev, not overridden here.
+  of `apps/app/src/models/registry/catalog-additions.ts`. A wrong value for a model models.dev lists is fixed at models.dev, not overridden here.
 - `codex_client_models.json`: the Codex client catalog, kept in its own format.
 
 `apps/app/test/catalog-build.test.ts` checks the trim, the build, the additions' rules and that every id the Go server served is

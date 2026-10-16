@@ -13,7 +13,7 @@
     "worker-configuration.d.ts",
     "apps/app/test/fixtures",
     "packages/*/test/fixtures",
-    "apps/app/src/registry/catalog",
+    "apps/app/src/models/registry/catalog",
     // Design decision records written by the impeccable tooling
     ".impeccable",
     // Codex corpus requests are compact on purpose: Go forwards some raw JSON text (tool_use input) verbatim.

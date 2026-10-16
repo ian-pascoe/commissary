@@ -10,16 +10,16 @@ import {
   queryEscape,
   randomBytes,
   sha256,
-} from "../src/oauth/encoding.ts";
-import { buildUserStatusRequest, parseUserStatus } from "../src/oauth/flows/devin-status.ts";
-import { isValidOAuthState, normalizeCallbackProvider } from "../src/oauth/names.ts";
+} from "../src/models/oauth/encoding.ts";
+import { buildUserStatusRequest, parseUserStatus } from "../src/models/oauth/flows/devin-status.ts";
+import { isValidOAuthState, normalizeCallbackProvider } from "../src/models/oauth/names.ts";
 import {
   COMPLETED_TTL_MS,
   MemorySessionTable,
   OAuthSessions,
   SESSION_TTL_MS,
   SqliteSessionTable,
-} from "../src/oauth/session-store.ts";
+} from "../src/models/oauth/session-store.ts";
 
 const T0 = 1_800_000_000_000;
 

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeApplyPatchResponses,
   ApplyPatchResponsesState,
-} from "../src/executor/helps/apply-patch-responses.ts";
+} from "../src/models/executor/helps/apply-patch-responses.ts";
 import { type Json, tryParseJson } from "@commissary/json";
 import fixtures from "./fixtures/applypatch.json";
 import { expandEmbeddedJson } from "@commissary/translation/testing";

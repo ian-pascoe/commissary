@@ -7,7 +7,7 @@ import {
   privateKeyToPkcs8,
   serviceAccountOf,
   VertexTokenCache,
-} from "../src/credentials/refresh/vertex.ts";
+} from "../src/models/credentials/refresh/vertex.ts";
 import { mockHttp, routes, T0 } from "./support/refresh.ts";
 import {
   makeServiceAccount,

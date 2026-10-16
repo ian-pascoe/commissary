@@ -1,7 +1,7 @@
 // Token accounting v2 and the usage parsers, ported from sdk/cliproxy/usage/accounting_test.go and
 // internal/runtime/executor/helps/usage_helpers_test.go (+ plugin_executor_usage.go merge rules).
 import { describe, expect, it } from "vitest";
-import { parseCodexUsage } from "../src/executor/codex/output.ts";
+import { parseCodexUsage } from "../src/models/executor/codex/output.ts";
 import {
   ensureTokenBreakdown,
   independentTokenBreakdown,
@@ -11,7 +11,7 @@ import {
   subsetTokenBreakdown,
   tokenAccountingSemanticsFor,
   unclassifiedTokenBreakdown,
-} from "../src/usage/accounting.ts";
+} from "../src/models/usage/accounting.ts";
 import {
   mergeStreamUsageDetail,
   parseAntigravityStreamUsage,
@@ -22,14 +22,14 @@ import {
   parseGeminiUsage,
   parseInteractionsStreamUsage,
   parseInteractionsUsage,
-} from "../src/usage/parsers.ts";
+} from "../src/models/usage/parsers.ts";
 import {
   emptyUsageDetail,
   parseOpenAIStreamUsage,
   parseOpenAIUsage,
   type UsageDetail,
-} from "../src/usage/record.ts";
-import { UsageReporter } from "../src/usage/reporter.ts";
+} from "../src/models/usage/record.ts";
+import { UsageReporter } from "../src/models/usage/reporter.ts";
 import { GLOBAL_ORG } from "@commissary/core";
 
 const MAX = Number.MAX_SAFE_INTEGER;

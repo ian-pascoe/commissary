@@ -2,13 +2,13 @@ import { Layer } from "effect";
 import { HttpRouter } from "effect/http";
 import { AccessLayer, withAccess } from "../access/layer.ts";
 import { orgAddressing } from "../management/org-address.ts";
-import { ClientApiLayer } from "../handlers/layer.ts";
+import { ClientApiLayer } from "../models/handlers/layer.ts";
 import { HostedRoutes } from "../hosted/routes.ts";
 import { ManagementRoutesLive } from "../management/routes.ts";
 import { WorkersLoggerLayer } from "@commissary/core";
 import { TraceLayer } from "../models/observability/trace.ts";
-import { OAuthCallbackRoutes } from "../oauth/public-routes.ts";
-import { ModelRoutesLive } from "../registry/live.ts";
+import { OAuthCallbackRoutes } from "../models/oauth/public-routes.ts";
+import { ModelRoutesLive } from "../models/registry/live.ts";
 import { RootRoutes } from "./routes.ts";
 
 /**

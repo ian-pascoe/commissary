@@ -1,7 +1,7 @@
 // End-to-end tests (workerd) of the Codex provider: /v1/responses (+compact, Codex aliases), chat completions routed
 // to Codex, error classification, payload rules as the last mutation, images and alpha search against a mocked upstream.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Config } from "../src/config/schema.ts";
+import type { Config } from "../src/models/config/schema.ts";
 import {
   providerKeyCredential,
   codexModels,
@@ -17,7 +17,7 @@ import {
   sseResponse,
   type UpstreamResponder,
 } from "./support/pipeline.ts";
-import type { CredentialSnapshot } from "../src/executor/picker.ts";
+import type { CredentialSnapshot } from "../src/models/executor/picker.ts";
 import type { Json } from "@commissary/json";
 
 const YAML = `

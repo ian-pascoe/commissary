@@ -1,16 +1,19 @@
 // Pure helpers of the management API: config key ids, typed duplicate keys, credential entries, field patches, cooldown reset.
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
-import { decodeConfig } from "../src/config/codec.ts";
+import { decodeConfig } from "../src/models/config/codec.ts";
 import type { JsonObject } from "@commissary/json";
-import { resetCooldownState } from "../src/credentials/cooldown-reset.ts";
-import { synthesizeConfigCredentials } from "../src/credentials/synthesize.ts";
-import { applyFieldPatch } from "../src/credentials/field-patch.ts";
-import { emptyQuota, emptyState, type CredentialState } from "../src/credentials/model.ts";
+import { resetCooldownState } from "../src/models/credentials/cooldown-reset.ts";
+import { synthesizeConfigCredentials } from "../src/models/credentials/synthesize.ts";
+import { applyFieldPatch } from "../src/models/credentials/field-patch.ts";
+import { emptyQuota, emptyState, type CredentialState } from "../src/models/credentials/model.ts";
 import { classifyPath, isPanelPagePath, LEGACY_PANEL_PATH } from "../src/management/zones.ts";
-import { configKeyIds } from "../src/credentials/key-ids.ts";
-import { buildCredentialEntry, cooldownSnapshot } from "../src/management/credential-entry.ts";
-import { typedDuplicates, withoutKeys } from "../src/management/key-duplicates.ts";
+import { configKeyIds } from "../src/models/credentials/key-ids.ts";
+import {
+  buildCredentialEntry,
+  cooldownSnapshot,
+} from "../src/models/management/credential-entry.ts";
+import { typedDuplicates, withoutKeys } from "../src/models/management/key-duplicates.ts";
 import { authIndexOf } from "./support/auth-index.ts";
 import { cred, cooling, state } from "./support/credentials.ts";
 

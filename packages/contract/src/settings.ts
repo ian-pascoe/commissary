@@ -1,6 +1,6 @@
 /**
- * `GET|PATCH /v9/management/settings` (`apps/app/src/management/settings-routes.ts`,
- * `apps/app/src/management/settings.ts`): the Settings page's typed view of the config settings that apply on Workers,
+ * `GET|PATCH /v9/management/settings` (`apps/app/src/models/management/settings-routes.ts`,
+ * `apps/app/src/models/management/settings.ts`): the Settings page's typed view of the config settings that apply on Workers,
  * and its writes; `POST /settings/import`: the Go config import. Shared with the browser: imports `effect` and sibling
  * contract modules only.
  *

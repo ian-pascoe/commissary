@@ -5,11 +5,15 @@
  */
 import { assert } from "@effect/vitest";
 import { Effect, Schema } from "effect";
-import { decodeConfig, encodeConfig } from "../../src/config/codec.ts";
-import { documentOfEntries, entriesOfConfig, type EntryRows } from "../../src/config/entries.ts";
-import { NOT_APPLIED_RULES } from "../../src/config/not-applied.ts";
-import { Config } from "../../src/config/schema.ts";
-import { assignEntryIds, withoutEntryIds } from "../../src/credentials/key-ids.ts";
+import { decodeConfig, encodeConfig } from "../../src/models/config/codec.ts";
+import {
+  documentOfEntries,
+  entriesOfConfig,
+  type EntryRows,
+} from "../../src/models/config/entries.ts";
+import { NOT_APPLIED_RULES } from "../../src/models/config/not-applied.ts";
+import { Config } from "../../src/models/config/schema.ts";
+import { assignEntryIds, withoutEntryIds } from "../../src/models/credentials/key-ids.ts";
 import { get, isJsonArray, isJsonObject, type Json, set } from "@commissary/json";
 
 /** The config an import of `config` assembles (entry ids included). */

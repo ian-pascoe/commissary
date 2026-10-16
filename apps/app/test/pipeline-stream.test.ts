@@ -4,11 +4,11 @@ import { assert, describe, expect, it } from "@effect/vitest";
 import { Effect, Fiber, Predicate, Stream } from "effect";
 import type { HttpBody } from "effect/http";
 import { TestClock } from "effect/testing";
-import { ExecutionError } from "../src/executor/errors.ts";
+import { ExecutionError } from "../src/models/executor/errors.ts";
 import {
   chatResponseToCompletions,
   completionsRequestToChat,
-} from "../src/handlers/openai/completions.ts";
+} from "../src/models/handlers/openai/completions.ts";
 import {
   chunkHasFinishReason,
   claudeFramer,
@@ -16,8 +16,8 @@ import {
   interactionsFramer,
   openAIFramer,
   responsesFramer,
-} from "../src/handlers/framing.ts";
-import { errorResponse, streamResponse } from "../src/handlers/respond.ts";
+} from "../src/models/handlers/framing.ts";
+import { errorResponse, streamResponse } from "../src/models/handlers/respond.ts";
 import { get, type Json, set } from "@commissary/json";
 import { structuralBody } from "@commissary/translation/testing";
 import { type SummaryHooks, TranslationError, TranslatorRegistry } from "@commissary/translation";

@@ -10,9 +10,9 @@ import {
   rewriteCodexMultiAgentV2Input,
   rewriteCodexOrphanDelegationInputForConfig,
   type SpawnAgentSource,
-} from "../src/executor/helps/codex-multi-agent-v2.ts";
+} from "../src/models/executor/helps/codex-multi-agent-v2.ts";
 import type { Json } from "@commissary/json";
-import codexClientCatalog from "../src/registry/catalog/codex_client_models.json";
+import codexClientCatalog from "../src/models/registry/catalog/codex_client_models.json";
 import fixture from "./fixtures/multiagent.json";
 import { configOf } from "./support/registry-sources.ts";
 import { structuralBody } from "@commissary/translation/testing";

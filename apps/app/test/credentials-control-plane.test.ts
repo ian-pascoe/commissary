@@ -1,10 +1,10 @@
 // ControlPlane credential storage + selection through the Durable Object RPC (Workers pool).
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { env } from "cloudflare:workers";
 import { evictDurableObject } from "cloudflare:test";
 import { withModelsPart } from "./support/models-part.ts";
 import { describe, expect, it } from "vitest";
-import type { PickResult } from "../src/credentials/selection/types.ts";
+import type { PickResult } from "../src/models/credentials/selection/types.ts";
 
 const plane = (name: string = crypto.randomUUID()) => env.CONTROL_PLANE.getByName(name);
 

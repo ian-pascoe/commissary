@@ -7,12 +7,12 @@ import {
   parseGoDuration,
   sessionAffinityTtlMs,
   videoResultAuthCacheTtlMs,
-} from "../src/config/accessors.ts";
-import { decodeConfig, encodeConfig, parseConfigYaml } from "../src/config/codec.ts";
-import { ConfigValidationError } from "../src/config/errors.ts";
-import { yamlMessage } from "../src/config/yaml-message.ts";
-import { Config } from "../src/config/schema.ts";
-import { applyPayloadRules } from "../src/config/payload/index.ts";
+} from "../src/models/config/accessors.ts";
+import { decodeConfig, encodeConfig, parseConfigYaml } from "../src/models/config/codec.ts";
+import { ConfigValidationError } from "../src/models/config/errors.ts";
+import { yamlMessage } from "../src/models/config/yaml-message.ts";
+import { Config } from "../src/models/config/schema.ts";
+import { applyPayloadRules } from "../src/models/config/payload/index.ts";
 import { get } from "@commissary/json";
 import { assertImportKeeps } from "./support/config-entries.ts";
 

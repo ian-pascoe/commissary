@@ -405,7 +405,7 @@ const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\
 
 /**
  * Whether an exclusion pattern matches a model name: case-insensitive, `*` matches any characters, anything else
- * is literal (the server's `matchWildcard`, apps/app/src/credentials/selection/model-name.ts).
+ * is literal (the server's `matchWildcard`, apps/app/src/models/credentials/selection/model-name.ts).
  */
 export const patternMatches = (pattern: string, name: string): boolean => {
   const normalised = lower(pattern);

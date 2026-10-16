@@ -7,14 +7,14 @@ import { Effect, Layer } from "effect";
 import type { HttpClient } from "effect/http";
 import type { ScheduledTask, WorkerExecutionContext } from "@commissary/core";
 import type { StateEnv } from "@commissary/state";
-import { ConfigReader } from "../config/reader.ts";
-import { refreshAntigravityModels } from "../executor/antigravity/models.ts";
-import { refreshAntigravityVersion } from "../executor/antigravity/version.ts";
-import { refreshXaiClientVersion } from "../executor/xai/version.ts";
-import { runQuotaSweep } from "../quota/check.ts";
-import { CatalogStore } from "../registry/catalog-store.ts";
-import { refreshCatalogs } from "../registry/refresh.ts";
-import { pruneExpiredUsage } from "../usage/retention.ts";
+import { ConfigReader } from "./config/reader.ts";
+import { refreshAntigravityModels } from "./executor/antigravity/models.ts";
+import { refreshAntigravityVersion } from "./executor/antigravity/version.ts";
+import { refreshXaiClientVersion } from "./executor/xai/version.ts";
+import { runQuotaSweep } from "./quota/check.ts";
+import { CatalogStore } from "./registry/catalog-store.ts";
+import { refreshCatalogs } from "./registry/refresh.ts";
+import { pruneExpiredUsage } from "./usage/retention.ts";
 import { currentModelsControlPlane, type ModelsEnv } from "./env.ts";
 
 /** What Models' tasks read: {@link ScheduledTaskLayer} provides the config reader and catalog store, the runner the rest. */

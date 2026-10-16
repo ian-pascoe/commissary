@@ -1,5 +1,5 @@
 // The Limits page's model: how a Spend limit reads (subject, period, spent and remaining), the order of the list,
-// the checks that mirror the server's (apps/app/src/spend/store.ts), the dollar amounts typed into the forms and what a
+// the checks that mirror the server's (apps/app/src/models/spend/store.ts), the dollar amounts typed into the forms and what a
 // refused write tells the caller. Pure: no DOM, tested in test/spend.test.ts.
 import type {
   SpendLimitView,

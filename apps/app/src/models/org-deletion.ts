@@ -4,7 +4,7 @@
  * The app Worker's org deletion (`platform/org-deletion.ts`) runs it first.
  */
 import type { OrgDeletionStep } from "@commissary/core";
-import { deleteOrgUsage } from "../usage/d1.ts";
+import { deleteOrgUsage } from "./usage/d1.ts";
 import type { ModelsBindings } from "./env.ts";
 
 /** Keys read and deleted per page: each key is one KV call. */

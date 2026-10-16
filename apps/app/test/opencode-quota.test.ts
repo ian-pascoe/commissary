@@ -1,31 +1,31 @@
 // OpenCode Go usage quotas, pure parts: the `/usage` payload as quota windows, the probe target of a config key, the
 // Accounts entry of a config key, and the usage-limit errors with their reset parsing.
 import { describe, expect, it } from "vitest";
-import { emptyState } from "../src/credentials/model.ts";
-import { synthesizeConfigCredentials } from "../src/credentials/synthesize.ts";
+import { emptyState } from "../src/models/credentials/model.ts";
+import { synthesizeConfigCredentials } from "../src/models/credentials/synthesize.ts";
 import {
   openCodeStreamEventError,
   openCodeUpstreamError,
-} from "../src/executor/opencode/errors.ts";
-import { OPENCODE_GO, OPENCODE_ZEN } from "../src/executor/opencode/providers.ts";
+} from "../src/models/executor/opencode/errors.ts";
+import { OPENCODE_GO, OPENCODE_ZEN } from "../src/models/executor/opencode/providers.ts";
 import {
   OPENCODE_LIMIT_DEFAULT_COOLDOWN_MS,
   OPENCODE_LIMIT_MAX_COOLDOWN_MS,
   openCodeUsageLimit,
   parseResetsInMs,
-} from "../src/executor/opencode/usage-limit.ts";
-import { buildConfigCredentialEntry } from "../src/management/credential-entry.ts";
+} from "../src/models/executor/opencode/usage-limit.ts";
+import { buildConfigCredentialEntry } from "../src/models/management/credential-entry.ts";
 import {
   OPENCODE_GO_WINDOWS,
   openCodeGoUsageUrl,
   parseOpenCodeGoUsage,
-} from "../src/quota/opencode-go.ts";
+} from "../src/models/quota/opencode-go.ts";
 import {
   CONFIG_QUOTA_PROVIDERS,
   isConfigQuotaProvider,
   isQuotaProvider,
-} from "../src/quota/report.ts";
-import { buildQuotaTarget } from "../src/quota/target.ts";
+} from "../src/models/quota/report.ts";
+import { buildQuotaTarget } from "../src/models/quota/target.ts";
 import { loadConfig } from "./support/pipeline.ts";
 
 const NOW = Date.parse("2026-10-12T12:00:00.000Z");
