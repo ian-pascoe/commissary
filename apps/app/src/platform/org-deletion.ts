@@ -45,11 +45,11 @@ export interface DeletionOptions {
 
 /**
  * Deletes every trace of `org`; see the module comment. Never rejects for an org that is already half deleted. `state`
- * holds the Durable Objects, `areas` the steps of the areas the Worker mounts, run in order.
+ * holds the Durable Objects, `steps` the org-deletion steps of the areas the Worker mounts, run in order.
  */
 export const deleteOrg = async (
   state: StateBindings,
-  areas: ReadonlyArray<OrgDeletionStep>,
+  steps: ReadonlyArray<OrgDeletionStep>,
   org: OrgId,
   options: DeletionOptions,
 ): Promise<OrgDeletion> => {
@@ -60,11 +60,11 @@ export const deleteOrg = async (
   const plane = controlPlaneOf(state, org);
 
   // 1. The areas' data.
-  for (const step of areas) {
+  for (const step of steps) {
     const progress = await step(org, budget);
     budget -= progress.calls;
 
-    if (!progress.complete) return { state: "incomplete", step: progress.step };
+    if (!progress.complete) return { state: "incomplete", step: progress.part };
   }
 
   // 2. The SessionState instances the org registered.

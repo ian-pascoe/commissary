@@ -38,9 +38,12 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
     src/
       index.ts                Worker entry: fetch, scheduled, DO class exports
       control-plane.ts        the ControlPlane Durable Object: @commissary/state's base composed with the Models part
-      models/                 the ControlPlane's Models part (config, credentials, grants, Spend, quota, OAuth)
+      models/                 the ControlPlane's Models part (config, credentials, grants, Spend, quota, OAuth), the
+                              client-API HTTP helpers (error formatting per protocol, bodies, headers), the request
+                              trace, Models' cron tasks and its org-deletion step
       platform/               org deletion (every area's step, then the state's)
-      http/                   router, CORS, error formatting per protocol, SSE framing, streaming helpers
+      api/                    what moves to the API Worker: CORS and the cron runner
+      http/                   router, hosts, /healthz
       access/                 the Access gate middleware: @commissary/auth's entry points with the Worker's routes
       config/                 config schema (Effect Schema), storage, payload rules
       registry/               model catalogs, model info, /models listings
@@ -62,7 +65,8 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
                               the stub helpers, the AuthDirectory adapter), tested in workerd
   packages/contract/          @commissary/contract: the management API's Effect HttpApi schemas and addressing (browser-safe)
   packages/core/              @commissary/core: the foundation without bindings (org model, shared errors, hashing,
-                              log-safe helpers, management replies, route services, the execution context)
+                              log-safe helpers, management replies, route services, the execution context, the
+                              area contracts ScheduledTask and OrgDeletionStep)
   packages/json/              @commissary/json: gjson/sjson-compatible path engine, Json types, JSON text helpers
   packages/translation/       @commissary/translation: pure translation, tested in Node.js
     src/translator/           registry + one directory per (client -> provider) pair
@@ -1617,7 +1621,7 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   no live credential (deleted, or matching nothing) reads the distinct `auth_id`s of the filtered rows
   (`resolveAuthIds`, an index scan bounded by the retained records). The former `auth_id`
   filter answers 400 instead of being ignored.
-- **Trace and logs** (`observability/`, `core/observability/`): the global `TraceLayer` middleware gives each request a `RequestTrace` (Context
+- **Trace and logs** (`models/observability/`, `core/observability/`): the global `TraceLayer` middleware gives each request a `RequestTrace` (Context
   reference, `undefined` outside the router) and sets `X-CPA-TRACE-ID` = the request id (a random UUID, also the usage
   records' `trace_id`). Deviation from Go: Go sends `yyyyMMddHHmmss-<auth index>-<request id>` to every API client (none
   when no credential was selected); its unsalted index would let any client confirm key guesses, and even a keyed one
@@ -1941,7 +1945,7 @@ Ported from `antigravity_executor*.go`, `internal/translator/antigravity/*`, `in
   (`findAllAntigravityCreditsCandidateAuths`): known-available balances first, then unknown ones (optimistic), each group sorted by credential id;
   known-empty credentials are skipped without an attempt (the conductor collects them with repeated `pick`s and releases the skipped leases
   as connection-lifecycle failures).
-- **Cron** (`scheduled.ts`): `antigravity-version` polls the Hub manifest into KV `antigravity:version` (`2.9.1` fallback, 6 h TTL; executors read it
+- **Cron** (`models/scheduled-tasks.ts`): `antigravity-version` polls the Hub manifest into KV `antigravity:version` (`2.9.1` fallback, 6 h TTL; executors read it
   through a 60 s isolate cache) and `antigravity-models` probes `fetchAvailableModels` for every enabled credential (first endpoint only, global
   user agent, failures keep the last good list and back off 2-30 min with jitter) into KV `ag:models:<id>`. The registry snapshot attaches
   the stored entitlements to the credential's `ModelSource` (`antigravityHints`): registered models = static list intersected with the fetched

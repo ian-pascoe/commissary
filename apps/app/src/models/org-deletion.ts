@@ -19,13 +19,13 @@ export const deleteOrgModels =
     const usage = await deleteOrgUsage(models.USAGE, org);
     calls += usage.calls;
 
-    if (!usage.complete) return { complete: false, calls, step: "usage" };
+    if (!usage.complete) return { complete: false, calls, part: "usage" };
 
     // KV: keys of the org, a page at a time.
     const prefix = `org.${org}.`;
 
     for (;;) {
-      if (budget - calls < KV_PAGE + 2) return { complete: false, calls, step: "cache" };
+      if (budget - calls < KV_PAGE + 2) return { complete: false, calls, part: "cache" };
       const page = await models.CACHE.list({ prefix, limit: KV_PAGE });
       calls += 1;
 

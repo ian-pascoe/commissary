@@ -451,6 +451,11 @@ const signInDeletionFailed = (error: DeletionThrew) =>
     Effect.andThen(Effect.fail(replyError(502, "account deletion failed"))),
   );
 
+/** The org-deletion steps of the areas this Worker mounts, in order. */
+const areaDeletionSteps = Effect.gen(function* () {
+  return [deleteOrgModels(yield* ModelsEnv)];
+});
+
 const deleteOrgRoute = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
 
@@ -483,12 +488,11 @@ const deleteOrgRoute = Effect.gen(function* () {
     });
 
   const state = yield* StateEnv;
-  // The org-deletion steps of the areas this Worker mounts.
-  const areas = [deleteOrgModels(yield* ModelsEnv)];
+  const steps = yield* areaDeletionSteps;
   const now = yield* Clock.currentTimeMillis;
 
   const outcome = yield* Effect.tryPromise({
-    try: async () => await deleteOrgData(state, areas, org.id, { now }),
+    try: async () => await deleteOrgData(state, steps, org.id, { now }),
     catch: (cause) => new DeletionThrew({ cause }),
   }).pipe(Effect.catch(deletionFailed(org.id)));
 
@@ -542,8 +546,7 @@ const deleteAccount = Effect.gen(function* () {
     });
 
   const state = yield* StateEnv;
-  // The org-deletion steps of the areas this Worker mounts.
-  const areas = [deleteOrgModels(yield* ModelsEnv)];
+  const steps = yield* areaDeletionSteps;
   const now = yield* Clock.currentTimeMillis;
   const orgs = yield* registry("orgsOfEmail", (stub) => stub.orgsOfEmail(email));
 
@@ -572,7 +575,7 @@ const deleteAccount = Effect.gen(function* () {
   for (const { org, standing } of standings) {
     if (standing.alone && org.id !== GLOBAL_ORG) {
       const outcome = yield* Effect.tryPromise({
-        try: async () => await deleteOrgData(state, areas, org.id, { now }),
+        try: async () => await deleteOrgData(state, steps, org.id, { now }),
         catch: (cause) => new DeletionThrew({ cause }),
       }).pipe(Effect.catch(deletionFailed(org.id)));
 

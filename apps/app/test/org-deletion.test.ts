@@ -347,7 +347,7 @@ describe("a deletion that needs more than one call", () => {
       async (id, budget) => {
         seen.push([`${name}:${id === org.id ? "org" : id}`, budget]);
 
-        return complete ? { complete, calls } : { complete, calls, step: name };
+        return complete ? { complete, calls } : { complete, calls, part: name };
       };
 
     const steps = [step("first", 10, true), step("second", 5, false), step("third", 1, true)];

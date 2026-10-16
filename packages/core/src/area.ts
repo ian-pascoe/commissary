@@ -29,8 +29,8 @@ export type OrgDeletionProgress =
   | {
       readonly complete: false;
       readonly calls: number;
-      /** The part of the step that stopped, for the caller's log. */
-      readonly step: string;
+      /** The part of the step that stopped (Models: `usage`, `cache`), for the caller's log. */
+      readonly part: string;
     };
 
 /**
