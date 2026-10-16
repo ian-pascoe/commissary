@@ -274,7 +274,7 @@ describe("concurrent refreshes", () => {
   });
 
   it("a refresh holding the lease (the scheduled one) refuses the panel's", async () => {
-    const taken = await platformOf(env).takeCatalogRefreshLease("cron");
+    const taken = await platformOf(env).takeLease("catalog_refresh", "cron");
 
     if (!taken.ok) throw new Error("lease was held");
 
@@ -284,7 +284,7 @@ describe("concurrent refreshes", () => {
     expect((refused.body as { message: string }).message).toContain("scheduled refresh");
     expect(harness.requests).toHaveLength(0);
 
-    await platformOf(env).releaseCatalogRefreshLease(taken.lease.token);
+    await platformOf(env).releaseLease(taken.lease.token);
     expect((await post()).status).toBe(200);
   });
 

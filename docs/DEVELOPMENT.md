@@ -47,7 +47,9 @@ credentials) (Alchemy v2, Effect-based); `infra/settings.ts` reads
 the deploy settings (`.env`), `infra/access.ts` provisions Cloudflare Access. There is no Wrangler configuration. When you
 add a binding or variable, change three places together: the Worker's `env` in `alchemy.run.ts`, the `Env` interface in
 `apps/app/src/env.d.ts`, and the test bindings in `apps/app/vitest.config.ts` (which mirrors the deployed Worker: entry, compatibility
-settings, Durable Objects, `*.bin` Data modules).
+settings, Durable Objects, `*.bin` Data modules). A Durable Object only tests use is the exception: its class is
+exported by the test Worker's entry, `apps/app/test/worker.ts`, and its binding exists only in `vitest.config.ts`
+(tests reach it with a `// SAFETY:` cast of `env`).
 
 `apps/app/worker-configuration.d.ts` holds the Workers runtime types for the compatibility date and flags in `alchemy.run.ts`.
 Regenerate it when those change (Wrangler is used only as a type generator here):

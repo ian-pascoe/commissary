@@ -8,9 +8,9 @@
  * `SWEEP_CONCURRENCY` accounts at a time, recent Claude reset grant reads skipped).
  * Answers `200 {started_at, finished_at, results, checked, failed}` with each account's outcome (a failed check is
  * `ok: false` with the report's fixed error message and the upstream status). Deduplicated through the ControlPlane's
- * sweep lease (src/quota/sweep-lease.ts): while another sweep runs, the panel's or the scheduled one, it answers `409
- * quota_check_running` (with `message` naming who started it and when) and asks no provider; the running sweep's
- * reports land in the credential list as they are stored.
+ * sweep lease (`quota_sweep`, src/state/lease.ts): while another sweep runs, the panel's or the scheduled one, it
+ * answers `409 quota_check_running` (with `message` naming who started it and when) and asks no provider; the running
+ * sweep's reports land in the credential list as they are stored.
  *
  * Workers addition, no Go counterpart: the upstream panel calls the usage endpoints from the browser through Go's
  * `POST /requests/api-call`, which is not ported (see docs/ARCHITECTURE.md "Quota check"). Tokens never leave the

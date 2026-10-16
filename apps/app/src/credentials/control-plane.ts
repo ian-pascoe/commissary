@@ -125,7 +125,7 @@ import {
   type SpendServiceResult,
 } from "../spend/service.ts";
 import { type SpendResult, SpendStore } from "../spend/store.ts";
-import { type SweepSource, SweepLeaseStore, type TakeLease } from "../quota/sweep-lease.ts";
+import { type LeaseSource, LeaseStore, type TakeLease } from "../state/lease.ts";
 import {
   type PutStatusResult,
   type ResetGrantMark,
@@ -173,6 +173,9 @@ const GRANT_SWEEP_TTL_MS = 6 * 60 * 60_000;
 
 /** How long the cron sweep trusts a stored "not eligible" status (new grants can make the account eligible). */
 const GRANT_INELIGIBLE_TTL_MS = 24 * 60 * 60_000;
+
+/** The lease (src/state/lease.ts) that keeps one check of every quota at a time: table `quota_sweep_lease`. */
+const QUOTA_SWEEP_LEASE = "quota_sweep";
 
 const decodeLease = Schema.decodeUnknownSync(Lease);
 
@@ -323,7 +326,7 @@ export class ControlPlane extends DurableObject<Env> {
   readonly #oauth: OAuthService;
   readonly #sessions: OAuthSessions;
   readonly #quota: QuotaReportStore;
-  readonly #sweepLease: SweepLeaseStore;
+  readonly #leases: LeaseStore;
   readonly #grants: ResetGrantStore;
   /** The org's data key: seals and opens the stored secrets once the object started. */
   readonly #secrets = new OrgSecrets();
@@ -380,7 +383,7 @@ export class ControlPlane extends DurableObject<Env> {
     this.#managementKeys = new ManagementKeyStore(ctx.storage.sql, this.#org);
     this.#sso = new SsoStore(ctx.storage.sql, this.#secrets);
     this.#quota = new QuotaReportStore(ctx.storage.sql);
-    this.#sweepLease = new SweepLeaseStore(ctx.storage.sql, () => Date.now());
+    this.#leases = new LeaseStore(ctx.storage.sql, () => Date.now());
 
     this.#spend = new SpendService(new SpendStore(ctx.storage.sql), {
       members: () => this.#members.members(),
@@ -1985,7 +1988,7 @@ export class ControlPlane extends DurableObject<Env> {
       readonly grantsMark?: ResetGrantMark;
     } = {},
   ): RecordQuotaResult {
-    if (options.sweepLease !== undefined) this.#sweepLease.renew(options.sweepLease);
+    if (options.sweepLease !== undefined) this.#leases.renew(options.sweepLease);
     const current = this.#pool.entry(id);
 
     if (current === undefined) return { kind: "gone" };
@@ -2175,21 +2178,21 @@ export class ControlPlane extends DurableObject<Env> {
   }
 
   /**
-   * Takes the lease of a check of every quota (src/quota/sweep-lease.ts) at this object's own time; refused while a
-   * live sweep holds it.
+   * Takes the lease of a check of every quota (`quota_sweep`, src/state/lease.ts) at this object's own time; refused
+   * while a live sweep holds it.
    */
-  takeQuotaSweepLease(source: SweepSource): TakeLease {
-    return this.#sweepLease.take(source);
+  takeQuotaSweepLease(source: LeaseSource): TakeLease {
+    return this.#leases.take(QUOTA_SWEEP_LEASE, source);
   }
 
   /** Marks the sweep holding `token` alive; `false` when it no longer holds the lease. */
   renewQuotaSweepLease(token: string): boolean {
-    return this.#sweepLease.renew(token);
+    return this.#leases.renew(token);
   }
 
   /** Gives back the lease taken with `token` (a lease taken over meanwhile is left alone). */
   releaseQuotaSweepLease(token: string): void {
-    this.#sweepLease.release(token);
+    this.#leases.release(token);
   }
 
   // --- provider OAuth logins (src/oauth) ------------------------------------------------------------------------

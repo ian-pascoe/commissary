@@ -418,20 +418,20 @@ describe("single sign-on domains", () => {
   });
 });
 
-describe("catalog refresh lease", () => {
-  it("is held by one refresh at a time and given back with its token", async () => {
+describe("leases", () => {
+  it("are held by one taker at a time and given back with their token", async () => {
     const platform = fresh();
-    const first = await platform.takeCatalogRefreshLease("cron");
+    const first = await platform.takeLease("catalog_refresh", "cron");
 
     if (!first.ok) throw new Error("the first refresh takes the lease");
 
-    const second = await platform.takeCatalogRefreshLease("panel");
+    const second = await platform.takeLease("catalog_refresh", "panel");
     expect(second).toMatchObject({ ok: false, held: { source: "cron" } });
 
-    await platform.releaseCatalogRefreshLease("not-the-token");
-    expect((await platform.takeCatalogRefreshLease("panel")).ok).toBe(false);
+    await platform.releaseLease("not-the-token");
+    expect((await platform.takeLease("catalog_refresh", "panel")).ok).toBe(false);
 
-    await platform.releaseCatalogRefreshLease(first.lease.token);
-    expect((await platform.takeCatalogRefreshLease("panel")).ok).toBe(true);
+    await platform.releaseLease(first.lease.token);
+    expect((await platform.takeLease("catalog_refresh", "panel")).ok).toBe(true);
   });
 });

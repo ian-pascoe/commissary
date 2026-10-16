@@ -21,7 +21,7 @@ import { ConfigReader } from "../config/reader.ts";
 import { holdInvocation } from "../platform/env.ts";
 import { CurrentOrg, GLOBAL_ORG } from "../platform/org.ts";
 import { platformOf } from "../platform/registry.ts";
-import type { SweepLease } from "../quota/sweep-lease.ts";
+import type { NamedLease } from "../state/lease.ts";
 import {
   catalogsFromModelsDev,
   embeddedCatalogs,
@@ -267,9 +267,12 @@ const refreshNow = (
  */
 const catalogLeaseHolder = (env: StateBindings) => platformOf(env);
 
+/** The Platform registry's lease (src/state/lease.ts) of the catalog refresh: table `catalog_refresh_lease`. */
+const CATALOG_REFRESH_LEASE = "catalog_refresh";
+
 type Taken =
   | { readonly kind: "taken"; readonly token: string }
-  | { readonly kind: "held"; readonly held: SweepLease }
+  | { readonly kind: "held"; readonly held: NamedLease }
   | { readonly kind: "unavailable" };
 
 const takeLease = (trigger: RefreshTrigger): Effect.Effect<Taken, never, StateEnv> =>
@@ -277,7 +280,7 @@ const takeLease = (trigger: RefreshTrigger): Effect.Effect<Taken, never, StateEn
     const env = yield* StateEnv;
 
     return yield* Effect.tryPromise(async (): Promise<Taken> => {
-      const taken = await catalogLeaseHolder(env).takeCatalogRefreshLease(trigger);
+      const taken = await catalogLeaseHolder(env).takeLease(CATALOG_REFRESH_LEASE, trigger);
 
       return taken.ok
         ? { kind: "taken", token: taken.lease.token }
@@ -289,9 +292,7 @@ const releaseLease = (token: string): Effect.Effect<void, never, StateEnv> =>
   Effect.gen(function* () {
     const env = yield* StateEnv;
 
-    yield* Effect.tryPromise(() => catalogLeaseHolder(env).releaseCatalogRefreshLease(token)).pipe(
-      Effect.ignore,
-    );
+    yield* Effect.tryPromise(() => catalogLeaseHolder(env).releaseLease(token)).pipe(Effect.ignore);
   });
 
 const record = (outcome: RefreshOutcome): Effect.Effect<void, never, ModelsEnv> =>
@@ -330,7 +331,7 @@ const record = (outcome: RefreshOutcome): Effect.Effect<void, never, ModelsEnv> 
   });
 
 /**
- * One refresh under the refresh lease (Platform registry, `catalog_refresh_lease`): cron and the panel never download at
+ * One refresh under the refresh lease (Platform registry, `catalog_refresh`): cron and the panel never download at
  * once, whichever isolates they run in. The second one gets `status: "running"` without any request being made. A
  * Platform registry that cannot be reached fails the refresh (exclusivity cannot be shown); the stored catalog stays.
  * `disabled` and `embed` do not fetch and need no lease. The invocation is held open until the lease is given back
