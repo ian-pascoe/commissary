@@ -168,22 +168,22 @@ Deploy settings live in `.env` (template with comments: [`.env.example`](.env.ex
 model aliases, retries, …) are edited in the control panel and stored in the Worker as config entries; a Go `config.yaml`
 (payload rules included) is imported with `POST /v9/management/settings/import` ([docs/MIGRATION.md](docs/MIGRATION.md)).
 
-| Variable                         | Default    | Purpose                                                                                                                            |
-| -------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `COMMISSARY_DOMAIN`              | (required) | Custom hostname of the Worker and of its Access application                                                                        |
-| `COMMISSARY_API_DOMAIN`          |            | A second hostname that alone serves the client API, outside Access ([docs/DEPLOY.md](docs/DEPLOY.md#api-host))                     |
-| `ACCESS_TEAM_DOMAIN`             | (required) | Zero Trust team name or `<team>.cloudflareaccess.com`                                                                              |
-| `ACCESS_ALLOW_EMAILS`            |            | Emails allowed to sign in (comma separated)                                                                                        |
-| `ACCESS_ALLOW_EMAIL_DOMAINS`     |            | Email domains allowed to sign in                                                                                                   |
-| `ACCESS_SERVICE_TOKENS`          |            | Names of the service tokens to create, one per script or machine using the management API                                          |
-| `ACCESS_ALLOW_SERVICE_TOKEN_IDS` |            | Service tokens managed elsewhere (by token ID) to admit as well, e.g. CI's                                                         |
-| `PLATFORM_ADMIN_EMAILS`          |            | Platform admins of the control panel and management API (replaces `ACCESS_ADMIN_EMAILS`, still read)                               |
-| `PLATFORM_ADMIN_SERVICE_TOKENS`  |            | Service token names (from `ACCESS_SERVICE_TOKENS`) or Client IDs that are platform admins (replaces `ACCESS_ADMIN_SERVICE_TOKENS`) |
-| `ACCESS_SESSION_DURATION`        | `24h`      | Access session length for browser sign-ins                                                                                         |
-| `ACCESS_SERVICE_TOKEN_HEADER`    |            | Accept service tokens as JSON in one header (e.g. `x-api-key`) for management scripts without custom headers                       |
-| `ACCESS_AUD`                     |            | Use an Access application you manage yourself instead of creating one                                                              |
-| `COMMISSARY_CPU_MS`              | `300000`   | CPU limit per request in ms; lower it on plans with smaller limits                                                                 |
-| `COMMISSARY_MODE`                |            | `cloud` for Commissary Cloud (own sign-in, no Access; its settings: [DEPLOY.md](docs/DEPLOY.md#commissary-cloud))                  |
+| Variable                         | Default    | Purpose                                                                                                           |
+| -------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------- |
+| `COMMISSARY_DOMAIN`              | (required) | Custom hostname of the Worker and of its Access application                                                       |
+| `COMMISSARY_API_DOMAIN`          |            | A second hostname that alone serves the client API, outside Access ([docs/DEPLOY.md](docs/DEPLOY.md#api-host))    |
+| `ACCESS_TEAM_DOMAIN`             | (required) | Zero Trust team name or `<team>.cloudflareaccess.com`                                                             |
+| `ACCESS_ALLOW_EMAILS`            |            | Emails allowed to sign in (comma separated)                                                                       |
+| `ACCESS_ALLOW_EMAIL_DOMAINS`     |            | Email domains allowed to sign in                                                                                  |
+| `ACCESS_SERVICE_TOKENS`          |            | Names of the service tokens to create, one per script or machine using the management API                         |
+| `ACCESS_ALLOW_SERVICE_TOKEN_IDS` |            | Service tokens managed elsewhere (by token ID) to admit as well, e.g. CI's                                        |
+| `PLATFORM_ADMIN_EMAILS`          |            | Platform admins of the control panel and management API                                                           |
+| `PLATFORM_ADMIN_SERVICE_TOKENS`  |            | Service token names (from `ACCESS_SERVICE_TOKENS`) or Client IDs that are platform admins                         |
+| `ACCESS_SESSION_DURATION`        | `24h`      | Access session length for browser sign-ins                                                                        |
+| `ACCESS_SERVICE_TOKEN_HEADER`    |            | Accept service tokens as JSON in one header (e.g. `x-api-key`) for management scripts without custom headers      |
+| `ACCESS_AUD`                     |            | Use an Access application you manage yourself instead of creating one                                             |
+| `COMMISSARY_CPU_MS`              | `300000`   | CPU limit per request in ms; lower it on plans with smaller limits                                                |
+| `COMMISSARY_MODE`                |            | `cloud` for Commissary Cloud (own sign-in, no Access; its settings: [DEPLOY.md](docs/DEPLOY.md#commissary-cloud)) |
 
 [ACCESS.md](docs/ACCESS.md) explains what each Access setting creates, how the Worker validates requests, and how to
 extend the policies (IdP groups, device posture).

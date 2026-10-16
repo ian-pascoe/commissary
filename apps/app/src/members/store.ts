@@ -7,7 +7,8 @@
  * - **teams**: named groups of members; a member can be on several. Removing a member takes them off every team.
  * - **service tokens**: Access service tokens (by Client ID) registered to the org with a role.
  * - **membership**: one row of org-wide state: the auto-join setting (on for `global`, off for new orgs), whether the
- *   `global` admin lists were migrated, and a counter of changes the Platform registry's index has caught up with.
+ *   platform admins were seeded into `global` (`seedPlatformAdmins`), and a counter of changes the Platform registry's
+ *   index has caught up with.
  *
  * The ControlPlane is authoritative; the Platform registry keeps a copy of which orgs each person and service token
  * belong to (`index`, pushed by the Worker, `admission.ts`). Writes take the acting principal's role (`Actor`) and
@@ -122,18 +123,13 @@ export interface AccountStanding {
 
 export type MemberResult<A> = { readonly ok: true; readonly value: A } | MemberRefused;
 
-/** The admin lists of the config document from before members (`access.admin-*`) and the deployment's admins. */
-export interface LegacyAdmins {
-  /** Platform admin emails at the time of the migration: they become org owners. */
-  readonly owners: ReadonlyArray<string>;
-  /** `access.admin-emails`: they become org admins. */
-  readonly admins: ReadonlyArray<string>;
-  /** `access.admin-service-tokens`: registered with the owner role. */
-  readonly serviceTokens: ReadonlyArray<string>;
-}
+/**
+ * Who added the platform admins `seedPlatformAdmins` made owners of `global`. The text is stored in `added_by` (and
+ * shown), so it stays `migration` for the rows already written.
+ */
+export const SEED_ACTOR = "migration";
 
-/** Who added the members a migration or auto-join created. */
-export const MIGRATION_ACTOR = "migration";
+/** Who added the members an auto-join created. */
 
 export const AUTO_JOIN_ACTOR = "auto-join";
 
@@ -306,55 +302,41 @@ export class MemberStore {
     );
   }
 
-  // --- the global migration -----------------------------------------------------------------------------------
+  // --- the platform admins of `global` ------------------------------------------------------------------------
 
-  /** Whether {@link migrateAdmins} has run (it runs once per org). */
-  adminsMigrated(): boolean {
+  /**
+   * Whether {@link seedPlatformAdmins} has run (it runs once per org). The column is still called `admins_migrated`:
+   * stages that stored it as 1 must not seed again.
+   */
+  platformAdminsSeeded(): boolean {
     return this.#state().admins_migrated === 1;
   }
 
   /**
-   * Turns the admin lists from before members into members of `global` (ADR 0022): the platform admins at the time
-   * become org owners, `access.admin-emails` org admins, `access.admin-service-tokens` service tokens with the owner
-   * role. Another org only records that it ran: its config admin lists never granted anything. Runs once (idempotent);
-   * call it inside the transaction that also removes the lists from the config.
+   * Makes the platform admins (`PLATFORM_ADMIN_EMAILS`) org owners of `global` the first time it is used, so they have a
+   * member id there (an API key, private credentials) without adding themselves. Another org only records that it ran.
+   * Runs once (idempotent); a platform admin taken out of the variable later keeps the membership until an org owner
+   * removes it.
    */
-  migrateAdmins(legacy: LegacyAdmins): void {
-    if (this.adminsMigrated()) return;
+  seedPlatformAdmins(platformAdminEmails: Iterable<string>): void {
+    if (this.platformAdminsSeeded()) return;
     const now = this.#now();
 
-    if (this.#org === GLOBAL_ORG) {
-      const placed = new Map<string, OrgRole>();
+    this.#transaction(() => {
+      if (this.#org === GLOBAL_ORG) {
+        for (const email of new Set([...platformAdminEmails].map(normalizeEmail))) {
+          if (!validEmail(email)) continue;
+          const existing = this.#memberByEmail(email);
 
-      for (const email of legacy.admins.map(normalizeEmail)) placed.set(email, "admin");
+          if (existing === undefined) this.#insertMember(email, "owner", now, SEED_ACTOR);
+          else this.#sql.exec(`UPDATE members SET role = ? WHERE id = ?`, "owner", existing.id);
+        }
 
-      for (const email of legacy.owners.map(normalizeEmail)) placed.set(email, "owner");
-
-      for (const [email, granted] of placed) {
-        if (!validEmail(email)) continue;
-        const existing = this.#memberByEmail(email);
-
-        if (existing === undefined) this.#insertMember(email, granted, now, MIGRATION_ACTOR);
-        else if (granted === "owner" || existing.role === "member")
-          this.#sql.exec(`UPDATE members SET role = ? WHERE id = ?`, granted, existing.id);
+        this.#changed();
       }
 
-      for (const clientId of new Set(legacy.serviceTokens.map((id) => id.trim()))) {
-        if (!CLIENT_ID.test(clientId)) continue;
-        this.#sql.exec(
-          `INSERT INTO service_tokens (client_id, name, role, added_at, added_by) VALUES (?, ?, 'owner', ?, ?)
-           ON CONFLICT (client_id) DO UPDATE SET role = 'owner'`,
-          clientId,
-          clientId,
-          now,
-          MIGRATION_ACTOR,
-        );
-      }
-
-      this.#changed();
-    }
-
-    this.#sql.exec(`UPDATE membership SET admins_migrated = 1 WHERE id = 1`);
+      this.#sql.exec(`UPDATE membership SET admins_migrated = 1 WHERE id = 1`);
+    });
   }
 
   // --- admission ----------------------------------------------------------------------------------------------

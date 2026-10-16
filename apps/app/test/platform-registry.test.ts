@@ -221,21 +221,11 @@ describe("membership index", () => {
 });
 
 describe("usage retention", () => {
-  it("gives a new org 90 days and keeps the orgs that existed before the setting without a period", async () => {
+  it("gives a new org 90 days and `global` none", async () => {
     const platform = fresh();
-
-    // The registry as it was before the setting: no column, `global` and one more org.
-    await runInDurableObject(platform, (_instance, state) => {
-      state.storage.sql.exec("ALTER TABLE orgs DROP COLUMN usage_retention_days");
-      state.storage.sql.exec(
-        "INSERT INTO orgs (id, slug, name, created_at) VALUES ('org-old', 'old', 'Old', 1)",
-      );
-    });
-    await evictDurableObject(platform);
 
     expect((await platform.listOrgs()).map((org) => [org.slug, org.usageRetentionDays])).toEqual([
       ["default", null],
-      ["old", null],
     ]);
 
     const created = await platform.createOrg({ slug: "fresh", name: "Fresh" }, NOW);
@@ -248,7 +238,6 @@ describe("usage retention", () => {
     await evictDurableObject(platform);
     expect((await platform.listOrgs()).map((org) => [org.slug, org.usageRetentionDays])).toEqual([
       ["default", null],
-      ["old", null],
       ["fresh", 90],
     ]);
   });

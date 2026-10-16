@@ -14,7 +14,7 @@ import { admitPrincipal } from "../members/admission.ts";
 import { roleAtLeast } from "../members/roles.ts";
 import { CurrentOrg, type OrgId, type OrgSlug } from "../platform/org.ts";
 import { platform } from "../platform/registry.ts";
-import { deprecatedAdminVariables, devBypass, isAdmin, loadAccessConfig } from "./config.ts";
+import { devBypass, isAdmin, loadAccessConfig } from "./config.ts";
 import { managementKeyIdentity, presentedManagementKey } from "./management-key.ts";
 import type { AccessIdentity, AdmissiblePrincipal } from "./principal.ts";
 import { makeIdentity } from "./principal.ts";
@@ -39,8 +39,6 @@ export type AccessError =
 
 let devBypassRefusalLogged = false;
 
-let deprecatedAdminLogged = false;
-
 /** Logs (once per isolate) that `ACCESS_DEV_BYPASS` is set on a Worker that has Access configured. */
 const warnDevBypassRefused = Effect.suspend(() => {
   if (devBypassRefusalLogged) return Effect.void;
@@ -50,28 +48,6 @@ const warnDevBypassRefused = Effect.suspend(() => {
     "ACCESS_DEV_BYPASS is ignored because ACCESS_TEAM_DOMAIN/ACCESS_AUD are set; remove it from this environment",
   );
 });
-
-/**
- * Logs (once per isolate) that the deployment still sets `ACCESS_ADMIN_*`, the deprecated names of the platform admin
- * variables. They keep working as aliases.
- */
-export const warnDeprecatedAdminVariables = (env: Parameters<typeof deprecatedAdminVariables>[0]) =>
-  Effect.suspend(() => {
-    const deprecated = deprecatedAdminVariables(env);
-
-    if (deprecatedAdminLogged || deprecated.length === 0) return Effect.void;
-    deprecatedAdminLogged = true;
-
-    return Effect.logWarning(
-      `deprecated variables set: ${deprecated.join(", ")}; rename them, the old names are only read as aliases`,
-    );
-  });
-
-/** Forgets what was logged, for tests that check the warnings. */
-export const resetAccessWarnings = (): void => {
-  devBypassRefusalLogged = false;
-  deprecatedAdminLogged = false;
-};
 
 /**
  * The org a management request is for: the org addressed by the URL (`slug`, looked up in the Platform registry), the
@@ -208,7 +184,6 @@ export const authenticateRequest = (
     }
 
     if (bypass?._tag === "Refused") yield* warnDevBypassRefused;
-    yield* warnDeprecatedAdminVariables(env);
 
     const config = yield* loadAccessConfig(env);
 

@@ -143,7 +143,6 @@ import {
 } from "../quota/reset-grants.ts";
 import { buildQuotaTarget, type QuotaTargetResult } from "../quota/target.ts";
 import { platformAdminLists } from "../access/config.ts";
-import { migrateLegacyAdmins } from "../members/migration.ts";
 import type { Actor, OrgRole } from "../members/roles.ts";
 import {
   type AccountStanding,
@@ -494,14 +493,14 @@ export class ControlPlane extends DurableObject<Env> {
    * `unchanged: true` answer instead of the full document.
    */
   getConfig(sinceVersion?: number): ConfigSnapshotWire {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#config.snapshot(sinceVersion);
   }
 
   /** The assembled config document with the revision of every entry (what the management routes edit). */
   configEntries(): ConfigEntriesWire {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#config.entries();
   }
@@ -527,7 +526,7 @@ export class ControlPlane extends DurableObject<Env> {
     changes: ReadonlyArray<SettingChange>,
     by: string,
   ): WriteResult<{ readonly revisions: Readonly<Record<string, number>> }> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#config.writeSettings(changes, by);
   }
@@ -557,7 +556,7 @@ export class ControlPlane extends DurableObject<Env> {
    * (`conflict` when another write landed since).
    */
   importConfig(text: string, by: string, basedOn?: number): ImportResult {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#config.importDocument(text, by, basedOn);
   }
@@ -565,18 +564,13 @@ export class ControlPlane extends DurableObject<Env> {
   // --- members, teams and service tokens (ADR 0022, `members/store.ts`) ------------------------------------------
 
   /**
-   * Moves the config admin lists from before members into members, once (`members/migration.ts`). Checked on every
-   * call that reads members or the config, so it runs before either is used; afterwards it is one row read.
+   * Makes the platform admins owners of `global` once (`MemberStore.seedPlatformAdmins`). Checked on every call that
+   * reads members or the config, so it runs before either is used; afterwards it is one row read.
    */
-  #ensureMembership(): void {
-    if (this.#members.adminsMigrated()) return;
+  #seedPlatformAdmins(): void {
+    if (this.#members.platformAdminsSeeded()) return;
 
-    migrateLegacyAdmins(
-      this.#config,
-      this.#members,
-      platformAdminLists(this.env).adminEmails,
-      (body) => this.ctx.storage.transactionSync(body),
-    );
+    this.#members.seedPlatformAdmins(platformAdminLists(this.env).adminEmails);
   }
 
   /**
@@ -589,7 +583,7 @@ export class ControlPlane extends DurableObject<Env> {
     autoJoin: boolean,
     client = false,
   ): Admission | ClientsUseApiKeys | undefined {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     if (client && !this.#apiKeys.accessClients()) return { apiKeysOnly: true };
 
@@ -597,7 +591,7 @@ export class ControlPlane extends DurableObject<Env> {
   }
 
   listMembers(): ReadonlyArray<MemberRecord> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#members.members();
   }
@@ -607,19 +601,19 @@ export class ControlPlane extends DurableObject<Env> {
     actor: Actor,
     by: string,
   ): MemberResult<MemberRecord> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#members.addMember(input, actor, by);
   }
 
   setMemberRole(id: string, role: string, actor: Actor): MemberResult<MemberRecord> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#members.setMemberRole(id, role, actor);
   }
 
   async removeMember(id: string, actor: Actor): Promise<MemberResult<{ readonly email: string }>> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     const removed = this.#members.removeMember(id, actor);
 
@@ -633,7 +627,7 @@ export class ControlPlane extends DurableObject<Env> {
 
   /** A person's place in the org (`MemberStore.standingOf`), for deleting their account. */
   accountStanding(email: string): AccountStanding {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#members.standingOf(email);
   }
@@ -643,7 +637,7 @@ export class ControlPlane extends DurableObject<Env> {
    * (`MemberStore.leave`). Answers whether they were a member.
    */
   async leaveOrg(email: string): Promise<{ readonly left: boolean }> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
     const id = this.#members.leave(email);
 
     if (id === undefined) return { left: false };
@@ -677,7 +671,7 @@ export class ControlPlane extends DurableObject<Env> {
   }
 
   membershipSettings(): MembershipSettingsWire {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return {
       autoJoin: this.#members.autoJoin(),
@@ -691,7 +685,7 @@ export class ControlPlane extends DurableObject<Env> {
    * or on again at once.
    */
   setMembershipSettings(settings: Partial<MembershipSettingsWire>): MembershipSettingsWire {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     if (settings.autoJoin !== undefined) this.#members.setAutoJoin(settings.autoJoin);
 
@@ -744,7 +738,7 @@ export class ControlPlane extends DurableObject<Env> {
 
   /** The org's API keys, or one member's, with the email of the member each belongs to. */
   listApiKeys(memberId: string | undefined, now: number): ReadonlyArray<ApiKeyListing> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
     const emails = new Map(this.#members.members().map((member) => [member.id, member.email]));
 
     return this.#apiKeys.list(memberId, now).map((key) => ({
@@ -758,7 +752,7 @@ export class ControlPlane extends DurableObject<Env> {
     input: { readonly memberId: string; readonly name: string; readonly expiresAt?: number },
     now: number,
   ): ApiKeyResult<{ readonly record: ApiKeyRecord; readonly key: string }> | MemberNotFound {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     if (this.#members.member(input.memberId) === undefined)
       return { ok: false, error: "member_not_found", message: "no member has this id" };
@@ -768,14 +762,14 @@ export class ControlPlane extends DurableObject<Env> {
 
   /** Deletes the keys that have expired at `now` in every member's name (the cron sweep); answers how many. */
   purgeExpiredApiKeys(now: number): number {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#apiKeys.purgeExpired(now);
   }
 
   /** Revokes a key by deleting it; `memberId` limits the call to that member's keys (`ApiKeyStore.revoke`). */
   revokeApiKey(id: string, now: number, memberId?: string): ApiKeyResult<ApiKeyRecord> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#apiKeys.revoke(id, now, memberId);
   }
@@ -786,7 +780,7 @@ export class ControlPlane extends DurableObject<Env> {
    * within its cache's short lifetime.
    */
   verifyApiKey(keyId: string, hash: string, now: number): ApiKeyVerdict {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
     const checked = this.#apiKeys.check(keyId, hash, now);
 
     if (!checked.ok) return checked;
@@ -807,7 +801,7 @@ export class ControlPlane extends DurableObject<Env> {
 
   /** The limits `viewer` sees with their Spend so far, and the org's calendar. */
   spendOverview(viewer: Viewer): SpendOverview {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#spend.overview(viewer);
   }
@@ -817,7 +811,7 @@ export class ControlPlane extends DurableObject<Env> {
     input: NewSpendLimit,
     by: string,
   ): SpendServiceResult<SpendEntry> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#spend.create(viewer, input, by);
   }
@@ -829,13 +823,13 @@ export class ControlPlane extends DurableObject<Env> {
     amountMicros: number,
     by: string,
   ): SpendServiceResult<SpendEntry> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#spend.update(viewer, id, revision, amountMicros, by);
   }
 
   removeSpendLimit(viewer: Viewer, id: string, revision: number): SpendServiceResult<SpendEntry> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#spend.remove(viewer, id, revision);
   }
@@ -845,7 +839,7 @@ export class ControlPlane extends DurableObject<Env> {
     readonly timeZone?: string | undefined;
     readonly weekStart?: string | undefined;
   }): SpendResult<SpendSettings> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#spend.setSettings(settings);
   }
@@ -919,7 +913,7 @@ export class ControlPlane extends DurableObject<Env> {
    * an org admin removed, until they are added back.
    */
   admitThroughSso(email: string): SsoAdmission {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
     const domain = emailDomain(email);
 
     if (this.#sso.provider() === undefined) return { ok: false, error: "provider_missing" };
@@ -939,25 +933,25 @@ export class ControlPlane extends DurableObject<Env> {
   }
 
   listTeams(): ReadonlyArray<TeamRecord> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#members.teams();
   }
 
   createTeam(name: string): MemberResult<TeamRecord> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#members.createTeam(name);
   }
 
   renameTeam(id: string, name: string): MemberResult<TeamRecord> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#members.renameTeam(id, name);
   }
 
   deleteTeam(id: string): MemberResult<true> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     const deleted = this.#members.deleteTeam(id);
 
@@ -970,7 +964,7 @@ export class ControlPlane extends DurableObject<Env> {
   }
 
   addTeamMember(teamId: string, memberId: string): MemberResult<TeamRecord> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     const added = this.#members.addTeamMember(teamId, memberId);
 
@@ -980,7 +974,7 @@ export class ControlPlane extends DurableObject<Env> {
   }
 
   removeTeamMember(teamId: string, memberId: string): MemberResult<TeamRecord> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     const removed = this.#members.removeTeamMember(teamId, memberId);
 
@@ -1004,7 +998,7 @@ export class ControlPlane extends DurableObject<Env> {
     change: GrantChange,
     by: string,
   ): WriteResult<{ readonly id: string; readonly revision: number }> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#modelGrants.write(change, by, (subject) => this.#missingSubject(subject));
   }
@@ -1021,7 +1015,7 @@ export class ControlPlane extends DurableObject<Env> {
 
   /** Everything the Worker needs to compute any member's reach: the grants and who is in each team. */
   grantTable(): GrantTable {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return {
       version: this.#modelGrants.version(),
@@ -1032,13 +1026,13 @@ export class ControlPlane extends DurableObject<Env> {
 
   /** The member ids of a team, `undefined` for an unknown team (usage filters). */
   teamMemberIds(teamId: string): ReadonlyArray<string> | undefined {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#members.teamMemberIds(teamId);
   }
 
   listServiceTokens(): ReadonlyArray<ServiceTokenRecord> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#members.serviceTokens();
   }
@@ -1048,7 +1042,7 @@ export class ControlPlane extends DurableObject<Env> {
     actor: Actor,
     by: string,
   ): MemberResult<ServiceTokenRecord> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#members.registerToken(input, actor, by);
   }
@@ -1058,26 +1052,26 @@ export class ControlPlane extends DurableObject<Env> {
     role: string,
     actor: Actor,
   ): MemberResult<ServiceTokenRecord> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#members.setTokenRole(clientId, role, actor);
   }
 
   removeServiceToken(clientId: string, actor: Actor): MemberResult<true> {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#members.removeToken(clientId, actor);
   }
 
   /** Undoes a registration another org won (`MemberStore.withdrawToken`). */
   withdrawServiceToken(clientId: string): void {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
     this.#members.withdrawToken(clientId);
   }
 
   /** Who the Platform registry should index for the org, and whether it has caught up (`members/admission.ts`). */
   membershipIndex(): MembershipIndex {
-    this.#ensureMembership();
+    this.#seedPlatformAdmins();
 
     return this.#members.index();
   }

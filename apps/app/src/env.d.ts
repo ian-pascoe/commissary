@@ -15,10 +15,6 @@ interface __BaseEnv_Env {
   PLATFORM_ADMIN_EMAILS: string;
   /** Comma separated platform admin service token Client IDs. */
   PLATFORM_ADMIN_SERVICE_TOKENS: string;
-  /** @deprecated Alias of `PLATFORM_ADMIN_EMAILS`, read for one release (a warning is logged). */
-  ACCESS_ADMIN_EMAILS?: string;
-  /** @deprecated Alias of `PLATFORM_ADMIN_SERVICE_TOKENS`, read for one release (a warning is logged). */
-  ACCESS_ADMIN_SERVICE_TOKENS?: string;
   /** Local development only: treats loopback requests as this admin. Never set when deployed. */
   ACCESS_DEV_BYPASS: string;
   /**

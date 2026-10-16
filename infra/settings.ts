@@ -56,7 +56,7 @@ export interface Settings {
   readonly allowServiceTokenIds: ReadonlyArray<string>;
   /**
    * Platform admins (ADR 0022): emails, and service token names (from `serviceTokens`) or Client IDs. They manage every
-   * org. `PLATFORM_ADMIN_*`, plus the deprecated `ACCESS_ADMIN_*` they replace, which a deployment may still set.
+   * org (`PLATFORM_ADMIN_*`).
    */
   readonly adminEmails: ReadonlyArray<string>;
   readonly adminServiceTokens: ReadonlyArray<string>;
@@ -90,22 +90,6 @@ const list = (name: string) =>
       .map((item) => item.trim())
       .filter((item) => item !== ""),
   );
-
-/**
- * `current` and its deprecated alias `old`, merged (no duplicates). A deployment that still sets the old name keeps its
- * admins and is told to rename it.
- */
-const renamedList = (current: string, old: string) =>
-  Effect.gen(function* () {
-    const legacy = yield* list(old);
-
-    if (legacy.length > 0)
-      yield* Effect.logWarning(
-        `${old} is deprecated: rename it to ${current} (read as an alias for now)`,
-      );
-
-    return [...new Set([...(yield* list(current)), ...legacy])];
-  });
 
 /** A key generation: a positive integer, or `fallback` when the variable is unset or empty (CI passes unset as ""). */
 const generation = (name: string, fallback: number | undefined) =>
@@ -247,11 +231,8 @@ export const readSettings = (dev: boolean, stage: string) =>
       allowEmailDomains: yield* list("ACCESS_ALLOW_EMAIL_DOMAINS"),
       serviceTokens: preview ? [] : yield* list("ACCESS_SERVICE_TOKENS"),
       allowServiceTokenIds: yield* list("ACCESS_ALLOW_SERVICE_TOKEN_IDS"),
-      adminEmails: yield* renamedList("PLATFORM_ADMIN_EMAILS", "ACCESS_ADMIN_EMAILS"),
-      adminServiceTokens: yield* renamedList(
-        "PLATFORM_ADMIN_SERVICE_TOKENS",
-        "ACCESS_ADMIN_SERVICE_TOKENS",
-      ),
+      adminEmails: yield* list("PLATFORM_ADMIN_EMAILS"),
+      adminServiceTokens: yield* list("PLATFORM_ADMIN_SERVICE_TOKENS"),
       sessionDuration: (yield* text("ACCESS_SESSION_DURATION", "24h")).trim(),
       serviceTokenHeader: (yield* text("ACCESS_SERVICE_TOKEN_HEADER")).trim(),
       metaMintUrl: (yield* text("META_MINT_URL")).trim(),
