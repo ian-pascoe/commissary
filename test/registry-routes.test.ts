@@ -152,9 +152,13 @@ describe("model routes with a fixed registry", () => {
     for (const path of ["/v1/models/nope", "/v1/models/"]) {
       const response = await call(path);
       expect(response.status, path).toBe(404);
-      expect(await response.text()).toBe(
-        '{"error":{"code":"model_not_found","message":"Model not found","type":"invalid_request_error"}}',
-      );
+      expect(await response.json()).toEqual({
+        error: {
+          code: "model_not_found",
+          message: "Model not found",
+          type: "invalid_request_error",
+        },
+      });
     }
   });
 

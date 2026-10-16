@@ -235,12 +235,12 @@ const CARRIER_FIELDS = [
 const hasInternalCarrierFields = (item: Json): boolean =>
   CARRIER_FIELDS.some((field) => exists(item, field));
 
-/** `stripGeminiResponsesCarrierMetadata`: Go re-marshals through a map, so the top-level keys end up sorted. */
+/** `stripGeminiResponsesCarrierMetadata`. */
 const stripCarrierMetadata = (item: Json): JsonObject | undefined => {
   if (!isJsonObject(item)) return undefined;
   const out: JsonObject = {};
 
-  for (const key of Object.keys(item).toSorted()) {
+  for (const key of Object.keys(item)) {
     if (!CARRIER_FIELDS.includes(key))
       // SAFETY: keys come from `Object.keys(item)`, so `item[key]` is present; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
       out[key] = item[key] as Json;

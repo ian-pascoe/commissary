@@ -19,7 +19,6 @@ import {
   type JsonObject,
   tryParseJson,
 } from "../../json/index.ts";
-import { goMarshal } from "../../http/json-text.ts";
 import { sseEvent } from "../../http/sse.ts";
 import { ExecutionError } from "../../executor/errors.ts";
 
@@ -352,7 +351,7 @@ export const buildImagesApiResponse = (
 
   if (extracted.usage !== undefined) out["usage"] = extracted.usage;
 
-  return goMarshal(out);
+  return JSON.stringify(out);
 };
 
 /** The `<prefix>.completed` SSE frames the Go handler writes for an image stream (one per image). */
@@ -373,6 +372,6 @@ export const buildImagesStreamFrames = (
 
     if (extracted.usage !== undefined) data["usage"] = extracted.usage;
 
-    return sseEvent(eventName, goMarshal(data));
+    return sseEvent(eventName, JSON.stringify(data));
   });
 };

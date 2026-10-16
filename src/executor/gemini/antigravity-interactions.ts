@@ -29,7 +29,7 @@ import {
   resolveBackend,
 } from "../../session-state/client.ts";
 import type { SessionAddress } from "../../session-state/protocol.ts";
-import { goMarshal } from "../../translator/common/claude-util.ts";
+import { stableStringify } from "../../http/json-text.ts";
 import type { CredentialSnapshot } from "../picker.ts";
 import type { ExecutorOptions, ExecutorRequest } from "../types.ts";
 
@@ -125,7 +125,8 @@ export const makeInMemoryContinuationStore = (now?: () => number): ContinuationS
 /** Default store: the `SessionState` Durable Object when bound, else per isolate. */
 export const defaultContinuationStore: ContinuationStore = makeSessionStateContinuationStore();
 
-const digest = (value: Json): string => createHash("sha256").update(goMarshal(value)).digest("hex");
+const digest = (value: Json): string =>
+  createHash("sha256").update(stableStringify(value)).digest("hex");
 
 /** Tracks one request, including streamed steps (`AntigravityInteractionsState`). */
 export class InteractionsState {

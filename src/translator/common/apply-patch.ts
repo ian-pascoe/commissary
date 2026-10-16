@@ -8,7 +8,6 @@
  * in decoded text); everything else, including the error messages, follows the Go state machine.
  */
 import { asString, get, type Json, type JsonObject } from "../../json/index.ts";
-import { goMarshal } from "../../http/json-text.ts";
 
 const getStr = (root: Json | undefined, path: string): string => asString(get(root, path));
 
@@ -62,7 +61,7 @@ export const applyPatchDescription = (tool: Json | undefined): string => {
 };
 
 /** `applypatch.WrapInput`. */
-export const wrapApplyPatchInput = (input: string): string => goMarshal({ input });
+export const wrapApplyPatchInput = (input: string): string => JSON.stringify({ input });
 
 /** `applypatch.UnwrapInput`: the patch text of a strict `{"input":"..."}` object, or an error message. */
 export const unwrapApplyPatchInput = (
@@ -97,7 +96,7 @@ export const unwrapApplyPatchInput = (
 
 /** `applypatch.EscapeInputFragment`: JSON string escaping without the surrounding quotes. */
 export const escapeApplyPatchInputFragment = (fragment: string): string =>
-  goMarshal(fragment).slice(1, -1);
+  JSON.stringify(fragment).slice(1, -1);
 
 type Phase =
   | "beforeObject"

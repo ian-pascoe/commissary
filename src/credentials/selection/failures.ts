@@ -4,7 +4,6 @@
  * Go source: sdk/cliproxy/auth/selector.go (`modelCooldownError`, `getAvailableAuthsWithPriorityMode`) and
  * errors.go (`newAuthUnavailableError`). Docs: credentials.md §6.5.
  */
-import { goMarshal } from "../../http/json-text.ts";
 import type { Refusal, SubjectKind } from "../../spend/model.ts";
 import type { PickFailure } from "./types.ts";
 
@@ -30,7 +29,7 @@ export const providerNotFound = (): PickFailure => ({
 
 /** Body of the 400 answer for a model no credential serves the caller (already JSON; OpenAI handlers pass it through). */
 export const unknownModelBody = (model: string): string =>
-  goMarshal({
+  JSON.stringify({
     error: {
       message: `unknown provider for model ${model}`,
       type: "invalid_request_error",

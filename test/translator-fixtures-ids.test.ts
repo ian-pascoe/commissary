@@ -43,9 +43,9 @@ const files = import.meta.glob<{ default: ReadonlyArray<FixtureCase> }>(
   },
 );
 
-const canonicalJson = (text: string): string | undefined => {
+const parseJson = (text: string): Json | undefined => {
   try {
-    return JSON.stringify(JSON.parse(text));
+    return JSON.parse(text);
   } catch {
     return undefined;
   }
@@ -62,25 +62,28 @@ const maskIds = (text: string): string =>
     .replace(/\b(interaction|step|response)_\d{10,}\b/g, "$1_N")
     .replace(/(call|resp)_[0-9a-f]{10,}_\d+/g, "$1_N")
     .replace(/(msg|rs|ws)_[0-9a-f]{12,}_\d+/g, "$1_N")
-    .replace(/("created_at"\s*:\s*)\d+/g, "$1N")
+    .replace(/("created_at"\s*:\s*)\d+/g, "$10")
     .replace(/("(?:created|updated)"\s*:\s*")\d{4}-\d\d-\d\dT[^"]*(")/g, "$1T$2");
 
-const normalize = (text: string): string => {
-  const canonical = canonicalJson(text);
+/** Parsed JSON with ids masked, so the comparison is structural (key order is not part of the contract). */
+const parseMasked = (text: string): Json | undefined => {
+  const parsed = parseJson(text);
 
-  if (canonical !== undefined) return maskIds(canonical);
+  return parsed === undefined ? undefined : JSON.parse(maskIds(JSON.stringify(parsed)));
+};
 
-  return maskIds(
-    text
-      .split("\n")
-      .map((line) => {
-        if (!line.startsWith("data:")) return line;
-        const json = canonicalJson(line.slice(5).trim());
+/** SSE framing and non-JSON text stay exact; only the JSON payloads compare structurally. */
+const normalize = (text: string): Json => {
+  const whole = parseMasked(text);
 
-        return json === undefined ? line : `data: ${json}`;
-      })
-      .join("\n"),
-  );
+  if (whole !== undefined) return { json: whole };
+
+  return text.split("\n").map((line) => {
+    if (!line.startsWith("data:")) return maskIds(line);
+    const json = parseMasked(line.slice(5).trim());
+
+    return json === undefined ? maskIds(line) : { data: json };
+  });
 };
 
 describe("translator golden fixtures with generated ids", () => {
@@ -101,7 +104,7 @@ describe("translator golden fixtures with generated ids", () => {
           );
 
           expect(envelope.error?.message).toBe(c.requestError);
-          expect(JSON.stringify(envelope.body)).toBe(canonicalJson(c.translatedRequest));
+          expect(envelope.body).toEqual(parseJson(c.translatedRequest));
 
           const context = () => ({
             model: c.model,

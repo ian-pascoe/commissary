@@ -6,7 +6,6 @@
  * `is-compat` models. Tool `input` is re-serialised compactly (Go forwards the raw text).
  */
 import { createHash } from "node:crypto";
-import { sortKeys } from "../../../http/json-text.ts";
 import {
   asBool,
   asInt,
@@ -203,7 +202,7 @@ const DEFAULT_PARAMETERS = (): Json => ({ type: "object", properties: {} });
 
 /**
  * `normalizeToolParameters`: object schemas get an empty `properties`, dialect keywords and unsupported regex
- * patterns are dropped. Go re-encodes through `map[string]any`, so keys come out sorted.
+ * patterns are dropped.
  */
 export const normalizeToolParameters = (schema: Json | undefined): Json => {
   if (!isJsonObject(schema)) return DEFAULT_PARAMETERS();
@@ -224,7 +223,7 @@ export const normalizeToolParameters = (schema: Json | undefined): Json => {
   if (isObject && (root["properties"] === undefined || root["properties"] === null))
     root["properties"] = {};
 
-  return sortKeys(root);
+  return root;
 };
 
 /** `codexSchemaMissesRequired`: a declared property missing from its sibling `required` list (recursively). */

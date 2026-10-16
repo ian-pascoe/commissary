@@ -10,6 +10,7 @@
  */
 import { createHash } from "node:crypto";
 import { Effect } from "effect";
+import { stableStringify } from "../../http/json-text.ts";
 import { get, type Json, type JsonObject, tryParseJson } from "../../json/index.ts";
 import {
   type BackendResolver,
@@ -163,21 +164,6 @@ export const replayModelFamily = (
   return `claude:${createHash("sha256").update(identity).digest("hex").slice(0, 16)}:${baseModel}`;
 };
 
-const canonical = (value: Json): string => JSON.stringify(sortKeys(value));
-
-const sortKeys = (value: Json): Json => {
-  if (isArr(value)) return value.map(sortKeys);
-
-  if (isObj(value))
-    return Object.fromEntries(
-      Object.entries(value)
-        .toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-        .map(([key, child]) => [key, sortKeys(child)]),
-    );
-
-  return value;
-};
-
 const hasThinking = (content: Json | undefined): boolean =>
   isArr(content) &&
   content.some((part) => ["thinking", "redacted_thinking"].includes(str(get(part, "type")).trim()));
@@ -198,7 +184,7 @@ const nonThinkingParts = (content: Json | undefined): string[] | undefined => {
       hasToolUse = true;
     }
 
-    parts.push(canonical(part));
+    parts.push(stableStringify(part));
   }
 
   return hasToolUse ? parts : undefined;
@@ -234,7 +220,7 @@ export const restoreReplayContent = (body: JsonObject, cached: Json): boolean =>
     if (str(get(message, "role")).trim().toLowerCase() !== "assistant" || !isObj(message)) continue;
     const current = message.content;
 
-    if (current !== undefined && canonical(current) === canonical(cached)) return false;
+    if (current !== undefined && stableStringify(current) === stableStringify(cached)) return false;
 
     if (hasThinking(current)) continue;
     const currentParts = nonThinkingParts(current);

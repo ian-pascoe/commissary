@@ -31,7 +31,6 @@ import {
   type Scope,
   Stream,
 } from "effect";
-import { goMarshal } from "../../http/json-text.ts";
 import {
   asString,
   cloneJson,
@@ -244,7 +243,7 @@ export const startCodexDuplex = (
     // --- writer ---------------------------------------------------------------------------------------------------
     const reject = (message: string): Effect.Effect<void> =>
       emit(
-        goMarshal({
+        JSON.stringify({
           error: { message, type: "invalid_request_error" },
           status: 400,
           type: "error",

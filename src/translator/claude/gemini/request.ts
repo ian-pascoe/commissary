@@ -338,9 +338,7 @@ export const convertGeminiRequestToClaude = (
 
         if (exists(params)) anthropicTool.input_schema = normalizeClaudeToolSchema(params);
         lowercaseSchemaTypes(anthropicTool);
-        // Go decodes the tool into a map, so the marshalled object has sorted keys.
-        // SAFETY: sortKeysDeep rebuilds its input with the same container kind (object stays object, array stays array).
-        anthropicTools.push(sortKeysDeep(anthropicTool) as JsonObject);
+        anthropicTools.push(anthropicTool);
       }
     }
 
@@ -366,21 +364,6 @@ export const convertGeminiRequestToClaude = (
   if (refusal !== undefined) throw refusal;
 
   return result;
-};
-
-const sortKeysDeep = (value: Json): Json => {
-  if (isArr(value)) return value.map(sortKeysDeep);
-
-  if (isObj(value)) {
-    // SAFETY: keys come from `Object.keys(value)`, so `value[key]` is present; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
-    return Object.fromEntries(
-      Object.keys(value)
-        .toSorted()
-        .map((key) => [key, sortKeysDeep(value[key] as Json)]),
-    );
-  }
-
-  return value;
 };
 
 const SCHEMA = "http://json-schema.org/draft-07/schema#";

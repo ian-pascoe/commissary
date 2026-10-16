@@ -4,9 +4,7 @@
  * Go source: internal/translator/openai/openai/responses/openai_openai-responses_request.go.
  */
 import { asBool, cloneJson, get, type Json, type JsonObject } from "../../../../json/index.ts";
-import { goMarshal } from "../../../../http/json-text.ts";
 import { alignOpenAIToolCallMessages } from "../../common/openai-tools.ts";
-import { sortKeysDeep } from "../../../common/go-json.ts";
 import { getStr, isArr, isObj, raw, str } from "../../common/read.ts";
 import {
   extractResponsesCallID,
@@ -318,12 +316,6 @@ export const convertResponsesToolChoice = (
     namespace !== "" ? toolIndex.namespaceName(namespace, name) : toolIndex.canonicalName(name);
 
   return { type: "function", function: { name } };
-};
-
-/** sjson string stringification: HTML-escaped when the string needs `json.Marshal` (quotes, control, non-ASCII). */
-const sjsonStringify = (value: string): string => {
-  // eslint-disable-next-line no-control-regex
-  return /[\u0000-\u001f"\\\u007f-\uffff]/.test(value) ? goMarshal(value) : `"${value}"`;
 };
 
 /**
@@ -776,7 +768,7 @@ export const convertOpenAIResponsesRequestToOpenAIChatCompletions = (
             namespace !== ""
               ? toolIndex.namespaceName(namespace, functionName)
               : toolIndex.canonicalName(functionName);
-          const wrappedArgs = `{"input":${sjsonStringify(getStr(item, "input"))}}`;
+          const wrappedArgs = `{"input":${JSON.stringify(getStr(item, "input"))}}`;
           pushToolCall(item, functionName, wrappedArgs);
           break;
         }
@@ -803,8 +795,7 @@ export const convertOpenAIResponsesRequestToOpenAIChatCompletions = (
   const chatTools = toolIndex.chatTools();
 
   if (chatTools.length > 0) {
-    // Go inserts the parsed values (maps), so keys are marshalled sorted.
-    out.tools = chatTools.map(sortKeysDeep);
+    out.tools = chatTools;
     const parallelToolCalls = get(root, "parallel_tool_calls");
 
     if (parallelToolCalls !== undefined) out.parallel_tool_calls = asBool(parallelToolCalls);

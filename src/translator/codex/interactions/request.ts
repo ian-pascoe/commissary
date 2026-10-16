@@ -610,7 +610,7 @@ const cleanedToolParameters = (params: Json): Json => {
   return cleaned;
 };
 
-/** `codexToolFromDeclaration`: Go marshals a `map[string]any`, so the keys are sorted. */
+/** `codexToolFromDeclaration`. */
 const toolFromDeclaration = (declaration: Json): JsonObject => {
   const tool: JsonObject = {};
   const description = get(declaration, "description");

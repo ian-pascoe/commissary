@@ -7,9 +7,10 @@ import {
 } from "../src/executor/helps/apply-patch-responses.ts";
 import { type Json, tryParseJson } from "../src/json/index.ts";
 import fixtures from "./fixtures/applypatch.json";
+import { expandEmbeddedJson } from "./support/structural.ts";
 
-/** Key-order-sensitive form of an output: JSON values are re-serialised, SSE data lines keep their prefix. */
-const canonical = (text: string): string => {
+/** Structural form of an output: JSON values are parsed, SSE data lines keep their prefix and framing. */
+const canonical = (text: string): Json => {
   const data = /^data:\s*(\{.*\}|\[.*\])\s*$/s.exec(text.replace(/\n\n$/, ""));
 
   if (data?.[1] !== undefined) {
@@ -17,12 +18,12 @@ const canonical = (text: string): string => {
 
     return parsed === undefined
       ? text
-      : `data: ${JSON.stringify(parsed)}${text.endsWith("\n\n") ? "\n\n" : ""}`;
+      : { data: expandEmbeddedJson(parsed), terminated: text.endsWith("\n\n") };
   }
 
   const parsed = text.startsWith("{") ? tryParseJson(text) : undefined;
 
-  return parsed === undefined ? text : JSON.stringify(parsed);
+  return parsed === undefined ? text : expandEmbeddedJson(parsed);
 };
 
 const parse = (text: string): Json => JSON.parse(text) as Json;
@@ -42,7 +43,7 @@ describe("normalizeApplyPatchResponses (Go parity)", () => {
         return;
       }
 
-      expect(JSON.stringify(run())).toBe(JSON.stringify(parse(entry.output ?? "")));
+      expect(expandEmbeddedJson(run())).toEqual(expandEmbeddedJson(parse(entry.output ?? "")));
     });
   }
 });

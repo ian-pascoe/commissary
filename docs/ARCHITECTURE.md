@@ -149,6 +149,14 @@ client -> Cloudflare Access -> Worker
 
 ## JSON values, config and payload rules
 
+- **JSON output**: Commissary emits plain `JSON.stringify` output (`src/http/json-text.ts`): no HTML escaping of `<`, `>`,
+  `&`, U+2028 and U+2029, and keys in the order they are built, not Go's sorted map order (ADR 0019: the Go server is a
+  reference, and no client depends on those bytes). `compactJson` still leaves number text verbatim. The one sorted
+  serialiser, `stableStringify`, is for text that feeds a hash or an equality check (session-routing fingerprints and
+  derived identities, Antigravity replay digests and comparisons, Claude thinking replay, the Gemini-to-Claude tool use id);
+  those must be stable but need not match Go. Golden fixtures from `tools/fixturegen` compare JSON structurally (parsed,
+  order-insensitive) while SSE framing and non-JSON text stay exact. The hash keys changed once at the deploy that introduced
+  this, which costs one sticky-session, replay and prompt-cache miss per live conversation.
 - **Path engine (`src/json/`)**: gjson/sjson semantics over parsed `JSON.parse` values instead of raw bytes, verified
   against the real tidwall libraries through golden fixtures (`go run ./tools/fixturegen/jsonpath`). `get`
   returns `undefined` for "does not exist" (`null` exists); `set`, `setRaw` and `del` mutate containers in place and
@@ -757,8 +765,8 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
 - **Listings** (`listings.ts`, `models-api.ts`, `routes.ts`): `GET /v1/models[/{id}]` dispatches Grok shell UA -> `client_version`
   query -> Anthropic (`Anthropic-Version` or `claude-cli` UA, with ID cloaking `claude-fable-5-dd-<reversed id>`) -> OpenAI;
   detail routes pick the entry whose `id` equals the path remainder (ids may contain `/`). `GET /v1beta/models[/{model}]` is
-  the Gemini shape. Bodies are serialised like Go's `encoding/json` (sorted keys, `\u003c` escapes) so they are byte-identical
-  to the Go server's; lists are sorted by model id (Go's order is map iteration order).
+  the Gemini shape. Bodies are plain `JSON.stringify` output (see _JSON output_ above); lists are sorted by model id
+  (Go's order is map iteration order).
 - **Routing view** (`routing-view.ts`, `GET /v9/management/routing/models`; no Go counterpart): the admin answer to "which
   credentials serve each model, and why not". `RegistrySnapshot` keeps the enriched `sources` and the `configVersion` it was
   built from; `ModelRegistry.fresh` drops the config reader's cache, builds now and stores the result in the 5 s cache (no
@@ -786,9 +794,9 @@ models and Home.
 (or the `gpt-5.5` template with compact instructions), with reasoning levels (`max`/`ultra` only for clients >= 0.144.0 or
 unparseable versions), modalities, priorities, Devin display names, `client.codex.optimize-multi-agent-v2` (`multi_agent_version`),
 `client.codex.enable-apply-patch` (`apply_patch_tool_type: freeform` only when every provider of the exact public model has an
-executor, `supportsApplyPatchProviders`) and `cpa_capabilities.web_search` for `client_version=cpa`. The body is serialised like
-Go's `MarshalCompact` (sorted keys, no HTML escaping). Fixtures: the real Go `OpenAIModels` handler over the registry scenarios
-(`codexClient` section of `test/fixtures/registry.json`: per-entry and whole-body hashes).
+executor, `supportsApplyPatchProviders`) and `cpa_capabilities.web_search` for `client_version=cpa`. The body is plain `JSON.stringify` output.
+Fixtures: the real Go `OpenAIModels` handler over the registry scenarios (`codexClient` section of `test/fixtures/registry.json`:
+per-entry and whole-body hashes of Go's sorted compact bytes, which the test reproduces itself before hashing).
 
 ## Token refresh (`src/credentials/refresh/`)
 
@@ -889,7 +897,7 @@ Deviations from Go (all deliberate, documented in code headers):
   is obfuscation, not a secret). Incoming `compaction` items are expanded into developer messages before translation; Claude drops
   foreign (non-CPA) items, an unreadable capsule is a request-scoped 400. Usage follows the Responses accounting (input = input + cache
   creation + cache read). Verified against the real Go executors (`go run ./tools/fixturegen/compaction`,
-  `test/compaction-fixtures.test.ts`: upstream request bodies, outputs, unsealed summaries, byte-identical sealing with a fixed nonce).
+  `test/compaction-fixtures.test.ts`: upstream request bodies, outputs, unsealed summaries, deterministic sealing with a fixed nonce; capsules sealed by Go open, plaintext compared structurally).
   The Claude and Antigravity executors also add the `output_tokens_details`/`input_tokens_details` of Responses answers
   (`EnsureResponsesUsageDetails`) that were missing on their non-stream/stream paths.
 - `responses/compact` stays 501 where Go answers 501: Gemini/Vertex (`gemini_executor.go`, `gemini_vertex_executor.go`), Meta and Kimi.
@@ -1920,7 +1928,7 @@ Grok/GPT/recognised checks, Gemini replay, ~500 sanitiser runs over synthetic hi
   clients (User-Agent allow-list) and `client.codex.optimize-multi-agent-v2`: `prepareCodexMultiAgentV2Tools` lists the available
   models in the `spawn_agent` description and removes `message.encrypted` from the collaboration tools; the Codex executor
   additionally renames the `collaboration` namespace to `collaboration-optimize` (unless the request already uses it) and restores
-  it in every response event (`restoreCodexMultiAgentV2Response`, re-marshalled like Go: sorted keys); `rewriteCodexMultiAgentV2Input`
+  it in every response event (`restoreCodexMultiAgentV2Response`, re-serialised with `JSON.stringify`); `rewriteCodexMultiAgentV2Input`
   turns `agent_message` items into user messages for non-Codex targets (and strips `author`/`recipient` for compat models);
   `rewriteCodexOrphanDelegationInput` (`upstream.codex.orphan-delegation-compatibility` and `X-Openai-Subagent: collab_spawn`)
   downgrades orphan `codex_app` delegation outputs. The Responses handler and WebSocket frames prepare the tools once

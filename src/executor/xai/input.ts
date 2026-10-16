@@ -7,7 +7,6 @@
  * mergeAdjacentXAIInputReasoningSummaries, sanitizeXAIInputEncryptedContent).
  * All functions mutate the parsed body in place and return it.
  */
-import { goMarshal } from "../../http/json-text.ts";
 import {
   asString,
   cloneJson,
@@ -79,7 +78,7 @@ const customToolCallArguments = (input: Json | undefined): string => {
     // Not JSON: wrapped below.
     if (isJsonObject(tryParseJson(text))) return text;
 
-    return `{"input":${goMarshal(input)}}`;
+    return `{"input":${JSON.stringify(input)}}`;
   }
 
   if (isJsonObject(input)) return JSON.stringify(input);
@@ -172,7 +171,7 @@ export const normalizeInputNamespaceToolCalls = (body: Json, shouldFold: boolean
       }
 
       item["name"] = namespaceName;
-      item["arguments"] = goMarshal(dispatcherArgs);
+      item["arguments"] = JSON.stringify(dispatcherArgs);
       delete item["namespace"];
       continue;
     }

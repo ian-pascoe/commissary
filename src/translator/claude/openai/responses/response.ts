@@ -26,7 +26,7 @@ import {
   isApplyPatchCustomTool,
 } from "../../../common/apply-patch.ts";
 import { claudeMessagesJSONToSSE } from "../../../common/claude-native-response.ts";
-import { exists, isArr, isObj, isStr, str } from "../../../common/gjson.ts";
+import { exists, isObj, isStr, str } from "../../../common/gjson.ts";
 import type { ResponseContext, ResponseTransform } from "../../../registry.ts";
 import {
   ClaudeToolNames,
@@ -281,21 +281,6 @@ const requestModelName = (original: Json | undefined, translated: Json | undefin
 
 const emit = (event: string, payload: JsonObject): string =>
   `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
-
-const sortKeysDeep = (value: Json): Json => {
-  if (isArr(value)) return value.map(sortKeysDeep);
-
-  if (isObj(value)) {
-    // SAFETY: keys come from `Object.keys(value)`, so `value[key]` is present; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
-    return Object.fromEntries(
-      Object.keys(value)
-        .toSorted()
-        .map((key) => [key, sortKeysDeep(value[key] as Json)]),
-    );
-  }
-
-  return value;
-};
 
 /** `SetResponsesToolCallIdentity` through `splitResponsesQualifiedFunctionCallFromRequest`. */
 const applyNamespaceFields = (
@@ -730,8 +715,7 @@ const finalizeAssistantMessage = (st: State, nextSeq: () => number): string[] =>
   const fullText = st.textBuf;
   const outputIndex = messageOutputIndex(st);
   const status = outputStatus(st.stopReason);
-  // SAFETY: sortKeysDeep rebuilds its input with the same container kind (object stays object, array stays array).
-  const annotations = sortKeysDeep(st.messageAnnotations) as Json[];
+  const annotations = st.messageAnnotations;
   const out: string[] = [];
   out.push(
     emit("response.output_text.done", {
@@ -816,19 +800,19 @@ const echoRequestFields = (target: JsonObject, req: Json | undefined): void => {
   v("parallel_tool_calls", asBool);
   v("previous_response_id", str);
   v("prompt_cache_key", str);
-  v("reasoning", (value) => sortKeysDeep(value));
+  v("reasoning", (value) => value);
   v("safety_identifier", str);
   v("service_tier", str);
   v("store", asBool);
   v("temperature", asFloat);
-  v("text", (value) => sortKeysDeep(value));
-  v("tool_choice", (value) => sortKeysDeep(value));
-  v("tools", (value) => sortKeysDeep(value));
+  v("text", (value) => value);
+  v("tool_choice", (value) => value);
+  v("tools", (value) => value);
   v("top_logprobs", asInt);
   v("top_p", asFloat);
   v("truncation", str);
-  v("user", (value) => sortKeysDeep(value));
-  v("metadata", (value) => sortKeysDeep(value));
+  v("user", (value) => value);
+  v("metadata", (value) => value);
 };
 
 /** `ConvertClaudeResponseToOpenAIResponses`. */
@@ -1315,7 +1299,7 @@ const convertStreamLine = (context: ResponseContext, line: string): ReadonlyArra
           content: [
             {
               type: "output_text",
-              annotations: message.annotations.length > 0 ? sortKeysDeep(message.annotations) : [],
+              annotations: message.annotations,
               logprobs: [],
               text: message.text,
             },
@@ -1750,8 +1734,7 @@ export const convertClaudeResponseToOpenAIResponsesNonStream = (
           content: [
             {
               type: "output_text",
-              annotations:
-                outputItem.annotations.length > 0 ? sortKeysDeep(outputItem.annotations) : [],
+              annotations: outputItem.annotations,
               logprobs: [],
               text: outputItem.text,
             },

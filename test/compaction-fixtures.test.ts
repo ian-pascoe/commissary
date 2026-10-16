@@ -42,22 +42,26 @@ const capsulesIn = (text: string): string[] => [
 ];
 
 describe("compaction capsule helpers (Go parity)", () => {
-  it("opens the capsules sealed by Go and reproduces the plaintext bytes", async () => {
+  it("opens the capsules sealed by Go and reproduces the plaintext", async () => {
     for (const entry of helpers.seals) {
       expect(await unsealCompaction(entry.capsule)).toBe(entry.summary);
-      expect(capsulePlaintext(entry.summary, entry.model, 0)).toBe(entry.plaintext);
+      // Structural: Go HTML-escapes the plaintext, Commissary does not.
+      expect(JSON.parse(capsulePlaintext(entry.summary, entry.model, 0))).toEqual(
+        JSON.parse(entry.plaintext),
+      );
     }
   });
 
-  it("seals byte-identically to the Go construction with a fixed nonce and time", async () => {
+  it("seals deterministically with a fixed nonce and time, and the capsule opens to the summary", async () => {
     for (const entry of helpers.fixedSeals) {
       const nonce = Uint8Array.from(entry.nonceHex.match(/../g) ?? [], (hex) =>
         Number.parseInt(hex, 16),
       );
 
-      expect(
-        await sealCompaction(entry.summary, entry.model, { createdAtSec: entry.createdAt, nonce }),
-      ).toBe(entry.capsule);
+      const options = { createdAtSec: entry.createdAt, nonce };
+      const capsule = await sealCompaction(entry.summary, entry.model, options);
+      expect(capsule).toBe(await sealCompaction(entry.summary, entry.model, options));
+      expect(await unsealCompaction(capsule)).toBe(entry.summary);
     }
   });
 

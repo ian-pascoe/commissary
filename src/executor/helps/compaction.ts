@@ -9,7 +9,6 @@
  * on purpose: capsules must stay interchangeable with the Go server and between Workers deployments.
  */
 import { sseEvent } from "../../http/sse.ts";
-import { goMarshal } from "../../http/json-text.ts";
 import {
   asInt,
   asString,
@@ -139,9 +138,9 @@ const fromBase64Url = (text: string): Uint8Array => {
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 };
 
-/** The capsule plaintext as Go's `json.Marshal` of `antigravityCompactionCapsuleData` writes it. */
+/** The capsule plaintext (`antigravityCompactionCapsuleData`). Capsules sealed with Go's HTML-escaped text still open. */
 export const capsulePlaintext = (summary: string, model: string, createdAt: number): string =>
-  goMarshal({ summary, model, created_at: createdAt });
+  JSON.stringify({ summary, model, created_at: createdAt });
 
 /**
  * `SealAntigravityCompaction`. `nonce` and `createdAtSec` are injectable for tests; production uses a random nonce

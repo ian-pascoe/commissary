@@ -9,16 +9,7 @@
  *  - {@link normalizeCodexToolIntegerTypes}: `number` -> `integer` for the numeric fields of the Codex CLI's own
  *    tools; part of the payload barrier for Codex clients targeting non-Codex executors (see `payload.ts`).
  */
-import { sortKeys } from "../../http/json-text.ts";
-import {
-  asString,
-  get,
-  isJsonArray,
-  isJsonObject,
-  type Json,
-  type JsonObject,
-  set,
-} from "../../json/index.ts";
+import { asString, get, isJsonArray, isJsonObject, type Json, set } from "../../json/index.ts";
 import type { HeaderInput } from "../../config/payload/index.ts";
 import {
   hasUnsupportedUnicodePropertyEscape,
@@ -191,16 +182,10 @@ const normalizePropertySchema = (prop: Json): boolean => {
 };
 
 /** `normalizeCodexParameters`: true when `params` changed. */
-const normalizeParameters = (params: Json, owner: JsonObject): boolean => {
+const normalizeParameters = (params: Json): boolean => {
   let changed = false;
 
-  if (stripIncompatiblePatterns(params)) {
-    // Go re-encodes the schema through a map: keys come out sorted.
-    const sorted = sortKeys(params);
-    owner["parameters"] = sorted;
-    params = sorted;
-    changed = true;
-  }
+  if (stripIncompatiblePatterns(params)) changed = true;
 
   const properties = get(params, "properties");
 
@@ -231,7 +216,7 @@ const normalizeToolList = (tools: Json | undefined): boolean => {
 
     if (!isJsonObject(params)) continue;
 
-    if (normalizeParameters(params, tool)) changed = true;
+    if (normalizeParameters(params)) changed = true;
   }
 
   return changed;

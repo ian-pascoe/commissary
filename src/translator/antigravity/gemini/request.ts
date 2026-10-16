@@ -23,7 +23,6 @@ import { contentHasGeminiFunctionResponse } from "../../gemini/common/contents.t
 import { attachDefaultSafetySettings } from "../../gemini/common/safety.ts";
 import { sanitizeGeminiRequestThoughtSignatures } from "../../gemini/common/signature.ts";
 import { mapSanitizedFunctionName, sanitizedFunctionNameMap } from "../../common/tool-names.ts";
-import { sortKeysDeep } from "../../common/go-json.ts";
 
 const DECLARATION_KEYS = ["functionDeclarations", "function_declarations"] as const;
 
@@ -488,7 +487,7 @@ export const sanitizeAntigravityClaudeGeminiRequestSignatures = (root: Json): Js
         contentChanged = true;
         const copy = clone(part);
         deleteSignatureFields(copy);
-        rewrittenParts.push(sortKeysDeep(copy));
+        rewrittenParts.push(copy);
       };
 
       if (Object.hasOwn(part, "functionResponse") || Object.hasOwn(part, "function_response")) {
@@ -528,7 +527,7 @@ export const sanitizeAntigravityClaudeGeminiRequestSignatures = (root: Json): Js
         const copy = clone(part);
         deleteSignatureFields(copy);
         copy["thoughtSignature"] = normalized;
-        rewrittenParts.push(sortKeysDeep(copy));
+        rewrittenParts.push(copy);
         continue;
       }
 

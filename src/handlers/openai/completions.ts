@@ -2,10 +2,8 @@
  * Legacy `/v1/completions` <-> Chat Completions conversion.
  *
  * Go source: sdk/api/handlers/openai/openai_handlers.go (convertCompletionsRequestToChatCompletions,
- * convertChatCompletionsResponseToCompletions, convertChatCompletionsStreamChunkToCompletions). Go marshals the
- * per-choice maps with sorted keys; that order is kept.
+ * convertChatCompletionsResponseToCompletions, convertChatCompletionsStreamChunkToCompletions).
  */
-import { goMarshalSorted } from "../../http/json-text.ts";
 import {
   asBool,
   asFloat,
@@ -101,7 +99,7 @@ export const chatResponseToCompletions = (payload: string): string => {
     }
   }
 
-  const choicesJson = choices.length > 0 ? goMarshalSorted(choices) : "[]";
+  const choicesJson = choices.length > 0 ? JSON.stringify(choices) : "[]";
 
   return `${header(root)},"choices":${choicesJson}${usage !== undefined ? `,"usage":${JSON.stringify(usage)}` : ""}}`;
 };
@@ -146,7 +144,7 @@ export const chatStreamChunkToCompletions = (chunk: string): string | undefined 
     return out;
   });
 
-  const choicesJson = choices.length > 0 ? goMarshalSorted(choices) : "[]";
+  const choicesJson = choices.length > 0 ? JSON.stringify(choices) : "[]";
 
   return `${header(root)},"choices":${choicesJson}${usage !== undefined ? `,"usage":${JSON.stringify(usage)}` : ""}}`;
 };

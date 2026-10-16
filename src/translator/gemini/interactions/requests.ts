@@ -3,8 +3,7 @@
  *
  * Go source: internal/translator/gemini/interactions/interactions_gemini_common.go (ConvertInteractionsRequestToGemini,
  * ConvertGeminiRequestToInteractions and their helpers), interactions_gemini_response.go
- * (ConvertInteractionsRequestToInteractions). Go builds tool entries as `map[string]any` and re-marshals them, which
- * sorts the keys; `sorted()` reproduces that.
+ * (ConvertInteractionsRequestToInteractions).
  */
 import {
   asBool,
@@ -26,7 +25,6 @@ import {
   UserRun,
   UserTurnDrops,
 } from "../../common/parts.ts";
-import { sortKeysDeep } from "../../common/go-json.ts";
 import {
   convertCamelCaseKeysToSnakeCase,
   convertSnakeCaseKeysToCamelCase,
@@ -41,17 +39,6 @@ import {
   interactionsContentPartToGeminiPart,
   interactionsGeminiContent,
 } from "./common.ts";
-
-/** Shallow key sort (Go `json.Marshal` of a `map[string]any`). */
-const sorted = (value: JsonObject): JsonObject => {
-  const out: JsonObject = {};
-
-  for (const key of Object.keys(value).toSorted())
-    // SAFETY: keys come from `Object.keys(value)`, so `value[key]` is present; the cast only drops the `undefined` added by noUncheckedIndexedAccess.
-    out[key] = value[key] as Json;
-
-  return out;
-};
 
 // --- Gemini -> Interactions ---------------------------------------------------------------------------------------------
 
@@ -111,7 +98,7 @@ const builtinToolEntry = (type: string, node: Json): JsonObject => {
 
   if (isNonEmptyObject(node)) entry[type] = node;
 
-  return sorted(entry);
+  return entry;
 };
 
 const functionToolEntry = (source: Json): JsonObject => {
@@ -123,7 +110,7 @@ const functionToolEntry = (source: Json): JsonObject => {
 
   if (params !== undefined) entry["parameters"] = params;
 
-  return sorted(entry);
+  return entry;
 };
 
 const copyGeminiToolsToInteractions = (out: Json, root: Json): void => {
@@ -478,7 +465,7 @@ const copyInteractionsTools = (out: Json, root: Json): void => {
           const params = get(tool, "parameters");
 
           if (params !== undefined) decl["parameters"] = params;
-          entry = { functionDeclarations: [sorted(decl)] };
+          entry = { functionDeclarations: [decl] };
         } else if (isJsonObject(tool)) {
           const rawMap: JsonObject = structuredClone(tool);
 
@@ -497,15 +484,14 @@ const copyInteractionsTools = (out: Json, root: Json): void => {
             }
           }
 
-          // SAFETY: sortKeysDeep rebuilds its input with the same container kind (object stays object, array stays array).
-          entry = sortKeysDeep(rawMap) as JsonObject;
+          entry = rawMap;
         } else {
           entry = undefined;
         }
       }
     }
 
-    if (entry !== undefined) normalized.push(sorted(entry));
+    if (entry !== undefined) normalized.push(entry);
   }
 
   set(out, "tools", normalized.length === 0 ? tools : normalized);

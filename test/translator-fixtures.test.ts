@@ -8,6 +8,7 @@ import { builtinTranslators } from "../src/translator/builtin.ts";
 import { setModelInfoLookup } from "../src/translator/model-info.ts";
 import { makeTranslationState } from "../src/translator/registry.ts";
 import { configOf } from "./support/registry-sources.ts";
+import { expandEmbeddedJson } from "./support/structural.ts";
 import { catalogLookup } from "./support/thinking.ts";
 
 // Translators that consult the model registry (e.g. Claude adaptive thinking) use the Go static catalog.
@@ -81,26 +82,30 @@ const normalizeClock = (value: Json): Json => {
   return value;
 };
 
-const canonicalJson = (text: string): string | undefined => {
+const parseJson = (text: string): Json | undefined => {
   try {
-    return JSON.stringify(normalizeClock(JSON.parse(text)));
+    return expandEmbeddedJson(normalizeClock(JSON.parse(text)));
   } catch {
     return undefined;
   }
 };
 
-/** Normalises JSON formatting (Go keeps raw bytes) while keeping key order, SSE framing and non-JSON text exact. */
-const normalizeChunk = (text: string): string =>
-  canonicalJson(text) ??
-  text
-    .split("\n")
-    .map((line) => {
-      if (!line.startsWith("data:")) return line;
-      const json = canonicalJson(line.slice(5).trim());
+/**
+ * Parses the JSON payload so the comparison is structural (Go's key order and HTML escaping are not part of the
+ * contract), while SSE framing (`event:` / `data:` lines, blank-line separators) and non-JSON text stay exact.
+ */
+const normalizeChunk = (text: string): Json => {
+  const whole = parseJson(text);
 
-      return json === undefined ? line : `data: ${json}`;
-    })
-    .join("\n");
+  if (whole !== undefined) return { json: whole };
+
+  return text.split("\n").map((line) => {
+    if (!line.startsWith("data:")) return line;
+    const json = parseJson(line.slice(5).trim());
+
+    return json === undefined ? line : { data: json };
+  });
+};
 
 describe("translator golden fixtures", () => {
   for (const [file, module] of Object.entries(files)) {
@@ -135,7 +140,7 @@ describe("translator golden fixtures", () => {
                 );
 
           expect(envelope.error?.message).toBe(c.requestError);
-          expect(JSON.stringify(envelope.body)).toBe(canonicalJson(c.translatedRequest));
+          expect(expandEmbeddedJson(envelope.body)).toEqual(parseJson(c.translatedRequest));
 
           if (c.responseLines !== undefined) {
             const context = {
@@ -185,7 +190,7 @@ describe("translator golden fixtures", () => {
               JSON.stringify(c.tokenCountUsage ?? null),
             );
 
-            expect(normalizeChunk(out)).toBe(normalizeChunk(c.tokenCountOutput ?? ""));
+            expect(normalizeChunk(out)).toEqual(normalizeChunk(c.tokenCountOutput ?? ""));
           }
         });
       }

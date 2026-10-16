@@ -16,7 +16,6 @@ import {
   set,
   tryParseJson,
 } from "../../json/index.ts";
-import { sortKeysDeep } from "../../translator/common/go-json.ts";
 import { jsonPayload, stripUsageMetadataFromJson } from "../gemini/usage.ts";
 import { ExecutionError } from "../errors.ts";
 import { antigravityStatusError } from "./errors.ts";
@@ -163,7 +162,6 @@ export const convertStreamToNonStream = (lines: ReadonlyArray<string>): Json => 
     if (pendingKind === "text") {
       if (pendingText.trim() !== "") parts.push({ text: pendingText });
     } else if (pendingText.trim() !== "" || pendingSignature !== "") {
-      // Go marshals the part through a map: keys are sorted.
       parts.push(
         pendingSignature !== ""
           ? { text: pendingText, thought: true, thoughtSignature: pendingSignature }
@@ -190,7 +188,7 @@ export const convertStreamToNonStream = (lines: ReadonlyArray<string>): Json => 
       delete copy["inline_data"];
     }
 
-    return sortKeysDeep(copy);
+    return copy;
   };
 
   for (const line of lines) {
