@@ -93,7 +93,7 @@ export const scheduledTasks: ReadonlyArray<ScheduledTask> = [
   },
   // Quota check (Workers addition, src/quota): provider usage windows of every enabled account that has a usage
   // endpoint (auth files, and the listed provider keys: OpenCode Go), stored as the credential's `quota_report`.
-  // Skipped while the panel's "Check all quotas" holds the sweep lease (src/quota/sweep-lease.ts).
+  // Skipped while the panel's "Check all quotas" holds the sweep lease (`quota_sweep`, src/state/lease.ts).
   { name: "quota-check", scope: "org", run: runQuotaSweep },
 ];
 

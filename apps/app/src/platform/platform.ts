@@ -1,15 +1,15 @@
 /**
  * `Platform` Durable Object: the Platform registry (ADR 0021), one object per deployment (`platformOf`, registry.ts).
  * It holds what spans orgs: the list of orgs, an index of which orgs each person and each Access service token belong to
- * (the orgs' ControlPlanes stay authoritative for membership), and the lease that keeps one refresh of the shared model
- * catalog at a time. It stays out of the request path for clients, which name their org with their API key. New in the
+ * (the orgs' ControlPlanes stay authoritative for membership), and deployment-wide named leases (src/state/lease.ts:
+ * the model catalog refresh takes one, so one refresh of the shared catalog runs at a time). It stays out of the request path for clients, which name their org with their API key. New in the
  * Workers port.
  *
  * The platform admins are not stored here: the deployment's variables name them, so they can always repair this
  * registry. Methods are exposed to the Worker through JS RPC and exchange plain data only.
  */
 import { DurableObject } from "cloudflare:workers";
-import { type SweepSource, SweepLeaseStore, type TakeLease } from "../quota/sweep-lease.ts";
+import { type LeaseSource, LeaseStore, type TakeLease } from "../state/lease.ts";
 import {
   type IndexRepair,
   type OrgIndex,
@@ -29,17 +29,12 @@ import {
 
 export class Platform extends DurableObject<Env> {
   readonly #store: PlatformStore;
-  readonly #catalogLease: SweepLeaseStore;
+  readonly #leases: LeaseStore;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.#store = new PlatformStore(ctx.storage.sql);
-
-    this.#catalogLease = new SweepLeaseStore(
-      ctx.storage.sql,
-      () => Date.now(),
-      "catalog_refresh_lease",
-    );
+    this.#leases = new LeaseStore(ctx.storage.sql, () => Date.now());
   }
 
   /** Every org: the seeded `global` first, then oldest first. */
@@ -149,12 +144,15 @@ export class Platform extends DurableObject<Env> {
     return this.#store.ssoDomain(domain);
   }
 
-  /** The shared model catalog's refresh lease (`SweepLeaseStore`): taken at the start of a download. */
-  takeCatalogRefreshLease(source: SweepSource): TakeLease {
-    return this.#catalogLease.take(source);
+  // --- deployment-wide leases (src/state/lease.ts) ----------------------------------------------------------------
+
+  /** Takes the lease `name` at this object's own time; refused while a live holder has it. */
+  takeLease(name: string, source: LeaseSource): TakeLease {
+    return this.#leases.take(name, source);
   }
 
-  releaseCatalogRefreshLease(token: string): void {
-    this.#catalogLease.release(token);
+  /** Gives back the lease taken with `token` (a lease taken over meanwhile is left alone). */
+  releaseLease(token: string): void {
+    this.#leases.release(token);
   }
 }

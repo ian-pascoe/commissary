@@ -18,13 +18,7 @@ import { LEASE_RENEW_INTERVAL_MS, runQuotaSweep, sweepQuotas } from "../src/quot
 import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/quota/claude.ts";
 import { RESET_GRANT_STATUS_URL } from "../src/quota/reset-grants.ts";
 import type { Json } from "@commissary/json";
-import {
-  LEASE_TTL_MS,
-  mayTake,
-  SweepLeaseStore,
-  type SweepSource,
-  type TakeLease,
-} from "../src/quota/sweep-lease.ts";
+import { LEASE_TTL_MS, type LeaseSource, type TakeLease } from "../src/state/lease.ts";
 import {
   claudeFile,
   controlPlane,
@@ -76,13 +70,23 @@ beforeAll(() => {
   globalThis.fetch = async () => refreshUpstream();
 });
 
-const takeLease = async (source: SweepSource): Promise<TakeLease> =>
+const takeLease = async (source: LeaseSource): Promise<TakeLease> =>
   await controlPlane().takeQuotaSweepLease(source);
 
-/** Runs SQL inside the global ControlPlane (the lease row has no RPC to set its times). */
+/**
+ * Runs SQL on the sweep lease's table inside the global ControlPlane (the lease row has no RPC to set its times). The
+ * table exists once the lease was first taken (src/state/lease.ts); before that there is nothing to change.
+ */
 const leaseSql = async (query: string, ...bindings: number[]): Promise<void> => {
   await runInDurableObject(controlPlane(), (_instance, state) => {
-    state.storage.sql.exec(query, ...bindings);
+    const { sql } = state.storage;
+
+    if (
+      sql
+        .exec("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'quota_sweep_lease'")
+        .toArray().length > 0
+    )
+      sql.exec(query, ...bindings);
   });
 };
 
@@ -642,55 +646,6 @@ describe("POST /credentials/quota/all", () => {
   );
 });
 
-describe("sweep lease", () => {
-  it("is free when unset, held while renewed, and abandoned a lifetime after the last renewal", () => {
-    const lease = { token: "t", source: "cron" as const, startedAt: 0, renewedAt: 1_000_000 };
-
-    expect(LEASE_TTL_MS).toBe(120_000);
-    expect(mayTake(undefined, 0)).toBe(true);
-    expect(mayTake(lease, 1_000_000)).toBe(false);
-    expect(mayTake(lease, 1_000_000 + LEASE_TTL_MS - 1)).toBe(false);
-    expect(mayTake(lease, 1_000_000 + LEASE_TTL_MS)).toBe(true);
-  });
-
-  it("renews and releases only with the token that holds it, on the object's clock", async () => {
-    const clock = { now: 5_000_000 };
-
-    await runInDurableObject(
-      env.CONTROL_PLANE.getByName(crypto.randomUUID()),
-      (_instance, state) => {
-        const store = new SweepLeaseStore(state.storage.sql, () => clock.now);
-        const taken = store.take("panel");
-
-        assert(taken.ok);
-        expect(taken.lease).toMatchObject({ startedAt: 5_000_000, renewedAt: 5_000_000 });
-
-        // A long sweep that keeps renewing keeps the lease well past one lifetime.
-        for (let step = 0; step < 4; step += 1) {
-          clock.now += LEASE_TTL_MS - 1_000;
-          expect(store.renew(taken.lease.token)).toBe(true);
-          expect(store.take("cron").ok).toBe(false);
-        }
-
-        expect(store.renew("someone-else")).toBe(false);
-        store.release("someone-else");
-        expect(store.current()?.token).toBe(taken.lease.token);
-
-        // Silent for a lifetime: abandoned, taken over; the old token can neither renew nor release the new lease.
-        clock.now += LEASE_TTL_MS;
-        const next = store.take("cron");
-
-        assert(next.ok);
-        expect(store.renew(taken.lease.token)).toBe(false);
-        store.release(taken.lease.token);
-        expect(store.current()?.token).toBe(next.lease.token);
-        store.release(next.lease.token);
-        expect(store.current()).toBeUndefined();
-      },
-    );
-  });
-});
-
 describe("recordQuotaReport", () => {
   it("drops an outcome for tokens replaced during the check, as a refresh result is dropped", async () => {
     await seed("a.json");
@@ -746,42 +701,6 @@ describe("recordQuotaReport", () => {
   });
 });
 
-describe("sweep lease table", () => {
-  it("is recreated when it predates renewals (no renewed_at), dropping the transient lease it held", async () => {
-    await runInDurableObject(
-      env.CONTROL_PLANE.getByName(crypto.randomUUID()),
-      (_instance, state) => {
-        const { sql } = state.storage;
-
-        sql.exec("DROP TABLE IF EXISTS quota_sweep_lease");
-        sql.exec(
-          `CREATE TABLE quota_sweep_lease (
-             id INTEGER PRIMARY KEY CHECK (id = 1),
-             token TEXT NOT NULL,
-             source TEXT NOT NULL,
-             started_at INTEGER NOT NULL
-           )`,
-        );
-        sql.exec(
-          "INSERT INTO quota_sweep_lease (id, token, source, started_at) VALUES (1, 'old', 'cron', ?)",
-          Date.now(),
-        );
-
-        const store = new SweepLeaseStore(sql);
-
-        expect(store.current()).toBeUndefined();
-        const taken = store.take("panel");
-
-        assert(taken.ok);
-        expect(store.renew(taken.lease.token)).toBe(true);
-
-        // Opening it again keeps a current table and its lease.
-        expect(new SweepLeaseStore(sql).current()?.token).toBe(taken.lease.token);
-      },
-    );
-  });
-});
-
 describe("pool batch writes", () => {
   it("change the in-memory state only once the storage transaction committed", async () => {
     const store = new MemoryPoolStore();
@@ -825,7 +744,7 @@ const fakePlane = (behaviour: {
   const calls: string[] = [];
 
   const stub = {
-    takeQuotaSweepLease: async (source: SweepSource): Promise<TakeLease> => {
+    takeQuotaSweepLease: async (source: LeaseSource): Promise<TakeLease> => {
       calls.push(`take:${source}`);
       await behaviour.take?.();
 

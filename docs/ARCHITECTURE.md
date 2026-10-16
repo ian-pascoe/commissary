@@ -737,8 +737,8 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
     URL. `models.codex-catalog` and `models.devin-catalog` are accepted and no longer have an effect (listed under
     _Not applied_).
   - _One refresh at a time_: a download takes the **catalog refresh lease** in the Platform registry
-    (`takeCatalogRefreshLease` / `releaseCatalogRefreshLease`: the same `SweepLeaseStore` as the quota sweep, table
-    `catalog_refresh_lease`, atomic on the object's clock, 2 min expiry, given back with its token; the refresh is bounded
+    (`takeLease("catalog_refresh", …)` / `releaseLease(token)`: the general-purpose lease store `state/lease.ts`, as
+    the quota sweep's, table `catalog_refresh_lease`, atomic on the object's clock, 2 min expiry, given back with its token; the refresh is bounded
     by its 30 s timeout so it is not renewed). The cron task and the panel therefore never download at once, in whichever
     isolates they run; the second gets `running` without a request being made. The invocation is held open with
     `waitUntil` until the lease is given back. A Platform registry that cannot be reached fails the refresh (exclusivity
@@ -1373,7 +1373,7 @@ result is stored.
   opens up to three upstream connections at once (usage, profile, reset grants), so two checks stay within the six
   connections a Workers invocation may have waiting for response headers (more are queued, and could run into the
   15 s bound). An outcome for replaced tokens is dropped (`stale`), its reset grant status with it. One sweep at a time across isolates: it takes a lease in the
-  ControlPlane first (`sweep-lease.ts`, one SQLite row, taken atomically under the input gate on the object's clock,
+  ControlPlane first (`quota_sweep` in the lease store `state/lease.ts`, one SQLite row, taken atomically under the input gate on the object's clock,
   given back with its token; a table from before `renewed_at` is recreated, it only holds a transient lease). Each
   recorded account renews it (`renewed_at`), and so does a background renewal every 30 s, since one account's check
   can outlast the lease (`ensureFresh` up to 120 s plus the 15 s probe); when a renewal finds the lease lost the sweep

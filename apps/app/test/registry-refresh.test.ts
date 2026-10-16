@@ -302,7 +302,7 @@ describe("refreshCatalogs (cron)", () => {
       for (let turn = 0; turn < 20 && lease.taken.length === 0; turn += 1)
         yield* Effect.promise(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
 
-      assert.deepStrictEqual(lease.taken, ["cron"]);
+      assert.deepStrictEqual(lease.taken, ["catalog_refresh:cron"]);
       assert.deepStrictEqual(lease.released, []);
 
       yield* Fiber.interrupt(fiber);
@@ -321,7 +321,7 @@ describe("refreshCatalogs (cron)", () => {
           CACHE: kv as unknown as KVNamespace,
           PLATFORM: {
             getByName: () => ({
-              takeCatalogRefreshLease: async () => {
+              takeLease: async () => {
                 throw new Error("down");
               },
             }),

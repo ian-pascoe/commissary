@@ -3,8 +3,10 @@
  * (`quotaProbeTarget`), the Worker calls the provider usage endpoint (src/quota/probe.ts) and the ControlPlane merges
  * the outcome into the stored report (`recordQuotaReport`). Used by `POST /v9/management/credentials/quota`, and for
  * every account at once (`sweepQuotas`) by the `quota-check` cron task (`runQuotaSweep`) and the panel's "Check all
- * quotas" (`POST /v9/management/credentials/quota/all`). A sweep holds the ControlPlane's sweep lease
- * (`sweep-lease.ts`), so only one runs at a time whoever started it. Accounts are named as the credential list names
+ * quotas" (`POST /v9/management/credentials/quota/all`). A sweep holds the ControlPlane's `quota_sweep` lease
+ * (src/state/lease.ts), so only one runs at a time whoever started it: a second sweep is refused (the panel answers
+ * `409 quota_check_running`, the cron task skips its run) instead of asking every provider a second time. There is no
+ * rate limit beyond that: a sweep started right after another one finished checks again. Accounts are named as the credential list names
  * them: auth files by file name, provider keys of a provider that reports quota with the key (OpenCode Go) by their
  * `auth_index`; a sweep covers both (`quotaCheckTargets`).
  *
@@ -19,8 +21,8 @@ import { holdInvocation } from "../platform/env.ts";
 import type { CurrentOrg } from "../platform/org.ts";
 import { probeQuota } from "./probe.ts";
 import type { QuotaOutcome } from "./report.ts";
-import type { SweepLease, SweepSource } from "./sweep-lease.ts";
 import type { ResetGrantMark } from "./reset-grant-store.ts";
+import type { Lease, LeaseSource } from "../state/lease.ts";
 import {
   currentModelsControlPlane,
   type ModelsControlPlaneStub,
@@ -163,7 +165,7 @@ export type QuotaSweep =
       readonly results: ReadonlyArray<AccountResult>;
     }
   /** Another sweep holds the lease. */
-  | { readonly kind: "running"; readonly held: SweepLease }
+  | { readonly kind: "running"; readonly held: Lease }
   /**
    * The sweep lost its lease midway (not renewed for its lifetime, so another sweep may have taken it over) and
    * stopped; the reports stored until then stay.
@@ -267,7 +269,7 @@ const keepLease = (token: string): Effect.Effect<void, never, ModelsEnv | Curren
  * (`holdInvocation`, `ctx.waitUntil`) until it is, so a request the client abandoned still gives it back.
  */
 export const sweepQuotas = (
-  source: SweepSource,
+  source: LeaseSource,
   viewer: Scope,
 ): Effect.Effect<
   QuotaSweep,
