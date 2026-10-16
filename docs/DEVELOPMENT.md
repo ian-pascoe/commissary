@@ -70,12 +70,16 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
 
 - `apps/app` (`@commissary/app`): the one Worker. `src/access` (the gate middleware over `@commissary/auth`),
   `src/http` (router, hosts), `src/api` (what moves to the API Worker: CORS and the cron runner),
-  `src/handlers` (inbound protocols and the shared execution pipeline), `src/executor` (one directory per provider),
   `src/control-plane.ts` (the ControlPlane Durable Object: `@commissary/state`'s org-wide base composed with the Models
-  part in `src/models`; `src/models` also holds the client-API HTTP helpers, the request trace, Models' cron tasks and
-  its org-deletion step), `src/credentials` (credential pool, selection, token refresh), `src/registry` (model catalogs and `/models`),
-  `src/management` and `src/oauth` (management API, panel serving, provider logins), `src/usage` (D1 usage records),
-  `src/platform` (org deletion); `test/` (workerd tests and golden fixtures).
+  part), `src/management` (the org-wide management routes, panel serving, path zones, the role table, org addressing),
+  `src/hosted` and `src/sso` (Commissary Cloud's sign-in and single sign-on), `src/platform` (org deletion);
+  `test/` (workerd tests and golden fixtures). `src/models` holds all of Models (#150), ready to become
+  `@commissary/models` (#151): `handlers` (inbound protocols and the shared execution pipeline), `executor` (one
+  directory per provider), `credentials` (credential pool, selection, token refresh), `registry` (model catalogs and
+  `/models`), `config`, `oauth`, `quota`, `usage` (D1 usage records), `grants`, `spend`, `signature`,
+  `session-routing`, `management` (its management routes), the ControlPlane part, the client-API HTTP helpers, the
+  request trace, its cron tasks and its org-deletion step. The rest of the app reaches it only through its entry
+  modules `models/api.ts`, `models/management.ts` and `models/state.ts` ("Lint and format", `boundaries`).
 - `apps/web` (`@commissary/web`): the control panel (below).
 - `packages/auth` (`@commissary/auth`): request-side authentication (#132). The principal and `AccessPrincipal`, roles,
   Access JWT verification, the cross-site checks, API and management keys (their text and the per-isolate caches of
@@ -95,19 +99,19 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
   `InvocationContext`, so core needs no Workers types, and `holdInvocation`), `src/area.ts` (what an area hands the
   Workers: `ScheduledTask`, `OrgDeletionStep`), all behind the one export `.`. It may
   import `effect` and `node:crypto` only: no bindings, no Workers APIs, no other workspace package. The per-request
-  context (`requestContext`, `src/worker-env.ts`) stays in the Worker, which provides its env views, and so do
-  `bodyJson`/`bodyObject` (they return `@commissary/json` values); the ControlPlane stubs (`controlPlaneOf`,
-  `controlPlane`) are `@commissary/state`.
+  context (`requestContext`, `src/worker-env.ts`) stays in the Worker, which provides its env views; the ControlPlane
+  stubs (`controlPlaneOf`, `controlPlane`) and the JSON body readers `bodyJson`/`bodyObject` (they return
+  `@commissary/json` values) are `@commissary/state`.
 - `packages/state` (`@commissary/state`): the org-wide state on Durable Objects (#134, #149). The ControlPlane's org-wide
   base (`src/control-plane.ts`) and its stores (`src/members`, `src/api-keys`, `src/management-keys`, `src/sso`,
   `src/secrets`, the `SessionState` instances), `composeControlPlane` (`src/compose.ts`: the base with the areas' parts,
   each reached through a method of its name, `stub.models().x()`), the Platform registry (`src/platform`), the
   general-purpose lease store (`src/lease.ts`), `SessionState` (`src/session-state`: class, client, protocol, engine),
-  the stub helpers (`controlPlaneOf`, `platformOf`, `currentControlPlane`, the management routes' `controlPlane`) and
-  the one `AuthDirectory` adapter, all behind the one export `.`; `./testing` holds the workerd test helpers
+  the stub helpers (`controlPlaneOf`, `platformOf`, `currentControlPlane`, the management routes' `controlPlane` and
+  body readers) and the one `AuthDirectory` adapter, all behind the one export `.`; `./testing` holds the workerd test helpers
   (`tablesOf`, `storedText`, `alarmOf`, `withPart`, `ORG_WIDE_TABLES`). It reads its bindings through `StateEnv` and its
   classes' settings from `StateObjectEnv`, and may import `@commissary/auth`, `@commissary/core`,
-  `@commissary/contract` and `effect` only: nothing from an area's code or `apps/`.
+  `@commissary/contract`, `@commissary/json` and `effect` only: nothing from an area's code or `apps/`.
 - `packages/json` (`@commissary/json`): the gjson/sjson path engine over parsed JSON, the `Json` types, `isValidJson`,
   `compactJson` and `stableStringify`. Depends on nothing.
 - `packages/translation` (`@commissary/translation`): pure sync translation. `src/translator` (the `TranslatorRegistry`
@@ -262,6 +266,11 @@ permissions they need, and deploy jobs use no dependency cache.
   `oxlint`, `oxlint-tsgolint` and `@effect/tsgo` are pinned to versions the patch supports, so upgrade them together.
 - **anti-slop** (vendored in `tools/oxlint/anti-slop/`, provenance in its `UPSTREAM.md`): the copy belongs to this
   repository; edit its rules there.
+- **boundaries** (`tools/oxlint/boundaries/`, ours): `boundaries/models-imports` keeps the Models folder
+  (`apps/app/src/models/`) ready to become `@commissary/models` (#150, #151). A file in the folder imports only the
+  folder's files, the workspace packages and the third-party modules the rule lists (Models' future dependencies); any
+  other file of `apps/app/src/` reaches Models only through its entry modules `models/api.ts`, `models/management.ts`
+  and `models/state.ts`, the package's future exports.
 
 Rules downgraded to warnings on purpose (reported, not failing): `effecttsgo/unstable-api-usage` (the HTTP stack is
 `effect/unstable/http`), `anti-slop-effect/no-service-constructor-imports` (flags every `make*` function),

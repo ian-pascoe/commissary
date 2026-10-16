@@ -38,22 +38,34 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
     src/
       index.ts                Worker entry: fetch, scheduled, DO class exports
       control-plane.ts        the ControlPlane Durable Object: @commissary/state's base composed with the Models part
-      models/                 the ControlPlane's Models part (config, credentials, grants, Spend, quota, OAuth), the
-                              client-API HTTP helpers (error formatting per protocol, bodies, headers), the request
-                              trace, Models' cron tasks and its org-deletion step
+      models/                 all of Models, the future @commissary/models (#150, #151); the rest of the app imports
+                              it only through api.ts, management.ts and state.ts (lint rule boundaries/models-imports)
+        api.ts                for the API Worker: client API routes, cron tasks, ModelsEnv
+        management.ts         for the app Worker: management routes, OAuth callbacks, role-table entries, org-deletion
+                              step, its section of the org export
+        state.ts              for the state Worker: ModelsPart, its part of the ControlPlane
+        control-plane-part.ts the ControlPlane's Models part (config, credentials, grants, Spend, quota, OAuth)
+        http/                 client-API HTTP helpers (error formatting per protocol, bodies, headers)
+        observability/        the request trace
+        config/               config schema (Effect Schema), storage, payload rules
+        registry/             model catalogs, model info, /models listings
+        credentials/          credential model, selection, cooldowns, refresh
+        executor/             executor interface + one directory per provider
+        signature/            the CACHE KV store of the thinking-signature cache
+        handlers/             inbound protocol handlers (openai, responses, claude, gemini, interactions, ...)
+        management/           Models' /v9/management routes (credentials, provider keys, settings, usage, ...)
+        oauth/                provider logins (OAuth flows, public callbacks)
+        usage/                usage records, D1 persistence
+        quota/                server-side quota check: provider usage endpoints, stored per-credential reports
+        grants/, spend/       grants and Spend limits
       platform/               org deletion (every area's step, then the state's)
       api/                    what moves to the API Worker: CORS and the cron runner
       http/                   router, hosts, /healthz
       access/                 the Access gate middleware: @commissary/auth's entry points with the Worker's routes
-      config/                 config schema (Effect Schema), storage, payload rules
-      registry/               model catalogs, model info, /models listings
-      credentials/            credential model, selection, cooldowns, refresh
-      executor/               executor interface + one directory per provider
-      signature/              the CACHE KV store of the thinking-signature cache
-      handlers/               inbound protocol handlers (openai, responses, claude, gemini, interactions, ...)
-      management/             /v9/management API, panel serving, OAuth flows; path zones, role table, org addressing
-      usage/                  usage records, D1 persistence
-      quota/                  server-side quota check: provider usage endpoints, stored per-credential reports
+      management/             the org-wide /v9/management routes (members, people, orgs, SSO, API and management
+                              keys), panel serving, the composition of every area's routes; path zones, role table,
+                              org addressing
+      hosted/, sso/           Commissary Cloud's sign-in and per-org single sign-on
     test/                     vitest suites in workerd (+ fixtures generated from the Go code)
   apps/web/                   @commissary/web: control panel served at / (React, Effect Atom, TanStack Router; built
                               into apps/web/dist, the Worker's assets), its tests in Node.js
@@ -154,9 +166,9 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
   last refresh, best-effort caches (signature cache) with `expirationTtl`; org data under org-scoped keys.
 - **D1 `USAGE`**: usage records written with `ctx.waitUntil`, each with its `org_id`; every query filters on it.
 - **Static assets** (`apps/web/dist/`, Worker runs first): the control panel (`apps/web` build).
-- **Cron trigger** (every 3 h, production only; the runner `src/api/scheduled.ts`, the future API Worker's): its own job
-  (expired API keys), then each area's tasks (`ScheduledTask` of `@commissary/core`; Models' in
-  `src/models/scheduled-tasks.ts`): the model catalog refresh (the one
+- **Cron trigger** (every 3 h, production only; the runner `src/api/scheduled.ts`, the future API Worker's, which
+  provides the state's and each area's env view itself): its own job (expired API keys), then each area's tasks
+  (`ScheduledTask` of `@commissary/core`; Models' from `src/models/api.ts`): the model catalog refresh (the one
   models.dev document: every provider's models, OpenCode's included), Antigravity version and model entitlements, xAI client version, usage retention, the Devin user status, a
   safety sweep that re-arms credential refresh alarms, and the quota check of connected accounts. A job is
   deployment-wide (catalog, client versions, usage retention: once per run) or org-scoped (entitlements, Devin status,
@@ -392,7 +404,7 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
     private key listed among the accounts (OpenCode Go) can also be disabled and enabled there (`PrivateKeyStore.setKeyExcludedAll`,
     the `*` exclusion, like a shared key). A shared credential
     stays admin-only. A plain member reaches only their own private credentials through the same routes (`/credentials*`,
-    `/oauth/*`, `/provider-keys*`: `MEMBER_CREDENTIAL_ROUTES` in `management/policy.ts`); what they upload, log in or add is private
+    `/oauth/*`, `/provider-keys*`: Models' role-table entries, `src/models/management/access-rules.ts`); what they upload, log in or add is private
     whatever they send, an org admin's is shared unless `?private=true` (`private: true` for a key group) asks otherwise.
     Where the org setting is off creating one answers `403` (`forbidden` for an account, `private_credentials_unavailable`
     for a key group). The download is the owner's alone (`403 private_credential` for an org admin, a service-token owner
@@ -1758,7 +1770,7 @@ error; `X-Opencode-Session` from a client is also an explicit session identity f
 OpenCode Go keys are listed as Accounts (config-sourced) for their usage windows. Not ported/added: the `jev`/systemone
 endpoint.
 
-## Zero data retention (`src/platform/org-deletion.ts`, `src/models/org-deletion.ts`, `src/management/{org-routes,export-view}.ts`)
+## Zero data retention (`src/platform/org-deletion.ts`, `src/models/org-deletion.ts`, `src/management/org-routes.ts`, `src/models/management/export-view.ts`)
 
 ADR 0027: deleting something deletes it at once, and Commissary keeps no content it does not need. The pieces:
 
@@ -1782,7 +1794,7 @@ ADR 0027: deleting something deletes it at once, and Commissary keeps no content
   (`state/session-state/instances.ts`, from the org-scoped store name; table `session_instances` with the expiry of the data, at
   most seven days) and org deletion wipes the registered ones. Instances written before this change are not registered: they
   hold replay state only, which expires on its own within seven days.
-- **Export** (`GET /export`, `export-view.ts`): the panel offers it before an org is deleted. It assembles what the org has
+- **Export** (`GET /export`, `org-routes.ts` with each area's section: Models' `exportSection` in `export-view.ts`): the panel offers it before an org is deleted. It assembles what the org has
   from the same reads the pages use and masks every secret as a preview (`maskConfigSecrets`: secret-named keys, header
   values the header classifier calls secret or does not know, credentials in a `proxy-url`); it never carries tokens. Usage
   records are not included: the usage routes page and export them.
@@ -2076,12 +2088,12 @@ error codes are in `docs/ACCESS.md` "Members, roles and teams".
   a role applies on the next one. An unreachable ControlPlane fails the request (500) unless the caller is a platform admin
   or the route is platform-level. `AccessIdentity` carries `role` and `memberId`; client API handlers write the member id into
   usage records (`member_id`, `migrations/0005_usage_member.sql`).
-- **Policy** (`management/policy.ts` `routeAccess`, the role table the Worker passes to `authenticateManagement` as `needs`): platform-level (no role: `/v9/management/me`, `/v9/management/orgs*`, panel
+- **Policy** (`management/policy.ts` `routeAccess`, the role table the Worker passes to `authenticateManagement` as `needs`; each area hands it its entries, `AccessRule` of `@commissary/auth`, Models' in `src/models/management/access-rules.ts`): platform-level (no role: `/v9/management/me`, `/v9/management/orgs*`, panel
   pages without an org, `/assets`, `/management.html`), member (the client API endpoints, the org's panel pages, `GET` usage
   records/summary/series, where a plain member is narrowed to their own records: by member id, or by Access principal for
   records from before members), admin (every other management route). Owner-only and ADR 0006 checks live in the handlers
   (role changes, auto-join, service token roles above member, the credential download). A plain member also reaches the
-  credential, OAuth and provider key routes of `MEMBER_CREDENTIAL_ROUTES` (their own private credentials, ADR 0023); the handlers
+  credential, OAuth and provider key routes Models' entries name (their own private credentials, ADR 0023); the handlers
   narrow every operation to what the caller's `Viewer` reaches (_Shared and private credentials_ above).
 - **Registry index**: the Platform registry lists which orgs each person and service token belong to, for `/me` and the
   panel's org switcher. Each member or token change bumps the ControlPlane's counter; the Worker then pushes the org's lists
@@ -2120,7 +2132,7 @@ credentials a subject may use; selection and the model registry read it (_Creden
   `POST /grants` creates one (`409 conflict` when the subject and scope have one); `PUT|DELETE /grants/:id` take `If-Match`
   (`409` stale, `400 invalid_if_match` missing); an empty pattern list or a member or team the org does not have is `422
   invalid_config`. Org admins only. `GET /models/mine` answers `{models}` from `snapshot.visibleTo(caller)` for every role
-  (`MEMBER_READS` in `management/policy.ts`).
+  (Models' entries in `src/models/management/access-rules.ts`).
 - **Panel** (`apps/web/src/pages/Grants.tsx`, `MyModels.tsx`, model in `apps/web/src/lib/grants.ts`): **Grants** (`/grants`, org
   admins) reads the grants by member (what reaches each member: their own, their teams' and everyone's, marked "via"), by team
   or by credential (who may use each account, provider or all of them) and adds, edits and removes them with the entry
@@ -2215,7 +2227,7 @@ prices each attempt, the ControlPlane counts and decides.
   already running (ADR 0024). Alpha search publishes no usage record, so it is not charged; a key limit still refuses it.
 - **`global`**: an org starts with no limits and an upgrade adds none, so nothing is limited until an org admin sets one;
   the first request of an org with no limits does no ledger work.
-- **Routes** (`spend-routes.ts`, contract `@commissary/contract/spend`; `management/policy.ts`): `GET /spend` answers the calendar and
+- **Routes** (`spend-routes.ts`, contract `@commissary/contract/spend`; the role-table entries in `src/models/management/access-rules.ts`): `GET /spend` answers the calendar and
   the limits the caller sees with `spent_micros`, `remaining_micros`, `period_start`, `resets_at` and `editable`
   (org admins: every limit; a plain member: their own member limit, their teams', the org's and those on their API
   keys); `POST /spend/limits` (201), `PUT|DELETE /spend/limits/:id` and `PATCH /spend/settings` (org admins only). Every
