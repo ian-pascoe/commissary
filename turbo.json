@@ -1,0 +1,43 @@
+{
+  "$schema": "./node_modules/turbo/schema.json",
+  "agentGuidance": false,
+  "globalDependencies": ["tsconfig.base.json"],
+  "tasks": {
+    "transit": {
+      "description": "No script: hashes a package's files into its dependants' typecheck, test and build (the packages are source-only, so a change in one must re-run them)",
+      "dependsOn": ["^transit"]
+    },
+    "typecheck": {
+      "description": "tsc over each program of the package (no emit)",
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "test": {
+      "description": "Vitest; arguments after `--` (such as CI's --shard=N/3) reach every package's run and its cache key",
+      "dependsOn": ["transit"],
+      "outputs": []
+    },
+    "build": {
+      "description": "The control panel's bundle (apps/web/dist), served by the Worker as its assets",
+      "dependsOn": ["^build", "transit"],
+      "outputs": ["dist/**"]
+    },
+    "//#typecheck:root": {
+      "description": "tsc over the deploy code at the root (tsconfig.infra.json) and the Worker modules it imports",
+      "inputs": [
+        "alchemy.run.ts",
+        "infra/**",
+        "stacks/**",
+        "tools/sync-models-dev-catalog.ts",
+        "tsconfig.json",
+        "tsconfig.infra.json",
+        "apps/app/src/**"
+      ],
+      "outputs": []
+    },
+    "//#lint:root": {
+      "description": "One oxlint (type-aware) and oxfmt --check run over the whole repository",
+      "outputs": []
+    }
+  }
+}

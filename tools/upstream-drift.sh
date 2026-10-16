@@ -21,7 +21,7 @@ done
 
 commits="$(git -C "$reference" log --no-merges --format='- [`%h`](https://github.com/router-for-me/CLIProxyAPI/commit/%H) %s' "$ported..$head")"
 results="$(mktemp)"
-pnpm exec vitest run --reporter=json --outputFile="$results" >/dev/null 2>&1 || true
+pnpm --filter @commissary/app exec vitest run --reporter=json --outputFile="$results" >/dev/null 2>&1 || true
 failing="$(jq -r --arg root "$PWD/" '.testResults[] | select(.status != "passed") | "- `" + (.name | ltrimstr($root)) + "`"' "$results")"
 rm -f "$results"
 

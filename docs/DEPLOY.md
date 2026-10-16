@@ -53,7 +53,7 @@ Any machine with the deploy settings can deploy a preview by hand: `pnpm run dep
 client API (`/v1`, `/v1beta`, `/v1internal`, `/openai/v1`, `/backend-api/codex`, `/chat/completions`, `/completions`,
 `/responses`) and `/healthz`, and nothing else. `COMMISSARY_DOMAIN` becomes the **app host**: the control panel, sign-in
 and the management API, and no client API route. One Worker answers on both custom domains and decides by hostname
-(`src/http/hosts.ts`); a path on the wrong host answers `404` with the host that serves it. The panel's API keys page
+(`apps/app/src/http/hosts.ts`); a path on the wrong host answers `404` with the host that serves it. The panel's API keys page
 tells clients the API host (`GET /me` `api_url`).
 
 - **Self-hosted:** Access covers the app host only; the API host has no Access application and the bypass application
@@ -194,8 +194,8 @@ the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --pro
 
 ## Operations
 
-- **Control panel.** CI builds the control panel from `web/` (`pnpm web:build`) before each deploy; nothing else is
-  installed into `public/`.
+- **Control panel.** CI builds the control panel from `apps/web` (`pnpm build`, into `apps/web/dist/`) before each
+  deploy.
 - **API keys.** The deploy adds, after the Worker (the bypass depends on the Worker's output, so the old Worker
   never serves the client API without Access in front), an Access application with a Bypass policy on the client API paths (`/v1*`,
   `/openai/v1*`, `/backend-api/codex*`, `/chat/completions`, `/completions`, `/responses`), so clients reach the
@@ -220,16 +220,16 @@ the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --pro
   running production deploy.
 - **Stale previews.** If a destroy fails, rerun the job, or run `pnpm run destroy --stage pr-<number>` locally.
 - **`auth_index` key.** `AUTH_INDEX_KEY` (the HMAC key of the credential handle `auth_index`,
-  `src/management/auth-index.ts`) is an Alchemy `Random` in `alchemy.run.ts`: minted on a stage's first deploy, kept in
+  `apps/app/src/management/auth-index.ts`) is an Alchemy `Random` in `alchemy.run.ts`: minted on a stage's first deploy, kept in
   the (encrypted) state store and bound as a Worker secret on every deploy. No GitHub secret or manual step is needed.
-  `alchemy dev` uses a fixed key (`DEV_AUTH_INDEX_KEY`), the tests the one in `vitest.config.ts`. A Worker with Access
+  `alchemy dev` uses a fixed key (`DEV_AUTH_INDEX_KEY`), the tests the one in `apps/app/vitest.config.ts`. A Worker with Access
   configured refuses that dev key and any key shorter than 64 characters, and logs the refusal: management calls that
   need an index fail (500), while serving requests keeps working (its request log lines then carry no `authIndex`).
 - **Secrets key.** Every org's stored secrets (auth files and config entries, see ARCHITECTURE.md _Stored secrets_) are
   encrypted with the org's data key, which is stored wrapped by the stage's `SECRETS_KEY`. Like the `auth_index` key it
   is an Alchemy `Random` in `alchemy.run.ts` (resource `SecretsKey`, one per generation), minted on the stage's first
   deploy and bound as a Worker secret; no GitHub secret or manual step is needed. `alchemy dev` uses
-  `DEV_SECRETS_KEY`, the tests the keys in `vitest.config.ts`; a Worker with Access configured refuses that dev key and
+  `DEV_SECRETS_KEY`, the tests the keys in `apps/app/vitest.config.ts`; a Worker with Access configured refuses that dev key and
   any key shorter than 64 characters. Without a working key no ControlPlane starts: model traffic and management calls of
   every org fail (500) and the Worker logs `the ControlPlane cannot open the org's data key` with the reason, until a
   deploy binds the right key. **Losing the key loses every stored secret**: do not destroy the stage's state or its

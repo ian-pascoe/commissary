@@ -1,0 +1,10 @@
+{
+  // The management API contract is shared by the Worker (workerd) and the control panel (browser), so it is checked
+  // with neither runtime's globals: no DOM, no Node.js, no Workers types. It imports `effect` and itself only.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": []
+  },
+  "include": ["src"]
+}

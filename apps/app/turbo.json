@@ -1,0 +1,24 @@
+{
+  "$schema": "../../node_modules/turbo/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "typecheck": {
+      "description": "Also checks the root files that vitest.config.ts and the tests import",
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/infra/bundle.ts",
+        "$TURBO_ROOT$/infra/settings.ts"
+      ]
+    },
+    "test": {
+      "description": "The tests import the root's infra files and D1 migrations; the test Worker serves the panel's build as its assets",
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/infra/bundle.ts",
+        "$TURBO_ROOT$/infra/settings.ts",
+        "$TURBO_ROOT$/migrations/**",
+        "$TURBO_ROOT$/apps/web/dist/**"
+      ]
+    }
+  }
+}

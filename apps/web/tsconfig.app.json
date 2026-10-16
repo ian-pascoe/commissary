@@ -1,0 +1,11 @@
+{
+  // The control panel (src/) runs in the browser: DOM types, React JSX, no Workers or Node.js globals. It shares the
+  // management API contract (@commissary/contract), which must stay browser-safe.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["vite/client"]
+  },
+  "include": ["src"]
+}

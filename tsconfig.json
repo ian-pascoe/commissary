@@ -1,10 +1,7 @@
 {
-  // Solution config: the Worker (workerd), the control panel (browser) and the deploy/build code (Node.js: Alchemy CLI,
-  // Vite) are separate programs with different ambient types. Editors and type-aware linting resolve each file to its project through these references.
+  // Solution config of the repository root: the deploy/build code (Node.js: Alchemy CLI) in tsconfig.infra.json. Each
+  // workspace package (apps/*, packages/*) has its own tsconfig.json; editors and type-aware linting resolve every file
+  // to the nearest one.
   "files": [],
-  "references": [
-    { "path": "./tsconfig.worker.json" },
-    { "path": "./tsconfig.web.json" },
-    { "path": "./tsconfig.infra.json" }
-  ]
+  "references": [{ "path": "./tsconfig.infra.json" }]
 }

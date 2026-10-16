@@ -1,4 +1,4 @@
-// Command credentials emits golden fixtures for the TypeScript credential synthesis (src/credentials).
+// Command credentials emits golden fixtures for the TypeScript credential synthesis (apps/app/src/credentials).
 //
 // Config cases run through the real config parser and ConfigSynthesizer (stable IDs, attributes, metadata); file
 // cases run through the real file synthesizer. Run from the repository root:
@@ -184,7 +184,7 @@ oauth-excluded-models:
 }
 
 func main() {
-	outPath := flag.String("out", "test/fixtures/credentials.json", "output file")
+	outPath := flag.String("out", "apps/app/test/fixtures/credentials.json", "output file")
 	flag.Parse()
 
 	now := time.Unix(1_800_000_000, 0)

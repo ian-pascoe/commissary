@@ -8,9 +8,8 @@ dist
 .env.*
 !.env.example
 !.env.cloud.example
-# Control panel built from web/ by `pnpm web:build`
-public/index.html
-public/assets/
+# Turborepo: local task cache and logs
+.turbo
 
 # Reference repositories (tools/sync-reference-repos.sh)
 .repos/
@@ -30,8 +29,6 @@ go.work.sum
 .pi
 .opencode/*
 AGENTS.override.md
-# TypeScript build info (tsc -b)
-.tsbuild
 
 # impeccable question-loop runtime state (decisions and surfaces are committed)
 .impeccable/questions/

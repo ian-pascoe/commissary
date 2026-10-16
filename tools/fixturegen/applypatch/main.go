@@ -1,5 +1,5 @@
 // Command applypatch emits golden fixtures for the TypeScript Responses apply_patch bridge
-// (src/translator/common/apply-patch-responses.ts and src/executor/helps/apply-patch-responses.ts).
+// (apps/app/src/translator/common/apply-patch-responses.ts and apps/app/src/executor/helps/apply-patch-responses.ts).
 //
 // The real Go helps.NewApplyPatchResponsesState / helps.NormalizeApplyPatchResponsesRequest run over scripted event
 // sequences (function-call streams, folded xAI dispatchers, sparse terminals, identity conflicts, SSE lines, EOF
@@ -522,7 +522,7 @@ func normalizeCases() []normalizeCase {
 }
 
 func main() {
-	outPath := flag.String("out", "test/fixtures/applypatch.json", "output file")
+	outPath := flag.String("out", "apps/app/test/fixtures/applypatch.json", "output file")
 	flag.Parse()
 	var results []scenarioResult
 	for _, s := range scenarios() {

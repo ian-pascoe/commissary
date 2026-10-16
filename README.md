@@ -98,7 +98,7 @@ Every other setting is optional; see [Configuration](#configuration). The Worker
 ### 4. Build and deploy
 
 ```bash
-pnpm web:build                  # build the control panel into public/
+pnpm build                      # build the control panel into apps/web/dist/
 pnpm run deploy --stage prod    # shows the plan, asks for confirmation, deploys
 ```
 
@@ -191,7 +191,7 @@ extend the policies (IdP groups, device posture).
 ## Updating and removing
 
 ```bash
-git pull && pnpm install && pnpm web:build && pnpm run deploy --stage prod   # update
+git pull && pnpm install && pnpm build && pnpm run deploy --stage prod   # update
 pnpm logs --stage prod --tail                                               # stream Worker logs
 pnpm destroy --stage prod                                                   # remove everything
 ```
@@ -236,7 +236,7 @@ More Access-specific answers: [ACCESS.md#troubleshooting](docs/ACCESS.md#trouble
 | OpenAI-compatible upstreams (provider key)                           | every client protocol                                    | Configured as `api-keys.openai-compatibility` groups                                                       |
 
 The matrix is indicative: which (client protocol, provider) pairs work follows the registered translators in
-`src/translator/builtin.ts`; an unsupported pair answers with a 4xx/501 error.
+`apps/app/src/translator/builtin.ts`; an unsupported pair answers with a 4xx/501 error.
 
 ## Known limitations
 
@@ -259,7 +259,7 @@ Per-provider details: [ARCHITECTURE.md](docs/ARCHITECTURE.md); config keys witho
 
 ```bash
 pnpm install
-pnpm web:build                     # or `pnpm web:dev` for the panel with hot reload on :5173
+pnpm build                         # or `pnpm --filter @commissary/web dev` for the panel with hot reload on :5173
 ALCHEMY_STATE=local pnpm dev       # Worker on http://localhost:1337 with hot reload
 ```
 

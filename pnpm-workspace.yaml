@@ -1,3 +1,18 @@
+# The Workers and the control panel live in apps/, the libraries they share in packages/ (scope `@commissary/*`,
+# source-only: they export TypeScript and are compiled by whatever imports them). docs/DEVELOPMENT.md, "Layout".
+packages:
+  - apps/*
+  - packages/*
+
+# Versions several packages share, named `catalog:` in their package.json so they cannot drift apart (two copies of
+# `effect` in one bundle break its services).
+catalog:
+  "@effect/vitest": 4.0.4
+  "@types/node": ^26.6.5
+  effect: 4.0.4
+  typescript: 7.0.2
+  vitest: 5.0.3
+
 allowBuilds:
   esbuild: true
   workerd: true

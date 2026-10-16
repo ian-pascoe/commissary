@@ -1,4 +1,4 @@
-// Command devin emits golden fixtures for the TypeScript Devin executor (src/executor/devin).
+// Command devin emits golden fixtures for the TypeScript Devin executor (apps/app/src/executor/devin).
 //
 // The scenarios run the real Go DevinExecutor against an httptest Connect-RPC server: the request bytes it sends
 // (BuildDevinGetChatMessageRequest + payload rules), the Interactions events/aggregate it produces from canned
@@ -349,7 +349,7 @@ func parseFrameCase(name string, payload []byte, groups bool) frameCase {
 }
 
 func main() {
-	outPath := flag.String("out", "test/fixtures/devin.json", "output file")
+	outPath := flag.String("out", "apps/app/test/fixtures/devin.json", "output file")
 	flag.Parse()
 
 	text := func(s string) frameSpec { return plain(newMsg().str(3, s).b) }

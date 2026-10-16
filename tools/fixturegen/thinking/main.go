@@ -1,4 +1,4 @@
-// Command thinking emits golden fixtures for the TypeScript thinking pipeline (src/thinking).
+// Command thinking emits golden fixtures for the TypeScript thinking pipeline (apps/app/src/thinking).
 //
 // Every case is executed with the real internal/thinking functions (and the real static model catalog from
 // internal/registry), so the TypeScript tests can verify behavioural parity. Run from the repository root:
@@ -321,7 +321,7 @@ type fixture struct {
 }
 
 func main() {
-	outPath := flag.String("out", "test/fixtures/thinking.json", "output file")
+	outPath := flag.String("out", "apps/app/test/fixtures/thinking.json", "output file")
 	flag.Parse()
 	log.SetOutput(io.Discard)
 

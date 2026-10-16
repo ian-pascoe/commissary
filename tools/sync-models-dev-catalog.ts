@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Regenerates the bundled models.dev snapshot (`src/registry/catalog/models-dev.json`): the providers Commissary reads
+ * Regenerates the bundled models.dev snapshot (`apps/app/src/registry/catalog/models-dev.json`): the providers Commissary reads
  * from the models.dev document, trimmed to the fields it uses (ADR 0020). The catalog additions
- * (`src/registry/catalog/additions.json`) are maintained by hand and untouched.
+ * (`apps/app/src/registry/catalog/additions.json`) are maintained by hand and untouched.
  *
  * Usage: `pnpm catalog:sync [source]`, where `source` is an http(s) URL or a local file (for instance a saved
  * `api.json`). Defaults to `https://models.dev/api.json`. Run by Node directly (type stripping), so it only imports the
@@ -10,11 +10,13 @@
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { trimModelsDev } from "../src/registry/models-dev.ts";
+import { trimModelsDev } from "../apps/app/src/registry/models-dev.ts";
 
 const DEFAULT_SOURCE = "https://models.dev/api.json";
 
-const OUTPUT = fileURLToPath(new URL("../src/registry/catalog/models-dev.json", import.meta.url));
+const OUTPUT = fileURLToPath(
+  new URL("../apps/app/src/registry/catalog/models-dev.json", import.meta.url),
+);
 
 const source = process.argv[2] ?? DEFAULT_SOURCE;
 

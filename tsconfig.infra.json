@@ -1,33 +1,11 @@
 {
-  // Deploy- and build-time code runs in Node.js, not in workerd: alchemy.run.ts, infra/, stacks/ (Alchemy CLI) and the
-  // control panel's Vite config.
+  // Deploy-time code runs in Node.js, not in workerd: alchemy.run.ts, infra/, stacks/ (Alchemy CLI) and the catalog
+  // sync script. The Worker modules they import (apps/app/src/registry/models-dev.ts, secrets/key.ts,
+  // management/auth-index-key.ts) are checked here too, with Node.js types.
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "composite": true,
-    "tsBuildInfoFile": ".tsbuild/tsconfig.infra.tsbuildinfo",
-    "target": "ES2023",
     "lib": ["ES2023"],
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "types": ["node"],
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-    "noImplicitOverride": true,
-    "verbatimModuleSyntax": true,
-    "isolatedModules": true,
-    "allowImportingTsExtensions": true,
-    "noEmit": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "types": ["node"]
   },
-  "include": [
-    "alchemy.run.ts",
-    "infra",
-    "stacks",
-    "web/vite.config.ts",
-    "tools/sync-models-dev-catalog.ts",
-    "src/registry/models-dev.ts",
-    "src/management/auth-index-key.ts",
-    "src/secrets/key.ts"
-  ]
+  "include": ["alchemy.run.ts", "infra", "stacks", "tools/sync-models-dev-catalog.ts"]
 }

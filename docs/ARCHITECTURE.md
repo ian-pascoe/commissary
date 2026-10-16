@@ -22,28 +22,36 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
 
 ## Layout
 
+A pnpm workspace run by Turborepo: Workers and the panel in `apps/`, libraries in `packages/` (scope `@commissary/*`,
+source-only: they export TypeScript and whatever imports them compiles it). The deploy code stays at the root. Paths
+such as `src/...` and `test/...` in the rest of this document are relative to `apps/app/`.
+
 ```
-.                             pnpm package, deployed with Alchemy (no Wrangler config)
+.                             workspace root and deploy root (Alchemy, no Wrangler config); turbo.json
   alchemy.run.ts              infrastructure: Worker, DOs, KV, D1 (+ migrations), assets, cron, Access
   infra/                      deploy settings (.env) and Cloudflare Access provisioning
-  src/
-    index.ts                  Worker entry: fetch, scheduled, DO class exports
-    platform/                 Cloudflare bindings as Effect services (Env, ExecutionContext, KV, D1, DO stubs)
-    http/                     router, CORS, error formatting per protocol, SSE framing, streaming helpers
-    access/                   Cloudflare Access JWT verification, principals
-    config/                   config schema (Effect Schema), storage, payload rules
-    json/                     gjson/sjson-compatible path engine and JSON helpers
-    registry/                 model catalogs, model info, /models listings
-    credentials/              credential model, selection, cooldowns, refresh, ControlPlane Durable Object
-    thinking/                 canonical thinking pipeline (port of internal/thinking)
-    translator/               registry + one directory per (client -> provider) pair
-    executor/                 executor interface + one directory per provider
-    handlers/                 inbound protocol handlers (openai, responses, claude, gemini, interactions, ...)
-    management/               /v9/management API (+ contract/: shared Effect HttpApi schemas), panel serving, OAuth flows
-    usage/                    usage records, D1 persistence
-    quota/                    server-side quota check: provider usage endpoints, stored per-credential reports
-  web/                        control panel served at / (React, Effect Atom, TanStack Router; built into public/)
-  test/                       vitest suites (+ fixtures generated from the Go code)
+  migrations/                 D1 schema of the usage database
+  apps/app/                   @commissary/app: the one Worker (client API, management API, panel serving)
+    src/
+      index.ts                Worker entry: fetch, scheduled, DO class exports
+      platform/               Cloudflare bindings as Effect services (Env, ExecutionContext, KV, D1, DO stubs)
+      http/                   router, CORS, error formatting per protocol, SSE framing, streaming helpers
+      access/                 Cloudflare Access JWT verification, principals
+      config/                 config schema (Effect Schema), storage, payload rules
+      json/                   gjson/sjson-compatible path engine and JSON helpers
+      registry/               model catalogs, model info, /models listings
+      credentials/            credential model, selection, cooldowns, refresh, ControlPlane Durable Object
+      thinking/               canonical thinking pipeline (port of internal/thinking)
+      translator/             registry + one directory per (client -> provider) pair
+      executor/               executor interface + one directory per provider
+      handlers/               inbound protocol handlers (openai, responses, claude, gemini, interactions, ...)
+      management/             /v9/management API, panel serving, OAuth flows
+      usage/                  usage records, D1 persistence
+      quota/                  server-side quota check: provider usage endpoints, stored per-credential reports
+    test/                     vitest suites in workerd (+ fixtures generated from the Go code)
+  apps/web/                   @commissary/web: control panel served at / (React, Effect Atom, TanStack Router; built
+                              into apps/web/dist, the Worker's assets), its tests in Node.js
+  packages/contract/          @commissary/contract: the management API's Effect HttpApi schemas (browser-safe)
   tools/fixturegen/           Go programs (own module, root go.work) that emit golden fixtures from the Go code
   tools/sync-reference-repos.sh  clones/updates the reference repositories in .repos/ (pnpm install, pnpm repos:sync)
   .repos/CLIProxyAPI/         read-only Go reference checkout (git-ignored)
@@ -107,7 +115,7 @@ realtime (WebRTC/SIP), the AI Studio `wsrelay` gateway, and deprecated `/v0/mana
 - **KV `CACHE`**: the model catalog (one trimmed models.dev document, refreshed by cron or on demand) and the status of its
   last refresh, best-effort caches (signature cache) with `expirationTtl`; org data under org-scoped keys.
 - **D1 `USAGE`**: usage records written with `ctx.waitUntil`, each with its `org_id`; every query filters on it.
-- **Static assets** (`public/`, Worker runs first): the control panel (`web/` build).
+- **Static assets** (`apps/web/dist/`, Worker runs first): the control panel (`apps/web` build).
 - **Cron trigger** (every 3 h, production only; `src/scheduled.ts`): the model catalog refresh (the one
   models.dev document: every provider's models, OpenCode's included), Antigravity version and model entitlements, xAI client version, usage retention, the Devin user status, a
   safety sweep that re-arms credential refresh alarms, and the quota check of connected accounts. A job is
@@ -722,7 +730,7 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
     `waitUntil` until the lease is given back. A Platform registry that cannot be reached fails the refresh (exclusivity
     cannot be shown); `embed` and `disabled` need no lease. The lease used to live in `global`'s ControlPlane
     (an unreleased lease there simply expires; the stale table is left unread).
-- **Catalog status and on-demand refresh** (`management/catalog-routes.ts`, `contract/catalog.ts`; no Go counterpart):
+- **Catalog status and on-demand refresh** (`management/catalog-routes.ts`, `@commissary/contract/catalog`; no Go counterpart):
   `GET /v9/management/models/catalog` answers `{mode, source_host?, source_problem?, stored, refreshed_at?, last_attempt?,
   models}`: the `models.catalog` mode (`official`, `embed`, `disabled`, `custom` with the host of the address, never the
   URL; an address that is not http(s) reads `disabled` with `source_problem` saying why), whether a refreshed copy from KV
@@ -778,7 +786,7 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
   `projectModel` (`quota` / `cooling` with `until`, `unavailable`, `available`). `listed` and `providers` come from the
   index, so they equal `/v1/models`; a model whose only routes are cooling is unlisted but still shown. The body also carries
   `oauth.model-alias`, `oauth.excluded-models`, `force_model_prefix`, per-channel account counts, `config_version` and `revisions` (the revision of each
-  channel's rules by channel, the `If-Match` value of rule edits, see _Config entries_ below). Contract: `contract/routing.ts`.
+  channel's rules by channel, the `If-Match` value of rule edits, see _Config entries_ below). Contract: `@commissary/contract/routing`.
 - Fixtures: `go run ./tools/fixturegen/registry` drives the real Go handlers (`OpenAIModels`, `ClaudeModels`,
   `GeminiModels`, `GeminiGetHandler`, `WriteModelListResponse` detail mode) against a real `registry.ModelRegistry` and records
   bodies and registry queries (`test/fixtures/registry.json`).
@@ -1002,7 +1010,7 @@ claude/gemini/openai-response -> openai, interactions <-> openai (Chat Completio
 ## Management API and control panel (`src/management/`)
 
 Port of `internal/api/handlers/management` for the `/v9/management` routes that apply on Workers. The API serves the
-control panel at `/` (`web/`, through `contract/`) and may change incompatibly: routes keep Go's response shapes where
+control panel at `/` (`apps/web`, through `@commissary/contract`) and may change incompatibly: routes keep Go's response shapes where
 that is cheap, but scripts written for the Go server are not guaranteed to keep working. The upstream panel (`Cli-Proxy-API-Management-Center`) is not served:
 its address redirects to `/` (_Legacy panel address_ below), and the routes only it needed are gone (`requests/api-call`,
 the operational and log routes listed under _Also not ported_) or replaced by the config entry routes (_Config entries_). Auth is the Access admin gate only (`access/routes.ts` classifies `/v9/management*`, the
@@ -1015,7 +1023,7 @@ management key is not ported, and the port's per-org management keys (_Managemen
   (ADR 0025, ADR 0019): the Workers port stores every setting, key group, provider key, channel rule list and payload rule as a
   config entry with a revision (_Storage_ above), and each route below edits its own kind of entry and names the revision
   it read. A stale revision, or a group that vanished, answers `409 conflict` and stores nothing; a write of another
-  entry never conflicts. Answers carry the new change counter as `version` (`Saved`, `EntrySaved` in `contract/config.ts`).
+  entry never conflicts. Answers carry the new change counter as `version` (`Saved`, `EntrySaved` in `@commissary/contract/config`).
   - **Removed**: `GET|PUT|PATCH /config`, `GET|PUT /config.yaml`, `GET|PUT|PATCH|DELETE /config/*path`,
     `GET /settings/config`, `POST /settings/config/check`, `PUT /settings/config` and
     `PUT|DELETE /config/oauth/model-alias|excluded-models/:channel` answer `404` now (still behind the admin gate). With
@@ -1217,20 +1225,20 @@ management key is not ported, and the port's per-org management keys (_Managemen
   Go substitutes a credential's token into a request to any host the caller names, for the upstream panel's browser-side
   quota and key probes; here those probes run server-side (`credentials/quota`, `provider-keys/probe`), so the route is not
   ported and answers `404` (still behind the admin gate).
-- **Control panel** (`web-panel.ts`, `web/`): `GET /`, the panel's page paths (`/accounts`, `/keys`, `/models`, `/usage`,
+- **Control panel** (`web-panel.ts`, `apps/web`): `GET /`, the panel's page paths (`/accounts`, `/keys`, `/models`, `/usage`,
   `/settings` and their sub-paths; `access/routes.ts` `PANEL_SECTIONS`) and `/assets/*` (hashed bundle files) are in the
-  management zone, so only Access admins get them. Every page path answers `public/index.html` (the browser router picks
+  management zone, so only Access admins get them. Every page path answers the build's `index.html` (the browser router picks
   the page) with a strict CSP (own origin only; inline `style` attributes allowed for meter widths and chart sizes), `404` with a build
   hint when it is missing. The panel calls `/v9/management` on its own origin with no key; Access authenticates the calls.
-  Its client is derived from `contract/` (Effect `HttpApi` groups for the endpoints it uses, imported by the worker tests
-  and the browser as `#contract/*`; `test/management-contract.test.ts` decodes real responses through it). Deviation
+  Its client is derived from `@commissary/contract` (`packages/contract`: Effect `HttpApi` groups for the endpoints it
+  uses, imported by the Worker, its tests and the browser as `@commissary/contract/<module>`; `test/management-contract.test.ts` decodes real responses through it). Deviation
   from Go: `/` was a public JSON banner there.
-- **Panel theme** (`web/src/lib/theme.ts`, `web/src/theme-boot.ts`, `web/src/styles/tokens.css`): light and dark through
+- **Panel theme** (`apps/web/src/lib/theme.ts`, `apps/web/src/theme-boot.ts`, `apps/web/src/styles/tokens.css`): light and dark through
   semantic `light-dark()` tokens. The theme follows `prefers-color-scheme` until the operator picks Light or Dark in the
   shell's theme menu (kept in `localStorage` as `commissary.theme`). The CSP allows no inline script, so a Vite plugin
   builds `theme-boot.ts` into a hashed same-origin classic script (`/assets/theme-<hash>.js`) placed in `<head>`; it sets
   `data-theme`, `color-scheme` and the `theme-color` metas before the first paint, so a stored choice never flashes.
-- **Panel pages** (`web/src/pages/`): Overview (`/`); Accounts (`/accounts`: every account ordered by urgency, filters
+- **Panel pages** (`apps/web/src/pages/`): Overview (`/`); Accounts (`/accounts`: every account ordered by urgency, filters
   All / Needs attention / Disabled, search, allowance meters, "Check all quotas" with the accounts whose check failed,
   and a Select mode: checkboxes, select-all of the shown rows, and a bar pinned to the window bottom that enables,
   disables, refreshes the tokens of or deletes (after a confirmation naming each account) the selected accounts the
@@ -1266,7 +1274,7 @@ management key is not ported, and the port's per-org management keys (_Managemen
   changed entry offers a reload); Settings (`/settings`: the settings that apply on Workers in sections, Routing,
   Retries & cooldowns, Requests & streaming, Payload rules, Images & video, Providers, Model catalog (one source field), Admin access,
   Account refresh; one
-  form per section whose draft is a delta of the touched fields (`web/src/lib/settings.ts`), saved with
+  form per section whose draft is a delta of the touched fields (`apps/web/src/lib/settings.ts`), saved with
   `PATCH /settings` carrying the `revisions` of the changed settings and only the changed leaves (`null` back to the default); inputs
   are checked and normalised as the server would (trimmed, admin emails lower-case) before sending; after a save the
   view refetches and the other sections' drafts rebase onto it, listing a changed field that moved on the server; on
@@ -1277,35 +1285,35 @@ management key is not ported, and the port's per-org management keys (_Managemen
   rules and account error rules are read-only there ("Set … by importing a Go config document (POST /settings/import)."; the import has no panel
   UI yet, see _Config entries_). There is no raw configuration editor (removed with its CodeMirror dependencies, ADR 0025).
   The Usage page keeps its range (24 hours, 7 days, 30 days), breakdown and filters in the
-  address (`?range=&by=&model=&provider=&account=&user=&member=&team=&failed=`, decoded per parameter by `web/src/lib/usage.ts`
+  address (`?range=&by=&model=&provider=&account=&user=&member=&team=&failed=`, decoded per parameter by `apps/web/src/lib/usage.ts`
   `readUsageSearch`, a malformed one dropped), reads `GET /observability/usage/summary`, `/series` (provider series
   summed in the browser; no principal filter, so no chart while a user filter is set) and `/records` (pages of 50
   through the `next_before` cursor); every range starts at its first bar. The shell's Refresh bumps one epoch atom
   that every usage query reads, so they all refetch. The page shows the period's **Cost**, the **Unpriced requests**
   count, a Cost column per breakdown row, the cost in each request's details and, while models without a price have
   requests in the view, a callout (from `/observability/usage/unpriced`, narrowed like the page) whose links open
-  `/usage/prices?provider=&model=`. **Prices** (`/usage/prices`, `web/src/pages/Prices.tsx`, model in
-  `web/src/lib/prices.ts`) lists, adds, edits and removes the org's price overrides over `/price-overrides`, with the
+  `/usage/prices?provider=&model=`. **Prices** (`/usage/prices`, `apps/web/src/pages/Prices.tsx`, model in
+  `apps/web/src/lib/prices.ts`) lists, adds, edits and removes the org's price overrides over `/price-overrides`, with the
   entry revision as `If-Match` (a `409` reloads the list and says to make the edit again); the form opens with the
   provider and model from the address, or edits the override that has them. The Usage page also breaks down and filters
   by member (`by=member`, `?member=`, shown by email) and filters by team (`?team=`, a picker of the org's teams). **Grants**
-  (`/grants`) and **My models** (`/my-models`) are described in _Grants_ below. **Members** (`/members`, `web/src/pages/Members*.tsx`, rules in
-  `web/src/lib/role.ts`) lists the org's members, teams and service tokens and offers only what the caller's role allows
+  (`/grants`) and **My models** (`/my-models`) are described in _Grants_ below. **Members** (`/members`, `apps/web/src/pages/Members*.tsx`, rules in
+  `apps/web/src/lib/role.ts`) lists the org's members, teams and service tokens and offers only what the caller's role allows
   (read from the org-scoped `GET /me`): admins add and remove plain members and manage teams, owners change roles and
   auto-join, and a token role above member is offered to a platform admin only. A plain member's panel is the Usage page
   alone: the nav lists nothing else, `/` lands on Usage, other pages show a not-allowed note, and Usage hides the
-  breakdowns and lists they cannot read. Allowance figures (`web/src/lib/quota.ts`) come from the
+  breakdowns and lists they cannot read. Allowance figures (`apps/web/src/lib/quota.ts`) come from the
   stored quota check when it is newer than the last response's rate-limit headers, otherwise from the headers. Window
-  history (`web/src/lib/history.ts`) sums `GET /observability/usage/series` hourly points into the account's past quota
+  history (`apps/web/src/lib/history.ts`) sums `GET /observability/usage/series` hourly points into the account's past quota
   windows, counted back from the current reset (approximate for windows the provider starts on first use), or into days
   for an account without windows. The Vertex import is multipart, so the panel posts a `FormData` itself and decodes the
-  answer with `contract/oauth.ts` `VertexImported` / `VertexImportFailed`. Pure helpers in `web/src/lib/` are tested in
-  workerd (`test/web-*.test.ts`, included by `tsconfig.worker.json`).
+  answer with `@commissary/contract/oauth` `VertexImported` / `VertexImportFailed`. Pure helpers in `apps/web/src/lib/` are tested in
+  Node.js (`apps/web/test/`).
 - **Legacy panel address** (`web-panel.ts` `LEGACY_PANEL_REDIRECT`, deviation from Go, which serves the upstream panel
   there): `GET|HEAD /management.html` (any case or percent-encoding) answers `302 Location: /` with
   `cache-control: no-store`. It stays in the management zone (`access/routes.ts` `LEGACY_PANEL_PATH`): `401`
   unauthenticated, `403` for non-admins, no CORS. The browser keeps the old `#/auth-files`-style fragment over the
-  redirect, and the panel maps it on boot to the page that replaced it (`web/src/lib/legacy-hash.ts`: auth files and
+  redirect, and the panel maps it on boot to the page that replaced it (`apps/web/src/lib/legacy-hash.ts`: auth files and
   quota → `/accounts`, OAuth → `/accounts/connect`, providers → `/keys`, OAuth rule editors → `/models/rules`, config and
   system → `/settings`, the rest → `/`).
 - Deviations from Go: `/` serves the control panel (admins only) instead of the public JSON banner; cooldown `reason`s are
@@ -1962,7 +1970,7 @@ management API and the panel (the client API endpoints still name it with the ca
   "Members, roles and teams"). A registry that cannot be reached fails a scoped address
   with `500` (the org cannot be told); the unscoped addresses need no lookup and keep working.
 
-Platform-level routes (`org-routes.ts`, contract group `orgs`, `src/management/contract/orgs.ts`):
+Platform-level routes (`org-routes.ts`, contract group `orgs`, `packages/contract/src/orgs.ts`):
 
 | Route                              | Who            | Does                                                                                                                                                                                                                                        |
 | ---------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1986,7 +1994,7 @@ Routes of the addressed org (`/org`, `/export`) and the account route (`DELETE /
 
 **Panel.** The panel of an org is the same single-page app served at `/o/<slug>/...` (the Worker answers every page path of
 every org with `index.html`). The app reads its org from the address: TanStack Router's `basepath` is `/o/<slug>`, and the
-typed client rewrites each request to `/v9/management/orgs/<slug>/...` except `/orgs` (`web/src/lib/org.ts`,
+typed client rewrites each request to `/v9/management/orgs/<slug>/...` except `/orgs` (`scopedApiUrl` in `@commissary/contract/api`,
 `ManagementClient`'s `transformClient`; the one hand-written request, the Vertex import, does the same). The shell bar shows an
 org switcher to anyone who belongs to several orgs or may create them; choosing an org reloads the app at its address. An
 address without an org (`/`, `/accounts`, ...) goes through `orgRedirect` (`web-panel.ts`): a caller who belongs to exactly
@@ -2058,12 +2066,12 @@ credentials a subject may use; selection and the model registry read it (_Creden
   teams). `unrestricted` when a grant for all credentials gives `*`; `coversAll(credential)` when one grant gives `*` on
   the credential; `permits(credential, upstreamModel)` otherwise. There is no deny. `reachFromTable(table, memberId)`
   is the same computation for the Worker, from `grantTable()`.
-- **Routes** (`grant-routes.ts`, contract `contract/grants.ts`): `GET /v9/management/grants` answers `{version, grants}`;
+- **Routes** (`grant-routes.ts`, contract `@commissary/contract/grants`): `GET /v9/management/grants` answers `{version, grants}`;
   `POST /grants` creates one (`409 conflict` when the subject and scope have one); `PUT|DELETE /grants/:id` take `If-Match`
   (`409` stale, `400 invalid_if_match` missing); an empty pattern list or a member or team the org does not have is `422
   invalid_config`. Org admins only. `GET /models/mine` answers `{models}` from `snapshot.visibleTo(caller)` for every role
   (`MEMBER_READS` in `access/policy.ts`).
-- **Panel** (`web/src/pages/Grants.tsx`, `MyModels.tsx`, model in `web/src/lib/grants.ts`): **Grants** (`/grants`, org
+- **Panel** (`apps/web/src/pages/Grants.tsx`, `MyModels.tsx`, model in `apps/web/src/lib/grants.ts`): **Grants** (`/grants`, org
   admins) reads the grants by member (what reaches each member: their own, their teams' and everyone's, marked "via"), by team
   or by credential (who may use each account, provider or all of them) and adds, edits and removes them with the entry
   revision as `If-Match` (a `409` reloads the list). **My models** (`/my-models`, every member) lists the models the caller
@@ -2156,7 +2164,7 @@ prices each attempt, the ControlPlane counts and decides.
   already running (ADR 0024). Alpha search publishes no usage record, so it is not charged; a key limit still refuses it.
 - **`global`**: an org starts with no limits and an upgrade adds none, so nothing is limited until an org admin sets one;
   the first request of an org with no limits does no ledger work.
-- **Routes** (`spend-routes.ts`, contract `contract/spend.ts`; `access/policy.ts`): `GET /spend` answers the calendar and
+- **Routes** (`spend-routes.ts`, contract `@commissary/contract/spend`; `access/policy.ts`): `GET /spend` answers the calendar and
   the limits the caller sees with `spent_micros`, `remaining_micros`, `period_start`, `resets_at` and `editable`
   (org admins: every limit; a plain member: their own member limit, their teams', the org's and those on their API
   keys); `POST /spend/limits` (201), `PUT|DELETE /spend/limits/:id` and `PATCH /spend/settings` (org admins only). Every
@@ -2167,7 +2175,7 @@ prices each attempt, the ControlPlane counts and decides.
   team's members' records summed apart, so a member on two teams counts in both and the groups can overlap) and by
   API key (`key:<id>` principals; other sign-ins have the empty key). The private-traffic filter applies to both: a
   private-credential record is read by its owner alone.
-- **Panel** (`web/src/pages/Limits.tsx`, `LimitsForms.tsx`, model in `web/src/lib/spend.ts`): **Limits** (`/limits`, every
+- **Panel** (`apps/web/src/pages/Limits.tsx`, `LimitsForms.tsx`, model in `apps/web/src/lib/spend.ts`): **Limits** (`/limits`, every
   member) lists the limits the caller sees with the Spend so far, what is left and when each starts over; org admins add,
   edit and remove any limit and set the calendar, a plain member limits their own API keys. The Usage page offers Team and
   API key breakdowns beside Member.

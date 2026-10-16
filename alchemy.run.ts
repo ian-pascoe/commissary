@@ -14,13 +14,13 @@ import * as Output from "alchemy/Output";
 import { type AccessWiring, provisionAccess, provisionClientApiBypass } from "./infra/access.ts";
 import { BUNDLE_ALIASES } from "./infra/bundle.ts";
 import { readSettings } from "./infra/settings.ts";
-import { DEV_AUTH_INDEX_KEY } from "./src/management/auth-index-key.ts";
-import { DEV_SECRETS_KEY, secretsKeyResourceId } from "./src/secrets/key.ts";
+import { DEV_AUTH_INDEX_KEY } from "./apps/app/src/management/auth-index-key.ts";
+import { DEV_SECRETS_KEY, secretsKeyResourceId } from "./apps/app/src/secrets/key.ts";
 
-/** Runtime compatibility of the Worker; keep in sync with vitest.config.ts and worker-configuration.d.ts. */
+/** Runtime compatibility of the Worker; keep in sync with apps/app/vitest.config.ts and apps/app/worker-configuration.d.ts. */
 export const COMPATIBILITY = { date: "2026-08-01", flags: ["nodejs_compat"] };
 
-/** Model catalog refresh, credential refresh sweep and usage retention (src/scheduled.ts). */
+/** Model catalog refresh, credential refresh sweep and usage retention (apps/app/src/scheduled.ts). */
 export const CRONS = ["0 */3 * * *"];
 
 // Remote state in the account (`Cloudflare.state()`, shared by every machine and CI) unless ALCHEMY_STATE=local,
@@ -37,14 +37,14 @@ export default Alchemy.Stack(
     const cache = yield* Cloudflare.KV.Namespace("Cache");
     const usage = yield* Cloudflare.D1.Database("Usage", { migrations: "./migrations" });
 
-    // Key of the keyed `auth_index` (src/management/auth-index.ts): 32 random bytes minted on the first deploy of a
+    // Key of the keyed `auth_index` (apps/app/src/management/auth-index.ts): 32 random bytes minted on the first deploy of a
     // stage and kept in the (encrypted) stack state, so every later deploy binds the same secret with no manual step.
     // `alchemy dev` (loopback only, no Access) uses a fixed key so local panel links survive a wiped local state.
     const authIndexKey = dev
       ? DEV_AUTH_INDEX_KEY
       : yield* Alchemy.makeRandom("AuthIndexKey", { bytes: 32 });
 
-    // Secrets key (src/secrets/): wraps every org's data key, which seals the stored auth files and config entries. Minted
+    // Secrets key (apps/app/src/secrets/): wraps every org's data key, which seals the stored auth files and config entries. Minted
     // like the auth index key, one `Random` per generation: raising SECRETS_KEY_GENERATION mints a new one, and during
     // the rotation the previous generation is bound as SECRETS_KEY_PREVIOUS (docs/DEPLOY.md). Every generation up to the
     // current one stays declared: Alchemy deletes an undeclared resource with its state, and a `Random` exists only
@@ -66,7 +66,7 @@ export default Alchemy.Stack(
         ? undefined
         : secretsKeys.get(settings.secretsKeyPreviousGeneration);
 
-    // `alchemy dev` serves the Worker on localhost without Access: the dev bypass (src/access/config.ts) makes every
+    // `alchemy dev` serves the Worker on localhost without Access: the dev bypass (apps/app/src/access/config.ts) makes every
     // loopback request an admin. Deployed Workers never get it and require the Access JWT (or an API key on the client
     // API).
     const { hosted } = settings;
@@ -105,7 +105,7 @@ export default Alchemy.Stack(
           };
 
     // With an API host (ADR 0028) the Worker answers on both hostnames and serves the client API on the API host only
-    // (src/http/hosts.ts). The API host has no Access application: clients authenticate there with API keys.
+    // (apps/app/src/http/hosts.ts). The API host has no Access application: clients authenticate there with API keys.
     const split = settings.apiDomain !== "";
 
     const domain = split
@@ -113,7 +113,7 @@ export default Alchemy.Stack(
       : settings.domain;
 
     const worker = yield* Cloudflare.Worker("Commissary", {
-      main: "./src/index.ts",
+      main: "./apps/app/src/index.ts",
       compatibility: COMPATIBILITY,
       // Production serves only its Access-protected domain; pull-request previews serve their workers.dev URL,
       // protected by enrolling the Worker into the preview's Access application. The client API leaves Access on both
@@ -123,9 +123,9 @@ export default Alchemy.Stack(
       ...(access.application === undefined ? {} : { access: access.application }),
       limits: { cpuMs: settings.cpuMs },
       build: { input: { resolve: { alias: { ...BUNDLE_ALIASES } } } },
-      // The control panel (`pnpm web:build`). The Worker runs first so the client API is never shadowed by assets and
-      // Access gates the panel (src/management/web-panel.ts serves it).
-      assets: { directory: "./public", runWorkerFirst: true },
+      // The control panel (`pnpm build`, apps/web). The Worker runs first so the client API is never shadowed by assets
+      // and Access gates the panel (apps/app/src/management/web-panel.ts serves it).
+      assets: { directory: "./apps/web/dist", runWorkerFirst: true },
       // Previews have no credentials to refresh or catalog worth keeping fresh.
       crons: settings.preview ? [] : CRONS,
       env: {
