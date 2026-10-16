@@ -51,8 +51,12 @@ _Avoid_: hosted proxy, SaaS, cloud (on its own), multi-tenant mode
 The hostname a deployment may give its client API alone (ADR 0028), where clients send API keys.
 _Avoid_: proxy domain, endpoint
 
+**Auth host**:
+Commissary Cloud's hostname for signing in, under the app host (`auth.<app host>` by default; ADR 0030), where the auth Worker answers.
+_Avoid_: login domain, SSO host
+
 **App host**:
-The hostname of the control panel, sign-in and the management API; with no API host it serves the client API too.
+The hostname of the control panel, the sign-in _page_ and the management API; with no API host it still serves the client API, through the API Worker.
 _Avoid_: dashboard domain, panel host
 
 **Personal org**:
