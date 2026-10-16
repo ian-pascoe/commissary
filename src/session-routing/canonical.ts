@@ -9,7 +9,8 @@
  */
 import { createHash } from "node:crypto";
 import { isJsonArray, isJsonObject, type Json } from "../json/index.ts";
-import { compareUtf8, goMarshal } from "./go-json.ts";
+import { stableStringify } from "../http/json-text.ts";
+import { compareStrings } from "../registry/compare.ts";
 
 const CANONICAL_TURN_VERSION = "cpa-session-turn-v1";
 
@@ -174,7 +175,7 @@ const jsonPart = (kind: string, value: Json): CanonicalPart => {
     });
   }
 
-  raw = goMarshal(value);
+  raw = stableStringify(value);
 
   return part(kind, raw, { originalSize: byteLength(raw) });
 };
@@ -535,7 +536,7 @@ const normalizeTurn = (input: CanonicalTurn): CanonicalTurn => {
 
   if (toolParts.length > 1) {
     const sorted = toolParts.toSorted(
-      (a, b) => compareUtf8(a.value, b.value) || compareUtf8(a.digest, b.digest),
+      (a, b) => compareStrings(a.value, b.value) || compareStrings(a.digest, b.digest),
     );
 
     toolIndexes.forEach((partIndex, index) => {

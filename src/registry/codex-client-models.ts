@@ -6,8 +6,7 @@
  * (`codexClientModelsResponse`), sdk/api/handlers/openai/openai_handlers.go (`OpenAIModels`, compact marshalling).
  *
  * Every public model becomes a catalog entry: models with a template in `codex_client_models.json` clone it, every other
- * model clones the `gpt-5.5` template with compact instructions. Bodies are serialised like Go's compact encoder (sorted
- * keys, no HTML escaping).
+ * model clones the `gpt-5.5` template with compact instructions. Bodies are plain `JSON.stringify` output.
  */
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { compareStrings } from "./compare.ts";

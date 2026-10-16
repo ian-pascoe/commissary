@@ -16,7 +16,6 @@ import {
 import { convertBudgetToLevel } from "../../../thinking/convert.ts";
 import { getThinkingText } from "../../../thinking/text.ts";
 import { alignOpenAIToolCallMessages } from "../common/openai-tools.ts";
-import { sortKeysDeep } from "../../common/go-json.ts";
 import { getStr, isArr, isObj, present, raw, str } from "../common/read.ts";
 import {
   alignClaudeToolResults,
@@ -441,7 +440,6 @@ const convertClaudeRequestToOpenAIImpl = (
                 }
 
                 const input = get(part, "input");
-                // Go marshals the parsed map (`gjson.Value()`), so keys are sorted.
                 toolCalls.push({
                   function: { arguments: input !== undefined ? raw(input) : "{}", name: toolName },
                   id: toolUseId,
@@ -543,8 +541,7 @@ const convertClaudeRequestToOpenAIImpl = (
       const inputSchema = get(tool, "input_schema");
 
       if (present(inputSchema)) {
-        // The parsed `Value()` map is marshalled with sorted keys.
-        fn.parameters = sortKeysDeep(normalizeObjectSchemaProperties(cloneJson(inputSchema)));
+        fn.parameters = normalizeObjectSchemaProperties(cloneJson(inputSchema));
       } else {
         fn.parameters = { type: "object", properties: {} };
       }

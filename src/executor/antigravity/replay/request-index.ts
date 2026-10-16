@@ -5,7 +5,7 @@
  * incremental context fingerprints, part fingerprints, `reasoningReplayItemsFromRequest`). The index aliases the live
  * payload parts, so it must be rebuilt after every mutation (callers do, like the Go sequential path).
  * Fingerprints only have to agree between the request that produced a ledger item and the request that consumes it
- * (both are built by this module), so they use the Go recipe over canonical JSON (`goMarshal`) without being
+ * (both are built by this module), so they use the Go recipe over canonical JSON (`stableStringify`) without being
  * byte-identical to Go's hashes.
  */
 import { createHash, type Hash } from "node:crypto";
@@ -20,7 +20,7 @@ import {
   type Json,
   type JsonObject,
 } from "../../../json/index.ts";
-import { goMarshal } from "../../../translator/common/claude-util.ts";
+import { stableStringify } from "../../../http/json-text.ts";
 
 export const SIGNATURE_PATHS = [
   "thoughtSignature",
@@ -51,16 +51,12 @@ export const hasNativeThoughtSignature = (signature: string): boolean => {
   return trimmed !== "" && trimmed !== SKIP_VALIDATOR;
 };
 
-/** `antigravityCanonicalReplayJSON` of a parsed value. */
-export const canonicalJson = (value: Json | undefined): string =>
-  value === undefined ? "" : goMarshal(value);
-
 /** `antigravityFunctionCallKey`. */
 export const functionCallKey = (name: string, args: Json | undefined, callId: string): string => {
   const trimmed = name.trim();
 
   if (trimmed === "") return "";
-  const argsText = args === undefined ? "" : canonicalJson(args);
+  const argsText = args === undefined ? "" : stableStringify(args);
 
   return `fc:${createHash("sha256").update([trimmed, argsText, callId].join("\u0000")).digest("hex").slice(0, 16)}`;
 };
@@ -151,7 +147,7 @@ class ContextFingerprints {
       if (value === undefined) continue;
       this.#write(path);
       this.#write("\u0000");
-      this.#write(canonicalJson(value));
+      this.#write(stableStringify(value));
       this.#write("\u0000");
     }
 
@@ -189,7 +185,7 @@ class ContextFingerprints {
           for (const path of SIGNATURE_PATHS) del(normalized, path);
         }
 
-        this.#write(canonicalJson(normalized));
+        this.#write(stableStringify(normalized));
         this.#write("\u0000");
       }
 

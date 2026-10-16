@@ -10,13 +10,13 @@ import {
   asFloat,
   asInt,
   asString,
+  cloneJson,
   get,
   type Json,
   type JsonObject,
   set,
 } from "../../../../json/index.ts";
 import { unwrapApplyPatchInput } from "../../../common/apply-patch.ts";
-import { sortKeysDeep } from "../../../common/go-json.ts";
 import type { ResponsesToolIdentity } from "../../../common/responses-tools.ts";
 
 // --- identifiers -------------------------------------------------------------------------------------------------------
@@ -116,8 +116,7 @@ export const echoRequestFields = (
     if (value !== undefined) set(target, path(field), convert(value));
   };
 
-  // gjson `Value()` yields Go maps, which re-marshal with sorted keys.
-  const raw = (value: Json | undefined): Json => (value === undefined ? null : sortKeysDeep(value));
+  const raw = (value: Json | undefined): Json => (value === undefined ? null : cloneJson(value));
   copy("instructions", asString);
   copy("max_output_tokens", asInt);
   copy("max_tool_calls", asInt);

@@ -4,11 +4,8 @@
  * Go source: internal/registry/model_registry.go (`convertModelToMap`), sdk/api/handlers/openai/openai_handlers.go
  * (`OpenAIModels`), internal/client/claude/models/models.go (`BuildResponse`, ID cloaking),
  * sdk/api/handlers/gemini/gemini_handlers.go (`GeminiModels`, `GeminiGetHandler`), internal/client/grokbuild.
- *
- * Go serialises maps with sorted keys and escapes `<`, `>` and `&`; `goJson` reproduces both so the bodies are
- * byte-identical to the Go server's.
  */
-import type { Json, JsonObject } from "../json/index.ts";
+import type { JsonObject } from "../json/index.ts";
 import { compareStrings } from "./compare.ts";
 import type { ModelInfo } from "./model-info.ts";
 
@@ -17,48 +14,6 @@ export { compareStrings };
 export const DEFAULT_CLAUDE_MAX_INPUT_TOKENS = 200000;
 
 export const DEFAULT_CLAUDE_MAX_OUTPUT_TOKENS = 64000;
-
-const sortKeys = (value: Json): Json => {
-  if (Array.isArray(value)) return value.map(sortKeys);
-
-  if (value !== null && typeof value === "object") {
-    const out: JsonObject = {};
-
-    for (const [key, child] of Object.entries(value).toSorted(([a], [b]) => compareStrings(a, b)))
-      out[key] = sortKeys(child);
-
-    return out;
-  }
-
-  return value;
-};
-
-const GO_ESCAPES = new Map<string, string>([
-  ["<", "\\u003c"],
-  [">", "\\u003e"],
-  ["&", "\\u0026"],
-  ["\u2028", "\\u2028"],
-  ["\u2029", "\\u2029"],
-]);
-
-const escapeLikeGo = (json: string): string =>
-  json.replace(/[<>&\u2028\u2029]/g, (char) => GO_ESCAPES.get(char) ?? char);
-
-/** `json.Marshal` of a Go map tree: sorted keys, HTML-safe escaping, compact. */
-export const goJson = (value: Json): string => escapeLikeGo(JSON.stringify(sortKeys(value)));
-
-/**
- * `MarshalCompact` of the Codex client catalog: a Go map tree with sorted keys through an encoder with HTML escaping
- * disabled (so `<`, `>` and `&` stay literal; U+2028/U+2029 are still escaped).
- */
-export const goCompactJson = (value: Json): string =>
-  JSON.stringify(sortKeys(value)).replace(
-    /[\u2028\u2029]/g,
-    (char) => GO_ESCAPES.get(char) ?? char,
-  );
-
-/** `json.Marshal` of a Go struct tree: keys keep their declaration order (insertion order here). */
-export const goStructJson = (value: Json): string => escapeLikeGo(JSON.stringify(value));
 
 // --- per-model entries ---------------------------------------------------------------------------------------------
 

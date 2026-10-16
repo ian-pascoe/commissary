@@ -8,7 +8,7 @@
  */
 import { createHash } from "node:crypto";
 import { asString, get, isJsonArray, isJsonObject, type Json } from "../../../json/index.ts";
-import { goMarshal } from "../../../translator/common/claude-util.ts";
+import { stableStringify } from "../../../http/json-text.ts";
 import { claudeCodeExecutionScope } from "../../codex/replay.ts";
 import { stableSessionId } from "../envelope.ts";
 
@@ -48,7 +48,7 @@ const claudeSystemLane = (payload: Json | undefined): string => {
   if (system === undefined) return "";
 
   return createHash("sha256")
-    .update(goMarshal(stripCacheControl(system)))
+    .update(stableStringify(stripCacheControl(system)))
     .digest("hex")
     .slice(0, 32);
 };

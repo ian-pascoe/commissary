@@ -19,6 +19,7 @@ import {
 } from "../src/handlers/framing.ts";
 import { errorResponse, streamResponse } from "../src/handlers/respond.ts";
 import { get, type Json, set } from "../src/json/index.ts";
+import { structuralBody } from "./support/structural.ts";
 import {
   type SummaryHooks,
   TranslationError,
@@ -151,8 +152,12 @@ describe("framers", () => {
     expect(framer.closeError()?.message).toBe(
       "upstream stream closed before a terminal event (last event: response.created)",
     );
-    expect(framer.terminalError(new ExecutionError({ status: 502, message: "x" }))).toBe(
-      'event: error\ndata: {"type":"error","error":{"code":"internal_server_error","message":"x","param":null,"type":"server_error"},"sequence_number":1}\n\n',
+    expect(
+      structuralBody(framer.terminalError(new ExecutionError({ status: 502, message: "x" }))),
+    ).toEqual(
+      structuralBody(
+        'event: error\ndata: {"type":"error","error":{"code":"internal_server_error","message":"x","param":null,"type":"server_error"},"sequence_number":1}\n\n',
+      ),
     );
     framer.chunk('event: response.completed\ndata: {"type":"response.completed"}\n\n');
     expect(framer.closeError()).toBeUndefined();
@@ -262,11 +267,15 @@ describe("legacy completions conversion", () => {
 
   it("converts responses with null finish reasons and logprobs", () => {
     expect(
-      chatResponseToCompletions(
-        '{"id":"x","choices":[{"index":1,"message":{"content":null},"finish_reason":null,"logprobs":{"b":1,"a":2}}]}',
+      JSON.parse(
+        chatResponseToCompletions(
+          '{"id":"x","choices":[{"index":1,"message":{"content":null},"finish_reason":null,"logprobs":{"b":1,"a":2}}]}',
+        ),
       ),
-    ).toBe(
-      '{"id":"x","object":"text_completion","created":0,"model":"","choices":[{"finish_reason":"","index":1,"logprobs":{"a":2,"b":1},"text":""}]}',
+    ).toEqual(
+      JSON.parse(
+        '{"id":"x","object":"text_completion","created":0,"model":"","choices":[{"finish_reason":"","index":1,"logprobs":{"a":2,"b":1},"text":""}]}',
+      ),
     );
   });
 });

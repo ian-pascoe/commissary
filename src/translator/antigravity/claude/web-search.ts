@@ -353,7 +353,6 @@ const buildCitedTextBlocks = (
       blocks.push({
         text: citedText,
         citations: [
-          // Go marshals the citation through a map: keys are sorted.
           {
             cited_text: citedText,
             title: support.chunkTitle,

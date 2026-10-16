@@ -6,9 +6,7 @@
  * (Walk). The Go code rewrites a JSON string through gjson/sjson paths; this port keeps the same path based passes on
  * a parsed document (`Doc`) using the gjson/sjson engine of `src/json`. Pass one single schema, never a request.
  *
- * Differences: hint texts embed `JSON.stringify` of objects/arrays (Go keeps the original raw text), and Go re-marshals
- * the whole document (sorted keys) when the malformed-schema repair or `$ref` inlining changed something; this port
- * sorts keys the same way in those two cases.
+ * Differences: hint texts embed `JSON.stringify` of objects/arrays (Go keeps the original raw text).
  */
 import {
   asString,
@@ -20,7 +18,6 @@ import {
   type JsonObject,
   set,
 } from "../../../json/index.ts";
-import { sortKeysDeep } from "../../common/go-json.ts";
 
 const PLACEHOLDER_REASON_DESCRIPTION = "Brief explanation of why you are calling this tool";
 
@@ -592,7 +589,7 @@ const normalizeMalformedSchemaObjects = (doc: Doc, addItems: boolean): void => {
     if (isJsonObject(inner)) {
       const repaired = repairSchemaNode(inner, addItems);
 
-      if (repaired.modified) doc.root = sortKeysDeep({ schema: repaired.node });
+      if (repaired.modified) doc.root = { schema: repaired.node };
 
       return;
     }
@@ -606,7 +603,7 @@ const normalizeMalformedSchemaObjects = (doc: Doc, addItems: boolean): void => {
 
   const repaired = repairSchemaNode(root, addItems);
 
-  if (repaired.modified) doc.root = sortKeysDeep(repaired.node);
+  if (repaired.modified) doc.root = repaired.node;
 };
 
 // --- $ref handling -------------------------------------------------------------------------------------------------------
@@ -706,7 +703,7 @@ const resolveLocalRefs = (root: Json, value: Json, active: Set<string>): Json =>
 
 const inlineLocalRefs = (doc: Doc): void => {
   if (!JSON.stringify(doc.root).includes('"$ref"')) return;
-  doc.root = sortKeysDeep(resolveLocalRefs(doc.root, doc.root, new Set()));
+  doc.root = resolveLocalRefs(doc.root, doc.root, new Set());
 };
 
 const convertRefsToHints = (doc: Doc, preserveSiblings: boolean): void => {

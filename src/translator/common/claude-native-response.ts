@@ -1,8 +1,7 @@
 /**
  * Converts a complete Claude Messages JSON body into the SSE event text that the streaming translators consume.
  *
- * Go source: internal/translator/common/claude_native_response.go. Go marshals the events through `map[string]any`,
- * so event keys are sorted; the literals below keep that order.
+ * Go source: internal/translator/common/claude_native_response.go.
  */
 import { cloneJson, get, isJsonObject, type JsonObject, tryParseJson } from "../../json/index.ts";
 import { isArr, isObj, str, toArray } from "./gjson.ts";

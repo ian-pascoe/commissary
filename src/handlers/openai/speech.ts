@@ -9,7 +9,6 @@
 import { Effect, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { routeServices } from "../../http/route-services.ts";
-import { goMarshal } from "../../http/json-text.ts";
 import { invalidRequestBody } from "../../http/errors.ts";
 import { mergeUpstreamHeaders } from "../../http/headers.ts";
 import { asString, get, isJsonObject, type Json, type JsonObject } from "../../json/index.ts";
@@ -179,7 +178,7 @@ export const speechResponseContentType = (
 };
 
 const speechError = (status: number, message: string) =>
-  HttpServerResponse.text(goMarshal({ error: { message, type: "invalid_request_error" } }), {
+  HttpServerResponse.text(JSON.stringify({ error: { message, type: "invalid_request_error" } }), {
     status,
     contentType: "application/json",
   });

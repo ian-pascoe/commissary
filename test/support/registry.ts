@@ -9,6 +9,7 @@ import {
   type Section,
 } from "../../src/registry/catalog.ts";
 import type { ClientProjection } from "../../src/registry/availability.ts";
+import { compareStrings } from "../../src/registry/compare.ts";
 import { decodeWireModel, fromWire, type ModelInfo } from "../../src/registry/model-info.ts";
 import { type ClientRegistration, ModelRegistryIndex } from "../../src/registry/registry.ts";
 import raw from "../fixtures/registry.json?raw";
@@ -146,6 +147,31 @@ export const scenarioClients = (scenario: FixtureScenario): ClientRegistration[]
 
 export const scenarioIndex = (scenario: FixtureScenario): ModelRegistryIndex =>
   new ModelRegistryIndex(scenarioClients(scenario), fixtureNow());
+
+/**
+ * Go's `MarshalCompact` bytes for the Codex client catalog (sorted keys, only U+2028/U+2029 escaped). The fixture
+ * keeps sha256 digests of those bytes, which can only be compared byte for byte: Commissary itself no longer emits
+ * them, so this lives with the test.
+ */
+export const goCompactBytes = (value: Json): string => {
+  const sort = (node: Json): Json => {
+    if (Array.isArray(node)) return node.map(sort);
+
+    if (node !== null && typeof node === "object") {
+      return Object.fromEntries(
+        Object.entries(node)
+          .toSorted(([a], [b]) => compareStrings(a, b))
+          .map(([key, child]) => [key, sort(child)]),
+      );
+    }
+
+    return node;
+  };
+
+  return JSON.stringify(sort(value)).replace(/[\u2028\u2029]/g, (char) =>
+    char === "\u2028" ? "\\u2028" : "\\u2029",
+  );
+};
 
 /** Sorts the entries of the named arrays by `key`, for comparing Go bodies whose order is map-iteration order. */
 export const sortedBody = (body: string, sort: Record<string, string>): Json => {

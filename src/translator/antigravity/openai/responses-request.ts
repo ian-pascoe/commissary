@@ -30,7 +30,6 @@ import {
   hasOnlyResponsesWebSearchTools,
 } from "../../gemini/openai/responses/web-search.ts";
 import { convertOpenAIResponsesRequestToGemini } from "../../gemini/openai/responses/request.ts";
-import { sortKeysDeep } from "../../common/go-json.ts";
 import { convertGeminiRequestToAntigravity } from "../gemini/request.ts";
 
 export const ANTIGRAVITY_WEB_SEARCH_SYSTEM_INSTRUCTION =
@@ -179,8 +178,7 @@ const rewriteReasoningForClaude = (modelName: string, input: Json, gemini: Json)
   if (!changed) return gemini;
   set(gemini, "contents", rewrittenContents);
 
-  // Go re-marshals the whole body through a map, which sorts every object's keys.
-  return sortKeysDeep(gemini);
+  return gemini;
 };
 
 const ensureWebSearchTool = (payload: Json, includedDomains: ReadonlyArray<string>): void => {

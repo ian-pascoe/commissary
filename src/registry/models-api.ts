@@ -6,21 +6,12 @@
  * with `ModelDetailIDContextKey`).
  */
 import { isJsonArray, type Json, type JsonObject } from "../json/index.ts";
-import {
-  claudeList,
-  geminiDetail,
-  geminiList,
-  goCompactJson,
-  goJson,
-  goStructJson,
-  grokList,
-  openaiList,
-} from "./listings.ts";
+import { claudeList, geminiDetail, geminiList, grokList, openaiList } from "./listings.ts";
 import type { ModelInfo } from "./model-info.ts";
 
 export interface ModelsReply {
   readonly status: number;
-  /** Serialised JSON body, byte-identical to the Go server's for the same model set. */
+  /** Serialised JSON body. */
   readonly body: string;
 }
 
@@ -47,7 +38,7 @@ export const modelsFormat = (request: ModelsRequestInfo): ModelsFormat => {
 
 const ok = (body: string): ModelsReply => ({ status: 200, body });
 
-const MODEL_NOT_FOUND = goJson({
+const MODEL_NOT_FOUND = JSON.stringify({
   error: { message: "Model not found", type: "invalid_request_error", code: "model_not_found" },
 });
 
@@ -63,11 +54,7 @@ const entryId = (entry: Json): string => {
 };
 
 /** Detail routes serve the catalog entry whose `id` (or `slug`) equals the requested id, else 404. */
-const selectDetail = (
-  payload: JsonObject,
-  id: string,
-  render: (value: Json) => string,
-): ModelsReply => {
+const selectDetail = (payload: JsonObject, id: string): ModelsReply => {
   const entries = [
     ...(isJsonArray(payload.data) ? payload.data : []),
     ...(isJsonArray(payload.models) ? payload.models : []),
@@ -75,7 +62,7 @@ const selectDetail = (
 
   const found = entries.find((entry) => entryId(entry) !== "" && entryId(entry) === id);
 
-  return found === undefined ? { status: 404, body: MODEL_NOT_FOUND } : ok(render(found));
+  return found === undefined ? { status: 404, body: MODEL_NOT_FOUND } : ok(JSON.stringify(found));
 };
 
 export interface ModelsOptions {
@@ -97,16 +84,13 @@ export const respondModels = (
 ): ModelsReply => {
   const format = modelsFormat(request);
   let payload: JsonObject;
-  let render = goJson;
 
   switch (format) {
     case "grok":
       payload = grokList(models);
-      render = goStructJson;
       break;
     case "codex-client":
       payload = options.codexClient(models, request.clientVersion ?? "");
-      render = goCompactJson;
       break;
     case "claude":
       payload = claudeList(models, options.disableCloaking);
@@ -115,13 +99,12 @@ export const respondModels = (
       payload = openaiList(models);
   }
 
-  // A selected element keeps the serialisation of its list (struct order for Grok entries).
-  return detailId === undefined ? ok(render(payload)) : selectDetail(payload, detailId, render);
+  return detailId === undefined ? ok(JSON.stringify(payload)) : selectDetail(payload, detailId);
 };
 
 /** `GET /v1beta/models`. */
 export const respondGeminiList = (models: ReadonlyArray<ModelInfo>): ModelsReply =>
-  ok(goJson(geminiList(models)));
+  ok(JSON.stringify(geminiList(models)));
 
 /** `GET /v1beta/models/{model}`; `action` is the path remainder without the leading slash. */
 export const respondGeminiDetail = (
@@ -130,5 +113,5 @@ export const respondGeminiDetail = (
 ): ModelsReply => {
   const entry = geminiDetail(models, action);
 
-  return entry === undefined ? { status: 404, body: GEMINI_NOT_FOUND } : ok(goJson(entry));
+  return entry === undefined ? { status: 404, body: GEMINI_NOT_FOUND } : ok(JSON.stringify(entry));
 };

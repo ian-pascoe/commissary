@@ -5,6 +5,7 @@
  * internal/translator/common/request.go (GenerateClaudeToolCallID), internal/translator/common/file_data.go.
  */
 import { createHash } from "node:crypto";
+import { stableStringify } from "../../http/json-text.ts";
 import { type Json, type JsonObject } from "../../json/index.ts";
 import { isArr, isObj } from "./gjson.ts";
 
@@ -19,20 +20,6 @@ export const sanitizeClaudeFunctionName = (name: string): string => {
 };
 
 const EMPTY_INPUT_SCHEMA = (): JsonObject => ({ type: "object", properties: {} });
-
-const sortedObject = (value: JsonObject): JsonObject => {
-  const out: JsonObject = {};
-
-  for (const key of Object.keys(value).toSorted())
-    Object.defineProperty(out, key, {
-      value: value[key],
-      enumerable: true,
-      writable: true,
-      configurable: true,
-    });
-
-  return out;
-};
 
 const schemaObject = (value: Json | undefined): JsonObject => (isObj(value) ? { ...value } : {});
 
@@ -64,10 +51,7 @@ const mergeRequired = (root: JsonObject, branchRequired: Json | undefined): void
   if (required.length > 0) root.required = required;
 };
 
-/**
- * `NormalizeClaudeToolInputSchema`: Claude needs an object schema without root-level unions. Go marshals through
- * `map[string]json.RawMessage`, so the root and `properties` keys come out sorted.
- */
+/** `NormalizeClaudeToolInputSchema`: Claude needs an object schema without root-level unions. */
 export const normalizeClaudeToolInputSchema = (schema: Json | undefined): JsonObject => {
   if (!isObj(schema)) return EMPTY_INPUT_SCHEMA();
   const root: JsonObject = { ...schema };
@@ -92,34 +76,9 @@ export const normalizeClaudeToolInputSchema = (schema: Json | undefined): JsonOb
   }
 
   root.type = "object";
-  root.properties = sortedObject(properties);
+  root.properties = properties;
 
-  return sortedObject(root);
-};
-
-const UNICODE_ESCAPES = new Map([
-  ["<", "\\u003c"],
-  [">", "\\u003e"],
-  ["&", "\\u0026"],
-  ["\u2028", "\\u2028"],
-  ["\u2029", "\\u2029"],
-]);
-
-/** Go `json.Marshal` of a decoded value: sorted object keys and HTML-safe escapes. */
-export const goMarshal = (value: Json): string => {
-  if (isArr(value)) return `[${value.map(goMarshal).join(",")}]`;
-
-  if (isObj(value)) {
-    return `{${Object.keys(value)
-      .toSorted()
-      .map((key) => `${goMarshal(key)}:${goMarshal(value[key] ?? null)}`)
-      .join(",")}}`;
-  }
-
-  return JSON.stringify(value).replace(
-    /[<>&\u2028\u2029]/gu,
-    (ch) => UNICODE_ESCAPES.get(ch) ?? ch,
-  );
+  return root;
 };
 
 const GEMINI_CLAUDE_TOOL_USE_ID_PREFIX = "cpa_gemini_";
@@ -134,7 +93,7 @@ export const geminiClaudeToolUseID = (callId: string, name: string, argsRaw: str
 
   if (args.trim() !== "") {
     try {
-      args = goMarshal(JSON.parse(args));
+      args = stableStringify(JSON.parse(args));
     } catch {
       args = args.trim();
     }

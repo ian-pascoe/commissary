@@ -14,7 +14,6 @@
  *  - {@link rewriteCodexOrphanDelegationInput} downgrades orphaned `codex_app` delegation outputs to user messages.
  */
 import { compareStrings } from "../../registry/compare.ts";
-import { goMarshalSorted } from "../../http/json-text.ts";
 import type { HeaderInput } from "../../config/payload/index.ts";
 import type { Config } from "../../config/schema.ts";
 import {
@@ -856,7 +855,7 @@ const restoreCollaborationValue = (value: Json): boolean => {
 
 /**
  * `RestoreCodexMultiAgentV2Response`: restores the collaboration namespace in an upstream JSON payload (text). A
- * restored payload is re-marshalled like Go does (sorted keys); untouched or invalid payloads are returned as is.
+ * restored payload is re-serialised; untouched or invalid payloads are returned as is.
  */
 export const restoreCodexMultiAgentV2Response = (payload: string, optimized: boolean): string => {
   if (!optimized || payload === "") return payload;
@@ -864,5 +863,5 @@ export const restoreCodexMultiAgentV2Response = (payload: string, optimized: boo
 
   if (parsed === undefined || !restoreCollaborationValue(parsed)) return payload;
 
-  return goMarshalSorted(parsed);
+  return JSON.stringify(parsed);
 };

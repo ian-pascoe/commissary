@@ -14,7 +14,6 @@ import {
   applyPatchInputDelta,
   applyPatchInputDone,
 } from "../../../common/apply-patch.ts";
-import { sortKeysDeep } from "../../../common/go-json.ts";
 import { getStr, isArr, str } from "../../common/read.ts";
 import { requestModelNameOf } from "../../../common/request.ts";
 import { responsesToolInputFailure, shellCallItem, shellCallPlaceholder } from "./shell.ts";
@@ -161,7 +160,7 @@ const echoRequestFields = (target: JsonObject, req: Json | undefined, nonStream:
   if (cacheKey !== undefined) target.prompt_cache_key = str(cacheKey);
   const reasoning = v("reasoning");
 
-  if (reasoning !== undefined) target.reasoning = sortKeysDeep(reasoning);
+  if (reasoning !== undefined) target.reasoning = reasoning;
   const safety = v("safety_identifier");
 
   if (safety !== undefined) target.safety_identifier = str(safety);
@@ -176,13 +175,13 @@ const echoRequestFields = (target: JsonObject, req: Json | undefined, nonStream:
   if (temperature !== undefined) target.temperature = asFloat(temperature);
   const text = v("text");
 
-  if (text !== undefined) target.text = sortKeysDeep(text);
+  if (text !== undefined) target.text = text;
   const toolChoice = v("tool_choice");
 
-  if (toolChoice !== undefined) target.tool_choice = sortKeysDeep(toolChoice);
+  if (toolChoice !== undefined) target.tool_choice = toolChoice;
   const tools = v("tools");
 
-  if (tools !== undefined) target.tools = sortKeysDeep(tools);
+  if (tools !== undefined) target.tools = tools;
   const topLogprobs = v("top_logprobs");
 
   if (topLogprobs !== undefined) target.top_logprobs = asInt(topLogprobs);
@@ -194,10 +193,10 @@ const echoRequestFields = (target: JsonObject, req: Json | undefined, nonStream:
   if (truncation !== undefined) target.truncation = str(truncation);
   const user = v("user");
 
-  if (user !== undefined) target.user = sortKeysDeep(user);
+  if (user !== undefined) target.user = user;
   const metadata = v("metadata");
 
-  if (metadata !== undefined) target.metadata = sortKeysDeep(metadata);
+  if (metadata !== undefined) target.metadata = metadata;
 };
 
 /** `buildResponsesCompletedEvent`. */
@@ -1384,7 +1383,7 @@ export const convertOpenAIChatCompletionsResponseToOpenAIResponsesNonStream = (
       u.total_tokens = asInt(get(usage, "total_tokens"));
       resp.usage = u;
     } else {
-      resp.usage = sortKeysDeep(usage);
+      resp.usage = usage;
     }
   }
 

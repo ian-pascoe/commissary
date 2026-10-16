@@ -8,7 +8,6 @@
  * videosCreateRequestFromForm).
  * Pure request/response conversion; routing, credential binding and HTTP live in `videos.ts`.
  */
-import { goMarshal } from "../../http/json-text.ts";
 import {
   asString,
   get,
@@ -369,12 +368,12 @@ export const buildVideosCreateResponse = (
 
   if (progress !== undefined) out["progress"] = progress;
 
-  return goMarshal(out);
+  return JSON.stringify(out);
 };
 
 /** `buildVideosFailedAPIResponse`. */
 export const buildVideosFailedResponse = (model: string, code: string, message: string): string =>
-  goMarshal({
+  JSON.stringify({
     object: "video",
     status: "failed",
     progress: 0,
@@ -471,7 +470,7 @@ export const buildVideosRetrieveResponse = (
   if (videoUrl !== "") out["video_url"] = videoUrl;
   setErrorFromXai(out, payload);
 
-  return goMarshal(out);
+  return JSON.stringify(out);
 };
 
 /** `xaiVideoContentURLFromPayload`. */

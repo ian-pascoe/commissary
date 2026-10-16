@@ -15,6 +15,7 @@ import type { Json } from "../src/json/index.ts";
 import codexClientCatalog from "../src/registry/catalog/codex_client_models.json";
 import fixture from "./fixtures/multiagent.json";
 import { configOf } from "./support/registry-sources.ts";
+import { structuralBody } from "./support/structural.ts";
 
 interface Combo {
   readonly userAgent: string;
@@ -138,11 +139,13 @@ describe("Codex multi-agent v2 rewriting (Go parity)", () => {
     }
   });
 
-  it("restores the collaboration namespace in upstream payloads like Go (sorted, HTML-escaped re-marshal)", () => {
+  it("restores the collaboration namespace in upstream payloads like Go", () => {
     for (const restore of fixture.restores) {
-      expect(restoreCodexMultiAgentV2Response(restore.input, true), restore.case).toBe(
-        restore.restored,
-      );
+      // Structural: Go re-marshals with sorted keys and HTML escaping, Commissary keeps the payload's order.
+      expect(
+        structuralBody(restoreCodexMultiAgentV2Response(restore.input, true)),
+        restore.case,
+      ).toEqual(structuralBody(restore.restored));
       expect(
         restoreCodexMultiAgentV2Response(restore.input, false),
         `${restore.case} (disabled)`,

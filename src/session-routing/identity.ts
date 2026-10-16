@@ -16,7 +16,7 @@ import {
   type JsonObject,
 } from "../json/index.ts";
 import { forEachValue, goTrimSpace, prop } from "./canonical.ts";
-import { goMarshal } from "./go-json.ts";
+import { stableStringify } from "../http/json-text.ts";
 
 const encoder = new TextEncoder();
 
@@ -307,7 +307,7 @@ const appendParts = (parts: DerivedPart[], value: Json | undefined): void => {
   }
 
   if (!isJsonObject(value)) {
-    parts.push({ kind: "json", mime: "", value: goMarshal(value) });
+    parts.push({ kind: "json", mime: "", value: stableStringify(value) });
 
     return;
   }
@@ -340,7 +340,7 @@ const appendParts = (parts: DerivedPart[], value: Json | undefined): void => {
     );
   }
 
-  parts.push({ kind: "json", mime: "", value: goMarshal(stripCacheControl(value)) });
+  parts.push({ kind: "json", mime: "", value: stableStringify(stripCacheControl(value)) });
 };
 
 const canonicalParts = (value: Json | undefined): DerivedPart[] => {
@@ -517,7 +517,7 @@ const interactionsRoot = (body: JsonObject): Root => {
   return { instructions, user: [] };
 };
 
-const jsonString = (value: string): string => goMarshal(value);
+const jsonString = (value: string): string => JSON.stringify(value);
 
 /**
  * `DeriveID`: a stable identity from the leading instructions and the first complete user input

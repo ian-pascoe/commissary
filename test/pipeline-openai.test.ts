@@ -6,6 +6,7 @@ import type { Config } from "../src/config/schema.ts";
 import { Thinking } from "../src/executor/thinking.ts";
 import { set } from "../src/json/index.ts";
 import { noopSummaryHooks } from "../src/translator/registry.ts";
+import { structuralBody } from "./support/structural.ts";
 import {
   jsonResponse,
   loadConfig,
@@ -179,8 +180,10 @@ describe("POST /v1/chat/completions (non-stream)", () => {
     );
 
     expect(response.status).toBe(502);
-    expect(await response.text()).toBe(
-      '{"error":{"message":"bad gateway \\u003chtml\\u003e","type":"server_error","code":"internal_server_error"}}',
+    expect(structuralBody(await response.text())).toEqual(
+      structuralBody(
+        '{"error":{"message":"bad gateway <html>","type":"server_error","code":"internal_server_error"}}',
+      ),
     );
   });
 
@@ -485,8 +488,10 @@ describe("POST /v1/completions", () => {
       stop: ["\n"],
       metadata: { via: "payload-rule" },
     });
-    expect(await response.text()).toBe(
-      '{"id":"chatcmpl-1","object":"text_completion","created":1700000000,"model":"upstream-model","choices":[{"finish_reason":"stop","index":0,"text":"hello"}],"usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7}}',
+    expect(structuralBody(await response.text())).toEqual(
+      structuralBody(
+        '{"id":"chatcmpl-1","object":"text_completion","created":1700000000,"model":"upstream-model","choices":[{"finish_reason":"stop","index":0,"text":"hello"}],"usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7}}',
+      ),
     );
   });
 
@@ -509,10 +514,12 @@ describe("POST /v1/completions", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(await response.text()).toBe(
-      'data: {"id":"chatcmpl-1","object":"text_completion","created":1700000000,"model":"upstream-model","choices":[{"finish_reason":"","index":0,"text":"Hi"}]}\n\n' +
-        'data: {"id":"chatcmpl-1","object":"text_completion","created":1700000000,"model":"upstream-model","choices":[{"finish_reason":"stop","index":0,"text":""}]}\n\n' +
-        "data: [DONE]\n\n",
+    expect(structuralBody(await response.text())).toEqual(
+      structuralBody(
+        'data: {"id":"chatcmpl-1","object":"text_completion","created":1700000000,"model":"upstream-model","choices":[{"finish_reason":"","index":0,"text":"Hi"}]}\n\n' +
+          'data: {"id":"chatcmpl-1","object":"text_completion","created":1700000000,"model":"upstream-model","choices":[{"finish_reason":"stop","index":0,"text":""}]}\n\n' +
+          "data: [DONE]\n\n",
+      ),
     );
   });
 });

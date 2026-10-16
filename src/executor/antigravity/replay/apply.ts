@@ -7,6 +7,7 @@
  * splice path that is an optimisation of the sequential one ("retain the exact legacy behavior"); only the sequential
  * semantics are ported (payloads are mutated in place, the index is rebuilt after each applied item).
  */
+import { stableStringify } from "../../../http/json-text.ts";
 import {
   asInt,
   asString,
@@ -29,7 +30,6 @@ import {
   sanitizedFunctionNameMap,
 } from "../../../translator/common/tool-names.ts";
 import {
-  canonicalJson,
   hasNativeThoughtSignature,
   isModelRole,
   type IndexedPart,
@@ -170,7 +170,7 @@ const functionCallMatchesItem = (
 
   if (current === undefined || native === undefined) return false;
 
-  if (canonicalJson(current) === canonicalJson(native)) return true;
+  if (stableStringify(current) === stableStringify(native)) return true;
   const schema = schemas.get(name);
 
   if (schema === undefined) return false;
@@ -425,9 +425,14 @@ export const itemIsEligible = (index: RequestIndex, item: Json, schemas: ToolSch
         const currentId = asString(get(location.functionCall, "id")).trim();
         const nativeId = asString(get(item, "call_id")).trim();
 
+        const currentArgs = get(location.functionCall, "args");
+        const nativeArgs = get(item, "args");
+
         const needsNativeRestore =
           currentId !== nativeId ||
-          canonicalJson(get(location.functionCall, "args")) !== canonicalJson(get(item, "args"));
+          (currentArgs === undefined || nativeArgs === undefined
+            ? currentArgs !== nativeArgs
+            : stableStringify(currentArgs) !== stableStringify(nativeArgs));
 
         return (
           needsNativeRestore ||

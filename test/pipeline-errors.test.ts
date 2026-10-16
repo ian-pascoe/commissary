@@ -11,7 +11,7 @@ import {
   responsesStreamFailedChunk,
 } from "../src/http/errors.ts";
 import { filterUpstreamHeaders, mergeUpstreamHeaders } from "../src/http/headers.ts";
-import { compactJson, goMarshalSorted } from "../src/http/json-text.ts";
+import { compactJson, stableStringify } from "../src/http/json-text.ts";
 
 describe("openAIErrorBody", () => {
   it.each([
@@ -41,9 +41,9 @@ describe("openAIErrorBody", () => {
     );
   });
 
-  it("HTML-escapes like Go json.Marshal", () => {
+  it("does not HTML-escape messages", () => {
     expect(openAIErrorBody(400, "<a & b>")).toBe(
-      '{"error":{"message":"\\u003ca \\u0026 b\\u003e","type":"invalid_request_error"}}',
+      '{"error":{"message":"<a & b>","type":"invalid_request_error"}}',
     );
   });
 
@@ -106,21 +106,21 @@ describe("claudeErrorBody", () => {
 });
 
 describe("Responses stream error chunks", () => {
-  it("builds error events with sorted detail keys", () => {
+  it("builds error events with detail keys in build order", () => {
     expect(responsesStreamErrorChunk(429, "slow down", 3)).toBe(
-      '{"type":"error","error":{"code":"rate_limit_exceeded","message":"slow down","param":null,"type":"invalid_request_error"},"sequence_number":3}',
+      '{"type":"error","error":{"type":"invalid_request_error","code":"rate_limit_exceeded","message":"slow down","param":null},"sequence_number":3}',
     );
   });
 
   it("reuses upstream error objects and sequence numbers", () => {
     expect(
       responsesStreamErrorChunk(500, '{"error":{"message":"x","code":"c"},"sequence_number":9}', 1),
-    ).toBe('{"type":"error","error":{"code":"c","message":"x"},"sequence_number":9}');
+    ).toBe('{"type":"error","error":{"message":"x","code":"c"},"sequence_number":9}');
   });
 
   it("builds response.failed events", () => {
     expect(responsesStreamFailedChunk(502, "gone", 0)).toBe(
-      '{"type":"response.failed","sequence_number":0,"response":{"status":"failed","error":{"code":"internal_server_error","message":"gone","param":null,"type":"server_error"}}}',
+      '{"type":"response.failed","sequence_number":0,"response":{"status":"failed","error":{"type":"server_error","code":"internal_server_error","message":"gone","param":null}}}',
     );
   });
 });
@@ -130,10 +130,17 @@ describe("json-text helpers", () => {
     expect(compactJson('{ "a" : "x  y\\" z" ,\n "b":[1, 2] }')).toBe('{"a":"x  y\\" z","b":[1,2]}');
   });
 
-  it("sorts map keys recursively", () => {
-    expect(goMarshalSorted({ b: 1, a: { d: [{ z: 1, y: 2 }], c: "<" } })).toBe(
-      '{"a":{"c":"\\u003c","d":[{"y":2,"z":1}]},"b":1}',
+  it("stableStringify sorts keys recursively with plain JSON.stringify escaping", () => {
+    expect(stableStringify({ b: 1, a: { d: [{ z: 1, y: 2 }], c: "<&>\u2028" } })).toBe(
+      '{"a":{"c":"<&>\u2028","d":[{"y":2,"z":1}]},"b":1}',
     );
+  });
+
+  it("stableStringify is independent of key insertion order", () => {
+    expect(stableStringify({ a: [{ y: 1, x: null }], b: "s" })).toBe(
+      stableStringify({ b: "s", a: [{ x: null, y: 1 }] }),
+    );
+    expect(stableStringify(JSON.parse('{"__proto__":1,"a":2}'))).toBe('{"__proto__":1,"a":2}');
   });
 });
 

@@ -3,12 +3,7 @@ import {
   buildCodexClientModels,
   supportsApplyPatchProviders,
 } from "../src/registry/codex-client-models.ts";
-import {
-  resolveClaudeModelIdPrefix,
-  ensureClaudeModelIdPrefix,
-  goCompactJson,
-  goJson,
-} from "../src/registry/listings.ts";
+import { resolveClaudeModelIdPrefix, ensureClaudeModelIdPrefix } from "../src/registry/listings.ts";
 import { asString, type JsonObject } from "../src/json/index.ts";
 import {
   respondGeminiDetail,
@@ -20,6 +15,7 @@ import {
   fixture,
   fixtureNow,
   type FixtureRequest,
+  goCompactBytes,
   scenarioIndex,
   sortedBody,
 } from "./support/registry.ts";
@@ -72,13 +68,8 @@ describe("listing parity with the Go handlers", () => {
           expect(reply.status).toBe(request.status);
           const sort = UNORDERED.get(request.name);
 
-          if (sort === undefined) {
-            expect(reply.body).toBe(request.body);
-          } else {
-            expect(goJson(sortedBody(reply.body, sort))).toBe(
-              goJson(sortedBody(request.body, sort)),
-            );
-          }
+          // Structural: key order and HTML escaping are not part of the contract.
+          expect(sortedBody(reply.body, sort ?? {})).toEqual(sortedBody(request.body, sort ?? {}));
         },
       );
     });
@@ -154,7 +145,7 @@ describe("Codex client catalog (client_version) parity with Go", () => {
         const actualHashes: Record<string, string> = {};
 
         for (const entry of entries)
-          actualHashes[entry.slug as string] = await sha256Hex(goCompactJson(entry));
+          actualHashes[entry.slug as string] = await sha256Hex(goCompactBytes(entry));
 
         // Readable first: per-model summaries where the fixture keeps them.
         if ((result.models ?? []).length > 0) {
@@ -181,8 +172,8 @@ describe("Codex client catalog (client_version) parity with Go", () => {
 
         // Ties follow Go's map iteration order; scenarios without ties must match the whole body.
         if (scenario.name !== "catalog-all") {
-          expect(await sha256Hex(goCompactJson(payload))).toBe(result.sha256);
-          expect(new TextEncoder().encode(goCompactJson(payload)).length).toBe(result.size);
+          expect(await sha256Hex(goCompactBytes(payload))).toBe(result.sha256);
+          expect(new TextEncoder().encode(goCompactBytes(payload)).length).toBe(result.size);
         }
       });
     });

@@ -8,7 +8,7 @@
  *
  * Gemini and Interactions handlers reuse the OpenAI-shaped body.
  */
-import { compactJson, goMarshal, goMarshalSorted, goSprint, isValidJson } from "./json-text.ts";
+import { compactJson, isValidJson } from "./json-text.ts";
 import { isJsonObject, type Json, type JsonObject } from "../json/index.ts";
 import { statusText } from "./status.ts";
 
@@ -84,7 +84,7 @@ export const openAIErrorBody = (
       message = direct ?? nested ?? message;
     }
 
-    return goMarshal({
+    return JSON.stringify({
       error: {
         message,
         type: "authentication_error",
@@ -98,12 +98,16 @@ export const openAIErrorBody = (
 
   const { type, code } = openAIErrorClass(effectiveStatus);
 
-  return goMarshal({ error: { message: errText, type, ...(code !== undefined ? { code } : {}) } });
+  return JSON.stringify({
+    error: { message: errText, type, ...(code !== undefined ? { code } : {}) },
+  });
 };
 
 /** Handler-level body read/parse failure: `400 {"error":{"message":"Invalid request: <err>","type":"invalid_request_error"}}`. */
 export const invalidRequestBody = (message: string): string =>
-  goMarshal({ error: { message: `Invalid request: ${message}`, type: "invalid_request_error" } });
+  JSON.stringify({
+    error: { message: `Invalid request: ${message}`, type: "invalid_request_error" },
+  });
 
 // --- Claude -------------------------------------------------------------------------------------------------------
 
@@ -195,7 +199,7 @@ export const claudeErrorBody = (status: number, text: string): string => {
   const errText = text.trim() === "" ? statusText(effectiveStatus) : text;
   const detail = claudeErrorDetailFromText(effectiveStatus, errText);
 
-  return goMarshal({
+  return JSON.stringify({
     type: "error",
     error: {
       type: detail.type,
@@ -259,7 +263,10 @@ const responsesErrorDetail = (
     const c = payload["code"];
 
     if (c !== undefined && c !== null)
-      code = typeof c === "string" && c.trim() !== "" ? c.trim() : goSprint(c).trim();
+      code =
+        typeof c === "string" && c.trim() !== ""
+          ? c.trim()
+          : (typeof c === "object" ? JSON.stringify(c) : String(c)).trim();
   }
 
   const detail: JsonObject = { type: responsesErrorClass(status).type, code, message, param: null };
@@ -296,7 +303,7 @@ export const responsesStreamErrorChunk = (
 ): string => {
   const { sequence, error } = responsesErrorParts(status, errText, sequenceNumber);
 
-  return `{"type":"error","error":${goMarshalSorted(error)},"sequence_number":${sequence}}`;
+  return `{"type":"error","error":${JSON.stringify(error)},"sequence_number":${sequence}}`;
 };
 
 /** `BuildOpenAIResponsesStreamFailedChunk`: `{"type":"response.failed","sequence_number":N,"response":{...}}`. */
@@ -307,5 +314,5 @@ export const responsesStreamFailedChunk = (
 ): string => {
   const { sequence, error } = responsesErrorParts(status, errText, sequenceNumber);
 
-  return `{"type":"response.failed","sequence_number":${sequence},"response":{"status":"failed","error":${goMarshalSorted(error)}}}`;
+  return `{"type":"response.failed","sequence_number":${sequence},"response":{"status":"failed","error":${JSON.stringify(error)}}}`;
 };

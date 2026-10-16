@@ -5,7 +5,6 @@
  * ...NonStream, ClaudeTokenCount) and codex_claude_response_web_search.go. The per-request state mirrors
  * `ConvertCodexResponseToClaudeParams`. One call returns the concatenation of all SSE events for one upstream line.
  */
-import { goMarshal } from "../../../http/json-text.ts";
 import {
   asInt,
   asString,
@@ -546,7 +545,7 @@ const appendWebSearchServerToolUse = (
     out += event("content_block_delta", {
       type: "content_block_delta",
       index: p.blockIndex,
-      delta: { type: "input_json_delta", partial_json: goMarshal({ query }) },
+      delta: { type: "input_json_delta", partial_json: JSON.stringify({ query }) },
     });
   }
 
