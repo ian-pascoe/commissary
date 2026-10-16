@@ -56,7 +56,7 @@ Commissary Cloud's hostname for signing in, under the app host (`auth.<app host>
 _Avoid_: login domain, SSO host
 
 **App host**:
-The hostname of the control panel, the sign-in _page_ and the management API; with no API host its hostname still serves the client API, through the API Worker.
+The hostname of the control panel, the sign-in _page_ and the management API; with no API host it still serves the client API, through the API Worker.
 _Avoid_: dashboard domain, panel host
 
 **Personal org**:
