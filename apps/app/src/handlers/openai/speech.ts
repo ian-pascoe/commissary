@@ -9,8 +9,8 @@
 import { Effect, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { routeServices } from "@commissary/core";
-import { invalidRequestBody } from "../../http/errors.ts";
-import { mergeUpstreamHeaders } from "../../http/headers.ts";
+import { invalidRequestBody } from "../../models/http/errors.ts";
+import { mergeUpstreamHeaders } from "../../models/http/headers.ts";
 import { asString, get, isJsonObject, type Json, type JsonObject } from "@commissary/json";
 import { executeNonStream, type ExecutionInput } from "../execute.ts";
 import { currentConfig, type ClientApiServices, readRequestBody } from "../request.ts";

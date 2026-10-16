@@ -3,7 +3,7 @@ import { it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
 import { HttpRouter, HttpServerResponse } from "effect/http";
 import { expect } from "vitest";
-import { CorsLayer } from "../src/http/cors.ts";
+import { CorsLayer } from "../src/api/cors.ts";
 import { WorkerExecutionContext } from "@commissary/core";
 import { AuthConfig } from "@commissary/auth";
 import { ModelsEnv } from "../src/models/env.ts";

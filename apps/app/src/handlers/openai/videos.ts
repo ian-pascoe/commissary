@@ -20,8 +20,8 @@ import {
   type ExecutionError,
   ExecutionError as ExecutionErrorClass,
 } from "../../executor/errors.ts";
-import { invalidRequestBody } from "../../http/errors.ts";
-import { mergeUpstreamHeaders } from "../../http/headers.ts";
+import { invalidRequestBody } from "../../models/http/errors.ts";
+import { mergeUpstreamHeaders } from "../../models/http/headers.ts";
 import {
   asString,
   get,

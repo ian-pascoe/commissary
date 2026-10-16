@@ -1,22 +1,21 @@
 /**
  * Deleting an org's data (ADR 0027), new in the Workers port: an org that is deleted leaves nothing behind. One call
- * removes, in this order:
+ * removes, in this order (#134 "Org deletion and crons"):
  *
- * 1. its usage records in D1 (`deleteOrgUsage`),
+ * 1. what each area keeps outside the ControlPlane, through the area steps it is given (Models: its usage records in D1
+ *    and its keys in the `CACHE` KV namespace, `models/org-deletion.ts`),
  * 2. the `SessionState` instances it registered (`@commissary/state`'s session instances), each wiped,
- * 3. its keys in the `CACHE` KV namespace (the names `org.<org>.…` of `orgScopedName`),
- * 4. its ControlPlane's whole storage: credentials, config entries, members, API keys, private data, OAuth logins and
+ * 3. its ControlPlane's whole storage: credentials, config entries, members, API keys, private data, OAuth logins and
  *    the refresh alarm (`ControlPlane.wipeOrg`),
- * 5. and last its Platform registry entry (the org, its people's index and its service tokens), which frees the slug.
+ * 4. and last its Platform registry entry (the org, its people's index and its service tokens), which frees the slug.
  *
  * The registry entry goes last so a deletion that stops half way can be run again: the org is still listed, and every
  * earlier step finds less to do. Each call may use at most {@link DELETION_BUDGET} subrequests (a Worker invocation has
- * a limit); a big org answers `incomplete` and the caller runs the deletion again. `global` is never deleted.
+ * a limit), shared by all the steps; a big org answers `incomplete` and the caller runs the deletion again. `global` is
+ * never deleted.
  */
-import type { ModelsBindings } from "../models/env.ts";
 import { controlPlaneOf, platformOf, type StateBindings } from "@commissary/state";
-import { deleteOrgUsage } from "../usage/d1.ts";
-import { GLOBAL_ORG, type OrgId } from "@commissary/core";
+import { GLOBAL_ORG, type OrgDeletionStep, type OrgId } from "@commissary/core";
 
 /** The most Durable Object, KV and D1 calls one deletion makes before it asks to be run again. */
 export const DELETION_BUDGET = 400;
@@ -24,12 +23,13 @@ export const DELETION_BUDGET = 400;
 /** `SessionState` instances wiped between two reads of the registered ones. */
 const INSTANCES_PER_READ = 50;
 
-/** Keys read and deleted per page: each key is one KV call. */
-const KV_PAGE = 100;
-
 export type OrgDeletion =
   | { readonly state: "deleted" }
-  | { readonly state: "incomplete"; readonly step: "usage" | "sessions" | "cache" }
+  | {
+      readonly state: "incomplete";
+      /** The step that stopped: an area step's part (Models: `usage`, `cache`), or `sessions`. */
+      readonly step: string;
+    }
   | {
       readonly state: "refused";
       readonly reason: "global" | "not_found";
@@ -44,12 +44,12 @@ export interface DeletionOptions {
 }
 
 /**
- * Deletes every trace of `org`; see the module comment. Never rejects for an org that is already half deleted. `models`
- * holds the Models data (usage records, `CACHE` keys), `state` the Durable Objects.
+ * Deletes every trace of `org`; see the module comment. Never rejects for an org that is already half deleted. `state`
+ * holds the Durable Objects, `areas` the steps of the areas the Worker mounts, run in order.
  */
 export const deleteOrg = async (
   state: StateBindings,
-  models: Pick<ModelsBindings, "USAGE" | "CACHE">,
+  areas: ReadonlyArray<OrgDeletionStep>,
   org: OrgId,
   options: DeletionOptions,
 ): Promise<OrgDeletion> => {
@@ -59,11 +59,13 @@ export const deleteOrg = async (
   let budget = options.budget ?? DELETION_BUDGET;
   const plane = controlPlaneOf(state, org);
 
-  // 1. Usage: each batch is one D1 call; the helper bounds its own loop.
-  const usage = await deleteOrgUsage(models.USAGE, org);
-  budget -= usage.calls;
+  // 1. The areas' data.
+  for (const step of areas) {
+    const progress = await step(org, budget);
+    budget -= progress.calls;
 
-  if (!usage.complete) return { state: "incomplete", step: "usage" };
+    if (!progress.complete) return { state: "incomplete", step: progress.step };
+  }
 
   // 2. The SessionState instances the org registered.
   for (;;) {
@@ -79,24 +81,10 @@ export const deleteOrg = async (
     budget -= 1;
   }
 
-  // 3. KV: keys of the org, a page at a time.
-  const prefix = `org.${org}.`;
-
-  for (;;) {
-    if (budget < KV_PAGE + 2) return { state: "incomplete", step: "cache" };
-    const page = await models.CACHE.list({ prefix, limit: KV_PAGE });
-    budget -= 1;
-
-    await Promise.all(page.keys.map(async (key) => await models.CACHE.delete(key.name)));
-    budget -= page.keys.length;
-
-    if (page.list_complete) break;
-  }
-
-  // 4. The ControlPlane's storage.
+  // 3. The ControlPlane's storage.
   await plane.wipeOrg();
 
-  // 5. The registry entry, last.
+  // 4. The registry entry, last.
   const removed = await platformOf(state).deleteOrg(org);
 
   if (!removed.ok && removed.error !== "not_found")

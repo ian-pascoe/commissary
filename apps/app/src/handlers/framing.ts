@@ -11,9 +11,9 @@
  * `responses/framer.ts`.
  */
 import { ExecutionError } from "../executor/errors.ts";
-import { claudeErrorBody, openAIErrorBody } from "../http/errors.ts";
+import { claudeErrorBody, openAIErrorBody } from "../models/http/errors.ts";
 import { SSE_KEEP_ALIVE, sseData, sseEvent } from "@commissary/translation/sse";
-import { statusText } from "../http/status.ts";
+import { statusText } from "../models/http/status.ts";
 import { get, isJsonArray, tryParseJson } from "@commissary/json";
 
 export interface StreamFramer {

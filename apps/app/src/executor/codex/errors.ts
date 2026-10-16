@@ -16,7 +16,7 @@ import {
   set,
   tryParseJson,
 } from "@commissary/json";
-import { statusText } from "../../http/status.ts";
+import { statusText } from "../../models/http/status.ts";
 import { ExecutionError } from "../errors.ts";
 
 export const CODEX_INCOMPLETE_STREAM_MESSAGE =

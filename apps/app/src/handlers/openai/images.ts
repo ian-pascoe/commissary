@@ -17,7 +17,7 @@ import {
   type ExecutionError as ExecutionErrorType,
 } from "../../executor/errors.ts";
 import type { Config } from "../../config/schema.ts";
-import { invalidRequestBody, openAIErrorBody } from "../../http/errors.ts";
+import { invalidRequestBody, openAIErrorBody } from "../../models/http/errors.ts";
 import { SSE_KEEP_ALIVE, sseEvent } from "@commissary/translation/sse";
 import {
   asInt,

@@ -23,7 +23,7 @@ import { DEV_SECRETS_KEY, secretsKeyResourceId } from "./packages/state/src/secr
  */
 export const COMPATIBILITY = { date: "2026-08-01", flags: ["nodejs_compat"] };
 
-/** Model catalog refresh, credential refresh sweep and usage retention (apps/app/src/scheduled.ts). */
+/** Model catalog refresh, credential refresh sweep and usage retention (apps/app/src/api/scheduled.ts). */
 export const CRONS = ["0 */3 * * *"];
 
 // Remote state in the account (`Cloudflare.state()`, shared by every machine and CI) unless ALCHEMY_STATE=local,

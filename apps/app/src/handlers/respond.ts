@@ -10,14 +10,14 @@
 import { Data, Duration, Effect, Fiber, Pull, Result, type Scope, Stream } from "effect";
 import { HttpServerResponse } from "effect/http";
 import type { ExecutionError } from "../executor/errors.ts";
-import { claudeErrorBody, openAIErrorBody } from "../http/errors.ts";
+import { claudeErrorBody, openAIErrorBody } from "../models/http/errors.ts";
 import {
   filterUpstreamHeaders,
   isCPAReservedResponseHeader,
   mergeUpstreamHeaders,
-} from "../http/headers.ts";
+} from "../models/http/headers.ts";
 import { isValidJson } from "@commissary/json";
-import { statusText } from "../http/status.ts";
+import { statusText } from "../models/http/status.ts";
 import type { StreamOutput } from "./execute.ts";
 import type { StreamFramer } from "./framing.ts";
 

@@ -3,8 +3,8 @@
  *
  * Go source: internal/misc/antigravity_version.go. Cloud Code rejects newer models for clients older than 2.9.0, so the
  * fallback must stay >= 2.9.0. The latest version comes from the Hub updater manifest: the cron task
- * (`scheduled.ts`) writes it to KV `CACHE` (`antigravity:version`), executors read it through a short per-isolate cache
- * and fall back to `2.9.1` when the entry is missing or older than the 6 h TTL.
+ * (`models/scheduled-tasks.ts`) writes it to KV `CACHE` (`antigravity:version`), executors read it through a short
+ * per-isolate cache and fall back to `2.9.1` when the entry is missing or older than the 6 h TTL.
  */
 import { Effect } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";

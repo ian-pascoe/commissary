@@ -1,0 +1,127 @@
+/**
+ * Cron runner (`scheduled` handler), the API Worker's (#134 "Org deletion and crons"). The Worker has a single
+ * three-hourly trigger (`CRONS` in alchemy.run.ts); the runner runs its own task and the cron tasks of each area it
+ * mounts, listed explicitly in {@link scheduledTasks}.
+ *
+ * Jobs run one after another and are isolated: a failing job is logged and does not stop the others. A job is either
+ * deployment-wide (`scope: "deployment"`: the shared model catalog, client versions, usage retention) and runs once, or
+ * org-scoped (`scope: "org"`: credentials, quotas, entitlements) and runs once for every org with `CurrentOrg` set, so
+ * it only ever reaches that org's ControlPlane (ADR 0021). One org's failure does not stop the next org. The orgs
+ * are the ones the Platform registry lists ({@link registeredOrgs}).
+ */
+import { Clock, Effect, Layer } from "effect";
+import { FetchHttpClient } from "effect/http";
+import {
+  causeSummary,
+  WorkerExecutionContext,
+  CurrentOrg,
+  GLOBAL_ORG,
+  type OrgId,
+  type ScheduledTask,
+} from "@commissary/core";
+import { currentControlPlane, platform, type StateEnv } from "@commissary/state";
+import {
+  scheduledTasks as modelsTasks,
+  ScheduledTaskLayer as ModelsTaskLayer,
+} from "../models/scheduled-tasks.ts";
+import { envContext, type EnvServices } from "../worker-env.ts";
+
+/** Services available to scheduled jobs (provided by {@link ScheduledLayer} and the invocation's bindings). */
+export type ScheduledServices =
+  | Layer.Success<typeof ScheduledLayer>
+  | EnvServices
+  | WorkerExecutionContext;
+
+/**
+ * Expired API keys are deleted, not kept marked (ADR 0027): a listing or issue deletes them too, this covers an org
+ * nobody opens. API keys are org-wide (`@commissary/state`), not an area's.
+ */
+const apiKeyExpiry: ScheduledTask<StateEnv> = {
+  name: "api-key-expiry",
+  scope: "org",
+  run: Effect.gen(function* () {
+    const plane = yield* currentControlPlane;
+    const now = yield* Clock.currentTimeMillis;
+
+    return yield* Effect.promise(() => plane.purgeExpiredApiKeys(now));
+  }),
+};
+
+/** Every job of a cron invocation, in order: the runner's own, then each area's. */
+export const scheduledTasks: ReadonlyArray<ScheduledTask<ScheduledServices>> = [
+  apiKeyExpiry,
+  ...modelsTasks,
+];
+
+/** The services the areas' tasks read besides the bindings, built once per cron invocation. */
+export const ScheduledLayer = Layer.mergeAll(FetchHttpClient.layer, ModelsTaskLayer);
+
+/** Logs a failed job instead of failing the invocation; a summary only: full causes carry stacks and upstream URLs. */
+const isolated = <R>(
+  label: string,
+  run: Effect.Effect<unknown, Error, R>,
+): Effect.Effect<void, never, R> =>
+  run.pipe(
+    Effect.asVoid,
+    Effect.catchCause((cause) =>
+      Effect.logError(`scheduled task ${label} failed: ${causeSummary(cause)}`),
+    ),
+  );
+
+/**
+ * The ids of the orgs the Platform registry lists, in its order. When the registry cannot be reached the jobs still run
+ * for `global`, the org every deployment has had since before orgs existed, so one failing object does not stop the
+ * deployment's maintenance; the failure is logged.
+ */
+export const registeredOrgs: Effect.Effect<ReadonlyArray<OrgId>, never, StateEnv> = platform(
+  "listOrgs",
+  (stub) => stub.listOrgs(),
+).pipe(
+  Effect.map((orgs) => orgs.map((org) => org.id)),
+  Effect.catchTag("PlatformUnavailable", (error) =>
+    Effect.logError(
+      `scheduled tasks: ${error.message}; running the org jobs for ${GLOBAL_ORG} only`,
+    ).pipe(Effect.as([GLOBAL_ORG])),
+  ),
+);
+
+/**
+ * Runs all jobs for one cron invocation: deployment jobs once, org jobs once per org of `orgs` (the registry's orgs
+ * unless given), in task order.
+ */
+export const runScheduledTasks = (
+  tasks: ReadonlyArray<ScheduledTask<ScheduledServices>>,
+  env: Env,
+  ctx: ExecutionContext,
+  orgs?: ReadonlyArray<OrgId>,
+): Promise<void> =>
+  Effect.gen(function* () {
+    const targets = orgs ?? (yield* registeredOrgs);
+
+    yield* Effect.forEach(
+      tasks,
+      (task) =>
+        task.scope === "deployment"
+          ? isolated(task.name, task.run)
+          : Effect.forEach(
+              targets,
+              (org) =>
+                isolated(`${task.name} (org ${org})`, task.run).pipe(
+                  Effect.provideService(CurrentOrg, org),
+                ),
+              { discard: true },
+            ),
+      { discard: true },
+    );
+  }).pipe(
+    Effect.provide(ScheduledLayer),
+    Effect.provideContext(envContext(env)),
+    Effect.provideService(WorkerExecutionContext, ctx),
+    Effect.runPromise,
+  );
+
+export const dispatchScheduled = (
+  _controller: ScheduledController,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<void> => runScheduledTasks(scheduledTasks, env, ctx);

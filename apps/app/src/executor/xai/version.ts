@@ -2,8 +2,8 @@
  * Grok CLI client version used for the chat-proxy identity headers.
  *
  * Go source: internal/runtime/executor/helps/xai_version.go. The Go updater polls npm every 3 hours into process
- * memory; on Workers the cron task ({@link refreshXaiClientVersion}, registered in `src/scheduled.ts`) stores the
- * accepted version in KV `CACHE` and request handling reads it back ({@link currentXaiClientVersion}, cached per
+ * memory; on Workers the cron task ({@link refreshXaiClientVersion}, listed in `src/models/scheduled-tasks.ts`) stores
+ * the accepted version in KV `CACHE` and request handling reads it back ({@link currentXaiClientVersion}, cached per
  * isolate for a minute) with the compiled-in fallback when KV has nothing.
  */
 import { Clock, Effect, Option } from "effect";

@@ -1,6 +1,6 @@
 import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { CORS_EXPOSED_RESPONSE_HEADERS } from "../src/http/cors.ts";
+import { CORS_EXPOSED_RESPONSE_HEADERS } from "../src/api/cors.ts";
 
 const fetchWorker = (path: string, init?: RequestInit) =>
   exports.default.fetch(new Request(`https://commissary.test${path}`, init));

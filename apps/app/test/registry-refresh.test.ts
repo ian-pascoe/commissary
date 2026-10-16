@@ -11,7 +11,7 @@ import {
   refreshCatalogs,
   resolveSource,
 } from "../src/registry/refresh.ts";
-import { scheduledTasks } from "../src/scheduled.ts";
+import { scheduledTasks } from "../src/api/scheduled.ts";
 import { documentText, mdModel } from "./support/models-dev.ts";
 import {
   FakeKv,

@@ -6,7 +6,7 @@ import { ClientApiLayer } from "../handlers/layer.ts";
 import { HostedRoutes } from "../hosted/routes.ts";
 import { ManagementRoutesLive } from "../management/routes.ts";
 import { WorkersLoggerLayer } from "@commissary/core";
-import { TraceLayer } from "../observability/trace.ts";
+import { TraceLayer } from "../models/observability/trace.ts";
 import { OAuthCallbackRoutes } from "../oauth/public-routes.ts";
 import { ModelRoutesLive } from "../registry/live.ts";
 import { RootRoutes } from "./routes.ts";
@@ -22,10 +22,10 @@ export const AppLayer = Layer.mergeAll(
   // Sign-in of Commissary Cloud (ADR 0026); unknown paths on a self-hosted one.
   HostedRoutes,
   AccessLayer,
-  ClientApiLayer,
+  withAccess(ClientApiLayer),
   withAccess(ModelRoutesLive),
   withAccess(ManagementRoutesLive),
-  // Request trace id header and structured request logs (src/observability).
+  // Request trace id header and structured request logs (src/models/observability).
   TraceLayer,
   WorkersLoggerLayer,
 );

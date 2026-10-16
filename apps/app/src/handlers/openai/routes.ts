@@ -12,7 +12,7 @@ import { Effect, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { routeServices } from "@commissary/core";
 import type { ExecutionError } from "../../executor/errors.ts";
-import { invalidRequestBody } from "../../http/errors.ts";
+import { invalidRequestBody } from "../../models/http/errors.ts";
 import { asBool, asString, get, isJsonObject, type Json } from "@commissary/json";
 import { builtinTranslators } from "@commissary/translation";
 import { Formats } from "@commissary/translation/formats";

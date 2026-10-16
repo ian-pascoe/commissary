@@ -3,14 +3,14 @@
 import { describe, expect, it } from "vitest";
 import { ExecutionError } from "../src/executor/errors.ts";
 import { enrichSelectionError } from "../src/handlers/execute.ts";
-import { decodeRequestBody, RequestBodyDecodeError } from "../src/http/body.ts";
+import { decodeRequestBody, RequestBodyDecodeError } from "../src/models/http/body.ts";
 import {
   claudeErrorBody,
   openAIErrorBody,
   responsesStreamErrorChunk,
   responsesStreamFailedChunk,
-} from "../src/http/errors.ts";
-import { filterUpstreamHeaders, mergeUpstreamHeaders } from "../src/http/headers.ts";
+} from "../src/models/http/errors.ts";
+import { filterUpstreamHeaders, mergeUpstreamHeaders } from "../src/models/http/headers.ts";
 import { compactJson, stableStringify } from "@commissary/json";
 
 describe("openAIErrorBody", () => {

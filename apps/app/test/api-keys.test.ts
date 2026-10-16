@@ -19,7 +19,7 @@ import {
   parseApiKey,
   VERIFIED_KEY_TTL_MS,
 } from "@commissary/auth";
-import { scheduledTasks } from "../src/scheduled.ts";
+import { scheduledTasks } from "../src/api/scheduled.ts";
 import { type CurrentOrg, GLOBAL_ORG, OrgId } from "@commissary/core";
 import { controlPlaneOf, type ControlPlaneStub, MAX_KEYS_PER_MEMBER } from "@commissary/state";
 import {

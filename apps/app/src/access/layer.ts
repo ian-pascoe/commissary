@@ -1,5 +1,5 @@
 import { Layer } from "effect";
-import { CorsLayer } from "../http/cors.ts";
+import { CorsLayer } from "../api/cors.ts";
 import { AccessJwks } from "@commissary/auth";
 import { AccessGate } from "./middleware.ts";
 

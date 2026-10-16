@@ -69,12 +69,13 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
 (`pnpm-workspace.yaml`): Workers and the panel in `apps/`, libraries in `packages/`, under the scope `@commissary/*`.
 
 - `apps/app` (`@commissary/app`): the one Worker. `src/access` (the gate middleware over `@commissary/auth`),
-  `src/http` (router, CORS),
+  `src/http` (router, hosts), `src/api` (what moves to the API Worker: CORS and the cron runner),
   `src/handlers` (inbound protocols and the shared execution pipeline), `src/executor` (one directory per provider),
   `src/control-plane.ts` (the ControlPlane Durable Object: `@commissary/state`'s org-wide base composed with the Models
-  part in `src/models`), `src/credentials` (credential pool, selection, token refresh), `src/registry` (model catalogs and `/models`),
-  `src/management` and `src/oauth` (management API, panel serving, provider logins), `src/usage` and
-  `src/observability` (D1 usage records, trace ids); `test/` (workerd tests and golden fixtures).
+  part in `src/models`; `src/models` also holds the client-API HTTP helpers, the request trace, Models' cron tasks and
+  its org-deletion step), `src/credentials` (credential pool, selection, token refresh), `src/registry` (model catalogs and `/models`),
+  `src/management` and `src/oauth` (management API, panel serving, provider logins), `src/usage` (D1 usage records),
+  `src/platform` (org deletion); `test/` (workerd tests and golden fixtures).
 - `apps/web` (`@commissary/web`): the control panel (below).
 - `packages/auth` (`@commissary/auth`): request-side authentication (#132). The principal and `AccessPrincipal`, roles,
   Access JWT verification, the cross-site checks, API and management keys (their text and the per-isolate caches of
@@ -91,7 +92,8 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
   (`sha256Hex`), `src/logging.ts` (`redactHeaders`), `src/observability/` (`causeSummary`, the Workers Logs logger),
   `src/http/management.ts` (the management replies and the text, query and `If-Match` readers, `handled`),
   `src/http/route-services.ts` and `src/execution-context.ts` (`WorkerExecutionContext` over a structural
-  `InvocationContext`, so core needs no Workers types, and `holdInvocation`), all behind the one export `.`. It may
+  `InvocationContext`, so core needs no Workers types, and `holdInvocation`), `src/area.ts` (what an area hands the
+  Workers: `ScheduledTask`, `OrgDeletionStep`), all behind the one export `.`. It may
   import `effect` and `node:crypto` only: no bindings, no Workers APIs, no other workspace package. The per-request
   context (`requestContext`, `src/worker-env.ts`) stays in the Worker, which provides its env views, and so do
   `bodyJson`/`bodyObject` (they return `@commissary/json` values); the ControlPlane stubs (`controlPlaneOf`,

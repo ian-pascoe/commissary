@@ -12,7 +12,7 @@ import type { CredentialRefresher } from "../executor/helps/credential-refresh.t
 import type { CredentialPicker } from "../executor/picker.ts";
 import type { ExecutorRegistry } from "../executor/registry.ts";
 import type { Thinking } from "../executor/thinking.ts";
-import { decodeRequestBody, RequestBodyTooLargeError } from "../http/body.ts";
+import { decodeRequestBody, RequestBodyTooLargeError } from "../models/http/body.ts";
 import { type Json, tryParseJson } from "@commissary/json";
 import type { UsageSink } from "../usage/sink.ts";
 import type { ModelCapabilities } from "./model-capabilities.ts";

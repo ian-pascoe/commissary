@@ -1,10 +1,11 @@
 import { env } from "cloudflare:workers";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
-import { CurrentOrg, GLOBAL_ORG, OrgId } from "@commissary/core";
+import { CurrentOrg, GLOBAL_ORG, OrgId, type ScheduledTask } from "@commissary/core";
 import { platformOf } from "@commissary/state";
-import { runScheduledTasks, type ScheduledTask, scheduledTasks } from "../src/scheduled.ts";
+import { runScheduledTasks, type ScheduledServices, scheduledTasks } from "../src/api/scheduled.ts";
 import { ModelsEnv } from "../src/models/env.ts";
+import { scheduledTasks as modelsTasks } from "../src/models/scheduled-tasks.ts";
 
 const ctx = {} as unknown as ExecutionContext;
 
@@ -13,10 +14,17 @@ describe("scheduled dispatch", () => {
     expect(scheduledTasks.map((task) => task.name)).toContain("model-catalog-refresh");
   });
 
+  it("runs its own task, then the Models tasks in their order", () => {
+    expect(scheduledTasks.map((task) => task.name)).toEqual([
+      "api-key-expiry",
+      ...modelsTasks.map((task) => task.name),
+    ]);
+  });
+
   it("runs every task in order, gives them the invocation's bindings and isolates failures", async () => {
     const log: string[] = [];
 
-    const tasks: ScheduledTask[] = [
+    const tasks: ScheduledTask<ScheduledServices>[] = [
       { name: "first", scope: "deployment", run: Effect.sync(() => void log.push("first")) },
       { name: "boom", scope: "deployment", run: Effect.fail(new Error("boom")) },
       { name: "defect", scope: "deployment", run: Effect.die("defect") },
@@ -39,7 +47,7 @@ describe("scheduled dispatch", () => {
     const acme = OrgId.make("acme");
     const other = OrgId.make("other");
 
-    const tasks: ScheduledTask[] = [
+    const tasks: ScheduledTask<ScheduledServices>[] = [
       { name: "shared", scope: "deployment", run: Effect.sync(() => void log.push("shared")) },
       {
         name: "per-org",
@@ -70,7 +78,7 @@ describe("scheduled dispatch", () => {
     if (!created.ok) throw new Error(created.message);
     const log: string[] = [];
 
-    const tasks: ScheduledTask[] = [
+    const tasks: ScheduledTask<ScheduledServices>[] = [
       {
         name: "per-org",
         scope: "org",
@@ -100,7 +108,7 @@ describe("scheduled dispatch", () => {
       },
     } as unknown as Env;
 
-    const tasks: ScheduledTask[] = [
+    const tasks: ScheduledTask<ScheduledServices>[] = [
       { name: "shared", scope: "deployment", run: Effect.sync(() => void log.push("shared")) },
       {
         name: "per-org",

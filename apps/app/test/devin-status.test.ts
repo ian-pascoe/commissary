@@ -7,7 +7,7 @@ import type { Credential, CredentialState } from "../src/credentials/model.ts";
 import { emptyState } from "../src/credentials/model.ts";
 import type { JsonObject } from "@commissary/json";
 import { parseUserStatus } from "../src/oauth/flows/devin-status.ts";
-import { scheduledTasks } from "../src/scheduled.ts";
+import { scheduledTasks } from "../src/api/scheduled.ts";
 import { recordingClient, type RecordedCall } from "./support/executor-run.ts";
 import fixtures from "./fixtures/devin-status.json";
 
