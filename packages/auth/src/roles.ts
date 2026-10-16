@@ -21,7 +21,7 @@ export type RouteAccess = "platform" | OrgRole;
  * One entry of the Worker's role table that an area hands it (#134 "The area package convention"): the role a
  * management route needs. `path` is the route once the org is taken out of it, lowercased (`/v9/management/spend`);
  * `subpaths` also covers the paths below it, and `methods` limits the entry to those methods (every method when absent).
- * The table takes the first entry that matches; a route none matches needs `admin`.
+ * The table takes the first entry that matches; a route none matches needs `admin` ({@link ruleAccess}).
  */
 export interface AccessRule {
   readonly path: string;
@@ -29,6 +29,17 @@ export interface AccessRule {
   readonly methods?: ReadonlyArray<string>;
   readonly role: RouteAccess;
 }
+
+const ruleMatches = (rule: AccessRule, method: string, route: string): boolean =>
+  (route === rule.path || (rule.subpaths === true && route.startsWith(`${rule.path}/`))) &&
+  (rule.methods === undefined || rule.methods.includes(method));
+
+/** What `rules` say a `method` request to `route` (org taken out, lowercased) needs: the first match, else `admin`. */
+export const ruleAccess = (
+  rules: ReadonlyArray<AccessRule>,
+  method: string,
+  route: string,
+): RouteAccess => rules.find((rule) => ruleMatches(rule, method, route))?.role ?? "admin";
 
 const RANK: Readonly<Record<OrgRole, number>> = { member: 0, admin: 1, owner: 2 };
 

@@ -1,8 +1,8 @@
 {
-  // Deploy-time code runs in Node.js, not in workerd: alchemy.run.ts, infra/, stacks/ (Alchemy CLI), the catalog
-  // sync script and the import-boundary lint rules (tools/oxlint/boundaries). The workspace modules they import (apps/app/src/models/registry/models-dev.ts,
-  // apps/app/src/models/management/auth-index-key.ts, packages/state/src/secrets/key.ts) are checked here too, with Node.js
-  // types.
+  // Code that runs in Node.js, not in workerd: alchemy.run.ts, infra/, stacks/ (Alchemy CLI), the catalog sync script
+  // and the import-boundary lint rules (tools/oxlint/boundaries, loaded by oxlint). The workspace modules they import
+  // (apps/app/src/models/registry/models-dev.ts, apps/app/src/models/management/auth-index-key.ts,
+  // packages/state/src/secrets/key.ts) are checked here too, with Node.js types.
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2023"],

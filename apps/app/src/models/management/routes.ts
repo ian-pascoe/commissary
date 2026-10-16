@@ -11,8 +11,17 @@
  * `reset-grant-routes.ts`; the model catalog's status and on-demand refresh (`/models/catalog`) in `catalog-routes.ts`.
  */
 import { Effect, Layer } from "effect";
-import { FetchHttpClient, type HttpClient, HttpRouter } from "effect/http";
-import { routeServices } from "@commissary/core";
+import {
+  FetchHttpClient,
+  type HttpClient,
+  HttpRouter,
+  type HttpServerRequest,
+  type HttpServerResponse,
+} from "effect/http";
+import type { AccessPrincipal, AuthConfig } from "@commissary/auth";
+import { type CurrentOrg, routeServices } from "@commissary/core";
+import type { StateEnv } from "@commissary/state";
+import type { ModelsEnv } from "../env.ts";
 import { CatalogStore } from "../registry/catalog-store.ts";
 import { ModelRegistryLive } from "../registry/live.ts";
 import type { ModelRegistry } from "../registry/service.ts";
@@ -39,7 +48,20 @@ export const ManagementRoutes = HttpRouter.addAll(
     // Handlers run per request: bind the isolate-wide services once instead of leaking them into the request context.
     const services = yield* routeServices<ModelRegistry | HttpClient.HttpClient | CatalogStore>();
 
-    const bound = <A, E, R>(handler: Effect.Effect<A, E, R>) => Effect.provide(handler, services);
+    const bound = <
+      R extends
+        | AccessPrincipal
+        | ModelRegistry
+        | HttpClient.HttpClient
+        | CatalogStore
+        | ModelsEnv
+        | StateEnv
+        | AuthConfig
+        | CurrentOrg
+        | HttpServerRequest.HttpServerRequest,
+    >(
+      handler: Effect.Effect<HttpServerResponse.HttpServerResponse, never, R>,
+    ) => Effect.provide(handler, services);
 
     return [
       ...modelRuleRoutes,

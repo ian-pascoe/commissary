@@ -15,7 +15,7 @@
  *   role (org owner), downloading a credential or giving a service token a role above member (ADR 0006's rule per
  *   org, `@commissary/auth` `holdsSensitivePowers`).
  */
-import type { AccessRule, RouteAccess } from "@commissary/auth";
+import { type AccessRule, type RouteAccess, ruleAccess } from "@commissary/auth";
 import { accessRules as modelsAccessRules } from "../models/management.ts";
 import {
   type AccessZone,
@@ -38,10 +38,6 @@ const RULES: ReadonlyArray<AccessRule> = [
   { path: API_KEYS, subpaths: true, role: "member" },
   ...modelsAccessRules,
 ];
-
-const matches = (rule: AccessRule, method: string, route: string): boolean =>
-  (route === rule.path || (rule.subpaths === true && route.startsWith(`${rule.path}/`))) &&
-  (rule.methods === undefined || rule.methods.includes(method));
 
 const ME = `${MANAGEMENT_PREFIX}/me`;
 
@@ -83,5 +79,5 @@ export const routeAccess = (
     if (isPanelPagePath(route)) return "platform";
   } else if (isPanelPagePath(route)) return "member";
 
-  return RULES.find((rule) => matches(rule, method, route))?.role ?? "admin";
+  return ruleAccess(RULES, method, route);
 };

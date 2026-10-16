@@ -32,9 +32,10 @@ const notFound = HttpServerResponse.text("404 page not found", { status: 404 });
 /**
  * Global middleware: every response (including 404s) carries the CORS headers, and `OPTIONS` requests are
  * answered with an empty 204 before routing. A request `exempt` names (a URL of a zone that must not be read across
- * origins) gets the 204 and the 404 too, but no CORS headers; nothing is exempt unless the Worker says so.
+ * origins) gets the 204 and the 404 too, but no CORS headers. The API Worker exempts nothing; the app Worker exempts
+ * its management zone (`access/layer.ts`).
  */
-export const makeCorsLayer = (exempt: (requestUrl: string) => boolean = () => false) =>
+export const makeCorsLayer = (exempt: (requestUrl: string) => boolean) =>
   HttpRouter.middleware<{ handles: HttpServerError.HttpServerError }>()(
     (app) =>
       Effect.gen(function* () {

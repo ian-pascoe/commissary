@@ -41,9 +41,15 @@ it.effect("web handler routes see per-request env/ctx services", () =>
       }),
     );
 
-    const { handler, dispose } = HttpRouter.toWebHandler(Layer.mergeAll(Route, makeCorsLayer()), {
-      disableLogger: true,
-    });
+    const { handler, dispose } = HttpRouter.toWebHandler(
+      Layer.mergeAll(
+        Route,
+        makeCorsLayer(() => false),
+      ),
+      {
+        disableLogger: true,
+      },
+    );
 
     const response = yield* Effect.promise(() =>
       handler(

@@ -53,7 +53,6 @@ const OrgWideRoutes = HttpRouter.addAll([
 export const ManagementRoutes = Layer.mergeAll(OrgWideRoutes, ModelsManagementRoutes);
 
 /** Production wiring: each area's services. Wrap with `withAccess(...)`. */
-export const ManagementRoutesLive = Layer.mergeAll(
-  OrgWideRoutes,
-  ModelsManagementRoutes.pipe(Layer.provide(ModelsManagementServicesLive)),
+export const ManagementRoutesLive = ManagementRoutes.pipe(
+  Layer.provide(ModelsManagementServicesLive),
 );

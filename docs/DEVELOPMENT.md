@@ -291,7 +291,9 @@ assertion that cannot be removed carries a `// SAFETY: <invariant>` comment on t
   (`handler(request, requestContext(env, ctx))`); code reads the view of its package (`yield* AuthConfig`,
   `StateEnv`, `ModelsEnv`, or `AppEnv` for code that stays in the Worker; `apps/app/src/worker-env.ts`), never the
   global `Env`. Never capture them in a layer.
-- Add routes as `HttpRouter.add(...)` layers and merge them into `AppLayer` in `apps/app/src/http/app.ts`.
+- Add routes as `HttpRouter.add(...)` layers and merge them into `AppLayer` in `apps/app/src/http/app.ts`; an area's
+  routes reach it through the area's entry modules (Models: the client API `ClientApiLayer` of `models/api.ts`, the
+  management routes of `models/management.ts`, which `management/routes.ts` mounts).
 - Never log tokens, API keys, JWTs or bodies; use `redactHeaders` when headers must be logged.
 - No wall-clock sleeps in tests; use Effect `TestClock` or injected clocks.
 - The Worker's tests live in `apps/app/test/*.test.ts` and run in workerd ("Tests" above). Use `@effect/vitest`

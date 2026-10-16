@@ -8,9 +8,12 @@
  * - any other file of `apps/app/src/` imports Models only through its entry modules, which match the package's future
  *   exports (#134 "The area package convention"): `api.ts`, `management.ts` and `state.ts`.
  *
- * Every module specifier counts: imports and re-exports (types too), `import()` calls and `import("…")` types.
+ * Every module specifier counts: imports and re-exports (types too), `import()` calls and `import("…")` types. An
+ * `import()` of a computed specifier cannot be checked and is refused in `apps/app/src/`.
+ *
+ * Tests (`apps/app/test/`) may import Models internals until the folder moves with its tests (#151).
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineRule, eslintCompatPlugin } from "@oxlint/plugins";
@@ -41,12 +44,10 @@ const MODELS_MODULES = new Set([
 /** The names of the workspace packages (`packages/*`); an app is never one of them. */
 const PACKAGES = new Set(
   readdirSync(path.join(ROOT, "packages"), { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => {
-      const manifest = readFileSync(
-        path.join(ROOT, "packages", entry.name, "package.json"),
-        "utf8",
-      );
+    .map((entry) => path.join(ROOT, "packages", entry.name, "package.json"))
+    .filter((file) => existsSync(file))
+    .map((file) => {
+      const manifest = readFileSync(file, "utf8");
 
       // SAFETY: a workspace package's manifest is a JSON object with a string `name`.
       return (JSON.parse(manifest) as { readonly name: string }).name;
@@ -67,9 +68,7 @@ const packageOf = (specifier: string): string => {
 };
 
 const allowedInModels = (specifier: string): boolean =>
-  PACKAGES.has(packageOf(specifier)) ||
-  MODELS_MODULES.has(specifier) ||
-  MODELS_MODULES.has(packageOf(specifier));
+  PACKAGES.has(packageOf(specifier)) || MODELS_MODULES.has(packageOf(specifier));
 
 /** The file a relative specifier names (without a query such as `?raw`); `undefined` for a bare one. */
 const resolved = (filename: string, specifier: string): string | undefined =>
@@ -87,6 +86,8 @@ const modelsImportsRule = defineRule({
     messages: {
       outsideModels:
         'Models imports "{{specifier}}", which is outside the folder: Models may import only its own files, the workspace packages and its listed modules (tools/oxlint/boundaries).',
+      computedImport:
+        "An import() of a computed specifier cannot be checked against the Models boundary: import a string literal.",
       insideModels:
         '"{{specifier}}" reaches inside Models: import its entry modules (models/api.ts, models/management.ts, models/state.ts) instead.',
     },
@@ -97,9 +98,7 @@ const modelsImportsRule = defineRule({
     if (!isInside(APP_SRC, filename)) return {};
     const inModels = isInside(MODELS, filename);
 
-    const check = (source: ESTree.StringLiteral | null) => {
-      if (source === null) return;
-      const specifier = source.value;
+    const check = (source: ESTree.Node, specifier: string) => {
       const target = resolved(filename, specifier);
 
       if (inModels) {
@@ -117,14 +116,21 @@ const modelsImportsRule = defineRule({
     };
 
     return {
-      ImportDeclaration: (node) => check(node.source),
-      ExportNamedDeclaration: (node) => check(node.source),
-      ExportAllDeclaration: (node) => check(node.source),
-      TSImportType: (node) => check(node.source),
-      TSExternalModuleReference: (node) => check(node.expression),
+      ImportDeclaration: (node) => check(node.source, node.source.value),
+      ExportNamedDeclaration: (node) => {
+        if (node.source !== null) check(node.source, node.source.value);
+      },
+      ExportAllDeclaration: (node) => check(node.source, node.source.value),
+      TSImportType: (node) => check(node.source, node.source.value),
+      TSExternalModuleReference: (node) => check(node.expression, node.expression.value),
       ImportExpression: (node) => {
-        if (node.source.type === "Literal" && typeof node.source.value === "string")
-          check(node.source);
+        const source = node.source;
+
+        if (source.type === "Literal" && typeof source.value === "string")
+          check(source, source.value);
+        else if (source.type === "TemplateLiteral" && source.expressions.length === 0)
+          check(source, source.quasis[0]?.value.cooked ?? "");
+        else context.report({ node: source, messageId: "computedImport" });
       },
     };
   },

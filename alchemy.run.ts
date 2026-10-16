@@ -40,9 +40,9 @@ export default Alchemy.Stack(
     const cache = yield* Cloudflare.KV.Namespace("Cache");
     const usage = yield* Cloudflare.D1.Database("Usage", { migrations: "./migrations" });
 
-    // Key of the keyed `auth_index` (apps/app/src/models/management/auth-index.ts): 32 random bytes minted on the first deploy
-    // of a stage and kept in the (encrypted) stack state, so every later deploy binds the same secret with no manual
-    // step. `alchemy dev` (loopback only, no Access) uses a fixed key so local panel links survive a wiped local state.
+    // Key of the keyed `auth_index` (apps/app/src/models/management/auth-index.ts): 32 random bytes minted on the first
+    // deploy of a stage and kept in the (encrypted) stack state, so every later deploy binds the same secret with no
+    // manual step. `alchemy dev` (loopback only, no Access) uses a fixed key so local panel links survive a wiped local state.
     const authIndexKey = dev
       ? DEV_AUTH_INDEX_KEY
       : yield* Alchemy.makeRandom("AuthIndexKey", { bytes: 32 });

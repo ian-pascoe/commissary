@@ -40,7 +40,7 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
       control-plane.ts        the ControlPlane Durable Object: @commissary/state's base composed with the Models part
       models/                 all of Models, the future @commissary/models (#150, #151); the rest of the app imports
                               it only through api.ts, management.ts and state.ts (lint rule boundaries/models-imports)
-        api.ts                for the API Worker: client API routes, cron tasks, ModelsEnv
+        api.ts                for the API Worker: client API routes, the request trace, cron tasks, ModelsEnv
         management.ts         for the app Worker: management routes, OAuth callbacks, role-table entries, org-deletion
                               step, its section of the org export
         state.ts              for the state Worker: ModelsPart, its part of the ControlPlane
@@ -790,7 +790,7 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
     isolates they run; the second gets `running` without a request being made. The invocation is held open with
     `waitUntil` until the lease is given back. A Platform registry that cannot be reached fails the refresh (exclusivity
     cannot be shown); `embed` and `disabled` need no lease.
-- **Catalog status and on-demand refresh** (`management/catalog-routes.ts`, `@commissary/contract/catalog`; no Go counterpart):
+- **Catalog status and on-demand refresh** (`models/management/catalog-routes.ts`, `@commissary/contract/catalog`; no Go counterpart):
   `GET /v9/management/models/catalog` answers `{mode, source_host?, source_problem?, stored, refreshed_at?, last_attempt?,
   models}`: the `models.catalog` mode (`official`, `embed`, `disabled`, `custom` with the host of the address, never the
   URL; an address that is not http(s) reads `disabled` with `source_problem` saying why), whether a refreshed copy from KV
@@ -1611,7 +1611,7 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
 - **Failures without a body** (difference from Go): a failed attempt's usage record keeps the upstream status, error type
   and error code, and nothing of the response body (the `fail_body` column stays `NULL`; migration `0007` clears the
   bodies stored before it). Go's queue keeps the failure body for the management API.
-- **Management** (`management/usage-routes.ts`): `GET /v9/management/observability/usage/queue?count=N` (atomically pops the oldest unexported records, Go queue JSON with
+- **Management** (`models/management/usage-routes.ts`): `GET /v9/management/observability/usage/queue?count=N` (atomically pops the oldest unexported records, Go queue JSON with
   `token_breakdown`; `api_key` = Access principal id, `auth_index` = the management (keyed) `auth_index`) and the Workers
   additions `.../records` (filters `since|until|provider|model|principal|member|team|auth_index|failed`, `limit`, keyset
   `before`; `team` is the team's member ids, one `json_each` parameter so a large team stays within D1's bound parameters)
@@ -1752,7 +1752,7 @@ select ("Auto (catalog)" when unset).
 - **Quota** (`src/models/quota/opencode-go.ts`): OpenCode Go keys are listed on the Accounts page as config accounts with the
   5-hour, weekly and monthly windows of `GET {base}/usage` (see _Quota check_ and _Management API_ "Credentials").
   OpenCode Zen has no usage endpoint.
-- **Key test** (`management/provider-keys-probe.ts`): the gateways list models without authentication, so the panel's key test
+- **Key test** (`models/management/provider-keys-probe.ts`): the gateways list models without authentication, so the panel's key test
   POSTs `{base}/chat/completions` with the key, the gateway headers and the model `commissary-key-check` (`max_tokens: 1`); any
   2xx or 400 ("Model is unavailable": the key was accepted, nothing is billed) passes, 401 and other statuses fail.
 - **Catalog** (`opencode-catalog.ts`): the gateways read the same models.dev document as every other provider (`opencode` and
@@ -2398,7 +2398,7 @@ Deviations from Go: the Antigravity login uses the Go fallback client version `2
 _Antigravity provider_) and project discovery runs inside the login (non-fatal; the executor repeats it when `project_id` is missing); a transport failure or 5xx of one xAI/Kimi poll keeps waiting instead of ending the login; Codex
 exchange errors include the (scrubbed) upstream status/body like Go but cap it at 512 chars; device-flow states carry a random
 suffix (`xai-<ms>-<hex>`); Kimi stores the normalised `domain`; Claude's uTLS/ordered-header fingerprint cannot be reproduced (see
-Claude provider). `POST /v9/management/oauth/import?provider=vertex` (`management/oauth-import.ts`, Go `ImportVertexCredential`)
+Claude provider). `POST /v9/management/oauth/import?provider=vertex` (`models/management/oauth-import.ts`, Go `ImportVertexCredential`)
 takes a multipart service-account `file` (+ `location`, default `us-central1`), re-encodes the key as an RSA PKCS#1 PEM
 (`normalizePrivateKey`, parity with `NormalizeServiceAccountMap` in `test/fixtures/session.json`; error texts of invalid keys
 differ) and stores `vertex-<project>.json` merged over an existing file. Not ported: plugin logins and the local callback forwarder (`is_webui`). Credential JSON files from the Go
