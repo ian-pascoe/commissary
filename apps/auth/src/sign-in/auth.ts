@@ -21,7 +21,7 @@
  * Better Auth is imported on first use: a self-hosted Commissary never loads it.
  */
 import type { betterAuth, BetterAuthOptions } from "better-auth";
-import { AUTH_BASE_PATH, SIGN_IN_PAGE_PATH } from "@commissary/contract/sign-in";
+import { AUTH_BASE_PATH, httpOrigin, SIGN_IN_PAGE_PATH } from "@commissary/contract/sign-in";
 import { type ProviderLookup, ssoAwareAdapter } from "./sso-adapter.ts";
 
 /** The social providers Commissary Cloud can offer, in the order the sign-in page lists them. */
@@ -80,18 +80,8 @@ const providerClient = (
 export const MIN_SECRET_LENGTH = 32;
 
 /** The app host's origin (`APP_ORIGIN`), `undefined` when it is not an http(s) origin. */
-export const appOriginOf = (env: Pick<SignInBindings, "APP_ORIGIN">): string | undefined => {
-  try {
-    const url = new URL(env.APP_ORIGIN.trim());
-
-    return (url.protocol === "https:" || url.protocol === "http:") &&
-      url.origin === env.APP_ORIGIN.trim()
-      ? url.origin
-      : undefined;
-  } catch {
-    return undefined;
-  }
-};
+export const appOriginOf = (env: Pick<SignInBindings, "APP_ORIGIN">): string | undefined =>
+  httpOrigin(env.APP_ORIGIN);
 
 /** What the deployment is missing for sign-in, `undefined` when nothing is. */
 export const authConfigurationProblem = (env: SignInBindings): string | undefined => {

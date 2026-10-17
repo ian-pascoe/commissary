@@ -3,7 +3,8 @@
 import { env } from "cloudflare:workers";
 import { afterAll, describe, expect, it } from "vitest";
 import { makeWebHandler } from "../../src/http/app.ts";
-import { AUTH_ORIGIN_META, hostedPanelCsp, PANEL_CSP } from "../../src/management/web-panel.ts";
+import { AUTH_ORIGIN_META } from "@commissary/contract/sign-in";
+import { hostedPanelCsp, PANEL_CSP } from "../../src/management/web-panel.ts";
 import { requestContext } from "../../src/worker-env.ts";
 import { AUTH_ORIGIN, ORIGIN } from "./support.ts";
 

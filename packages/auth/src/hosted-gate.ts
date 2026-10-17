@@ -14,7 +14,7 @@
  *   `PLATFORM_ADMIN_SERVICE_TOKENS` means nothing here.
  */
 import { Context, Effect } from "effect";
-import { type CurrentOrg, UnauthorizedError } from "@commissary/core";
+import { type CurrentOrg, type InternalError, UnauthorizedError } from "@commissary/core";
 import { platformAdminLists } from "./access/config.ts";
 import { presentedCredentials } from "./api-key.ts";
 import { AuthConfig } from "./config.ts";
@@ -50,9 +50,10 @@ export class SignInSessions extends Context.Service<
   {
     /**
      * The person whose live session `cookie` (the request's `Cookie` header) names; `undefined` without one, for an
-     * expired or ended session, an unverified email, and when the lookup fails.
+     * expired or ended session and an unverified email. A failed lookup fails (a 500), so a broken auth Worker does
+     * not pass for a signed-out person.
      */
-    readonly person: (cookie: string) => Effect.Effect<SignedInPerson | undefined>;
+    readonly person: (cookie: string) => Effect.Effect<SignedInPerson | undefined, InternalError>;
   }
 >()("commissary/auth/SignInSessions") {}
 

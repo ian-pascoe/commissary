@@ -25,9 +25,9 @@ caches each task: run again with no change, a task replays its logs (and `build`
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pnpm install`                      | Install dependencies and clone/update the Go reference checkout (`.repos/`)                                                                                                                                                                                                 |
 | `pnpm repos:sync`                   | Clone or fast-forward the reference repositories in `.repos/` (`tools/sync-reference-repos.sh`)                                                                                                                                                                             |
-| `pnpm dev`                          | Builds the panel, then `alchemy dev`: the app (:1337), API (:1339) and state (:1338) Workers in workerd with emulated DO/KV/D1, hot reload (`ALCHEMY_STATE=local` avoids a Cloudflare login)                                                                                |
+| `pnpm dev`                          | Builds the panel, then `alchemy dev`: the app (:1337), API (:1339) and state (:1338) Workers, and the auth Worker (:1340) with `COMMISSARY_MODE=cloud`, in workerd with emulated DO/KV/D1, hot reload (`ALCHEMY_STATE=local` avoids a Cloudflare login)                     |
 | `pnpm build`                        | Build the control panel (`apps/web`) into `apps/web/dist/` (the Worker's assets, served at `/`)                                                                                                                                                                             |
-| `pnpm --filter @commissary/web dev` | Vite dev server for the panel on :5173 with hot reload, forwarding `/v9` to `pnpm dev` (`COMMISSARY_DEV_URL`, default :1337)                                                                                                                                                |
+| `pnpm --filter @commissary/web dev` | Vite dev server for the panel on :5173 with hot reload, forwarding `/v9` to `pnpm dev` (`COMMISSARY_DEV_URL`, default :1337) and `/api` to the auth Worker (`COMMISSARY_AUTH_DEV_URL`, default :1340)                                                                       |
 | `pnpm typecheck`                    | `tsc` over every program: each package's `typecheck` (Worker, panel, packages) and the root's deploy code (`typecheck:root`, `tsconfig.infra.json`)                                                                                                                         |
 | `pnpm lint`                         | `lint:root`: `oxlint` over the whole repository (type-aware, with type checking, Effect and anti-slop rules) + `oxfmt --check`                                                                                                                                              |
 | `pnpm format`                       | `oxfmt`                                                                                                                                                                                                                                                                     |
@@ -387,14 +387,16 @@ assertion that cannot be removed carries a `// SAFETY: <invariant>` comment on t
 - Per-request Cloudflare `env` / `ctx` are passed as the `Context` argument of the web handler
   (`handler(request, requestContext(env, ctx))`); code reads the view of its package (`yield* AuthConfig`,
   `StateEnv`, `ModelsEnv`, or `AppEnv` for code that stays in the app Worker, `apps/app/src/worker-env.ts`; the API
-  Worker's own code reads `ApiBindings`, `apps/api/src/worker-env.ts`), never the global `Env`. Never capture them in a layer.
+  Worker's own code reads `ApiBindings`, `apps/api/src/worker-env.ts`, and the auth Worker's `AuthWorkerEnv`,
+  `apps/auth/src/worker-env.ts`), never the global `Env`. Never capture them in a layer.
 - Add routes as `HttpRouter.add(...)` layers and merge them into the Worker's router (`apps/app/src/http/app.ts` for the
-  panel and the management API, `apps/api/src/http/app.ts` for the client API); an area's routes reach it through the
+  panel and the management API, `apps/api/src/http/app.ts` for the client API, `apps/auth/src/http/app.ts` for the
+  auth host); an area's routes reach it through the
   area's entry points (Models: the client API `ClientApiLayer` of `@commissary/models/api`, which the API Worker mounts,
   the management routes of `@commissary/models/management`, which the app Worker's `management/routes.ts` mounts).
 - Never log tokens, API keys, JWTs or bodies; use `redactHeaders` when headers must be logged.
 - No wall-clock sleeps in tests; use Effect `TestClock` or injected clocks.
-- The Workers' tests live in `apps/app/test/*.test.ts` and `apps/api/test/*.test.ts` and run in workerd ("Tests"
+- The Workers' tests live in `apps/app/test/*.test.ts`, `apps/api/test/*.test.ts` and `apps/auth/test/*.test.ts` and run in workerd ("Tests"
   above); Models' live in
   `packages/models/test/`. Use `@effect/vitest`
   (`it.effect`) for Effect code and `exports.default.fetch(...)` (`cloudflare:workers`) for end-to-end Worker requests.
@@ -405,7 +407,7 @@ assertion that cannot be removed carries a `// SAFETY: <invariant>` comment on t
 ## Dependency notes
 
 - TypeScript 7 (native `tsc`). Each program has its own tsconfig extending `tsconfig.base.json`: `apps/app/tsconfig.json`
-  (app Worker, workerd types), `apps/api/tsconfig.json` (API Worker, workerd types), `apps/state/tsconfig.json` (state Worker, workerd types), `apps/web/tsconfig.app.json` (panel, DOM types) and `tsconfig.node.json` (its Node.js side),
+  (app Worker, workerd types), `apps/api/tsconfig.json` (API Worker, workerd types), `apps/auth/tsconfig.json` (auth Worker, workerd types), `apps/state/tsconfig.json` (state Worker, workerd types), `apps/web/tsconfig.app.json` (panel, DOM types) and `tsconfig.node.json` (its Node.js side),
   `packages/contract/tsconfig.json` (no runtime types), `packages/auth`, `packages/core`, `packages/json` and `packages/translation` (Node.js types,
   no Workers types), `packages/state` and `packages/models` (workerd types, with the Node.js tests of `test/unit/`
   checked in the same program) and the root's `tsconfig.infra.json` (deploy code, Node.js types). `tsc` only checks (`noEmit`); Turborepo caches it. `capnp-es` (via Alchemy) declares a TypeScript 5/6 peer

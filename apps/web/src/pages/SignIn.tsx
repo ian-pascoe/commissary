@@ -6,8 +6,7 @@ import { Option, Schema } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AUTH_ROUTES, SIGN_IN_OPTIONS_PATH, SignInOptions } from "@commissary/contract/sign-in";
 import { kit, Problem } from "../components/Kit.tsx";
-import { authOrigin } from "../auth-origin.ts";
-import { authUrl, returnUrl } from "../lib/auth-origin.ts";
+import { onAuthHost } from "../auth-origin.ts";
 import {
   needsWorkEmail,
   providerLabel,
@@ -136,7 +135,7 @@ const useOptions = (): Options => {
   useEffect(() => {
     const controller = new AbortController();
 
-    fetch(authUrl(authOrigin(), SIGN_IN_OPTIONS_PATH), {
+    fetch(onAuthHost(SIGN_IN_OPTIONS_PATH), {
       credentials: "include",
       signal: controller.signal,
     })
@@ -177,11 +176,12 @@ export const SignInPage = () => {
     setProblem(undefined);
 
     try {
-      const response = await fetch(authUrl(authOrigin(), AUTH_ROUTES.signInSocial), {
+      const response = await fetch(onAuthHost(AUTH_ROUTES.signInSocial), {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json", "x-captcha-response": check.token },
-        body: JSON.stringify({ provider, callbackURL: returnUrl(window.location.origin, next) }),
+        // Absolute: the auth host would read a bare path as one of its own.
+        body: JSON.stringify({ provider, callbackURL: `${window.location.origin}${next}` }),
       });
 
       const started = response.ok ? decodeStart(await response.json()) : undefined;

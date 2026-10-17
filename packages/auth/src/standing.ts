@@ -100,50 +100,47 @@ export const ensureSignedUp = (
   });
 
 /** Where `org` and the person with `email` stand, cached for {@link STANDING_TTL_MS}. */
-const cachedStanding = (
+const cachedStanding = Effect.fnUntraced(function* (
   org: OrgId,
   email: string | undefined,
-): Effect.Effect<Standing, InternalError, AuthDirectory> =>
-  Effect.gen(function* () {
-    const key = `${org}\u0000${email?.toLowerCase() ?? ""}`;
-    const now = yield* Clock.currentTimeMillis;
-    const cached = standings.get(key);
+): Effect.fn.Return<Standing, InternalError, AuthDirectory> {
+  const key = `${org}\u0000${email?.toLowerCase() ?? ""}`;
+  const now = yield* Clock.currentTimeMillis;
+  const cached = standings.get(key);
 
-    const standing =
-      cached !== undefined && now < cached.until
-        ? cached.standing
-        : yield* (yield* AuthDirectory)
-            .standing(org, email)
-            .pipe(Effect.mapError(directoryFailure()));
+  const standing =
+    cached !== undefined && now < cached.until
+      ? cached.standing
+      : yield* (yield* AuthDirectory)
+          .standing(org, email)
+          .pipe(Effect.mapError(directoryFailure()));
 
-    if (cached === undefined || now >= cached.until)
-      remember(standings, key, { standing, until: now + STANDING_TTL_MS });
+  if (cached === undefined || now >= cached.until)
+    remember(standings, key, { standing, until: now + STANDING_TTL_MS });
 
-    return standing;
-  });
+  return standing;
+});
 
 /**
  * Where `org` and the person with `email` stand (cached); refuses (403 `Suspended`) a suspended org or person. A
  * missing org is left to the caller.
  */
-export const requireStanding = (
+export const requireStanding = Effect.fnUntraced(function* (
   org: OrgId,
   email: string | undefined,
-): Effect.Effect<Standing, ForbiddenError | InternalError, AuthDirectory> =>
-  Effect.gen(function* () {
-    const standing = yield* cachedStanding(org, email);
+): Effect.fn.Return<Standing, ForbiddenError | InternalError, AuthDirectory> {
+  const standing = yield* cachedStanding(org, email);
 
-    if (standing.org === "suspended" || standing.person === "suspended")
-      return yield* new ForbiddenError({ message: SUSPENDED });
+  if (standing.org === "suspended" || standing.person === "suspended")
+    return yield* new ForbiddenError({ message: SUSPENDED });
 
-    return standing;
-  });
+  return standing;
+});
 
 /** Refuses (403 `Suspended`) a suspended person, whatever their orgs' standing (a platform admin's, cached). */
-export const requireActivePerson = (
+export const requireActivePerson = Effect.fnUntraced(function* (
   email: string,
-): Effect.Effect<void, ForbiddenError | InternalError, AuthDirectory> =>
-  Effect.gen(function* () {
-    if ((yield* cachedStanding(GLOBAL_ORG, email)).person === "suspended")
-      return yield* new ForbiddenError({ message: SUSPENDED });
-  });
+): Effect.fn.Return<void, ForbiddenError | InternalError, AuthDirectory> {
+  if ((yield* cachedStanding(GLOBAL_ORG, email)).person === "suspended")
+    return yield* new ForbiddenError({ message: SUSPENDED });
+});

@@ -111,34 +111,37 @@ export const crossSiteWrite = (
  * the org that verified the email's domain; `undefined` when no org did (or it has no provider). The sign-in returns to
  * the panel on the app host.
  */
-const ssoSignInRequest = (request: Request, input: typeof SsoSignIn.Type, appOrigin: string) =>
-  Effect.gen(function* () {
-    const directory = yield* AuthDirectory;
+const ssoSignInRequest = Effect.fnUntraced(function* (
+  request: Request,
+  input: typeof SsoSignIn.Type,
+  appOrigin: string,
+) {
+  const directory = yield* AuthDirectory;
 
-    if (input.email.length > MAX_EMAIL_LENGTH) return undefined;
-    const email = input.email.trim().toLowerCase();
-    const domain = emailDomain(email);
+  if (input.email.length > MAX_EMAIL_LENGTH) return undefined;
+  const email = input.email.trim().toLowerCase();
+  const domain = emailDomain(email);
 
-    if (domain === undefined) return undefined;
-    const holder = yield* directory.ssoDomain(domain);
+  if (domain === undefined) return undefined;
+  const holder = yield* directory.ssoDomain(domain);
 
-    if (holder === undefined) return undefined;
-    const headers = new Headers(request.headers);
+  if (holder === undefined) return undefined;
+  const headers = new Headers(request.headers);
 
-    headers.delete("content-length");
-    headers.set("content-type", "application/json");
+  headers.delete("content-length");
+  headers.set("content-type", "application/json");
 
-    return new Request(request.url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        providerId: providerIdOf(holder.org),
-        callbackURL: `${appOrigin}/`,
-        errorCallbackURL: `${appOrigin}${SIGN_IN_PAGE_PATH}`,
-        loginHint: email,
-      }),
-    });
+  return new Request(request.url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      providerId: providerIdOf(holder.org),
+      callbackURL: `${appOrigin}/`,
+      errorCallbackURL: `${appOrigin}${SIGN_IN_PAGE_PATH}`,
+      loginHint: email,
+    }),
   });
+});
 
 /** `* /api/auth/*`: the Better Auth routes of {@link PASSED} and the providers' callbacks. */
 const authRoute = Effect.gen(function* () {

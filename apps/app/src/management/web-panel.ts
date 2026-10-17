@@ -17,9 +17,10 @@ import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import { addressedSlug } from "./org-address.ts";
 import { AccessPrincipal, AuthConfig, isHosted } from "@commissary/auth";
 import { PANEL_ORG_PREFIX, PANEL_SECTIONS } from "./zones.ts";
+import { AUTH_ORIGIN_META } from "@commissary/contract/sign-in";
 import { jsonReply } from "@commissary/core";
 import { openableOrgs } from "./org-routes.ts";
-import { authOriginOf } from "../hosted/sign-in.ts";
+import { configuredAuthOrigin } from "../hosted/sign-in.ts";
 import { AppEnv } from "../worker-env.ts";
 
 export const PANEL_NOT_BUILT = "the control panel is not built; run `pnpm build`";
@@ -57,9 +58,6 @@ export const hostedPanelCsp = (authOrigin: string | undefined): string =>
       `connect-src 'self'${authOrigin === undefined ? "" : ` ${authOrigin}`}`,
     )
     .replace("frame-ancestors 'none'", `frame-src ${TURNSTILE_ORIGIN}; frame-ancestors 'none'`);
-
-/** The `<meta>` tag naming the auth host's origin for the panel (`apps/web/src/lib/auth-origin.ts`). */
-export const AUTH_ORIGIN_META = "commissary-auth-origin";
 
 const escapeAttribute = (value: string): string =>
   value.replace(/[&"<>]/g, (char) => `&#${char.charCodeAt(0)};`);
@@ -162,12 +160,7 @@ export const panelIndex = Effect.gen(function* () {
 
   if (!isHosted(auth))
     return HttpServerResponse.raw(asset.body, { status: 200, headers: PAGE_HEADERS });
-  const authOrigin = authOriginOf(yield* AppEnv);
-
-  if (authOrigin === undefined)
-    yield* Effect.logError(
-      "hosted sign-in is not configured: AUTH_ORIGIN is missing or not an origin",
-    );
+  const authOrigin = yield* configuredAuthOrigin;
 
   return HttpServerResponse.raw(
     authOrigin === undefined ? asset.body : withAuthOrigin(asset, authOrigin).body,

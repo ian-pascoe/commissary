@@ -5,6 +5,7 @@
 import { WorkerEntrypoint } from "cloudflare:workers";
 import { Effect } from "effect";
 import type { SignedInPerson, SignInService } from "@commissary/auth";
+import { WorkersLoggerLayer } from "@commissary/core";
 import { stateAuthDirectory } from "@commissary/state";
 import { makeWebHandler } from "./http/app.ts";
 import { authConfigurationProblem } from "./sign-in/auth.ts";
@@ -35,24 +36,21 @@ export abstract class SignInEntrypoint<E> extends WorkerEntrypoint<E> implements
     return await handler(request, requestContext(this.bindings(), this.ctx));
   }
 
+  /** A lookup that fails (sign-in not configured, the database unreachable) throws: the app Worker answers 500. */
   async session(cookie: string): Promise<SignedInPerson | null> {
     const env = this.bindings();
     const problem = authConfigurationProblem(env);
 
     if (problem !== undefined) {
-      await Effect.runPromise(Effect.logError(`hosted sign-in is not configured: ${problem}`));
+      const message = `hosted sign-in is not configured: ${problem}`;
 
-      return null;
+      await Effect.runPromise(Effect.logError(message).pipe(Effect.provide(WorkersLoggerLayer)));
+
+      throw new Error(message);
     }
 
     // Better Auth reads the session from its cookie; the origin it runs at only shapes the cookies it would set.
-    try {
-      return (await signedInPerson(env, stateAuthDirectory(env), RPC_ORIGIN, cookie)) ?? null;
-    } catch (error) {
-      await Effect.runPromise(Effect.logWarning(`session lookup failed: ${String(error)}`));
-
-      return null;
-    }
+    return (await signedInPerson(env, stateAuthDirectory(env), RPC_ORIGIN, cookie)) ?? null;
   }
 
   async endSessions(emails: ReadonlyArray<string>): Promise<number> {

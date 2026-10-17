@@ -4,60 +4,65 @@
  * `SignInService`) who a session belongs to (the gate's `SignInSessions` port) and to end sessions or delete a sign-in
  * account. A self-hosted Commissary has no binding and makes none of these calls. New in the Workers port.
  */
-import { Effect } from "effect";
+import { Data, Effect } from "effect";
 import { SignInSessions, type SignInService } from "@commissary/auth";
+import { httpOrigin } from "@commissary/contract/sign-in";
+import { InternalError } from "@commissary/core";
 import { AppEnv, type AppBindings } from "../worker-env.ts";
 
 /**
  * The auth host's origin (`AUTH_ORIGIN`): where the sign-in page sends its requests and the orgs' identity providers
- * send people back. `undefined` when it is not an http(s) origin (a misconfigured deployment of Commissary Cloud).
+ * send people back. Logged and `undefined` when it is not an http(s) origin (a misconfigured Commissary Cloud).
  */
-export const authOriginOf = (env: Pick<AppBindings, "AUTH_ORIGIN">): string | undefined => {
-  const value = env.AUTH_ORIGIN?.trim() ?? "";
+export const configuredAuthOrigin: Effect.Effect<string | undefined, never, AppEnv> = Effect.gen(
+  function* () {
+    const origin = httpOrigin((yield* AppEnv).AUTH_ORIGIN);
 
-  try {
-    const url = new URL(value);
+    if (origin === undefined)
+      yield* Effect.logError(
+        "hosted sign-in is not configured: AUTH_ORIGIN is missing or not an origin",
+      );
 
-    return (url.protocol === "https:" || url.protocol === "http:") && url.origin === value
-      ? url.origin
-      : undefined;
-  } catch {
-    return undefined;
-  }
-};
+    return origin;
+  },
+);
 
-/** The auth Worker is not bound: a deployment of Commissary Cloud without it is misconfigured. */
-const NOT_BOUND = "the auth Worker is not bound (AUTH)";
+/** A call to the auth Worker failed, or it is not bound (a deployment of Commissary Cloud without it is misconfigured). */
+export class SignInCallFailed extends Data.TaggedError("SignInCallFailed")<{
+  readonly message: string;
+}> {}
 
 /** Calls the auth Worker `auth`; fails when it is not bound or the call fails. */
 const callAuth = <A>(
   auth: SignInService | undefined,
   call: (auth: SignInService) => Promise<A>,
-): Effect.Effect<A, Error> =>
+): Effect.Effect<A, SignInCallFailed> =>
   auth === undefined
-    ? Effect.fail(new Error(NOT_BOUND))
+    ? Effect.fail(new SignInCallFailed({ message: "the auth Worker is not bound (AUTH)" }))
     : Effect.tryPromise({
         try: async () => await call(auth),
-        catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
+        catch: (cause) =>
+          new SignInCallFailed({ message: cause instanceof Error ? cause.message : String(cause) }),
       });
 
 /** Calls the auth Worker the invocation binds. */
-const ask = <A>(call: (auth: SignInService) => Promise<A>): Effect.Effect<A, Error, AppEnv> =>
-  Effect.gen(function* () {
-    return yield* callAuth((yield* AppEnv).AUTH, call);
-  });
+const ask = Effect.fnUntraced(function* <A>(
+  call: (auth: SignInService) => Promise<A>,
+): Effect.fn.Return<A, SignInCallFailed, AppEnv> {
+  return yield* callAuth((yield* AppEnv).AUTH, call);
+});
 
 /**
- * The gate's port to the auth Worker's sessions (`SignInSessions`), over the invocation's bindings: a failed lookup is
- * logged and counts as no session.
+ * The gate's port to the auth Worker's sessions (`SignInSessions`), over the invocation's bindings. A failed lookup
+ * fails the request (a 500): it does not turn the person away as signed out.
  */
 export const signInSessions = (env: Pick<AppBindings, "AUTH">): SignInSessions["Service"] =>
   SignInSessions.of({
     person: (cookie) =>
       callAuth(env.AUTH, async (auth) => await auth.session(cookie)).pipe(
         Effect.map((person) => person ?? undefined),
-        Effect.catch((error) =>
-          Effect.logWarning(`session lookup failed: ${error.message}`).pipe(Effect.as(undefined)),
+        Effect.mapError(
+          (error) => new InternalError({ message: `session lookup failed: ${error.message}` }),
         ),
       ),
   });
@@ -76,9 +81,13 @@ export const endSessions = (emails: ReadonlyArray<string>): Effect.Effect<number
       );
 
 /** Ends every session of the people whose email is at `domain`: answers how many it ended; a failure fails. */
-export const endDomainSessions = (domain: string): Effect.Effect<number, Error, AppEnv> =>
+export const endDomainSessions = (
+  domain: string,
+): Effect.Effect<number, SignInCallFailed, AppEnv> =>
   ask(async (auth) => await auth.endDomainSessions(domain));
 
 /** Deletes the sign-in account of `email`: answers how many accounts it deleted; a failure fails. */
-export const deleteSignInAccount = (email: string): Effect.Effect<number, Error, AppEnv> =>
+export const deleteSignInAccount = (
+  email: string,
+): Effect.Effect<number, SignInCallFailed, AppEnv> =>
   ask(async (auth) => await auth.deleteSignInAccount(email));

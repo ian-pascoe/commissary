@@ -18,6 +18,9 @@ export const FAKE_SESSION_COOKIE = "__Secure-better-auth.session_token";
 /** Where the fake keeps a session (`<prefix><token>`: the person) in the test Worker's KV namespace. */
 export const FAKE_SESSION_PREFIX = "test:sign-in:session:";
 
+/** A session token whose lookup fails, as the auth Worker's does when its database cannot be reached. */
+export const FAILING_SESSION_TOKEN = "lookup-fails";
+
 /** Where the fake keeps a sign-in account (`<prefix><email>`), as Better Auth's `user` row. */
 export const FAKE_ACCOUNT_PREFIX = "test:sign-in:account:";
 
@@ -34,6 +37,8 @@ export class FakeSignIn extends WorkerEntrypoint<Env> implements SignInService {
     const token = tokenOf(cookie);
 
     if (token === undefined || token === "") return null;
+
+    if (token === FAILING_SESSION_TOKEN) throw new Error("the sign-in database is unreachable");
 
     return await this.env.CACHE.get<SignedInPerson>(`${FAKE_SESSION_PREFIX}${token}`, "json");
   }

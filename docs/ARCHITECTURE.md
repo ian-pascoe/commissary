@@ -2349,7 +2349,7 @@ prices each attempt, the ControlPlane counts and decides.
   `AuthDirectory`, a narrow Effect service of the ControlPlane and Platform calls it makes (`auth/directory.ts`, which
   also holds the types crossing it, such as `ApiKeyVerdict`, `Admission` and `Standing`, that the stores import); the
   adapter over the Durable Object stubs is `state/auth-directory.ts`, an in-memory one is
-  `@commissary/auth/testing`. Better Auth's session lookup stays in the Worker behind auth's `SignInSessions` port. Auth
+  `@commissary/auth/testing`. The session lookup is the auth Worker's, reached over its RPC behind auth's `SignInSessions` port. Auth
   imports `@commissary/core`, `@commissary/contract`, `effect` and `jose` only, and tests in Node.js.
 - Clients of the client API send API keys ("API keys" above). Scripts on the management API use Access service
   tokens (`CF-Access-Client-Id`/`CF-Access-Client-Secret` headers, or Access single-header mode via `x-api-key`, set on
@@ -2397,7 +2397,10 @@ is the Access one, unchanged, and there is no auth Worker. User docs: `docs/ACCE
 - **RPC** (`SignInService`, `auth/sign-in-service.ts`; `src/hosted/sign-in.ts`): the app Worker binds the auth Worker
   as a service (`AUTH`, Cloud only) and asks it whose session a cookie is (the gate's `SignInSessions` port), to end
   people's or a domain's sessions (a suspension, single sign-on becoming required) and to delete a sign-in account.
-  Changes are expand-then-contract, like the state RPC. The tests bind a fake of it (`test/worker.ts` `FakeSignIn`).
+  A lookup that fails (no binding, a broken auth Worker) answers 500, never a signed-out 401. Changes are
+  expand-then-contract, like the state RPC. The tests bind a fake of it (`test/worker.ts` `FakeSignIn`). The app Worker
+  runs no Better Auth: it keeps `@better-auth/sso` and `@better-auth/core` only to check an org's OIDC discovery
+  document when an admin saves its identity provider (`sso/idp.ts`).
 - **Sign-in** (`apps/auth/src/sign-in/`: `auth.ts`, `sessions.ts`, `turnstile.ts`; `http/sign-in-routes.ts`): Better
   Auth (core only, social providers GitHub and Google, account linking by verified email), mounted at `/api/auth/*` on
   the auth host, of which the auth Worker passes only social sign-in, the providers' callbacks, `get-session`,

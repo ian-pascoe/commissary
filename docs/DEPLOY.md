@@ -203,7 +203,9 @@ which has the explicit name `commissary-app-<stage>` so the auth Worker knows it
 (`infra/preview-origin.ts`). A sign-in completes only after the auth Worker's callbacks are registered with the provider
 and the app Worker's hostname is added to the Turnstile widget. Every Worker of the account shares its workers.dev
 subdomain, which a preview's session cookie is scoped to; each preview names its cookie apart
-(`commissary-<stage>` prefix), so previews keep separate sessions. Previews share the rate-limit namespace with each other, and with
+(`commissary-<stage>` prefix), so previews keep separate sessions. The prefix only names cookies apart: every
+Worker on that subdomain receives every preview's session cookie, so deploy nothing untrusted on the account's
+workers.dev subdomain (prod and `cloud` scope theirs to the app host). Previews share the rate-limit namespace with each other, and with
 production when the environments set the same `ORG_RATE_LIMIT_NAMESPACE_ID`: the org `global` exists on every stage
 under the same id, so give `preview` its own namespace.
 

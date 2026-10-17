@@ -180,67 +180,65 @@ const authHost = (configured: string, domain: string): string => {
  * The settings of Commissary Cloud, and what is wrong with them. Under `alchemy dev` (`dev`) Turnstile defaults to its
  * always-passing test keys and no problem is reported: a sign-in provider is optional there.
  */
-const hostedSettings = (dev: boolean, preview: boolean, domain: string, apiDomain: string) =>
-  Effect.gen(function* () {
-    const problems: Array<string> = [];
-    const limit = wholeNumber(yield* text("OWNED_ORG_LIMIT"), 3, 0);
-    const rate = wholeNumber(yield* text("ORG_RATE_LIMIT"), 600, 1);
-    const namespace = wholeNumber(yield* text("ORG_RATE_LIMIT_NAMESPACE_ID"), 7201, 1);
+const hostedSettings = Effect.fnUntraced(function* (
+  dev: boolean,
+  preview: boolean,
+  domain: string,
+  apiDomain: string,
+) {
+  const problems: Array<string> = [];
+  const limit = wholeNumber(yield* text("OWNED_ORG_LIMIT"), 3, 0);
+  const rate = wholeNumber(yield* text("ORG_RATE_LIMIT"), 600, 1);
+  const namespace = wholeNumber(yield* text("ORG_RATE_LIMIT_NAMESPACE_ID"), 7201, 1);
 
-    if (limit === undefined) problems.push("OWNED_ORG_LIMIT must be a whole number from 0");
+  if (limit === undefined) problems.push("OWNED_ORG_LIMIT must be a whole number from 0");
 
-    if (rate === undefined)
-      problems.push("ORG_RATE_LIMIT must be a whole number from 1 (requests per minute)");
+  if (rate === undefined)
+    problems.push("ORG_RATE_LIMIT must be a whole number from 1 (requests per minute)");
 
-    if (namespace === undefined)
-      problems.push("ORG_RATE_LIMIT_NAMESPACE_ID must be a positive integer");
+  if (namespace === undefined)
+    problems.push("ORG_RATE_LIMIT_NAMESPACE_ID must be a positive integer");
 
-    const hosted: HostedSettings = {
-      githubClientId: (yield* text("SIGN_IN_GITHUB_CLIENT_ID")).trim(),
-      githubClientSecret: yield* secret("SIGN_IN_GITHUB_CLIENT_SECRET"),
-      googleClientId: (yield* text("SIGN_IN_GOOGLE_CLIENT_ID")).trim(),
-      googleClientSecret: yield* secret("SIGN_IN_GOOGLE_CLIENT_SECRET"),
-      turnstileSiteKey: (yield* text(
-        "TURNSTILE_SITE_KEY",
-        dev ? DEV_TURNSTILE_SITE_KEY : "",
-      )).trim(),
-      turnstileSecretKey: yield* secret(
-        "TURNSTILE_SECRET_KEY",
-        dev ? DEV_TURNSTILE_SECRET_KEY : "",
-      ),
-      ownedOrgLimit: String(limit ?? 3),
-      orgRateLimit: rate ?? 600,
-      orgRateLimitNamespaceId: namespace ?? 7201,
-      authDomain:
-        dev || preview ? "" : authHost((yield* text("COMMISSARY_AUTH_DOMAIN")).trim(), domain),
-    };
+  const hosted: HostedSettings = {
+    githubClientId: (yield* text("SIGN_IN_GITHUB_CLIENT_ID")).trim(),
+    githubClientSecret: yield* secret("SIGN_IN_GITHUB_CLIENT_SECRET"),
+    googleClientId: (yield* text("SIGN_IN_GOOGLE_CLIENT_ID")).trim(),
+    googleClientSecret: yield* secret("SIGN_IN_GOOGLE_CLIENT_SECRET"),
+    turnstileSiteKey: (yield* text("TURNSTILE_SITE_KEY", dev ? DEV_TURNSTILE_SITE_KEY : "")).trim(),
+    turnstileSecretKey: yield* secret("TURNSTILE_SECRET_KEY", dev ? DEV_TURNSTILE_SECRET_KEY : ""),
+    ownedOrgLimit: String(limit ?? 3),
+    orgRateLimit: rate ?? 600,
+    orgRateLimitNamespaceId: namespace ?? 7201,
+    authDomain:
+      dev || preview ? "" : authHost((yield* text("COMMISSARY_AUTH_DOMAIN")).trim(), domain),
+  };
 
-    if (hosted.authDomain !== "") {
-      if (!HOSTNAME.test(hosted.authDomain))
-        problems.push(
-          `COMMISSARY_AUTH_DOMAIN must be a lowercase hostname such as auth.example.com, not "${hosted.authDomain}"`,
-        );
-      else if (!hosted.authDomain.endsWith(`.${domain.toLowerCase()}`))
-        problems.push(
-          `COMMISSARY_AUTH_DOMAIN must be a subdomain of COMMISSARY_DOMAIN (${domain}), so its session cookie reaches the app host`,
-        );
-      else if (hosted.authDomain === apiDomain)
-        problems.push("COMMISSARY_AUTH_DOMAIN must differ from COMMISSARY_API_DOMAIN");
-    }
-
-    const github = hosted.githubClientId !== "" && Redacted.value(hosted.githubClientSecret) !== "";
-    const google = hosted.googleClientId !== "" && Redacted.value(hosted.googleClientSecret) !== "";
-
-    if (!github && !google)
+  if (hosted.authDomain !== "") {
+    if (!HOSTNAME.test(hosted.authDomain))
       problems.push(
-        "Commissary Cloud needs a sign-in provider: SIGN_IN_GITHUB_CLIENT_ID and SIGN_IN_GITHUB_CLIENT_SECRET, and/or SIGN_IN_GOOGLE_CLIENT_ID and SIGN_IN_GOOGLE_CLIENT_SECRET",
+        `COMMISSARY_AUTH_DOMAIN must be a lowercase hostname such as auth.example.com, not "${hosted.authDomain}"`,
       );
+    else if (!hosted.authDomain.endsWith(`.${domain.toLowerCase()}`))
+      problems.push(
+        `COMMISSARY_AUTH_DOMAIN must be a subdomain of COMMISSARY_DOMAIN (${domain}), so its session cookie reaches the app host`,
+      );
+    else if (hosted.authDomain === apiDomain)
+      problems.push("COMMISSARY_AUTH_DOMAIN must differ from COMMISSARY_API_DOMAIN");
+  }
 
-    if (hosted.turnstileSiteKey === "" || Redacted.value(hosted.turnstileSecretKey) === "")
-      problems.push("Commissary Cloud needs TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY");
+  const github = hosted.githubClientId !== "" && Redacted.value(hosted.githubClientSecret) !== "";
+  const google = hosted.googleClientId !== "" && Redacted.value(hosted.googleClientSecret) !== "";
 
-    return { hosted, problems };
-  });
+  if (!github && !google)
+    problems.push(
+      "Commissary Cloud needs a sign-in provider: SIGN_IN_GITHUB_CLIENT_ID and SIGN_IN_GITHUB_CLIENT_SECRET, and/or SIGN_IN_GOOGLE_CLIENT_ID and SIGN_IN_GOOGLE_CLIENT_SECRET",
+    );
+
+  if (hosted.turnstileSiteKey === "" || Redacted.value(hosted.turnstileSecretKey) === "")
+    problems.push("Commissary Cloud needs TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY");
+
+  return { hosted, problems };
+});
 
 /** Stage names of pull-request previews (`pr-<number>`, as deployed by .github/workflows/ci.yml). */
 export const PREVIEW_STAGE = /^pr-\d+$/;

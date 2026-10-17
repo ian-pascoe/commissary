@@ -5,6 +5,7 @@
 // (apps/api/test/hosted/gate.test.ts, suspension included): the app Worker refuses it with a 404.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { resetStandingCaches } from "@commissary/auth";
+import { FAILING_SESSION_TOKEN, FAKE_SESSION_COOKIE } from "../worker.ts";
 import {
   call,
   clearPeople,
@@ -107,6 +108,15 @@ describe("authentication", () => {
     const home = await call("/");
     expect(home.status).toBe(302);
     expect(home.headers.get("location")).toBe("/sign-in");
+  });
+
+  it("answers 500, not 401, when the auth Worker cannot look the session up", async () => {
+    const response = await call("/v9/management/me", {
+      headers: panelHeaders(`${FAKE_SESSION_COOKIE}=${FAILING_SESSION_TOKEN}`),
+    });
+
+    expect(response.status).toBe(500);
+    expect(await response.text()).not.toContain("Not signed in");
   });
 
   it("serves the sign-in page and the panel's bundle files to anyone", async () => {

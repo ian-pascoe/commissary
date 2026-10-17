@@ -89,9 +89,11 @@ if [ "$mode" = cloud ]; then
     echo "$status $* (expecting $text)"
     [ "$status" = 200 ] && grep -Fq "$text" "$body" || { cat "$body" "$log"; exit 1; }
   }
-  # preflight <origin>: the status of a CORS preflight of a sign-in on the auth host from <origin>.
+  # preflight <origin>: the status of a CORS preflight of a sign-in on the auth host from <origin>; its headers go to
+  # $headers.
+  headers=$(mktemp)
   preflight() {
-    curl -s -o /dev/null -w '%{http_code}' -X OPTIONS -H "Origin: $1" \
+    curl -s -o /dev/null -D "$headers" -w '%{http_code}' -X OPTIONS -H "Origin: $1" \
       -H 'Access-Control-Request-Method: POST' "$auth_url/api/auth/sign-in/social"
   }
   # The auth host: the sign-in options (the GitHub client above), Better Auth's health check (its secret and the SignIn
@@ -101,13 +103,14 @@ if [ "$mode" = cloud ]; then
   contains '"ok":true' "$auth_url/api/auth/ok"
   status=$(preflight "$url")
   echo "$status preflight from $url"
-  [ "$status" = 204 ] || { cat "$log"; exit 1; }
+  [ "$status" = 204 ] && grep -Fiq "access-control-allow-origin: $url" "$headers" || { cat "$headers" "$log"; exit 1; }
   status=$(preflight "https://elsewhere.invalid")
   echo "$status preflight from elsewhere"
-  [ "$status" = 403 ] || { cat "$log"; exit 1; }
+  [ "$status" = 403 ] && ! grep -iq '^access-control-allow-origin:' "$headers" || { cat "$headers" "$log"; exit 1; }
   expect 404 "$auth_url/v9/management/me"
   # The app host: the sign-in page names the auth host, the panel sends a browser there, and a cookie the auth Worker
-  # does not know (asked over the app Worker's service binding) is no session.
+  # does not know is no session. The 401 is the auth Worker's answer over the app Worker's service binding: a lookup
+  # that fails (no binding, a broken auth Worker) answers 500.
   contains "<meta name=\"commissary-auth-origin\" content=\"$auth_url\">" "$url/sign-in"
   expect 302 "$url/"
   expect 404 "$url/api/sign-in-options"
@@ -117,7 +120,7 @@ if [ "$mode" = cloud ]; then
   [ "$status" = 401 ] && grep -q '"Not signed in"' "$body" || { cat "$body" "$log"; exit 1; }
   # The API Worker takes API keys only.
   expect 401 "$api_url/v1/models"
-  rm -f "$body"
+  rm -f "$body" "$headers"
   echo "smoke ok (Commissary Cloud): $url (auth Worker at $auth_url, API Worker at $api_url, state Worker at $state_url)"
   exit 0
 fi
