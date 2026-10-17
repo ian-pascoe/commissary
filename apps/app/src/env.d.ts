@@ -1,6 +1,8 @@
 // Bindings and variables of the Worker. Deployed values come from `alchemy.run.ts` (the Worker's `env` plus the
-// `ASSETS` binding created by `assets`); keep both in sync. Tests bind the same names in `vitest.config.ts`.
-// `Env` is read only by the entry (`index.ts`, `api/scheduled.ts`), the Durable Object classes and tests; other code
+// `ASSETS` binding created by `assets`); keep both in sync. Tests bind the same names in `vitest.config.ts`. The Durable
+// Object namespaces are the state Worker's (apps/state), bound by script name; what its classes read is in its own
+// `env` too (apps/state/src/env.d.ts).
+// `Env` is read only by the entry (`index.ts`, `api/scheduled.ts`) and tests; other code
 // reads its package's view (`AuthConfig`, `StateEnv`, `ModelsEnv`, `AppEnv`: `worker-env.ts`), which `Env` must satisfy.
 interface __BaseEnv_Env {
   /** Model catalogs, signature cache, Antigravity state (Workers KV). */
@@ -61,16 +63,15 @@ interface __BaseEnv_Env {
   OWNED_ORG_LIMIT?: string;
   /** Hosted: the per-org request rate limit of the client API (Workers rate limiting, keyed by org id). */
   ORG_RATE_LIMIT?: RateLimit;
-  CONTROL_PLANE: DurableObjectNamespace<import("./index").ControlPlane>;
-  SESSION_STATE: DurableObjectNamespace<import("./index").SessionState>;
+  CONTROL_PLANE: DurableObjectNamespace<import("@commissary/state-worker").ControlPlane>;
+  SESSION_STATE: DurableObjectNamespace<import("@commissary/state-worker").SessionState>;
   /** The Platform registry: one object per deployment (`platformOf`, `@commissary/state`). */
-  PLATFORM: DurableObjectNamespace<import("./index").Platform>;
+  PLATFORM: DurableObjectNamespace<import("@commissary/state-worker").Platform>;
 }
 
 declare namespace Cloudflare {
   interface GlobalProps {
     mainModule: typeof import("./index");
-    durableNamespaces: "ControlPlane" | "SessionState" | "Platform";
   }
 
   interface Env extends __BaseEnv_Env {}

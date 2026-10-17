@@ -1,0 +1,12 @@
+{
+  // The state Worker (workerd), with the Workers runtime types shared with the other workerd programs
+  // (tools/workers/worker-configuration.d.ts) and the Node.js types for `node:crypto`/`node:buffer` (nodejs_compat).
+  // Its `env` is declared in src/env.d.ts. It has no tests of its own: the app's test Worker re-exports its classes
+  // (apps/app/test/worker.ts).
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": ["node", "../../tools/workers/worker-configuration.d.ts"]
+  },
+  "include": ["src"]
+}

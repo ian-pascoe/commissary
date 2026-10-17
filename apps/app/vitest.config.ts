@@ -47,11 +47,13 @@ const HOSTED_BINDINGS = {
 /** Requests per minute an org may send on the client API of the Commissary Cloud test Worker (test/hosted/rate-limit.test.ts). */
 const HOSTED_TEST_RATE_LIMIT = 5;
 
-// The test Worker mirrors the deployed one declared in alchemy.run.ts (same entry, compatibility settings and binding
-// names); there is no Wrangler configuration file.
+// The test Worker mirrors the deployed ones declared in alchemy.run.ts (compatibility settings and binding names); there
+// is no Wrangler configuration file. Its entry (test/worker.ts) is the app Worker's handler plus the state Worker's
+// Durable Objects, so both run in one isolate (#135): `durableObjects` names classes the entry exports, where the
+// deployed app binds them by script name.
 const worker = (bindings: Record<string, string>, hosted: boolean) =>
   cloudflareTest({
-    main: "./src/index.ts",
+    main: "./test/worker.ts",
     miniflare: {
       compatibilityDate: "2026-08-01",
       compatibilityFlags: ["nodejs_compat"],

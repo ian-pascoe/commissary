@@ -42,6 +42,11 @@ export class DummyPart extends RpcTarget implements ControlPlanePart {
     return this.add(text);
   }
 
+  /** Fails with `message`: a failure of the part's own code, which reaches the caller. */
+  fail(message: string): never {
+    throw new Error(message);
+  }
+
   list(): string[] {
     return this.#sql
       .exec<{ text: string }>(`SELECT text FROM ${this.#name}_items ORDER BY id`)

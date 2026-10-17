@@ -2,7 +2,7 @@
   "name": "@commissary/app",
   "version": "0.0.0",
   "private": true,
-  "description": "The Commissary Worker: the client API, the management API and the control panel's assets, with its Durable Objects",
+  "description": "The app Worker (`Commissary`): the client API, the management API and the control panel's assets; it binds the state Worker's Durable Objects",
   "type": "module",
   "scripts": {
     "test": "vitest run",
@@ -17,6 +17,7 @@
     "@commissary/json": "workspace:*",
     "@commissary/models": "workspace:*",
     "@commissary/state": "workspace:*",
+    "@commissary/state-worker": "workspace:*",
     "better-auth": "1.7.7",
     "effect": "catalog:",
     "jose": "catalog:"
