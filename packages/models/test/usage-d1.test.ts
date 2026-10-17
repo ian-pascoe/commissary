@@ -33,6 +33,8 @@ import costMigration from "../../../migrations/usage/0004_usage_cost.sql?raw";
 import memberMigration from "../../../migrations/usage/0005_usage_member.sql?raw";
 import privateMigration from "../../../migrations/usage/0006_usage_private.sql?raw";
 import failureMigration from "../../../migrations/usage/0007_usage_failure.sql?raw";
+import hostedAuthMigration from "../../../migrations/usage/0008_hosted_auth.sql?raw";
+import dropHostedAuthMigration from "../../../migrations/usage/0009_drop_hosted_auth.sql?raw";
 import { platformOf } from "@commissary/state";
 import { envContext } from "./support/context.ts";
 
@@ -99,6 +101,59 @@ describe("migration 0003 (usage org)", () => {
 
     await insertUsageRecord(db, sampleRecord({ requestId: "new", orgId: OrgId.make("acme") }));
     expect((await listUsageRecords(db, OrgId.make("acme"), {}, authIndexOf)).rows).toHaveLength(1);
+  });
+});
+
+describe("migration 0009 (drop hosted auth)", () => {
+  const authObjects = async () =>
+    (
+      await db
+        .prepare(
+          "SELECT type, name FROM sqlite_master WHERE name LIKE 'auth\\_%' ESCAPE '\\' ORDER BY name",
+        )
+        .all<{ readonly type: string; readonly name: string }>()
+    ).results;
+
+  it("leaves the usage database without the auth_ tables, their indexes and their rows", async () => {
+    expect(await authObjects()).toEqual([]);
+
+    for (const statement of statementsOf(hostedAuthMigration)) await db.prepare(statement).run();
+
+    await db
+      .prepare(
+        `INSERT INTO auth_user (id, name, email, emailVerified, createdAt, updatedAt)
+         VALUES ('u1', 'A', 'a@example.com', 1, 1, 1)`,
+      )
+      .run();
+    await db
+      .prepare(
+        `INSERT INTO auth_session (id, expiresAt, token, createdAt, updatedAt, userId)
+         VALUES ('s1', 1, 't', 1, 1, 'u1')`,
+      )
+      .run();
+    await insertUsageRecord(db, sampleRecord({ requestId: "kept" }));
+
+    expect((await authObjects()).map((object) => object.name)).toEqual([
+      "auth_account",
+      "auth_account_userId_idx",
+      "auth_session",
+      "auth_session_userId_idx",
+      "auth_user",
+      "auth_verification",
+      "auth_verification_identifier_idx",
+    ]);
+
+    for (const statement of statementsOf(dropHostedAuthMigration))
+      await db.prepare(statement).run();
+
+    expect(await authObjects()).toEqual([]);
+    expect((await rows()).map((row) => row.request_id)).toEqual(["kept"]);
+
+    // A second run is a no-op.
+    for (const statement of statementsOf(dropHostedAuthMigration))
+      await db.prepare(statement).run();
+
+    expect(await authObjects()).toEqual([]);
   });
 });
 

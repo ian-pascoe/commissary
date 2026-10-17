@@ -7,7 +7,6 @@ import costs from "../../../../migrations/usage/0004_usage_cost.sql?raw";
 import members from "../../../../migrations/usage/0005_usage_member.sql?raw";
 import privates from "../../../../migrations/usage/0006_usage_private.sql?raw";
 import failures from "../../../../migrations/usage/0007_usage_failure.sql?raw";
-import hostedAuth from "../../../../migrations/usage/0008_hosted_auth.sql?raw";
 import { GLOBAL_ORG } from "@commissary/core";
 import { emptyUsageDetail, type UsageRecord } from "../../src/usage/record.ts";
 
@@ -33,7 +32,6 @@ export const resetUsageDb = async (db: D1Database = env.USAGE): Promise<D1Databa
     ...statementsOf(members),
     ...statementsOf(privates),
     ...statementsOf(failures),
-    ...statementsOf(hostedAuth),
   ]) {
     try {
       await db
