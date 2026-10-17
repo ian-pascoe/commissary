@@ -35,8 +35,8 @@ export interface AppBindings {
    */
   readonly AUTH?: SignInService;
   /**
-   * Hosted: the auth host's origin (`https://auth.<app host>`), which the sign-in page calls (`management/web-panel.ts`)
-   * and the orgs' identity providers send people back to (`management/sso-routes.ts`).
+   * Hosted: the auth host's origin (`https://<COMMISSARY_AUTH_DOMAIN>`, under the base domain), which the sign-in page
+   * calls (`management/web-panel.ts`) and the orgs' identity providers send people back to (`management/sso-routes.ts`).
    */
   readonly AUTH_ORIGIN?: string;
 }

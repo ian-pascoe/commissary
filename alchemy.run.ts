@@ -213,11 +213,12 @@ export default Alchemy.Stack(
         ? undefined
         : yield* Cloudflare.D1.Database("SignIn", { migrations: "./migrations/sign-in" });
 
-    // The auth Worker (apps/auth, ADR 0030), Commissary Cloud only: Better Auth on the auth host (`COMMISSARY_AUTH_DOMAIN`,
-    // by default `auth.<COMMISSARY_DOMAIN>`; a preview's workers.dev URL; its dev port), and the RPC the app Worker asks
-    // over its service binding. It trusts and returns to the app origin only, and scopes the session cookie to the app
-    // host so the app host receives it (a preview: the account's workers.dev subdomain, every preview's cookie named
-    // apart by its prefix; under `alchemy dev` a host-only `localhost` cookie, which spans the ports).
+    // The auth Worker (apps/auth, ADR 0030), Commissary Cloud only: Better Auth on the auth host
+    // (`COMMISSARY_AUTH_DOMAIN`, by default `auth.<COMMISSARY_DOMAIN>`; a preview's workers.dev URL; its dev port), and
+    // the RPC the app Worker asks over its service binding. It trusts and returns to the app origin only, and scopes the
+    // session cookie to the base domain (ADR 0031), so the app host receives it (a preview: the account's workers.dev
+    // subdomain; under `alchemy dev` a host-only `localhost` cookie, which spans the ports). The cookie's name, and its
+    // domain except on a preview, come from the settings (`HostedSettings` `cookiePrefix`, `cookieDomain`).
     const authWorker = (app: {
       readonly origin: string | Output.Output<string>;
       readonly cookieDomain: string | Output.Output<string>;
@@ -235,7 +236,7 @@ export default Alchemy.Stack(
           ...stateBindings,
           APP_ORIGIN: app.origin,
           AUTH_COOKIE_DOMAIN: app.cookieDomain,
-          AUTH_COOKIE_PREFIX: settings.preview ? `commissary-${stage}` : "",
+          AUTH_COOKIE_PREFIX: hosted?.cookiePrefix ?? "",
           ...signInEnv,
         },
       });
@@ -255,7 +256,7 @@ export default Alchemy.Stack(
         // protected by enrolling the Worker into the preview's Access application.
         workersDev: settings.preview,
         dev: { port: DEV_PORTS.app },
-        ...(dev || settings.preview ? {} : { domain: settings.domain }),
+        ...(dev || settings.preview ? {} : { domain: settings.appDomain }),
         ...(access.application === undefined ? {} : { access: access.application }),
         limits: { cpuMs: settings.cpuMs },
         build: { input: { resolve: { alias: { ...BUNDLE_ALIASES } } } },
@@ -303,7 +304,7 @@ export default Alchemy.Stack(
           ? {}
           : {
               routes: CLIENT_API_PREFIXES.map((prefix) => ({
-                pattern: `${settings.domain}${prefix}*`,
+                pattern: `${settings.appDomain}${prefix}*`,
               })),
             }),
         limits: { cpuMs: settings.cpuMs },
@@ -319,7 +320,7 @@ export default Alchemy.Stack(
           // (it was the app's alias before the API Worker existed; Alchemy refuses a hostname another Worker holds).
           ...(split && app !== undefined
             ? {
-                APP_DOMAIN: Output.asOutput(app.url).pipe(Output.map(() => settings.domain)),
+                APP_DOMAIN: Output.asOutput(app.url).pipe(Output.map(() => settings.appDomain)),
                 API_DOMAIN: settings.apiDomain,
               }
             : {}),
@@ -369,7 +370,10 @@ export default Alchemy.Stack(
               : yield* authWorker(
                   dev
                     ? { origin: `http://localhost:${DEV_PORTS.app}`, cookieDomain: "" }
-                    : { origin: `https://${settings.domain}`, cookieDomain: settings.domain },
+                    : {
+                        origin: `https://${settings.appDomain}`,
+                        cookieDomain: hosted.cookieDomain,
+                      },
                 );
 
           const app = yield* appWorker(split ? settings.apiDomain : undefined, signInWorker);
@@ -385,7 +389,7 @@ export default Alchemy.Stack(
     if (!dev && hosted === undefined && !split && !settings.preview)
       yield* provisionClientApiBypass(
         settings,
-        Output.asOutput(api.url).pipe(Output.map(() => settings.domain)),
+        Output.asOutput(api.url).pipe(Output.map(() => settings.appDomain)),
       );
 
     return {

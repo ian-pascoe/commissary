@@ -150,7 +150,8 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
   paths wherever it answers, and neither looks at the request's hostname. The client API paths (`CLIENT_API_PREFIXES`,
   `core/http/client-api.ts`) are the API Worker's: on the API host when the deployment has one (`API_DOMAIN`, deploy
   setting `COMMISSARY_API_DOMAIN`: the API Worker's custom domain), on its own `workers.dev` URL on a preview, else
-  through zone routes `<domain><prefix>*` on the app host, which run in front of the app Worker's custom domain. The
+  through zone routes `<app host><prefix>*` on the app host (`COMMISSARY_APP_DOMAIN`, by default `COMMISSARY_DOMAIN`),
+  which run in front of the app Worker's custom domain. The
   app Worker answers a client API path that reaches it `404 {"error": "Not found: the client API is served at
   https://<API_DOMAIN>"}` (or "… by the API Worker" without an API host), checked before authentication; the API Worker
   answers every path but the client API and `/healthz` `404 {"error": "Not found: … serves the client API only; the
@@ -2390,10 +2391,13 @@ is the Access one, unchanged, and there is no auth Worker. User docs: `docs/ACCE
   Worker names in the page (`<meta name="commissary-auth-origin">`, `AUTH_ORIGIN`, `management/web-panel.ts`) and allows
   in the page's `connect-src`. The auth Worker answers CORS for the app origin (`APP_ORIGIN`) only, with credentials
   (`apps/auth/src/http/cors.ts`); Better Auth trusts and returns to that origin alone, and its session cookie is scoped
-  to the app host (`AUTH_COOKIE_DOMAIN`), so the app host receives it. A preview's Workers share the account's
-  workers.dev subdomain, which its cookie is scoped to, so each preview names its cookie apart (`AUTH_COOKIE_PREFIX`). A
-  Cloud preview's app origin is derived before the app Worker exists (`infra/preview-origin.ts`). The app host has none
-  of Better Auth's routes.
+  to the base domain (`AUTH_COOKIE_DOMAIN` = `COMMISSARY_DOMAIN`, ADR 0031), so the app host under it receives it, as
+  does every other host under it. Once the base domain is above the app host the cookie is named
+  `__Secure-commissary.*` (`AUTH_COOKIE_PREFIX`, `infra/settings.ts` `BASE_COOKIE_PREFIX`), so a cookie of the same name
+  still scoped to the app host from before cannot shadow it (Better Auth reads the first of two cookies of one name). A
+  preview's Workers share the account's workers.dev subdomain, which its cookie is scoped to, so each preview names its
+  cookie apart (`AUTH_COOKIE_PREFIX`). A Cloud preview's app origin is derived before the app Worker exists
+  (`infra/preview-origin.ts`). The app host has none of Better Auth's routes.
 - **RPC** (`SignInService`, `auth/sign-in-service.ts`; `src/hosted/sign-in.ts`): the app Worker binds the auth Worker
   as a service (`AUTH`, Cloud only) and asks it whose session a cookie is (the gate's `SignInSessions` port), to end
   people's or a domain's sessions (a suspension, single sign-on becoming required) and to delete a sign-in account.

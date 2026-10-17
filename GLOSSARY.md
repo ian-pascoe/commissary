@@ -52,12 +52,16 @@ The hostname a deployment may give its client API alone (ADR 0028), where client
 _Avoid_: proxy domain, endpoint
 
 **Auth host**:
-Commissary Cloud's hostname for signing in, under the app host (`auth.<app host>` by default; ADR 0030), where the auth Worker answers.
+Commissary Cloud's hostname for signing in, under the base domain (`auth.<base domain>` by default; ADR 0030, ADR 0031), where the auth Worker answers.
 _Avoid_: login domain, SSO host
 
 **App host**:
-The hostname of the control panel, the sign-in _page_ and the management API; with no API host it still serves the client API, through the API Worker.
+The hostname of the control panel, the sign-in _page_ and the management API; with no API host it still serves the client API, through the API Worker. The base domain itself or a host under it.
 _Avoid_: dashboard domain, panel host
+
+**Base domain**:
+The domain the app host and the auth host are under (ADR 0031; the API host may be elsewhere): the app host unless the deployment gives the app a host of its own, and where a landing page may live. Commissary Cloud's sign-in reaches every host under it.
+_Avoid_: root domain, apex, zone (a zone is Cloudflare's)
 
 **Personal org**:
 The org Commissary Cloud gives a person who signs up without being a member anywhere; they are its org owner. An ordinary

@@ -3,6 +3,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { ConfigProvider, Effect, Logger, Redacted } from "effect";
 import {
+  BASE_COOKIE_PREFIX,
   DEV_TURNSTILE_SECRET_KEY,
   DEV_TURNSTILE_SITE_KEY,
   readSettings,
@@ -22,6 +23,20 @@ const read = (variables: Record<string, string>, deployed?: { readonly stage: st
     Effect.provide(capture),
     Effect.map((settings) => ({ settings, warnings })),
   );
+};
+
+/** A deployed stage's settings, or the readable refusal of invalid ones (a defect, see `readSettings`). */
+const refusal = (variables: Record<string, string>, stage = "prod") =>
+  read(variables, { stage }).pipe(
+    Effect.as("accepted"),
+    Effect.catchDefect((defect) => Effect.succeed(String(defect))),
+  );
+
+/** The least a self-hosted Commissary deploys with. */
+const selfHosted = {
+  COMMISSARY_DOMAIN: "commissary.example.com",
+  ACCESS_TEAM_DOMAIN: "team",
+  ACCESS_ALLOW_EMAILS: "a@x.com",
 };
 
 describe("platform admin settings", () => {
@@ -83,12 +98,12 @@ describe("secrets key generations", () => {
         ],
       ] as const) {
         // The settings refuse invalid values as a defect with a readable message (see `readSettings`).
-        const refusal = yield* read(variables).pipe(
+        const refused = yield* read(variables).pipe(
           Effect.as("accepted"),
           Effect.catchDefect((defect) => Effect.succeed(String(defect))),
         );
 
-        assert.include(refusal, message);
+        assert.include(refused, message);
       }
     }),
   );
@@ -104,11 +119,13 @@ describe("Commissary Cloud settings", () => {
     TURNSTILE_SECRET_KEY: "turnstile-secret",
   };
 
-  const refusal = (variables: Record<string, string>) =>
-    read(variables, { stage: "prod" }).pipe(
-      Effect.as("accepted"),
-      Effect.catchDefect((defect) => Effect.succeed(String(defect))),
-    );
+  // Commissary Cloud's own layout: a base domain for a landing page, and the app, auth and API hosts under it.
+  const cloud = {
+    ...hosted,
+    COMMISSARY_DOMAIN: "example.com",
+    COMMISSARY_APP_DOMAIN: "app.example.com",
+    COMMISSARY_API_DOMAIN: "api.example.com",
+  };
 
   it.effect("need no Access settings, and default the org limits", () =>
     Effect.gen(function* () {
@@ -157,7 +174,7 @@ describe("Commissary Cloud settings", () => {
   );
 
   it.effect(
-    "put the auth host under the app host, auth.<domain> by default, none on a preview",
+    "put the auth host under the base domain, auth.<base domain> by default, none on a preview",
     () =>
       Effect.gen(function* () {
         assert.strictEqual(
@@ -170,6 +187,10 @@ describe("Commissary Cloud settings", () => {
             { stage: "prod" },
           )).settings.hosted?.authDomain,
           "login.commissary.example.com",
+        );
+        assert.strictEqual(
+          (yield* read(cloud, { stage: "prod" })).settings.hosted?.authDomain,
+          "auth.example.com",
         );
         assert.strictEqual(
           (yield* read({ ...hosted, COMMISSARY_DOMAIN: "" }, { stage: "pr-12" })).settings.hosted
@@ -197,8 +218,58 @@ describe("Commissary Cloud settings", () => {
             },
             "COMMISSARY_AUTH_DOMAIN must differ from COMMISSARY_API_DOMAIN",
           ],
+          [
+            {
+              COMMISSARY_APP_DOMAIN: "app.commissary.example.com",
+              COMMISSARY_AUTH_DOMAIN: "app.commissary.example.com",
+            },
+            "COMMISSARY_AUTH_DOMAIN must differ from the app host (app.commissary.example.com)",
+          ],
+          [
+            { COMMISSARY_APP_DOMAIN: "auth.commissary.example.com" },
+            "COMMISSARY_AUTH_DOMAIN must differ from the app host (auth.commissary.example.com)",
+          ],
         ] as const)
           assert.include(yield* refusal({ ...hosted, ...variables }), message);
+
+        // The auth host of the old layout, under an app host that is the base domain, outside a base domain above it.
+        assert.strictEqual(
+          yield* refusal({ ...cloud, COMMISSARY_AUTH_DOMAIN: "auth.app.example.com" }),
+          "accepted",
+        );
+        assert.include(
+          yield* refusal({ ...cloud, COMMISSARY_AUTH_DOMAIN: "auth.elsewhere.example.org" }),
+          "COMMISSARY_AUTH_DOMAIN must be a subdomain of COMMISSARY_DOMAIN (example.com)",
+        );
+      }),
+  );
+
+  it.effect(
+    "scope the session cookie to the base domain, named apart once the base domain is above the app host",
+    () =>
+      Effect.gen(function* () {
+        // The app host is the base domain (the layout before COMMISSARY_APP_DOMAIN): Better Auth's cookie name.
+        const legacy = (yield* read(hosted, { stage: "prod" })).settings.hosted;
+
+        assert.strictEqual(legacy?.cookieDomain, "commissary.example.com");
+        assert.strictEqual(legacy?.cookiePrefix, "");
+
+        const split = (yield* read(cloud, { stage: "cloud" })).settings.hosted;
+
+        assert.strictEqual(split?.cookieDomain, "example.com");
+        assert.strictEqual(split?.cookiePrefix, BASE_COOKIE_PREFIX);
+
+        // A preview names its cookie apart, scoped in alchemy.run.ts to the account's workers.dev subdomain.
+        const preview = (yield* read(cloud, { stage: "pr-12" })).settings.hosted;
+
+        assert.strictEqual(preview?.cookieDomain, "");
+        assert.strictEqual(preview?.cookiePrefix, "commissary-pr-12");
+
+        // `alchemy dev`: a host-only `localhost` cookie of Better Auth's name.
+        const dev = (yield* read(cloud)).settings.hosted;
+
+        assert.strictEqual(dev?.cookieDomain, "");
+        assert.strictEqual(dev?.cookiePrefix, "");
       }),
   );
 
@@ -251,18 +322,6 @@ describe("Commissary Cloud settings", () => {
 });
 
 describe("API host settings", () => {
-  const selfHosted = {
-    COMMISSARY_DOMAIN: "commissary.example.com",
-    ACCESS_TEAM_DOMAIN: "team",
-    ACCESS_ALLOW_EMAILS: "a@x.com",
-  };
-
-  const refusal = (variables: Record<string, string>, stage = "prod") =>
-    read(variables, { stage }).pipe(
-      Effect.as("accepted"),
-      Effect.catchDefect((defect) => Effect.succeed(String(defect))),
-    );
-
   it.effect("default to one host serving everything", () =>
     Effect.gen(function* () {
       assert.strictEqual((yield* read(selfHosted, { stage: "prod" })).settings.apiDomain, "");
@@ -282,10 +341,33 @@ describe("API host settings", () => {
     }),
   );
 
+  it.effect(
+    "refuse an API host that is an app host of its own, but not one that is the base domain",
+    () =>
+      Effect.gen(function* () {
+        const app = { ...selfHosted, COMMISSARY_APP_DOMAIN: "app.commissary.example.com" };
+
+        assert.include(
+          yield* refusal({ ...app, COMMISSARY_API_DOMAIN: "app.commissary.example.com" }),
+          "COMMISSARY_API_DOMAIN must differ from the app host (app.commissary.example.com)",
+        );
+        assert.strictEqual(
+          (yield* read(
+            { ...app, COMMISSARY_API_DOMAIN: "commissary.example.com" },
+            { stage: "prod" },
+          )).settings.apiDomain,
+          "commissary.example.com",
+        );
+      }),
+  );
+
   it.effect("refuse an API host that is the app host or no hostname", () =>
     Effect.gen(function* () {
       for (const [apiDomain, message] of [
-        ["commissary.example.com", "COMMISSARY_API_DOMAIN must differ from COMMISSARY_DOMAIN"],
+        [
+          "commissary.example.com",
+          "COMMISSARY_API_DOMAIN must differ from the app host (commissary.example.com)",
+        ],
         ["https://api.example.com", "COMMISSARY_API_DOMAIN must be a lowercase hostname"],
         ["api.example.com/v1", "COMMISSARY_API_DOMAIN must be a lowercase hostname"],
         ["API.example.com", "COMMISSARY_API_DOMAIN must be a lowercase hostname"],
@@ -295,6 +377,85 @@ describe("API host settings", () => {
           yield* refusal({ ...selfHosted, COMMISSARY_API_DOMAIN: apiDomain }),
           message,
         );
+    }),
+  );
+});
+
+describe("base domain and app host", () => {
+  it.effect("serve the app on the base domain by default, as a self-hosted .env always did", () =>
+    Effect.gen(function* () {
+      for (const variables of [selfHosted, { ...selfHosted, COMMISSARY_APP_DOMAIN: "" }]) {
+        const { settings } = yield* read(variables, { stage: "prod" });
+
+        assert.strictEqual(settings.baseDomain, "commissary.example.com");
+        assert.strictEqual(settings.appDomain, "commissary.example.com");
+        assert.strictEqual(settings.hosted, undefined);
+      }
+    }),
+  );
+
+  it.effect("read COMMISSARY_APP_DOMAIN: the base domain itself or a host under it", () =>
+    Effect.gen(function* () {
+      for (const [app, expected] of [
+        [" app.commissary.example.com ", "app.commissary.example.com"],
+        ["commissary.example.com", "commissary.example.com"],
+        ["panel.eu.commissary.example.com", "panel.eu.commissary.example.com"],
+      ] as const) {
+        const { settings } = yield* read(
+          { ...selfHosted, COMMISSARY_APP_DOMAIN: app },
+          { stage: "prod" },
+        );
+
+        assert.strictEqual(settings.baseDomain, "commissary.example.com");
+        assert.strictEqual(settings.appDomain, expected);
+      }
+    }),
+  );
+
+  it.effect("refuse a base domain that is no hostname", () =>
+    Effect.gen(function* () {
+      for (const base of ["Commissary.example.com", "https://commissary.example.com", "localhost"])
+        assert.include(
+          yield* refusal({ ...selfHosted, COMMISSARY_DOMAIN: base }),
+          "COMMISSARY_DOMAIN must be a lowercase hostname",
+        );
+    }),
+  );
+
+  it.effect("refuse an app host outside the base domain or no hostname", () =>
+    Effect.gen(function* () {
+      for (const [app, message] of [
+        [
+          "app.elsewhere.com",
+          "COMMISSARY_APP_DOMAIN must be COMMISSARY_DOMAIN (commissary.example.com) or a subdomain of it",
+        ],
+        [
+          "example.com",
+          "COMMISSARY_APP_DOMAIN must be COMMISSARY_DOMAIN (commissary.example.com) or a subdomain of it",
+        ],
+        [
+          "appcommissary.example.com",
+          "COMMISSARY_APP_DOMAIN must be COMMISSARY_DOMAIN (commissary.example.com) or a subdomain of it",
+        ],
+        [
+          "https://app.commissary.example.com",
+          "COMMISSARY_APP_DOMAIN must be a lowercase hostname",
+        ],
+        ["App.commissary.example.com", "COMMISSARY_APP_DOMAIN must be a lowercase hostname"],
+      ] as const)
+        assert.include(yield* refusal({ ...selfHosted, COMMISSARY_APP_DOMAIN: app }), message);
+    }),
+  );
+
+  it.effect("ignore the hosts on a preview", () =>
+    Effect.gen(function* () {
+      assert.strictEqual(
+        yield* refusal(
+          { ...selfHosted, COMMISSARY_DOMAIN: "", COMMISSARY_APP_DOMAIN: "app.elsewhere.com" },
+          "pr-12",
+        ),
+        "accepted",
+      );
     }),
   );
 });

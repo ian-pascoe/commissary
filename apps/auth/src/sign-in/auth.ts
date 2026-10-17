@@ -5,9 +5,9 @@
  * which verified email signed in. New in the Workers port.
  *
  * Better Auth answers on the auth host, and the sign-in page and the panel are on the app host (`APP_ORIGIN`), the one
- * origin it trusts and returns to. Its session cookie is scoped to the app host (`AUTH_COOKIE_DOMAIN`), which the app
- * Worker hands back over the RPC (`SignInService.session`), and its name carries a per-preview prefix
- * (`AUTH_COOKIE_PREFIX`).
+ * origin it trusts and returns to. Its session cookie is scoped to the base domain (`AUTH_COOKIE_DOMAIN`, ADR 0031), so
+ * the app host under it receives it and the app Worker hands it back over the RPC (`SignInService.session`), and its
+ * name carries a prefix (`AUTH_COOKIE_PREFIX`): per preview, or naming it apart from the cookie of an older scope.
  *
  * Only an email the provider reports as verified becomes an identity (`validateUserInfo`); the provider's tokens are
  * not kept (Commissary never calls GitHub or Google on the person's behalf), nor the browser's address or user agent.

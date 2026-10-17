@@ -7,17 +7,21 @@ interface __AuthWorkerEnv {
   /** Better Auth's people, sessions and linked accounts (D1, the `SignIn` database); schema in migrations/sign-in/. */
   SIGN_IN: D1Database;
   /**
-   * The app host's origin (`https://<COMMISSARY_DOMAIN>`, a preview's app workers.dev URL, the app's dev URL): where
+   * The app host's origin (`https://<COMMISSARY_APP_DOMAIN>`, a preview's app workers.dev URL, the app's dev URL): where
    * the sign-in page and the panel are. The only origin CORS and Better Auth trust, the Turnstile widget's host, and
    * where a sign-in returns.
    */
   APP_ORIGIN: string;
   /**
-   * The session cookie's `Domain` (the app host; a preview's account workers.dev subdomain), so the app host receives
-   * it. Empty under `alchemy dev`: a host-only `localhost` cookie spans the ports.
+   * The session cookie's `Domain` (the base domain, `COMMISSARY_DOMAIN`, ADR 0031; a preview's account workers.dev
+   * subdomain), so the app host under it receives it. Empty under `alchemy dev`: a host-only `localhost` cookie spans
+   * the ports.
    */
   AUTH_COOKIE_DOMAIN: string;
-  /** Better Auth's cookie prefix: one per preview stage, so previews keep apart; empty for Better Auth's default. */
+  /**
+   * Better Auth's cookie prefix: one per preview stage, so previews keep apart; `commissary` once the base domain is
+   * above the app host (ADR 0031); empty for Better Auth's default.
+   */
   AUTH_COOKIE_PREFIX: string;
   /** Better Auth's signing secret. Deployed: an Alchemy `Random` (alchemy.run.ts). */
   BETTER_AUTH_SECRET?: string;

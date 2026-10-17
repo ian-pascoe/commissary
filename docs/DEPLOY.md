@@ -4,7 +4,7 @@
 
 | Event                                    | Stage         | Where                                                         |
 | ---------------------------------------- | ------------- | ------------------------------------------------------------- |
-| Push to `main`                           | `prod`        | `COMMISSARY_DOMAIN`, GitHub environment `production`          |
+| Push to `main`                           | `prod`        | its app host, GitHub environment `production`                 |
 | Push to `main`                           | `cloud`       | its own domain, GitHub environment `cloud` (once set up)      |
 | Pull request from a branch of this repo  | `pr-<number>` | the Workers' `workers.dev` URLs, GitHub environment `preview` |
 | That pull request closed (merged or not) | `pr-<number>` | destroyed                                                     |
@@ -47,7 +47,8 @@ A stage named `pr-<number>` is a preview (`infra/settings.ts`):
   platform admins (`PLATFORM_ADMIN_EMAILS`).
 - Empty KV, D1 and Durable Objects, and no cron trigger. A preview has no provider credentials, so it serves the panel,
   the management API and the routes but cannot serve real requests. Add credentials through its panel if you need to.
-- `COMMISSARY_DOMAIN`, `COMMISSARY_API_DOMAIN`, `ACCESS_AUD` and `ACCESS_SERVICE_TOKENS` are ignored.
+- `COMMISSARY_DOMAIN`, `COMMISSARY_APP_DOMAIN`, `COMMISSARY_API_DOMAIN`, `COMMISSARY_AUTH_DOMAIN`, `ACCESS_AUD` and
+  `ACCESS_SERVICE_TOKENS` are ignored.
 
 Any machine with the deploy settings can deploy a preview by hand: `pnpm run deploy --stage pr-123`, and remove it with
 `pnpm run destroy --stage pr-123`.
@@ -71,7 +72,7 @@ the auth Worker ([Commissary Cloud](#commissary-cloud)):
    application of its own: clients send API keys. It binds the Durable Objects by script name too, and the per-org rate limit
    on Commissary Cloud. Where it answers:
    - on the API host when there is one ([API host](#api-host)), as its custom domain;
-   - else on the app host, through **zone routes** `<COMMISSARY_DOMAIN>/v1*`, `/openai/v1*`, `/backend-api/codex*`,
+   - else on the app host, through **zone routes** `<app host>/v1*`, `/openai/v1*`, `/backend-api/codex*`,
      `/chat/completions*`, `/completions*` and `/responses*` (a route runs in front of the app Worker's custom domain on
      the same hostname); the bypass application of the client API paths takes them out of the app host's Access
      application ([Operations](#operations));
@@ -120,14 +121,39 @@ state Worker and the move happens on that deploy, with no setting or manual step
 that everything survived and the API key works, destroy the stage. A pull request's own preview starts empty and
 proves nothing about the move.
 
+## Base domain and app host
+
+`COMMISSARY_DOMAIN` is the **base domain** (ADR 0031): the app host and Commissary Cloud's auth host are under it (the
+API host may be elsewhere), it is where a landing page may live, and on Commissary Cloud it scopes the session cookie.
+`COMMISSARY_APP_DOMAIN` (optional) is the **app host**, the app Worker's custom domain: the control panel, the sign-in
+page and the management API, on a self-hosted Commissary the hostname of the Access application, and, without an [API
+host](#api-host), the hostname of the client API's zone routes. It is the base domain itself or a host under it, and by
+default the base domain, so a `.env` that sets `COMMISSARY_DOMAIN` alone serves everything there as before.
+
+| Layout                     | `COMMISSARY_DOMAIN` | `COMMISSARY_APP_DOMAIN` | `COMMISSARY_API_DOMAIN` | Auth host (Cloud)      |
+| -------------------------- | ------------------- | ----------------------- | ----------------------- | ---------------------- |
+| one hostname (the default) | `llm.example.com`   | (unset)                 | (unset)                 | `auth.llm.example.com` |
+| a landing page on the base | `example.com`       | `app.example.com`       | `api.example.com`       | `auth.example.com`     |
+
+- **Moving the app host** (setting `COMMISSARY_APP_DOMAIN` to a host other than the base domain) moves the app Worker's
+  custom domain, the Access application and the zone routes: the old hostname stops answering, so point people and
+  clients at the new one. The app host must be on a zone of the account; `pnpm ci:setup` writes the variable into the
+  environment and extends the deploy token to its zone.
+- **Commissary Cloud's session cookie** is scoped to the base domain, so every host under it receives it: a landing
+  page, and the API host when it is under the base domain (ADR 0031). While the base domain is the app host the cookie
+  keeps Better Auth's name; once the base domain is above the app host it is named `__Secure-commissary.session_token`,
+  so a cookie still scoped to the app host from before is ignored instead of shadowing it: everyone signs in once more
+  after the switch.
+
 ## API host
 
 `COMMISSARY_API_DOMAIN` (optional, ADR 0028) gives a deployment a second hostname, the **API host**: the API Worker's
 custom domain, which serves the client API (`/v1`, `/v1beta`, `/v1internal`, `/openai/v1`, `/backend-api/codex`,
-`/chat/completions`, `/completions`, `/responses`) and `/healthz`, and nothing else. `COMMISSARY_DOMAIN`, the **app
-host**, is the app Worker's: the control panel, sign-in and the management API, and no client API route, with no zone
-routes. A path on the wrong host answers `404` with the host that serves it (`apps/app/src/http/hosts.ts`,
-`apps/api/src/http/hosts.ts`). The panel's API keys page tells clients the API host (`GET /me` `api_url`).
+`/chat/completions`, `/completions`, `/responses`) and `/healthz`, and nothing else. The **app host** ([Base domain and
+app host](#base-domain-and-app-host)) is the app Worker's: the control panel, sign-in and the management API, and no
+client API route, with no zone routes. A path on the wrong host answers `404` with the host that serves it
+(`apps/app/src/http/hosts.ts`, `apps/api/src/http/hosts.ts`). The panel's API keys page tells clients the API host
+(`GET /me` `api_url`).
 
 - **Self-hosted:** Access covers the app host only; the API host has no Access application and the bypass application
   of the client API paths is not created (an existing one is deleted). Clients that sign in through Access send the app
@@ -135,8 +161,8 @@ routes. A path on the wrong host answers `404` with the host that serves it (`ap
 - **Commissary Cloud:** the Turnstile hostname is the app host, where the sign-in page shows the widget; the OAuth
   callbacks are on the auth host ([Commissary Cloud](#commissary-cloud)), which an API host does not change.
 - **Moving to an API host** changes the address of every client: point them at the API host when the deploy finishes
-  (their old base URL answers `404`). On Commissary Cloud people sign in again: the session cookie belongs to the old
-  hostname. Unsetting the variable moves everything back to one host.
+  (their old base URL answers `404`). Unsetting the variable moves everything back to one host. The API host differs
+  from the app host and the auth host; it need not be under the base domain.
 - Both hostnames must be in zones of the account; `pnpm ci:setup` writes the variable into the environment and extends
   the deploy token to the API host's zone.
 
@@ -151,21 +177,22 @@ are the people in `PLATFORM_ADMIN_EMAILS` signed in with that email verified by 
 Sign-in has a Worker of its own (ADR 0030): **`Auth`** (`apps/auth`), the auth Worker, on the **auth host**
 (`COMMISSARY_AUTH_DOMAIN`, by default `auth.<COMMISSARY_DOMAIN>`), with Better Auth's database `SignIn` (D1, schema in
 `migrations/sign-in/`), which no other Worker binds. The sign-in page stays on the app host and calls the auth host,
-which answers the app host's origin only (CORS); the session cookie is scoped to the app host, so the app host gets it,
-and the app Worker asks the auth Worker over a service binding whose session it is. The auth host must be a subdomain
-of the app host (the deploy refuses another one), in the same zone. A self-hosted Commissary has neither the auth Worker
-nor the `SignIn` database.
+which answers the app host's origin only (CORS) and returns people there; the session cookie is scoped to the base
+domain ([Base domain and app host](#base-domain-and-app-host)), so the app host gets it, and the app Worker asks the
+auth Worker over a service binding whose session it is. The auth host must be a subdomain of the base domain other
+than the app host and the API host (the deploy refuses another one), on a zone of the account. A self-hosted
+Commissary has neither the auth Worker nor the `SignIn` database.
 
-| Setting                                                    | Kind        | Meaning                                                                     |
-| ---------------------------------------------------------- | ----------- | --------------------------------------------------------------------------- |
-| `COMMISSARY_MODE`                                          | variable    | `cloud`; unset or `self-hosted` for a self-hosted Commissary                |
-| `COMMISSARY_AUTH_DOMAIN`                                   | variable    | the auth host, a subdomain of `COMMISSARY_DOMAIN` (default `auth.<domain>`) |
-| `SIGN_IN_GITHUB_CLIENT_ID`, `SIGN_IN_GITHUB_CLIENT_SECRET` | var, secret | a GitHub OAuth app (or GitHub App); offered when both are set               |
-| `SIGN_IN_GOOGLE_CLIENT_ID`, `SIGN_IN_GOOGLE_CLIENT_SECRET` | var, secret | a Google OAuth client (web application); offered when both are set          |
-| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`               | var, secret | a Cloudflare Turnstile widget for the app host (required)                   |
-| `OWNED_ORG_LIMIT`                                          | variable    | orgs a person may own unless a platform admin raises it (default 3)         |
-| `ORG_RATE_LIMIT`                                           | variable    | requests per minute each org may send on the client API (default 600)       |
-| `ORG_RATE_LIMIT_NAMESPACE_ID`                              | variable    | the Workers rate-limit namespace, a positive integer (default 7201)         |
+| Setting                                                    | Kind        | Meaning                                                                 |
+| ---------------------------------------------------------- | ----------- | ----------------------------------------------------------------------- |
+| `COMMISSARY_MODE`                                          | variable    | `cloud`; unset or `self-hosted` for a self-hosted Commissary            |
+| `COMMISSARY_AUTH_DOMAIN`                                   | variable    | the auth host, under `COMMISSARY_DOMAIN` (default `auth.<base domain>`) |
+| `SIGN_IN_GITHUB_CLIENT_ID`, `SIGN_IN_GITHUB_CLIENT_SECRET` | var, secret | a GitHub OAuth app (or GitHub App); offered when both are set           |
+| `SIGN_IN_GOOGLE_CLIENT_ID`, `SIGN_IN_GOOGLE_CLIENT_SECRET` | var, secret | a Google OAuth client (web application); offered when both are set      |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`               | var, secret | a Cloudflare Turnstile widget for the app host (required)               |
+| `OWNED_ORG_LIMIT`                                          | variable    | orgs a person may own unless a platform admin raises it (default 3)     |
+| `ORG_RATE_LIMIT`                                           | variable    | requests per minute each org may send on the client API (default 600)   |
+| `ORG_RATE_LIMIT_NAMESPACE_ID`                              | variable    | the Workers rate-limit namespace, a positive integer (default 7201)     |
 
 At least one provider and the Turnstile keys are required: the deploy refuses a Commissary Cloud stage without them.
 `BETTER_AUTH_SECRET` is minted like the `auth_index` key (an Alchemy `Random`, resource `BetterAuthSecret`); nothing to
@@ -205,9 +232,9 @@ and the app Worker's hostname is added to the Turnstile widget. Every Worker of 
 subdomain, which a preview's session cookie is scoped to; each preview names its cookie apart
 (`commissary-<stage>` prefix), so previews keep separate sessions. The prefix only names cookies apart: every
 Worker on that subdomain receives every preview's session cookie, so deploy nothing untrusted on the account's
-workers.dev subdomain (prod and `cloud` scope theirs to the app host). Previews share the rate-limit namespace with each other, and with
-production when the environments set the same `ORG_RATE_LIMIT_NAMESPACE_ID`: the org `global` exists on every stage
-under the same id, so give `preview` its own namespace.
+workers.dev subdomain (prod and `cloud` scope theirs to their base domain). Previews share the rate-limit namespace
+with each other, and with production when the environments set the same `ORG_RATE_LIMIT_NAMESPACE_ID`: the org
+`global` exists on every stage under the same id, so give `preview` its own namespace.
 
 ### The Commissary Cloud stage
 
@@ -219,17 +246,18 @@ never take the self-hosted Commissary's hostname from `.env`.
 Its settings live in `.env.cloud` (copy `.env.cloud.example`), never in `.env`, which keeps the self-hosted Commissary's
 and the Commissary Cloud previews'. Set them up once:
 
-1. **Hostname.** Pick one in a zone of the account, other than `COMMISSARY_DOMAIN` of `.env`, and optionally an API
-   host (`COMMISSARY_API_DOMAIN`, [API host](#api-host)). The other steps use the app host.
-2. **OAuth apps.** A GitHub OAuth app for its auth host (`auth.<hostname>` unless `COMMISSARY_AUTH_DOMAIN` names
+1. **Hostnames.** Pick a base domain (`COMMISSARY_DOMAIN`) in a zone of the account, other than `.env`'s, an app host
+   under it (`COMMISSARY_APP_DOMAIN`, by default the base domain; [Base domain and app host](#base-domain-and-app-host)),
+   and optionally an API host (`COMMISSARY_API_DOMAIN`, [API host](#api-host)).
+2. **OAuth apps.** A GitHub OAuth app for its auth host (`auth.<base domain>` unless `COMMISSARY_AUTH_DOMAIN` names
    another subdomain; a GitHub OAuth app takes one callback host, so not the previews' app) with the callback
    `https://<auth host>/api/auth/callback/github`; for Google, add `https://<auth host>/api/auth/callback/google` to
    the client's redirect URIs.
-3. **Turnstile.** Add the hostname (the app host) to a widget (or create one) and put its keys in `.env.cloud`.
+3. **Turnstile.** Add the app host to a widget (or create one) and put its keys in `.env.cloud`.
 4. **Rate-limit namespace.** An `ORG_RATE_LIMIT_NAMESPACE_ID` that the previews' environment does not use.
 5. **CI.** `pnpm ci:setup` creates the GitHub environment `cloud` (deployments from `main` only) with the settings of
-   `.env.cloud`, and extends the deploy token to the hostname's zone. Until then the `deploy cloud` job of a push to
-   `main` only notes that it is not set up.
+   `.env.cloud`, and extends the deploy token to the zones of its hostnames. Until then the `deploy cloud` job of a push
+   to `main` only notes that it is not set up.
 
 The next push to `main` (or a manual run) deploys it and checks it with `tools/check-cloud-deploy.sh`. Whoever signs in with an
 email of `PLATFORM_ADMIN_EMAILS` (verified by the provider) is a platform admin. By hand, `pnpm deploy:cloud`
@@ -252,13 +280,13 @@ It manages:
   `preview`, and `cloud` (like `production`) when `.env.cloud` exists ([The Commissary Cloud stage](#the-commissary-cloud-stage));
 - `commissary-ci-deploy`, an account-owned Cloudflare API token limited to what `alchemy.run.ts` deploys: Workers Scripts,
   Workers KV Storage, D1, Secrets Store (Alchemy's state store) and Access: Apps and Policies (Write), Account Settings
-  (Read), and Zone Read, DNS Write and Workers Routes Write on the zones of `COMMISSARY_DOMAIN` and
-  `COMMISSARY_API_DOMAIN` (and of the `cloud` stage's);
+  (Read), and Zone Read, DNS Write and Workers Routes Write on the zones of the app host, the API host and Commissary
+  Cloud's auth host (and of the `cloud` stage's);
 - `commissary-ci-check`, the Access service token of the post-deploy check;
 - in both environments, the secrets `CLOUDFLARE_API_TOKEN`, `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` and the
   variables `CLOUDFLARE_ACCOUNT_ID`, `ACCESS_*` (from `.env`) and `ACCESS_ALLOW_SERVICE_TOKEN_IDS` (the check token's
-  ID); in `production` also `COMMISSARY_DOMAIN` and `COMMISSARY_API_DOMAIN`; and Commissary Cloud's settings where `.env` sets them
-  ([Commissary Cloud](#commissary-cloud));
+  ID); in `production` also `COMMISSARY_DOMAIN`, `COMMISSARY_APP_DOMAIN` and `COMMISSARY_API_DOMAIN`; and Commissary
+  Cloud's settings where `.env` sets them ([Commissary Cloud](#commissary-cloud));
 - in `cloud`, the secret `CLOUDFLARE_API_TOKEN` and the settings of `.env.cloud` (no Access settings or check token).
 
 Raw secrets never leave Alchemy: Cloudflare returns them once, they go to the encrypted state store and are encrypted
