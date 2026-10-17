@@ -2,7 +2,7 @@
 // fake GitHub and Turnstile behind the global `fetch`, and a sign-in that walks Better Auth's real GitHub flow.
 import { exports } from "cloudflare:workers";
 import { SITEVERIFY_URL } from "../../src/hosted/turnstile.ts";
-import { resetUsageDb } from "../support/usage.ts";
+import { resetUsageDb } from "@commissary/models/testing";
 
 export const ORIGIN = "https://commissary.test";
 

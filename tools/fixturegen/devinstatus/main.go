@@ -1,5 +1,5 @@
 // Command devinstatus emits golden fixtures for the TypeScript Devin `GetUserStatus` refresh
-// (apps/app/src/models/credentials/devin-status.ts, apps/app/src/models/oauth/flows/devin-status.ts). The real Go
+// (packages/models/src/credentials/devin-status.ts, packages/models/src/oauth/flows/devin-status.ts). The real Go
 // DevinExecutor.Refresh runs against a local Connect-RPC stub serving scripted protobuf answers; the resulting metadata,
 // attributes and quota signals are recorded. Run from the repository root:
 //
@@ -124,7 +124,7 @@ func run(name string, seed string, status int, body []byte) scenario {
 }
 
 func main() {
-	outPath := flag.String("out", "apps/app/test/fixtures/devin-status.json", "output file")
+	outPath := flag.String("out", "packages/models/test/fixtures/devin-status.json", "output file")
 	flag.Parse()
 	deterministic := hex.EncodeToString(devin.BuildGetUserStatusRequest("devin-session-token$abc", devin.GenerateDeviceFingerprint("seed-1")))
 	scenarios := []scenario{

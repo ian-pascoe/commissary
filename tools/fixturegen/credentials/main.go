@@ -184,7 +184,7 @@ oauth-excluded-models:
 }
 
 func main() {
-	outPath := flag.String("out", "apps/app/test/fixtures/credentials.json", "output file")
+	outPath := flag.String("out", "packages/models/test/fixtures/credentials.json", "output file")
 	flag.Parse()
 
 	now := time.Unix(1_800_000_000, 0)

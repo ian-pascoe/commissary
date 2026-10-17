@@ -2,10 +2,9 @@
 // management `/config` paths.
 import { Effect, Schema } from "effect";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { decodeConfig, encodeConfig, parseConfigYaml } from "../src/models/config/codec.ts";
-import { Config } from "../src/models/config/schema.ts";
 import type { ProviderKeysList } from "@commissary/contract/provider-keys";
 import { jsonInit, makeHarness, resetControlPlane } from "./support/management.ts";
+import { Config, decodeConfig, encodeConfig, parseConfigYaml } from "@commissary/models/testing";
 
 const YAML = `api-keys:
   opencode-zen:

@@ -1,7 +1,7 @@
 // The secrets of `secrets/` without a Durable Object: the sealed value format (`SecretCipher`, AES-256-GCM with the
 // value's context as additional data) and the stage's secrets keys (`deploymentSecretsKeys`). The ControlPlane that
 // stores sealed values and starts from each state it can find is tested with an area's part in the Worker
-// (apps/app/test/secrets.test.ts).
+// (packages/models/test/secrets.test.ts).
 import { env } from "cloudflare:workers";
 import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";

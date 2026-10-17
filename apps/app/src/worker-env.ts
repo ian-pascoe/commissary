@@ -9,7 +9,7 @@ import { Context } from "effect";
 import { type AuthBindings, AuthConfig, AuthDirectory, SignInSessions } from "@commissary/auth";
 import type { SignInBindings } from "./hosted/auth.ts";
 import { signInSessions } from "./hosted/session.ts";
-import { type ModelsBindings, ModelsEnv } from "./models/api.ts";
+import { type ModelsBindings, ModelsEnv } from "@commissary/models/api";
 import { WorkerExecutionContext, CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { stateAuthDirectory, type StateBindings, StateEnv } from "@commissary/state";
 

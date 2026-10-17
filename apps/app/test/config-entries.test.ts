@@ -1,21 +1,24 @@
 // Config entries (ADR 0025): per-entry revisions, the Go config import, the migration of a stored document, and the
 // entry routes (`/settings`, `/provider-keys/groups`, `/model-rules/*`) through the router and the real ControlPlane.
-import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { runInDurableObject } from "cloudflare:test";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { Effect } from "effect";
-import { decodeConfig, encodeConfig } from "../src/models/config/codec.ts";
-import { MIGRATION_PRINCIPAL } from "../src/models/config/store.ts";
-import { configKeyIds } from "../src/models/credentials/key-ids.ts";
 import type { Json } from "@commissary/json";
 import type { ProviderKeysList } from "@commissary/contract/provider-keys";
 import type { RoutingModels } from "@commissary/contract/routing";
 import type { SettingsView } from "@commissary/contract/settings";
 import { OrgId } from "@commissary/core";
-import { authIndexOf } from "./support/auth-index.ts";
-import { comparable } from "./support/config-entries.ts";
-import { asBeforeEncryption } from "./support/secrets.ts";
 import { controlPlane, jsonInit, makeHarness, resetControlPlane } from "./support/management.ts";
+import {
+  asBeforeEncryption,
+  authIndexOf,
+  comparable,
+  configKeyIds,
+  decodeConfig,
+  encodeConfig,
+  FULL_ACCESS,
+  MIGRATION_PRINCIPAL,
+} from "@commissary/models/testing";
 
 const harness = makeHarness();
 

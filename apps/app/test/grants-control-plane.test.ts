@@ -1,10 +1,9 @@
 // Grants in the real ControlPlane (ADR 0023): the writes (revisions, conflicts, what a grant may name), what a pick does
 // the moment a grant changes, team grants following the team, and grants leaving with their member or team.
 import { afterAll, describe, expect, it } from "vitest";
-import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
-import type { GrantValue } from "../src/models/grants/grant.ts";
 import { OrgId } from "@commissary/core";
 import { claudeFile, controlPlane, makeHarness } from "./support/management.ts";
+import { FULL_ACCESS, type GrantValue } from "@commissary/models/testing";
 
 const harness = makeHarness();
 

@@ -6,7 +6,7 @@ import { expect } from "vitest";
 import { makeCorsLayer } from "../src/api/cors.ts";
 import { WorkerExecutionContext } from "@commissary/core";
 import { AuthConfig } from "@commissary/auth";
-import { ModelsEnv } from "../src/models/env.ts";
+import { ModelsEnv } from "@commissary/models/api";
 import { StateEnv } from "@commissary/state";
 import { AppEnv, requestContext } from "../src/worker-env.ts";
 

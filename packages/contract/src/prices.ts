@@ -1,5 +1,5 @@
 /**
- * Price overrides (`/v9/management/price-overrides`, `apps/app/src/models/management/price-routes.ts`): an org's own price for
+ * Price overrides (`/v9/management/price-overrides`, `packages/models/src/management/price-routes.ts`): an org's own price for
  * a provider and model, which wins over the models.dev price when a usage record is costed (ADR 0024). Shared with the
  * browser: imports `effect` and `./config.ts`, `./errors.ts` only.
  *

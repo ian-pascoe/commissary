@@ -1,7 +1,7 @@
 /**
- * The `/v9/management/credentials` routes the panel uses (`apps/app/src/models/management/credentials-routes.ts`;
- * `apps/app/src/models/management/credential-entry.ts` builds each entry), the batch actions
- * (`apps/app/src/models/management/credentials-batch.ts`) and the quota checks (`apps/app/src/models/management/quota-routes.ts`).
+ * The `/v9/management/credentials` routes the panel uses (`packages/models/src/management/credentials-routes.ts`;
+ * `packages/models/src/management/credential-entry.ts` builds each entry), the batch actions
+ * (`packages/models/src/management/credentials-batch.ts`) and the quota checks (`packages/models/src/management/quota-routes.ts`).
  * Shared with the browser: imports `effect` only. Field names are the wire's (snake_case, like Go's auth-file list).
  *
  * Mutations answer with a status only (except refresh, the batch actions and the quota checks, which answer per
@@ -72,7 +72,7 @@ export const QuotaReport = Schema.Struct({
 export type QuotaReport = typeof QuotaReport.Type;
 
 /**
- * One Claude reset grant (Anthropic's `cedar_ember` program, `apps/app/src/models/quota/reset-grants.ts`): a bundle of resets, each
+ * One Claude reset grant (Anthropic's `cedar_ember` program, `packages/models/src/quota/reset-grants.ts`): a bundle of resets, each
  * of which sets the usage windows in `clears` (`five_hour`, `seven_day`, …) back to empty. `label` is Anthropic's
  * display text, sanitised (empty when none); times are ISO instants.
  */

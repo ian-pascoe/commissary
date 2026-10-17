@@ -1,5 +1,5 @@
 // The Settings page's model: which setting lives in which section, the form's inputs for a value and back, the
-// client-side checks that mirror the server's (`apps/app/src/models/management/settings.ts`), the patch a section's draft
+// client-side checks that mirror the server's (`packages/models/src/management/settings.ts`), the patch a section's draft
 // becomes, and the rebase of a draft onto a newer view. Pure: no DOM, tested in test/settings.test.ts.
 //
 // A section's draft is a delta: the inputs the operator touched, by dotted config path. Everything else shows the
@@ -284,7 +284,7 @@ export const inputOf = (spec: FieldSpec, value: SettingValue | undefined): Input
 };
 
 // ---------------------------------------------------------------------------------------------------------------
-// Checks (mirroring apps/app/src/models/management/settings.ts)
+// Checks (mirroring packages/models/src/management/settings.ts)
 
 const UNITS = new Map<string, number>([
   ["ns", 1e-6],
@@ -297,7 +297,7 @@ const UNITS = new Map<string, number>([
   ["h", 3_600_000],
 ]);
 
-/** Go `time.ParseDuration` in milliseconds (`1h30m`, `1.5s`, `0`); `undefined` when invalid (apps/app/src/models/config/accessors.ts). */
+/** Go `time.ParseDuration` in milliseconds (`1h30m`, `1.5s`, `0`); `undefined` when invalid (packages/models/src/config/accessors.ts). */
 export const parseGoDuration = (input: string): number | undefined => {
   const text = input.trim();
 

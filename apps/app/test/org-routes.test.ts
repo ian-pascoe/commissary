@@ -1,7 +1,6 @@
 // Orgs through the management API (ADR 0021): platform admins list, create and rename orgs, address one with
 // `/v9/management/orgs/<slug>/...`, and everyone else keeps to `global`. Through the router with the real ControlPlanes
 // and a Platform registry of its own (`isolatedPlatform`).
-import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { ProviderKeysList } from "@commissary/contract/provider-keys";
 import type { RoutingModels } from "@commissary/contract/routing";
@@ -17,6 +16,7 @@ import {
   serviceToken,
   token,
 } from "./support/management.ts";
+import { FULL_ACCESS } from "@commissary/models/testing";
 
 const registry = isolatedPlatform();
 

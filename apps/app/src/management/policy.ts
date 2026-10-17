@@ -16,7 +16,7 @@
  *   org, `@commissary/auth` `holdsSensitivePowers`).
  */
 import { type AccessRule, type RouteAccess, ruleAccess } from "@commissary/auth";
-import { accessRules as modelsAccessRules } from "../models/management.ts";
+import { accessRules as modelsAccessRules } from "@commissary/models/management";
 import {
   type AccessZone,
   isPanelPagePath,

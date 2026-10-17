@@ -4,9 +4,6 @@ import { env } from "cloudflare:workers";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import type { CatalogRefresh, CatalogStatus } from "@commissary/contract/catalog";
 import { platformOf } from "@commissary/state";
-import { CATALOG_KEYS } from "../src/models/registry/catalog-store.ts";
-import { MODELS_DEV_URL } from "../src/models/registry/refresh.ts";
-import { documentText, mdModel } from "./support/models-dev.ts";
 import {
   controlPlane,
   jsonInit,
@@ -14,6 +11,7 @@ import {
   resetControlPlane,
   token,
 } from "./support/management.ts";
+import { CATALOG_KEYS, documentText, mdModel, MODELS_DEV_URL } from "@commissary/models/testing";
 
 const STATUS = "/v9/management/models/catalog";
 

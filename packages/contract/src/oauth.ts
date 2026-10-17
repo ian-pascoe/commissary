@@ -1,6 +1,6 @@
 /**
- * `/v9/management/oauth/*`: connecting an account (`apps/app/src/models/management/oauth-routes.ts`,
- * `apps/app/src/models/oauth/service.ts`). Shared with the browser: imports `effect` only.
+ * `/v9/management/oauth/*`: connecting an account (`packages/models/src/management/oauth-routes.ts`,
+ * `packages/models/src/oauth/service.ts`). Shared with the browser: imports `effect` only.
  *
  * Two flows. Callback flows (claude, codex, antigravity, devin) answer an authorize `url`; the provider redirects to
  * a localhost page that does not load, and the operator pastes that address into `POST /oauth/callback`. Device
@@ -48,7 +48,7 @@ export const OAuthProgress = Schema.Union([
 export type OAuthProgress = typeof OAuthProgress.Type;
 
 /**
- * `POST /oauth/import?provider=vertex` (`apps/app/src/models/management/oauth-import.ts`): a Google service-account key as
+ * `POST /oauth/import?provider=vertex` (`packages/models/src/management/oauth-import.ts`): a Google service-account key as
  * multipart field `file`, with an optional `location`. Not an HttpApi endpoint (the generated client sends no
  * multipart); the panel posts a `FormData` and decodes the answer with these.
  */

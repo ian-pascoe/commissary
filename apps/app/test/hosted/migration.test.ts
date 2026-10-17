@@ -12,7 +12,7 @@ import privates from "../../../../migrations/0006_usage_private.sql?raw";
 import failures from "../../../../migrations/0007_usage_failure.sql?raw";
 import hostedAuth from "../../../../migrations/0008_hosted_auth.sql?raw";
 import { authOptions } from "../../src/hosted/auth.ts";
-import { statementsOf } from "../support/usage.ts";
+import { statementsOf } from "@commissary/models/testing";
 
 const db = env.USAGE;
 

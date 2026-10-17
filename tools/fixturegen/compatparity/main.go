@@ -1,5 +1,5 @@
 // Command compatparity emits golden fixtures for the TypeScript OpenAI-compatible parity helpers
-// (apps/app/src/models/executor/helps/openai-compat-tool-results.ts): the real Go helps.NormalizeOpenAIToolResultsTextOnly and
+// (packages/models/src/executor/helps/openai-compat-tool-results.ts): the real Go helps.NormalizeOpenAIToolResultsTextOnly and
 // helps.ShouldNormalizeOpenAIToolResultsForModel run over scripted payloads and model configurations. Run from the
 // repository root:
 //
@@ -115,7 +115,7 @@ func promptCacheKeys() []cacheKeyCase {
 func lower(value string) string { return strings.ToLower(strings.TrimSpace(value)) }
 
 func main() {
-	outPath := flag.String("out", "apps/app/test/fixtures/compat-parity.json", "output file")
+	outPath := flag.String("out", "packages/models/test/fixtures/compat-parity.json", "output file")
 	flag.Parse()
 	doc := map[string]any{"normalize": normalizeCases(), "models": modelCases(), "promptCacheKeys": promptCacheKeys()}
 	data, err := json.MarshalIndent(doc, "", " ")

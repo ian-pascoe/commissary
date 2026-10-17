@@ -105,7 +105,7 @@ export const shownAccounts = (
   return accounts.filter((account) => keep(account) && matchesQuery(account, query));
 };
 
-/** Providers whose tokens the server can refresh on request (apps/app/src/models/credentials/refresh/registry.ts). */
+/** Providers whose tokens the server can refresh on request (packages/models/src/credentials/refresh/registry.ts). */
 const REFRESHABLE = new Set([
   "claude",
   "codex",

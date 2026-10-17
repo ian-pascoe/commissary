@@ -1,16 +1,19 @@
 // The upgrade to shared and private credentials (ADR 0023): each test starts from the storage a ControlPlane had before
 // ownership (no `owner` columns, no `private_credentials` column, no private key tables), restarts it so its constructor
 // migrates, and checks that everything that existed is shared and still works. A second restart changes nothing.
-import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { runInDurableObject } from "cloudflare:test";
 import { afterAll, describe, expect, it } from "vitest";
-import { CredentialStore } from "../src/models/credentials/store.ts";
 import { GLOBAL_ORG, OrgId } from "@commissary/core";
-import { SqliteSessionTable } from "../src/models/oauth/session-store.ts";
 import { controlPlane, makeHarness } from "./support/management.ts";
-import { withModelsPart } from "./support/models-part.ts";
 import { storedText } from "@commissary/state/testing";
-import { orgDataKey, restart } from "./support/secrets.ts";
+import {
+  CredentialStore,
+  FULL_ACCESS,
+  orgDataKey,
+  restart,
+  SqliteSessionTable,
+  withModelsPart,
+} from "@commissary/models/testing";
 
 const harness = makeHarness();
 

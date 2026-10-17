@@ -22,7 +22,7 @@ const HOUR_MS = 3_600_000;
 
 const DAY_MS = 24 * HOUR_MS;
 
-/** How far back the series is read: hour buckets may span 31 days (apps/app/src/models/usage/d1.ts). */
+/** How far back the series is read: hour buckets may span 31 days (packages/models/src/usage/d1.ts). */
 export const HISTORY_SPAN_MS = 30 * DAY_MS;
 
 const sum = (points: ReadonlyArray<UsagePoint>, start: number, end: number) =>

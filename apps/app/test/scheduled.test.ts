@@ -1,11 +1,17 @@
+import {
+  createExecutionContext,
+  runInDurableObject,
+  waitOnExecutionContext,
+} from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { Effect } from "effect";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CurrentOrg, GLOBAL_ORG, OrgId, type ScheduledTask } from "@commissary/core";
 import { platformOf } from "@commissary/state";
 import { runScheduledTasks, type ScheduledServices, scheduledTasks } from "../src/api/scheduled.ts";
-import { ModelsEnv } from "../src/models/env.ts";
-import { scheduledTasks as modelsTasks } from "../src/models/scheduled-tasks.ts";
+import worker, { type ControlPlane } from "../src/index.ts";
+import { ModelsEnv, scheduledTasks as modelsTasks } from "@commissary/models/api";
+import { FULL_ACCESS } from "@commissary/models/testing";
 
 const ctx = {} as unknown as ExecutionContext;
 
@@ -135,5 +141,51 @@ describe("scheduled dispatch", () => {
       "credential-refresh-sweep": "org",
       "quota-check": "org",
     });
+  });
+});
+
+describe("the scheduled handler", () => {
+  const HOUR = 3_600_000;
+
+  const iso = (ms: number) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
+
+  // No provider is asked: the refresh is not due. Effect's FetchHttpClient resolves `globalThis.fetch` once, so the
+  // stand-in stays for the whole file.
+  const realFetch = globalThis.fetch;
+
+  beforeAll(() => {
+    globalThis.fetch = async () => new Response("no upstream configured", { status: 500 });
+  });
+
+  afterAll(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  const alarmOf = (stub: DurableObjectStub<ControlPlane>) =>
+    runInDurableObject(stub, (_instance, state) => state.storage.getAlarm());
+
+  it("sweeps the global ControlPlane", async () => {
+    const global = env.CONTROL_PLANE.getByName("global");
+    await global.models().importAuthFile(
+      "claude-a.json",
+      {
+        type: "claude",
+        email: "me@x.com",
+        access_token: "sk-ant-oat-old",
+        refresh_token: "rt-1",
+        expired: iso(Date.now() + 10 * HOUR),
+      },
+      {},
+      FULL_ACCESS,
+    );
+    await runInDurableObject(global, (_instance, state) => state.storage.deleteAlarm());
+    const ctx = createExecutionContext();
+    await worker.scheduled?.(
+      { cron: "0 */3 * * *", scheduledTime: Date.now(), noRetry() {} },
+      env,
+      ctx,
+    );
+    await waitOnExecutionContext(ctx);
+    expect(await alarmOf(global)).not.toBeNull();
   });
 });

@@ -1,11 +1,11 @@
 // The management routes mounted in the real application layer (`makeWebHandler`), reached through the local Access
 // dev bypass: what `alchemy dev` does for the panel.
-import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { env } from "cloudflare:workers";
 import { afterAll, describe, expect, it } from "vitest";
 import { makeWebHandler } from "../src/http/app.ts";
 import { requestContext } from "../src/worker-env.ts";
 import { claudeFile, resetControlPlane } from "./support/management.ts";
+import { FULL_ACCESS } from "@commissary/models/testing";
 
 const app = makeWebHandler();
 

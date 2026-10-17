@@ -5,8 +5,8 @@ import { orgAddressing } from "../management/org-address.ts";
 import { HostedRoutes } from "../hosted/routes.ts";
 import { ManagementRoutesLive } from "../management/routes.ts";
 import { WorkersLoggerLayer } from "@commissary/core";
-import { ClientApiLayer, TraceLayer } from "../models/api.ts";
-import { OAuthCallbackRoutes } from "../models/management.ts";
+import { ClientApiLayer, TraceLayer } from "@commissary/models/api";
+import { OAuthCallbackRoutes } from "@commissary/models/management";
 import { RootRoutes } from "./routes.ts";
 
 /**
@@ -22,7 +22,7 @@ export const AppLayer = Layer.mergeAll(
   AccessLayer,
   withAccess(ClientApiLayer),
   withAccess(ManagementRoutesLive),
-  // Request trace id header and structured request logs (src/models/observability).
+  // Request trace id header and structured request logs (packages/models/src/observability).
   TraceLayer,
   WorkersLoggerLayer,
 );

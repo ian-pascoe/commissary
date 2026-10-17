@@ -14,7 +14,7 @@ const SELF_HOSTED_BINDINGS = {
   ACCESS_DEV_BYPASS: "true",
   META_MINT_URL: "",
   // Fixed test key of the keyed `auth_index` (deployed: an Alchemy `Random`, alchemy.run.ts); 64 characters, so
-  // tests that configure Access (where shorter keys are refused, src/models/management/auth-index.ts) can use it too.
+  // tests that configure Access (where shorter keys are refused, packages/models/src/management/auth-index.ts) can use it too.
   AUTH_INDEX_KEY: "commissary-test-auth-index-key-0123456789abcdef0123456789abcdef01234",
   // Fixed test secrets keys (deployed: an Alchemy `Random`, alchemy.run.ts), 64 characters like the minted ones. The
   // previous key lets tests start a ControlPlane whose data key is still wrapped by it (a rotation, @commissary/state's

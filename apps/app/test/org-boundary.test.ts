@@ -3,18 +3,23 @@
 import { env } from "cloudflare:workers";
 import { Effect, Layer, Schema } from "effect";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { ConfigStoreError } from "../src/models/config/errors.ts";
 import type { SettingsView } from "@commissary/contract/settings";
-import { ConfigReader, ConfigSource } from "../src/models/config/reader.ts";
-import { makeControlPlanePicker } from "../src/models/executor/control-plane-picker.ts";
 import { CurrentOrg, GLOBAL_ORG, OrgId } from "@commissary/core";
 import { controlPlaneOf, resolveBackend } from "@commissary/state";
-import { loadVideoBinding, saveVideoBinding } from "../src/models/handlers/openai/video-binding.ts";
-import { insertUsageRecord } from "../src/models/usage/d1.ts";
-import { authIndexOf } from "./support/auth-index.ts";
 import { claudeFile, makeHarness, resetOrgControlPlane } from "./support/management.ts";
-import { resetUsageDb, sampleRecord } from "./support/usage.ts";
 import { type EnvServices, envContext } from "../src/worker-env.ts";
+import {
+  authIndexOf,
+  ConfigReader,
+  ConfigSource,
+  ConfigStoreError,
+  insertUsageRecord,
+  loadVideoBinding,
+  makeControlPlanePicker,
+  resetUsageDb,
+  sampleRecord,
+  saveVideoBinding,
+} from "@commissary/models/testing";
 
 /** Fresh orgs per test file run: their ControlPlanes start empty. */
 const ACME = OrgId.make(`acme-${crypto.randomUUID().slice(0, 8)}`);

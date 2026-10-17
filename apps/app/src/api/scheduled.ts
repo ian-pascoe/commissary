@@ -25,7 +25,7 @@ import {
   ModelsEnv,
   scheduledTasks as modelsTasks,
   ScheduledTaskLayer as ModelsTaskLayer,
-} from "../models/api.ts";
+} from "@commissary/models/api";
 
 /** The bindings the runner and the areas it mounts read: the state's and each area's view of `env`. */
 export type ScheduledBindings = StateBindings & ModelsBindings;

@@ -25,6 +25,7 @@
     "typecheck:root": "tsc -p tsconfig.infra.json"
   },
   "devDependencies": {
+    "@commissary/models": "workspace:*",
     "@commitlint/cli": "21.2.3",
     "@commitlint/config-conventional": "21.2.3",
     "@distilled.cloud/cloudflare": "1.0.0-rc.15",

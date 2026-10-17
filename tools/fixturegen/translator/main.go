@@ -157,7 +157,7 @@ func run(registry *sdktranslator.Registry, c corpusCase) (fixtureCase, error) {
 func main() {
 	corpusDir := flag.String("corpus", "tools/fixturegen/translator/corpus", "directory with corpus *.json files")
 	outDir := flag.String("out", "packages/translation/test/fixtures/translator", "output directory")
-	executorOut := flag.String("executor-out", "apps/app/test/fixtures/translator-executor.json", "output file of the cases with an executor context")
+	executorOut := flag.String("executor-out", "packages/models/test/fixtures/translator-executor.json", "output file of the cases with an executor context")
 	flag.Parse()
 
 	files, err := filepath.Glob(filepath.Join(*corpusDir, "*.json"))

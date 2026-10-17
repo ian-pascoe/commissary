@@ -1,8 +1,8 @@
 /**
- * `GET /v9/management/routing/models` (`apps/app/src/models/management/routing-models.ts`,
- * `apps/app/src/models/registry/routing-view.ts`) and the channel rule edits of the Models page (`PUT|DELETE
+ * `GET /v9/management/routing/models` (`packages/models/src/management/routing-models.ts`,
+ * `packages/models/src/registry/routing-view.ts`) and the channel rule edits of the Models page (`PUT|DELETE
  * /model-rules/aliases/:channel`, `/model-rules/exclusions/:channel`, served by
- * `apps/app/src/models/management/model-rules-routes.ts`). Shared with the browser: imports `effect` only.
+ * `packages/models/src/management/model-rules-routes.ts`). Shared with the browser: imports `effect` only.
  *
  * `routing/models` answers, per client-visible model id, every credential that could serve it and why it does or does
  * not right now. It is built from a fresh (uncached) registry snapshot, so an edit shows on the next read. The same
