@@ -2,8 +2,8 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
-import { refreshClaude } from "../src/credentials/refresh/claude.ts";
-import { refreshCodex } from "../src/credentials/refresh/codex.ts";
+import { refreshClaude } from "../src/models/credentials/refresh/claude.ts";
+import { refreshCodex } from "../src/models/credentials/refresh/codex.ts";
 import { mockHttp, T0 } from "./support/refresh.ts";
 
 const context = {

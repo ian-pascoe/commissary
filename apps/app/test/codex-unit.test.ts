@@ -3,33 +3,33 @@
 import { Effect, Layer, Stream } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { Config } from "../src/config/schema.ts";
-import { makeCodexExecutor } from "../src/executor/codex/executor.ts";
+import type { Config } from "../src/models/config/schema.ts";
+import { makeCodexExecutor } from "../src/models/executor/codex/executor.ts";
 import {
   codexTerminalFailure,
   newCodexStatusError,
   parseCodexRetryAfterMs,
-} from "../src/executor/codex/errors.ts";
-import { ensureResponsesUsageDetails } from "../src/executor/codex/output.ts";
+} from "../src/models/executor/codex/errors.ts";
+import { ensureResponsesUsageDetails } from "../src/models/executor/codex/output.ts";
 import {
   CODEX_REASONING_REPLAY_TURN_TYPE,
   insertReplayTurns,
   makeInMemoryReplayStore,
-} from "../src/executor/codex/replay.ts";
-import { ExecutionError } from "../src/executor/errors.ts";
-import { sanitizeCodexInputItemIds } from "../src/executor/helps/codex-input-ids.ts";
+} from "../src/models/executor/codex/replay.ts";
+import { ExecutionError } from "../src/models/executor/errors.ts";
+import { sanitizeCodexInputItemIds } from "../src/models/executor/helps/codex-input-ids.ts";
 import {
   normalizeCodexToolIntegerTypes,
   normalizeCodexToolSchemas,
-} from "../src/executor/helps/codex-tool-schema.ts";
-import { finalizePayload } from "../src/executor/helps/payload.ts";
-import { uuidV5Oid } from "../src/executor/helps/uuid.ts";
-import type { ExecutionContext, ExecutorOptions } from "../src/executor/types.ts";
-import { Thinking } from "../src/executor/thinking.ts";
-import { responsesFramer } from "../src/handlers/responses/framer.ts";
+} from "../src/models/executor/helps/codex-tool-schema.ts";
+import { finalizePayload } from "../src/models/executor/helps/payload.ts";
+import { uuidV5Oid } from "../src/models/executor/helps/uuid.ts";
+import type { ExecutionContext, ExecutorOptions } from "../src/models/executor/types.ts";
+import { Thinking } from "../src/models/executor/thinking.ts";
+import { responsesFramer } from "../src/models/handlers/responses/framer.ts";
 import { get, type Json } from "@commissary/json";
 import { builtinTranslators, makeTranslationState } from "@commissary/translation";
-import { UsageReporter } from "../src/usage/reporter.ts";
+import { UsageReporter } from "../src/models/usage/reporter.ts";
 import { oauthCredential } from "./support/codex.ts";
 import { loadConfig } from "./support/pipeline.ts";
 import { GLOBAL_ORG } from "@commissary/core";

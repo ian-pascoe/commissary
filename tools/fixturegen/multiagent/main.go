@@ -1,5 +1,5 @@
 // Command multiagent emits golden fixtures for the TypeScript Codex multi-agent v2 / orphan-delegation rewriting
-// (apps/app/src/executor/helps/codex-multi-agent-v2.ts).
+// (apps/app/src/models/executor/helps/codex-multi-agent-v2.ts).
 //
 // The real internal/client/codex/optimize-multi-agent-v2 functions run over a corpus of Responses requests (agent
 // messages, collaboration namespace tools, additional_tools, orphan delegation outputs) under every combination of

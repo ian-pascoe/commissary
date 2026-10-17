@@ -1,9 +1,9 @@
 // Devin executor-level apply_patch guards (helps/apply_patch.go as used by devin_executor.go) and the refreshed catalog
 // feeding the model UID resolution.
 import { describe, expect, it } from "vitest";
-import { makeDevinExecutor } from "../src/executor/devin/executor.ts";
-import { ProtoWriter } from "../src/executor/devin/protobuf.ts";
-import type { ExecutorRequest } from "../src/executor/types.ts";
+import { makeDevinExecutor } from "../src/models/executor/devin/executor.ts";
+import { ProtoWriter } from "../src/models/executor/devin/protobuf.ts";
+import type { ExecutorRequest } from "../src/models/executor/types.ts";
 import {
   collectStream,
   credential,

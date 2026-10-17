@@ -29,6 +29,7 @@ import {
   type ServiceTokenRecord,
   type StateEnv,
   type TeamRecord,
+  bodyJson,
 } from "@commissary/state";
 import {
   GLOBAL_ORG,
@@ -51,7 +52,6 @@ import {
   UpdateMember,
   UpdateServiceToken,
 } from "@commissary/contract/members";
-import { bodyJson } from "./http.ts";
 import { registry } from "./org-routes.ts";
 
 const BASE = "/v9/management";

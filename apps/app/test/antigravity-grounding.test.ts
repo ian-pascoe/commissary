@@ -7,8 +7,8 @@ import {
   resolveGroundingUrl,
   resolveGroundingUrlsInPayload,
   shouldResolveGroundingUrls,
-} from "../src/executor/antigravity/grounding.ts";
-import { resetMemoryAntigravityState } from "../src/executor/antigravity/state.ts";
+} from "../src/models/executor/antigravity/grounding.ts";
+import { resetMemoryAntigravityState } from "../src/models/executor/antigravity/state.ts";
 import { credential, makeGeminiHarness } from "./support/gemini.ts";
 import {
   jsonResponse,

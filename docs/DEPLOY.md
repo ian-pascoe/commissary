@@ -216,7 +216,7 @@ the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --pro
   running production deploy.
 - **Stale previews.** If a destroy fails, rerun the job, or run `pnpm run destroy --stage pr-<number>` locally.
 - **`auth_index` key.** `AUTH_INDEX_KEY` (the HMAC key of the credential handle `auth_index`,
-  `apps/app/src/management/auth-index.ts`) is an Alchemy `Random` in `alchemy.run.ts`: minted on a stage's first deploy, kept in
+  `apps/app/src/models/management/auth-index.ts`) is an Alchemy `Random` in `alchemy.run.ts`: minted on a stage's first deploy, kept in
   the (encrypted) state store and bound as a Worker secret on every deploy. No GitHub secret or manual step is needed.
   `alchemy dev` uses a fixed key (`DEV_AUTH_INDEX_KEY`), the tests the one in `apps/app/vitest.config.ts`. A Worker with Access
   configured refuses that dev key and any key shorter than 64 characters, and logs the refusal: management calls that

@@ -1,6 +1,6 @@
 // OpenCode Zen/Go executor units: protocol resolution, gateway headers and error classification.
 import { describe, expect, it } from "vitest";
-import type { CredentialSnapshot } from "../src/executor/picker.ts";
+import type { CredentialSnapshot } from "../src/models/executor/picker.ts";
 import {
   OPENCODE_MODEL_COOLDOWN_MS,
   OPENCODE_PROTOCOL_COOLDOWN_MS,
@@ -8,21 +8,21 @@ import {
   openCodeStreamEventError,
   openCodeUpstreamError,
   reclassifyOpenCodeError,
-} from "../src/executor/opencode/errors.ts";
-import { ExecutionError } from "../src/executor/errors.ts";
+} from "../src/models/executor/opencode/errors.ts";
+import { ExecutionError } from "../src/models/executor/errors.ts";
 import {
   OPENCODE_USER_AGENT,
   openCodeAuthHeaders,
   openCodeHeaders,
   openCodeSessionId,
-} from "../src/executor/opencode/headers.ts";
+} from "../src/models/executor/opencode/headers.ts";
 import {
   findModelEntry,
   resolveOpenCodeKeyConfig,
   resolveOpenCodeProtocol,
-} from "../src/executor/opencode/protocol.ts";
-import { embeddedModelsDev } from "../src/registry/catalog.ts";
-import type { ExecutorOptions } from "../src/executor/types.ts";
+} from "../src/models/executor/opencode/protocol.ts";
+import { embeddedModelsDev } from "../src/models/registry/catalog.ts";
+import type { ExecutorOptions } from "../src/models/executor/types.ts";
 import { loadConfig } from "./support/pipeline.ts";
 
 const credential = (

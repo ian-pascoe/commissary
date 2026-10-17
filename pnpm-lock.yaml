@@ -432,6 +432,9 @@ importers:
       '@commissary/core':
         specifier: workspace:*
         version: link:../core
+      '@commissary/json':
+        specifier: workspace:*
+        version: link:../json
       effect:
         specifier: 'catalog:'
         version: 4.0.4

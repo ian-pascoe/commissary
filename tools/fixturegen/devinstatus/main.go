@@ -1,5 +1,5 @@
 // Command devinstatus emits golden fixtures for the TypeScript Devin `GetUserStatus` refresh
-// (apps/app/src/credentials/devin-status.ts, apps/app/src/oauth/flows/devin-status.ts). The real Go
+// (apps/app/src/models/credentials/devin-status.ts, apps/app/src/models/oauth/flows/devin-status.ts). The real Go
 // DevinExecutor.Refresh runs against a local Connect-RPC stub serving scripted protobuf answers; the resulting metadata,
 // attributes and quota signals are recorded. Run from the repository root:
 //

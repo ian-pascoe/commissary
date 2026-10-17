@@ -2,21 +2,24 @@
 // config credentials and the static credential picker.
 import { assert, describe, expect, it } from "@effect/vitest";
 import { Effect } from "effect";
-import { configCredentials, openAICompatModelIds } from "../src/executor/config-credentials.ts";
-import { customHeaders } from "../src/executor/helps/custom-headers.ts";
-import { normalizeOpenAIMaxTokens } from "../src/executor/helps/openai-compat-models.ts";
-import { openAICompatRetryAfterMs } from "../src/executor/helps/retry-after.ts";
+import {
+  configCredentials,
+  openAICompatModelIds,
+} from "../src/models/executor/config-credentials.ts";
+import { customHeaders } from "../src/models/executor/helps/custom-headers.ts";
+import { normalizeOpenAIMaxTokens } from "../src/models/executor/helps/openai-compat-models.ts";
+import { openAICompatRetryAfterMs } from "../src/models/executor/helps/retry-after.ts";
 import {
   executionModelCandidates,
   openAICompatibleProviderKey,
   resolveModelAliasPool,
-} from "../src/executor/models.ts";
+} from "../src/models/executor/models.ts";
 import {
   OpenAICompatStreamReader,
   openAICompatStreamDataError,
-} from "../src/executor/openai-compat/stream.ts";
-import { CredentialPicker, type CredentialSnapshot } from "../src/executor/picker.ts";
-import { StaticCredentialPickerLayer } from "../src/executor/static-picker.ts";
+} from "../src/models/executor/openai-compat/stream.ts";
+import { CredentialPicker, type CredentialSnapshot } from "../src/models/executor/picker.ts";
+import { StaticCredentialPickerLayer } from "../src/models/executor/static-picker.ts";
 import { parseSuffix } from "@commissary/translation/thinking";
 import { LineSplitter } from "@commissary/translation/sse";
 import {

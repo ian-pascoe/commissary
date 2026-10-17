@@ -1,8 +1,8 @@
 // End-to-end tests (workerd) of the Antigravity executor: Access gate -> routes -> conductor -> executor -> mocked
 // Cloud Code upstream. Covers the envelope, header whitelist, stream aggregation, 429 handling and token counting.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Config } from "../src/config/schema.ts";
-import { resetMemoryAntigravityState } from "../src/executor/antigravity/state.ts";
+import type { Config } from "../src/models/config/schema.ts";
+import { resetMemoryAntigravityState } from "../src/models/executor/antigravity/state.ts";
 import type { Json, JsonObject } from "@commissary/json";
 import { credential, makeGeminiHarness } from "./support/gemini.ts";
 import {

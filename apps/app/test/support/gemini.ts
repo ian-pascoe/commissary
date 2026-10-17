@@ -4,19 +4,19 @@ import { env } from "cloudflare:workers";
 import { Effect, Layer } from "effect";
 import { HttpRouter } from "effect/http";
 import { makeAccessLayer, makeWithAccess } from "../../src/access/layer.ts";
-import type { Config } from "../../src/config/schema.ts";
+import type { Config } from "../../src/models/config/schema.ts";
 import {
   type AttemptResult,
   CredentialPicker,
   type CredentialSnapshot,
   type PickRequest,
-} from "../../src/executor/picker.ts";
-import { Thinking } from "../../src/executor/thinking.ts";
-import { ModelProviders } from "../../src/handlers/model-providers.ts";
-import { makeClientApiRoutes } from "../../src/handlers/layer.ts";
+} from "../../src/models/executor/picker.ts";
+import { Thinking } from "../../src/models/executor/thinking.ts";
+import { ModelProviders } from "../../src/models/handlers/model-providers.ts";
+import { makeClientApiRoutes } from "../../src/models/handlers/layer.ts";
 import { RootRoutes } from "../../src/http/routes.ts";
-import type { UsageRecord } from "../../src/usage/record.ts";
-import { UsageSink } from "../../src/usage/sink.ts";
+import type { UsageRecord } from "../../src/models/usage/record.ts";
+import { UsageSink } from "../../src/models/usage/sink.ts";
 import {
   AUD,
   fakeJwksLayer,

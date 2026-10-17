@@ -1,14 +1,14 @@
 // Test helpers for the xAI provider: credentials, a fixed picker that honours `pinnedId` and an xai-only model lookup.
 import { Effect, Layer } from "effect";
-import { ConfigReader } from "../../src/config/reader.ts";
-import { ExecutionError } from "../../src/executor/errors.ts";
+import { ConfigReader } from "../../src/models/config/reader.ts";
+import { ExecutionError } from "../../src/models/executor/errors.ts";
 import {
   type AttemptResult,
   CredentialPicker,
   type CredentialSnapshot,
   type PickResult,
-} from "../../src/executor/picker.ts";
-import { ModelProviders } from "../../src/handlers/model-providers.ts";
+} from "../../src/models/executor/picker.ts";
+import { ModelProviders } from "../../src/models/handlers/model-providers.ts";
 
 /** OAuth (Grok CLI login) credential: talks to the CLI chat proxy by default. */
 export const xaiOauth = (overrides: Partial<CredentialSnapshot> = {}): CredentialSnapshot => ({

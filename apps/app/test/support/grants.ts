@@ -1,6 +1,6 @@
 // Test helpers for grants: grant builders and the reach of a holder.
-import { type GrantHolder, reachOf } from "../../src/grants/reach.ts";
-import type { GrantEntry, GrantScope, GrantSubject } from "../../src/grants/grant.ts";
+import { type GrantHolder, reachOf } from "../../src/models/grants/reach.ts";
+import type { GrantEntry, GrantScope, GrantSubject } from "../../src/models/grants/grant.ts";
 
 export const everyone: GrantSubject = { kind: "everyone" };
 

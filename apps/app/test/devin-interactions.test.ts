@@ -5,7 +5,7 @@ import {
   normalizeDevinUuid,
   parseInteractionsPayload,
   parseSignatureBytes,
-} from "../src/executor/devin/interactions.ts";
+} from "../src/models/executor/devin/interactions.ts";
 import { json } from "./support/executor-run.ts";
 import type { Json } from "@commissary/json";
 

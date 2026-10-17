@@ -1,10 +1,10 @@
-// Prices and the cost of an attempt (src/usage/pricing.ts, ADR 0024): known Claude, OpenAI and Gemini attempts with
+// Prices and the cost of an attempt (src/models/usage/pricing.ts, ADR 0024): known Claude, OpenAI and Gemini attempts with
 // cache reads and writes and reasoning tokens, the override that wins over the catalog, the model without a price.
 import { describe, expect, it } from "vitest";
-import { embeddedModelsDev } from "../src/registry/catalog.ts";
-import { trimModelsDev } from "../src/registry/models-dev.ts";
-import { ensureTokenBreakdown } from "../src/usage/accounting.ts";
-import { parseClaudeUsage, parseGeminiUsage } from "../src/usage/parsers.ts";
+import { embeddedModelsDev } from "../src/models/registry/catalog.ts";
+import { trimModelsDev } from "../src/models/registry/models-dev.ts";
+import { ensureTokenBreakdown } from "../src/models/usage/accounting.ts";
+import { parseClaudeUsage, parseGeminiUsage } from "../src/models/usage/parsers.ts";
 import {
   catalogPrice,
   costOf,
@@ -12,8 +12,8 @@ import {
   PRICE_PROVIDERS,
   type PriceOverride,
   priceOfCost,
-} from "../src/usage/pricing.ts";
-import { parseOpenAIUsage, type UsageDetail } from "../src/usage/record.ts";
+} from "../src/models/usage/pricing.ts";
+import { parseOpenAIUsage, type UsageDetail } from "../src/models/usage/record.ts";
 import { documentText, mdModel } from "./support/models-dev.ts";
 
 const catalog = (() => {

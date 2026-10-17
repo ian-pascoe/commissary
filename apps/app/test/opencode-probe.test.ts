@@ -7,7 +7,7 @@ import {
   type ProviderKeyProbeTarget,
   OPENCODE_PROBE_MODEL,
   probeProviderKey,
-} from "../src/management/provider-keys-probe.ts";
+} from "../src/models/management/provider-keys-probe.ts";
 
 interface Seen {
   readonly method: string;

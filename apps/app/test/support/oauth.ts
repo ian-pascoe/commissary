@@ -4,11 +4,15 @@ import { Effect } from "effect";
 import type { HttpClient } from "effect/http";
 import { TestClock } from "effect/testing";
 import type { JsonObject } from "@commissary/json";
-import { sha256 } from "../../src/oauth/encoding.ts";
-import { base64Url } from "../../src/oauth/encoding.ts";
-import { type CredentialSink } from "../../src/oauth/record.ts";
-import { makeOAuthService, type OAuthService, type StatusResult } from "../../src/oauth/service.ts";
-import { MemorySessionTable, OAuthSessions } from "../../src/oauth/session-store.ts";
+import { sha256 } from "../../src/models/oauth/encoding.ts";
+import { base64Url } from "../../src/models/oauth/encoding.ts";
+import { type CredentialSink } from "../../src/models/oauth/record.ts";
+import {
+  makeOAuthService,
+  type OAuthService,
+  type StatusResult,
+} from "../../src/models/oauth/service.ts";
+import { MemorySessionTable, OAuthSessions } from "../../src/models/oauth/session-store.ts";
 import { type MockHandler, mockHttp, T0 } from "./refresh.ts";
 import { GLOBAL_ORG } from "@commissary/core";
 

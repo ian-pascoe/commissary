@@ -1,11 +1,15 @@
 // Adapters between the pipeline services and the model registry snapshot.
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
-import { ExecutionError } from "../src/executor/errors.ts";
-import { ModelCapabilities } from "../src/handlers/model-capabilities.ts";
-import { ModelProviders } from "../src/handlers/model-providers.ts";
-import { embeddedCatalogs } from "../src/registry/catalog.ts";
-import { buildSnapshot, ModelRegistry, ModelRegistryError } from "../src/registry/service.ts";
+import { ExecutionError } from "../src/models/executor/errors.ts";
+import { ModelCapabilities } from "../src/models/handlers/model-capabilities.ts";
+import { ModelProviders } from "../src/models/handlers/model-providers.ts";
+import { embeddedCatalogs } from "../src/models/registry/catalog.ts";
+import {
+  buildSnapshot,
+  ModelRegistry,
+  ModelRegistryError,
+} from "../src/models/registry/service.ts";
 import { configOf, source } from "./support/registry-sources.ts";
 import { CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { envContext } from "../src/worker-env.ts";

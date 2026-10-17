@@ -2,9 +2,12 @@
 // base-URL routing, CLI identity headers, error rules, reasoning replay and payload rules as the last mutation.
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { resetXaiClientVersionCache, XAI_VERSION_KV_KEY } from "../src/executor/xai/version.ts";
-import type { Config } from "../src/config/schema.ts";
-import type { CredentialSnapshot } from "../src/executor/picker.ts";
+import {
+  resetXaiClientVersionCache,
+  XAI_VERSION_KV_KEY,
+} from "../src/models/executor/xai/version.ts";
+import type { Config } from "../src/models/config/schema.ts";
+import type { CredentialSnapshot } from "../src/models/executor/picker.ts";
 import {
   jsonResponse,
   loadConfig,

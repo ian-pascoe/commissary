@@ -1,6 +1,6 @@
 // The Account page's Routing form: one account's own auth-file fields as a draft of the inputs the operator touched,
 // which of them apply to the account's provider, the checks the server makes
-// (`apps/app/src/credentials/field-patch.ts`), the change count, and the `PATCH /credentials/fields` body (changed
+// (`apps/app/src/models/credentials/field-patch.ts`), the change count, and the `PATCH /credentials/fields` body (changed
 // fields only; `null` deletes a field, so the routing setting applies again). Header values arrive masked
 // (`[redacted]…abcd`) except safe headers (`@commissary/contract/headers`): a header keeps its mask until the operator
 // replaces the value, and the mask goes back unchanged, which the server reads as "keep". An error names its field and,
@@ -80,7 +80,7 @@ export type FieldErrors = Partial<Record<FieldKey, FieldError>>;
 /** The request body without `name`. */
 export type FieldsPatch = Omit<CredentialFieldsPatch, "name">;
 
-/** The largest weight the server takes (`MAX_WEIGHT`, `apps/app/src/credentials/weight.ts`). */
+/** The largest weight the server takes (`MAX_WEIGHT`, `apps/app/src/models/credentials/weight.ts`). */
 export const MAX_WEIGHT = 1_000_000;
 
 /** The form's fields in page order (a failed save focuses the first error in this order). */

@@ -1,12 +1,12 @@
 // Cooldown/quota state, retry planning and the Worker-side picker through the real ControlPlane Durable Object.
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { env } from "cloudflare:workers";
 import { evictDurableObject } from "cloudflare:test";
 import { withModelsPart } from "./support/models-part.ts";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
-import { makeControlPlanePicker } from "../src/executor/control-plane-picker.ts";
-import type { PickResult } from "../src/credentials/selection/types.ts";
+import { makeControlPlanePicker } from "../src/models/executor/control-plane-picker.ts";
+import type { PickResult } from "../src/models/credentials/selection/types.ts";
 import { CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { type EnvServices, envContext } from "../src/worker-env.ts";
 

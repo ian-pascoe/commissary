@@ -1,7 +1,6 @@
 // Port of corsMiddleware (internal/api/server_middleware.go:25-143).
 import { Effect, Predicate } from "effect";
 import { HttpRouter, HttpServerError, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { classifyPath } from "../management/zones.ts";
 
 /** Mirrors `corsExposedResponseHeaders` in internal/api/server_middleware.go. */
 export const CORS_EXPOSED_RESPONSE_HEADERS = [
@@ -32,31 +31,30 @@ const notFound = HttpServerResponse.text("404 page not found", { status: 404 });
 
 /**
  * Global middleware: every response (including 404s) carries the CORS headers, and `OPTIONS` requests are
- * answered with an empty 204 before routing.
- *
- * Deviation from Go: the management zone (`/v9/management*`, the control panel at `/` and its pages, the legacy
- * `/management.html` redirect) gets no CORS headers at all, so other origins can neither pass a preflight nor read a
- * management response with an admin's Access cookie. The panel is served by the Worker itself and does not need CORS.
+ * answered with an empty 204 before routing. A request `exempt` names (a URL of a zone that must not be read across
+ * origins) gets the 204 and the 404 too, but no CORS headers. The API Worker exempts nothing; the app Worker exempts
+ * its management zone (`access/layer.ts`).
  */
-export const CorsLayer = HttpRouter.middleware<{ handles: HttpServerError.HttpServerError }>()(
-  (app) =>
-    Effect.gen(function* () {
-      const request = yield* HttpServerRequest.HttpServerRequest;
+export const makeCorsLayer = (exempt: (requestUrl: string) => boolean) =>
+  HttpRouter.middleware<{ handles: HttpServerError.HttpServerError }>()(
+    (app) =>
+      Effect.gen(function* () {
+        const request = yield* HttpServerRequest.HttpServerRequest;
 
-      const response =
-        request.method === "OPTIONS"
-          ? HttpServerResponse.empty({ status: 204 })
-          : yield* app.pipe(
-              Effect.catchTag("HttpServerError", (error) =>
-                Predicate.isTagged(error.reason, "RouteNotFound")
-                  ? Effect.succeed(notFound)
-                  : Effect.fail(error),
-              ),
-            );
+        const response =
+          request.method === "OPTIONS"
+            ? HttpServerResponse.empty({ status: 204 })
+            : yield* app.pipe(
+                Effect.catchTag("HttpServerError", (error) =>
+                  Predicate.isTagged(error.reason, "RouteNotFound")
+                    ? Effect.succeed(notFound)
+                    : Effect.fail(error),
+                ),
+              );
 
-      if (classifyPath(request.originalUrl) === "management") return response;
+        if (exempt(request.originalUrl)) return response;
 
-      return HttpServerResponse.setHeaders(response, corsHeaders);
-    }),
-  { global: true },
-);
+        return HttpServerResponse.setHeaders(response, corsHeaders);
+      }),
+    { global: true },
+  );

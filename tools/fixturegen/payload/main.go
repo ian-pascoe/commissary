@@ -1,4 +1,4 @@
-// Command payload emits golden fixtures for the TypeScript payload rules engine (apps/app/src/config/payload).
+// Command payload emits golden fixtures for the TypeScript payload rules engine (apps/app/src/models/config/payload).
 //
 // Every case is executed with the real helps.ApplyPayloadConfigWithTrackedPathsForExecutor so the TypeScript
 // tests can verify behavioural parity. Run from the repository root:

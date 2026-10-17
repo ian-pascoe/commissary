@@ -2,16 +2,19 @@
 // plus merge, expiry, redaction and weight rules.
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
-import { parseConfigYaml } from "../src/config/codec.ts";
-import { deriveFileCredential } from "../src/credentials/derive.ts";
-import { accessTokenExpiry, parseJwtExp } from "../src/credentials/expiry.ts";
-import { parseAuthFile } from "../src/credentials/import.ts";
-import { credentialsChanged, mergeExistingMetadata } from "../src/credentials/merge.ts";
-import { executorKey } from "../src/credentials/model.ts";
-import { redactSecrets } from "../src/credentials/redact.ts";
-import { StableIdGenerator, synthesizeConfigCredentials } from "../src/credentials/synthesize.ts";
-import { redactMetadata, summarizeCredential } from "../src/credentials/summary.ts";
-import { parseWeightValue } from "../src/credentials/weight.ts";
+import { parseConfigYaml } from "../src/models/config/codec.ts";
+import { deriveFileCredential } from "../src/models/credentials/derive.ts";
+import { accessTokenExpiry, parseJwtExp } from "../src/models/credentials/expiry.ts";
+import { parseAuthFile } from "../src/models/credentials/import.ts";
+import { credentialsChanged, mergeExistingMetadata } from "../src/models/credentials/merge.ts";
+import { executorKey } from "../src/models/credentials/model.ts";
+import { redactSecrets } from "../src/models/credentials/redact.ts";
+import {
+  StableIdGenerator,
+  synthesizeConfigCredentials,
+} from "../src/models/credentials/synthesize.ts";
+import { redactMetadata, summarizeCredential } from "../src/models/credentials/summary.ts";
+import { parseWeightValue } from "../src/models/credentials/weight.ts";
 import type { JsonObject } from "@commissary/json";
 import fixtures from "./fixtures/credentials.json";
 import { cred, state } from "./support/credentials.ts";

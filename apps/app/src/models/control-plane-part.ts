@@ -12,63 +12,59 @@ import {
   type PriceOverridesWire,
   type SettingChange,
   type WriteResult,
-} from "../config/store.ts";
+} from "./config/store.ts";
 import type { JsonObject } from "@commissary/json";
-import { isTokenPayloadKey } from "../credentials/merge.ts";
+import { isTokenPayloadKey } from "./credentials/merge.ts";
 import {
   CredentialPool,
   type ConfigView,
   type RefreshTarget,
   type UpsertResult,
-} from "../credentials/pool.ts";
-import { type Credential, type CredentialState, executorKey } from "../credentials/model.ts";
+} from "./credentials/pool.ts";
+import { type Credential, type CredentialState, executorKey } from "./credentials/model.ts";
 import {
   type Access,
   accessTo,
   FULL_ACCESS,
   isFullAccess,
   type Scope,
-} from "../credentials/ownership.ts";
+} from "./credentials/ownership.ts";
 import {
   RefreshManager,
   type RefreshOptions,
   type RefreshResult,
   type RunSummary,
-} from "../credentials/refresh/index.ts";
-import { type RetryPlan, RetryQuery } from "../credentials/selection/retry.ts";
+} from "./credentials/refresh/index.ts";
+import { type RetryPlan, RetryQuery } from "./credentials/selection/retry.ts";
 import {
   Lease,
   PickRequest,
   ReportResult,
   type PickResult,
   type ReportOutcome,
-} from "../credentials/selection/types.ts";
-import { CredentialStore } from "../credentials/store.ts";
-import type { CredentialSummary } from "../credentials/summary.ts";
-import type { ModelSource } from "../registry/source.ts";
-import { reachOf } from "../grants/reach.ts";
-import type { GrantChange, GrantSubject, GrantTable, GrantsWire } from "../grants/grant.ts";
-import { GrantStore } from "../grants/store.ts";
-import {
-  type AuthIndexer,
-  type AuthIndexKeyEnv,
-  orgAuthIndexer,
-} from "../management/auth-index.ts";
+} from "./credentials/selection/types.ts";
+import { CredentialStore } from "./credentials/store.ts";
+import type { CredentialSummary } from "./credentials/summary.ts";
+import type { ModelSource } from "./registry/source.ts";
+import { reachOf } from "./grants/reach.ts";
+import type { GrantChange, GrantSubject, GrantTable, GrantsWire } from "./grants/grant.ts";
+import { GrantStore } from "./grants/store.ts";
+import { type AuthIndexer, type AuthIndexKeyEnv, orgAuthIndexer } from "./management/auth-index.ts";
 import {
   type ProviderKeyProbeTargetResult,
   buildProviderKeyProbeTarget,
-} from "../management/provider-keys-probe.ts";
-import { buildProviderKeysList } from "../management/provider-keys-view.ts";
-import { locateKey } from "../management/provider-keys-write.ts";
-import { PROVIDER_KEY_FAMILIES } from "../config/schema.ts";
-import { configKeyIds } from "../credentials/key-ids.ts";
-import { PrivateKeyStore } from "../credentials/private-keys.ts";
+} from "./management/provider-keys-probe.ts";
+import { buildProviderKeysList } from "./management/provider-keys-view.ts";
+import { locateKey } from "./management/provider-keys-write.ts";
+import { PROVIDER_KEY_FAMILIES } from "./config/schema.ts";
+import { configKeyIds } from "./credentials/key-ids.ts";
+import { PrivateKeyStore } from "./credentials/private-keys.ts";
 import {
   buildConfigCredentialEntry,
   buildCredentialEntry,
   buildLimitedEntry,
   ownerFields,
-} from "../management/credential-entry.ts";
+} from "./management/credential-entry.ts";
 import {
   apiCallToken,
   findCredential,
@@ -76,9 +72,9 @@ import {
   type CredentialRef,
   type RefreshAllItem,
   type RefreshOneResult,
-} from "../management/credential-ops.ts";
-import { applyFieldPatch } from "../credentials/field-patch.ts";
-import { type DevinStatusSummary, refreshDevinStatuses } from "../credentials/devin-status.ts";
+} from "./management/credential-ops.ts";
+import { applyFieldPatch } from "./credentials/field-patch.ts";
+import { type DevinStatusSummary, refreshDevinStatuses } from "./credentials/devin-status.ts";
 import {
   type CallbackInput,
   type CallbackResult,
@@ -87,8 +83,8 @@ import {
   type StartInput,
   type StartResult,
   type StatusResult,
-} from "../oauth/service.ts";
-import { OAuthSessions, SqliteSessionTable } from "../oauth/session-store.ts";
+} from "./oauth/service.ts";
+import { OAuthSessions, SqliteSessionTable } from "./oauth/session-store.ts";
 import type {
   AccountResult,
   BatchAction,
@@ -101,19 +97,19 @@ import {
   isQuotaProvider,
   mergeQuotaReport,
   type QuotaOutcome,
-} from "../quota/report.ts";
+} from "./quota/report.ts";
 import type { Viewer } from "@commissary/auth";
 import type { OrgId } from "@commissary/core";
-import { QuotaReportStore } from "../quota/store.ts";
-import type { SpendSettings } from "../spend/model.ts";
+import { QuotaReportStore } from "./quota/store.ts";
+import type { SpendSettings } from "./spend/model.ts";
 import {
   type NewSpendLimit,
   type SpendEntry,
   type SpendOverview,
   SpendService,
   type SpendServiceResult,
-} from "../spend/service.ts";
-import { type SpendResult, SpendStore } from "../spend/store.ts";
+} from "./spend/service.ts";
+import { type SpendResult, SpendStore } from "./spend/store.ts";
 import {
   type ControlPlanePart,
   type LeaseSource,
@@ -126,7 +122,7 @@ import {
   type PutStatusResult,
   type ResetGrantMark,
   ResetGrantStore,
-} from "../quota/reset-grant-store.ts";
+} from "./quota/reset-grant-store.ts";
 import {
   beginClaim,
   type BeginClaim,
@@ -136,8 +132,8 @@ import {
   openClaim,
   pendingClaimJson,
   settleClaim,
-} from "../quota/reset-grants.ts";
-import { buildQuotaTarget, type QuotaTargetResult } from "../quota/target.ts";
+} from "./quota/reset-grants.ts";
+import { buildQuotaTarget, type QuotaTargetResult } from "./quota/target.ts";
 
 const decodePickRequest = Schema.decodeUnknownSync(PickRequest);
 
@@ -1406,7 +1402,7 @@ export class ModelsPart extends RpcTarget implements ControlPlanePart {
   }
 
   /**
-   * One batch action over auth files named by id (`POST /credentials/batch`, src/management/credentials-batch.ts):
+   * One batch action over auth files named by id (`POST /credentials/batch`, src/models/management/credentials-batch.ts):
    * one result per name, in order. Every name is resolved against one snapshot of the stored credentials.
    *
    * Enable, disable and delete apply every name in one synchronous pass inside a storage transaction (nothing
@@ -1621,7 +1617,7 @@ export class ModelsPart extends RpcTarget implements ControlPlanePart {
     return { kind: "stored", report };
   }
 
-  // --- Claude reset grants (src/quota/reset-grant-flow.ts) ------------------------------------------------------
+  // --- Claude reset grants (src/models/quota/reset-grant-flow.ts) ------------------------------------------------------
 
   /**
    * What the Worker needs to read or claim the reset grants of a Claude auth file: the fresh OAuth token and the claim

@@ -3,8 +3,8 @@
 // carries the scopes to charge, and the charge made by `report`. The pool runs with an injected clock and an in-memory
 // ledger book, so the reset at local midnight (with a DST change) is driven by `clock.advance`.
 import { describe, expect, it } from "vitest";
-import type { PickResult, ReportResult } from "../src/credentials/selection/types.ts";
-import { SpendLedger } from "../src/spend/ledger.ts";
+import type { PickResult, ReportResult } from "../src/models/credentials/selection/types.ts";
+import { SpendLedger } from "../src/models/spend/ledger.ts";
 import { makePool, TestNow } from "./support/pool.ts";
 import { limit, MemorySpendBook, USD } from "./support/spend.ts";
 

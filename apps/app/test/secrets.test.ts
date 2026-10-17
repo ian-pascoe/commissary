@@ -2,16 +2,16 @@
 // stage's secrets keys are tested there) in the real ControlPlane Durable Object with its Models part, started from
 // each state it can find in production (new, before encryption, after a rotation, under another key) by restarting it
 // (`evictDurableObject`).
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { ControlPlane } from "../src/index.ts";
-import type { PickResult } from "../src/credentials/selection/types.ts";
+import type { PickResult } from "../src/models/credentials/selection/types.ts";
 import { OrgId } from "@commissary/core";
 import { deploymentSecretsKeys, DEV_SECRETS_KEY, isSealed, openDataKey } from "@commissary/state";
 import { storedText } from "@commissary/state/testing";
-import { orgAuthIndexer } from "../src/management/auth-index.ts";
+import { orgAuthIndexer } from "../src/models/management/auth-index.ts";
 import { controlPlane } from "./support/management.ts";
 import {
   UNRELATED_SECRETS_KEY,

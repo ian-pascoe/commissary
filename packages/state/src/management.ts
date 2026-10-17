@@ -1,6 +1,11 @@
-/** The management routes' way to the ControlPlane: a call over its stub, answered with 502 when the RPC fails. */
+/**
+ * What the management routes of the app and of every area share beyond `@commissary/core`'s replies and readers: the
+ * way to the ControlPlane (a call over its stub, answered with 502 when the RPC fails) and the JSON body readers (they
+ * return `@commissary/json` values, and core imports no other workspace package).
+ */
 import { Effect } from "effect";
-import { type CurrentOrg, type Reply, replyError } from "@commissary/core";
+import { bodyText, type CurrentOrg, type Reply, replyError } from "@commissary/core";
+import { isJsonObject, type Json } from "@commissary/json";
 import { type ControlPlaneStub, currentControlPlane, type StateEnv } from "./env.ts";
 
 /** Calls a ControlPlane stub; a failed RPC is logged (never with payloads) and answered with 502. */
@@ -27,3 +32,21 @@ export const controlPlane = <R>(
   call: (stub: ControlPlaneStub) => R,
 ): Effect.Effect<Awaited<R>, Reply, StateEnv | CurrentOrg> =>
   Effect.flatMap(currentControlPlane, (stub) => callControlPlane(label, stub, call));
+
+/** Request body parsed as JSON (any value); 400 `invalid body` otherwise. */
+export const bodyJson = Effect.gen(function* () {
+  const text = yield* bodyText;
+
+  return yield* Effect.try({
+    // SAFETY: JSON.parse always returns a JSON value, so naming it Json only records that.
+    try: () => JSON.parse(text) as Json,
+    catch: () => replyError(400, "invalid body"),
+  });
+});
+
+/** Request body parsed as a JSON object; 400 `invalid body` otherwise. */
+export const bodyObject = bodyJson.pipe(
+  Effect.flatMap((value) =>
+    isJsonObject(value) ? Effect.succeed(value) : Effect.fail(replyError(400, "invalid body")),
+  ),
+);

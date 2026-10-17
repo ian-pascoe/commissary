@@ -1,5 +1,5 @@
 // Test harness for the management routes: Access gate with a fake JWKS, real ControlPlane, mocked outbound HTTP.
-import { FULL_ACCESS } from "../../src/credentials/ownership.ts";
+import { FULL_ACCESS } from "../../src/models/credentials/ownership.ts";
 import { env } from "cloudflare:workers";
 import { Context, Layer } from "effect";
 import { HttpRouter } from "effect/http";
@@ -8,11 +8,11 @@ import type { AccessPrincipal } from "@commissary/auth";
 import { orgAddressing } from "../../src/management/org-address.ts";
 import { RootRoutes } from "../../src/http/routes.ts";
 import { ManagementRoutes } from "../../src/management/routes.ts";
-import { OAuthCallbackRoutes } from "../../src/oauth/public-routes.ts";
+import { OAuthCallbackRoutes } from "../../src/models/oauth/public-routes.ts";
 import { CurrentOrg, GLOBAL_ORG, type OrgId } from "@commissary/core";
 import { controlPlaneOf } from "@commissary/state";
-import { CatalogStore } from "../../src/registry/catalog-store.ts";
-import { ModelRegistryLive } from "../../src/registry/live.ts";
+import { CatalogStore } from "../../src/models/registry/catalog-store.ts";
+import { ModelRegistryLive } from "../../src/models/registry/live.ts";
 import {
   AUD,
   fakeJwksLayer,

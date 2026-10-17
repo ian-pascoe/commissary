@@ -1,8 +1,8 @@
 // Parity backlog (#29 part 2) for Codex: `resolveCodexModelIsCompat` config fallback and models.json override headers.
 import { describe, expect, it } from "vitest";
-import { resolveCodexModelIsCompat } from "../src/executor/codex/compat.ts";
-import { makeCodexExecutor } from "../src/executor/codex/executor.ts";
-import { modelOverrideHeaders } from "../src/executor/helps/model-headers.ts";
+import { resolveCodexModelIsCompat } from "../src/models/executor/codex/compat.ts";
+import { makeCodexExecutor } from "../src/models/executor/codex/executor.ts";
+import { modelOverrideHeaders } from "../src/models/executor/helps/model-headers.ts";
 import type { ThinkingModelInfo } from "@commissary/translation/thinking";
 import { providerKeyCredential } from "./support/codex.ts";
 import { execute, harness, json, loadConfig, options } from "./support/executor-run.ts";

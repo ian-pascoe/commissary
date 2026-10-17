@@ -7,26 +7,26 @@ import {
   normalizeRequest,
   normalizeSubsequentRequest,
   syntheticPrewarmPayloads,
-} from "../src/handlers/responses/websocket/normalize.ts";
+} from "../src/models/handlers/responses/websocket/normalize.ts";
 import {
   closeForUpstreamError,
   OutputCollector,
   payloadsFromChunk,
   truncateCloseReason,
-} from "../src/handlers/responses/websocket/frames.ts";
+} from "../src/models/handlers/responses/websocket/frames.ts";
 import {
   commitPrewarm,
   commitTurn,
   newSocketState,
   Plan,
   planTurn,
-} from "../src/handlers/responses/websocket/plan.ts";
-import { ExecutionError } from "../src/executor/errors.ts";
+} from "../src/models/handlers/responses/websocket/plan.ts";
+import { ExecutionError } from "../src/models/executor/errors.ts";
 import {
   downstreamSessionKey,
   prepareFallbackTurn,
   ToolCaches,
-} from "../src/handlers/responses/websocket/tool-cache.ts";
+} from "../src/models/handlers/responses/websocket/tool-cache.ts";
 
 const user = (text: string) => ({ type: "message", role: "user", content: text });
 

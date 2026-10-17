@@ -1,5 +1,5 @@
 // Command tokens emits the tokenizer assets and golden fixtures for the TypeScript token counting code
-// (packages/translation/src/tokenizer, apps/app/src/executor/helps/token-count.ts).
+// (packages/translation/src/tokenizer, apps/app/src/models/executor/helps/token-count.ts).
 //
 //   - packages/translation/src/tokenizer/ranks/{o200k_base,cl100k_base}.bin: the vocabularies of the Go tokenizer
 //     (tiktoken-go/tokenizer) in rank order, so the TypeScript BPE uses exactly the ranks Go uses.

@@ -1,8 +1,8 @@
 // The default grant (ADR 0023): a ControlPlane writes "everyone, every shared credential, every model" the first time
 // it is constructed, once, and does not make it again after an org admin removed it.
 import { afterAll, describe, expect, it } from "vitest";
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
-import { DEFAULT_GRANT } from "../src/grants/grant.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
+import { DEFAULT_GRANT } from "../src/models/grants/grant.ts";
 import { OrgId } from "@commissary/core";
 import { claudeFile, controlPlane, makeHarness } from "./support/management.ts";
 import { withModelsPart } from "./support/models-part.ts";

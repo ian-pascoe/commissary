@@ -2,9 +2,9 @@
 import { createHash } from "node:crypto";
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { notAppliedSettings } from "../src/config/not-applied.ts";
+import { notAppliedSettings } from "../src/models/config/not-applied.ts";
 import { sha256Hex } from "@commissary/core";
-import { sha256Hex as oauthSha256Hex } from "../src/oauth/encoding.ts";
+import { sha256Hex as oauthSha256Hex } from "../src/models/oauth/encoding.ts";
 import { loadConfig } from "./support/pipeline.ts";
 
 const GO_CONFIG = `

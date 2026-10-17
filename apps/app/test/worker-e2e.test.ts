@@ -1,7 +1,7 @@
 // End-to-end tests of the production Worker: `exports.default.fetch` (and the default export with a recording
 // ExecutionContext) with the real ControlPlane picker, model registry, D1 usage sink and Access gate (dev bypass on
 // localhost, see vitest.config.ts). Only the upstream provider is mocked, through the global `fetch`.
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { env, exports } from "cloudflare:workers";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index.ts";

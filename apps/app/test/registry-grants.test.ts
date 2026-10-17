@@ -3,10 +3,10 @@
 // every model for routing; `visibleTo` is the per-member view, cached per snapshot (so per org, grants version and
 // member).
 import { describe, expect, it } from "vitest";
-import type { GrantEntry, GrantTable } from "../src/grants/grant.ts";
-import { routingView } from "../src/registry/routing-view.ts";
-import { buildSnapshot } from "../src/registry/service.ts";
-import type { ModelSource } from "../src/registry/source.ts";
+import type { GrantEntry, GrantTable } from "../src/models/grants/grant.ts";
+import { routingView } from "../src/models/registry/routing-view.ts";
+import { buildSnapshot } from "../src/models/registry/service.ts";
+import type { ModelSource } from "../src/models/registry/source.ts";
 import { authIndexOf } from "./support/auth-index.ts";
 import { catalogs } from "./support/registry.ts";
 import { configOf, ids, source } from "./support/registry-sources.ts";

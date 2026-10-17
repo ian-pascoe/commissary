@@ -1,5 +1,5 @@
 // /v9/management/credentials* and /routing/cooldown/reset through the router with the real ControlPlane.
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { authIndexOf } from "./support/auth-index.ts";
 import {

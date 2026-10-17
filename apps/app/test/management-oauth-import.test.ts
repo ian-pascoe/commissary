@@ -1,8 +1,8 @@
 // POST /v9/management/oauth/import?provider=vertex through the router with the real ControlPlane, and the private-key
 // normalisation against the Go `NormalizeServiceAccountMap` (test/fixtures/session.json, tools/fixturegen/session).
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { normalizePrivateKey } from "../src/credentials/refresh/vertex.ts";
+import { normalizePrivateKey } from "../src/models/credentials/refresh/vertex.ts";
 import fixtures from "./fixtures/session.json";
 import { controlPlane, makeHarness, resetControlPlane } from "./support/management.ts";
 import { makeServiceAccount, type TestServiceAccount } from "./support/vertex.ts";

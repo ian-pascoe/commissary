@@ -29,7 +29,7 @@ interface __BaseEnv_Env {
   /** Overrides the Meta key-mint endpoint (empty: default). */
   META_MINT_URL: string;
   /**
-   * Secret HMAC key of `auth_index` (src/management/auth-index.ts). Deployed: an Alchemy `Random` (alchemy.run.ts);
+   * Secret HMAC key of `auth_index` (src/models/management/auth-index.ts). Deployed: an Alchemy `Random` (alchemy.run.ts);
    * tests and `alchemy dev` use their own. Empty fails closed.
    */
   AUTH_INDEX_KEY: string;

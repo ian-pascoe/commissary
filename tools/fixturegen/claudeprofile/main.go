@@ -1,5 +1,5 @@
 // Command claudeprofile emits golden fixtures for the TypeScript Claude device profile stabiliser
-// (apps/app/src/executor/claude/device-profile.ts): sequences of requests resolved by the real
+// (apps/app/src/models/executor/claude/device-profile.ts): sequences of requests resolved by the real
 // helps.ResolveClaudeDeviceProfile (local cache mode). Run from the repository root:
 //
 //	go run ./tools/fixturegen/claudeprofile

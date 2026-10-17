@@ -1,5 +1,5 @@
 // Command compatparity emits golden fixtures for the TypeScript OpenAI-compatible parity helpers
-// (apps/app/src/executor/helps/openai-compat-tool-results.ts): the real Go helps.NormalizeOpenAIToolResultsTextOnly and
+// (apps/app/src/models/executor/helps/openai-compat-tool-results.ts): the real Go helps.NormalizeOpenAIToolResultsTextOnly and
 // helps.ShouldNormalizeOpenAIToolResultsForModel run over scripted payloads and model configurations. Run from the
 // repository root:
 //

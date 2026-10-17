@@ -3,16 +3,16 @@
 import { claudeSignature } from "./support/signatures.ts";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
-import { metaCreds, requireMetaToken } from "../src/executor/meta/credentials.ts";
+import { metaCreds, requireMetaToken } from "../src/models/executor/meta/credentials.ts";
 import {
   isMetaSubscriptionQuota,
   META_NOT_FOUND_COOLDOWN_MS,
   metaStreamEventError,
   parseMetaRetryAfterMs,
   wrapMetaUpstreamError,
-} from "../src/executor/meta/errors.ts";
-import { makeMetaExecutor } from "../src/executor/meta/executor.ts";
-import { sanitizeMetaWebSearchTools } from "../src/executor/meta/request.ts";
+} from "../src/models/executor/meta/errors.ts";
+import { makeMetaExecutor } from "../src/models/executor/meta/executor.ts";
+import { sanitizeMetaWebSearchTools } from "../src/models/executor/meta/request.ts";
 import type { Json } from "@commissary/json";
 import {
   collectStream,

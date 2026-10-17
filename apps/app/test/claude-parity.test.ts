@@ -2,23 +2,23 @@
 // state, the post-payload Fable/Opus-5.5 and system-placement reconcilers, and the `experimental-cch-signing` key.
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
-import { makeClaudeExecutor } from "../src/executor/claude/executor.ts";
+import { makeClaudeExecutor } from "../src/models/executor/claude/executor.ts";
 import {
   captureFableState,
   captureSystemPlacement,
   reconcileFableModelAfterPayload,
   reconcileSystemPlacementAfterPayload,
-} from "../src/executor/claude/reconcile.ts";
-import { makeMemoryDeviceProfileStore } from "../src/executor/claude/device-profile.ts";
-import { makeMemoryToolAliasStore } from "../src/executor/claude/thread.ts";
-import { makeMemoryContinuityStore } from "../src/executor/claude/continuity.ts";
+} from "../src/models/executor/claude/reconcile.ts";
+import { makeMemoryDeviceProfileStore } from "../src/models/executor/claude/device-profile.ts";
+import { makeMemoryToolAliasStore } from "../src/models/executor/claude/thread.ts";
+import { makeMemoryContinuityStore } from "../src/models/executor/claude/continuity.ts";
 import fixtures from "./fixtures/claude-profile.json";
-import { rebuildMidSystemMessagesToTopLevel } from "../src/executor/claude/mid-system.ts";
+import { rebuildMidSystemMessagesToTopLevel } from "../src/models/executor/claude/mid-system.ts";
 import {
   threadAliasKeys,
   threadContinuationNeedsAliasState,
   threadNotFoundError,
-} from "../src/executor/claude/thread.ts";
+} from "../src/models/executor/claude/thread.ts";
 import { asString, type Json, type JsonObject } from "@commissary/json";
 import { credential, execute, harness, json, loadConfig, options } from "./support/executor-run.ts";
 

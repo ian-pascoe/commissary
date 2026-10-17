@@ -4,20 +4,20 @@ import { env } from "cloudflare:workers";
 import { Effect, Layer, Match } from "effect";
 import { type HttpBody, HttpClient, HttpClientResponse, HttpRouter } from "effect/http";
 import { makeAccessLayer, makeWithAccess } from "../../src/access/layer.ts";
-import { parseConfigYaml } from "../../src/config/codec.ts";
-import { ConfigReader, type ConfigSnapshot } from "../../src/config/reader.ts";
-import type { Config } from "../../src/config/schema.ts";
-import type { CredentialPicker } from "../../src/executor/picker.ts";
-import { StaticCredentialPickerLayer } from "../../src/executor/static-picker.ts";
-import type { Thinking } from "../../src/executor/thinking.ts";
-import type { UpstreamWebSocketConnector } from "../../src/executor/websocket/connector.ts";
-import { makeClientApiRoutes } from "../../src/handlers/layer.ts";
-import { ModelCapabilities } from "../../src/handlers/model-capabilities.ts";
-import { ModelProviders } from "../../src/handlers/model-providers.ts";
-import { CredentialRefresher } from "../../src/executor/helps/credential-refresh.ts";
+import { parseConfigYaml } from "../../src/models/config/codec.ts";
+import { ConfigReader, type ConfigSnapshot } from "../../src/models/config/reader.ts";
+import type { Config } from "../../src/models/config/schema.ts";
+import type { CredentialPicker } from "../../src/models/executor/picker.ts";
+import { StaticCredentialPickerLayer } from "../../src/models/executor/static-picker.ts";
+import type { Thinking } from "../../src/models/executor/thinking.ts";
+import type { UpstreamWebSocketConnector } from "../../src/models/executor/websocket/connector.ts";
+import { makeClientApiRoutes } from "../../src/models/handlers/layer.ts";
+import { ModelCapabilities } from "../../src/models/handlers/model-capabilities.ts";
+import { ModelProviders } from "../../src/models/handlers/model-providers.ts";
+import { CredentialRefresher } from "../../src/models/executor/helps/credential-refresh.ts";
 import { RootRoutes } from "../../src/http/routes.ts";
-import type { UsageRecord } from "../../src/usage/record.ts";
-import { UsageSink } from "../../src/usage/sink.ts";
+import type { UsageRecord } from "../../src/models/usage/record.ts";
+import { UsageSink } from "../../src/models/usage/sink.ts";
 import {
   AUD,
   fakeJwksLayer,

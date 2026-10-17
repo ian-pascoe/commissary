@@ -4,21 +4,21 @@
 import { env } from "cloudflare:workers";
 import { Duration, Effect, Layer } from "effect";
 import { beforeEach, describe, expect, it } from "vitest";
-import { ConfigReader } from "../src/config/reader.ts";
-import type { PriceOverrideValue } from "../src/config/store.ts";
+import { ConfigReader } from "../src/models/config/reader.ts";
+import type { PriceOverrideValue } from "../src/models/config/store.ts";
 import { WorkerExecutionContext, GLOBAL_ORG, OrgId } from "@commissary/core";
-import { CatalogStore } from "../src/registry/catalog-store.ts";
+import { CatalogStore } from "../src/models/registry/catalog-store.ts";
 import {
   insertUsageRecord,
   listUsageRecords,
   summarizeUsage,
   unpricedModels,
-} from "../src/usage/d1.ts";
-import { D1UsageSink } from "../src/usage/d1-sink.ts";
-import { UsagePricing } from "../src/usage/pricing-service.ts";
-import type { UsageRecord } from "../src/usage/record.ts";
-import { parseClaudeUsage, parseGeminiUsage } from "../src/usage/parsers.ts";
-import { UsageSink } from "../src/usage/sink.ts";
+} from "../src/models/usage/d1.ts";
+import { D1UsageSink } from "../src/models/usage/d1-sink.ts";
+import { UsagePricing } from "../src/models/usage/pricing-service.ts";
+import type { UsageRecord } from "../src/models/usage/record.ts";
+import { parseClaudeUsage, parseGeminiUsage } from "../src/models/usage/parsers.ts";
+import { UsageSink } from "../src/models/usage/sink.ts";
 import { authIndexOf } from "./support/auth-index.ts";
 import { controlPlane, resetControlPlane, resetOrgControlPlane } from "./support/management.ts";
 import { resetUsageDb, sampleRecord } from "./support/usage.ts";

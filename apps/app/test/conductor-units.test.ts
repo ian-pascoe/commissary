@@ -2,21 +2,24 @@
 // Worker-side error classification / report building and the live thinking layer.
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
-import { toExecutorSnapshot } from "../src/executor/control-plane-picker.ts";
+import { toExecutorSnapshot } from "../src/models/executor/control-plane-picker.ts";
 import {
   failureReport,
   isCompactRequestFault,
   matchRequestScopedAction,
   requestScopedRules,
   successReport,
-} from "../src/executor/classify.ts";
-import { ExecutionError } from "../src/executor/errors.ts";
-import { CredentialRefresher, needsPreparation } from "../src/executor/helps/credential-refresh.ts";
-import type { CredentialSnapshot } from "../src/executor/picker.ts";
-import { makeLiveThinking } from "../src/executor/thinking.ts";
-import { compatModelInfo } from "../src/handlers/model-capabilities.ts";
-import { rewriteResponseModel, rewriteStreamChunk } from "../src/handlers/model-rewrite.ts";
-import { extractSessionInfo, normalizeExplicitId } from "../src/handlers/session.ts";
+} from "../src/models/executor/classify.ts";
+import { ExecutionError } from "../src/models/executor/errors.ts";
+import {
+  CredentialRefresher,
+  needsPreparation,
+} from "../src/models/executor/helps/credential-refresh.ts";
+import type { CredentialSnapshot } from "../src/models/executor/picker.ts";
+import { makeLiveThinking } from "../src/models/executor/thinking.ts";
+import { compatModelInfo } from "../src/models/handlers/model-capabilities.ts";
+import { rewriteResponseModel, rewriteStreamChunk } from "../src/models/handlers/model-rewrite.ts";
+import { extractSessionInfo, normalizeExplicitId } from "../src/models/handlers/session.ts";
 import { builtinTranslators } from "@commissary/translation";
 import { Formats } from "@commissary/translation/formats";
 import type { JsonObject } from "@commissary/json";

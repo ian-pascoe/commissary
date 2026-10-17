@@ -1,19 +1,19 @@
-// Provider usage payloads → quota windows (src/quota/*.ts), and how a check merges into the stored report.
+// Provider usage payloads → quota windows (src/models/quota/*.ts), and how a check merges into the stored report.
 import { assert, describe, it } from "@effect/vitest";
-import { parseAntigravityQuota } from "../src/quota/antigravity.ts";
-import { parseClaudePlan, parseClaudeUsage } from "../src/quota/claude.ts";
-import { parseCodexUsage } from "../src/quota/codex.ts";
-import { devinUsage } from "../src/quota/devin.ts";
+import { parseAntigravityQuota } from "../src/models/quota/antigravity.ts";
+import { parseClaudePlan, parseClaudeUsage } from "../src/models/quota/claude.ts";
+import { parseCodexUsage } from "../src/models/quota/codex.ts";
+import { devinUsage } from "../src/models/quota/devin.ts";
 import {
   KIMI_AI_USAGE_URL,
   KIMI_USAGE_URL,
   kimiUsageUrl,
   parseKimiUsage,
-} from "../src/quota/kimi.ts";
-import { isDcaToken, parseMetaUsage } from "../src/quota/meta.ts";
-import { isQuotaProvider, mergeQuotaReport, quotaReportJson } from "../src/quota/report.ts";
-import { DAY, uniqueIds, windowId, windowLabel } from "../src/quota/window.ts";
-import { parseXaiMonthly, parseXaiWeekly } from "../src/quota/xai.ts";
+} from "../src/models/quota/kimi.ts";
+import { isDcaToken, parseMetaUsage } from "../src/models/quota/meta.ts";
+import { isQuotaProvider, mergeQuotaReport, quotaReportJson } from "../src/models/quota/report.ts";
+import { DAY, uniqueIds, windowId, windowLabel } from "../src/models/quota/window.ts";
+import { parseXaiMonthly, parseXaiWeekly } from "../src/models/quota/xai.ts";
 
 const NOW = Date.parse("2026-10-10T12:00:00Z");
 

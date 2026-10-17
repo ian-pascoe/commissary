@@ -14,7 +14,7 @@
  */
 import { Clock, Context, Effect, Exit } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { AuthIndexKeyError, orgAuthIndexer } from "../../management/auth-index.ts";
+import { AuthIndexKeyError, orgAuthIndexer } from "../management/auth-index.ts";
 import { CurrentOrg } from "@commissary/core";
 import { ModelsEnv } from "../env.ts";
 

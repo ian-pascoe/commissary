@@ -2,8 +2,8 @@
 // and end-to-end scenarios (route -> conductor -> Claude/Antigravity executor -> mocked upstream) compared with the
 // real Go executors (`go run ./tools/fixturegen/compaction`, test/fixtures/compaction.json).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Config } from "../src/config/schema.ts";
-import { resetMemoryAntigravityState } from "../src/executor/antigravity/state.ts";
+import type { Config } from "../src/models/config/schema.ts";
+import { resetMemoryAntigravityState } from "../src/models/executor/antigravity/state.ts";
 import {
   buildCompactionResponse,
   buildCompactionStreamChunks,
@@ -13,7 +13,7 @@ import {
   prepareCompactionSummaryPayload,
   sealCompaction,
   unsealCompaction,
-} from "../src/executor/helps/compaction.ts";
+} from "../src/models/executor/helps/compaction.ts";
 import { type JsonObject, tryParseJson } from "@commissary/json";
 import fixtures from "./fixtures/compaction.json";
 import { credential, makeGeminiHarness } from "./support/gemini.ts";

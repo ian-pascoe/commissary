@@ -1,8 +1,8 @@
 // Error bodies per protocol (Go: handlers.go BuildErrorResponseBodyWithError, claude/code_handlers.go,
 // openai_responses_stream_error.go) and related HTTP helpers.
 import { describe, expect, it } from "vitest";
-import { ExecutionError } from "../src/executor/errors.ts";
-import { enrichSelectionError } from "../src/handlers/execute.ts";
+import { ExecutionError } from "../src/models/executor/errors.ts";
+import { enrichSelectionError } from "../src/models/handlers/execute.ts";
 import { decodeRequestBody, RequestBodyDecodeError } from "../src/models/http/body.ts";
 import {
   claudeErrorBody,

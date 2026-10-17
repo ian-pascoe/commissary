@@ -1,8 +1,8 @@
 // The reporter stamps a record with the caller's member and with whether a private credential served it (ADR 0023).
 import { describe, expect, it } from "vitest";
 import { GLOBAL_ORG } from "@commissary/core";
-import { emptyUsageDetail } from "../src/usage/record.ts";
-import { UsageReporter, type UsageReporterInit } from "../src/usage/reporter.ts";
+import { emptyUsageDetail } from "../src/models/usage/record.ts";
+import { UsageReporter, type UsageReporterInit } from "../src/models/usage/reporter.ts";
 
 const init = (extra: Partial<UsageReporterInit> = {}): UsageReporterInit => ({
   requestId: "r",

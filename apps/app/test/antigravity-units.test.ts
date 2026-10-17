@@ -10,41 +10,41 @@ import {
   makeKvAntigravityState,
   makeMemoryAntigravityState,
   sessionStateCreditsClaim,
-} from "../src/executor/antigravity/state.ts";
+} from "../src/models/executor/antigravity/state.ts";
 import {
   parseCreditsReply,
   shouldAttemptCreditsFallback,
-} from "../src/executor/antigravity/credits.ts";
-import { ExecutionError } from "../src/executor/errors.ts";
+} from "../src/models/executor/antigravity/credits.ts";
+import { ExecutionError } from "../src/models/executor/errors.ts";
 import {
   decideAntigravity429,
   hasExplicitCreditsBalanceExhaustedReason,
   parseGoDuration,
   parseRetryDelayMs,
-} from "../src/executor/antigravity/errors.ts";
+} from "../src/models/executor/antigravity/errors.ts";
 import {
   geminiToAntigravity,
   requestBaseUrl,
   sanitizeRequestSchemas,
   constrainRequestPayload,
   stableSessionId,
-} from "../src/executor/antigravity/envelope.ts";
+} from "../src/models/executor/antigravity/envelope.ts";
 import {
   normalizeFunctionResponseRoles,
   usesReasoningReplay,
-} from "../src/executor/antigravity/content.ts";
+} from "../src/models/executor/antigravity/content.ts";
 import {
   loadAntigravityHints,
   modelsKey,
   nextFailure,
   parseModelHints,
   refreshAntigravityModels,
-} from "../src/executor/antigravity/models.ts";
+} from "../src/models/executor/antigravity/models.ts";
 import {
   convertStreamToNonStream,
   JsonAssembler,
   UsageFilter,
-} from "../src/executor/antigravity/stream.ts";
+} from "../src/models/executor/antigravity/stream.ts";
 import {
   ANTIGRAVITY_FALLBACK_VERSION,
   ANTIGRAVITY_VERSION_KEY,
@@ -54,10 +54,10 @@ import {
   refreshAntigravityVersion,
   resetAntigravityVersionCache,
   resolveStoredVersion,
-} from "../src/executor/antigravity/version.ts";
+} from "../src/models/executor/antigravity/version.ts";
 import { asString, get, type Json } from "@commissary/json";
-import { applyAntigravityHints } from "../src/registry/antigravity-hints.ts";
-import { embeddedCatalogs, sectionModels } from "../src/registry/catalog.ts";
+import { applyAntigravityHints } from "../src/models/registry/antigravity-hints.ts";
+import { embeddedCatalogs, sectionModels } from "../src/models/registry/catalog.ts";
 import {
   DEFAULT_SIGNATURE_SCOPE,
   MemorySignatureCache,

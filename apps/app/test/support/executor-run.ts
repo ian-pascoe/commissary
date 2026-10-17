@@ -1,11 +1,11 @@
 // Helpers to run provider executors directly against a mocked upstream HttpClient.
 import { Effect, Layer, Predicate, Result, Stream } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
-import { parseConfigYaml } from "../../src/config/codec.ts";
-import type { Config } from "../../src/config/schema.ts";
-import { ExecutionError } from "../../src/executor/errors.ts";
-import type { CredentialSnapshot } from "../../src/executor/picker.ts";
-import { Thinking } from "../../src/executor/thinking.ts";
+import { parseConfigYaml } from "../../src/models/config/codec.ts";
+import type { Config } from "../../src/models/config/schema.ts";
+import { ExecutionError } from "../../src/models/executor/errors.ts";
+import type { CredentialSnapshot } from "../../src/models/executor/picker.ts";
+import { Thinking } from "../../src/models/executor/thinking.ts";
 import type {
   ExecutionContext,
   ExecutorOptions,
@@ -13,9 +13,9 @@ import type {
   ExecutorResponse,
   ProviderExecutor,
   StreamResult,
-} from "../../src/executor/types.ts";
+} from "../../src/models/executor/types.ts";
 import type { Json } from "@commissary/json";
-import { UsageReporter } from "../../src/usage/reporter.ts";
+import { UsageReporter } from "../../src/models/usage/reporter.ts";
 import { GLOBAL_ORG } from "@commissary/core";
 
 export interface RecordedCall {

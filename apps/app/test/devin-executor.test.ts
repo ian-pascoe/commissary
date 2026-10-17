@@ -3,12 +3,12 @@
 // produce the same Interactions events / aggregate / errors from the same response frames.
 import { Effect, Result } from "effect";
 import { describe, expect, it } from "vitest";
-import { resetSessionTurnIndex } from "../src/executor/devin/credentials.ts";
-import { makeDevinExecutor } from "../src/executor/devin/executor.ts";
-import { devinPayloadView } from "../src/executor/devin/payload.ts";
-import { ProtoWriter, readFields } from "../src/executor/devin/protobuf.ts";
-import type { ExecutorRequest } from "../src/executor/types.ts";
-import { ExecutionError } from "../src/executor/errors.ts";
+import { resetSessionTurnIndex } from "../src/models/executor/devin/credentials.ts";
+import { makeDevinExecutor } from "../src/models/executor/devin/executor.ts";
+import { devinPayloadView } from "../src/models/executor/devin/payload.ts";
+import { ProtoWriter, readFields } from "../src/models/executor/devin/protobuf.ts";
+import type { ExecutorRequest } from "../src/models/executor/types.ts";
+import { ExecutionError } from "../src/models/executor/errors.ts";
 import { type Json, tryParseJson } from "@commissary/json";
 import {
   collectStream,

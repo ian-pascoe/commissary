@@ -1,6 +1,6 @@
 // TTFT: token-event detection per protocol (helps/*_ttft_helpers.go) and the reporter's first-packet fallback.
 import { describe, expect, it } from "vitest";
-import { UsageReporter } from "../src/usage/reporter.ts";
+import { UsageReporter } from "../src/models/usage/reporter.ts";
 import {
   isChatTokenEvent,
   isClaudeTokenEvent,
@@ -8,7 +8,7 @@ import {
   isResponsesTokenEvent,
   isTokenEvent,
   tokenEventProtocolOf,
-} from "../src/usage/ttft.ts";
+} from "../src/models/usage/ttft.ts";
 import { GLOBAL_ORG } from "@commissary/core";
 
 describe("token events", () => {

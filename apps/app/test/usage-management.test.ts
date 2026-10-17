@@ -1,6 +1,6 @@
 // /v9/management/observability/usage/*: queue, records and summary (D1).
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { insertUsageRecord } from "../src/usage/d1.ts";
+import { insertUsageRecord } from "../src/models/usage/d1.ts";
 import { makeHarness, resetControlPlane, token } from "./support/management.ts";
 import { resetUsageDb, sampleRecord } from "./support/usage.ts";
 

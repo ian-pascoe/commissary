@@ -9,7 +9,7 @@
  * it only ever reaches that org's ControlPlane (ADR 0021). One org's failure does not stop the next org. The orgs
  * are the ones the Platform registry lists ({@link registeredOrgs}).
  */
-import { Clock, Effect, Layer } from "effect";
+import { Clock, Context, Effect, Layer } from "effect";
 import { FetchHttpClient } from "effect/http";
 import {
   causeSummary,
@@ -19,17 +19,26 @@ import {
   type OrgId,
   type ScheduledTask,
 } from "@commissary/core";
-import { currentControlPlane, platform, type StateEnv } from "@commissary/state";
+import { currentControlPlane, platform, type StateBindings, StateEnv } from "@commissary/state";
 import {
+  type ModelsBindings,
+  ModelsEnv,
   scheduledTasks as modelsTasks,
   ScheduledTaskLayer as ModelsTaskLayer,
-} from "../models/scheduled-tasks.ts";
-import { envContext, type EnvServices } from "../worker-env.ts";
+} from "../models/api.ts";
+
+/** The bindings the runner and the areas it mounts read: the state's and each area's view of `env`. */
+export type ScheduledBindings = StateBindings & ModelsBindings;
+
+/** Each view of `env` the jobs read, as its service. */
+const bindingsContext = (env: ScheduledBindings): Context.Context<StateEnv | ModelsEnv> =>
+  Context.make(StateEnv, env).pipe(Context.add(ModelsEnv, env));
 
 /** Services available to scheduled jobs (provided by {@link ScheduledLayer} and the invocation's bindings). */
 export type ScheduledServices =
   | Layer.Success<typeof ScheduledLayer>
-  | EnvServices
+  | StateEnv
+  | ModelsEnv
   | WorkerExecutionContext;
 
 /**
@@ -91,7 +100,7 @@ export const registeredOrgs: Effect.Effect<ReadonlyArray<OrgId>, never, StateEnv
  */
 export const runScheduledTasks = (
   tasks: ReadonlyArray<ScheduledTask<ScheduledServices>>,
-  env: Env,
+  env: ScheduledBindings,
   ctx: ExecutionContext,
   orgs?: ReadonlyArray<OrgId>,
 ): Promise<void> =>
@@ -115,7 +124,7 @@ export const runScheduledTasks = (
     );
   }).pipe(
     Effect.provide(ScheduledLayer),
-    Effect.provideContext(envContext(env)),
+    Effect.provideContext(bindingsContext(env)),
     Effect.provideService(WorkerExecutionContext, ctx),
     Effect.runPromise,
   );

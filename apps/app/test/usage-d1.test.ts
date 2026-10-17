@@ -17,13 +17,13 @@ import {
   summarizeUsageSeries,
   type UsageRow,
   unpricedModels,
-} from "../src/usage/d1.ts";
-import { D1UsageSink } from "../src/usage/d1-sink.ts";
-import { UsagePricing } from "../src/usage/pricing-service.ts";
-import { ensureTokenBreakdown } from "../src/usage/accounting.ts";
-import { parseClaudeUsage } from "../src/usage/parsers.ts";
-import { pruneExpiredUsage } from "../src/usage/retention.ts";
-import { UsageSink } from "../src/usage/sink.ts";
+} from "../src/models/usage/d1.ts";
+import { D1UsageSink } from "../src/models/usage/d1-sink.ts";
+import { UsagePricing } from "../src/models/usage/pricing-service.ts";
+import { ensureTokenBreakdown } from "../src/models/usage/accounting.ts";
+import { parseClaudeUsage } from "../src/models/usage/parsers.ts";
+import { pruneExpiredUsage } from "../src/models/usage/retention.ts";
+import { UsageSink } from "../src/models/usage/sink.ts";
 import { authIndexOf } from "./support/auth-index.ts";
 import { resetUsageDb, sampleRecord, statementsOf } from "./support/usage.ts";
 import initialMigration from "../../../migrations/0001_usage_records.sql?raw";

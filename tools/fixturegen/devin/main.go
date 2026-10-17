@@ -1,4 +1,4 @@
-// Command devin emits golden fixtures for the TypeScript Devin executor (apps/app/src/executor/devin).
+// Command devin emits golden fixtures for the TypeScript Devin executor (apps/app/src/models/executor/devin).
 //
 // The scenarios run the real Go DevinExecutor against an httptest Connect-RPC server: the request bytes it sends
 // (BuildDevinGetChatMessageRequest + payload rules), the Interactions events/aggregate it produces from canned

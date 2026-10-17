@@ -2,19 +2,19 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Exit, Fiber, Layer, Predicate, Queue, Scope } from "effect";
 import { TestClock } from "effect/testing";
-import { ExecutionError } from "../src/executor/errors.ts";
+import { ExecutionError } from "../src/models/executor/errors.ts";
 import {
   HandshakeError,
   type UpstreamMessage,
   type UpstreamSocket,
   UpstreamSendError,
   UpstreamWebSocketConnector,
-} from "../src/executor/websocket/connector.ts";
+} from "../src/models/executor/websocket/connector.ts";
 import {
   openTurn,
   type OpenTurnInput,
   UpstreamSessionStore,
-} from "../src/executor/websocket/session.ts";
+} from "../src/models/executor/websocket/session.ts";
 import { Frames } from "./support/upstream-message.ts";
 
 interface FakeSocket {

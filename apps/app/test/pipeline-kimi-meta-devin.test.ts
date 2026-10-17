@@ -2,8 +2,8 @@
 // conductor for the Kimi, Meta and Devin providers against mocked upstreams.
 import { Effect, Layer } from "effect";
 import { afterAll, describe, expect, it } from "vitest";
-import type { CredentialSnapshot } from "../src/executor/picker.ts";
-import { ModelProviders } from "../src/handlers/model-providers.ts";
+import type { CredentialSnapshot } from "../src/models/executor/picker.ts";
+import { ModelProviders } from "../src/models/handlers/model-providers.ts";
 import { fixedPicker } from "./support/codex.ts";
 import {
   jsonResponse,

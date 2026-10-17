@@ -4,8 +4,8 @@ import { Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
 import { expect } from "vitest";
 import { asString, type JsonObject } from "@commissary/json";
-import { CALLBACK_WINDOW_MS } from "../src/oauth/service.ts";
-import { SESSION_TTL_MS } from "../src/oauth/session-store.ts";
+import { CALLBACK_WINDOW_MS } from "../src/models/oauth/service.ts";
+import { SESSION_TTL_MS } from "../src/models/oauth/session-store.ts";
 import {
   begin,
   iso,

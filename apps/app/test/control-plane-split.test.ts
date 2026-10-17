@@ -7,7 +7,7 @@
 import { evictDurableObject, runDurableObjectAlarm, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { describe, expect, it, vi } from "vitest";
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { OrgId } from "@commissary/core";
 import { alarmOf, ORG_WIDE_TABLES, storedText, tablesOf } from "@commissary/state/testing";
 import { withModelsPart } from "./support/models-part.ts";

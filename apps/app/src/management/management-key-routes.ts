@@ -18,10 +18,10 @@ import {
   controlPlane,
   type ManagementKeyErrorCode,
   type ManagementKeyRecord,
+  bodyJson,
 } from "@commissary/state";
 import { CreateManagementKey, type ManagementKeyView } from "@commissary/contract/management-keys";
 import { handled, jsonReply, type Reply, replyError } from "@commissary/core";
-import { bodyJson } from "./http.ts";
 
 const BASE = "/v9/management";
 

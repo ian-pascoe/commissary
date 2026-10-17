@@ -27,8 +27,6 @@ import { ownedOrgLimit } from "../hosted/owned-orgs.ts";
 import type { JsonObject } from "@commissary/json";
 import { deleteSignInAccount, endSessions } from "../hosted/session.ts";
 import { apiOrigin } from "../http/hosts.ts";
-import { ModelsEnv, modelsControlPlane } from "../models/env.ts";
-import { deleteOrgModels } from "../models/org-deletion.ts";
 import { GLOBAL_ORG, newOrgId, handled, jsonReply, replyError, type Reply } from "@commissary/core";
 import {
   controlPlane,
@@ -38,15 +36,15 @@ import {
   platform,
   type PlatformStub,
   StateEnv,
+  bodyObject,
 } from "@commissary/state";
 import { deleteOrg as deleteOrgData } from "../platform/org-deletion.ts";
 import type { OrgView } from "@commissary/contract/orgs";
-import type { GrantSubject } from "../grants/grant.ts";
 import { AppEnv } from "../worker-env.ts";
-import { maskConfigSecrets } from "./export-view.ts";
-import { bodyObject } from "./http.ts";
-import { storedConfig } from "./settings-routes.ts";
-import { currentViewer } from "@commissary/auth";
+import {
+  exportSection as modelsExportSection,
+  orgDeletionStep as modelsOrgDeletionStep,
+} from "../models/management.ts";
 
 const BASE = "/v9/management";
 
@@ -351,57 +349,23 @@ const updateSettings = Effect.gen(function* () {
   return jsonReply(200, view(result.org));
 });
 
-/** A grant's subject by what a person reads: the member's email or the team's name instead of an id. */
-const exportedSubject = (
-  subject: GrantSubject,
-  members: ReadonlyMap<string, string>,
-  teams: ReadonlyMap<string, string>,
-): JsonObject => {
-  if (subject.kind === "member") return { kind: "member", email: members.get(subject.id) ?? "" };
-
-  if (subject.kind === "team") return { kind: "team", name: teams.get(subject.id) ?? "" };
-
-  return { kind: "everyone" };
-};
-
 const exportOrg = Effect.gen(function* () {
   const org = yield* addressedOrg;
-  const viewer = yield* currentViewer;
   const now = yield* Clock.currentTimeMillis;
-  const config = yield* storedConfig;
-
-  // The Models section of the export goes through Models' view of the ControlPlane.
-  const prices = yield* modelsControlPlane("priceOverrideEntries", (stub) =>
-    stub.models().priceOverrideEntries(),
-  );
-
-  const credentials = yield* modelsControlPlane("listCredentialEntries", (stub) =>
-    stub.models().listCredentialEntries(viewer),
-  );
-
   const members = yield* controlPlane("listMembers", (stub) => stub.listMembers());
-  const grants = yield* modelsControlPlane("grantEntries", (stub) => stub.models().grantEntries());
   const teams = yield* controlPlane("listTeams", (stub) => stub.listTeams());
-  const tokens = yield* controlPlane("listServiceTokens", (stub) => stub.listServiceTokens());
-  const iso = (at: number) => new Date(at).toISOString();
   const byId = new Map(members.map((member) => [member.id, member.email]));
   const teamNames = new Map(teams.map((team) => [team.id, team.name]));
+
+  // Each area's section goes through its own view of the ControlPlane.
+  const models = yield* modelsExportSection({ members: byId, teams: teamNames });
+  const tokens = yield* controlPlane("listServiceTokens", (stub) => stub.listServiceTokens());
+  const iso = (at: number) => new Date(at).toISOString();
 
   return jsonReply(200, {
     exported_at: iso(now),
     org: view(org),
-    config: maskConfigSecrets(config.document),
-    prices: prices.overrides.map(({ id: _id, revision: _revision, ...price }) => ({
-      ...price,
-      updated_at: iso(price.updated_at),
-    })),
-    credentials,
-    grants: grants.grants.map((grant) => ({
-      subject: exportedSubject(grant.subject, byId, teamNames),
-      scope: grant.scope,
-      models: grant.models,
-      updated_at: iso(grant.updated_at),
-    })),
+    ...models,
     members: members.map((member) => ({
       email: member.email,
       role: member.role,
@@ -452,9 +416,7 @@ const signInDeletionFailed = (error: DeletionThrew) =>
   );
 
 /** The org-deletion steps of the areas this Worker mounts, in order. */
-const areaDeletionSteps = Effect.gen(function* () {
-  return [deleteOrgModels(yield* ModelsEnv)];
-});
+const areaDeletionSteps = Effect.all([modelsOrgDeletionStep]);
 
 const deleteOrgRoute = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;

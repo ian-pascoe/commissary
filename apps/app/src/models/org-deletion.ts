@@ -3,9 +3,10 @@
  * the `CACHE` KV namespace (the names `org.<org>.…` of `orgScopedName`). Its ControlPlane tables go with `wipeOrg`.
  * The app Worker's org deletion (`platform/org-deletion.ts`) runs it first.
  */
+import { Effect } from "effect";
 import type { OrgDeletionStep } from "@commissary/core";
-import { deleteOrgUsage } from "../usage/d1.ts";
-import type { ModelsBindings } from "./env.ts";
+import { deleteOrgUsage } from "./usage/d1.ts";
+import { type ModelsBindings, ModelsEnv } from "./env.ts";
 
 /** Keys read and deleted per page: each key is one KV call. */
 const KV_PAGE = 100;
@@ -35,3 +36,10 @@ export const deleteOrgModels =
       if (page.list_complete) return { complete: true, calls };
     }
   };
+
+/** Models' step over the invocation's bindings. */
+export const orgDeletionStep: Effect.Effect<OrgDeletionStep, never, ModelsEnv> = Effect.gen(
+  function* () {
+    return deleteOrgModels(yield* ModelsEnv);
+  },
+);

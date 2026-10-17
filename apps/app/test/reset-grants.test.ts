@@ -1,7 +1,7 @@
-// Claude reset grants: the pure status parsing, grant choice and claim journal (src/quota/reset-grants.ts), then
+// Claude reset grants: the pure status parsing, grant choice and claim journal (src/models/quota/reset-grants.ts), then
 // `GET /v9/management/credentials/reset-grants` and `POST .../claim` through the router with the real ControlPlane and
 // mocked Anthropic endpoints, the quota check's tolerated grant read, the contract and the Access/CSRF gates.
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { assert, describe, it } from "@effect/vitest";
 import { runInDurableObject } from "cloudflare:test";
 import { env, exports } from "cloudflare:workers";
@@ -15,9 +15,9 @@ import { ManagementApi } from "@commissary/contract/api";
 import { CredentialEntry, type ResetGrantStatus } from "@commissary/contract/credentials";
 import { ManagementError } from "@commissary/contract/errors";
 import type { Json } from "@commissary/json";
-import { runQuotaSweep } from "../src/quota/check.ts";
-import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/quota/claude.ts";
-import { claimResetGrant } from "../src/quota/reset-grant-flow.ts";
+import { runQuotaSweep } from "../src/models/quota/check.ts";
+import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/models/quota/claude.ts";
+import { claimResetGrant } from "../src/models/quota/reset-grant-flow.ts";
 import {
   beginClaim,
   CLAIM_LEASE_MS,
@@ -33,7 +33,7 @@ import {
   RETRY_WINDOW_MS,
   selectResetGrant,
   settleClaim,
-} from "../src/quota/reset-grants.ts";
+} from "../src/models/quota/reset-grants.ts";
 import {
   claudeFile,
   controlPlane,

@@ -3,14 +3,14 @@
 import { Effect, Layer, Predicate, Stream } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Config } from "../src/config/schema.ts";
-import { makeOpenAICompatExecutor } from "../src/executor/openai-compat/executor.ts";
-import type { CredentialSnapshot } from "../src/executor/picker.ts";
-import { Thinking } from "../src/executor/thinking.ts";
-import type { ExecutionContext, ExecutorOptions } from "../src/executor/types.ts";
+import type { Config } from "../src/models/config/schema.ts";
+import { makeOpenAICompatExecutor } from "../src/models/executor/openai-compat/executor.ts";
+import type { CredentialSnapshot } from "../src/models/executor/picker.ts";
+import { Thinking } from "../src/models/executor/thinking.ts";
+import type { ExecutionContext, ExecutorOptions } from "../src/models/executor/types.ts";
 import { get, type Json } from "@commissary/json";
-import { UsageReporter } from "../src/usage/reporter.ts";
-import { buildImagesApiResponse } from "../src/handlers/openai/images.ts";
+import { UsageReporter } from "../src/models/usage/reporter.ts";
+import { buildImagesApiResponse } from "../src/models/handlers/openai/images.ts";
 import {
   jsonResponse,
   loadConfig,

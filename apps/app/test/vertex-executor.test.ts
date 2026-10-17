@@ -2,13 +2,13 @@
 // ControlPlane stub, Imagen conversion, native Interactions and the payload-rules-last ordering.
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Config } from "../src/config/schema.ts";
+import type { Config } from "../src/models/config/schema.ts";
 import {
   convertImagenToGeminiResponse,
   convertToImagenRequest,
-} from "../src/executor/gemini/google.ts";
-import { stripVertexOpenAIResponsesToolCallIds } from "../src/executor/gemini/shaping.ts";
-import { vertexBaseUrl, vertexInteractionsUrl } from "../src/executor/gemini/targets.ts";
+} from "../src/models/executor/gemini/google.ts";
+import { stripVertexOpenAIResponsesToolCallIds } from "../src/models/executor/gemini/shaping.ts";
+import { vertexBaseUrl, vertexInteractionsUrl } from "../src/models/executor/gemini/targets.ts";
 import { credential, makeGeminiHarness } from "./support/gemini.ts";
 import {
   jsonResponse,

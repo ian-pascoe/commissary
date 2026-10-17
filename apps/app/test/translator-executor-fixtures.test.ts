@@ -8,7 +8,7 @@ import {
   type TranslatorFixtureCase,
 } from "@commissary/translation/testing";
 import { describe } from "vitest";
-import { translateRequestForExecutor } from "../src/executor/helps/translate.ts";
+import { translateRequestForExecutor } from "../src/models/executor/helps/translate.ts";
 import cases from "./fixtures/translator-executor.json";
 import { configOf } from "./support/registry-sources.ts";
 

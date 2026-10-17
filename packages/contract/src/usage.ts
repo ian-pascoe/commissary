@@ -1,7 +1,7 @@
 /**
  * `GET /v9/management/observability/usage/summary` (token totals), `/series` (totals per time bucket) and `/records`
- * (the request log, newest first, keyset-paged) from the D1 usage history (`apps/app/src/management/usage-routes.ts`,
- * `apps/app/src/usage/d1.ts` `summarizeUsage` / `summarizeUsageSeries` / `listUsageRecords` / `rowToPayload`). Shared
+ * (the request log, newest first, keyset-paged) from the D1 usage history (`apps/app/src/models/management/usage-routes.ts`,
+ * `apps/app/src/models/usage/d1.ts` `summarizeUsage` / `summarizeUsageSeries` / `listUsageRecords` / `rowToPayload`). Shared
  * with the browser: imports `effect` only.
  */
 import { Schema } from "effect";
@@ -10,7 +10,7 @@ import { managementErrors } from "./errors.ts";
 
 const optional = Schema.optionalKey;
 
-/** Keys a summary can be grouped by (`apps/app/src/usage/d1.ts` `GROUP_BY`; a contract test keeps them equal). */
+/** Keys a summary can be grouped by (`apps/app/src/models/usage/d1.ts` `GROUP_BY`; a contract test keeps them equal). */
 export const UsageGroupBy = Schema.Literals([
   "model",
   "provider",
@@ -135,7 +135,7 @@ const tokenBreakdown = Schema.Struct({
 });
 
 /**
- * One request-log record (`rowToPayload` in `apps/app/src/usage/d1.ts`). Only the fields the panel reads are listed:
+ * One request-log record (`rowToPayload` in `apps/app/src/models/usage/d1.ts`). Only the fields the panel reads are listed:
  * the payload carries more (`tokens`, `source`, `parent_session_id`, ...), and `Schema.Struct` ignores excess keys when
  * decoding.
  */

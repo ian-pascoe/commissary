@@ -3,7 +3,7 @@
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { OrgId } from "@commissary/core";
-import { insertUsageRecord } from "../src/usage/d1.ts";
+import { insertUsageRecord } from "../src/models/usage/d1.ts";
 import { ADMIN, isolatedPlatform, jsonInit, makeHarness, token } from "./support/management.ts";
 import { resetUsageDb, sampleRecord } from "./support/usage.ts";
 

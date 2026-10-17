@@ -2,10 +2,13 @@
 // that served their conversation, forks/compactions get their own identities, failures drop only the attempted
 // sequence, and the derived / message-hash identities bind like explicit ones (selector.go Pick/OnResult).
 import { describe, expect, it } from "vitest";
-import type { PickResult, ReportResult } from "../src/credentials/selection/types.ts";
-import type { CredentialPool } from "../src/credentials/pool.ts";
-import { extractCanonicalTurns, prepareFingerprints } from "../src/session-routing/canonical.ts";
-import { prepareSessionRouting } from "../src/session-routing/routing.ts";
+import type { PickResult, ReportResult } from "../src/models/credentials/selection/types.ts";
+import type { CredentialPool } from "../src/models/credentials/pool.ts";
+import {
+  extractCanonicalTurns,
+  prepareFingerprints,
+} from "../src/models/session-routing/canonical.ts";
+import { prepareSessionRouting } from "../src/models/session-routing/routing.ts";
 import type { Json } from "@commissary/json";
 import { makePool } from "./support/pool.ts";
 

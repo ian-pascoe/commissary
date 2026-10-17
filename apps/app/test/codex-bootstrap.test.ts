@@ -13,20 +13,20 @@ import {
   isBootstrapBufferableEvent,
   isGrokClientHeaders,
   isOverloadBootstrapFailure,
-} from "../src/executor/codex/bootstrap.ts";
-import { CodexStreamReader, type CodexStreamOptions } from "../src/executor/codex/stream.ts";
-import { ExecutionError } from "../src/executor/errors.ts";
-import { CredentialRefresher } from "../src/executor/helps/credential-refresh.ts";
-import { ExecutorRegistry } from "../src/executor/registry.ts";
-import { Thinking } from "../src/executor/thinking.ts";
-import { executeStream } from "../src/handlers/execute.ts";
-import { ModelCapabilities } from "../src/handlers/model-capabilities.ts";
-import { ModelProviders } from "../src/handlers/model-providers.ts";
+} from "../src/models/executor/codex/bootstrap.ts";
+import { CodexStreamReader, type CodexStreamOptions } from "../src/models/executor/codex/stream.ts";
+import { ExecutionError } from "../src/models/executor/errors.ts";
+import { CredentialRefresher } from "../src/models/executor/helps/credential-refresh.ts";
+import { ExecutorRegistry } from "../src/models/executor/registry.ts";
+import { Thinking } from "../src/models/executor/thinking.ts";
+import { executeStream } from "../src/models/handlers/execute.ts";
+import { ModelCapabilities } from "../src/models/handlers/model-capabilities.ts";
+import { ModelProviders } from "../src/models/handlers/model-providers.ts";
 import { builtinTranslators, makeTranslationState } from "@commissary/translation";
 import { Formats } from "@commissary/translation/formats";
-import { UsageReporter } from "../src/usage/reporter.ts";
-import type { UsageRecord } from "../src/usage/record.ts";
-import { UsageSink } from "../src/usage/sink.ts";
+import { UsageReporter } from "../src/models/usage/reporter.ts";
+import type { UsageRecord } from "../src/models/usage/record.ts";
+import { UsageSink } from "../src/models/usage/sink.ts";
 import {
   mockHttpClient,
   sseResponse,

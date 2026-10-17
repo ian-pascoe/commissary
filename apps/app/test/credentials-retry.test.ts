@@ -2,8 +2,8 @@
 // conductor_retry_round_test.go, conductor_selection_cooldown_test.go, conductor_alias_cooldown_test.go,
 // conductor_subsecond_cooldown_test.go (retry storms), openai_compat_pool_test.go.
 import { describe, expect, it } from "vitest";
-import type { PickResult } from "../src/credentials/selection/types.ts";
-import type { CredentialPool } from "../src/credentials/pool.ts";
+import type { PickResult } from "../src/models/credentials/selection/types.ts";
+import type { CredentialPool } from "../src/models/credentials/pool.ts";
 import { makePool, MemoryPoolStore, TestNow } from "./support/pool.ts";
 
 const group = (name: string, extra = "", model = "{ name: m }") => `

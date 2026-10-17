@@ -2,10 +2,14 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
 import { TestClock } from "effect/testing";
 import { expect } from "vitest";
-import { CatalogStore } from "../src/registry/catalog-store.ts";
-import { lookupStaticModelInfo } from "../src/registry/catalog.ts";
-import { ModelRegistry, ModelRegistryError, SNAPSHOT_TTL_MS } from "../src/registry/service.ts";
-import type { ModelSource } from "../src/registry/source.ts";
+import { CatalogStore } from "../src/models/registry/catalog-store.ts";
+import { lookupStaticModelInfo } from "../src/models/registry/catalog.ts";
+import {
+  ModelRegistry,
+  ModelRegistryError,
+  SNAPSHOT_TTL_MS,
+} from "../src/models/registry/service.ts";
+import type { ModelSource } from "../src/models/registry/source.ts";
 import {
   applyThinking,
   type ModelInfoLookup,

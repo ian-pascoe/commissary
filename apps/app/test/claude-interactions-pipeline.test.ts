@@ -2,10 +2,10 @@
 // `gemini-interactions` credential through Access, model resolution, the credential picker and the Gemini executor,
 // and the Devin executor driven with a Claude source format.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Config } from "../src/config/schema.ts";
-import { makeDevinExecutor } from "../src/executor/devin/executor.ts";
-import { devinPayloadView } from "../src/executor/devin/payload.ts";
-import { resetSessionTurnIndex } from "../src/executor/devin/credentials.ts";
+import type { Config } from "../src/models/config/schema.ts";
+import { makeDevinExecutor } from "../src/models/executor/devin/executor.ts";
+import { devinPayloadView } from "../src/models/executor/devin/payload.ts";
+import { resetSessionTurnIndex } from "../src/models/executor/devin/credentials.ts";
 import devinFixtures from "./fixtures/devin.json";
 import {
   collectStream,

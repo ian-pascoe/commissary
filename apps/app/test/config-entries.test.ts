@@ -1,12 +1,12 @@
 // Config entries (ADR 0025): per-entry revisions, the Go config import, the migration of a stored document, and the
 // entry routes (`/settings`, `/provider-keys/groups`, `/model-rules/*`) through the router and the real ControlPlane.
-import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { runInDurableObject } from "cloudflare:test";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { Effect } from "effect";
-import { decodeConfig, encodeConfig } from "../src/config/codec.ts";
-import { MIGRATION_PRINCIPAL } from "../src/config/store.ts";
-import { configKeyIds } from "../src/credentials/key-ids.ts";
+import { decodeConfig, encodeConfig } from "../src/models/config/codec.ts";
+import { MIGRATION_PRINCIPAL } from "../src/models/config/store.ts";
+import { configKeyIds } from "../src/models/credentials/key-ids.ts";
 import type { Json } from "@commissary/json";
 import type { ProviderKeysList } from "@commissary/contract/provider-keys";
 import type { RoutingModels } from "@commissary/contract/routing";

@@ -2,7 +2,7 @@
 // `{"input": ...}` function, the function-call answer is bridged back to `custom_tool_call` events/items, and the
 // folded namespace dispatcher (>200 tools) is expanded before the bridge sees it.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Config } from "../src/config/schema.ts";
+import type { Config } from "../src/models/config/schema.ts";
 import {
   loadConfig,
   makePipeline,

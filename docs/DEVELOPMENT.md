@@ -38,7 +38,7 @@ caches each task: run again with no change, a task replays its logs (and `build`
 | `pnpm destroy`                      | `alchemy destroy`: delete every resource of a stage                                                                                                                                               |
 | `pnpm logs`                         | `alchemy logs` (`--tail`)                                                                                                                                                                         |
 | `pnpm ci:setup`                     | Deploy `stacks/github.ts`: CI's Cloudflare token, check service token and GitHub environments (`docs/DEPLOY.md`)                                                                                  |
-| `pnpm catalog:sync`                 | Regenerate the bundled models.dev snapshot `apps/app/src/registry/catalog/models-dev.json` (`tools/sync-models-dev-catalog.ts [url\|file]`); the catalog additions are edited by hand             |
+| `pnpm catalog:sync`                 | Regenerate the bundled models.dev snapshot `apps/app/src/models/registry/catalog/models-dev.json` (`tools/sync-models-dev-catalog.ts [url\|file]`); the catalog additions are edited by hand      |
 
 ## Infrastructure
 
@@ -70,12 +70,16 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
 
 - `apps/app` (`@commissary/app`): the one Worker. `src/access` (the gate middleware over `@commissary/auth`),
   `src/http` (router, hosts), `src/api` (what moves to the API Worker: CORS and the cron runner),
-  `src/handlers` (inbound protocols and the shared execution pipeline), `src/executor` (one directory per provider),
   `src/control-plane.ts` (the ControlPlane Durable Object: `@commissary/state`'s org-wide base composed with the Models
-  part in `src/models`; `src/models` also holds the client-API HTTP helpers, the request trace, Models' cron tasks and
-  its org-deletion step), `src/credentials` (credential pool, selection, token refresh), `src/registry` (model catalogs and `/models`),
-  `src/management` and `src/oauth` (management API, panel serving, provider logins), `src/usage` (D1 usage records),
-  `src/platform` (org deletion); `test/` (workerd tests and golden fixtures).
+  part), `src/management` (the org-wide management routes, panel serving, path zones, the role table, org addressing),
+  `src/hosted` and `src/sso` (Commissary Cloud's sign-in and single sign-on), `src/platform` (org deletion);
+  `test/` (workerd tests and golden fixtures). `src/models` holds all of Models (#150), ready to become
+  `@commissary/models` (#151): `handlers` (inbound protocols and the shared execution pipeline), `executor` (one
+  directory per provider), `credentials` (credential pool, selection, token refresh), `registry` (model catalogs and
+  `/models`), `config`, `oauth`, `quota`, `usage` (D1 usage records), `grants`, `spend`, `signature`,
+  `session-routing`, `management` (its management routes), the ControlPlane part, the client-API HTTP helpers, the
+  request trace, its cron tasks and its org-deletion step. The rest of the app reaches it only through its entry
+  modules `models/api.ts`, `models/management.ts` and `models/state.ts` ("Lint and format", `boundaries`).
 - `apps/web` (`@commissary/web`): the control panel (below).
 - `packages/auth` (`@commissary/auth`): request-side authentication (#132). The principal and `AccessPrincipal`, roles,
   Access JWT verification, the cross-site checks, API and management keys (their text and the per-isolate caches of
@@ -95,19 +99,19 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
   `InvocationContext`, so core needs no Workers types, and `holdInvocation`), `src/area.ts` (what an area hands the
   Workers: `ScheduledTask`, `OrgDeletionStep`), all behind the one export `.`. It may
   import `effect` and `node:crypto` only: no bindings, no Workers APIs, no other workspace package. The per-request
-  context (`requestContext`, `src/worker-env.ts`) stays in the Worker, which provides its env views, and so do
-  `bodyJson`/`bodyObject` (they return `@commissary/json` values); the ControlPlane stubs (`controlPlaneOf`,
-  `controlPlane`) are `@commissary/state`.
+  context (`requestContext`, `src/worker-env.ts`) stays in the Worker, which provides its env views; the ControlPlane
+  stubs (`controlPlaneOf`, `controlPlane`) and the JSON body readers `bodyJson`/`bodyObject` (they return
+  `@commissary/json` values) are `@commissary/state`.
 - `packages/state` (`@commissary/state`): the org-wide state on Durable Objects (#134, #149). The ControlPlane's org-wide
   base (`src/control-plane.ts`) and its stores (`src/members`, `src/api-keys`, `src/management-keys`, `src/sso`,
   `src/secrets`, the `SessionState` instances), `composeControlPlane` (`src/compose.ts`: the base with the areas' parts,
   each reached through a method of its name, `stub.models().x()`), the Platform registry (`src/platform`), the
   general-purpose lease store (`src/lease.ts`), `SessionState` (`src/session-state`: class, client, protocol, engine),
-  the stub helpers (`controlPlaneOf`, `platformOf`, `currentControlPlane`, the management routes' `controlPlane`) and
-  the one `AuthDirectory` adapter, all behind the one export `.`; `./testing` holds the workerd test helpers
+  the stub helpers (`controlPlaneOf`, `platformOf`, `currentControlPlane`, the management routes' `controlPlane` and
+  body readers) and the one `AuthDirectory` adapter, all behind the one export `.`; `./testing` holds the workerd test helpers
   (`tablesOf`, `storedText`, `alarmOf`, `withPart`, `ORG_WIDE_TABLES`). It reads its bindings through `StateEnv` and its
   classes' settings from `StateObjectEnv`, and may import `@commissary/auth`, `@commissary/core`,
-  `@commissary/contract` and `effect` only: nothing from an area's code or `apps/`.
+  `@commissary/contract`, `@commissary/json` and `effect` only: nothing from an area's code or `apps/`.
 - `packages/json` (`@commissary/json`): the gjson/sjson path engine over parsed JSON, the `Json` types, `isValidJson`,
   `compactJson` and `stableStringify`. Depends on nothing.
 - `packages/translation` (`@commissary/translation`): pure sync translation. `src/translator` (the `TranslatorRegistry`
@@ -117,7 +121,7 @@ then restore the three-line header comment. Durable Object classes are SQLite-ba
   `./testing`. It may import `effect`, `@commissary/json` and `node:crypto` only: no Workers APIs, no other workspace
   package. Executors install the attempt's model lookup and signature cache around each synchronous translator call
   (`withModelInfoLookup`, `withSignatureContext`); the `CACHE` KV store of signatures stays in the Worker
-  (`src/signature/store.ts`).
+  (`src/models/signature/store.ts`).
 - The root stays the deploy root: `alchemy.run.ts`, `infra/`, `migrations/` (D1 schema), `stacks/`, `tools/` (with
   `tools/fixturegen`, Go programs that emit golden fixtures, see below), `go.work`, `.repos/`, `docs/` and the lint,
   format and commit configs.
@@ -148,14 +152,14 @@ ignores it, `--dry` shows what would run and why.
 ## Model catalog
 
 Every provider's models come from models.dev plus the catalog additions (ADR 0020; `docs/ARCHITECTURE.md`, "Model registry
-and `/models` endpoints"). Three things are checked in under `apps/app/src/registry/catalog/`:
+and `/models` endpoints"). Three things are checked in under `apps/app/src/models/registry/catalog/`:
 
 - `models-dev.json`: the trimmed models.dev snapshot a fresh deploy starts from. `pnpm catalog:sync` regenerates it from
   `https://models.dev/api.json` (or a URL or saved file given as argument); syncing a trimmed file rewrites it unchanged.
   A deployed Worker refreshes its own copy every 3 hours and from the Models page ("Refresh catalog").
 - `additions.json`: what models.dev lacks (models it does not list, facts such as `thinking.dynamicAllowed`, Codex plans,
   `include`/`exclude` patterns). Edited by hand; the format and precedence ("an addition only fills gaps") are in the header
-  of `apps/app/src/registry/catalog-additions.ts`. A wrong value for a model models.dev lists is fixed at models.dev, not overridden here.
+  of `apps/app/src/models/registry/catalog-additions.ts`. A wrong value for a model models.dev lists is fixed at models.dev, not overridden here.
 - `codex_client_models.json`: the Codex client catalog, kept in its own format.
 
 `apps/app/test/catalog-build.test.ts` checks the trim, the build, the additions' rules and that every id the Go server served is
@@ -262,6 +266,11 @@ permissions they need, and deploy jobs use no dependency cache.
   `oxlint`, `oxlint-tsgolint` and `@effect/tsgo` are pinned to versions the patch supports, so upgrade them together.
 - **anti-slop** (vendored in `tools/oxlint/anti-slop/`, provenance in its `UPSTREAM.md`): the copy belongs to this
   repository; edit its rules there.
+- **boundaries** (`tools/oxlint/boundaries/`, ours): `boundaries/models-imports` keeps the Models folder
+  (`apps/app/src/models/`) ready to become `@commissary/models` (#150, #151). A file in the folder imports only the
+  folder's files, the workspace packages and the third-party modules the rule lists (Models' future dependencies); any
+  other file of `apps/app/src/` reaches Models only through its entry modules `models/api.ts`, `models/management.ts`
+  and `models/state.ts`, the package's future exports.
 
 Rules downgraded to warnings on purpose (reported, not failing): `effecttsgo/unstable-api-usage` (the HTTP stack is
 `effect/unstable/http`), `anti-slop-effect/no-service-constructor-imports` (flags every `make*` function),
@@ -282,7 +291,9 @@ assertion that cannot be removed carries a `// SAFETY: <invariant>` comment on t
   (`handler(request, requestContext(env, ctx))`); code reads the view of its package (`yield* AuthConfig`,
   `StateEnv`, `ModelsEnv`, or `AppEnv` for code that stays in the Worker; `apps/app/src/worker-env.ts`), never the
   global `Env`. Never capture them in a layer.
-- Add routes as `HttpRouter.add(...)` layers and merge them into `AppLayer` in `apps/app/src/http/app.ts`.
+- Add routes as `HttpRouter.add(...)` layers and merge them into `AppLayer` in `apps/app/src/http/app.ts`; an area's
+  routes reach it through the area's entry modules (Models: the client API `ClientApiLayer` of `models/api.ts`, the
+  management routes of `models/management.ts`, which `management/routes.ts` mounts).
 - Never log tokens, API keys, JWTs or bodies; use `redactHeaders` when headers must be logged.
 - No wall-clock sleeps in tests; use Effect `TestClock` or injected clocks.
 - The Worker's tests live in `apps/app/test/*.test.ts` and run in workerd ("Tests" above). Use `@effect/vitest`

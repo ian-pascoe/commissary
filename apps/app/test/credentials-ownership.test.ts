@@ -1,7 +1,7 @@
 // Shared and private credentials in selection: a private credential is a candidate only for its owner's requests.
 import { describe, expect, it } from "vitest";
-import { planRetry } from "../src/credentials/selection/retry.ts";
-import { ALLOW_ALL } from "../src/grants/reach.ts";
+import { planRetry } from "../src/models/credentials/selection/retry.ts";
+import { ALLOW_ALL } from "../src/models/grants/reach.ts";
 import { Harness, NOW, cred, defaultSettings, entry } from "./support/credentials.ts";
 
 const pool = () => [

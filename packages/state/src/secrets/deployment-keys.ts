@@ -2,7 +2,7 @@
  * The stage's secrets keys: `SECRETS_KEY`, which wraps every org's data key (`data-key.ts`), and during a rotation
  * `SECRETS_KEY_PREVIOUS`, the key it replaces. New in the Workers port.
  *
- * Fails closed like `AUTH_INDEX_KEY` (`management/auth-index.ts`): a missing, non-string or short (< 32 characters)
+ * Fails closed like `AUTH_INDEX_KEY` (`apps/app/src/models/management/auth-index.ts`): a missing, non-string or short (< 32 characters)
  * key throws. On a deployed stage (`ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` set, the condition that also refuses
  * `ACCESS_DEV_BYPASS`) the fixed `alchemy dev` key and any key shorter than 64 characters (the deploy mints 32 random
  * bytes, 256 bits, as 64 hex characters) are refused too. The ControlPlane reads them when it starts (and logs a
