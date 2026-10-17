@@ -115,13 +115,13 @@ describe("a stub of a retrying namespace", () => {
     const stub = fake.namespace.getByName("org");
 
     expect(await stub.part().echo("a", "b")).toBe("2:a,b");
-    expect(await stub.echo("c")).toBe("3:c");
-    expect(fake.stubs()).toBe(3);
+    // The stub that threw is not used again: a later call goes to the new one.
+    expect(await stub.echo("c")).toBe("2:c");
+    expect(fake.stubs()).toBe(2);
     expect(fake.calls).toEqual([
       { stub: 1, method: "part.echo", args: ["a", "b"] },
       { stub: 2, method: "part.echo", args: ["a", "b"] },
-      { stub: 1, method: "echo", args: ["c"] },
-      { stub: 3, method: "echo", args: ["c"] },
+      { stub: 2, method: "echo", args: ["c"] },
     ]);
   });
 
@@ -140,6 +140,17 @@ describe("a stub of a retrying namespace", () => {
     );
     expect(fake.stubs()).toBe(1);
     expect(fake.calls).toHaveLength(1);
+  });
+
+  it("answers the members every object has itself, sending no call", () => {
+    const fake = fakeNamespace(() => undefined);
+    const stub = fake.namespace.getByName("org") as unknown as Record<string, unknown>;
+    const call = fake.namespace.getByName("org").echo("a") as unknown as Record<string, unknown>;
+
+    expect(stub["toJSON"]).toBeUndefined();
+    expect(typeof stub["toString"]).toBe("function");
+    expect(call["toJSON"]).toBeUndefined();
+    expect(fake.calls).toEqual([{ stub: 2, method: "echo", args: ["a"] }]);
   });
 
   it("settles a call once however often it is awaited", async () => {

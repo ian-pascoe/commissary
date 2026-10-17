@@ -36,14 +36,6 @@ interface __BaseEnv_Env {
    */
   AUTH_INDEX_KEY: string;
   /**
-   * Secrets key of the stage (`@commissary/state`'s `secrets/`): wraps every org's data key, which seals the stored
-   * secrets. Deployed: an Alchemy `Random` per key generation (alchemy.run.ts); tests and `alchemy dev` use their own.
-   * Missing: no ControlPlane starts.
-   */
-  SECRETS_KEY: string;
-  /** During a rotation, the secrets key `SECRETS_KEY` replaces: data keys still wrapped by it are wrapped again. */
-  SECRETS_KEY_PREVIOUS?: string;
-  /**
    * `cloud`: Commissary Cloud (ADR 0026, src/hosted/): the Worker signs people in with Better Auth and Access is not
    * used; unset or `self-hosted`: Cloudflare Access in front of the panel and the management API (ADR 0022).
    */

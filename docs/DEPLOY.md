@@ -58,7 +58,8 @@ A stage deploys two Workers (ADR 0030) from the one stack, in this order:
    settings that mark a deployed stage.
 2. **`Commissary`** (`apps/app`), the app Worker: everything that answers requests (panel, management API, client API,
    cron trigger), on the stage's domain or `workers.dev` URL. It binds the state Worker's Durable Objects by script
-   name, which is also why Alchemy deploys it second.
+   name, which is also why Alchemy deploys it second. It no longer binds the secrets keys, which only the
+   ControlPlane reads.
 
 Deploying a Worker restarts the Durable Objects it defines, and Alchemy uploads a Worker again only when its bundle
 changes, so the Durable Objects restart only on a deploy that changes their code, not on every panel or client API
@@ -269,7 +270,7 @@ the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --pro
 - **Secrets key.** Every org's stored secrets (auth files and config entries, see ARCHITECTURE.md _Stored secrets_) are
   encrypted with the org's data key, which is stored wrapped by the stage's `SECRETS_KEY`. Like the `auth_index` key it
   is an Alchemy `Random` in `alchemy.run.ts` (resource `SecretsKey`, one per generation), minted on the stage's first
-  deploy and bound as a secret of both Workers; no GitHub secret or manual step is needed. `alchemy dev` uses
+  deploy and bound as a secret of the state Worker, the only one that reads it; no GitHub secret or manual step is needed. `alchemy dev` uses
   `DEV_SECRETS_KEY`, the tests the keys in `apps/app/vitest.config.ts`; a Worker with Access configured refuses that dev key and
   any key shorter than 64 characters. Without a working key no ControlPlane starts: model traffic and management calls of
   every org fail (500) and the Worker logs `the ControlPlane cannot open the org's data key` with the reason, until a

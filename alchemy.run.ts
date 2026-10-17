@@ -117,6 +117,27 @@ export default Alchemy.Stack(
       ? { name: settings.domain, aliases: [settings.apiDomain] }
       : settings.domain;
 
+    // What the state Worker's classes read besides their namespaces and the mode (`StateObjectEnv`, `ModelsPartEnv`).
+    // The app Worker's own code reads all of it too, except the secrets keys.
+    const stateSettings = {
+      // Platform admins seeded as owners of `global`; the Access settings mark a deployed stage, where the dev secrets
+      // key is refused (@commissary/state's secrets/).
+      ACCESS_TEAM_DOMAIN: dev || hosted !== undefined ? "" : settings.teamDomain,
+      ACCESS_AUD: access.aud,
+      PLATFORM_ADMIN_EMAILS: settings.adminEmails.join(","),
+      PLATFORM_ADMIN_SERVICE_TOKENS: access.adminServiceTokens,
+      META_MINT_URL: settings.metaMintUrl,
+      // Redacted: bound as a secret (`secret_text`), never as a plain variable.
+      AUTH_INDEX_KEY: authIndexKey,
+    };
+
+    // The secrets keys (redacted, like `AUTH_INDEX_KEY`): only the ControlPlane reads them, so only the Worker that
+    // runs it binds them.
+    const secretsKeyBindings = {
+      ...(secretsKey === undefined ? {} : { SECRETS_KEY: secretsKey }),
+      ...(previousSecretsKey === undefined ? {} : { SECRETS_KEY_PREVIOUS: previousSecretsKey }),
+    };
+
     // The state Worker (apps/state, ADR 0030): defines ControlPlane, SessionState and Platform, and binds only what
     // their classes read (apps/state/src/env.d.ts). No routes, no domain, no workers.dev URL: the other Workers reach
     // it through their Durable Object bindings. A deploy restarts the Durable Objects a Worker defines, and Alchemy
@@ -137,17 +158,8 @@ export default Alchemy.Stack(
         SESSION_STATE: Cloudflare.DurableObject("SessionState", { transferredFrom: "Commissary" }),
         PLATFORM: Cloudflare.DurableObject("Platform", { transferredFrom: "Commissary" }),
         ...(hosted === undefined ? {} : { COMMISSARY_MODE: "cloud" }),
-        // Platform admins seeded as owners of `global`; the Access settings only mark a deployed stage, where the dev
-        // secrets key is refused (@commissary/state's secrets/).
-        PLATFORM_ADMIN_EMAILS: settings.adminEmails.join(","),
-        PLATFORM_ADMIN_SERVICE_TOKENS: access.adminServiceTokens,
-        ACCESS_TEAM_DOMAIN: dev || hosted !== undefined ? "" : settings.teamDomain,
-        ACCESS_AUD: access.aud,
-        META_MINT_URL: settings.metaMintUrl,
-        // Redacted: bound as secrets (`secret_text`), never as plain variables.
-        AUTH_INDEX_KEY: authIndexKey,
-        ...(secretsKey === undefined ? {} : { SECRETS_KEY: secretsKey }),
-        ...(previousSecretsKey === undefined ? {} : { SECRETS_KEY_PREVIOUS: previousSecretsKey }),
+        ...stateSettings,
+        ...secretsKeyBindings,
       },
     });
 
@@ -186,17 +198,11 @@ export default Alchemy.Stack(
         CONTROL_PLANE: stateObject("ControlPlane"),
         SESSION_STATE: stateObject("SessionState"),
         PLATFORM: stateObject("Platform"),
-        ACCESS_TEAM_DOMAIN: dev || hosted !== undefined ? "" : settings.teamDomain,
-        ACCESS_AUD: access.aud,
-        PLATFORM_ADMIN_EMAILS: settings.adminEmails.join(","),
-        PLATFORM_ADMIN_SERVICE_TOKENS: access.adminServiceTokens,
+        ...stateSettings,
         ACCESS_DEV_BYPASS: dev ? settings.devBypass : "",
-        META_MINT_URL: settings.metaMintUrl,
         ...(split ? { APP_DOMAIN: settings.domain, API_DOMAIN: settings.apiDomain } : {}),
-        // Redacted: bound as a secret (`secret_text`), never as a plain variable.
-        AUTH_INDEX_KEY: authIndexKey,
-        ...(secretsKey === undefined ? {} : { SECRETS_KEY: secretsKey }),
-        ...(previousSecretsKey === undefined ? {} : { SECRETS_KEY_PREVIOUS: previousSecretsKey }),
+        // Under `alchemy dev` the app runs the ControlPlane itself (the dev-only guard above).
+        ...(dev ? secretsKeyBindings : {}),
         ...hostedEnv,
       },
     });

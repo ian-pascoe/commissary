@@ -221,7 +221,8 @@ client -> Cloudflare Access -> Worker
   Worker reads `AppEnv` (`src/worker-env.ts`). `requestContext` provides each from the invocation's `env`, plus auth's
   ports over it: `AuthDirectory` (`state/auth-directory.ts`, the Durable Object stubs) and `SignInSessions`
   (`src/hosted/session.ts`, Better Auth); the global
-  `Env` appears only in the entry (`index.ts`, `api/scheduled.ts`), the Durable Object classes and tests.
+  `Env` appears only in the entry (`index.ts`, `api/scheduled.ts`) and tests; the state Worker's classes read
+  `StateObjectEnv` and their parts' views (`apps/state/src/env.d.ts`).
 - Use Effect at boundaries and for orchestration: services (`Context.Service`) + `Layer`s, `Schema` for config,
   credentials and external payloads, tagged errors, `Stream` for upstream/downstream streaming, `HttpClient`
   (`FetchHttpClient`) for upstream calls so tests can swap the transport.

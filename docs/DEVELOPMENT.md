@@ -53,7 +53,8 @@ settings, Durable Objects, `*.bin` Data modules). One that `@commissary/state`'s
 `StateObjectEnv` (`packages/state/src/env.ts`), the state Worker's `env` in `alchemy.run.ts` and
 `apps/state/src/env.d.ts`, and the state test Worker's bindings (`packages/state/vitest.config.ts`;
 its `test/env.d.ts` follows `StateObjectEnv`); one the Models part reads, into `ModelsPartEnv` and the state Worker's
-`env` the same way. One Models reads also goes into `ModelsBindings` (`packages/models/src/env.ts`)
+`env` the same way. The app's test Worker runs those classes too, so it binds them as well; one that only the classes
+read (the secrets keys) is declared for its tests in `apps/app/test/env.d.ts`, not in the app Worker's `Env`. One Models reads also goes into `ModelsBindings` (`packages/models/src/env.ts`)
 and the Models test Worker's bindings (`packages/models/vitest.config.ts`; its `test/env.d.ts` follows `ModelsBindings`,
 `StateObjectEnv` and `AuthBindings`).
 
@@ -93,7 +94,8 @@ a part's methods) is made in steps, one release apart:
 A deploy of the state Worker resets its Durable Objects, and the calls in flight fail with "Durable Object reset because
 its code was updated." The app Worker retries such a call once, on a new stub (`retryOnCodeUpdate`,
 `packages/state/src/code-update-retry.ts`, applied to the `env` in `apps/app/src/index.ts`); a call cut off by the reset
-may have stored its writes before, so it may run twice.
+may have stored its writes before, so it may run twice. Only chains are retried: a call on a result the caller awaited
+(`await stub.models()`) goes to the runtime's own stub, so call through the chain (`stub.models().x()`).
 
 ## Layout
 
@@ -361,7 +363,7 @@ assertion that cannot be removed carries a `// SAFETY: <invariant>` comment on t
 ## Dependency notes
 
 - TypeScript 7 (native `tsc`). Each program has its own tsconfig extending `tsconfig.base.json`: `apps/app/tsconfig.json`
-  (Worker, workerd types), `apps/web/tsconfig.app.json` (panel, DOM types) and `tsconfig.node.json` (its Node.js side),
+  (app Worker, workerd types), `apps/state/tsconfig.json` (state Worker, workerd types), `apps/web/tsconfig.app.json` (panel, DOM types) and `tsconfig.node.json` (its Node.js side),
   `packages/contract/tsconfig.json` (no runtime types), `packages/auth`, `packages/core`, `packages/json` and `packages/translation` (Node.js types,
   no Workers types), `packages/state` and `packages/models` (workerd types, with the Node.js tests of `test/unit/`
   checked in the same program) and the root's `tsconfig.infra.json` (deploy code, Node.js types). `tsc` only checks (`noEmit`); Turborepo caches it. `capnp-es` (via Alchemy) declares a TypeScript 5/6 peer
