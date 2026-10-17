@@ -28,23 +28,24 @@ export interface HostedSettings {
   readonly authDomain: string;
   /**
    * The session cookie's `Domain` (ADR 0031): the base domain, so the cookie the auth host sets reaches the app host
-   * and every other host under the base domain. Empty on a preview and under `alchemy dev`, which scope theirs in
-   * alchemy.run.ts (the account's workers.dev subdomain; a host-only `localhost` cookie).
+   * and every other host under the base domain. Empty under `alchemy dev` (a host-only `localhost` cookie, which spans
+   * the ports) and on a preview, whose cookie alchemy.run.ts scopes to the account's workers.dev subdomain, known only
+   * once its first Worker is deployed (infra/preview-origin.ts).
    */
   readonly cookieDomain: string;
   /**
    * The session cookie's name prefix: Better Auth's default (empty) while the base domain is the app host, as before
-   * there was an app host of its own; {@link BASE_COOKIE_PREFIX} once the base domain is above it, so a cookie still
-   * scoped to the app host (the old layout) never shadows the base domain's (ADR 0031). Empty on a preview and under
-   * `alchemy dev`, which name theirs in alchemy.run.ts.
+   * there was an app host of its own, and under `alchemy dev`; {@link BASE_COOKIE_PREFIX} once the base domain is above
+   * it, so a cookie still scoped to the app host (the old layout) never shadows the base domain's (ADR 0031);
+   * `commissary-<stage>` on a preview, so previews, which share the account's workers.dev subdomain, keep apart.
    */
   readonly cookiePrefix: string;
 }
 
 /**
- * The session cookie's name prefix once it is scoped to a base domain above the app host (`__Secure-commissary.*`). A
- * browser keeps a cookie of the same name scoped to the app host apart, sends the older one first, and Better Auth reads
- * the first: renaming the cookie with its scope signs people out once instead.
+ * The session cookie's name prefix once it is scoped to a base domain above the app host (`__Secure-commissary.*`).
+ * A browser keeps a cookie of the same name scoped to the app host apart, sends the older one first, and Better Auth
+ * reads the first: renaming the cookie with its scope signs people out once instead.
  */
 export const BASE_COOKIE_PREFIX = "commissary";
 
@@ -70,8 +71,8 @@ export interface Settings {
    */
   readonly preview: boolean;
   /**
-   * The base domain (`COMMISSARY_DOMAIN`, ADR 0031), e.g. `example.com`: the domain every host of the deployment is
-   * under (the app host, Commissary Cloud's auth host), the scope of Commissary Cloud's session cookie, and where a
+   * The base domain (`COMMISSARY_DOMAIN`, ADR 0031), e.g. `example.com`: the domain the app host and Commissary Cloud's
+   * auth host are under (the API host may be elsewhere), the scope of Commissary Cloud's session cookie, and where a
    * landing page may live. The app host unless `COMMISSARY_APP_DOMAIN` names another.
    */
   readonly baseDomain: string;
@@ -172,6 +173,23 @@ const TOKEN_NAME = /^[a-z0-9][a-z0-9-]{0,40}$/;
 const HOSTNAME =
   /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/;
 
+/** Why the setting `name` is no hostname (`value`, e.g. `example`), `undefined` when it is one. */
+const notAHostname = (name: string, value: string, example: string): string | undefined =>
+  HOSTNAME.test(value)
+    ? undefined
+    : `${name} must be a lowercase hostname such as ${example}, not "${value}"`;
+
+/**
+ * Whether `host` is `domain` or a host under it. Settings compare hosts that passed {@link HOSTNAME}, so lowercase;
+ * stacks/github.ts matches a host to its zone with it.
+ */
+export const isWithin = (host: string, domain: string): boolean =>
+  host === domain || host.endsWith(`.${domain}`);
+
+/** The refusal of a setting (`name`) that names the app host. */
+const sameAsAppHost = (name: string, appDomain: string): string =>
+  `${name} must differ from the app host (${appDomain}), COMMISSARY_APP_DOMAIN or by default COMMISSARY_DOMAIN`;
+
 const secret = (name: string, fallback = "") =>
   Effect.map(text(name, fallback), (value) => Redacted.make(value.trim()));
 
@@ -202,15 +220,7 @@ const commissaryMode = Effect.gen(function* () {
 const authHost = (configured: string, baseDomain: string): string => {
   if (configured !== "") return configured;
 
-  return baseDomain === "" ? "" : `auth.${baseDomain.toLowerCase()}`;
-};
-
-/** Whether `host` is `domain` or a host under it (case-insensitive). */
-const isWithin = (host: string, domain: string): boolean => {
-  const name = host.toLowerCase();
-  const base = domain.toLowerCase();
-
-  return name === base || name.endsWith(`.${base}`);
+  return baseDomain === "" ? "" : `auth.${baseDomain}`;
 };
 
 /**
@@ -219,11 +229,13 @@ const isWithin = (host: string, domain: string): boolean => {
  */
 const hostedSettings = Effect.fnUntraced(function* (
   dev: boolean,
+  stage: string,
   preview: boolean,
   hosts: { readonly baseDomain: string; readonly appDomain: string; readonly apiDomain: string },
 ) {
   const { baseDomain, appDomain, apiDomain } = hosts;
   const deployed = !dev && !preview;
+  const scopedToBase = deployed && baseDomain !== appDomain;
   const problems: Array<string> = [];
   const limit = wholeNumber(yield* text("OWNED_ORG_LIMIT"), 3, 0);
   const rate = wholeNumber(yield* text("ORG_RATE_LIMIT"), 600, 1);
@@ -251,26 +263,23 @@ const hostedSettings = Effect.fnUntraced(function* (
       ? authHost((yield* text("COMMISSARY_AUTH_DOMAIN")).trim(), baseDomain)
       : "",
     cookieDomain: deployed ? baseDomain : "",
-    cookiePrefix:
-      deployed && baseDomain.toLowerCase() !== appDomain.toLowerCase() ? BASE_COOKIE_PREFIX : "",
+    cookiePrefix: preview ? `commissary-${stage}` : scopedToBase ? BASE_COOKIE_PREFIX : "",
   };
 
   if (hosted.authDomain !== "") {
-    if (!HOSTNAME.test(hosted.authDomain))
-      problems.push(
-        `COMMISSARY_AUTH_DOMAIN must be a lowercase hostname such as auth.example.com, not "${hosted.authDomain}"`,
-      );
-    else if (
-      hosted.authDomain === baseDomain.toLowerCase() ||
-      !isWithin(hosted.authDomain, baseDomain)
-    )
+    const notHostname = notAHostname(
+      "COMMISSARY_AUTH_DOMAIN",
+      hosted.authDomain,
+      "auth.example.com",
+    );
+
+    if (notHostname !== undefined) problems.push(notHostname);
+    else if (hosted.authDomain === baseDomain || !isWithin(hosted.authDomain, baseDomain))
       problems.push(
         `COMMISSARY_AUTH_DOMAIN must be a subdomain of COMMISSARY_DOMAIN (${baseDomain}), the scope of its session cookie`,
       );
-    else if (hosted.authDomain === appDomain.toLowerCase())
-      problems.push(
-        `COMMISSARY_AUTH_DOMAIN must differ from the app host (${appDomain}), COMMISSARY_APP_DOMAIN or by default COMMISSARY_DOMAIN`,
-      );
+    else if (hosted.authDomain === appDomain)
+      problems.push(sameAsAppHost("COMMISSARY_AUTH_DOMAIN", appDomain));
     else if (hosted.authDomain === apiDomain)
       problems.push("COMMISSARY_AUTH_DOMAIN must differ from COMMISSARY_API_DOMAIN");
   }
@@ -312,6 +321,7 @@ export const readSettings = (dev: boolean, stage: string) =>
         ),
       );
 
+    // The hosts are trimmed here and refused below unless lowercase hostnames, so they compare as they are.
     const baseDomain = (yield* text("COMMISSARY_DOMAIN")).trim();
     // The app host is the base domain unless set (ADR 0031): a self-hosted `.env` from before keeps serving it there.
     const configuredAppDomain = (yield* text("COMMISSARY_APP_DOMAIN")).trim();
@@ -322,7 +332,7 @@ export const readSettings = (dev: boolean, stage: string) =>
     // Under `alchemy dev` too (`COMMISSARY_MODE=cloud pnpm smoke`): people sign in on the auth Worker's dev port, without the dev bypass.
     const hosted =
       mode === "cloud"
-        ? yield* hostedSettings(dev, preview, { baseDomain, appDomain, apiDomain })
+        ? yield* hostedSettings(dev, stage, preview, { baseDomain, appDomain, apiDomain })
         : undefined;
 
     const settings: Settings = {
@@ -351,30 +361,40 @@ export const readSettings = (dev: boolean, stage: string) =>
     if (dev) return settings;
     const problems: Array<string> = [...(hosted?.problems ?? [])];
 
-    if (settings.baseDomain === "" && !preview)
-      problems.push(
-        "COMMISSARY_DOMAIN is required (the base domain; the app Worker's custom hostname unless COMMISSARY_APP_DOMAIN names another)",
-      );
+    // A preview ignores the base domain and the app host: its Workers serve their workers.dev URLs.
+    if (!preview) {
+      const notHostname =
+        settings.baseDomain === ""
+          ? "COMMISSARY_DOMAIN is required (the base domain; the app host unless COMMISSARY_APP_DOMAIN names another)"
+          : notAHostname("COMMISSARY_DOMAIN", settings.baseDomain, "example.com");
 
-    if (configuredAppDomain !== "" && settings.baseDomain !== "" && !preview) {
-      if (!HOSTNAME.test(configuredAppDomain))
-        problems.push(
-          `COMMISSARY_APP_DOMAIN must be a lowercase hostname such as app.example.com, not "${configuredAppDomain}"`,
+      if (notHostname !== undefined) problems.push(notHostname);
+      else if (configuredAppDomain !== "") {
+        const notAppHostname = notAHostname(
+          "COMMISSARY_APP_DOMAIN",
+          configuredAppDomain,
+          "app.example.com",
         );
-      else if (!isWithin(configuredAppDomain, settings.baseDomain))
-        problems.push(
-          `COMMISSARY_APP_DOMAIN must be COMMISSARY_DOMAIN (${settings.baseDomain}) or a subdomain of it`,
-        );
+
+        if (notAppHostname !== undefined) problems.push(notAppHostname);
+        else if (!isWithin(configuredAppDomain, settings.baseDomain))
+          problems.push(
+            `COMMISSARY_APP_DOMAIN must be COMMISSARY_DOMAIN (${settings.baseDomain}) or a subdomain of it`,
+          );
+      }
     }
 
     if (settings.apiDomain !== "") {
-      if (!HOSTNAME.test(settings.apiDomain))
+      const notHostname = notAHostname(
+        "COMMISSARY_API_DOMAIN",
+        settings.apiDomain,
+        "api.example.com",
+      );
+
+      if (notHostname !== undefined) problems.push(notHostname);
+      else if (settings.apiDomain === settings.appDomain)
         problems.push(
-          `COMMISSARY_API_DOMAIN must be a lowercase hostname such as api.example.com, not "${settings.apiDomain}"`,
-        );
-      else if (settings.apiDomain === settings.appDomain.toLowerCase())
-        problems.push(
-          `COMMISSARY_API_DOMAIN must differ from the app host (${settings.appDomain}), COMMISSARY_APP_DOMAIN or by default COMMISSARY_DOMAIN: unset it to serve the client API on the app host`,
+          `${sameAsAppHost("COMMISSARY_API_DOMAIN", settings.appDomain)}: unset it to serve the client API on the app host`,
         );
     }
 

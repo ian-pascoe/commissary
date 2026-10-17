@@ -1,17 +1,19 @@
 import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 import { BUNDLE_ALIASES } from "../../infra/bundle.ts";
+import { BASE_COOKIE_PREFIX } from "../../infra/settings.ts";
 
 /**
  * Commissary Cloud (`COMMISSARY_MODE=cloud`, ADR 0026), the only mode the auth Worker runs in (ADR 0030): Better Auth
  * signs people in with GitHub and Google (stubbed through the global `fetch` in the tests) and Turnstile guards sign-up.
- * The auth host is `https://auth.commissary.test`, the app host `https://app.commissary.test`, both under the base domain
- * `commissary.test`, the session cookie's scope (test/support.ts, ADR 0031).
+ * The auth host is `https://auth.commissary.test`, the app host `https://app.commissary.test`, both under the base
+ * domain `commissary.test`, the session cookie's scope, so the cookie is named apart (`__Secure-commissary.*`) as on a
+ * deployed stage with that layout (test/support.ts, ADR 0031).
  */
 const BINDINGS = {
   APP_ORIGIN: "https://app.commissary.test",
   AUTH_COOKIE_DOMAIN: "commissary.test",
-  AUTH_COOKIE_PREFIX: "",
+  AUTH_COOKIE_PREFIX: BASE_COOKIE_PREFIX,
   BETTER_AUTH_SECRET: "commissary-test-better-auth-secret-0123456789abcdef0123456789abcd",
   SIGN_IN_GITHUB_CLIENT_ID: "github-client-id",
   SIGN_IN_GITHUB_CLIENT_SECRET: "github-client-secret",

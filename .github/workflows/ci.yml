@@ -222,7 +222,8 @@ jobs:
           tools/preview-comment.sh "$PR" "Preview \`$STAGE\` deployed at $URL (commit ${SHA:0:8}), $how; the client API (API keys) is at $API_URL. Storage starts empty and is destroyed when the pull request closes."
 
   # Commissary Cloud (ADR 0026) deployed from main next to production: stage `cloud`, settings in the `cloud`
-  # environment (docs/DEPLOY.md "The Commissary Cloud stage"). Skipped until that environment names its base domain (COMMISSARY_DOMAIN).
+  # environment (docs/DEPLOY.md "The Commissary Cloud stage"). Skipped until that environment names its base domain
+  # (COMMISSARY_DOMAIN).
   deploy-cloud:
     name: deploy cloud
     needs: [static, test, smoke, smoke-cloud]
@@ -242,15 +243,15 @@ jobs:
       CONFIGURED: ${{ vars.COMMISSARY_DOMAIN != '' }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-      # The base domain (ADR 0031): the app host unless COMMISSARY_APP_DOMAIN names another, and the scope of
-      # Commissary Cloud's session cookie. Previews ignore it.
+      # The base domain (ADR 0031): the app host unless COMMISSARY_APP_DOMAIN names another, and the scope of the
+      # session cookie.
       COMMISSARY_DOMAIN: ${{ vars.COMMISSARY_DOMAIN }}
-      # The app host (ADR 0031), COMMISSARY_DOMAIN or a host under it; unset, COMMISSARY_DOMAIN. Previews ignore it.
+      # The app host (ADR 0031), COMMISSARY_DOMAIN or a host under it; unset, COMMISSARY_DOMAIN.
       COMMISSARY_APP_DOMAIN: ${{ vars.COMMISSARY_APP_DOMAIN }}
       # The API host (ADR 0028), served by the API Worker; unset, zone routes send the client API paths on the app
-      # host to it (ADR 0030). Previews ignore it.
+      # host to it (ADR 0030).
       COMMISSARY_API_DOMAIN: ${{ vars.COMMISSARY_API_DOMAIN }}
-      # Commissary Cloud's auth host (ADR 0030; default auth.<COMMISSARY_DOMAIN>). Previews ignore it.
+      # The auth host (ADR 0030; default auth.<COMMISSARY_DOMAIN>).
       COMMISSARY_AUTH_DOMAIN: ${{ vars.COMMISSARY_AUTH_DOMAIN }}
       PLATFORM_ADMIN_EMAILS: ${{ vars.PLATFORM_ADMIN_EMAILS }}
       SECRETS_KEY_GENERATION: ${{ vars.SECRETS_KEY_GENERATION }}

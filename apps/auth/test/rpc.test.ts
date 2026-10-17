@@ -8,6 +8,7 @@ import {
   installFakes,
   restoreFetch,
   rpc,
+  SESSION_COOKIE,
   sessionOf,
   signIn,
   upstreams,
@@ -44,7 +45,7 @@ describe("session", () => {
 
     expect(person).toEqual({ userId: expect.any(String), email: "ada@example.com" });
     expect(await sessionOf("")).toBeNull();
-    expect(await sessionOf("__Secure-better-auth.session_token=forged")).toBeNull();
+    expect(await sessionOf(`${SESSION_COOKIE}=forged`)).toBeNull();
   });
 });
 

@@ -4,11 +4,11 @@ status: accepted
 
 # Hosts share a base domain, which scopes the session cookie
 
-A deployment has a **base domain** (`COMMISSARY_DOMAIN`), and every hostname it serves is under it: the app host (`COMMISSARY_APP_DOMAIN`, the base domain itself or a host under it, by default the base domain) and Commissary Cloud's auth host (`auth.<base domain>` by default, never the app host or the API host). Commissary Cloud's session cookie is scoped to the base domain. Commissary Cloud then runs as `commissary.dev` (a landing page, later), `app.commissary.dev`, `auth.commissary.dev` and `api.commissary.dev`. ADR 0030 had the auth host under the app host and the cookie scoped to the app host, which left no place for a landing page beside the app: this replaces that part of it.
+A deployment has a **base domain** (`COMMISSARY_DOMAIN`), and the hostnames people use are under it: the app host (`COMMISSARY_APP_DOMAIN`, the base domain itself or a host under it, by default the base domain) and Commissary Cloud's auth host (`auth.<base domain>` by default, never the app host or the API host). The API host is not bound to it: clients reach it with API keys, not the session cookie. Commissary Cloud's session cookie is scoped to the base domain. Commissary Cloud then runs as `commissary.dev` (a landing page, later), `app.commissary.dev`, `auth.commissary.dev` and `api.commissary.dev`. ADR 0030 had the auth host under the app host and the cookie scoped to the app host, which left no place for a landing page beside the app: this replaces that part of it.
 
 `COMMISSARY_DOMAIN` keeps its name and becomes the base domain, and the app host defaults to it, so a deployment that sets only `COMMISSARY_DOMAIN` (every self-hosted one) keeps serving everything there, with the auth host where it was.
 
-The tradeoff: the browser sends the session cookie to every host under the base domain, a landing page and the API host included. Only the auth Worker reads it (the app Worker passes it on), so another host under the base domain must not log or forward cookies, and nothing untrusted may be served under the base domain.
+The tradeoff: the browser sends the session cookie to every host under the base domain, a landing page included, and the API host when it is under the base domain (as `api.commissary.dev` is). Only the auth Worker reads it (the app Worker passes it on), so another host under the base domain must not log or forward cookies, and nothing untrusted may be served under the base domain.
 
 ## Considered Options
 

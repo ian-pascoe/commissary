@@ -170,7 +170,7 @@ model aliases, retries, …) are edited in the control panel and stored in the W
 
 | Variable                         | Default    | Purpose                                                                                                           |
 | -------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------- |
-| `COMMISSARY_DOMAIN`              | (required) | Base domain, every hostname is under it; the app host unless `COMMISSARY_APP_DOMAIN` is set                       |
+| `COMMISSARY_DOMAIN`              | (required) | Base domain, the app host is under it; the app host itself unless `COMMISSARY_APP_DOMAIN` is set                  |
 | `COMMISSARY_APP_DOMAIN`          | (base)     | App host: the app Worker's and Access's hostname ([docs/DEPLOY.md](docs/DEPLOY.md#base-domain-and-app-host))      |
 | `COMMISSARY_API_DOMAIN`          |            | A second hostname that alone serves the client API, outside Access ([docs/DEPLOY.md](docs/DEPLOY.md#api-host))    |
 | `ACCESS_TEAM_DOMAIN`             | (required) | Zero Trust team name or `<team>.cloudflareaccess.com`                                                             |

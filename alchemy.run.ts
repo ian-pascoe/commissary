@@ -213,15 +213,15 @@ export default Alchemy.Stack(
         ? undefined
         : yield* Cloudflare.D1.Database("SignIn", { migrations: "./migrations/sign-in" });
 
-    // The auth Worker (apps/auth, ADR 0030), Commissary Cloud only: Better Auth on the auth host (`COMMISSARY_AUTH_DOMAIN`,
-    // by default `auth.<COMMISSARY_DOMAIN>`; a preview's workers.dev URL; its dev port), and the RPC the app Worker asks
-    // over its service binding. It trusts and returns to the app origin only, and scopes the session cookie to the base
-    // domain (ADR 0031), so the app host receives it (a preview: the account's workers.dev subdomain, every preview's
-    // cookie named apart by its prefix; under `alchemy dev` a host-only `localhost` cookie, which spans the ports).
+    // The auth Worker (apps/auth, ADR 0030), Commissary Cloud only: Better Auth on the auth host
+    // (`COMMISSARY_AUTH_DOMAIN`, by default `auth.<COMMISSARY_DOMAIN>`; a preview's workers.dev URL; its dev port), and
+    // the RPC the app Worker asks over its service binding. It trusts and returns to the app origin only, and scopes the
+    // session cookie to the base domain (ADR 0031), so the app host receives it (a preview: the account's workers.dev
+    // subdomain; under `alchemy dev` a host-only `localhost` cookie, which spans the ports). The cookie's name, and its
+    // domain except on a preview, come from the settings (`HostedSettings` `cookiePrefix`, `cookieDomain`).
     const authWorker = (app: {
       readonly origin: string | Output.Output<string>;
       readonly cookieDomain: string | Output.Output<string>;
-      readonly cookiePrefix: string;
     }) =>
       Cloudflare.Worker("Auth", {
         main: dev ? "./apps/auth/src/dev.ts" : "./apps/auth/src/index.ts",
@@ -236,7 +236,7 @@ export default Alchemy.Stack(
           ...stateBindings,
           APP_ORIGIN: app.origin,
           AUTH_COOKIE_DOMAIN: app.cookieDomain,
-          AUTH_COOKIE_PREFIX: app.cookiePrefix,
+          AUTH_COOKIE_PREFIX: hosted?.cookiePrefix ?? "",
           ...signInEnv,
         },
       });
@@ -355,7 +355,6 @@ export default Alchemy.Stack(
               : yield* authWorker({
                   origin: origin.pipe(Output.map((found) => found.appOrigin)),
                   cookieDomain: origin.pipe(Output.map((found) => found.accountDomain)),
-                  cookiePrefix: `commissary-${stage}`,
                 });
 
           return {
@@ -370,15 +369,10 @@ export default Alchemy.Stack(
               ? undefined
               : yield* authWorker(
                   dev
-                    ? {
-                        origin: `http://localhost:${DEV_PORTS.app}`,
-                        cookieDomain: "",
-                        cookiePrefix: "",
-                      }
+                    ? { origin: `http://localhost:${DEV_PORTS.app}`, cookieDomain: "" }
                     : {
                         origin: `https://${settings.appDomain}`,
                         cookieDomain: hosted.cookieDomain,
-                        cookiePrefix: hosted.cookiePrefix,
                       },
                 );
 

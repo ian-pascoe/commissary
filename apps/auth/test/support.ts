@@ -17,6 +17,9 @@ export const AUTH_ORIGIN = "https://auth.commissary.test";
 /** The app host (`APP_ORIGIN`): the sign-in page and the panel, which call the auth host. */
 export const APP_ORIGIN = "https://app.commissary.test";
 
+/** The session cookie's name: scoped to the base domain above the app host, so named apart (ADR 0031). */
+export const SESSION_COOKIE = "__Secure-commissary.session_token";
+
 /** The Turnstile token the fake siteverify accepts; any other token fails. */
 export const GOOD_TURNSTILE = "turnstile-ok";
 

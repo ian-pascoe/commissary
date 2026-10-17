@@ -25,6 +25,20 @@ const read = (variables: Record<string, string>, deployed?: { readonly stage: st
   );
 };
 
+/** A deployed stage's settings, or the readable refusal of invalid ones (a defect, see `readSettings`). */
+const refusal = (variables: Record<string, string>, stage = "prod") =>
+  read(variables, { stage }).pipe(
+    Effect.as("accepted"),
+    Effect.catchDefect((defect) => Effect.succeed(String(defect))),
+  );
+
+/** The least a self-hosted Commissary deploys with. */
+const selfHosted = {
+  COMMISSARY_DOMAIN: "commissary.example.com",
+  ACCESS_TEAM_DOMAIN: "team",
+  ACCESS_ALLOW_EMAILS: "a@x.com",
+};
+
 describe("platform admin settings", () => {
   it.effect("reads PLATFORM_ADMIN_* without a warning", () =>
     Effect.gen(function* () {
@@ -84,12 +98,12 @@ describe("secrets key generations", () => {
         ],
       ] as const) {
         // The settings refuse invalid values as a defect with a readable message (see `readSettings`).
-        const refusal = yield* read(variables).pipe(
+        const refused = yield* read(variables).pipe(
           Effect.as("accepted"),
           Effect.catchDefect((defect) => Effect.succeed(String(defect))),
         );
 
-        assert.include(refusal, message);
+        assert.include(refused, message);
       }
     }),
   );
@@ -112,12 +126,6 @@ describe("Commissary Cloud settings", () => {
     COMMISSARY_APP_DOMAIN: "app.example.com",
     COMMISSARY_API_DOMAIN: "api.example.com",
   };
-
-  const refusal = (variables: Record<string, string>) =>
-    read(variables, { stage: "prod" }).pipe(
-      Effect.as("accepted"),
-      Effect.catchDefect((defect) => Effect.succeed(String(defect))),
-    );
 
   it.effect("need no Access settings, and default the org limits", () =>
     Effect.gen(function* () {
@@ -251,14 +259,17 @@ describe("Commissary Cloud settings", () => {
         assert.strictEqual(split?.cookieDomain, "example.com");
         assert.strictEqual(split?.cookiePrefix, BASE_COOKIE_PREFIX);
 
-        // A preview and `alchemy dev` scope theirs in alchemy.run.ts (workers.dev, a host-only localhost cookie).
-        for (const settings of [
-          (yield* read(cloud, { stage: "pr-12" })).settings,
-          (yield* read(cloud)).settings,
-        ]) {
-          assert.strictEqual(settings.hosted?.cookieDomain, "");
-          assert.strictEqual(settings.hosted?.cookiePrefix, "");
-        }
+        // A preview names its cookie apart, scoped in alchemy.run.ts to the account's workers.dev subdomain.
+        const preview = (yield* read(cloud, { stage: "pr-12" })).settings.hosted;
+
+        assert.strictEqual(preview?.cookieDomain, "");
+        assert.strictEqual(preview?.cookiePrefix, "commissary-pr-12");
+
+        // `alchemy dev`: a host-only `localhost` cookie of Better Auth's name.
+        const dev = (yield* read(cloud)).settings.hosted;
+
+        assert.strictEqual(dev?.cookieDomain, "");
+        assert.strictEqual(dev?.cookiePrefix, "");
       }),
   );
 
@@ -311,18 +322,6 @@ describe("Commissary Cloud settings", () => {
 });
 
 describe("API host settings", () => {
-  const selfHosted = {
-    COMMISSARY_DOMAIN: "commissary.example.com",
-    ACCESS_TEAM_DOMAIN: "team",
-    ACCESS_ALLOW_EMAILS: "a@x.com",
-  };
-
-  const refusal = (variables: Record<string, string>, stage = "prod") =>
-    read(variables, { stage }).pipe(
-      Effect.as("accepted"),
-      Effect.catchDefect((defect) => Effect.succeed(String(defect))),
-    );
-
   it.effect("default to one host serving everything", () =>
     Effect.gen(function* () {
       assert.strictEqual((yield* read(selfHosted, { stage: "prod" })).settings.apiDomain, "");
@@ -383,18 +382,6 @@ describe("API host settings", () => {
 });
 
 describe("base domain and app host", () => {
-  const selfHosted = {
-    COMMISSARY_DOMAIN: "commissary.example.com",
-    ACCESS_TEAM_DOMAIN: "team",
-    ACCESS_ALLOW_EMAILS: "a@x.com",
-  };
-
-  const refusal = (variables: Record<string, string>, stage = "prod") =>
-    read(variables, { stage }).pipe(
-      Effect.as("accepted"),
-      Effect.catchDefect((defect) => Effect.succeed(String(defect))),
-    );
-
   it.effect("serve the app on the base domain by default, as a self-hosted .env always did", () =>
     Effect.gen(function* () {
       for (const variables of [selfHosted, { ...selfHosted, COMMISSARY_APP_DOMAIN: "" }]) {
@@ -422,6 +409,16 @@ describe("base domain and app host", () => {
         assert.strictEqual(settings.baseDomain, "commissary.example.com");
         assert.strictEqual(settings.appDomain, expected);
       }
+    }),
+  );
+
+  it.effect("refuse a base domain that is no hostname", () =>
+    Effect.gen(function* () {
+      for (const base of ["Commissary.example.com", "https://commissary.example.com", "localhost"])
+        assert.include(
+          yield* refusal({ ...selfHosted, COMMISSARY_DOMAIN: base }),
+          "COMMISSARY_DOMAIN must be a lowercase hostname",
+        );
     }),
   );
 

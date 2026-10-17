@@ -5,6 +5,7 @@
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { stateAuthDirectory } from "@commissary/state";
+import { BASE_COOKIE_PREFIX } from "../../../infra/settings.ts";
 import { signedInPerson } from "../src/sign-in/sessions.ts";
 import {
   AUTH_ORIGIN,
@@ -18,6 +19,7 @@ import {
   installFakes,
   APP_ORIGIN,
   restoreFetch,
+  SESSION_COOKIE,
   signIn,
   startSignIn,
   upstreams,
@@ -71,10 +73,11 @@ describe("sign-in with GitHub", () => {
 
     const cookie = callback.headers
       .getSetCookie()
-      .find((value) => value.startsWith("__Secure-better-auth.session_token="));
+      .find((value) => value.startsWith(`${SESSION_COOKIE}=`));
 
     expect(cookie).toBeDefined();
-    // Scoped to the base domain, so the app host under it receives it and hands it back over the RPC.
+    // Scoped to the base domain, so the app host under it receives it and hands it back over the RPC; named apart
+    // (`AUTH_COOKIE_PREFIX`) because the base domain is above the app host.
     expect(cookie).toMatch(/;\s*Domain=\.?commissary\.test(;|$)/i);
     expect(cookie).toMatch(/;\s*Secure/i);
     expect(cookie).toMatch(/;\s*HttpOnly/i);
@@ -122,8 +125,9 @@ describe("sign-in with GitHub", () => {
     expect(people?.n).toBe(0);
   });
 
-  it("sign-out ends the session", async () => {
+  it("sign-out ends the session and clears its cookie, under the same name and domain", async () => {
     const cookie = await signIn({ email: "ada@example.com" });
+    expect(cookie).toContain(`${SESSION_COOKIE}=`);
     expect(await session(cookie)).not.toBeNull();
 
     const out = await call("/api/auth/sign-out", {
@@ -134,23 +138,36 @@ describe("sign-in with GitHub", () => {
 
     expect(out.status).toBe(200);
 
+    const cleared = out.headers
+      .getSetCookie()
+      .find((value) => value.startsWith(`${SESSION_COOKIE}=`));
+
+    expect(cleared).toBeDefined();
+    expect(cleared?.split(";")[0]).toBe(`${SESSION_COOKIE}=`);
+    expect(cleared).toMatch(/;\s*Domain=\.?commissary\.test(;|$)/i);
+    expect(cleared).toMatch(/;\s*Max-Age=0(;|$)/i);
+
     expect(await session(cookie)).toBeNull();
   });
 });
 
+/** The session cookie's value, which Better Auth signs alone: valid under any name. */
+const tokenOf = (cookie: string): string =>
+  cookie
+    .split("; ")
+    .find((pair) => pair.startsWith(`${SESSION_COOKIE}=`))
+    ?.slice(SESSION_COOKIE.length + 1) ?? "";
+
+/** Who the session in `cookie` belongs to, read by a Better Auth whose cookie prefix is `prefix`. */
+const personFor = async (prefix: string, cookie: string) =>
+  await signedInPerson(
+    { ...env, AUTH_COOKIE_PREFIX: prefix },
+    stateAuthDirectory(env),
+    AUTH_ORIGIN,
+    cookie,
+  );
+
 describe("the session cookie's name", () => {
-  // The session cookie's value, whatever its name: Better Auth signs the value alone.
-  const tokenOf = (cookie: string): string =>
-    /__Secure-better-auth\.session_token=([^;]+)/.exec(cookie)?.[1] ?? "";
-
-  const personFor = async (prefix: string, cookie: string) =>
-    await signedInPerson(
-      { ...env, AUTH_COOKIE_PREFIX: prefix },
-      stateAuthDirectory(env),
-      AUTH_ORIGIN,
-      cookie,
-    );
-
   it("is read under AUTH_COOKIE_PREFIX alone, so a renamed cookie is not shadowed by one of the old name (ADR 0031)", async () => {
     const token = tokenOf(await signIn({ email: "ada@example.com" }));
     expect(token).not.toBe("");
@@ -165,13 +182,13 @@ describe("the session cookie's name", () => {
     ).toBeUndefined();
 
     // Renamed with its scope, the cookie of the old name is ignored: the person is signed out once, then signs in.
-    expect(await personFor("commissary", `__Secure-better-auth.session_token=${token}`)).toBe(
-      undefined,
-    );
+    expect(
+      await personFor(BASE_COOKIE_PREFIX, `__Secure-better-auth.session_token=${token}`),
+    ).toBeUndefined();
     expect(
       await personFor(
-        "commissary",
-        `__Secure-better-auth.session_token=stale; __Secure-commissary.session_token=${token}`,
+        BASE_COOKIE_PREFIX,
+        `__Secure-better-auth.session_token=stale; ${SESSION_COOKIE}=${token}`,
       ),
     ).toMatchObject({ email: "ada@example.com" });
   });

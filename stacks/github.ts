@@ -6,10 +6,11 @@
  *
  *   pnpm ci:setup        # alchemy deploy --config stacks/github.ts --profile admin --stage ci
  *
- * The deploy settings (COMMISSARY_DOMAIN, COMMISSARY_APP_DOMAIN, ACCESS_*) come from `.env`, like `alchemy.run.ts`, and so do Commissary
- * Cloud's (SIGN_IN_*, TURNSTILE_*, …), written whenever `.env` sets them: previews labeled `cloud-preview` need them
- * even while production is self-hosted. The `cloud` environment (Commissary Cloud, which CI deploys next to production,
- * stage `cloud`) takes its settings from `.env.cloud` instead, and is left alone while that file does not exist.
+ * The deploy settings (COMMISSARY_DOMAIN, COMMISSARY_APP_DOMAIN, ACCESS_*) come from `.env`, like `alchemy.run.ts`,
+ * and so do Commissary Cloud's (SIGN_IN_*, TURNSTILE_*, …), written whenever `.env` sets them: previews labeled
+ * `cloud-preview` need them even while production is self-hosted. The `cloud` environment (Commissary Cloud, which CI
+ * deploys next to production, stage `cloud`) takes its settings from `.env.cloud` instead, and is left alone while
+ * that file does not exist.
  */
 import * as zones from "@distilled.cloud/cloudflare/zones";
 import * as Alchemy from "alchemy";
@@ -23,7 +24,7 @@ import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Stream from "effect/Stream";
 import { existsSync, readFileSync } from "node:fs";
-import { CLOUD_STAGE, readSettings } from "../infra/settings.ts";
+import { CLOUD_STAGE, isWithin, readSettings } from "../infra/settings.ts";
 
 /** The `cloud` stage's deploy settings, next to `.env` (docs/DEPLOY.md "The Commissary Cloud stage"). */
 const CLOUD_ENV_FILE = ".env.cloud";
@@ -74,7 +75,7 @@ const hostedConfig = Effect.gen(function* () {
 /** The account's zone that serves `domain` (the longest zone name `domain` ends with). */
 const zoneFor = (accountId: string, domain: string) =>
   zones.listZones.items({ account: { id: accountId } }).pipe(
-    Stream.filter((zone) => domain === zone.name || domain.endsWith(`.${zone.name}`)),
+    Stream.filter((zone) => isWithin(domain, zone.name)),
     Stream.runCollect,
     Effect.flatMap((matches) => {
       const zone = [...matches].toSorted((a, b) => b.name.length - a.name.length)[0];
@@ -279,7 +280,7 @@ export default Alchemy.Stack(
       // Put this into ACCESS_ALLOW_SERVICE_TOKEN_IDS in .env too, so local deploys keep the CI token admitted.
       checkServiceTokenId: checkToken.serviceTokenId,
       zone: zone.name,
-      cloudDomain: cloudStage?.settings.baseDomain ?? "(no .env.cloud)",
+      cloudBaseDomain: cloudStage?.settings.baseDomain ?? "(no .env.cloud)",
       cloudAppDomain: cloudStage?.settings.appDomain ?? "",
       cloudApiDomain: cloudStage?.settings.apiDomain ?? "",
       // Where the `cloud` stage's OAuth callbacks go (docs/DEPLOY.md "The Commissary Cloud stage").

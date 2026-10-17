@@ -432,10 +432,13 @@ application. Everything in §1-§2 and the service tokens of §3 do not apply; m
 management keys work as above. What changes:
 
 - **Sign-in.** People sign in at `/sign-in` with GitHub or Google (Better Auth, in the auth Worker on the auth host,
-  `auth.<base domain>` by default, ADR 0030, ADR 0031), behind a Cloudflare Turnstile challenge (a token solved on another hostname
-  is refused). The auth Worker keeps the verified email and a session in its own D1 database (`SignIn`), never the
-  provider's tokens; the session cookie is scoped to the base domain (`COMMISSARY_DOMAIN`), so the app host under it receives it and asks the auth Worker whose it is (every other host under the base domain receives it too); Better Auth's session cookie is `HttpOnly` and `SameSite=Lax` (and `Secure` over HTTPS). The panel signs out with **Sign out** in the shell's account menu. Without a
-  session the management API answers `401 Not signed in` and a panel page redirects to `/sign-in?next=<page>`.
+  `auth.<base domain>` by default, ADR 0030, ADR 0031), behind a Cloudflare Turnstile challenge (a token solved on
+  another hostname is refused). The auth Worker keeps the verified email and a session in its own D1 database
+  (`SignIn`), never the provider's tokens; the session cookie is scoped to the base domain (`COMMISSARY_DOMAIN`), so the
+  app host under it receives it and asks the auth Worker whose it is (every other host under the base domain receives it
+  too); Better Auth's session cookie is `HttpOnly` and `SameSite=Lax` (and `Secure` over HTTPS). The panel signs out
+  with **Sign out** in the shell's account menu. Without a session the management API answers `401 Not signed in` and a
+  panel page redirects to `/sign-in?next=<page>`.
 - **Who is who.** The signed-in email is the principal, like Access's `email` claim, so a member invited by email signs
   in with a provider account whose verified email matches. Access JWTs and Access service tokens are accepted nowhere.
   Platform admins are the emails in `PLATFORM_ADMIN_EMAILS`; `PLATFORM_ADMIN_SERVICE_TOKENS` means nothing.
