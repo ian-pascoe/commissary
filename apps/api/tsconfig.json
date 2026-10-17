@@ -1,0 +1,15 @@
+{
+  // The API Worker (workerd) and its tests, with the Workers runtime types shared with the other workerd programs
+  // (tools/workers/worker-configuration.d.ts) and the Node.js types for `node:crypto`/`node:buffer` (nodejs_compat).
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023"],
+    "types": [
+      "node",
+      "../../tools/workers/worker-configuration.d.ts",
+      "@cloudflare/vitest-plugin/types"
+    ],
+    "resolveJsonModule": true
+  },
+  "include": ["src", "test", "vitest.config.ts"]
+}

@@ -16,7 +16,7 @@ secrets Commissary holds for outside services are **credentials**, and a model p
   and vice versa.
 - **Use the subscriptions you already pay for.** Log in with OAuth (Claude, Codex, Antigravity, xAI, Kimi, Devin, …) or
   add provider keys; credentials rotate round-robin with cooldowns on rate limits and automatic token refresh.
-- **Nothing to run.** Two Workers (the app and the state Worker that holds the Durable Objects), KV and D1. No servers, no containers, and it scales to zero.
+- **Nothing to run.** Three Workers (the app Worker for the panel and the management API, the API Worker for the client API, and the state Worker that holds the Durable Objects), KV and D1. No servers, no containers, and it scales to zero.
 - **Zero-trust by default.** People sign in to the control panel and management API through Cloudflare Access with
   your identity provider; tools send an API key each member creates in the panel, stored only as a hash and
   revocable (a revoked key stops working within 30 seconds); scripts use management keys or Access service tokens. The Worker stores no client passwords.
@@ -260,10 +260,10 @@ Per-provider details: [ARCHITECTURE.md](docs/ARCHITECTURE.md); config keys witho
 ```bash
 pnpm install
 pnpm build                         # or `pnpm --filter @commissary/web dev` for the panel with hot reload on :5173
-ALCHEMY_STATE=local pnpm dev       # Worker on http://localhost:1337 with hot reload
+ALCHEMY_STATE=local pnpm dev       # panel on http://localhost:1337, client API on :1339, hot reload
 ```
 
-`alchemy dev` runs the Worker in local workerd with emulated KV, D1 and Durable Objects. No Cloudflare resources are
+`alchemy dev` runs the Workers in local workerd with emulated KV, D1 and Durable Objects. No Cloudflare resources are
 created, and with `ALCHEMY_STATE=local` no Cloudflare login is needed. Access is not provisioned in dev: every request
 to a loopback host is treated as the admin `dev@example.com` (override with `ACCESS_DEV_BYPASS`). The bypass is ignored
 for any other host, refused whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set, and never reaches a deployed Worker.
@@ -271,8 +271,8 @@ for any other host, refused whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set
 Open `http://localhost:1337/`, connect an account, then:
 
 ```bash
-curl localhost:1337/v1/models
-curl 'localhost:1337/cdn-cgi/handler/scheduled?cron=0+*/3+*+*+*'   # run the cron jobs
+curl localhost:1339/v1/models
+curl 'localhost:1339/cdn-cgi/handler/scheduled?cron=0+*/3+*+*+*'   # run the cron jobs
 ```
 
 Before sending a change: `pnpm typecheck && pnpm lint && pnpm test && pnpm smoke`. Scripts, module layout and

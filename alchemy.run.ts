@@ -1,11 +1,12 @@
 /**
- * Infrastructure of the Workers port, deployed with Alchemy (`pnpm deploy`, `pnpm dev`, `pnpm destroy`): the state
- * Worker, which defines the Durable Objects (ADR 0030), the app Worker with its static assets and cron trigger, which
- * binds them by script name, the KV namespace, the D1 usage database (migrations
- * applied on every deploy), the `auth_index` HMAC key and the Cloudflare Access application, policies and service tokens
- * in front of it (except the client API, where clients send API keys). Commissary Cloud (`COMMISSARY_MODE=cloud`, ADR
- * 0026) creates no Access resources: the Worker signs people in itself, and gets its sign-in settings, Better Auth's
- * secret and the per-org rate limit instead.
+ * Infrastructure of the Workers port, deployed with Alchemy (`pnpm deploy`, `pnpm dev`, `pnpm destroy`): the three
+ * Workers of ADR 0030, the state Worker, which defines the Durable Objects, the app Worker (panel, sign-in, management
+ * API) with its static assets, and the API Worker (the client API) with its cron trigger, which both bind the objects by
+ * script name; the KV namespace, the D1 usage database (migrations applied on every deploy), the `auth_index` HMAC key
+ * and the Cloudflare Access application, policies and service tokens in front of the app (and of the client API on a
+ * stage with one host, except that clients send API keys there). Commissary Cloud (`COMMISSARY_MODE=cloud`, ADR 0026)
+ * creates no Access resources: the app Worker signs people in itself, and gets its sign-in settings and Better Auth's
+ * secret instead, and the API Worker the per-org rate limit.
  * Deploy-time settings are read from the environment / `.env` (see `.env.example` and infra/settings.ts).
  */
 import * as Alchemy from "alchemy";
@@ -17,14 +18,15 @@ import { BUNDLE_ALIASES } from "./infra/bundle.ts";
 import { readSettings } from "./infra/settings.ts";
 import { DEV_AUTH_INDEX_KEY } from "@commissary/models/auth-index-key";
 import { DEV_SECRETS_KEY, secretsKeyResourceId } from "./packages/state/src/secrets/key.ts";
+import { CLIENT_API_PREFIXES } from "./packages/core/src/http/client-api.ts";
 
 /**
- * Runtime compatibility of the Workers; keep in sync with apps/app/vitest.config.ts, packages/state/vitest.config.ts,
- * packages/models/vitest.config.ts and tools/workers/worker-configuration.d.ts.
+ * Runtime compatibility of the Workers; keep in sync with apps/app/vitest.config.ts, apps/api/vitest.config.ts,
+ * packages/state/vitest.config.ts, packages/models/vitest.config.ts and tools/workers/worker-configuration.d.ts.
  */
 export const COMPATIBILITY = { date: "2026-08-01", flags: ["nodejs_compat"] };
 
-/** Model catalog refresh, credential refresh sweep and usage retention (apps/app/src/api/scheduled.ts). */
+/** Model catalog refresh, credential refresh sweep and usage retention (apps/api/src/scheduled.ts). */
 export const CRONS = ["0 */3 * * *"];
 
 // Remote state in the account (`Cloudflare.state()`, shared by every machine and CI) unless ALCHEMY_STATE=local,
@@ -71,7 +73,7 @@ export default Alchemy.Stack(
         ? undefined
         : secretsKeys.get(settings.secretsKeyPreviousGeneration);
 
-    // `alchemy dev` serves the Worker on localhost without Access: the dev bypass (packages/auth/src/access/config.ts)
+    // `alchemy dev` serves the Workers on localhost without Access: the dev bypass (packages/auth/src/access/config.ts)
     // makes every loopback request an admin. Deployed Workers never get it and require the Access JWT (or an API key on
     // the client API).
     const { hosted } = settings;
@@ -81,7 +83,8 @@ export default Alchemy.Stack(
         ? { aud: "", adminServiceTokens: "", serviceTokenClientIds: {} }
         : yield* provisionAccess(settings);
 
-    // Commissary Cloud (ADR 0026): Better Auth's signing secret, minted like the keys above, and its settings.
+    // Commissary Cloud (ADR 0026), on the app Worker: Better Auth's signing secret, minted like the keys above, and its
+    // settings.
     const hostedEnv =
       hosted === undefined
         ? {}
@@ -103,19 +106,25 @@ export default Alchemy.Stack(
             TURNSTILE_SITE_KEY: hosted.turnstileSiteKey,
             TURNSTILE_SECRET_KEY: hosted.turnstileSecretKey,
             OWNED_ORG_LIMIT: hosted.ownedOrgLimit,
+          };
+
+    // Commissary Cloud on the API Worker: API keys only, under the per-org rate limit of the client API.
+    const hostedApiEnv =
+      hosted === undefined
+        ? {}
+        : {
+            COMMISSARY_MODE: "cloud",
             ORG_RATE_LIMIT: Cloudflare.RateLimit("ORG_RATE_LIMIT", {
               namespaceId: hosted.orgRateLimitNamespaceId,
               simple: { limit: hosted.orgRateLimit, period: 60 },
             }),
           };
 
-    // With an API host (ADR 0028) the Worker answers on both hostnames and serves the client API on the API host only
-    // (apps/app/src/http/hosts.ts). The API host has no Access application: clients authenticate there with API keys.
+    // Where the client API is served (ADR 0028, ADR 0030; apps/app/src/http/hosts.ts, apps/api/src/http/hosts.ts): with
+    // an API host the API Worker answers there and the app Worker on the app host; without one, zone routes on the app
+    // host send the client API paths to the API Worker (a preview's API Worker answers on its own workers.dev URL). The
+    // API host has no Access application: clients authenticate there with API keys.
     const split = settings.apiDomain !== "";
-
-    const domain = split
-      ? { name: settings.domain, aliases: [settings.apiDomain] }
-      : settings.domain;
 
     // What the state Worker's classes read besides their namespaces and the mode (`StateObjectEnv`, `ModelsPartEnv`).
     // The app Worker's own code reads all of it too, except the secrets keys.
@@ -163,73 +172,143 @@ export default Alchemy.Stack(
       },
     });
 
-    // The Durable Objects are the state Worker's, bound by its script name; the binding also makes this Worker deploy
-    // after it (ADR 0030: the state Worker deploys before its callers, whose state RPC changes are expand-then-contract,
-    // docs/DEVELOPMENT.md).
+    // The Durable Objects are the state Worker's, bound by its script name; the binding also makes the app and the API
+    // Worker deploy after it (ADR 0030: the state Worker deploys before its callers, whose state RPC changes are
+    // expand-then-contract, docs/DEVELOPMENT.md).
     //
     // Dev-only guard: under `alchemy dev` the local dev registry reaches another Worker's Durable Object by its hex id
-    // and drops `ctx.id.name`, which tells a ControlPlane its org. There, and only there (`dev`), the app runs its dev
-    // entry (apps/app/src/dev.ts: the handler plus the state Worker's classes) and binds the objects locally; the state
-    // Worker still runs beside it. A deploy always uses apps/app/src/index.ts and the script-name bindings.
+    // and drops `ctx.id.name`, which tells a ControlPlane its org (cloudflare/workerd#7286). There, and only there
+    // (`dev`), the app runs its dev entry (apps/app/src/dev.ts: the handler plus the state Worker's classes) and binds
+    // the objects locally, and the API Worker runs its dev entry (apps/api/src/dev.ts), which reaches those objects over
+    // a service binding to the app's dev-only `DevStateBridge` entrypoint; the state Worker still runs beside them. A
+    // deploy always uses the `index.ts` entries and the script-name bindings.
     const stateObject = (className: "ControlPlane" | "SessionState" | "Platform") =>
       dev
         ? Cloudflare.DurableObject(className)
         : Cloudflare.DurableObject(className, { scriptName: stateWorker.workerName });
 
-    const worker = yield* Cloudflare.Worker("Commissary", {
-      main: dev ? "./apps/app/src/dev.ts" : "./apps/app/src/index.ts",
-      compatibility: COMPATIBILITY,
-      // Production serves only its Access-protected domain; pull-request previews serve their workers.dev URL,
-      // protected by enrolling the Worker into the preview's Access application. The client API leaves Access on both
-      // (`provisionClientApiBypass` below, or the API host): clients authenticate there with API keys (ADR 0022).
-      workersDev: settings.preview,
-      ...(dev || settings.preview ? {} : { domain }),
-      ...(access.application === undefined ? {} : { access: access.application }),
-      limits: { cpuMs: settings.cpuMs },
-      build: { input: { resolve: { alias: { ...BUNDLE_ALIASES } } } },
-      // The control panel (`pnpm build`, apps/web). The Worker runs first so the client API is never shadowed by assets
-      // and Access gates the panel (apps/app/src/management/web-panel.ts serves it).
-      assets: { directory: "./apps/web/dist", runWorkerFirst: true },
-      // Previews have no credentials to refresh or catalog worth keeping fresh.
-      crons: settings.preview ? [] : CRONS,
-      env: {
-        CACHE: cache,
-        USAGE: usage,
-        CONTROL_PLANE: stateObject("ControlPlane"),
-        SESSION_STATE: stateObject("SessionState"),
-        PLATFORM: stateObject("Platform"),
-        ...stateSettings,
-        ACCESS_DEV_BYPASS: dev ? settings.devBypass : "",
-        ...(split ? { APP_DOMAIN: settings.domain, API_DOMAIN: settings.apiDomain } : {}),
-        // Under `alchemy dev` the app runs the ControlPlane itself (the dev-only guard above).
-        ...(dev ? secretsKeyBindings : {}),
-        ...hostedEnv,
-      },
-    });
+    // The app Worker (apps/app): the panel, sign-in and the management API. Under `alchemy dev` it also runs the Durable
+    // Objects and lends them to the API Worker (the dev-only guard above).
+    const appWorker = (apiDomain: string | Output.Output<string> | undefined) =>
+      Cloudflare.Worker("Commissary", {
+        main: dev ? "./apps/app/src/dev.ts" : "./apps/app/src/index.ts",
+        compatibility: COMPATIBILITY,
+        // Production serves only its Access-protected domain; pull-request previews serve their workers.dev URL,
+        // protected by enrolling the Worker into the preview's Access application.
+        workersDev: settings.preview,
+        ...(dev || settings.preview ? {} : { domain: settings.domain }),
+        ...(access.application === undefined ? {} : { access: access.application }),
+        limits: { cpuMs: settings.cpuMs },
+        build: { input: { resolve: { alias: { ...BUNDLE_ALIASES } } } },
+        // The control panel (`pnpm build`, apps/web). The Worker runs first so Access gates the panel
+        // (apps/app/src/management/web-panel.ts serves it) and a client API path gets its 404, not an asset.
+        assets: { directory: "./apps/web/dist", runWorkerFirst: true },
+        env: {
+          CACHE: cache,
+          USAGE: usage,
+          CONTROL_PLANE: stateObject("ControlPlane"),
+          SESSION_STATE: stateObject("SessionState"),
+          PLATFORM: stateObject("Platform"),
+          ...stateSettings,
+          ACCESS_DEV_BYPASS: dev ? settings.devBypass : "",
+          // Where the panel tells clients to send API keys (`GET /me` `api_url`).
+          ...(apiDomain === undefined ? {} : { API_DOMAIN: apiDomain }),
+          // Under `alchemy dev` the app runs the ControlPlane itself (the dev-only guard above).
+          ...(dev ? secretsKeyBindings : {}),
+          ...hostedEnv,
+        },
+      });
 
-    // The bypass is derived from the Worker's output on every stage, so it is applied only after the Worker: the first
-    // deploy must not take the client API out of Access while the old Worker, which only reads the Access edge's
-    // `Cf-Access-Jwt-Assertion`, still serves them (clients sending `cf-access-token` would get 401 in between).
-    // An API host needs none: Access covers the app host only.
-    if (!dev && hosted === undefined && !split)
+    // The API Worker (apps/api): the client API and the cron jobs. Its own workers.dev URL on a preview, the API host on a
+    // stage that has one, else zone routes for the client API paths on the app host (`CLIENT_API_PREFIXES`: a route
+    // pattern matches every path that starts with it, as the Workers match them, so `/v1*` covers `/v1beta`). Under
+    // `alchemy dev` it serves its own port and reaches the app Worker's objects through the dev-only `DevStateBridge`
+    // entrypoint (apps/api/src/dev.ts), bound only there. `app` is the app Worker, deployed first except on a preview.
+    const apiWorker = (app: Effect.Success<ReturnType<typeof appWorker>> | undefined) =>
+      Cloudflare.Worker("Api", {
+        main: dev ? "./apps/api/src/dev.ts" : "./apps/api/src/index.ts",
+        compatibility: COMPATIBILITY,
+        workersDev: settings.preview,
+        ...(dev ? { dev: { port: 1339 } } : {}),
+        ...(split ? { domain: settings.apiDomain } : {}),
+        ...(dev || settings.preview || split
+          ? {}
+          : {
+              routes: CLIENT_API_PREFIXES.map((prefix) => ({
+                pattern: `${settings.domain}${prefix}*`,
+              })),
+            }),
+        limits: { cpuMs: settings.cpuMs },
+        // Previews have no credentials to refresh or catalog worth keeping fresh.
+        crons: settings.preview ? [] : CRONS,
+        env: {
+          CACHE: cache,
+          USAGE: usage,
+          ...(dev && app !== undefined
+            ? { DEV_STATE_BRIDGE: Cloudflare.WorkerEntrypoint(app, "DevStateBridge") }
+            : {
+                CONTROL_PLANE: stateObject("ControlPlane"),
+                SESSION_STATE: stateObject("SessionState"),
+                PLATFORM: stateObject("Platform"),
+              }),
+          ...stateSettings,
+          ACCESS_DEV_BYPASS: dev ? settings.devBypass : "",
+          // Derived from the app Worker's output, so the API host is attached only once the app Worker no longer has it
+          // (it was the app's alias before the API Worker existed; Alchemy refuses a hostname another Worker holds).
+          ...(split && app !== undefined
+            ? {
+                APP_DOMAIN: Output.asOutput(app.url).pipe(Output.map(() => settings.domain)),
+                API_DOMAIN: settings.apiDomain,
+              }
+            : {}),
+          ...hostedApiEnv,
+        },
+      });
+
+    // The app Worker comes first: under `alchemy dev` the API Worker binds its bridge, and with an API host the API
+    // Worker takes that host from it. On a preview the API Worker comes first: the app names its workers.dev host.
+    const { worker, api } = settings.preview
+      ? yield* Effect.gen(function* () {
+          const client = yield* apiWorker(undefined);
+
+          // A preview always serves its workers.dev URL (`workersDev` above).
+          const previewHost = Output.asOutput(client.url).pipe(
+            Output.map((url) => {
+              if (url === undefined)
+                throw new Error("the preview API Worker has no workers.dev URL");
+
+              return new URL(url).host;
+            }),
+          );
+
+          return { api: client, worker: yield* appWorker(previewHost) };
+        })
+      : yield* Effect.gen(function* () {
+          const app = yield* appWorker(split ? settings.apiDomain : undefined);
+
+          return { worker: app, api: yield* apiWorker(app) };
+        });
+
+    // On a stage with one host, the Access application of the app host covers the client API paths the zone routes send
+    // to the API Worker; they leave Access (clients send API keys there, ADR 0022). Derived from the API Worker's output,
+    // so it is applied only after the API Worker and its routes: the client API must not leave Access while a Worker
+    // that only reads the Access edge's `Cf-Access-Jwt-Assertion` still serves it. An API host needs none (Access
+    // covers the app host only), nor does a preview, whose API Worker's workers.dev URL is not enrolled in Access.
+    if (!dev && hosted === undefined && !split && !settings.preview)
       yield* provisionClientApiBypass(
         settings,
-        Output.asOutput(worker.url).pipe(
-          Output.map((url) => {
-            if (!settings.preview) return settings.domain;
-
-            // A preview always serves its workers.dev URL (`workersDev` above).
-            if (url === undefined) throw new Error("the preview Worker has no workers.dev URL");
-
-            return new URL(url).host;
-          }),
-        ),
+        Output.asOutput(api.url).pipe(Output.map(() => settings.domain)),
       );
 
     return {
       url: worker.url,
-      // Where clients send API keys: the API host, or the Worker's one URL (tools/deploy-stage.sh).
-      apiUrl: split ? `https://${settings.apiDomain}` : worker.url,
+      // Where clients send API keys (tools/deploy-stage.sh): the API host; the API Worker's own URL on a preview or
+      // under `alchemy dev`; else the app host, whose client API paths the zone routes send to the API Worker.
+      apiUrl: split
+        ? `https://${settings.apiDomain}`
+        : dev || settings.preview
+          ? api.url
+          : worker.url,
       accessAud: access.aud,
       serviceTokens: access.serviceTokenClientIds,
     };

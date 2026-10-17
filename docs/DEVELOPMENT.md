@@ -21,45 +21,47 @@ Run from the repository root. `typecheck`, `lint`, `test` and `build` run throug
 caches each task: run again with no change, a task replays its logs (and `build` its output) instead of running. See
 "Workspace and Turborepo" below.
 
-| Script                              | Purpose                                                                                                                                                                                           |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm install`                      | Install dependencies and clone/update the Go reference checkout (`.repos/`)                                                                                                                       |
-| `pnpm repos:sync`                   | Clone or fast-forward the reference repositories in `.repos/` (`tools/sync-reference-repos.sh`)                                                                                                   |
-| `pnpm dev`                          | Builds the panel, then `alchemy dev`: the app and state Workers in workerd with emulated DO/KV/D1, hot reload (`ALCHEMY_STATE=local` avoids a Cloudflare login)                                   |
-| `pnpm build`                        | Build the control panel (`apps/web`) into `apps/web/dist/` (the Worker's assets, served at `/`)                                                                                                   |
-| `pnpm --filter @commissary/web dev` | Vite dev server for the panel on :5173 with hot reload, forwarding `/v9` to `pnpm dev` (`COMMISSARY_DEV_URL`, default :1337)                                                                      |
-| `pnpm typecheck`                    | `tsc` over every program: each package's `typecheck` (Worker, panel, packages) and the root's deploy code (`typecheck:root`, `tsconfig.infra.json`)                                               |
-| `pnpm lint`                         | `lint:root`: `oxlint` over the whole repository (type-aware, with type checking, Effect and anti-slop rules) + `oxfmt --check`                                                                    |
-| `pnpm format`                       | `oxfmt`                                                                                                                                                                                           |
-| `pnpm test`                         | Each package's `vitest run`: the Worker's inside the Workers runtime (`@cloudflare/vitest-plugin`), the panel's and the packages' in Node.js; arguments go to every run (`pnpm test --shard=1/3`) |
-| `pnpm smoke`                        | Builds the panel, boots `alchemy dev` with local state, waits for both Workers' ready lines, checks a few routes, stops it (bundle + startup check)                                               |
-| `pnpm plan`                         | `alchemy plan`: preview infrastructure changes (needs a Cloudflare profile)                                                                                                                       |
-| `pnpm run deploy`                   | `alchemy deploy` (`pnpm deploy` is a pnpm built-in; use `run`)                                                                                                                                    |
-| `pnpm destroy`                      | `alchemy destroy`: delete every resource of a stage                                                                                                                                               |
-| `pnpm logs`                         | `alchemy logs` (`--tail`)                                                                                                                                                                         |
-| `pnpm ci:setup`                     | Deploy `stacks/github.ts`: CI's Cloudflare token, check service token and GitHub environments (`docs/DEPLOY.md`)                                                                                  |
-| `pnpm catalog:sync`                 | Regenerate the bundled models.dev snapshot `packages/models/src/registry/catalog/models-dev.json` (`tools/sync-models-dev-catalog.ts [url\|file]`); the catalog additions are edited by hand      |
+| Script                              | Purpose                                                                                                                                                                                               |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm install`                      | Install dependencies and clone/update the Go reference checkout (`.repos/`)                                                                                                                           |
+| `pnpm repos:sync`                   | Clone or fast-forward the reference repositories in `.repos/` (`tools/sync-reference-repos.sh`)                                                                                                       |
+| `pnpm dev`                          | Builds the panel, then `alchemy dev`: the app (:1337), API (:1339) and state (:1338) Workers in workerd with emulated DO/KV/D1, hot reload (`ALCHEMY_STATE=local` avoids a Cloudflare login)          |
+| `pnpm build`                        | Build the control panel (`apps/web`) into `apps/web/dist/` (the Worker's assets, served at `/`)                                                                                                       |
+| `pnpm --filter @commissary/web dev` | Vite dev server for the panel on :5173 with hot reload, forwarding `/v9` to `pnpm dev` (`COMMISSARY_DEV_URL`, default :1337)                                                                          |
+| `pnpm typecheck`                    | `tsc` over every program: each package's `typecheck` (Worker, panel, packages) and the root's deploy code (`typecheck:root`, `tsconfig.infra.json`)                                                   |
+| `pnpm lint`                         | `lint:root`: `oxlint` over the whole repository (type-aware, with type checking, Effect and anti-slop rules) + `oxfmt --check`                                                                        |
+| `pnpm format`                       | `oxfmt`                                                                                                                                                                                               |
+| `pnpm test`                         | Each package's `vitest run`: the Worker's inside the Workers runtime (`@cloudflare/vitest-plugin`), the panel's and the packages' in Node.js; arguments go to every run (`pnpm test --shard=1/3`)     |
+| `pnpm smoke`                        | Builds the panel, boots `alchemy dev` with local state, waits for the three Workers' ready lines, checks a few routes of each and an API key's journey across them, stops it (bundle + startup check) |
+| `pnpm plan`                         | `alchemy plan`: preview infrastructure changes (needs a Cloudflare profile)                                                                                                                           |
+| `pnpm run deploy`                   | `alchemy deploy` (`pnpm deploy` is a pnpm built-in; use `run`)                                                                                                                                        |
+| `pnpm destroy`                      | `alchemy destroy`: delete every resource of a stage                                                                                                                                                   |
+| `pnpm logs`                         | `alchemy logs` (`--tail`)                                                                                                                                                                             |
+| `pnpm ci:setup`                     | Deploy `stacks/github.ts`: CI's Cloudflare token, check service token and GitHub environments (`docs/DEPLOY.md`)                                                                                      |
+| `pnpm catalog:sync`                 | Regenerate the bundled models.dev snapshot `packages/models/src/registry/catalog/models-dev.json` (`tools/sync-models-dev-catalog.ts [url\|file]`); the catalog additions are edited by hand          |
 
 ## Infrastructure
 
 `alchemy.run.ts` is the composition root of the deployed resources (`stacks/github.ts`, a separate stack, holds CI's
 credentials) (Alchemy v2, Effect-based); `infra/settings.ts` reads
 the deploy settings (`.env`), `infra/access.ts` provisions Cloudflare Access. There is no Wrangler configuration. It
-declares two Workers (ADR 0030): `State` (`apps/state`), which defines the Durable Objects and has no routes, and
-`Commissary` (`apps/app`), the app Worker, which binds them by the state Worker's script name. When you
-add a binding or variable, change three places together: the app Worker's `env` in `alchemy.run.ts`, the `Env` interface in
-`apps/app/src/env.d.ts`, and the test bindings in `apps/app/vitest.config.ts` (which mirrors the deployed Workers: compatibility
+declares three Workers (ADR 0030): `State` (`apps/state`), which defines the Durable Objects and has no routes,
+`Commissary` (`apps/app`), the app Worker, and `Api` (`apps/api`), the API Worker, which both bind them by the state
+Worker's script name. When you add a binding or variable, change three places together for each Worker that reads it:
+its `env` in `alchemy.run.ts`, its `Env` interface (`apps/app/src/env.d.ts`, `apps/api/src/env.d.ts`), and its test
+bindings (`apps/app/vitest.config.ts`, `apps/api/vitest.config.ts`, which mirror the deployed Workers: compatibility
 settings, Durable Objects, `*.bin` Data modules). One that `@commissary/state`'s Durable Object classes read also goes into
 `StateObjectEnv` (`packages/state/src/env.ts`), the state Worker's `env` in `alchemy.run.ts` and
 `apps/state/src/env.d.ts`, and the state test Worker's bindings (`packages/state/vitest.config.ts`;
 its `test/env.d.ts` follows `StateObjectEnv`); one the Models part reads, into `ModelsPartEnv` and the state Worker's
-`env` the same way. The app's test Worker runs those classes too, so it binds them as well; one that only the classes
-read (the secrets keys) is declared for its tests in `apps/app/test/env.d.ts`, not in the app Worker's `Env`. One Models reads also goes into `ModelsBindings` (`packages/models/src/env.ts`)
+`env` the same way. The app's and the API's test Workers run those classes too, so they bind them as well; one that only
+the classes read (the secrets keys) is declared for their tests in `apps/app/test/env.d.ts` and `apps/api/test/env.d.ts`,
+not in the Workers' `Env`. One Models reads also goes into `ModelsBindings` (`packages/models/src/env.ts`)
 and the Models test Worker's bindings (`packages/models/vitest.config.ts`; its `test/env.d.ts` follows `ModelsBindings`,
 `StateObjectEnv` and `AuthBindings`).
 
 `tools/workers/worker-configuration.d.ts` holds the Workers runtime types for the compatibility date and flags in
-`alchemy.run.ts`, shared by every program that runs in workerd (`apps/app`, `packages/state`, `packages/models`; each declares its own
+`alchemy.run.ts`, shared by every program that runs in workerd (`apps/app`, `apps/api`, `packages/state`, `packages/models`; each declares its own
 `Env`). Regenerate it when those change (Wrangler is used only as a type generator here):
 
 ```bash
@@ -70,15 +72,21 @@ pnpm dlx wrangler@4 types --include-env=false -c /tmp/rt.json tools/workers/work
 then restore the three-line header comment. Durable Object classes are SQLite-backed; Alchemy derives their class migrations from the
 `DurableObject` bindings (renaming a class needs `className`/`transferredFrom`, see the Alchemy docs). The state
 Worker's bindings carry `transferredFrom: "Commissary"`, which moved the namespaces out of the app Worker
-(`docs/DEPLOY.md`, "The state Worker"); it does nothing once a stage has moved, and stays.
+(`docs/DEPLOY.md`, "The Workers"); it does nothing once a stage has moved, and stays.
 
 Under `alchemy dev` the app Worker runs its dev entry (`apps/app/src/dev.ts`: its handler plus the state Worker's
 classes) and binds the Durable Objects locally; `alchemy.run.ts` picks it on the dev flag only, so a deploy never does.
 The local dev registry reaches another Worker's Durable Object by its hex id (alchemy's and miniflare's registry proxy:
-`getActor(…, ctx.id.toString())`, [cloudflare/workerd#7286](https://github.com/cloudflare/workerd/issues/7286)), which drops `ctx.id.name`, the name a ControlPlane learns its org from. The state
-Worker still runs beside it (`pnpm smoke` waits for both ready lines). Deployed, Cloudflare sets `ctx.id.name` for an
-object reached by `getByName` (Durable Object ID docs), so the preview deploy is where the script-name binding is
-checked.
+`getActor(…, ctx.id.toString())`, [cloudflare/workerd#7286](https://github.com/cloudflare/workerd/issues/7286)), which drops `ctx.id.name`, the name a ControlPlane learns its org from. The API
+Worker runs its dev entry too (`apps/api/src/dev.ts`), which binds no Durable Objects: it replaces the state namespaces
+of its `env` with bridged ones (`@commissary/state/dev-state-bridge`) whose stubs record each call chain and send it,
+with the object's name, over a service binding (`DEV_STATE_BRIDGE`) to the app Worker's dev-only `DevStateBridge`
+entrypoint, which replays it on a real stub of the app's local objects. Service-binding RPC to a named entrypoint keeps
+working through the dev registry, so both Workers see the same objects. Neither dev entry, nor the bridge, is in a
+deployed bundle. The state Worker still runs beside them (`pnpm smoke` waits for the three ready lines). Deployed,
+Cloudflare sets `ctx.id.name` for an object reached by `getByName` (Durable Object ID docs), so the preview deploy is
+where the script-name bindings are checked. Locally the panel names its own origin as the client API's address; the API
+Worker answers on :1339.
 
 ### State RPC: expand, then contract
 
@@ -92,8 +100,8 @@ a part's methods) is made in steps, one release apart:
 3. **Contract**: remove the old method or field a release later, once no deployed caller uses it.
 
 A deploy of the state Worker resets its Durable Objects, and the calls in flight fail with "Durable Object reset because
-its code was updated." The app Worker retries such a call once, on a new stub (`retryOnCodeUpdate`,
-`packages/state/src/code-update-retry.ts`, applied to the `env` in `apps/app/src/index.ts`); a call cut off by the reset
+its code was updated." The app and the API Worker retry such a call once, on a new stub (`retryOnCodeUpdate`,
+`packages/state/src/code-update-retry.ts`, applied to the `env` in each `src/index.ts`); a call cut off by the reset
 may have stored its writes before, so it may run twice. Only chains are retried: a call on a result the caller awaited
 (`await stub.models()`) goes to the runtime's own stub, so call through the chain (`stub.models().x()`).
 
@@ -102,17 +110,22 @@ may have stored its writes before, so it may run twice. Only chains are retried:
 `ARCHITECTURE.md` ("Layout" plus one section per subsystem) is the map. The repository is a pnpm workspace
 (`pnpm-workspace.yaml`): Workers and the panel in `apps/`, libraries in `packages/`, under the scope `@commissary/*`.
 
-- `apps/app` (`@commissary/app`): the app Worker (`Commissary`), which binds the state Worker's Durable Objects. `src/access` (the gate middleware over `@commissary/auth`),
-  `src/http` (router, hosts), `src/api` (what moves to the API Worker: CORS and the cron runner),
+- `apps/app` (`@commissary/app`): the app Worker (`Commissary`): panel, sign-in and the management API; it binds the state Worker's Durable Objects. `src/access` (the gate middleware over `@commissary/auth`),
+  `src/http` (router, the client API's 404, plain 404s),
   `src/management` (the org-wide management routes, panel serving, path zones, the role table, org addressing),
   `src/hosted` and `src/sso` (Commissary Cloud's sign-in and single sign-on), `src/platform` (org deletion),
-  `src/dev.ts` (its `alchemy dev` entry, "Infrastructure");
+  `src/dev.ts` (its `alchemy dev` entry and the dev-only bridge, "Infrastructure");
   `test/` (workerd tests through its router or `fetch`; `test/worker.ts` is the test Worker). It mounts Models explicitly, through
   `@commissary/models/api` and `/management` only ("Lint and format", `boundaries`).
+- `apps/api` (`@commissary/api`): the API Worker (`Api`, ADR 0030): the client API of every area and the cron jobs; it
+  binds the state Worker's Durable Objects. `src/http` (router, the client gate, CORS, hosts: a 404 for every other
+  path, `/healthz`), `src/scheduled.ts` (the cron runner), `src/dev.ts` (its `alchemy dev` entry over the bridge,
+  "Infrastructure"); `test/` (workerd tests through the client API's router or `fetch`, two projects: self-hosted and
+  Cloud; `test/worker.ts` is the test Worker). It mounts Models through `@commissary/models/api` only.
 - `apps/state` (`@commissary/state-worker`): the state Worker (ADR 0030). `src/index.ts` exports the ControlPlane
   (`src/control-plane.ts`: `@commissary/state`'s org-wide base composed with `@commissary/models/state`'s part),
   SessionState and Platform, and answers every request 404; `src/env.d.ts` declares what the classes read. No tests of
-  its own: the app's test Worker runs its classes.
+  its own: the app's and the API's test Workers run its classes.
 - `packages/models` (`@commissary/models`): the Models area (#134, #151). `handlers` (inbound protocols and the shared
   execution pipeline), `executor` (one directory per provider, the `Thinking` service, `translateRequestForExecutor`
   with the Codex rewrites), `credentials` (credential pool, selection, token refresh), `registry` (model catalogs and
@@ -180,7 +193,8 @@ Internal packages are source-only: `package.json` `exports` point at TypeScript 
 the contract, named entry points for the others; `./testing` at `test/testing.ts`, "Tests" below), there is no build step, and whatever imports a package compiles it
 (Alchemy's bundler, Vite, Vitest). Import a module by its subpath, e.g. `@commissary/contract/api` or
 `@commissary/translation/thinking`. `apps/app` imports nothing from `apps/web` and only the state Worker's classes
-from `apps/state` (types in `src/`, the classes in its test and dev entries), `apps/web` imports only
+from `apps/state` (types in `src/`, the classes in its test and dev entries), `apps/api` only the classes' types (and
+the classes in its test entry), `apps/web` imports only
 `@commissary/contract` from the workspace, and packages import nothing from `apps/` (lint rule). Versions that several packages share (`effect`, `typescript`, `vitest`, …)
 are pinned once in the `catalog:` of `pnpm-workspace.yaml`.
 
@@ -190,11 +204,12 @@ depend on each other's sources, not on build output, so every package task depen
 hash covers a package's files and those of its dependencies (Turborepo's transit-node pattern): a change in
 `packages/contract` re-runs the panel's, auth's, state's and the Worker's tasks, one in `packages/json` re-runs translation's and the
 Worker's (and Models'), one in `packages/core` or `packages/auth` re-runs state's, Models' and the Worker's (and core's
-auth's too), one in `packages/state` re-runs Models', the state Worker's and the app Worker's, and one in `packages/models` re-runs the
-state Worker's and the app Worker's (`apps/state` is a dependency of `apps/app`) (the root lists Models as a dev dependency for its deploy code; that re-runs no other package's tasks). The root `typecheck` and `test` tasks also hash `tools/vitest/` (the packages' Vitest configs import it), and
+auth's too), one in `packages/state` re-runs Models', the state Worker's, the app Worker's and the API Worker's, and one in
+`packages/models` re-runs the state Worker's, the app Worker's and the API Worker's (`apps/state` is a dependency of
+`apps/app` and `apps/api`) (the root lists Models as a dev dependency for its deploy code; that re-runs no other package's tasks). The root `typecheck` and `test` tasks also hash `tools/vitest/` (the packages' Vitest configs import it), and
 `typecheck` hashes `tools/workers/` (the Workers runtime types); a
 package's `turbo.json` appends the root files its tasks read (`"$TURBO_EXTENDS$"`; `apps/app`: `infra/bundle.ts`,
-`infra/settings.ts`, `migrations/`; `packages/models`: `migrations/`). The cache is local
+`infra/settings.ts`, `migrations/`; `apps/api` and `packages/models`: `migrations/`). The cache is local
 (`.turbo/cache`, one per git worktree: `cacheDir` keeps a worktree from writing into the main checkout's); there is
 no remote cache. `pnpm exec turbo run <task> --force`
 ignores it, `--dry` shows what would run and why.
@@ -236,9 +251,12 @@ lives in the lowest package that holds all the code it exercises; a test that go
 stays with that Worker.
 
 - **Runtime.** A package tests in plain Node.js unless the code under test needs a binding or a Durable Object. The
-  app Worker's tests run in workerd (`@cloudflare/vitest-plugin`, two projects: self-hosted and Cloud) against its
-  test Worker, `apps/app/test/worker.ts`, which re-exports the app's handler and the state Worker's Durable Objects so
-  they run in one isolate with no auxiliary Worker (#135), and so do
+  app and the API Worker's tests run in workerd (`@cloudflare/vitest-plugin`, two projects each: self-hosted and Cloud)
+  against their test Workers, `apps/app/test/worker.ts` and `apps/api/test/worker.ts`, which re-export the Worker's
+  handler and the state Worker's Durable Objects so they run in one isolate with no auxiliary Worker (#135). A test
+  that goes through the client API's router or `fetch` is the API Worker's; one that needs an org, member or API key
+  there sets it up straight through the Durable Objects (`apps/api/test/support/client.ts`), since the management
+  routes that make them are the app Worker's. So do
   `@commissary/state`'s (one project, `state`: a test Worker of its own, `packages/state/test/worker.ts`, exports the
   ControlPlane's base composed with two dummy area parts, the Platform registry and SessionState, on real SQLite
   storage; its bindings are declared in `test/env.d.ts`); `@commissary/models` has two projects (#135): `models-unit`
@@ -348,22 +366,25 @@ assertion that cannot be removed carries a `// SAFETY: <invariant>` comment on t
 
 - Per-request Cloudflare `env` / `ctx` are passed as the `Context` argument of the web handler
   (`handler(request, requestContext(env, ctx))`); code reads the view of its package (`yield* AuthConfig`,
-  `StateEnv`, `ModelsEnv`, or `AppEnv` for code that stays in the Worker; `apps/app/src/worker-env.ts`), never the
-  global `Env`. Never capture them in a layer.
-- Add routes as `HttpRouter.add(...)` layers and merge them into `AppLayer` in `apps/app/src/http/app.ts`; an area's
-  routes reach it through the area's entry points (Models: the client API `ClientApiLayer` of `@commissary/models/api`,
-  the management routes of `@commissary/models/management`, which `management/routes.ts` mounts).
+  `StateEnv`, `ModelsEnv`, or `AppEnv` for code that stays in the app Worker, `apps/app/src/worker-env.ts`; the API
+  Worker's own code reads `ApiBindings`, `apps/api/src/worker-env.ts`), never the global `Env`. Never capture them in a layer.
+- Add routes as `HttpRouter.add(...)` layers and merge them into the Worker's router (`apps/app/src/http/app.ts` for the
+  panel and the management API, `apps/api/src/http/app.ts` for the client API); an area's routes reach it through the
+  area's entry points (Models: the client API `ClientApiLayer` of `@commissary/models/api`, which the API Worker mounts,
+  the management routes of `@commissary/models/management`, which the app Worker's `management/routes.ts` mounts).
 - Never log tokens, API keys, JWTs or bodies; use `redactHeaders` when headers must be logged.
 - No wall-clock sleeps in tests; use Effect `TestClock` or injected clocks.
-- The Worker's tests live in `apps/app/test/*.test.ts` and run in workerd ("Tests" above); Models' live in
+- The Workers' tests live in `apps/app/test/*.test.ts` and `apps/api/test/*.test.ts` and run in workerd ("Tests"
+  above); Models' live in
   `packages/models/test/`. Use `@effect/vitest`
   (`it.effect`) for Effect code and `exports.default.fetch(...)` (`cloudflare:workers`) for end-to-end Worker requests.
-- `alchemy.run.ts` keeps `workersDev: false` (no `workers.dev` or preview URLs) so Cloudflare Access cannot be bypassed.
+- `alchemy.run.ts` gives a Worker a `workers.dev` URL on previews only, so Cloudflare Access cannot be bypassed (a
+  preview's app Worker enrolls into its Access application; the API Worker is never under Access).
 
 ## Dependency notes
 
 - TypeScript 7 (native `tsc`). Each program has its own tsconfig extending `tsconfig.base.json`: `apps/app/tsconfig.json`
-  (app Worker, workerd types), `apps/state/tsconfig.json` (state Worker, workerd types), `apps/web/tsconfig.app.json` (panel, DOM types) and `tsconfig.node.json` (its Node.js side),
+  (app Worker, workerd types), `apps/api/tsconfig.json` (API Worker, workerd types), `apps/state/tsconfig.json` (state Worker, workerd types), `apps/web/tsconfig.app.json` (panel, DOM types) and `tsconfig.node.json` (its Node.js side),
   `packages/contract/tsconfig.json` (no runtime types), `packages/auth`, `packages/core`, `packages/json` and `packages/translation` (Node.js types,
   no Workers types), `packages/state` and `packages/models` (workerd types, with the Node.js tests of `test/unit/`
   checked in the same program) and the root's `tsconfig.infra.json` (deploy code, Node.js types). `tsc` only checks (`noEmit`); Turborepo caches it. `capnp-es` (via Alchemy) declares a TypeScript 5/6 peer

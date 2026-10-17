@@ -15,18 +15,18 @@ and signs people in itself: see [Commissary Cloud](#commissary-cloud) at the end
 `pnpm run deploy` (`alchemy.run.ts`, `infra/access.ts`) provisions Access together with the Worker, from the
 settings in `.env` (template: `.env.example`):
 
-| Setting                                                  | Creates / sets                                                                                                  |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `COMMISSARY_DOMAIN`                                      | A **self-hosted application** on that hostname (empty path: the whole hostname), and the Worker's custom domain |
-| `COMMISSARY_API_DOMAIN` (optional)                       | A second custom domain, the API host, which serves the client API and has no Access application (below)         |
-| (without `COMMISSARY_API_DOMAIN`)                        | A second application on the client API paths of that hostname with a **Bypass** policy for everyone (below)     |
-| `ACCESS_ALLOW_EMAILS`, `ACCESS_ALLOW_EMAIL_DOMAINS`      | A reusable **Allow** policy (interactive login with your identity providers)                                    |
-| `ACCESS_SERVICE_TOKENS` (names)                          | One **service token** per name and a **Service Auth** policy that admits exactly those tokens                   |
-| `ACCESS_ALLOW_SERVICE_TOKEN_IDS`                         | Adds service tokens managed elsewhere (by token ID, e.g. CI's) to the **Service Auth** policy                   |
-| `ACCESS_SESSION_DURATION`                                | Session duration of the application (default `24h`)                                                             |
-| `ACCESS_SERVICE_TOKEN_HEADER`                            | Optional single-header service tokens (section 5)                                                               |
-| `ACCESS_TEAM_DOMAIN`                                     | Worker variable (issuer and JWKS host); your Zero Trust team name                                               |
-| `PLATFORM_ADMIN_EMAILS`, `PLATFORM_ADMIN_SERVICE_TOKENS` | Worker variables: platform admins (token names from `ACCESS_SERVICE_TOKENS` are replaced by their Client IDs)   |
+| Setting                                                  | Creates / sets                                                                                                                        |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `COMMISSARY_DOMAIN`                                      | A **self-hosted application** on that hostname (empty path: the whole hostname), and the app Worker's custom domain                   |
+| `COMMISSARY_API_DOMAIN` (optional)                       | The API Worker's custom domain, the API host, which serves the client API and has no Access application (below)                       |
+| (without `COMMISSARY_API_DOMAIN`)                        | Zone routes of the client API paths to the API Worker, and a second application on them with a **Bypass** policy for everyone (below) |
+| `ACCESS_ALLOW_EMAILS`, `ACCESS_ALLOW_EMAIL_DOMAINS`      | A reusable **Allow** policy (interactive login with your identity providers)                                                          |
+| `ACCESS_SERVICE_TOKENS` (names)                          | One **service token** per name and a **Service Auth** policy that admits exactly those tokens                                         |
+| `ACCESS_ALLOW_SERVICE_TOKEN_IDS`                         | Adds service tokens managed elsewhere (by token ID, e.g. CI's) to the **Service Auth** policy                                         |
+| `ACCESS_SESSION_DURATION`                                | Session duration of the application (default `24h`)                                                                                   |
+| `ACCESS_SERVICE_TOKEN_HEADER`                            | Optional single-header service tokens (section 5)                                                                                     |
+| `ACCESS_TEAM_DOMAIN`                                     | Worker variable (issuer and JWKS host); your Zero Trust team name                                                                     |
+| `PLATFORM_ADMIN_EMAILS`, `PLATFORM_ADMIN_SERVICE_TOKENS` | Worker variables: platform admins (token names from `ACCESS_SERVICE_TOKENS` are replaced by their Client IDs)                         |
 
 The application's **AUD tag** is passed to the Worker as `ACCESS_AUD` automatically. The deploy also sets the application's
 cookie to **SameSite=Lax** and **HTTP Only**, so the `CF_Authorization` session cookie is not sent with cross-site
@@ -34,21 +34,23 @@ subrequests (the first line of defence against cross-site request forgery on the
 Alchemy application resource does not manage these fields and its updates are PUT-style, so a follow-up step re-applies them
 after every change of the application: do not edit them in the dashboard.
 
-**The client API leaves Access.** With an API host (`COMMISSARY_API_DOMAIN`, ADR 0028) it is served there only,
-and no Access application covers that hostname: the Worker answers the client API on the API host and everything else
-(the panel, the management API, the OAuth callbacks) on `COMMISSARY_DOMAIN`, each with a `404` naming the other host
-for a path it does not serve (`apps/app/src/http/hosts.ts`). A client that signs in through Access sends the token of the app
-host's application (`cloudflared access token -app=https://<COMMISSARY_DOMAIN>`) in `cf-access-token` to the API host;
-the Worker checks it against `ACCESS_AUD` itself. Without an API host, the bypass application (`infra/access.ts` `provisionClientApiBypass`) covers `/v1`,
-`/v1beta`, `/v1internal`, `/openai/v1`, `/backend-api/codex`, `/chat/completions`, `/completions` and `/responses` with
-their sub-paths. Access applies the most specific application to a request, and a hostname-and-path application before
-a Worker-level one, so these paths reach the Worker without a sign-in while every other path (the panel, the management
-API, the OAuth callbacks) stays behind the main application. The Worker is then the only gate of the client API: it
-answers `401` to a request without a valid API key (§4).
+**The client API leaves Access.** The client API is the API Worker's (ADR 0030), which is never under Access; the app
+Worker serves everything else (the panel, the management API, the OAuth callbacks), each with a `404` naming where the
+other's paths are (`apps/app/src/http/hosts.ts`, `apps/api/src/http/hosts.ts`). With an API host
+(`COMMISSARY_API_DOMAIN`, ADR 0028) the API Worker answers there, and no Access application covers that hostname. A
+client that signs in through Access sends the token of the app host's application (`cloudflared access token
+-app=https://<COMMISSARY_DOMAIN>`) in `cf-access-token` to the API host; the API Worker checks it against `ACCESS_AUD`
+itself. Without an API host, zone routes send the client API paths of `COMMISSARY_DOMAIN` to the API Worker, and the
+bypass application (`infra/access.ts` `provisionClientApiBypass`) covers `/v1`, `/v1beta`, `/v1internal`, `/openai/v1`,
+`/backend-api/codex`, `/chat/completions`, `/completions` and `/responses` with their sub-paths. Access applies the most
+specific application to a request, so these paths reach the API Worker without a sign-in while every other path stays
+behind the main application. The API Worker is then the only gate of the client API: it answers `401` to a request
+without a valid API key (§4).
 
-The production Worker has no `workers.dev` or preview URLs, so the custom domain is the only way in. Pull-request preview
-stages (`pr-<number>`, see [DEPLOY.md](DEPLOY.md)) instead serve their `workers.dev` URL behind their own application,
-which the Worker enrolls into, with the bypass application on the client API paths of that URL. Service token credentials:
+The production Workers have no `workers.dev` or preview URLs, so the custom domains are the only way in. Pull-request
+preview stages (`pr-<number>`, see [DEPLOY.md](DEPLOY.md)) instead serve their app Worker's `workers.dev` URL behind
+their own application, which the app Worker enrolls into, and their API Worker on its own `workers.dev` URL, outside
+Access, with no bypass application. Service token credentials:
 
 - The Client IDs are printed in the deploy outputs (`serviceTokens`).
 - The Client Secrets are returned by Cloudflare only on creation; the deploy writes them to

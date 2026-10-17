@@ -1,4 +1,4 @@
-import { env, exports } from "cloudflare:workers";
+import { env } from "cloudflare:workers";
 import { Effect, Layer } from "effect";
 import { HttpRouter, HttpServerResponse } from "effect/http";
 import { afterAll, describe, expect, it } from "vitest";
@@ -26,15 +26,8 @@ const whoami = Effect.gen(function* () {
   );
 });
 
-// Stand-ins for the real handlers of later slices, one per gated prefix.
-const TestRoutes = Layer.mergeAll(
-  HttpRouter.add("GET", "/v1/models", whoami),
-  HttpRouter.add("POST", "/v1/chat/completions", whoami),
-  HttpRouter.add("GET", "/v1beta/models", whoami),
-  HttpRouter.add("GET", "/openai/v1/videos", whoami),
-  HttpRouter.add("POST", "/backend-api/codex/responses", whoami),
-  HttpRouter.add("GET", "/v9/management/config", whoami),
-);
+// A stand-in management route. The client API's gate is the API Worker's (apps/api/test/access-router.test.ts).
+const TestRoutes = HttpRouter.add("GET", "/v9/management/config", whoami);
 
 const accessEnv = {
   ...env,
@@ -83,28 +76,6 @@ describe("Access gate through the router", () => {
     expect((await call("/nope")).status).toBe(404);
   });
 
-  it.each([
-    ["GET", "/v1/models"],
-    ["POST", "/v1/chat/completions"],
-    ["GET", "/v1beta/models"],
-    ["GET", "/openai/v1/videos"],
-    ["POST", "/backend-api/codex/responses"],
-    ["POST", "/chat/completions"],
-    ["POST", "/completions"],
-    ["POST", "/responses"],
-    ["POST", "/responses/compact"],
-    ["GET", "//Responses"],
-  ])(
-    "rejects %s %s without a token (flat Go-style body, CORS headers kept)",
-    async (method, path) => {
-      const response = await call(path, { method });
-      expect(response.status).toBe(401);
-      expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
-      expect(response.headers.get("access-control-allow-origin")).toBe("*");
-      expect(await response.text()).toBe('{"error":"Missing API key"}');
-    },
-  );
-
   it("rejects management routes without a token and never adds CORS headers there", async () => {
     const response = await call("/v9/management/config");
     expect(response.status).toBe(401);
@@ -126,86 +97,6 @@ describe("Access gate through the router", () => {
 
     expect(preflight.headers.get("access-control-allow-origin")).toBeNull();
     expect(preflight.headers.get("access-control-allow-headers")).toBeNull();
-  });
-
-  it("rejects malformed and foreign tokens with Invalid API key", async () => {
-    const malformed = await call("/v1/models", {
-      headers: { "cf-access-jwt-assertion": "garbage" },
-    });
-
-    expect(malformed.status).toBe(401);
-    expect(await malformed.text()).toBe('{"error":"Invalid API key"}');
-
-    const other = await makeKey("router-kid");
-
-    const forged = await signToken({
-      key: other,
-      now: now(),
-      claims: userClaims("alice@example.com"),
-    });
-
-    expect(
-      (await call("/v1/models", { headers: { "cf-access-jwt-assertion": forged } })).status,
-    ).toBe(401);
-
-    const wrongAud = await signToken({
-      key,
-      now: now(),
-      claims: userClaims("a@x.com"),
-      audience: "nope",
-    });
-
-    expect(
-      (await call("/v1/models", { headers: { "cf-access-jwt-assertion": wrongAud } })).status,
-    ).toBe(401);
-  });
-
-  it("passes a valid user token to the handler with the principal", async () => {
-    const response = await call("/v1/models", await withToken(userClaims("alice@example.com")));
-    expect(response.status).toBe(200);
-    const [principal, scope] = (await response.text()).split("|");
-    expect(JSON.parse(principal ?? "")).toEqual({
-      kind: "user",
-      email: "alice@example.com",
-      sub: "sub-alice@example.com",
-    });
-    expect(scope).toBe("21cd36b0");
-  });
-
-  it("accepts service tokens on the client API", async () => {
-    const response = await call("/v1/chat/completions", {
-      method: "POST",
-      ...(await withToken(serviceClaims("some.access"))),
-    });
-
-    expect(response.status).toBe(200);
-    expect(
-      (await response.text()).startsWith('{"kind":"service","commonName":"some.access"}'),
-    ).toBe(true);
-  });
-
-  it("answers CORS preflights without authentication", async () => {
-    const response = await call("/v1/models", {
-      method: "OPTIONS",
-      headers: { origin: "https://x.test" },
-    });
-
-    expect(response.status).toBe(204);
-    expect(response.headers.get("access-control-allow-origin")).toBe("*");
-  });
-
-  it("does not let alternative path spellings bypass the gate", async () => {
-    for (const path of [
-      "//v1/models",
-      "/%76%31/models",
-      "/V1/models",
-      "/./v1/models",
-      "/a/../v1/models",
-    ]) {
-      const response = await call(path);
-      expect([401, 404], path).toContain(response.status);
-      expect(await response.text()).not.toContain("kind");
-    }
   });
 
   it("enforces the admin allow-list on management routes", async () => {
@@ -237,18 +128,6 @@ describe("Access gate through the router", () => {
     );
 
     expect(otherService.status).toBe(403);
-  });
-
-  it("fails closed with 500 when Access is not configured", async () => {
-    const response = await call("/v1/models", await withToken(userClaims("alice@example.com")), {
-      ...accessEnv,
-      ACCESS_TEAM_DOMAIN: "",
-      ACCESS_AUD: "",
-    });
-
-    expect(response.status).toBe(500);
-    expect(await response.text()).toBe('{"error":"Authentication service error"}');
-    expect((await call("/healthz", {}, { ...accessEnv, ACCESS_TEAM_DOMAIN: "" })).status).toBe(200);
   });
 
   it("dev bypass works for loopback hosts only", async () => {
@@ -289,17 +168,5 @@ describe("Access gate through the router", () => {
     );
 
     expect(token.status).toBe(200);
-  });
-});
-
-const fetchWorker = (path: string) =>
-  exports.default.fetch(new Request(`https://commissary.test${path}`));
-
-describe("Worker entry point", () => {
-  it("serves public routes and gates protected ones (unconfigured defaults fail closed)", async () => {
-    expect((await fetchWorker("/healthz")).status).toBe(200);
-    const response = await fetchWorker("/v1/models");
-    expect(response.status).toBe(500);
-    expect(await response.text()).toBe('{"error":"Authentication service error"}');
   });
 });

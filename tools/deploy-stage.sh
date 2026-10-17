@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # CI deploy of one stage (.github/workflows/ci.yml): runs `alchemy deploy` with the settings in the environment and
-# writes the Worker's URL to the step output `url` and the URL of its client API to `api_url` (the API host, ADR 0028,
-# or the same URL). The control panel must be built first (`pnpm build`).
+# writes the app Worker's URL to the step output `url` and the URL of the client API to `api_url` (ADR 0028, ADR 0030:
+# the API host, a preview's API Worker workers.dev URL, or the same URL, whose client API paths zone routes send to the
+# API Worker). The control panel must be built first (`pnpm build`).
 # Usage: tools/deploy-stage.sh <stage>
 set -euo pipefail
 

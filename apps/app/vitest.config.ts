@@ -25,8 +25,8 @@ const SELF_HOSTED_BINDINGS = {
 
 /**
  * Commissary Cloud (`COMMISSARY_MODE=cloud`, ADR 0026, `src/hosted/`): Better Auth signs people in with GitHub and Google (stubbed through the
- * global `fetch` in the tests), Turnstile guards sign-up, and the per-org rate limit is low enough to reach. No dev
- * bypass: requests go to `https://commissary.test`.
+ * global `fetch` in the tests) and Turnstile guards sign-up. No dev bypass: requests go to `https://commissary.test`.
+ * (The per-org rate limit is the client API's: the API Worker's, apps/api/vitest.config.ts.)
  */
 const HOSTED_BINDINGS = {
   ...SELF_HOSTED_BINDINGS,
@@ -44,14 +44,11 @@ const HOSTED_BINDINGS = {
   OWNED_ORG_LIMIT: "3",
 };
 
-/** Requests per minute an org may send on the client API of the Commissary Cloud test Worker (test/hosted/rate-limit.test.ts). */
-const HOSTED_TEST_RATE_LIMIT = 5;
-
 // The test Worker mirrors the deployed ones declared in alchemy.run.ts (compatibility settings and binding names); there
 // is no Wrangler configuration file. Its entry (test/worker.ts) is the app Worker's handler plus the state Worker's
 // Durable Objects, so both run in one isolate (#135): `durableObjects` names classes the entry exports, where the
 // deployed app binds them by script name.
-const worker = (bindings: Record<string, string>, hosted: boolean) =>
+const worker = (bindings: Record<string, string>) =>
   cloudflareTest({
     main: "./test/worker.ts",
     miniflare: {
@@ -66,16 +63,6 @@ const worker = (bindings: Record<string, string>, hosted: boolean) =>
       },
       kvNamespaces: ["CACHE"],
       d1Databases: ["USAGE"],
-      ...(hosted
-        ? {
-            ratelimits: {
-              ORG_RATE_LIMIT: {
-                namespace_id: "1001",
-                simple: { limit: HOSTED_TEST_RATE_LIMIT, period: 60 as const },
-              },
-            },
-          }
-        : {}),
       assets: {
         // The control panel's build (`pnpm build`), as deployed. No test reads it (a missing folder serves nothing): the
         // tests that need a panel bind their own `ASSETS`, so it is not an input of the test task (turbo.json).
@@ -96,7 +83,7 @@ export default defineConfig({
     projects: [
       {
         extends: true,
-        plugins: [worker(SELF_HOSTED_BINDINGS, false)],
+        plugins: [worker(SELF_HOSTED_BINDINGS)],
         test: {
           name: "self-hosted",
           include: ["test/**/*.test.ts"],
@@ -105,7 +92,7 @@ export default defineConfig({
       },
       {
         extends: true,
-        plugins: [worker(HOSTED_BINDINGS, true)],
+        plugins: [worker(HOSTED_BINDINGS)],
         // Each file's `installFakes` loads Better Auth once (slow under a full parallel run), outside the tests.
         test: { name: "hosted", include: ["test/hosted/**/*.test.ts"], hookTimeout: 120_000 },
       },

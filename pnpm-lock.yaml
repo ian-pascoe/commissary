@@ -242,6 +242,43 @@ importers:
         specifier: 'catalog:'
         version: 7.0.2
 
+  apps/api:
+    dependencies:
+      '@commissary/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@commissary/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@commissary/models':
+        specifier: workspace:*
+        version: link:../../packages/models
+      '@commissary/state':
+        specifier: workspace:*
+        version: link:../../packages/state
+      effect:
+        specifier: 'catalog:'
+        version: 4.0.4
+    devDependencies:
+      '@cloudflare/vitest-plugin':
+        specifier: 1.4.2
+        version: 1.4.2(@cloudflare/workers-types@5.20261014.1)(@types/node@26.6.5)(vitest@5.0.3(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.6.1)(yaml@2.9.1)))
+      '@commissary/state-worker':
+        specifier: workspace:*
+        version: link:../state
+      '@effect/vitest':
+        specifier: 'catalog:'
+        version: 4.0.4(effect@4.0.4)(vitest@5.0.3(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.6.1)(yaml@2.9.1)))
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.6.5
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.3(@types/node@26.6.5)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.6.1)(yaml@2.9.1))
+
   apps/app:
     dependencies:
       '@better-auth/core':

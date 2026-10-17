@@ -5,7 +5,7 @@
 import { evictDurableObject } from "cloudflare:test";
 import { env, exports } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { withModelsPart } from "@commissary/models/testing";
+import { FULL_ACCESS, withModelsPart } from "@commissary/models/testing";
 
 const LIMITED_KEY = "sk-go-limited-0001";
 
@@ -105,12 +105,15 @@ interface Account {
   }>;
 }
 
-/** The listed account of a key (`GET /v9/management/credentials`). */
+/**
+ * The listed account of a key, as `GET /v9/management/credentials` (the app Worker's) lists it to an org admin: the
+ * Models part's `listCredentialEntries`, whose entries that route answers unchanged.
+ */
 const accountOf = async (key: string): Promise<Account | undefined> => {
-  const response = await exports.default.fetch("http://localhost/v9/management/credentials");
-  expect(response.status).toBe(200);
   // SAFETY: the credential list contract (`@commissary/contract/credentials` CredentialEntry).
-  const { files } = (await response.json()) as { files: ReadonlyArray<Account> };
+  const files = (await withModelsPart(controlPlane(), (part) =>
+    part.listCredentialEntries(FULL_ACCESS),
+  )) as unknown as ReadonlyArray<Account>;
 
   return files.find((file) => file.account?.endsWith(key.slice(-4)) === true);
 };

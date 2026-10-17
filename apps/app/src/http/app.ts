@@ -5,14 +5,14 @@ import { orgAddressing } from "../management/org-address.ts";
 import { HostedRoutes } from "../hosted/routes.ts";
 import { ManagementRoutesLive } from "../management/routes.ts";
 import { WorkersLoggerLayer } from "@commissary/core";
-import { ClientApiLayer, TraceLayer } from "@commissary/models/api";
+import { TraceLayer } from "@commissary/models/api";
 import { OAuthCallbackRoutes } from "@commissary/models/management";
 import { RootRoutes } from "./routes.ts";
 
 /**
- * All routes and global middleware of the Worker. Later slices merge their route layers here. Route layers whose
- * handlers use `AccessPrincipal` are wrapped with `withAccess(...)` (src/access/layer.ts); protected prefixes are
- * authenticated by `AccessLayer` regardless.
+ * All routes and global middleware of the app Worker: the panel, its sign-in and the management API. The client API is
+ * the API Worker's (apps/api, ADR 0030). Route layers whose handlers use `AccessPrincipal` are wrapped with
+ * `withAccess(...)` (src/access/layer.ts); the management zone is authenticated by `AccessLayer` regardless.
  */
 export const AppLayer = Layer.mergeAll(
   RootRoutes,
@@ -20,7 +20,6 @@ export const AppLayer = Layer.mergeAll(
   // Sign-in of Commissary Cloud (ADR 0026); unknown paths on a self-hosted one.
   HostedRoutes,
   AccessLayer,
-  withAccess(ClientApiLayer),
   withAccess(ManagementRoutesLive),
   // Request trace id header and structured request logs (packages/models/src/observability).
   TraceLayer,

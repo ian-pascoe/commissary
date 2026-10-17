@@ -1,108 +1,18 @@
-// API keys (ADR 0022, issue #67): the management routes that issue and revoke keys, and the gate on
-// the client API: each header form a client sends keys in, the refusals (all `Invalid API key`), that a key only ever
-// reaches its own org's ControlPlane and serves its member's private credentials, revocation within the cache window,
-// and the Access sign-ins a client API route still takes while the org's `access_clients` setting is on. Through the router with the real ControlPlanes and a Platform
-// registry of its own; the cache window through `authenticateRequest` with `TestClock`. The key text is tested in
-// packages/auth (keys.test.ts).
+// API keys (ADR 0022, issue #67) on the app Worker: the management routes that issue, list and revoke keys, that the
+// management routes never take a key, and the org's `access_clients` setting. Through the router with the real
+// ControlPlanes and a Platform registry of its own. The gate on the client API, where keys are used, is the API
+// Worker's (apps/api/test/api-keys.test.ts); the key text is tested in packages/auth (keys.test.ts).
 import { evictDurableObject, runInDurableObject } from "cloudflare:test";
-import { env } from "cloudflare:workers";
-import { assert, it as effectIt } from "@effect/vitest";
-import { Effect, Layer } from "effect";
-import { HttpRouter, HttpServerResponse } from "effect/http";
-import { TestClock } from "effect/testing";
+import { env, exports } from "cloudflare:workers";
 import { afterAll, describe, expect, it } from "vitest";
-import { authenticateRequest } from "../src/access/authenticate.ts";
-import {
-  type AccessJwks,
-  AccessPrincipal,
-  mintApiKey,
-  parseApiKey,
-  VERIFIED_KEY_TTL_MS,
-} from "@commissary/auth";
-import { scheduledTasks } from "../src/api/scheduled.ts";
-import { type CurrentOrg, GLOBAL_ORG, OrgId } from "@commissary/core";
+import { parseApiKey } from "@commissary/auth";
+import { GLOBAL_ORG, OrgId } from "@commissary/core";
 import { controlPlaneOf, type ControlPlaneStub, MAX_KEYS_PER_MEMBER } from "@commissary/state";
-import {
-  fakeJwksLayer,
-  makeFakeJwks,
-  makeKey,
-  signToken,
-  userClaims,
-} from "@commissary/auth/testing";
-import {
-  ADMIN,
-  claudeFile,
-  isolatedPlatform,
-  jsonInit,
-  key as managementKey,
-  makeHarness,
-  serviceToken,
-  token,
-} from "./support/management.ts";
-import { type EnvServices, requestContext } from "../src/worker-env.ts";
-import { resetUsageDb } from "@commissary/models/testing";
-
-/** What the stand-in client API route saw of its caller. */
-interface Seen {
-  readonly principal_id: string;
-  readonly org: string;
-  readonly member_id?: string;
-  readonly role?: string;
-  readonly caller_scope: string;
-}
-
-const whoami = Effect.gen(function* () {
-  const identity = yield* AccessPrincipal;
-
-  return HttpServerResponse.text(
-    JSON.stringify({
-      principal_id: identity.principalId,
-      org: identity.org,
-      member_id: identity.memberId,
-      role: identity.role,
-      caller_scope: identity.callerScope,
-    }),
-    { contentType: "application/json" },
-  );
-});
-
-/**
- * Picks a Claude credential for the caller the way Commissary handlers do (`handlers/execute.ts`: the identity's org and
- * member), and answers which one, or the refusal.
- */
-const pickForCaller = Effect.gen(function* () {
-  const identity = yield* AccessPrincipal;
-
-  const picked = yield* Effect.promise(async () => {
-    const answer = await controlPlaneOf(env, identity.org)
-      .models()
-      .pick({
-        providers: ["claude"],
-        model: "claude-sonnet-4-5",
-        ...(identity.memberId === undefined ? {} : { memberId: identity.memberId }),
-      });
-
-    return answer.ok ? { credential: answer.credential.id } : { refused: true };
-  });
-
-  return HttpServerResponse.text(JSON.stringify(picked), { contentType: "application/json" });
-});
-
-const ClientApiRoutes = Layer.mergeAll(
-  HttpRouter.add("POST", "/v1/chat/completions", pickForCaller),
-  HttpRouter.add("GET", "/v1/models", whoami),
-  HttpRouter.add("POST", "/v1/messages", whoami),
-  HttpRouter.add("GET", "/v1beta/models", whoami),
-  HttpRouter.add("POST", "/openai/v1/chat/completions", whoami),
-  HttpRouter.add("POST", "/backend-api/codex/responses", whoami),
-  HttpRouter.add("POST", "/responses", whoami),
-);
+import { ADMIN, isolatedPlatform, jsonInit, makeHarness, token } from "./support/management.ts";
 
 const registry = isolatedPlatform();
 
-const accessKey = await makeKey("api-keys-kid");
-
-const harness = makeHarness(undefined, registry.bindings, GLOBAL_ORG, ClientApiRoutes);
+const harness = makeHarness(undefined, registry.bindings, GLOBAL_ORG);
 
 afterAll(harness.dispose);
 
@@ -199,10 +109,6 @@ const createKeyDirect = async (
   return issued.value.record.name;
 };
 
-/** A client API route called with `headers` only: no Access sign-in. */
-const clientApi = async (path: string, headers: Record<string, string>, method = "GET") =>
-  await harness.json(path, { method, headers, auth: false });
-
 describe("issuing keys", () => {
   it("shows a new key once and lists it by its prefix only", async () => {
     const { org, slug, alice } = await staffedOrg("issue");
@@ -246,6 +152,27 @@ describe("issuing keys", () => {
     // A platform admin manages every org but is a member of none of them here: keys go to members only.
     const outsider = await send(slug, "/api-keys", platformAdmin, "POST", { name: "admin" });
     expect([outsider.status, errorOf(outsider)]).toEqual([403, "member_required"]);
+  });
+
+  it("issues keys to the dev admin (the dev bypass of `alchemy dev`) in an org it joined, as to a platform admin", async () => {
+    // Through the Worker's default export on a loopback host, where the test Worker's ACCESS_DEV_BYPASS applies.
+    const local = async (path: string, init: RequestInit) => {
+      const response = await exports.default.fetch(
+        new Request(`http://localhost/v9/management/orgs/default${path}`, init),
+      );
+
+      return { status: response.status, body: await response.json<{ error?: string }>() };
+    };
+
+    const issue = () => local("/api-keys", jsonInit("POST", { name: "local" }));
+    const outsider = await issue();
+
+    expect([outsider.status, outsider.body.error]).toEqual([403, "member_required"]);
+    expect(
+      (await local("/members", jsonInit("POST", { email: "dev@localhost", role: "member" })))
+        .status,
+    ).toBe(201);
+    expect((await issue()).status).toBe(201);
   });
 
   it("lets members list and revoke their own keys, and org admins every key", async () => {
@@ -384,8 +311,8 @@ describe("issuing keys", () => {
 
     // The cron sweep covers an org nobody opens.
     expect(await stub.purgeExpiredApiKeys(now + 100_000)).toBe(1);
+    // The API Worker's cron runs it for every org (`api-key-expiry`, apps/api/test/scheduled.test.ts).
     expect(await rows()).toEqual(["a-live", "a-new"]);
-    expect(scheduledTasks.find((task) => task.name === "api-key-expiry")?.scope).toBe("org");
   });
 
   it("deletes a revoked key a previous version kept, when the org's ControlPlane starts", async () => {
@@ -408,166 +335,7 @@ describe("issuing keys", () => {
   });
 });
 
-describe("the gate on the client API", () => {
-  it("takes a key in each header form a client sends, as its member in its org", async () => {
-    const { org, slug, alice } = await staffedOrg("gate-forms");
-    const created = await createKey(slug, alice);
-    const key = wholeKey(created);
-
-    const forms: ReadonlyArray<readonly [string, string, Record<string, string>]> = [
-      ["GET", "/v1/models", { authorization: `Bearer ${key}` }],
-      ["POST", "/v1/messages", { "x-api-key": key }],
-      ["GET", "/v1beta/models", { "x-goog-api-key": key }],
-      ["GET", `/v1beta/models?key=${encodeURIComponent(key)}`, {}],
-      ["POST", "/openai/v1/chat/completions", { authorization: `bearer ${key}` }],
-      ["POST", "/backend-api/codex/responses", { authorization: `Bearer ${key}` }],
-      ["POST", "/responses", { "x-api-key": key }],
-      // An old shared key in one header does not hide an API key in another.
-      ["GET", "/v1/models", { authorization: "Bearer sk-dummy", "x-api-key": key }],
-    ];
-
-    for (const [method, path, headers] of forms) {
-      const reply = await clientApi(path, headers, method);
-
-      expect(reply.status, `${method} ${path}`).toBe(200);
-      expect(reply.body).toMatchObject({
-        principal_id: `key:${created.id}`,
-        org,
-        member_id: alice.id,
-        role: "member",
-      });
-    }
-
-    const listed = (await send(slug, "/api-keys", alice)).body as { keys: Array<KeyBody> };
-    expect(listed.keys[0]?.last_used_at).toBeDefined();
-  });
-
-  it("gives one member's keys one caller scope, apart from another member's", async () => {
-    const { slug, alice, bob } = await staffedOrg("gate-scope");
-
-    const scopeOf = async (key: KeyBody) =>
-      ((await clientApi("/v1/models", { authorization: `Bearer ${wholeKey(key)}` })).body as Seen)
-        .caller_scope;
-
-    const laptop = await scopeOf(await createKey(slug, alice, "laptop"));
-    const desktop = await scopeOf(await createKey(slug, alice, "desktop"));
-    const bobs = await scopeOf(await createKey(slug, bob));
-
-    expect(laptop).toMatch(/^[0-9a-f]{64}$/);
-    expect(desktop).toBe(laptop);
-    expect(bobs).not.toBe(laptop);
-  });
-
-  it("makes the key's member the owner a private credential is picked for (ADR 0023)", async () => {
-    const { slug, alice, bob } = await staffedOrg("gate-private", true);
-
-    const uploaded = await send(slug, "/credentials?name=alice.json", alice, "POST", claudeFile());
-
-    expect(uploaded.status).toBe(200);
-
-    const pickedWith = async (key: KeyBody) =>
-      (
-        await clientApi(
-          "/v1/chat/completions",
-          { authorization: `Bearer ${wholeKey(key)}` },
-          "POST",
-        )
-      ).body;
-
-    expect(await pickedWith(await createKey(slug, alice))).toEqual({ credential: "alice.json" });
-    expect(await pickedWith(await createKey(slug, bob))).toEqual({ refused: true });
-  });
-
-  it("answers wrong, unknown, revoked and expired keys with Invalid API key", async () => {
-    const { org, slug, alice } = await staffedOrg("gate-refusals");
-    const other = await staffedOrg("gate-refusals-other");
-    const key = wholeKey(await createKey(slug, alice));
-    const parsed = parseApiKey(key);
-
-    if (parsed === undefined) throw new Error("the issued key does not parse");
-    const secret = key.slice(`cms_${org}_${parsed.keyId}_`.length);
-    const flipped = `${secret.slice(0, -1)}${secret.endsWith("A") ? "B" : "A"}`;
-
-    const revoked = await createKey(slug, alice, "revoked");
-    expect((await send(slug, `/api-keys/${revoked.id}`, alice, "DELETE")).status).toBe(200);
-
-    // An expired key: issued directly, already past its expiry.
-    const now = Date.now();
-
-    const expired = await controlPlaneOf(env, org).createApiKey(
-      { memberId: alice.id, name: "expired", expiresAt: now - 1000 },
-      now - 2000,
-    );
-
-    if (!expired.ok) throw new Error(expired.message);
-
-    const refused = {
-      "wrong org prefix": `cms_${other.org}_${parsed.keyId}_${secret}`,
-      "org that does not exist": `cms_no-such-org_${parsed.keyId}_${secret}`,
-      "unknown key": mintApiKey(org).key,
-      "wrong secret": `cms_${org}_${parsed.keyId}_${flipped}`,
-      revoked: wholeKey(revoked),
-      expired: expired.value.key,
-      malformed: "cms_definitely-not-a-key",
-    };
-
-    for (const [why, presented] of Object.entries(refused)) {
-      const reply = await clientApi("/v1/models", { authorization: `Bearer ${presented}` });
-
-      expect([reply.status, reply.body], why).toEqual([401, { error: "Invalid API key" }]);
-    }
-
-    // A refused key is not saved by an Access sign-in sent with it.
-    const withJwt = await harness.json("/v1/models", {
-      headers: { authorization: `Bearer ${wholeKey(revoked)}` },
-      auth: await token(alice.email),
-    });
-
-    expect(withJwt.status).toBe(401);
-
-    expect(await clientApi("/v1/models", {})).toMatchObject({
-      status: 401,
-      body: { error: "Missing API key" },
-    });
-  });
-
-  it("refuses a key under the old cfp_ prefix", async () => {
-    const { slug, alice } = await staffedOrg("gate-old-prefix");
-    const key = wholeKey(await createKey(slug, alice));
-    const old = key.replace(/^cms_/, "cfp_");
-
-    expect((await clientApi("/v1/models", { "x-api-key": key })).status).toBe(200);
-    expect(parseApiKey(old)).toBeUndefined();
-
-    for (const headers of [{ authorization: `Bearer ${old}` }, { "x-api-key": old }])
-      expect((await clientApi("/v1/models", headers)).status).toBe(401);
-  });
-
-  it("never takes a key of one org to another org's ControlPlane", async () => {
-    const a = await staffedOrg("gate-org-a");
-    const b = await staffedOrg("gate-org-b");
-    const keyA = wholeKey(await createKey(a.slug, a.alice));
-    const keyB = wholeKey(await createKey(b.slug, b.alice));
-    const parsedA = parseApiKey(keyA);
-
-    if (parsedA === undefined) throw new Error("the issued key does not parse");
-
-    expect(((await clientApi("/v1/models", { "x-api-key": keyA })).body as Seen).org).toBe(a.org);
-    expect(((await clientApi("/v1/models", { "x-api-key": keyB })).body as Seen).org).toBe(b.org);
-
-    // Org B's ControlPlane does not know org A's key, even asked directly.
-    expect(
-      await controlPlaneOf(env, b.org).verifyApiKey(parsedA.keyId, parsedA.hash, Date.now()),
-    ).toEqual({ ok: false, reason: "unknown" });
-
-    // Asked through the gate with B's org in front of A's key: refused, and B records no use of any key.
-    const relabelled = keyA.replace(`cms_${a.org}_`, `cms_${b.org}_`);
-    expect((await clientApi("/v1/models", { "x-api-key": relabelled })).status).toBe(401);
-
-    const bKeys = (await send(b.slug, "/api-keys", b.admin)).body as { keys: Array<KeyBody> };
-    expect(bKeys.keys.map((key) => key.id)).not.toContain(parsedA.keyId);
-  });
-
+describe("API keys on the management API", () => {
   it("never takes a key on the management routes", async () => {
     const { slug, alice } = await staffedOrg("gate-management");
     const key = wholeKey(await createKey(slug, alice));
@@ -609,99 +377,6 @@ describe("Access sign-ins on the client API", () => {
     });
   });
 
-  it("take the cloudflared header while global accepts them, and 401 once it does not", async () => {
-    const jwt = await token("client@example.com");
-
-    // `cloudflared access` sends the token in `cf-access-token`; clients often send a dummy key next to it.
-    for (const headers of [
-      { "cf-access-token": jwt },
-      { "cf-access-token": jwt, authorization: "Bearer sk-dummy" },
-      { "cf-access-token": jwt, "x-api-key": "sk-dummy" },
-    ]) {
-      const reply = await clientApi("/v1/models", headers);
-
-      expect(reply.status).toBe(200);
-      expect((reply.body as Seen).principal_id).toBe("user:client@example.com");
-    }
-
-    expect(await setAccessClients(false)).toMatchObject({ access_clients: false });
-
-    try {
-      expect(await clientApi("/v1/models", { "cf-access-token": jwt })).toMatchObject({
-        status: 401,
-        body: { error: "Missing API key" },
-      });
-
-      const viaEdge = await harness.json("/v1/models", { auth: jwt });
-      expect([viaEdge.status, viaEdge.body]).toEqual([401, { error: "Missing API key" }]);
-
-      const withDummy = await clientApi("/v1/models", {
-        "cf-access-token": jwt,
-        authorization: "Bearer sk-dummy",
-      });
-
-      expect([withDummy.status, withDummy.body]).toEqual([401, { error: "Invalid API key" }]);
-
-      // Not even a platform admin's or a service token's sign-in is a client credential then.
-      expect((await harness.json("/v1/models", { auth: await token(ADMIN) })).status).toBe(401);
-      expect(
-        (await harness.json("/v1/models", { auth: await serviceToken("bot.access") })).status,
-      ).toBe(401);
-
-      // The management routes still take Access, and only Access.
-      expect((await harness.json("/v9/management/membership", await owner())).status).toBe(200);
-    } finally {
-      await setAccessClients(true);
-    }
-  });
-
-  it("are checked as strictly as the Access edge checks them: signature, audience, issuer and expiry", async () => {
-    const now = Math.floor(Date.now() / 1000);
-    const claims = userClaims("client@example.com");
-    const impostor = await makeKey(managementKey.kid);
-
-    const refused = {
-      "bad signature": await signToken({ key: impostor, now, claims }),
-      "unknown key id": await signToken({ key: impostor, kid: "nobody", now, claims }),
-      "another application's audience": await signToken({
-        key: managementKey,
-        audience: "another-app",
-        now,
-        claims,
-      }),
-      "another team": await signToken({
-        key: managementKey,
-        issuer: "https://other.cloudflareaccess.com",
-        now,
-        claims,
-      }),
-      expired: await signToken({ key: managementKey, now: now - 7200, expiresIn: 3600, claims }),
-      "not yet valid": await signToken({ key: managementKey, now, notBefore: now + 600, claims }),
-    };
-
-    for (const [why, jwt] of Object.entries(refused))
-      for (const headers of [
-        { "cf-access-token": jwt, authorization: "Bearer sk-dummy" },
-        { "cf-access-jwt-assertion": jwt },
-      ]) {
-        const reply = await clientApi("/v1/models", headers);
-
-        expect([reply.status, reply.body], why).toEqual([401, { error: "Invalid API key" }]);
-      }
-
-    // The same claims, signed properly for this application, pass.
-    const valid = await signToken({ key: managementKey, now, claims });
-
-    expect(
-      (
-        await clientApi("/v1/models", {
-          "cf-access-token": valid,
-          authorization: "Bearer sk-dummy",
-        })
-      ).status,
-    ).toBe(200);
-  });
-
   it("are changed by org owners only", async () => {
     const { slug, admin } = await staffedOrg("access-owner");
     const reply = await send(slug, "/membership", admin, "PATCH", { access_clients: true });
@@ -725,158 +400,4 @@ describe("Access sign-ins on the client API", () => {
       await setAccessClients(true);
     }
   });
-});
-
-describe("the verified-key cache", () => {
-  const NOW_MS = 1_800_000_000_000;
-
-  const context = requestContext(
-    { ...env, ...registry.bindings, ACCESS_TEAM_DOMAIN: "team", ACCESS_AUD: "unused" },
-    {} as unknown as ExecutionContext,
-  );
-
-  const run = <A, E>(body: Effect.Effect<A, E, EnvServices | AccessJwks | CurrentOrg>) =>
-    Effect.gen(function* () {
-      yield* TestClock.setTime(NOW_MS);
-
-      return yield* body.pipe(
-        Effect.provide(fakeJwksLayer(makeFakeJwks([accessKey]))),
-        Effect.provideContext(context),
-      );
-    });
-
-  effectIt.effect("lets a key revoked in another isolate through for at most its window", () =>
-    run(
-      Effect.gen(function* () {
-        const slug = `cache-${crypto.randomUUID().slice(0, 8)}`;
-
-        const org = yield* Effect.promise(async () => {
-          const created = await registry.platform.createOrg({ slug, name: slug }, NOW_MS);
-
-          if (!created.ok) throw new Error(created.message);
-
-          return created.org.id;
-        });
-
-        const stub = controlPlaneOf(env, org);
-
-        const key = yield* Effect.promise(async () => {
-          const member = await stub.addMember(
-            { email: "carol@example.com", role: "member" },
-            { role: "owner", sensitive: true },
-            "test",
-          );
-
-          if (!member.ok) throw new Error(member.message);
-
-          const issued = await stub.createApiKey(
-            { memberId: member.value.id, name: "cli" },
-            NOW_MS,
-          );
-
-          if (!issued.ok) throw new Error(issued.message);
-
-          return issued.value;
-        });
-
-        const headers = { authorization: `Bearer ${key.key}` };
-        const url = "https://commissary.test/v1/models";
-        const identity = yield* authenticateRequest(headers, url, "protected");
-
-        assert.strictEqual(identity.principalId, `key:${key.record.id}`);
-        assert.strictEqual(identity.org, org);
-
-        // Revoked behind this isolate's back (another isolate's request).
-        yield* Effect.promise(async () => await stub.revokeApiKey(key.record.id, NOW_MS));
-
-        yield* TestClock.adjust(VERIFIED_KEY_TTL_MS - 1);
-        assert.strictEqual((yield* authenticateRequest(headers, url, "protected")).org, org);
-
-        yield* TestClock.adjust(1);
-        const refused = yield* Effect.flip(authenticateRequest(headers, url, "protected"));
-
-        assert.strictEqual(refused._tag, "UnauthorizedError");
-        assert.strictEqual(refused.message, "Invalid API key");
-        assert.isAtMost(VERIFIED_KEY_TTL_MS, 60_000);
-      }),
-    ),
-  );
-
-  /**
-   * Verifies `key` (so this isolate caches it), runs `revoke` (a management request, which never reaches this
-   * isolate's cache: the API Worker verifies and the app Worker revokes), then shows the key still serves for the rest
-   * of its window and is refused the moment the window has passed.
-   */
-  const refusedOnceTheWindowPassed = (key: string, revoke: () => Promise<void>) =>
-    Effect.gen(function* () {
-      const headers = { authorization: `Bearer ${key}` };
-      const url = "https://commissary.test/v1/models";
-
-      yield* authenticateRequest(headers, url, "protected");
-      yield* Effect.promise(revoke);
-
-      yield* TestClock.adjust(VERIFIED_KEY_TTL_MS - 1);
-      yield* authenticateRequest(headers, url, "protected");
-
-      yield* TestClock.adjust(1);
-      const refused = yield* Effect.flip(authenticateRequest(headers, url, "protected"));
-
-      assert.strictEqual(refused._tag, "UnauthorizedError");
-      assert.strictEqual(refused.message, "Invalid API key");
-    });
-
-  effectIt.effect(
-    "refuses a key revoked through the management API once its window has passed",
-    () =>
-      run(
-        Effect.gen(function* () {
-          const { slug, alice } = yield* Effect.promise(
-            async () => await staffedOrg("window-revoke"),
-          );
-
-          const created = yield* Effect.promise(async () => await createKey(slug, alice));
-
-          yield* refusedOnceTheWindowPassed(wholeKey(created), async () => {
-            expect((await send(slug, `/api-keys/${created.id}`, alice, "DELETE")).status).toBe(200);
-          });
-        }),
-      ),
-  );
-
-  effectIt.effect("refuses the keys of a removed member once the window has passed", () =>
-    run(
-      Effect.gen(function* () {
-        const { slug, admin, bob } = yield* Effect.promise(
-          async () => await staffedOrg("window-removed"),
-        );
-
-        const created = yield* Effect.promise(async () => await createKey(slug, bob));
-
-        yield* refusedOnceTheWindowPassed(wholeKey(created), async () => {
-          expect((await send(slug, `/members/${bob.id}`, admin, "DELETE")).status).toBe(200);
-        });
-      }),
-    ),
-  );
-
-  effectIt.effect("refuses the keys of a deleted org once the window has passed", () =>
-    run(
-      Effect.gen(function* () {
-        // Deleting an org wipes its usage rows (D1), which needs the table the usage tests create.
-        yield* Effect.promise(async () => await resetUsageDb());
-
-        const { slug, alice, platformAdmin } = yield* Effect.promise(
-          async () => await staffedOrg("window-deleted"),
-        );
-
-        const created = yield* Effect.promise(async () => await createKey(slug, alice));
-
-        yield* refusedOnceTheWindowPassed(wholeKey(created), async () => {
-          expect((await send(slug, "/org", platformAdmin, "DELETE", { name: slug })).status).toBe(
-            200,
-          );
-        });
-      }),
-    ),
-  );
 });

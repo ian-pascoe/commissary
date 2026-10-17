@@ -95,10 +95,10 @@ const ApplicationSettings = Alchemy.Action(
 );
 
 /**
- * The client API (`apps/app/src/management/zones.ts` `PROTECTED_PREFIXES` without `/v9/management`): clients authenticate
- * there with API keys the Worker checks itself (ADR 0022), so Access lets every request through. Access matches a path
- * and its sub-paths (`/v1` covers `/v1/models`), not other paths that start with the same letters, so `/v1beta` and
- * `/v1internal` are listed on their own.
+ * The client API (`CLIENT_API_PREFIXES`, packages/core/src/http/client-api.ts), which the zone routes of a stage with one
+ * host send to the API Worker: clients authenticate there with API keys the Worker checks itself (ADR 0022), so Access
+ * lets every request through. Access matches a path and its sub-paths (`/v1` covers `/v1/models`), not other paths
+ * that start with the same letters, so `/v1beta` and `/v1internal` are listed on their own.
  */
 export const CLIENT_API_PATHS = [
   "/v1",
@@ -112,11 +112,10 @@ export const CLIENT_API_PATHS = [
 ] as const;
 
 /**
- * A bypass application for the client API of `host` (the production domain, or a preview's `workers.dev` host): a
- * hostname-and-path application takes precedence over the application of the whole domain and over a Worker-level
- * one (a preview's), so the client API leaves Access while the panel and the management API stay behind it. Only
- * with a stack-managed Access application: a deployment that brings its own (`ACCESS_AUD`) adds the bypass itself
- * (docs/DEPLOY.md).
+ * A bypass application for the client API of `host` (the domain of a stage with one host): a hostname-and-path
+ * application takes precedence over the application of the whole domain, so the client API leaves Access while the
+ * panel and the management API stay behind it. Only with a stack-managed Access application: a deployment that brings
+ * its own (`ACCESS_AUD`) adds the bypass itself (docs/DEPLOY.md).
  */
 export const provisionClientApiBypass = (
   settings: Settings,

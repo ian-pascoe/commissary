@@ -1,10 +1,12 @@
-// Grants through the production Worker (`exports.default.fetch`): the real model resolution, registry views and
+// Grants through the production API Worker (`exports.default.fetch`): the real model resolution, registry views and
 // ControlPlane picker. A request with no member behind it (no Access in the test env) is served by the grants for
 // everyone only, so restricting those is what the requests here see. Only the Claude upstream is mocked.
+import { createExecutionContext } from "cloudflare:test";
 import { env, exports } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { claudeFile } from "./support/management.ts";
-import { FULL_ACCESS, unknownModelBody } from "@commissary/models/testing";
+import { claudeFile, FULL_ACCESS, unknownModelBody } from "@commissary/models/testing";
+import { makeWebHandler } from "../src/http/app.ts";
+import { requestContext } from "../src/worker-env.ts";
 
 /** A Sonnet and an Opus model of the catalog, found in the list before anything is restricted. */
 let SONNET = "";
@@ -50,8 +52,22 @@ const stream = (model: string): Response => {
   );
 };
 
+/** Where requests go: the Worker's default export, or the handler of a fresh isolate once {@link restrictTo} ran. */
+let send = async (request: Request): Promise<Response> => await exports.default.fetch(request);
+
+/** Disposes of the handler {@link freshIsolate} made. */
+let disposeFresh = async (): Promise<void> => {};
+
+/** A Web handler of the API Worker of its own, as a new isolate builds it: with no registry snapshot cached yet. */
+const freshIsolate = () => {
+  const { handler, dispose } = makeWebHandler();
+
+  disposeFresh = dispose;
+  send = async (request) => await handler(request, requestContext(env, createExecutionContext()));
+};
+
 const chat = async (model: string) =>
-  await exports.default.fetch(
+  await send(
     new Request("http://localhost/v1/chat/completions", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -60,7 +76,7 @@ const chat = async (model: string) =>
   );
 
 const listed = async (): Promise<ReadonlyArray<string>> => {
-  const response = await exports.default.fetch("http://localhost/v1/models");
+  const response = await send(new Request("http://localhost/v1/models"));
   expect(response.status).toBe(200);
   // SAFETY: the OpenAI model list shape.
   const body = (await response.json()) as { data: ReadonlyArray<{ id: string }> };
@@ -87,8 +103,9 @@ beforeAll(async () => {
   OPUS = ids.find((id) => id.startsWith("claude-opus-")) ?? "";
 });
 
-afterAll(() => {
+afterAll(async () => {
   globalThis.fetch = realFetch;
+  await disposeFresh();
 });
 
 /** Replaces the default grant with `everyone, all shared credentials, models`. */
@@ -110,10 +127,10 @@ const restrictTo = async (models: ReadonlyArray<string>) => {
     );
 
   expect(written.ok).toBe(true);
-  // The routing view rebuilds the registry now (`fresh`), so the next list does not wait for the 5 s snapshot TTL.
-  expect(
-    (await exports.default.fetch("http://localhost/v9/management/routing/models")).status,
-  ).toBe(200);
+  // An isolate's registry snapshot of the org is cached for 5 s (Models' `SNAPSHOT_TTL_MS`), and the management routes
+  // that rebuild it at once are the app Worker's: the requests go to a fresh isolate's handler, which reads the grants
+  // just written, as every isolate does within those 5 s.
+  freshIsolate();
 };
 
 describe("grants through the production request path", () => {

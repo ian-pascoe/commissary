@@ -2,7 +2,7 @@
 // `ASSETS` binding created by `assets`); keep both in sync. Tests bind the same names in `vitest.config.ts`. The Durable
 // Object namespaces are the state Worker's (apps/state), bound by script name; what its classes read is in its own
 // `env` too (apps/state/src/env.d.ts).
-// `Env` is read only by the entry (`index.ts`, `api/scheduled.ts`) and tests; other code
+// `Env` is read only by the entry (`index.ts`) and tests; other code
 // reads its package's view (`AuthConfig`, `StateEnv`, `ModelsEnv`, `AppEnv`: `worker-env.ts`), which `Env` must satisfy.
 interface __BaseEnv_Env {
   /** Model catalogs, signature cache, Antigravity state (Workers KV). */
@@ -22,11 +22,10 @@ interface __BaseEnv_Env {
   /** Local development only: treats loopback requests as this admin. Never set when deployed. */
   ACCESS_DEV_BYPASS: string;
   /**
-   * The app host (`COMMISSARY_DOMAIN`): panel, sign-in and management API. Set together with `API_DOMAIN`; unset,
-   * like `API_DOMAIN`, on a deployment that serves everything on one host (src/http/hosts.ts, ADR 0028).
+   * The host the API Worker serves the client API on (src/http/hosts.ts, ADR 0028, ADR 0030): the API host
+   * (`COMMISSARY_API_DOMAIN`), or a preview API Worker's workers.dev host. Unset: zone routes send the client API paths
+   * on the app host to the API Worker.
    */
-  APP_DOMAIN?: string;
-  /** The API host (`COMMISSARY_API_DOMAIN`): the only host of the client API. Unset: one host serves everything. */
   API_DOMAIN?: string;
   /** Overrides the Meta key-mint endpoint (empty: default). */
   META_MINT_URL: string;
@@ -53,8 +52,6 @@ interface __BaseEnv_Env {
   TURNSTILE_SECRET_KEY?: string;
   /** Hosted: how many orgs a person may own unless a platform admin raised their limit (default 3). */
   OWNED_ORG_LIMIT?: string;
-  /** Hosted: the per-org request rate limit of the client API (Workers rate limiting, keyed by org id). */
-  ORG_RATE_LIMIT?: RateLimit;
   CONTROL_PLANE: DurableObjectNamespace<import("@commissary/state-worker").ControlPlane>;
   SESSION_STATE: DurableObjectNamespace<import("@commissary/state-worker").SessionState>;
   /** The Platform registry: one object per deployment (`platformOf`, `@commissary/state`). */

@@ -1,22 +1,17 @@
 // Grants apply to an API key like to an Access sign-in (ADR 0022, ADR 0023): the key resolves to its member, and the
 // member's reach decides what the request may pick. An ungranted model answers like an unknown one (same 400 body),
 // and a request without a member (a service token) is served by the default grant only, so upgrading changes nothing.
+// Through the API Worker's gate; the org, its members, keys, credential and grants are set up straight through the
+// ControlPlane (the management routes that do it are the app Worker's, tested in apps/app/test/grants-routes.test.ts).
 import { env } from "cloudflare:workers";
 import { Effect, Layer } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { afterAll, describe, expect, it } from "vitest";
 import { AccessPrincipal } from "@commissary/auth";
-import { GLOBAL_ORG } from "@commissary/core";
+import { type OrgId } from "@commissary/core";
 import { controlPlaneOf } from "@commissary/state";
-import {
-  ADMIN,
-  claudeFile,
-  isolatedPlatform,
-  jsonInit,
-  makeHarness,
-  token,
-} from "./support/management.ts";
-import { unknownModelBody } from "@commissary/models/testing";
+import { claudeFile, FULL_ACCESS, unknownModelBody } from "@commissary/models/testing";
+import { isolatedPlatform, issueKey, makeClientHarness, staffedOrg } from "./support/client.ts";
 
 /** Picks the model in `?model=` for the caller the way Commissary handlers do (the identity's org and member). */
 const pickForCaller = Effect.gen(function* () {
@@ -48,32 +43,12 @@ const pickForCaller = Effect.gen(function* () {
 
 const registry = isolatedPlatform();
 
-const harness = makeHarness(
-  undefined,
-  registry.bindings,
-  GLOBAL_ORG,
+const harness = makeClientHarness(
   Layer.mergeAll(HttpRouter.add("POST", "/v1/chat/completions", pickForCaller)),
+  registry.bindings,
 );
 
 afterAll(harness.dispose);
-
-interface Auth {
-  readonly auth: string;
-}
-
-const as = async (email: string): Promise<Auth> => ({ auth: await token(email) });
-
-const send = async (
-  slug: string,
-  path: string,
-  who: Auth,
-  method = "GET",
-  body?: Parameters<typeof jsonInit>[1],
-) =>
-  await harness.json(`/v9/management/orgs/${slug}${path}`, {
-    ...(body === undefined ? { method } : jsonInit(method, body)),
-    ...who,
-  });
 
 const SONNET = "claude-sonnet-4-5";
 
@@ -81,39 +56,51 @@ const OPUS = "claude-opus-4-1";
 
 /** An org with a shared Claude subscription, an admin and two plain members each holding an API key. */
 const org = async () => {
-  const slug = `grants-key-${crypto.randomUUID().slice(0, 8)}`;
-  const platform = await as(ADMIN);
+  const staff = await staffedOrg(registry, "grants-key");
 
-  expect(
-    (await harness.json("/v9/management/orgs", jsonInit("POST", { slug, name: slug }))).status,
-  ).toBe(201);
+  const imported = await controlPlaneOf(env, staff.org)
+    .models()
+    .importAuthFile("shared.json", claudeFile(), {}, FULL_ACCESS);
 
-  const add = async (name: string, role: string) => {
-    const email = `${name}-${slug}@example.com`;
-    const reply = await send(slug, "/members", platform, "POST", { email, role });
+  expect(imported.ok).toBe(true);
 
-    expect(reply.status).toBe(201);
-    const who = await as(email);
-    const created = await send(slug, "/api-keys", who, "POST", { name: "laptop" });
-
-    expect(created.status).toBe(201);
-
-    return {
-      id: (reply.body as { id: string }).id,
-      who,
-      key: (created.body as { key: string }).key,
-    };
+  return {
+    org: staff.org,
+    alice: { id: staff.alice.id, key: (await issueKey(staff.org, staff.alice)).key },
+    bob: { id: staff.bob.id, key: (await issueKey(staff.org, staff.bob)).key },
   };
+};
 
-  const admin = await add("admin", "admin");
-  const alice = await add("alice", "member");
-  const bob = await add("bob", "member");
+/**
+ * Replaces the default grant of `org` with the example grant: `member` may use Sonnet models of `shared.json`. As the
+ * management routes write grants.
+ */
+const grantSonnetTo = async (org: OrgId, member: string) => {
+  const models = controlPlaneOf(env, org).models();
+  const [fallback] = (await models.grantEntries()).grants;
 
-  expect(
-    (await send(slug, "/credentials?name=shared.json", admin.who, "POST", claudeFile())).status,
-  ).toBe(200);
+  if (fallback === undefined) throw new Error("a new org has the default grant");
 
-  return { slug, admin, alice, bob };
+  const removed = await models.writeGrant(
+    { id: fallback.id, revision: fallback.revision, value: null },
+    "test",
+  );
+
+  expect(removed.ok).toBe(true);
+
+  const granted = await models.writeGrant(
+    {
+      revision: 0,
+      value: {
+        subject: { kind: "member", id: member },
+        scope: { kind: "credential", id: "shared.json" },
+        models: ["claude-sonnet-*"],
+      },
+    },
+    "test",
+  );
+
+  expect(granted.ok).toBe(true);
 };
 
 const pick = async (key: string, model: string) =>
@@ -135,29 +122,9 @@ describe("grants and API keys", () => {
   });
 
   it("serves Sonnet and refuses Opus to the member the example grant names, like an unknown model", async () => {
-    const { slug, admin, alice, bob } = await org();
-    const listed = await send(slug, "/grants", admin.who);
+    const { org: id, alice, bob } = await org();
 
-    const [fallback] = (listed.body as { grants: ReadonlyArray<{ id: string; revision: number }> })
-      .grants;
-
-    expect(
-      (
-        await harness.json(`/v9/management/orgs/${slug}/grants/${fallback?.id}`, {
-          method: "DELETE",
-          headers: { "if-match": String(fallback?.revision) },
-          auth: admin.who.auth,
-        })
-      ).status,
-    ).toBe(200);
-
-    const granted = await send(slug, "/grants", admin.who, "POST", {
-      subject: { kind: "member", id: alice.id },
-      scope: { kind: "credential", id: "shared.json" },
-      models: ["claude-sonnet-*"],
-    });
-
-    expect(granted.status).toBe(200);
+    await grantSonnetTo(id, alice.id);
 
     expect(await pick(alice.key, SONNET)).toEqual({ credential: "shared.json" });
 

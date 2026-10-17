@@ -124,7 +124,8 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       COMMISSARY_DOMAIN: ${{ vars.COMMISSARY_DOMAIN }}
-      # The API host (ADR 0028); unset serves everything on COMMISSARY_DOMAIN. Previews ignore it.
+      # The API host (ADR 0028), served by the API Worker; unset, zone routes send the client API paths on
+      # COMMISSARY_DOMAIN to it (ADR 0030). Previews ignore it.
       COMMISSARY_API_DOMAIN: ${{ vars.COMMISSARY_API_DOMAIN }}
       ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN }}
       ACCESS_ALLOW_EMAILS: ${{ vars.ACCESS_ALLOW_EMAILS }}
@@ -183,10 +184,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           URL: ${{ steps.deploy.outputs.url }}
+          API_URL: ${{ steps.deploy.outputs.api_url }}
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           if [ "$COMMISSARY_MODE" = cloud ]; then how="Commissary Cloud: sign in with GitHub or Google"; else how="sign in with Access"; fi
-          tools/preview-comment.sh "$PR" "Preview \`$STAGE\` deployed at $URL (commit ${SHA:0:8}), $how; storage starts empty and is destroyed when the pull request closes."
+          tools/preview-comment.sh "$PR" "Preview \`$STAGE\` deployed at $URL (commit ${SHA:0:8}), $how; the client API (API keys) is at $API_URL. Storage starts empty and is destroyed when the pull request closes."
 
   # Commissary Cloud (ADR 0026) deployed from main next to production: stage `cloud`, settings in the `cloud`
   # environment (docs/DEPLOY.md "The Commissary Cloud stage"). Skipped until that environment names a domain.
@@ -210,7 +212,8 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       COMMISSARY_DOMAIN: ${{ vars.COMMISSARY_DOMAIN }}
-      # The API host (ADR 0028); unset serves everything on COMMISSARY_DOMAIN. Previews ignore it.
+      # The API host (ADR 0028), served by the API Worker; unset, zone routes send the client API paths on
+      # COMMISSARY_DOMAIN to it (ADR 0030). Previews ignore it.
       COMMISSARY_API_DOMAIN: ${{ vars.COMMISSARY_API_DOMAIN }}
       PLATFORM_ADMIN_EMAILS: ${{ vars.PLATFORM_ADMIN_EMAILS }}
       SECRETS_KEY_GENERATION: ${{ vars.SECRETS_KEY_GENERATION }}

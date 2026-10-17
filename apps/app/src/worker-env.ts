@@ -20,9 +20,7 @@ import { stateAuthDirectory, type StateBindings, StateEnv } from "@commissary/st
 export interface AppBindings extends SignInBindings {
   /** Static assets (management panel, `management/web-panel.ts`). */
   readonly ASSETS: Fetcher;
-  /** The app host (`http/hosts.ts`, ADR 0028). */
-  readonly APP_DOMAIN?: string;
-  /** The API host (`http/hosts.ts`, ADR 0028). */
+  /** The host of the client API, when it is not the app host (`http/hosts.ts`, ADR 0028, ADR 0030). */
   readonly API_DOMAIN?: string;
   /** Hosted: how many orgs a person may own unless a platform admin raised their limit (`hosted/owned-orgs.ts`). */
   readonly OWNED_ORG_LIMIT?: string;

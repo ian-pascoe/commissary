@@ -17,7 +17,6 @@ import {
 } from "./gate.ts";
 import { managementKeyIdentity, presentedManagementKey } from "./management-key.ts";
 import type { AccessIdentity, AdmissiblePrincipal } from "./principal.ts";
-import { makeIdentity } from "./principal.ts";
 
 export const ACCESS_JWT_HEADER = "cf-access-jwt-assertion";
 
@@ -80,13 +79,16 @@ export const accessGate = (
     const bypass = devBypass(env, requestUrl);
 
     if (bypass?._tag === "Active") {
-      // Local `alchemy dev` only; the bypass principal is an administrator of everything.
+      // Local `alchemy dev` only; the bypass principal is an administrator of everything and, like a platform admin
+      // signed in through Access, a member of the orgs it joined (so it can issue itself API keys there).
       const org = yield* targetOrg(slug, true);
 
-      return yield* makeIdentity(
+      return yield* admitted(
         { kind: "user", email: bypass.email, sub: "dev-bypass" },
         org,
         true,
+        needs,
+        undefined,
       );
     }
 

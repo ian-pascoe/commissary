@@ -12,6 +12,8 @@ export * from "./execution-context.ts";
 
 export * from "./hash.ts";
 
+export * from "./http/client-api.ts";
+
 export * from "./http/management.ts";
 
 export * from "./http/route-services.ts";
