@@ -63,8 +63,8 @@ A stage deploys three Workers (ADR 0030) from the one stack, the state Worker fi
    `404` with the address of the client API. It binds the state Worker's Durable Objects by script name, which is also
    why Alchemy deploys it after the state Worker, and no secrets keys, which only the ControlPlane reads.
 3. **`Api`** (`apps/api`), the API Worker: the client API (`/v1`, `/v1beta`, `/v1internal`, `/openai/v1`,
-   `/backend-api/codex`, `/chat/completions`, `/completions`, `/responses`), `/healthz` and the cron trigger, never
-   behind Access: clients send API keys. It binds the Durable Objects by script name too, and the per-org rate limit
+   `/backend-api/codex`, `/chat/completions`, `/completions`, `/responses`), `/healthz` and the cron trigger, under no Access
+   application of its own: clients send API keys. It binds the Durable Objects by script name too, and the per-org rate limit
    on Commissary Cloud. Where it answers:
    - on the API host when there is one ([API host](#api-host)), as its custom domain;
    - else on the app host, through **zone routes** `<COMMISSARY_DOMAIN>/v1*`, `/openai/v1*`, `/backend-api/codex*`,
@@ -107,9 +107,9 @@ state Worker and the move happens on that deploy, with no setting or manual step
   the API host ([The Workers](#the-workers)): the account's Worker count grows by two (see "Workers Free" above);
 - the requests in flight during the deploy may fail once while the Durable Objects restart, as on any deploy that
   changed their code;
-- no change to URLs, API keys, management keys, sessions or stored data; with an API host, the hostname moves from the
-  app Worker (where it was an alias) to the API Worker within the deploy, so the client API may answer `404` for a few
-  seconds.
+- no change to URLs, API keys, management keys, sessions or stored data. The client API may answer `404` for a few
+  seconds within the deploy: with an API host, the hostname moves from the app Worker (where it was an alias) to the
+  API Worker; on one host, the new app Worker may refuse the client API paths before the zone routes exist.
 
 **Before merging the split** a person rehearses the move on a throwaway stage `pr-0`, self-hosted and Commissary Cloud
 (#152): deploy `main`, seed an org, a member, a credential and an API key, deploy the split onto the same stage, check

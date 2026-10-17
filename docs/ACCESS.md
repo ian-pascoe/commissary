@@ -34,7 +34,7 @@ subrequests (the first line of defence against cross-site request forgery on the
 Alchemy application resource does not manage these fields and its updates are PUT-style, so a follow-up step re-applies them
 after every change of the application: do not edit them in the dashboard.
 
-**The client API leaves Access.** The client API is the API Worker's (ADR 0030), which is never under Access; the app
+**The client API leaves Access.** The client API is the API Worker's (ADR 0030), which no Access application protects; the app
 Worker serves everything else (the panel, the management API, the OAuth callbacks), each with a `404` naming where the
 other's paths are (`apps/app/src/http/hosts.ts`, `apps/api/src/http/hosts.ts`). With an API host
 (`COMMISSARY_API_DOMAIN`, ADR 0028) the API Worker answers there, and no Access application covers that hostname. A

@@ -379,7 +379,8 @@ assertion that cannot be removed carries a `// SAFETY: <invariant>` comment on t
   `packages/models/test/`. Use `@effect/vitest`
   (`it.effect`) for Effect code and `exports.default.fetch(...)` (`cloudflare:workers`) for end-to-end Worker requests.
 - `alchemy.run.ts` gives a Worker a `workers.dev` URL on previews only, so Cloudflare Access cannot be bypassed (a
-  preview's app Worker enrolls into its Access application; the API Worker is never under Access).
+  preview's app Worker enrolls into its Access application; no Access application protects the API Worker: on a single host, the bypass application takes its paths out of
+  the app host's).
 
 ## Dependency notes
 

@@ -3,7 +3,6 @@ import { env } from "cloudflare:workers";
 import { Context, Layer } from "effect";
 import { HttpRouter } from "effect/http";
 import { makeAccessLayer, makeWithAccess } from "../../src/access/layer.ts";
-import type { AccessPrincipal } from "@commissary/auth";
 import { orgAddressing } from "../../src/management/org-address.ts";
 import { RootRoutes } from "../../src/http/routes.ts";
 import { ManagementRoutes } from "../../src/management/routes.ts";
@@ -74,18 +73,13 @@ export interface Harness {
 }
 
 /**
- * `org`: the org every request of the harness belongs to (the Worker resolves `global` for now). `clientApiRoutes`: stand-in
- * client API behind the same gate, for tests of what reaches them.
+ * `org`: the org every request of the harness belongs to (the Worker resolves `global` for now). The client API is the
+ * API Worker's (apps/api/test/support/client.ts).
  */
 export const makeHarness = (
   http: MockHandler = () => ({ status: 404 }),
   bindings: Partial<Env> = {},
   org: OrgId = GLOBAL_ORG,
-  clientApiRoutes: Layer.Layer<
-    never,
-    never,
-    HttpRouter.HttpRouter | HttpRouter.Request<"Requires", AccessPrincipal>
-  > = Layer.empty,
 ): Harness => {
   const outbound = mockHttp(http);
   const access = makeAccessLayer(fakeJwksLayer(makeFakeJwks([key])));
@@ -93,12 +87,7 @@ export const makeHarness = (
   const routes = ManagementRoutes.pipe(Layer.provide(managementServicesWith(outbound.layer)));
 
   const web = HttpRouter.toWebHandler(
-    Layer.mergeAll(
-      RootRoutes,
-      OAuthCallbackRoutes,
-      access,
-      makeWithAccess(access)(Layer.mergeAll(routes, clientApiRoutes)),
-    ),
+    Layer.mergeAll(RootRoutes, OAuthCallbackRoutes, access, makeWithAccess(access)(routes)),
     { disableLogger: true, middleware: orgAddressing },
   );
 

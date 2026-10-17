@@ -34,6 +34,7 @@ const baseEnv = {
   ACCESS_DEV_BYPASS: "",
 };
 
+// SAFETY: the gate and the routes under test never call the execution context's methods.
 const ctx = {} as unknown as ExecutionContext;
 
 /** An Access sign-in of `email`, as `Cf-Access-Jwt-Assertion` carries it. */

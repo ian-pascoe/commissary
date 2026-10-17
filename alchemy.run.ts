@@ -127,7 +127,7 @@ export default Alchemy.Stack(
     const split = settings.apiDomain !== "";
 
     // What the state Worker's classes read besides their namespaces and the mode (`StateObjectEnv`, `ModelsPartEnv`).
-    // The app Worker's own code reads all of it too, except the secrets keys.
+    // The app and the API Worker's own code read all of it too, except the secrets keys.
     const stateSettings = {
       // Platform admins seeded as owners of `global`; the Access settings mark a deployed stage, where the dev secrets
       // key is refused (@commissary/state's secrets/).

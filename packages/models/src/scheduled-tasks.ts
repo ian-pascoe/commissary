@@ -1,5 +1,5 @@
 /**
- * Models' cron tasks (#134 "Org deletion and crons"), run by the cron runner (`api/scheduled.ts`) in this order. The
+ * Models' cron tasks (#134 "Org deletion and crons"), run by the API Worker's cron runner (`apps/api/src/scheduled.ts`) in this order. The
  * services they read besides the bindings come from {@link ScheduledTaskLayer}, which the runner builds once per cron
  * invocation, so the tasks share one config reader and catalog store.
  */

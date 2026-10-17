@@ -511,7 +511,7 @@ Core contracts every provider slice implements (Go references in each module hea
   Deviation: `POST /chat/completions`, `/completions`, `/responses`, `/responses/compact` and the `GET /responses`
   WebSocket are unprefixed aliases of the `/v1` routes (Go serves only `/v1`). A client whose Anthropic models append
   `/v1/messages` and whose OpenAI models append `/chat/completions` to the same base URL (pi's `opencode-go` catalog)
-  then needs a single base URL. The aliases are in `PROTECTED_PREFIXES` (`management/zones.ts`). `GET /models` is not
+  then needs a single base URL. The aliases are in `CLIENT_API_PREFIXES` (`core/http/client-api.ts`). `GET /models` is not
   aliased, because it is a control panel page.
   Request bodies (`handlers/request.ts`, `models/http/body.ts`) decode `Content-Encoding: zstd` with a 32 MiB cap on the
   decoded size (`models/http/zstd.ts`: frame windows/content sizes are checked before fzstd allocates, the streaming decoder stops past the
@@ -2294,7 +2294,7 @@ prices each attempt, the ControlPlane counts and decides.
 - Access application on the app Worker's custom domain, provisioned with the Workers by `alchemy.run.ts`/`infra/access.ts`
   (Allow policy for people, Service Auth policy for the stack's service tokens, SameSite=Lax cookie; its AUD tag feeds
   `ACCESS_AUD`); no `workers.dev`/preview URLs outside previews, so Access cannot be bypassed. The client API is outside
-  it ("API keys" above): there the API Worker is the only gate, and it is never under Access. With an API host
+  it ("API keys" above): there the API Worker is the only gate, and no Access application protects it. With an API host
   ("Runtime topology") the application covers the app host only and the API host has none; on a stage with one host a
   bypass application takes the client API paths, which zone routes send to the API Worker, out of Access; a preview's
   API Worker answers on its own `workers.dev` URL, outside the preview's application.
@@ -2318,15 +2318,16 @@ prices each attempt, the ControlPlane counts and decides.
   _global_ router middleware that matches path prefixes, normalising case, duplicate slashes and percent-encoding: the
   API Worker's default-denies the client API (`/v1*`, `/openai/v1*`, `/backend-api/codex*`, the unprefixed
   `/chat/completions`, `/completions`, `/responses`), the app Worker's `/v9/management*` and the panel (and answers a
-  client API path 404 before authenticating anything); each provides `AccessPrincipal`; route layers that read it use `withAccess(...)` for typing.
+  client API path 404 before authenticating anything); each provides `AccessPrincipal`; route layers that read it use `withAccess(...)` (the app Worker) or `behindGate(...)`
+  (the API Worker) for typing.
   JWKS keys are cached per isolate and refreshed on unknown `kid` at most once per 30 s (no cross-request locks, which
   workerd forbids). `ACCESS_DEV_BYPASS` only applies when the request host is loopback (i.e. `alchemy dev`) and is refused (warning logged once
   per isolate) whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set.
 - **`@commissary/auth`** (`packages/auth`, #132): request-side authentication with two entry points,
   `authenticateClient(headers, url)` (the client API) and `authenticateManagement(headers, url, {needs, slug})` (the
   management API and the panel), each picking the Access gate (`auth/access-gate.ts`) or Commissary Cloud's
-  (`auth/hosted-gate.ts`); the API Worker calls the first, the app Worker the second. The Worker owns the routes and passes in what a path needs: the zone (`management/zones.ts`
-  `classifyPath`, which entry point), the role (`management/policy.ts`), the addressed org's slug and, for the cross-site
+  (`auth/hosted-gate.ts`); the API Worker calls the first, the app Worker the second. Each Worker owns its routes and passes in what a path needs: the app Worker the zone (`management/zones.ts`
+  `classifyPath`: public, management, or the client API it refuses), the role (`management/policy.ts`), the addressed org's slug and, for the cross-site
   checks, whether a path is a panel page and which body types its route takes (`src/access/csrf.ts`); `src/access/`
   keeps the router middleware. Auth reads `AuthConfig` (raw variables, parsed per request) and reaches state only through
   `AuthDirectory`, a narrow Effect service of the ControlPlane and Platform calls it makes (`auth/directory.ts`, which

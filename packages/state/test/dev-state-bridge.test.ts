@@ -55,6 +55,7 @@ describe("replayDevChain", () => {
       { kind: "member", key: "dummy" },
       { kind: "call", args: [] },
       { kind: "member", key: "add" },
+      // SAFETY: the argument is only recorded and replayed; the dummy part's method takes a string.
       { kind: "call", args: ["a" as never] },
     ];
 
@@ -133,6 +134,7 @@ describe("a bridged stub", () => {
   it("carries only getByName and RPC calls, never the members every object has", () => {
     const { bridge, sent } = recordingBridge();
     const namespace = bridgedControlPlane(bridge);
+    // SAFETY: the bridged stub is a Proxy that answers any member name; the test reads members it never declared.
     const stub = namespace.getByName("org") as unknown as Record<string, unknown>;
 
     expect(() => namespace.idFromName("org")).toThrow("not bridged");

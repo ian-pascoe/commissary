@@ -401,6 +401,7 @@ describe("the verified-key cache", () => {
 
   const context = requestContext(
     { ...env, ...registry.bindings, ACCESS_TEAM_DOMAIN: "team", ACCESS_AUD: "unused" },
+    // SAFETY: authenticating a key never calls the execution context's methods.
     {} as unknown as ExecutionContext,
   );
 

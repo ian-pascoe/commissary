@@ -1,4 +1,4 @@
-// Router middleware gating Commissary and management routes (mirrors AuthMiddleware in
+// Router middleware gating the panel and the management routes, and refusing the client API (mirrors AuthMiddleware in
 // internal/api/server_middleware.go: flat `{"error": "..."}` bodies).
 import { Effect, Predicate, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";

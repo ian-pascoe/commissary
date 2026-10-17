@@ -47,6 +47,7 @@ const accessEnv = {
   ACCESS_DEV_BYPASS: "",
 };
 
+// SAFETY: the gate and the routes under test never call the execution context's methods.
 const ctx = {} as unknown as ExecutionContext;
 
 const makeHandler = () => {

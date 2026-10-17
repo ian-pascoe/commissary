@@ -7,6 +7,7 @@ import * as Redacted from "effect/Redacted";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Settings } from "./settings.ts";
+import { CLIENT_API_PREFIXES } from "../packages/core/src/http/client-api.ts";
 
 /** Where `alchemy deploy` writes the service token credentials (gitignored, mode 0600). */
 export const SERVICE_TOKENS_FILE = ".alchemy/access-service-tokens.json";
@@ -98,18 +99,15 @@ const ApplicationSettings = Alchemy.Action(
  * The client API (`CLIENT_API_PREFIXES`, packages/core/src/http/client-api.ts), which the zone routes of a stage with one
  * host send to the API Worker: clients authenticate there with API keys the Worker checks itself (ADR 0022), so Access
  * lets every request through. Access matches a path and its sub-paths (`/v1` covers `/v1/models`), not other paths
- * that start with the same letters, so `/v1beta` and `/v1internal` are listed on their own.
+ * that start with the same letters, so `/v1beta` and `/v1internal`, which the `/v1*` zone route covers, are listed on
+ * their own (the order is the one the deployed applications were created with).
  */
-export const CLIENT_API_PATHS = [
+export const CLIENT_API_PATHS: readonly [string, ...string[]] = [
   "/v1",
   "/v1beta",
   "/v1internal",
-  "/openai/v1",
-  "/backend-api/codex",
-  "/chat/completions",
-  "/completions",
-  "/responses",
-] as const;
+  ...CLIENT_API_PREFIXES.filter((prefix) => prefix !== "/v1"),
+];
 
 /**
  * A bypass application for the client API of `host` (the domain of a stage with one host): a hostname-and-path

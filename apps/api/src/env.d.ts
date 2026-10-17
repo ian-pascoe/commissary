@@ -38,6 +38,8 @@ interface __ApiWorkerEnv {
   SESSION_STATE: DurableObjectNamespace<import("@commissary/state-worker").SessionState>;
   /** The Platform registry: one object per deployment (`platformOf`, `@commissary/state`). */
   PLATFORM: DurableObjectNamespace<import("@commissary/state-worker").Platform>;
+  // Not here on purpose: `DEV_STATE_BRIDGE`, bound under `alchemy dev` only (alchemy.run.ts) and typed by the dev entry
+  // alone (`DevBridgedEnv`, src/dev.ts), so no deployed code can name it; the tests bind the objects instead.
 }
 
 declare namespace Cloudflare {

@@ -95,7 +95,7 @@ echo "$status POST $org/api-keys"
 [ "$status" = 201 ] || { cat "$body" "$log"; exit 1; }
 key=$(sed -n 's/.*"key":"\([^"]*\)".*/\1/p' "$body")
 id=$(sed -n 's/.*"id":"\([^"]*\)".*/\1/p' "$body")
-[ -n "$key" ] && [ -n "$id" ] || { cat "$body"; echo "no key in the answer" >&2; exit 1; }
+[ -n "$key" ] && [ -n "$id" ] || { echo "no key or id in the answer" >&2; exit 1; }
 with_key() { curl -s -o /dev/null -w '%{http_code}' -H "authorization: Bearer $key" "$api_url/v1/models"; }
 status=$(with_key)
 echo "$status $api_url/v1/models with the key"
