@@ -1,4 +1,4 @@
--- Usage accounting: one row per upstream attempt (see src/models/usage/d1.ts).
+-- Usage accounting: one row per upstream attempt (see src/usage/d1.ts).
 -- Timestamps are epoch milliseconds. The `acct_*` columns hold the token accounting v2 breakdown
 -- (sdk/cliproxy/usage/accounting.go): input_total = uncached + cache_read + cache_write,
 -- output_total = non_reasoning + reasoning, total = input_total + output_total + unclassified.
