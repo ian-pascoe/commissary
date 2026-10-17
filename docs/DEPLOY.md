@@ -211,9 +211,10 @@ set. Replacing it signs everyone out.
    host. The Platform registry and each ControlPlane add their new tables and columns on first use.
 
 **Moving sign-in to the auth host** (the first deploy of a Commissary Cloud stage with the auth Worker): sign-in starts
-fresh. The people, sessions and linked accounts Better Auth kept in the usage database (`auth_*` tables, migration
-`migrations/usage/0008_hosted_auth.sql`) are not moved to `SignIn`, and nothing reads them any more: everyone signs in
-again, and their first sign-in creates their sign-in account anew, under the same verified email. Orgs, memberships, roles, API
+fresh. The people, sessions and linked accounts Better Auth kept in the usage database (the `auth_*` tables of
+`migrations/usage/0008_hosted_auth.sql`) are not moved to `SignIn`: `migrations/usage/0009_drop_hosted_auth.sql` drops
+them, so the usage database holds usage records only. Everyone signs in again, and their first sign-in creates their
+sign-in account anew, under the same verified email. Orgs, memberships, roles, API
 keys, management keys and the Platform registry live in the Durable Objects and stay as they were; a person who
 already signed up gets no second Personal org. Register the auth host's callbacks before the deploy, or sign-in fails
 until they are.

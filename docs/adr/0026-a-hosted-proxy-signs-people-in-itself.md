@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted, storage amended by ADR-0030
 ---
 
 # A hosted proxy signs people in itself, with Better Auth
