@@ -75,7 +75,7 @@ Worker's bindings carry `transferredFrom: "Commissary"`, which moved the namespa
 Under `alchemy dev` the app Worker runs its dev entry (`apps/app/src/dev.ts`: its handler plus the state Worker's
 classes) and binds the Durable Objects locally; `alchemy.run.ts` picks it on the dev flag only, so a deploy never does.
 The local dev registry reaches another Worker's Durable Object by its hex id (alchemy's and miniflare's registry proxy:
-`getActor(…, ctx.id.toString())`), which drops `ctx.id.name`, the name a ControlPlane learns its org from. The state
+`getActor(…, ctx.id.toString())`, [cloudflare/workerd#7286](https://github.com/cloudflare/workerd/issues/7286)), which drops `ctx.id.name`, the name a ControlPlane learns its org from. The state
 Worker still runs beside it (`pnpm smoke` waits for both ready lines). Deployed, Cloudflare sets `ctx.id.name` for an
 object reached by `getByName` (Durable Object ID docs), so the preview deploy is where the script-name binding is
 checked.
