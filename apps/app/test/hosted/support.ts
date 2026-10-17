@@ -1,150 +1,90 @@
-// Helpers for Commissary Cloud tests (vitest project `hosted`, vitest.config.ts): requests to `https://commissary.test`, a
-// fake GitHub and Turnstile behind the global `fetch`, and a sign-in that walks Better Auth's real GitHub flow.
-import { exports } from "cloudflare:workers";
-import { SITEVERIFY_URL } from "../../src/hosted/turnstile.ts";
+// Helpers for Commissary Cloud tests (vitest project `hosted`, vitest.config.ts): requests to the app host
+// `https://commissary.test` and sessions of the fake auth Worker (test/worker.ts `FakeSignIn`). A sign-in here signs the
+// person up the way the auth Worker does before their session starts (`ensureSignedUp`, `@commissary/auth`); Better
+// Auth's own flow is the auth Worker's, tested there (apps/auth/test/).
+import { env, exports } from "cloudflare:workers";
+import { Effect } from "effect";
+import { AuthDirectory, ensureSignedUp } from "@commissary/auth";
+import { stateAuthDirectory } from "@commissary/state";
 import { resetUsageDb } from "@commissary/models/testing";
+import { FAKE_ACCOUNT_PREFIX, FAKE_SESSION_COOKIE, FAKE_SESSION_PREFIX } from "../worker.ts";
 
 export const ORIGIN = "https://commissary.test";
 
-/** The Turnstile token the fake siteverify accepts; any other token fails. */
-export const GOOD_TURNSTILE = "turnstile-ok";
+/** The auth host the app Worker names (`AUTH_ORIGIN`, vitest.config.ts). */
+export const AUTH_ORIGIN = "https://auth.commissary.test";
 
-/** A token the fake siteverify accepts but reports as issued on another site's widget. */
-export const OTHER_SITE_TURNSTILE = "turnstile-other-site";
-
-/** Who the fake GitHub signs in next, and whether it verified their email. */
-export interface GitHubPerson {
+/** Who signs in. */
+export interface Person {
   readonly email: string;
-  readonly verified?: boolean;
-  /** GitHub's numeric user id; derived from the email by default. */
-  readonly id?: number;
 }
-
-interface FakeUpstreams {
-  person: GitHubPerson;
-  /** siteverify answers 500 while set. */
-  turnstileDown: boolean;
-  /** Bodies siteverify received. */
-  siteverify: Array<Record<string, unknown>>;
-  /** Calls the fake answered with 599 (nothing should reach them). */
-  unexpected: Array<string>;
-}
-
-export const upstreams: FakeUpstreams = {
-  person: { email: "ada@example.com" },
-  turnstileDown: false,
-  siteverify: [],
-  unexpected: [],
-};
-
-const idOf = (email: string): number =>
-  Array.from(email, (char) => char.charCodeAt(0)).reduce(
-    (hash, code) => (hash * 31 + code) % 1_000_000_007,
-    7,
-  );
 
 const realFetch = globalThis.fetch;
 
-/** Installs the fake upstreams (call in `beforeAll`) and empties the D1 tables; {@link restoreFetch} undoes it. */
+/** Empties the usage database and the fake's sessions (call in `beforeAll`); {@link restoreFetch} undoes stubs. */
 export const installFakes = async (): Promise<void> => {
   await resetUsageDb();
-  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    const request = input instanceof Request ? input : new Request(input, init);
-    const url = request.url;
-
-    if (url === SITEVERIFY_URL) {
-      // The Worker sends siteverify a JSON object (src/hosted/turnstile.ts).
-      const body = await request.json<Record<string, unknown>>();
-      upstreams.siteverify.push(body);
-
-      if (upstreams.turnstileDown) return new Response("down", { status: 500 });
-
-      if (body["response"] === OTHER_SITE_TURNSTILE)
-        return Response.json({ success: true, hostname: "elsewhere.example" });
-
-      return Response.json({
-        success: body["response"] === GOOD_TURNSTILE,
-        hostname: new URL(ORIGIN).hostname,
-      });
-    }
-
-    if (url.startsWith("https://github.com/login/oauth/access_token"))
-      return Response.json({ access_token: "gho_test", token_type: "bearer", scope: "user:email" });
-
-    const { email, verified = true, id = idOf(email) } = upstreams.person;
-
-    if (url === "https://api.github.com/user")
-      return Response.json({ id, login: email.split("@")[0], name: email, email, avatar_url: "" });
-
-    if (url === "https://api.github.com/user/emails")
-      return Response.json([{ email, primary: true, verified, visibility: "public" }]);
-
-    upstreams.unexpected.push(url);
-
-    return new Response(`unexpected ${url}`, { status: 599 });
-  };
-
-  // Loads Better Auth (imported lazily by the Worker) here, under the hook timeout, rather than in the first test.
-  await call("/api/auth/get-session");
+  await clearPeople();
 };
 
+/** Puts back the global `fetch` a test file replaced. */
 export const restoreFetch = (): void => {
   globalThis.fetch = realFetch;
 };
 
-/** Clears the D1 auth tables between tests (people and sessions). */
+/** Ends every session and forgets every sign-in account of the fake auth Worker. */
 export const clearPeople = async (): Promise<void> => {
-  const db = await resetUsageDb();
+  for (const prefix of [FAKE_SESSION_PREFIX, FAKE_ACCOUNT_PREFIX]) {
+    const { keys } = await env.CACHE.list({ prefix });
 
-  for (const table of ["auth_session", "auth_account", "auth_verification", "auth_user"])
-    await db.prepare(`DELETE FROM ${table}`).run();
+    for (const { name } of keys) await env.CACHE.delete(name);
+  }
 };
 
-/** A request to the hosted Worker; redirects are returned, not followed. */
+/** A request to the app host; redirects are returned, not followed. */
 export const call = (path: string, init?: RequestInit): Promise<Response> =>
   exports.default.fetch(new Request(`${ORIGIN}${path}`, { redirect: "manual", ...init }));
 
-/** The `name=value` pairs of a response's cookies, joined for a `Cookie` header. */
-export const cookiesOf = (response: Response): string =>
-  response.headers
-    .getSetCookie()
-    .map((cookie) => cookie.split(";")[0] ?? "")
-    .filter((pair) => pair !== "" && !pair.endsWith("="))
-    .join("; ");
+/**
+ * Signs `person` in as the auth Worker does: signs them up (a Personal org unless they were invited) and starts a
+ * session; the session cookie for later requests, empty when the sign-in was refused (a suspended person).
+ */
+export const signIn = async (person: Person): Promise<string> => {
+  const email = person.email.toLowerCase();
 
-/** Starts a GitHub sign-in the way the sign-in page does: same origin, JSON, the Turnstile token in its header. */
-export const startSignIn = (turnstile: string | null = GOOD_TURNSTILE): Promise<Response> =>
-  call("/api/auth/sign-in/social", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      origin: ORIGIN,
-      "sec-fetch-site": "same-origin",
-      ...(turnstile === null ? {} : { "x-captcha-response": turnstile }),
-    },
-    body: JSON.stringify({ provider: "github", callbackURL: "/" }),
-  });
+  const signedUp = await Effect.runPromise(
+    ensureSignedUp(email).pipe(
+      Effect.as(true),
+      Effect.catchTag("ForbiddenError", () => Effect.succeed(false)),
+      Effect.provideService(AuthDirectory, stateAuthDirectory(env)),
+    ),
+  );
 
-/** GitHub sending the browser back: the callback with the state of `start` and its cookies. */
-export const finishSignIn = async (start: Response): Promise<Response> => {
-  // Better Auth answers a started social sign-in with `{url, redirect}`.
-  const { url } = await start.clone().json<{ url: string }>();
-  const state = new URL(url).searchParams.get("state") ?? "";
+  if (!signedUp) return "";
+  const token = crypto.randomUUID();
 
-  return call(`/api/auth/callback/github?code=code-1&state=${encodeURIComponent(state)}`, {
-    headers: { cookie: cookiesOf(start), "sec-fetch-site": "cross-site" },
-    redirect: "manual",
-  });
+  await env.CACHE.put(`${FAKE_ACCOUNT_PREFIX}${email}`, "1");
+  await env.CACHE.put(
+    `${FAKE_SESSION_PREFIX}${token}`,
+    JSON.stringify({ userId: `user-${email}`, email }),
+  );
+
+  return `${FAKE_SESSION_COOKIE}=${token}`;
 };
 
-/** Signs `person` in through GitHub; the session cookie for later requests (empty when the sign-in was refused). */
-export const signIn = async (person: GitHubPerson): Promise<string> => {
-  upstreams.person = person;
-  const start = await startSignIn();
+/** What the fake auth Worker keeps of `email`: its sign-in account and sessions. */
+export const signInRowsOf = async (email: string) => {
+  const address = email.toLowerCase();
+  const { keys } = await env.CACHE.list({ prefix: FAKE_SESSION_PREFIX });
+  let sessions = 0;
 
-  if (start.status !== 200) throw new Error(`sign-in start answered ${start.status}`);
+  for (const { name } of keys)
+    if ((await env.CACHE.get<{ email: string }>(name, "json"))?.email === address) sessions += 1;
 
-  return cookiesOf(await finishSignIn(start));
+  return {
+    accounts: (await env.CACHE.get(`${FAKE_ACCOUNT_PREFIX}${address}`)) === null ? 0 : 1,
+    sessions,
+  };
 };
 
 /** Headers of a same-origin panel request with `cookie`. */

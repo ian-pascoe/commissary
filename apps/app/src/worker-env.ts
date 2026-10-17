@@ -6,27 +6,39 @@
  * through (`AuthDirectory`, `SignInSessions`).
  */
 import { Context } from "effect";
-import { type AuthBindings, AuthConfig, AuthDirectory, SignInSessions } from "@commissary/auth";
-import type { SignInBindings } from "./hosted/auth.ts";
-import { signInSessions } from "./hosted/session.ts";
+import {
+  type AuthBindings,
+  AuthConfig,
+  AuthDirectory,
+  SignInSessions,
+  type SignInService,
+} from "@commissary/auth";
+import { signInSessions } from "./hosted/sign-in.ts";
 import { type ModelsBindings, ModelsEnv } from "@commissary/models/api";
 import { WorkerExecutionContext, CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { stateAuthDirectory, type StateBindings, StateEnv } from "@commissary/state";
 
 /**
- * What the Worker's own code reads (the panel's assets, its hosts, Better Auth's sign-in, the owned-org limit): code
- * that stays in an app when the packages move.
+ * What the Worker's own code reads (the panel's assets, its hosts, the auth Worker, the owned-org limit): code that
+ * stays in an app when the packages move.
  */
-export interface AppBindings extends SignInBindings {
+export interface AppBindings {
   /** Static assets (management panel, `management/web-panel.ts`). */
   readonly ASSETS: Fetcher;
   /** The host of the client API, when it is not the app host (`http/hosts.ts`, ADR 0028, ADR 0030). */
   readonly API_DOMAIN?: string;
   /** Hosted: how many orgs a person may own unless a platform admin raised their limit (`hosted/owned-orgs.ts`). */
   readonly OWNED_ORG_LIMIT?: string;
-  /** Hosted: Cloudflare Turnstile widget keys guarding sign-in and sign-up (`hosted/routes.ts`). */
-  readonly TURNSTILE_SITE_KEY?: string;
-  readonly TURNSTILE_SECRET_KEY?: string;
+  /**
+   * Hosted: the auth Worker (ADR 0030), which holds Better Auth: who a session belongs to, ending sessions, deleting a
+   * sign-in account (`hosted/sign-in.ts`). Unbound on a self-hosted Commissary.
+   */
+  readonly AUTH?: SignInService;
+  /**
+   * Hosted: the auth host's origin (`https://auth.<app host>`), which the sign-in page calls (`management/web-panel.ts`)
+   * and the orgs' identity providers send people back to (`management/sso-routes.ts`).
+   */
+  readonly AUTH_ORIGIN?: string;
 }
 
 /**
@@ -49,7 +61,8 @@ export type EnvServices =
 
 /**
  * Each view of `env`, as its service, and auth's ports over it: the directory over the Durable Object stubs
- * (`@commissary/state`'s `stateAuthDirectory`) and Better Auth's sessions (`hosted/session.ts`).
+ * (`@commissary/state`'s `stateAuthDirectory`) and Better Auth's sessions over the auth Worker's RPC
+ * (`hosted/sign-in.ts`).
  */
 export const envContext = (env: WorkerBindings): Context.Context<EnvServices> => {
   const directory = stateAuthDirectory(env);
@@ -59,7 +72,7 @@ export const envContext = (env: WorkerBindings): Context.Context<EnvServices> =>
     Context.add(ModelsEnv, env),
     Context.add(AppEnv, env),
     Context.add(AuthDirectory, directory),
-    Context.add(SignInSessions, signInSessions(env, directory)),
+    Context.add(SignInSessions, signInSessions(env)),
   );
 };
 

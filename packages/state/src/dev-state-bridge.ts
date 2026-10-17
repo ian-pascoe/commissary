@@ -1,16 +1,17 @@
 /**
  * Dev only (`alchemy dev`); no deployed bundle imports this module (`@commissary/state/dev-state-bridge`, not the
- * package's root). It lets the API Worker reach the Durable Objects the app Worker hosts locally under `alchemy dev`.
+ * package's root). It lets the app, API and auth Workers reach the state Worker's Durable Objects under `alchemy dev`.
  *
  * There every Worker runs in its own workerd, and a cross-script Durable Object binding goes through miniflare's dev
  * registry, which reaches the object by its hex id and drops `ctx.id.name`
  * ([cloudflare/workerd#7286](https://github.com/cloudflare/workerd/issues/7286)), the name a ControlPlane learns its org
- * from. So under `alchemy dev` the app Worker hosts the objects itself (apps/app/src/dev.ts) and also exports
- * {@link DevStateBridge}, and the API Worker's dev entry (apps/api/src/dev.ts) binds that entrypoint as a service and
- * replaces its state namespaces with {@link devBridgedNamespace}s. Each stub of those records the call chain the caller
- * writes (`stub.models().pick(…)`) and sends it over the service binding with the object's name, as plain arguments,
- * and {@link replayDevChain} replays it on the app Worker's own stub. Both Workers then share one copy of each object.
- * Deployed Workers bind the state Worker's namespaces by script name (alchemy.run.ts) and never use this.
+ * from. So under `alchemy dev` the state Worker's dev entry (apps/state/src/dev.ts) also exports
+ * {@link DevStateBridge}, and the other Workers' dev entries bind that entrypoint as a service and replace their state
+ * namespaces with {@link devBridgedNamespace}s ({@link devBridgedEnv}). Each stub of those records the call chain the
+ * caller writes (`stub.models().pick(…)`) and sends it over the service binding with the object's name, as plain
+ * arguments, and {@link replayDevChain} replays it on the state Worker's own stub, where the name survives. Every Worker
+ * then shares the state Worker's one copy of each object. Deployed Workers bind the state Worker's namespaces by script
+ * name (alchemy.run.ts) and never use this.
  *
  * Limits, acceptable in dev: a call is sent at the end of the turn it was made in, as one chain with the calls chained
  * onto it in that turn (a member read is sent only when awaited); a call chained onto one later is sent again with
@@ -92,7 +93,7 @@ export const replayDevChain = async (
   return await Promise.resolve(value);
 };
 
-/** The app Worker's dev entrypoint the API Worker's dev entry binds (`alchemy dev` only). */
+/** The state Worker's dev entrypoint the other Workers' dev entries bind (`alchemy dev` only). */
 export class DevStateBridge extends WorkerEntrypoint<StateBindings> {
   async call(
     binding: DevStateBinding,
@@ -209,7 +210,7 @@ export const devBridgedNamespace = <T extends Rpc.DurableObjectBranded | undefin
   };
 };
 
-/** The binding of the app Worker's {@link DevStateBridge} in the API Worker under `alchemy dev`. */
+/** The binding of the state Worker's {@link DevStateBridge} in the other Workers under `alchemy dev`. */
 export interface DevStateBridgeBindings {
   readonly DEV_STATE_BRIDGE: DevStateBridgeRpc;
 }
@@ -217,3 +218,34 @@ export interface DevStateBridgeBindings {
 /** The `env` of a Worker that reaches the state over the bridge: its own (`E`) without the state namespaces. */
 export type DevBridgedEnv<E extends StateBindings> = Omit<E, DevStateBinding> &
   DevStateBridgeBindings;
+
+const bridgedEnvs = new WeakMap<object, object>();
+
+/**
+ * `env` with the state namespaces over its bridge; the same copy for the same `env`, so caches keyed by it (the code
+ * update retry's, `code-update-retry.ts`) keep working.
+ */
+export const devBridgedEnv = <E extends StateBindings>(env: DevBridgedEnv<E>): E => {
+  const known = bridgedEnvs.get(env);
+
+  if (known !== undefined) {
+    // SAFETY: only this function stores into `bridgedEnvs`, the copy it made of this `env`, an `E`.
+    return known as E;
+  }
+
+  const bridge = env.DEV_STATE_BRIDGE;
+
+  const bridged: Omit<E, DevStateBinding> & StateBindings = {
+    ...env,
+    CONTROL_PLANE: devBridgedNamespace(bridge, "CONTROL_PLANE"),
+    PLATFORM: devBridgedNamespace(bridge, "PLATFORM"),
+    SESSION_STATE: devBridgedNamespace(bridge, "SESSION_STATE"),
+  };
+
+  // SAFETY: `E` is `env` without the bridge and with the three state namespaces, which `bridged` adds back over it.
+  const copy = bridged as E;
+
+  bridgedEnvs.set(env, copy);
+
+  return copy;
+};

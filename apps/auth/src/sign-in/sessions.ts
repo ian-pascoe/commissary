@@ -1,22 +1,22 @@
 /**
- * The person Commissary Cloud's request comes from (ADR 0026): Better Auth's session cookie, read on every request, so a
- * session ended by sign-out or suspension stops working at once. The gate (`@commissary/auth`) asks through its
- * `SignInSessions` port ({@link signInSessions}); Better Auth itself runs here, and reaches the orgs and the Platform
- * registry through `AuthDirectory`. New in the Workers port.
+ * Better Auth's sessions on Commissary Cloud (ADR 0026, ADR 0030): the instance the auth Worker runs, with the hooks
+ * that reach the orgs and the Platform registry through `AuthDirectory`, and what the auth Worker's RPC
+ * (`SignInService`, `@commissary/auth`) does with the `SignIn` database: who a session belongs to, ending sessions,
+ * deleting a sign-in account. Only this Worker binds that database (#130). New in the Workers port.
  */
 import { Effect } from "effect";
 import {
   AuthDirectory,
   type AuthDirectoryService,
+  ensureSignedUp,
   type SignedInPerson,
-  SignInSessions,
   type SsoAdmission,
+  SUSPENDED,
   syncOrgIndex,
 } from "@commissary/auth";
 import { betterAuthProvider, emailDomain, orgOfProviderId } from "@commissary/auth/sso";
-import { GLOBAL_ORG } from "@commissary/core";
 import {
-  AUTH_TABLES,
+  appOriginOf,
   hostedAuth,
   type HostedAuth,
   type SignInBindings,
@@ -46,7 +46,8 @@ const SSO_REFUSALS: Readonly<Record<Exclude<SsoAdmission, { ok: true }>["error"]
  * verified that the Platform registry also gives it (one org per domain), `undefined` without one.
  */
 const ssoProvider =
-  (directory: AuthDirectoryService, origin: string) => async (providerId: string) => {
+  (directory: AuthDirectoryService, origin: string, appOrigin: string) =>
+  async (providerId: string) => {
     const org = orgOfProviderId(providerId);
 
     if (org === undefined) return undefined;
@@ -62,7 +63,7 @@ const ssoProvider =
       .filter((domain) => domain.verifiedAt !== undefined && registered.has(domain.domain))
       .map((domain) => domain.domain);
 
-    return betterAuthProvider(origin, org, state.provider.settings, verified);
+    return betterAuthProvider(origin, org, state.provider.settings, verified, `${appOrigin}/`);
   };
 
 /**
@@ -94,8 +95,26 @@ const admitThroughSso =
   };
 
 /**
- * The deployment's Better Auth instance: a suspended person cannot start a session; the orgs' identity providers sign
- * people in, and GitHub or Google cannot for a domain that requires single sign-on.
+ * Signs the person up before their session starts (#132: once, here, rather than on their requests to the app Worker):
+ * `false` for a suspended person, whose session must not start; any other failure fails the sign-in, which they retry.
+ */
+const signUp =
+  (directory: AuthDirectoryService) =>
+  async (email: string): Promise<boolean> =>
+    await Effect.runPromise(
+      ensureSignedUp(email).pipe(
+        Effect.as(true),
+        Effect.catchTag("ForbiddenError", (error) =>
+          error.message === SUSPENDED ? Effect.succeed(false) : Effect.fail(error),
+        ),
+        Effect.provideService(AuthDirectory, directory),
+      ),
+    );
+
+/**
+ * The deployment's Better Auth instance at `origin` (the auth host): a sign-in signs the person up and a suspended
+ * person cannot start a session; the orgs' identity providers sign people in, and GitHub or Google cannot for a domain
+ * that requires single sign-on.
  */
 export const signedInAuth = (
   env: SignInBindings,
@@ -103,9 +122,8 @@ export const signedInAuth = (
   origin: string,
 ): Promise<HostedAuth> =>
   hostedAuth(env, origin, {
-    maySignIn: async (email) =>
-      (await Effect.runPromise(directory.standing(GLOBAL_ORG, email))).person !== "suspended",
-    ssoProvider: ssoProvider(directory, origin),
+    signUp: signUp(directory),
+    ssoProvider: ssoProvider(directory, origin, appOriginOf(env) ?? ""),
     admitThroughSso: admitThroughSso(directory),
     ssoRequired: async (email) => {
       const domain = emailDomain(email);
@@ -119,39 +137,30 @@ export const signedInAuth = (
 
 /**
  * Ends every session of the people with these emails (a suspension): their next request is not signed in. Their
- * accounts stay: nothing is deleted.
+ * accounts stay: nothing is deleted. Answers how many sessions it ended; a D1 failure rejects.
  */
-export const endSessions = (
-  env: Pick<SignInBindings, "USAGE">,
+export const endSessions = async (
+  env: Pick<SignInBindings, "SIGN_IN">,
   emails: ReadonlyArray<string>,
-): Effect.Effect<number> => {
+): Promise<number> => {
   const unique = [...new Set(emails.map((email) => email.toLowerCase()))];
+  let ended = 0;
 
-  if (unique.length === 0) return Effect.succeed(0);
+  // D1 binds at most 100 parameters per statement.
+  for (let start = 0; start < unique.length; start += 90) {
+    const batch = unique.slice(start, start + 90);
 
-  return Effect.tryPromise(async () => {
-    let ended = 0;
+    const result = await env.SIGN_IN.prepare(
+      `DELETE FROM "session" WHERE "userId" IN
+         (SELECT id FROM "user" WHERE lower(email) IN (${batch.map(() => "?").join(", ")}))`,
+    )
+      .bind(...batch)
+      .run();
 
-    // D1 binds at most 100 parameters per statement.
-    for (let start = 0; start < unique.length; start += 90) {
-      const batch = unique.slice(start, start + 90);
+    ended += result.meta.changes;
+  }
 
-      const result = await env.USAGE.prepare(
-        `DELETE FROM ${AUTH_TABLES.session} WHERE "userId" IN
-           (SELECT id FROM ${AUTH_TABLES.user} WHERE lower(email) IN (${batch.map(() => "?").join(", ")}))`,
-      )
-        .bind(...batch)
-        .run();
-
-      ended += result.meta.changes;
-    }
-
-    return ended;
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.logError(`sessions not ended: ${error.message}`).pipe(Effect.as(0)),
-    ),
-  );
+  return ended;
 };
 
 /**
@@ -159,13 +168,13 @@ export const endSessions = (
  * sign in again, through the org's identity provider. Answers how many sessions it ended; a D1 failure rejects.
  */
 export const endDomainSessions = async (
-  env: Pick<SignInBindings, "USAGE">,
+  env: Pick<SignInBindings, "SIGN_IN">,
   domain: string,
 ): Promise<number> => {
   // A normalized domain (`@commissary/auth/sso` `normalizeDomain`) holds only letters, digits, `-` and `.`: nothing `LIKE` treats specially.
-  const result = await env.USAGE.prepare(
-    `DELETE FROM ${AUTH_TABLES.session} WHERE "userId" IN
-       (SELECT id FROM ${AUTH_TABLES.user} WHERE lower(email) LIKE ?)`,
+  const result = await env.SIGN_IN.prepare(
+    `DELETE FROM "session" WHERE "userId" IN
+       (SELECT id FROM "user" WHERE lower(email) LIKE ?)`,
   )
     .bind(`%@${domain.toLowerCase()}`)
     .run();
@@ -179,17 +188,17 @@ export const endDomainSessions = async (
  * (0 once it is gone, so a repeated deletion succeeds); a D1 failure rejects.
  */
 export const deleteSignInAccount = async (
-  env: Pick<SignInBindings, "USAGE">,
+  env: Pick<SignInBindings, "SIGN_IN">,
   email: string,
 ): Promise<number> => {
   const address = email.toLowerCase();
-  const ofUser = `"userId" IN (SELECT id FROM ${AUTH_TABLES.user} WHERE lower(email) = ?)`;
+  const ofUser = `"userId" IN (SELECT id FROM "user" WHERE lower(email) = ?)`;
 
   // One batch is one transaction: the sessions and accounts go with the user, whether or not D1 enforces the cascade.
-  const [, , users] = await env.USAGE.batch([
-    env.USAGE.prepare(`DELETE FROM ${AUTH_TABLES.session} WHERE ${ofUser}`).bind(address),
-    env.USAGE.prepare(`DELETE FROM ${AUTH_TABLES.account} WHERE ${ofUser}`).bind(address),
-    env.USAGE.prepare(`DELETE FROM ${AUTH_TABLES.user} WHERE lower(email) = ?`).bind(address),
+  const [, , users] = await env.SIGN_IN.batch([
+    env.SIGN_IN.prepare(`DELETE FROM "session" WHERE ${ofUser}`).bind(address),
+    env.SIGN_IN.prepare(`DELETE FROM "account" WHERE ${ofUser}`).bind(address),
+    env.SIGN_IN.prepare(`DELETE FROM "user" WHERE lower(email) = ?`).bind(address),
   ]);
 
   return users?.meta.changes ?? 0;
@@ -197,38 +206,19 @@ export const deleteSignInAccount = async (
 
 /**
  * The person whose live session `cookie` names; `undefined` without one, for an expired or ended session, and for an
- * email the provider has not verified (Better Auth never creates those, `auth.ts`).
+ * email the provider has not verified (Better Auth never creates those, `auth.ts`). `origin` is the auth host's.
  */
-const signedInPerson = (
+export const signedInPerson = async (
   env: SignInBindings,
   directory: AuthDirectoryService,
   origin: string,
   cookie: string,
-): Effect.Effect<SignedInPerson | undefined> => {
-  if (cookie === "") return Effect.succeed(undefined);
+): Promise<SignedInPerson | undefined> => {
+  if (cookie === "") return undefined;
+  const auth = await signedInAuth(env, directory, origin);
+  const session = await auth.api.getSession({ headers: new Headers({ cookie }) });
 
-  return Effect.tryPromise(async () => {
-    const auth = await signedInAuth(env, directory, origin);
+  if (session === null || !session.user.emailVerified) return undefined;
 
-    const session = await auth.api.getSession({
-      headers: new Headers({ cookie }),
-    });
-
-    if (session === null || !session.user.emailVerified) return undefined;
-
-    return { userId: session.user.id, email: session.user.email.toLowerCase() };
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.logWarning(`session lookup failed: ${error.message}`).pipe(Effect.as(undefined)),
-    ),
-  );
+  return { userId: session.user.id, email: session.user.email.toLowerCase() };
 };
-
-/** The gate's port to Better Auth's sessions (`SignInSessions`), over the invocation's bindings and directory. */
-export const signInSessions = (
-  env: SignInBindings,
-  directory: AuthDirectoryService,
-): SignInSessions["Service"] =>
-  SignInSessions.of({
-    person: (cookie, origin) => signedInPerson(env, directory, origin, cookie),
-  });

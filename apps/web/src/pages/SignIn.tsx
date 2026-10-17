@@ -1,10 +1,12 @@
 // The sign-in page of Commissary Cloud (/sign-in, ADR 0026). It is the one page that opens before anyone is signed in, so
-// it never calls the management API: it asks `/api/sign-in-options` which providers are enabled and for the Turnstile
-// site key, shows the bot check, and sends the chosen provider to Better Auth, which answers the address to go to.
+// it never calls the management API: it asks the auth host (ADR 0030, `lib/auth-origin.ts`) at `/api/sign-in-options`
+// which providers are enabled and for the Turnstile site key, shows the bot check, and sends the chosen provider to
+// Better Auth there, which answers the address to go to and returns to this origin.
 import { Option, Schema } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AUTH_ROUTES, SIGN_IN_OPTIONS_PATH, SignInOptions } from "@commissary/contract/sign-in";
 import { kit, Problem } from "../components/Kit.tsx";
+import { onAuthHost } from "../auth-origin.ts";
 import {
   needsWorkEmail,
   providerLabel,
@@ -133,7 +135,10 @@ const useOptions = (): Options => {
   useEffect(() => {
     const controller = new AbortController();
 
-    fetch(SIGN_IN_OPTIONS_PATH, { credentials: "include", signal: controller.signal })
+    fetch(onAuthHost(SIGN_IN_OPTIONS_PATH), {
+      credentials: "include",
+      signal: controller.signal,
+    })
       .then(async (response) => {
         if (!response.ok) return { kind: "failed" as const };
         const options = decodeOptions(await response.json());
@@ -171,11 +176,12 @@ export const SignInPage = () => {
     setProblem(undefined);
 
     try {
-      const response = await fetch(AUTH_ROUTES.signInSocial, {
+      const response = await fetch(onAuthHost(AUTH_ROUTES.signInSocial), {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json", "x-captcha-response": check.token },
-        body: JSON.stringify({ provider, callbackURL: next }),
+        // Absolute: the auth host would read a bare path as one of its own.
+        body: JSON.stringify({ provider, callbackURL: `${window.location.origin}${next}` }),
       });
 
       const started = response.ok ? decodeStart(await response.json()) : undefined;

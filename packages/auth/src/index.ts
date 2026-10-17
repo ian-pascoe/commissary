@@ -1,7 +1,7 @@
 /**
  * `@commissary/auth`: request-side authentication (#132). The principal and its identity, roles, Cloudflare Access JWT
  * verification, the cross-site checks, API keys and management keys with their per-isolate caches, admission and the
- * membership index, the viewer (who asks, for an area's ownership rules), Commissary Cloud's standing and rate limit,
+ * membership index, the viewer (who asks, for an area's ownership rules), Commissary Cloud's standing and rate limit, the auth Worker's RPC interface (`SignInService`),
  * the two gates behind the two entry points (`authenticateClient`, `authenticateManagement`) and what a Worker's gate
  * answers around them (`refusal.ts`). It reads its settings from `AuthConfig` and its state through `AuthDirectory`,
  * which the Worker provides; it imports `@commissary/core`, `@commissary/contract`, `effect` and `jose` only. Single sign-on's pure parts are `@commissary/auth/sso`; the
@@ -44,6 +44,8 @@ export * from "./rate-limit.ts";
 export * from "./refusal.ts";
 
 export * from "./roles.ts";
+
+export type { SignInService } from "./sign-in-service.ts";
 
 export * from "./standing.ts";
 

@@ -1,35 +1,50 @@
-// Per-org single sign-on on Commissary Cloud (issue #76; src/sso/, src/management/sso-routes.ts, src/hosted/): an org
-// owner proves an email domain with a DNS TXT record and sets one identity provider; people of that domain sign in
-// through it (OIDC or SAML) and become members; GitHub and Google are refused for a domain that requires single
-// sign-on. The DNS resolver and the identity providers are fakes behind the global `fetch`.
+// Per-org single sign-on on Commissary Cloud (issue #76; src/sso/, src/management/sso-routes.ts): an org owner proves an
+// email domain with a DNS TXT record and sets one identity provider, which signs people in on the auth host (ADR 0030;
+// the sign-in itself is the auth Worker's, apps/auth/test/sso.test.ts); requiring single sign-on for a domain ends the
+// sessions of its people. The DNS resolver and the identity provider's discovery are fakes behind the global `fetch`.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { resetStandingCaches } from "@commissary/auth";
 import { DOH_URL } from "../../src/sso/dns.ts";
 import {
-  OIDC_CLIENT_ID,
-  OIDC_CLIENT_SECRET,
-  OIDC_ISSUER,
-  oidcIssuer,
-  oidcState,
-  SAML_CERTIFICATE,
-  SAML_ENTITY_ID,
-  SAML_SSO_URL,
-  samlAnswer,
-} from "./identity-providers.ts";
-import {
+  AUTH_ORIGIN,
   call,
   clearPeople,
-  cookiesOf,
-  finishSignIn,
-  GOOD_TURNSTILE,
   installFakes,
-  ORIGIN,
   panelHeaders,
   restoreFetch,
   signIn,
-  startSignIn,
-  upstreams,
 } from "./support.ts";
+
+/** The fake OIDC issuer: its discovery document and one signing key. */
+const OIDC_ISSUER = "https://login.acme-idp.com";
+
+const OIDC_CLIENT_ID = "proxy-client";
+
+const OIDC_CLIENT_SECRET = "proxy-client-secret";
+
+/** The issuer's answer to `request`, `undefined` for any other host. */
+const oidcIssuer = (request: Request): Response | undefined => {
+  const url = new URL(request.url);
+
+  if (url.origin !== OIDC_ISSUER) return undefined;
+
+  if (url.pathname === "/.well-known/openid-configuration")
+    return Response.json({
+      issuer: OIDC_ISSUER,
+      authorization_endpoint: `${OIDC_ISSUER}/authorize`,
+      token_endpoint: `${OIDC_ISSUER}/token`,
+      jwks_uri: `${OIDC_ISSUER}/jwks`,
+      response_types_supported: ["code"],
+      subject_types_supported: ["public"],
+      id_token_signing_alg_values_supported: ["RS256"],
+      token_endpoint_auth_methods_supported: ["client_secret_basic"],
+    });
+
+  if (url.pathname === "/jwks")
+    return Response.json({ keys: [{ kty: "RSA", kid: "key-1", alg: "RS256", use: "sig" }] });
+
+  return new Response("not found", { status: 404 });
+};
 
 /** TXT records the fake resolver answers, by name. */
 const txt = new Map<string, Array<string>>();
@@ -49,41 +64,16 @@ const resolver = (request: Request): Response | undefined => {
   });
 };
 
-/** The person Google signs in next. */
-let googleEmail = "";
-
-const base64url = (json: string) =>
-  btoa(json).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
-
-/** Google's token endpoint: an ID token for {@link googleEmail} (Better Auth reads it without checking a signature). */
-const google = (request: Request): Response | undefined => {
-  if (request.url !== "https://oauth2.googleapis.com/token") return undefined;
-
-  const claims = {
-    iss: "https://accounts.google.com",
-    sub: `google-${googleEmail}`,
-    email: googleEmail,
-    email_verified: true,
-    name: googleEmail,
-  };
-
-  return Response.json({
-    access_token: "ya29.test",
-    token_type: "Bearer",
-    expires_in: 3600,
-    id_token: `${base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }))}.${base64url(JSON.stringify(claims))}.signature`,
-  });
-};
-
 beforeAll(async () => {
   await installFakes();
-  const fakes = globalThis.fetch;
 
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(input, init);
 
     return (
-      resolver(request) ?? google(request) ?? (await oidcIssuer(request)) ?? (await fakes(request))
+      resolver(request) ??
+      oidcIssuer(request) ??
+      new Response(`unexpected ${request.url}`, { status: 599 })
     );
   };
 });
@@ -93,8 +83,6 @@ afterAll(restoreFetch);
 beforeEach(async () => {
   await clearPeople();
   resetStandingCaches();
-  upstreams.unexpected = [];
-  oidcState.tokenRequests = [];
 });
 
 /** A JSON management request of the signed-in `cookie`. */
@@ -171,82 +159,8 @@ const oidcOrg = async (slug: string, domain: string): Promise<string> => {
   return owner;
 };
 
-/** Starts a sign-in with a work email the way the sign-in page does. */
-const startSso = (email: string) =>
-  call("/api/auth/sign-in/sso", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      origin: ORIGIN,
-      "sec-fetch-site": "same-origin",
-      "x-captcha-response": GOOD_TURNSTILE,
-    },
-    body: JSON.stringify({ email }),
-  });
-
-/** Signs `email` in through Google; the callback's response. */
-const googleSignIn = async (email: string): Promise<Response> => {
-  const start = await call("/api/auth/sign-in/social", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      origin: ORIGIN,
-      "sec-fetch-site": "same-origin",
-      "x-captcha-response": GOOD_TURNSTILE,
-    },
-    body: JSON.stringify({ provider: "google", callbackURL: "/" }),
-  });
-
-  expect(start.status).toBe(200);
-  const { url } = await start.clone().json<{ url: string }>();
-  const state = new URL(url).searchParams.get("state") ?? "";
-
-  googleEmail = email;
-
-  return await call(`/api/auth/callback/google?code=code-1&state=${encodeURIComponent(state)}`, {
-    headers: { cookie: cookiesOf(start), "sec-fetch-site": "cross-site" },
-  });
-};
-
-/** Signs `email` in through the fake OIDC issuer; the callback's response. */
-const oidcSignIn = async (email: string): Promise<Response> => {
-  const start = await startSso(email);
-  expect(start.status).toBe(200);
-  const { url } = await start.json<{ url: string }>();
-  const authorize = new URL(url);
-
-  expect(`${authorize.origin}${authorize.pathname}`).toBe(`${OIDC_ISSUER}/authorize`);
-  expect(authorize.searchParams.get("login_hint")).toBe(email);
-  oidcState.email = email;
-  const callback = new URL(authorize.searchParams.get("redirect_uri") ?? "");
-
-  return await call(
-    `${callback.pathname}?code=code-1&state=${encodeURIComponent(authorize.searchParams.get("state") ?? "")}`,
-    { headers: { cookie: cookiesOf(start), "sec-fetch-site": "cross-site" } },
-  );
-};
-
 const signedIn = async (cookie: string) =>
   await call("/v9/management/me", { headers: panelHeaders(cookie) });
-
-const members = async (owner: string, org: string) => {
-  const response = await call(`/v9/management/orgs/${org}/members`, {
-    headers: panelHeaders(owner),
-  });
-
-  expect(response.status).toBe(200);
-
-  return (await response.json<{ members: Array<{ id: string; email: string; role: string }> }>())
-    .members;
-};
-
-/** Where a refused sign-in sends the browser: the sign-in page with the reason. */
-const refusal = (response: Response): string | null => {
-  expect(response.status).toBe(302);
-  expect(cookiesOf(response)).not.toContain("session_token");
-
-  return new URL(response.headers.get("location") ?? "", ORIGIN).searchParams.get("error");
-};
 
 describe("setting up single sign-on", () => {
   it("proves a domain with its TXT record and keeps the client secret out of the settings", async () => {
@@ -288,7 +202,9 @@ describe("setting up single sign-on", () => {
 
     expect(body).not.toContain(OIDC_CLIENT_SECRET);
     // SAFETY: a 200 answers `SsoSettings` (@commissary/contract/sso).
-    expect(JSON.parse(body) as Settings).toMatchObject({
+    const parsed = JSON.parse(body) as Settings;
+
+    expect(parsed).toMatchObject({
       provider: {
         kind: "oidc",
         issuer: OIDC_ISSUER,
@@ -297,6 +213,11 @@ describe("setting up single sign-on", () => {
       },
       domains: [{ domain: "setup.com", verified: true }],
     });
+
+    // The identity provider sends people back to the auth host, where Better Auth's SSO plugin answers.
+    const sp = parsed.service_provider;
+    expect(sp.oidc_redirect_uri.startsWith(`${AUTH_ORIGIN}/api/auth/sso/callback/sso-`)).toBe(true);
+    expect(sp.saml_acs_url.startsWith(`${AUTH_ORIGIN}/api/auth/sso/saml2/sp/acs/sso-`)).toBe(true);
 
     // The provider answers a test.
     const test = await call(sso("setup", "/provider/test"), json(owner, "POST"));
@@ -347,208 +268,13 @@ describe("setting up single sign-on", () => {
   });
 });
 
-describe("signing in with an org's identity provider", () => {
-  it("signs a person in through OIDC and makes them a member of the org", async () => {
-    const owner = await oidcOrg("oidc-org", "oidc-corp.com");
-    const callback = await oidcSignIn("olga@oidc-corp.com");
-
-    expect(callback.status).toBe(302);
-    expect(callback.headers.get("location")).toBe("/");
-    const cookie = cookiesOf(callback);
-
-    expect(cookie).toContain("session_token");
-    const me = await signedIn(cookie);
-    expect(me.status).toBe(200);
-    expect((await me.json<{ orgs: Array<{ slug: string }> }>()).orgs).toEqual([
-      expect.objectContaining({ slug: "oidc-org" }),
-    ]);
-    expect(await members(owner, "oidc-org")).toContainEqual(
-      expect.objectContaining({ email: "olga@oidc-corp.com", role: "member" }),
-    );
-
-    // Commissary authenticated as the org's client, with PKCE.
-    expect(oidcState.tokenRequests[0]?.get("code_verifier")).toBeTruthy();
-  });
-
-  it("signs a person in through SAML and makes them a member of the org", async () => {
-    const owner = await orgOwnedBy("saml-org");
-    expect((await proveDomain(owner, "saml-org", "saml-corp.com")).status).toBe(200);
-
-    const provider = await call(
-      sso("saml-org", "/provider"),
-      json(owner, "PUT", {
-        kind: "saml",
-        entry_point: SAML_SSO_URL,
-        idp_entity_id: SAML_ENTITY_ID,
-        certificate: SAML_CERTIFICATE,
-      }),
-    );
-
-    expect(provider.status).toBe(200);
-
-    const settings = await (
-      await call(sso("saml-org"), { headers: panelHeaders(owner) })
-    ).json<Settings>();
-
-    const start = await startSso("sam@saml-corp.com");
-    expect(start.status).toBe(200);
-    const { url } = await start.json<{ url: string }>();
-    expect(url.startsWith(`${SAML_SSO_URL}?`)).toBe(true);
-
-    const answer = await samlAnswer(
-      url,
-      {
-        entityId: settings.service_provider.saml_entity_id,
-        acsUrl: settings.service_provider.saml_acs_url,
-      },
-      "sam@saml-corp.com",
-    );
-
-    // The identity provider's page posts the answer from its own site.
-    const acs = await call(new URL(settings.service_provider.saml_acs_url).pathname, {
-      method: "POST",
-      headers: {
-        "content-type": "application/x-www-form-urlencoded",
-        origin: new URL(SAML_SSO_URL).origin,
-        "sec-fetch-site": "cross-site",
-      },
-      body: new URLSearchParams(answer).toString(),
-    });
-
-    expect(acs.status).toBe(302);
-    const cookie = cookiesOf(acs);
-    expect(cookie).toContain("session_token");
-    expect((await signedIn(cookie)).status).toBe(200);
-    expect(await members(owner, "saml-org")).toContainEqual(
-      expect.objectContaining({ email: "sam@saml-corp.com", role: "member" }),
-    );
-
-    // The same answer cannot be posted twice.
-    const replay = await call(new URL(settings.service_provider.saml_acs_url).pathname, {
-      method: "POST",
-      headers: {
-        "content-type": "application/x-www-form-urlencoded",
-        origin: new URL(SAML_SSO_URL).origin,
-        "sec-fetch-site": "cross-site",
-      },
-      body: new URLSearchParams(answer).toString(),
-    });
-
-    expect(refusal(replay)).toBe("invalid_saml_response");
-  });
-
-  it("keeps the role of someone who already was a member", async () => {
-    const owner = await oidcOrg("member-org", "member-corp.com");
-
-    expect(
-      (
-        await call(
-          "/v9/management/orgs/member-org/members",
-          json(owner, "POST", { email: "ada@member-corp.com", role: "admin" }),
-        )
-      ).status,
-    ).toBe(201);
-
-    expect((await oidcSignIn("ada@member-corp.com")).headers.get("location")).toBe("/");
-    expect(await members(owner, "member-org")).toContainEqual(
-      expect.objectContaining({ email: "ada@member-corp.com", role: "admin" }),
-    );
-  });
-
-  it("takes a work email only with a solved bot check", async () => {
-    await oidcOrg("bot-org", "bot-corp.com");
-
-    const start = await call("/api/auth/sign-in/sso", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        origin: ORIGIN,
-        "sec-fetch-site": "same-origin",
-      },
-      body: JSON.stringify({ email: "bea@bot-corp.com" }),
-    });
-
-    expect(start.status).toBe(403);
-  });
-
-  it("does not redirect for a domain no org verified", async () => {
-    const owner = await orgOwnedBy("pending-org");
-    expect(
-      (await call(sso("pending-org", "/domains"), json(owner, "POST", { domain: "pending.com" })))
-        .status,
-    ).toBe(201);
-    expect((await setOidc(owner, "pending-org")).status).toBe(200);
-
-    for (const email of ["pat@pending.com", "nobody@unknown-corp.com", "not an email"]) {
-      const start = await startSso(email);
-
-      expect(start.status).toBe(404);
-      expect(await start.json()).toMatchObject({ error: "sso_not_found" });
-    }
-  });
-
-  it("does not let an org's provider sign in an email of another domain", async () => {
-    await oidcOrg("narrow-org", "narrow.com");
-    const callback = await oidcSignIn("olga@narrow.com");
-    expect(callback.status).toBe(302);
-
-    // The issuer answers with someone of a domain the org has not verified.
-    const start = await startSso("eve@narrow.com");
-    const { url } = await start.json<{ url: string }>();
-    const authorize = new URL(url);
-    oidcState.email = "eve@elsewhere.com";
-    const callbackUrl = new URL(authorize.searchParams.get("redirect_uri") ?? "");
-
-    const response = await call(
-      `${callbackUrl.pathname}?code=code-2&state=${encodeURIComponent(authorize.searchParams.get("state") ?? "")}`,
-      { headers: { cookie: cookiesOf(start), "sec-fetch-site": "cross-site" } },
-    );
-
-    expect(refusal(response)).toBe("sso_domain_unverified");
-  });
-
-  it("does not add back someone an org admin removed, until they are added again", async () => {
-    const owner = await oidcOrg("removal-org", "removal.com");
-    expect((await oidcSignIn("rita@removal.com")).status).toBe(302);
-
-    const rita = (await members(owner, "removal-org")).find(
-      (member) => member.email === "rita@removal.com",
-    );
-
-    expect(
-      (await call(`/v9/management/orgs/removal-org/members/${rita?.id}`, json(owner, "DELETE")))
-        .status,
-    ).toBe(200);
-
-    resetStandingCaches();
-    expect(refusal(await oidcSignIn("rita@removal.com"))).toBe("sso_removed");
-    expect((await members(owner, "removal-org")).map((member) => member.email)).not.toContain(
-      "rita@removal.com",
-    );
-
-    expect(
-      (
-        await call(
-          "/v9/management/orgs/removal-org/members",
-          json(owner, "POST", { email: "rita@removal.com", role: "member" }),
-        )
-      ).status,
-    ).toBe(201);
-
-    const again = await oidcSignIn("rita@removal.com");
-    expect(again.status).toBe(302);
-    expect(cookiesOf(again)).toContain("session_token");
-  });
-});
-
 describe("requiring single sign-on", () => {
-  it("refuses GitHub for the domain and ends the sessions its people had", async () => {
+  it("ends the sessions the domain's people had, and keeps the provider while a domain requires it", async () => {
     const owner = await oidcOrg("strict-org", "strict.com");
-
-    // Before: GitHub works for the domain.
-    const github = await signIn({ email: "gina@strict.com" });
-    expect((await signedIn(github)).status).toBe(200);
+    const atDomain = await signIn({ email: "gina@strict.com" });
     const other = await signIn({ email: "gina@example.com" });
+
+    expect((await signedIn(atDomain)).status).toBe(200);
 
     const required = await call(
       sso("strict-org", "/domains/strict.com"),
@@ -558,35 +284,14 @@ describe("requiring single sign-on", () => {
     expect(required.status).toBe(200);
     expect(await required.json()).toMatchObject({ require_sso: true });
 
-    // Her GitHub session is gone; someone of another domain keeps theirs.
+    // Her session is gone; someone of another domain keeps theirs.
     resetStandingCaches();
-    expect((await signedIn(github)).status).toBe(401);
+    expect((await signedIn(atDomain)).status).toBe(401);
     expect((await signedIn(other)).status).toBe(200);
-
-    // GitHub and Google are refused for the domain now; the identity provider still signs her in.
-    upstreams.person = { email: "gina@strict.com" };
-    expect(await signIn({ email: "gina@strict.com" })).toBe("");
-    expect(await signIn({ email: "gina@example.com" })).toContain("session_token");
-    expect(refusal(await googleSignIn("gina@strict.com"))).toBe("sso_required");
-    expect(cookiesOf(await googleSignIn("gina@example.com"))).toContain("session_token");
-    expect((await oidcSignIn("gina@strict.com")).headers.get("location")).toBe("/");
 
     // The provider cannot be removed while a domain requires it.
     const removal = await call(sso("strict-org", "/provider"), json(owner, "DELETE"));
     expect(removal.status).toBe(409);
     expect(await removal.json()).toMatchObject({ error: "sso_required" });
-  });
-
-  it("says why GitHub was refused", async () => {
-    const owner = await oidcOrg("why-org", "why.com");
-    expect(
-      (await call(sso("why-org", "/domains/why.com"), json(owner, "PATCH", { require_sso: true })))
-        .status,
-    ).toBe(200);
-
-    upstreams.person = { email: "walt@why.com" };
-    const callback = await finishSignIn(await startSignIn());
-
-    expect(refusal(callback)).toBe("sso_required");
   });
 });

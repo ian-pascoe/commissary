@@ -1,0 +1,17 @@
+// The auth Worker's entry under `alchemy dev` only, never deployed (alchemy.run.ts picks it on its dev flag). Locally a
+// cross-script Durable Object is reached through the dev registry by its hex id, which drops `ctx.id.name`, the name a
+// ControlPlane learns its org from ([cloudflare/workerd#7286](https://github.com/cloudflare/workerd/issues/7286),
+// docs/DEVELOPMENT.md "Infrastructure"). So under `alchemy dev` this entry reaches the state Worker's objects through its
+// dev-only `DevStateBridge` entrypoint (`DEV_STATE_BRIDGE`, apps/state/src/dev.ts): the state namespaces are replaced
+// with bridged ones, whose stubs send their calls, with the object's name, over that service binding
+// (`@commissary/state/dev-state-bridge`). Deployed, the auth Worker binds the state Worker's objects by script name and
+// runs src/index.ts.
+import { retryOnCodeUpdate } from "@commissary/state";
+import { type DevBridgedEnv, devBridgedEnv } from "@commissary/state/dev-state-bridge";
+import { SignInEntrypoint } from "./entrypoint.ts";
+
+export default class DevAuthWorker extends SignInEntrypoint<DevBridgedEnv<Env>> {
+  protected bindings(): Env {
+    return retryOnCodeUpdate(devBridgedEnv(this.env));
+  }
+}

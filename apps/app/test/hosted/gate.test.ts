@@ -1,10 +1,11 @@
 // The gate of Commissary Cloud (ADR 0026, packages/auth/src/hosted-gate.ts) on the app Worker: session cookies for the
-// panel and the management API, no Access credentials anywhere, sign-up with a Personal org, the owned-org limit, and
-// suspension of people and orgs by platform admins. The client API, which takes API keys only, is the API Worker's
+// panel and the management API, which the auth Worker names (ADR 0030; here its fake, test/worker.ts), no Access
+// credentials anywhere, the owned-org limit, and suspension of people and orgs by platform admins. Sign-up itself is the
+// auth Worker's (apps/auth/test/sign-up.test.ts). The client API, which takes API keys only, is the API Worker's
 // (apps/api/test/hosted/gate.test.ts, suspension included): the app Worker refuses it with a 404.
-import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { resetStandingCaches } from "@commissary/auth";
+import { FAILING_SESSION_TOKEN, FAKE_SESSION_COOKIE } from "../worker.ts";
 import {
   call,
   clearPeople,
@@ -12,7 +13,7 @@ import {
   panelHeaders,
   restoreFetch,
   signIn,
-  upstreams,
+  signInRowsOf,
 } from "./support.ts";
 
 beforeAll(installFakes);
@@ -22,7 +23,6 @@ afterAll(restoreFetch);
 beforeEach(async () => {
   await clearPeople();
   resetStandingCaches();
-  upstreams.unexpected = [];
 });
 
 const ROOT = "root@example.com";
@@ -68,52 +68,6 @@ const apiKey = async (cookie: string, org: string): Promise<string> => {
 };
 
 describe("signing up", () => {
-  it("gives a person signing in for the first time a Personal org they own", async () => {
-    const cookie = await signIn({ email: "ada@example.com" });
-    const first = await me(cookie);
-
-    expect(first).toMatchObject({
-      platform_admin: false,
-      hosted: true,
-      org_limit: 3,
-      owned_orgs: 1,
-    });
-    expect(first.orgs).toHaveLength(1);
-    expect(first.orgs[0]?.name).toBe("Personal");
-    expect(first.orgs[0]?.slug).toMatch(/^personal-[0-9a-f]{10}$/);
-
-    const members = await call(`/v9/management/orgs/${first.orgs[0]?.slug}/members`, {
-      headers: panelHeaders(cookie),
-    });
-
-    expect(members.status).toBe(200);
-    expect(await members.json()).toMatchObject({
-      members: [{ email: "ada@example.com", role: "owner" }],
-    });
-
-    // Signing in again creates nothing more.
-    resetStandingCaches();
-    const again = await me(await signIn({ email: "ada@example.com" }));
-    expect(again.orgs).toEqual(first.orgs);
-  });
-
-  it("gives an invited person no Personal org", async () => {
-    const owner = await signIn({ email: "owner@example.com" });
-    const created = await createOrg(owner, "acme");
-    expect(created.status).toBe(201);
-
-    const invited = await call(
-      "/v9/management/orgs/acme/members",
-      json(owner, "POST", { email: "bob@example.com", role: "member" }),
-    );
-
-    expect(invited.status).toBe(201);
-
-    const bob = await me(await signIn({ email: "bob@example.com" }));
-    expect(bob.orgs).toEqual([{ slug: "acme", name: "acme" }]);
-    expect(bob.owned_orgs).toBe(0);
-  });
-
   it("does not let everyone signed in join global, even with its auto-join on", async () => {
     const root = await signIn({ email: ROOT });
 
@@ -156,6 +110,15 @@ describe("authentication", () => {
     expect(home.headers.get("location")).toBe("/sign-in");
   });
 
+  it("answers 500, not 401, when the auth Worker cannot look the session up", async () => {
+    const response = await call("/v9/management/me", {
+      headers: panelHeaders(`${FAKE_SESSION_COOKIE}=${FAILING_SESSION_TOKEN}`),
+    });
+
+    expect(response.status).toBe(500);
+    expect(await response.text()).not.toContain("Not signed in");
+  });
+
   it("serves the sign-in page and the panel's bundle files to anyone", async () => {
     // Answered by the assets binding (404 while the panel is not built), never refused or redirected.
     for (const path of ["/sign-in", "/assets/missing.js"])
@@ -163,6 +126,24 @@ describe("authentication", () => {
 
     // What tools/check-cloud-deploy.sh probes after a deploy.
     expect((await call("/healthz")).status).toBe(200);
+  });
+
+  it("has none of Better Auth's routes or the sign-in options: the auth host serves them", async () => {
+    for (const [method, path] of [
+      ["GET", "/api/auth/get-session"],
+      ["POST", "/api/auth/sign-in/social"],
+      ["POST", "/api/auth/sign-out"],
+      ["GET", "/api/auth/callback/github?code=x&state=y"],
+      ["GET", "/api/sign-in-options"],
+    ] as const) {
+      const response = await call(path, {
+        method,
+        headers: panelHeaders("", { "content-type": "application/json" }),
+        ...(method === "POST" ? { body: JSON.stringify({ provider: "github" }) } : {}),
+      });
+
+      expect(response.status, `${method} ${path}`).toBe(404);
+    }
   });
 
   it("accepts no Access JWT and no Access service token", async () => {
@@ -298,7 +279,6 @@ describe("suspension", () => {
     expect((await call("/v9/management/me", { headers: panelHeaders(cookie) })).status).toBe(401);
 
     // A new sign-in is refused too.
-    upstreams.person = { email: "mallory@example.com" };
     expect(await signIn({ email: "mallory@example.com" }).catch(() => "")).toBe("");
 
     const lifted = await call(
@@ -447,24 +427,11 @@ describe("management keys and downloads", () => {
 });
 
 describe("deleting an account", () => {
-  const authRows = async (email: string) => {
-    const count = async (sql: string) =>
-      (await env.USAGE.prepare(sql).bind(email).first<{ n: number }>())?.n;
-
-    const ofUser = `"userId" IN (SELECT id FROM auth_user WHERE email = ?)`;
-
-    return {
-      users: await count(`SELECT count(*) AS n FROM auth_user WHERE email = ?`),
-      sessions: await count(`SELECT count(*) AS n FROM auth_session WHERE ${ofUser}`),
-      accounts: await count(`SELECT count(*) AS n FROM auth_account WHERE ${ofUser}`),
-    };
-  };
-
   it("deletes the sign-in account with its sessions, and a later sign-in is a new sign-up", async () => {
     const cookie = await signIn({ email: "gus@example.com" });
     const personal = (await me(cookie)).orgs[0]?.slug;
 
-    expect(await authRows("gus@example.com")).toEqual({ users: 1, sessions: 1, accounts: 1 });
+    expect(await signInRowsOf("gus@example.com")).toEqual({ accounts: 1, sessions: 1 });
 
     const deleted = await call(
       "/v9/management/me",
@@ -477,7 +444,7 @@ describe("deleting an account", () => {
       orgs_left: [],
       orgs_deleted: [personal],
     });
-    expect(await authRows("gus@example.com")).toEqual({ users: 0, sessions: 0, accounts: 0 });
+    expect(await signInRowsOf("gus@example.com")).toEqual({ accounts: 0, sessions: 0 });
     expect((await call("/v9/management/me", { headers: panelHeaders(cookie) })).status).toBe(401);
 
     const again = await me(await signIn({ email: "gus@example.com" }));

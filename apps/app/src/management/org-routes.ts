@@ -25,7 +25,7 @@ import {
 } from "@commissary/auth";
 import { ownedOrgLimit } from "../hosted/owned-orgs.ts";
 import type { JsonObject } from "@commissary/json";
-import { deleteSignInAccount, endSessions } from "../hosted/session.ts";
+import { deleteSignInAccount, endSessions } from "../hosted/sign-in.ts";
 import { apiOrigin } from "../http/hosts.ts";
 import { GLOBAL_ORG, newOrgId, handled, jsonReply, replyError, type Reply } from "@commissary/core";
 import {
@@ -262,7 +262,6 @@ const create = Effect.gen(function* () {
  */
 const suspendOrg = (slug: string, suspended: boolean) =>
   Effect.gen(function* () {
-    const env = yield* AppEnv;
     const now = yield* Clock.currentTimeMillis;
 
     const result = yield* registry("setOrgSuspended", (stub) =>
@@ -275,7 +274,7 @@ const suspendOrg = (slug: string, suspended: boolean) =>
 
     if (suspended) {
       const emails = yield* registry("emailsOfOrg", (stub) => stub.emailsOfOrg(org.id));
-      const ended = yield* endSessions(env, emails);
+      const ended = yield* endSessions(emails);
 
       yield* Effect.logInfo("org suspended").pipe(
         Effect.annotateLogs({ org: org.id, sessionsEnded: ended }),
@@ -483,7 +482,7 @@ const deleteOrgRoute = Effect.gen(function* () {
  * deployment's own settings and is never deleted: a person alone in it only leaves it.
  *
  * On Commissary Cloud (ADR 0026) the sign-in account goes too, after the last org step and before the registry forgets the
- * person: Better Auth's user, its sessions and linked accounts (`hosted/session.ts`). Signing in again later is a new
+ * person: Better Auth's user, its sessions and linked accounts, which the auth Worker deletes (`hosted/sign-in.ts`). Signing in again later is a new
  * sign-up, with a new Personal org. A failed step answers an error and a repeated request picks up where it stopped.
  */
 const deleteAccount = Effect.gen(function* () {
@@ -557,12 +556,10 @@ const deleteAccount = Effect.gen(function* () {
   }
 
   if (isHosted(yield* AuthConfig)) {
-    const signIn = yield* AppEnv;
-
-    yield* Effect.tryPromise({
-      try: async () => await deleteSignInAccount(signIn, email),
-      catch: (cause) => new DeletionThrew({ cause }),
-    }).pipe(Effect.catch(signInDeletionFailed));
+    yield* deleteSignInAccount(email).pipe(
+      Effect.mapError((cause) => new DeletionThrew({ cause })),
+      Effect.catch(signInDeletionFailed),
+    );
   }
 
   yield* registry("removePerson", (stub) => stub.removePerson(email));

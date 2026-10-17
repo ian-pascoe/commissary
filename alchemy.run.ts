@@ -1,12 +1,13 @@
 /**
- * Infrastructure of the Workers port, deployed with Alchemy (`pnpm deploy`, `pnpm dev`, `pnpm destroy`): the three
- * Workers of ADR 0030, the state Worker, which defines the Durable Objects, the app Worker (panel, sign-in, management
- * API) with its static assets, and the API Worker (the client API) with its cron trigger, which both bind the objects by
- * script name; the KV namespace, the D1 usage database (migrations applied on every deploy), the `auth_index` HMAC key
- * and the Cloudflare Access application, policies and service tokens in front of the app (and of the client API on a
- * stage with one host, except that clients send API keys there). Commissary Cloud (`COMMISSARY_MODE=cloud`, ADR 0026)
- * creates no Access resources: the app Worker signs people in itself, and gets its sign-in settings and Better Auth's
- * secret instead, and the API Worker the per-org rate limit.
+ * Infrastructure of the Workers port, deployed with Alchemy (`pnpm deploy`, `pnpm dev`, `pnpm destroy`): the Workers of
+ * ADR 0030, the state Worker, which defines the Durable Objects, the app Worker (panel, management API) with its static
+ * assets, and the API Worker (the client API) with its cron trigger, which both bind the objects by script name; the KV
+ * namespace, the D1 usage database (migrations applied on every deploy), the `auth_index` HMAC key and the Cloudflare
+ * Access application, policies and service tokens in front of the app (and of the client API on a stage with one host,
+ * except that clients send API keys there). Commissary Cloud (`COMMISSARY_MODE=cloud`, ADR 0026) creates no Access
+ * resources: people sign in on the auth host, served by a fourth Worker, the auth Worker (apps/auth), with Better Auth's
+ * `SignIn` D1 database, its sign-in settings and secret; the app Worker asks it over a service binding, and the API
+ * Worker gets the per-org rate limit.
  * Deploy-time settings are read from the environment / `.env` (see `.env.example` and infra/settings.ts).
  */
 import * as Alchemy from "alchemy";
@@ -15,6 +16,7 @@ import * as Effect from "effect/Effect";
 import * as Output from "alchemy/Output";
 import { type AccessWiring, provisionAccess, provisionClientApiBypass } from "./infra/access.ts";
 import { BUNDLE_ALIASES } from "./infra/bundle.ts";
+import { previewAppName, previewOrigin } from "./infra/preview-origin.ts";
 import { readSettings } from "./infra/settings.ts";
 import { DEV_AUTH_INDEX_KEY } from "@commissary/models/auth-index-key";
 import { DEV_SECRETS_KEY, secretsKeyResourceId } from "./packages/state/src/secrets/key.ts";
@@ -29,6 +31,15 @@ export const COMPATIBILITY = { date: "2026-08-01", flags: ["nodejs_compat"] };
 /** Model catalog refresh, credential refresh sweep and usage retention (apps/api/src/scheduled.ts). */
 export const CRONS = ["0 */3 * * *"];
 
+/**
+ * Ports under `alchemy dev`: the app Worker's (where the panel's dev server sends `/v9`, apps/web/vite.config.ts), the
+ * state Worker's, the API Worker's and, on Commissary Cloud, the auth Worker's (where the dev server sends `/api`).
+ */
+const DEV_PORTS = { app: 1337, state: 1338, api: 1339, auth: 1340 } as const;
+
+/** Better Auth's signing secret under `alchemy dev` (loopback only), fixed like the dev keys below. */
+const DEV_BETTER_AUTH_SECRET = "commissary-dev-better-auth-secret-never-deployed-0123456789";
+
 // Remote state in the account (`Cloudflare.state()`, shared by every machine and CI) unless ALCHEMY_STATE=local,
 // which keeps it under .alchemy/ (handy for `alchemy dev` without a Cloudflare login).
 const state = process.env["ALCHEMY_STATE"] === "local" ? Alchemy.localState() : Cloudflare.state();
@@ -38,10 +49,12 @@ export default Alchemy.Stack(
   { providers: Cloudflare.providers(), state },
   Effect.gen(function* () {
     const dev = yield* Alchemy.ALCHEMY_DEV;
-    const settings = yield* readSettings(dev, yield* Alchemy.Stage);
+    const stage = yield* Alchemy.Stage;
+    const settings = yield* readSettings(dev, stage);
 
     const cache = yield* Cloudflare.KV.Namespace("Cache");
-    const usage = yield* Cloudflare.D1.Database("Usage", { migrations: "./migrations" });
+    // Each database applies the migrations of its own folder (migrations/usage/, migrations/sign-in/).
+    const usage = yield* Cloudflare.D1.Database("Usage", { migrations: "./migrations/usage" });
 
     // Key of the keyed `auth_index` (packages/models/src/management/auth-index.ts): 32 random bytes minted on the first
     // deploy of a stage and kept in the (encrypted) stack state, so every later deploy binds the same secret with no
@@ -83,14 +96,15 @@ export default Alchemy.Stack(
         ? { aud: "", adminServiceTokens: "", serviceTokenClientIds: {} }
         : yield* provisionAccess(settings);
 
-    // Commissary Cloud (ADR 0026), on the app Worker: Better Auth's signing secret, minted like the keys above, and its
-    // settings.
-    const hostedEnv =
+    // Commissary Cloud (ADR 0026, ADR 0030), on the auth Worker: Better Auth's signing secret, minted like the keys
+    // above, and its sign-in settings.
+    const signInEnv =
       hosted === undefined
         ? {}
         : {
-            COMMISSARY_MODE: "cloud",
-            BETTER_AUTH_SECRET: yield* Alchemy.makeRandom("BetterAuthSecret", { bytes: 32 }),
+            BETTER_AUTH_SECRET: dev
+              ? DEV_BETTER_AUTH_SECRET
+              : yield* Alchemy.makeRandom("BetterAuthSecret", { bytes: 32 }),
             ...(hosted.githubClientId === ""
               ? {}
               : {
@@ -105,7 +119,6 @@ export default Alchemy.Stack(
                 }),
             TURNSTILE_SITE_KEY: hosted.turnstileSiteKey,
             TURNSTILE_SECRET_KEY: hosted.turnstileSecretKey,
-            OWNED_ORG_LIMIT: hosted.ownedOrgLimit,
           };
 
     // Commissary Cloud on the API Worker: API keys only, under the per-org rate limit of the client API.
@@ -155,12 +168,17 @@ export default Alchemy.Stack(
     // The namespaces used to live in the app Worker (`Commissary`). `transferredFrom` moves each one with every stored
     // object on the first deploy of a stage that still has it there (prod, cloud, a self-hosted stage upgrading); on a
     // fresh stage, or once moved, it does nothing, so it stays (docs/DEPLOY.md, "The state Worker").
+    //
+    // Dev-only guard: under `alchemy dev` the local dev registry reaches another Worker's Durable Object by its hex id
+    // and drops `ctx.id.name`, which tells a ControlPlane its org (cloudflare/workerd#7286). There, and only there
+    // (`dev`), the state Worker runs its dev entry (apps/state/src/dev.ts), which adds the dev-only `DevStateBridge`
+    // entrypoint, and the other Workers run theirs (`src/dev.ts`), which reach the objects over a service binding to it
+    // ({@link stateBindings}). A deploy always uses the `index.ts` entries and the script-name bindings.
     const stateWorker = yield* Cloudflare.Worker("State", {
-      main: "./apps/state/src/index.ts",
+      main: dev ? "./apps/state/src/dev.ts" : "./apps/state/src/index.ts",
       compatibility: COMPATIBILITY,
       workersDev: false,
-      // Under `alchemy dev` the app Worker keeps the default port 1337, where the panel's dev server sends `/v9`.
-      dev: { port: 1338 },
+      dev: { port: DEV_PORTS.state },
       limits: { cpuMs: settings.cpuMs },
       env: {
         CONTROL_PLANE: Cloudflare.DurableObject("ControlPlane", { transferredFrom: "Commissary" }),
@@ -172,30 +190,71 @@ export default Alchemy.Stack(
       },
     });
 
-    // The Durable Objects are the state Worker's, bound by its script name; the binding also makes the app and the API
-    // Worker deploy after it (ADR 0030: the state Worker deploys before its callers, whose state RPC changes are
-    // expand-then-contract, docs/DEVELOPMENT.md).
-    //
-    // Dev-only guard: under `alchemy dev` the local dev registry reaches another Worker's Durable Object by its hex id
-    // and drops `ctx.id.name`, which tells a ControlPlane its org (cloudflare/workerd#7286). There, and only there
-    // (`dev`), the app runs its dev entry (apps/app/src/dev.ts: the handler plus the state Worker's classes) and binds
-    // the objects locally, and the API Worker runs its dev entry (apps/api/src/dev.ts), which reaches those objects over
-    // a service binding to the app's dev-only `DevStateBridge` entrypoint; the state Worker still runs beside them. A
-    // deploy always uses the `index.ts` entries and the script-name bindings.
-    const stateObject = (className: "ControlPlane" | "SessionState" | "Platform") =>
-      dev
-        ? Cloudflare.DurableObject(className)
-        : Cloudflare.DurableObject(className, { scriptName: stateWorker.workerName });
+    // How the other Workers reach the state: deployed, the state Worker's namespaces bound by its script name (the
+    // binding also makes them deploy after it: ADR 0030, the state Worker deploys before its callers, whose state RPC
+    // changes are expand-then-contract, docs/DEVELOPMENT.md); under `alchemy dev`, its `DevStateBridge` (the dev-only
+    // guard above).
+    const stateBindings = dev
+      ? { DEV_STATE_BRIDGE: Cloudflare.WorkerEntrypoint(stateWorker, "DevStateBridge") }
+      : {
+          CONTROL_PLANE: Cloudflare.DurableObject("ControlPlane", {
+            scriptName: stateWorker.workerName,
+          }),
+          SESSION_STATE: Cloudflare.DurableObject("SessionState", {
+            scriptName: stateWorker.workerName,
+          }),
+          PLATFORM: Cloudflare.DurableObject("Platform", { scriptName: stateWorker.workerName }),
+        };
 
-    // The app Worker (apps/app): the panel, sign-in and the management API. Under `alchemy dev` it also runs the Durable
-    // Objects and lends them to the API Worker (the dev-only guard above).
-    const appWorker = (apiDomain: string | Output.Output<string> | undefined) =>
+    // The Better Auth database of Commissary Cloud (ADR 0030, #130): people, sessions and linked accounts, bound by the
+    // auth Worker only. A self-hosted Commissary has none.
+    const signIn =
+      hosted === undefined
+        ? undefined
+        : yield* Cloudflare.D1.Database("SignIn", { migrations: "./migrations/sign-in" });
+
+    // The auth Worker (apps/auth, ADR 0030), Commissary Cloud only: Better Auth on the auth host (`COMMISSARY_AUTH_DOMAIN`,
+    // by default `auth.<COMMISSARY_DOMAIN>`; a preview's workers.dev URL; its dev port), and the RPC the app Worker asks
+    // over its service binding. It trusts and returns to the app origin only, and scopes the session cookie to the app
+    // host so the app host receives it (a preview: the account's workers.dev subdomain, every preview's cookie named
+    // apart by its prefix; under `alchemy dev` a host-only `localhost` cookie, which spans the ports).
+    const authWorker = (app: {
+      readonly origin: string | Output.Output<string>;
+      readonly cookieDomain: string | Output.Output<string>;
+    }) =>
+      Cloudflare.Worker("Auth", {
+        main: dev ? "./apps/auth/src/dev.ts" : "./apps/auth/src/index.ts",
+        compatibility: COMPATIBILITY,
+        workersDev: settings.preview,
+        dev: { port: DEV_PORTS.auth },
+        ...(dev || settings.preview || hosted === undefined ? {} : { domain: hosted.authDomain }),
+        limits: { cpuMs: settings.cpuMs },
+        build: { input: { resolve: { alias: { ...BUNDLE_ALIASES } } } },
+        env: {
+          ...(signIn === undefined ? {} : { SIGN_IN: signIn }),
+          ...stateBindings,
+          APP_ORIGIN: app.origin,
+          AUTH_COOKIE_DOMAIN: app.cookieDomain,
+          AUTH_COOKIE_PREFIX: settings.preview ? `commissary-${stage}` : "",
+          ...signInEnv,
+        },
+      });
+
+    // The app Worker (apps/app): the panel and the management API; on Commissary Cloud the sign-in page, and it asks
+    // the auth Worker (`auth`) who a session belongs to. On a Cloud preview it has an explicit name, from which the auth
+    // Worker learnt its origin before it existed (infra/preview-origin.ts).
+    const appWorker = (
+      apiDomain: string | Output.Output<string> | undefined,
+      auth: Effect.Success<ReturnType<typeof authWorker>> | undefined,
+    ) =>
       Cloudflare.Worker("Commissary", {
         main: dev ? "./apps/app/src/dev.ts" : "./apps/app/src/index.ts",
+        ...(hosted !== undefined && settings.preview ? { name: previewAppName(stage) } : {}),
         compatibility: COMPATIBILITY,
         // Production serves only its Access-protected domain; pull-request previews serve their workers.dev URL,
         // protected by enrolling the Worker into the preview's Access application.
         workersDev: settings.preview,
+        dev: { port: DEV_PORTS.app },
         ...(dev || settings.preview ? {} : { domain: settings.domain }),
         ...(access.application === undefined ? {} : { access: access.application }),
         limits: { cpuMs: settings.cpuMs },
@@ -206,30 +265,39 @@ export default Alchemy.Stack(
         env: {
           CACHE: cache,
           USAGE: usage,
-          CONTROL_PLANE: stateObject("ControlPlane"),
-          SESSION_STATE: stateObject("SessionState"),
-          PLATFORM: stateObject("Platform"),
+          ...stateBindings,
           ...stateSettings,
-          ACCESS_DEV_BYPASS: dev ? settings.devBypass : "",
+          ACCESS_DEV_BYPASS: dev && hosted === undefined ? settings.devBypass : "",
           // Where the panel tells clients to send API keys (`GET /me` `api_url`).
           ...(apiDomain === undefined ? {} : { API_DOMAIN: apiDomain }),
-          // Under `alchemy dev` the app runs the ControlPlane itself (the dev-only guard above).
-          ...(dev ? secretsKeyBindings : {}),
-          ...hostedEnv,
+          ...(hosted === undefined || auth === undefined
+            ? {}
+            : {
+                COMMISSARY_MODE: "cloud",
+                OWNED_ORG_LIMIT: hosted.ownedOrgLimit,
+                AUTH: auth,
+                // Where the sign-in page sends its requests and the orgs' identity providers send people back.
+                AUTH_ORIGIN: Output.asOutput(auth.url).pipe(
+                  Output.map((url) => {
+                    if (url === undefined) throw new Error("the auth Worker has no URL");
+
+                    return new URL(url).origin;
+                  }),
+                ),
+              }),
         },
       });
 
     // The API Worker (apps/api): the client API and the cron jobs. Its own workers.dev URL on a preview, the API host on a
     // stage that has one, else zone routes for the client API paths on the app host (`CLIENT_API_PREFIXES`: a route
     // pattern matches every path that starts with it, as the Workers match them, so `/v1*` covers `/v1beta`). Under
-    // `alchemy dev` it serves its own port and reaches the app Worker's objects through the dev-only `DevStateBridge`
-    // entrypoint (apps/api/src/dev.ts), bound only there. `app` is the app Worker, deployed first except on a preview.
+    // `alchemy dev` it serves its own port. `app` is the app Worker, deployed first except on a preview.
     const apiWorker = (app: Effect.Success<ReturnType<typeof appWorker>> | undefined) =>
       Cloudflare.Worker("Api", {
         main: dev ? "./apps/api/src/dev.ts" : "./apps/api/src/index.ts",
         compatibility: COMPATIBILITY,
         workersDev: settings.preview,
-        ...(dev ? { dev: { port: 1339 } } : {}),
+        dev: { port: DEV_PORTS.api },
         ...(split ? { domain: settings.apiDomain } : {}),
         ...(dev || settings.preview || split
           ? {}
@@ -244,15 +312,9 @@ export default Alchemy.Stack(
         env: {
           CACHE: cache,
           USAGE: usage,
-          ...(dev && app !== undefined
-            ? { DEV_STATE_BRIDGE: Cloudflare.WorkerEntrypoint(app, "DevStateBridge") }
-            : {
-                CONTROL_PLANE: stateObject("ControlPlane"),
-                SESSION_STATE: stateObject("SessionState"),
-                PLATFORM: stateObject("Platform"),
-              }),
+          ...stateBindings,
           ...stateSettings,
-          ACCESS_DEV_BYPASS: dev ? settings.devBypass : "",
+          ACCESS_DEV_BYPASS: dev && hosted === undefined ? settings.devBypass : "",
           // Derived from the app Worker's output, so the API host is attached only once the app Worker no longer has it
           // (it was the app's alias before the API Worker existed; Alchemy refuses a hostname another Worker holds).
           ...(split && app !== undefined
@@ -265,9 +327,10 @@ export default Alchemy.Stack(
         },
       });
 
-    // The app Worker comes first: under `alchemy dev` the API Worker binds its bridge, and with an API host the API
-    // Worker takes that host from it. On a preview the API Worker comes first: the app names its workers.dev host.
-    const { worker, api } = settings.preview
+    // The order: the state Worker first (above); the auth Worker before the app Worker, which binds it; the app Worker
+    // before the API Worker, which takes the API host from it. On a preview the API Worker comes first: the app names
+    // its workers.dev host, and on Commissary Cloud the auth Worker derives the app's origin from its URL.
+    const { worker, api, auth } = settings.preview
       ? yield* Effect.gen(function* () {
           const client = yield* apiWorker(undefined);
 
@@ -281,12 +344,37 @@ export default Alchemy.Stack(
             }),
           );
 
-          return { api: client, worker: yield* appWorker(previewHost) };
+          const origin = Output.asOutput(client.url).pipe(
+            Output.map((url) => previewOrigin(url, previewAppName(stage))),
+          );
+
+          const signInWorker =
+            hosted === undefined
+              ? undefined
+              : yield* authWorker({
+                  origin: origin.pipe(Output.map((found) => found.appOrigin)),
+                  cookieDomain: origin.pipe(Output.map((found) => found.accountDomain)),
+                });
+
+          return {
+            api: client,
+            auth: signInWorker,
+            worker: yield* appWorker(previewHost, signInWorker),
+          };
         })
       : yield* Effect.gen(function* () {
-          const app = yield* appWorker(split ? settings.apiDomain : undefined);
+          const signInWorker =
+            hosted === undefined
+              ? undefined
+              : yield* authWorker(
+                  dev
+                    ? { origin: `http://localhost:${DEV_PORTS.app}`, cookieDomain: "" }
+                    : { origin: `https://${settings.domain}`, cookieDomain: settings.domain },
+                );
 
-          return { worker: app, api: yield* apiWorker(app) };
+          const app = yield* appWorker(split ? settings.apiDomain : undefined, signInWorker);
+
+          return { worker: app, auth: signInWorker, api: yield* apiWorker(app) };
         });
 
     // On a stage with one host, the Access application of the app host covers the client API paths the zone routes send
@@ -309,6 +397,8 @@ export default Alchemy.Stack(
         : dev || settings.preview
           ? api.url
           : worker.url,
+      // Commissary Cloud's auth host (tools/deploy-stage.sh, tools/check-cloud-deploy.sh); none on a self-hosted one.
+      ...(auth === undefined ? {} : { authUrl: auth.url }),
       accessAud: access.aud,
       serviceTokens: access.serviceTokenClientIds,
     };

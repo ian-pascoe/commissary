@@ -431,9 +431,10 @@ Commissary Cloud (`COMMISSARY_MODE=cloud`, ADR 0026; deploy settings in [DEPLOY.
 application. Everything in §1-§2 and the service tokens of §3 do not apply; members, roles, teams, grants, API keys and
 management keys work as above. What changes:
 
-- **Sign-in.** People sign in at `/sign-in` with GitHub or Google (Better Auth, `apps/app/src/hosted/`), behind a Cloudflare
-  Turnstile challenge (a token solved on another hostname is refused). The Worker keeps the verified email and a session in D1 (`auth_*` tables), never the provider's
-  tokens; Better Auth's session cookie is `HttpOnly` and `SameSite=Lax` (and `Secure` over HTTPS). The panel signs out with **Sign out** in the shell's account menu. Without a
+- **Sign-in.** People sign in at `/sign-in` with GitHub or Google (Better Auth, in the auth Worker on the auth host,
+  `auth.<app host>` by default, ADR 0030), behind a Cloudflare Turnstile challenge (a token solved on another hostname
+  is refused). The auth Worker keeps the verified email and a session in its own D1 database (`SignIn`), never the
+  provider's tokens; the session cookie is scoped to the app host, which asks the auth Worker whose it is; Better Auth's session cookie is `HttpOnly` and `SameSite=Lax` (and `Secure` over HTTPS). The panel signs out with **Sign out** in the shell's account menu. Without a
   session the management API answers `401 Not signed in` and a panel page redirects to `/sign-in?next=<page>`.
 - **Who is who.** The signed-in email is the principal, like Access's `email` claim, so a member invited by email signs
   in with a provider account whose verified email matches. Access JWTs and Access service tokens are accepted nowhere.

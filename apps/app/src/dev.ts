@@ -1,12 +1,14 @@
-// The app Worker's entry under `alchemy dev` only, never deployed (alchemy.run.ts picks it on its dev flag): the
-// handler plus the state Worker's Durable Objects, bound locally. Locally a cross-script Durable Object is reached
-// through the dev registry by its hex id, so `ctx.id.name`, which tells a ControlPlane its org, would be lost
-// ([cloudflare/workerd#7286](https://github.com/cloudflare/workerd/issues/7286), docs/DEVELOPMENT.md
-// "Infrastructure"). For the same reason it also exports the dev-only `DevStateBridge` entrypoint, through which the API
-// Worker's dev entry (apps/api/src/dev.ts) reaches these same objects by name. Deployed, the app and the API Worker bind
-// the state Worker's objects by script name.
-export { default } from "./index.ts";
+// The app Worker's entry under `alchemy dev` only, never deployed (alchemy.run.ts picks it on its dev flag). Locally a
+// cross-script Durable Object is reached through the dev registry by its hex id, which drops `ctx.id.name`, the name a
+// ControlPlane learns its org from ([cloudflare/workerd#7286](https://github.com/cloudflare/workerd/issues/7286),
+// docs/DEVELOPMENT.md "Infrastructure"). So under `alchemy dev` this entry reaches the state Worker's objects through its
+// dev-only `DevStateBridge` entrypoint (`DEV_STATE_BRIDGE`, apps/state/src/dev.ts): the state namespaces are replaced
+// with bridged ones, whose stubs send their calls, with the object's name, over that service binding
+// (`@commissary/state/dev-state-bridge`). Deployed, the app Worker binds the state Worker's objects by script name and
+// runs src/index.ts.
+import { type DevBridgedEnv, devBridgedEnv } from "@commissary/state/dev-state-bridge";
+import app from "./index.ts";
 
-export { ControlPlane, Platform, SessionState } from "@commissary/state-worker";
-
-export { DevStateBridge } from "@commissary/state/dev-state-bridge";
+export default {
+  fetch: (request, env, ctx) => app.fetch(request, devBridgedEnv(env), ctx),
+} satisfies ExportedHandler<DevBridgedEnv<Env>>;

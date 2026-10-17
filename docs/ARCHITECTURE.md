@@ -32,34 +32,48 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
 
 ```
 .                             workspace root and deploy root (Alchemy, no Wrangler config); turbo.json
-  alchemy.run.ts              infrastructure: app, API and state Workers, DOs, KV, D1 (+ migrations), assets, cron,
-                              zone routes, Access
-  infra/                      deploy settings (.env) and Cloudflare Access provisioning
-  migrations/                 D1 schema of the usage database
-  apps/app/                   @commissary/app: the app Worker (management API, sign-in, panel serving)
+  alchemy.run.ts              infrastructure: app, API, state and (Cloud) auth Workers, DOs, KV, D1 (+ migrations),
+                              assets, cron, zone routes, Access
+  infra/                      deploy settings (.env), Cloudflare Access provisioning, a Cloud preview's app origin
+  migrations/usage/           D1 schema of the usage database (`Usage`)
+  migrations/sign-in/         D1 schema of Commissary Cloud's Better Auth database (`SignIn`, the auth Worker's)
+  apps/app/                   @commissary/app: the app Worker (management API, panel serving, Cloud's sign-in page)
     src/
       index.ts                Worker entry: fetch; state calls retried once on a code-update reset
-      dev.ts                  its `alchemy dev` entry: index.ts plus the state Worker's classes, bound locally, and
-                              the dev-only DevStateBridge entrypoint the API Worker's dev entry reaches them through
+      dev.ts                  its `alchemy dev` entry: index.ts with the state namespaces over the state Worker's
+                              dev bridge
       platform/               org deletion (every area's step, then the state's)
       http/                   router, the 404 of the client API (hosts.ts), plain 404s, /healthz
       access/                 the Access gate middleware: @commissary/auth's entry points with the Worker's routes
       management/             the org-wide /v9/management routes (members, people, orgs, SSO, API and management
                               keys), panel serving, the composition of every area's routes; path zones, role table,
                               org addressing
-      hosted/, sso/           Commissary Cloud's sign-in and per-org single sign-on
+      hosted/, sso/           Commissary Cloud: the sign-in page, the auth Worker's RPC (sign-in.ts), per-org single
+                              sign-on settings
     test/                     vitest suites in workerd: what goes through the Worker's router or fetch; worker.ts,
-                              the test Worker, re-exports the handler and the state Worker's Durable Objects
+                              the test Worker, re-exports the handler and the state Worker's Durable Objects and binds
+                              a fake auth Worker (FakeSignIn) on Cloud
   apps/api/                   @commissary/api: the API Worker (client API of every area, cron jobs; ADR 0030)
     src/
       index.ts                Worker entry: fetch, scheduled; state calls retried once on a code-update reset
-      dev.ts                  its `alchemy dev` entry: index.ts with the state namespaces over the app's dev bridge
+      dev.ts                  its `alchemy dev` entry: index.ts with the state namespaces over the state Worker's
+                              dev bridge
       scheduled.ts            the cron runner: its own job, then each area's ScheduledTasks
       http/                   router, the client gate, CORS, hosts (404 for every other path), /healthz
     test/                     vitest suites in workerd (self-hosted and Cloud projects): what goes through the client
                               API's router or fetch; worker.ts re-exports the handler and the state Worker's objects
+  apps/auth/                  @commissary/auth-worker: the auth Worker, Commissary Cloud only (ADR 0030)
+    src/
+      index.ts                Worker entry (AuthWorker) over entrypoint.ts: fetch on the auth host, the
+                              SignInService RPC methods
+      dev.ts                  its `alchemy dev` entry: the state namespaces over the state Worker's dev bridge
+      http/                   router: Better Auth's routes and the sign-in options, CORS for the app origin, /healthz
+      sign-in/                Better Auth (auth.ts), sessions and the RPC's D1 work (sessions.ts), the SSO plugin's
+                              adapter, Turnstile
+    test/                     vitest suites in workerd: worker.ts re-exports the entry and the state Worker's objects
   apps/state/                 @commissary/state-worker: the state Worker, no routes (ADR 0030)
     src/index.ts              exports ControlPlane, SessionState and Platform; answers every request 404
+    src/dev.ts                its `alchemy dev` entry: index.ts plus the dev-only DevStateBridge entrypoint
     src/control-plane.ts      the ControlPlane Durable Object: @commissary/state's base composed with the Models part
     src/env.d.ts              what the classes read: the state Worker's bindings
   apps/web/                   @commissary/web: control panel served at / (React, Effect Atom, TanStack Router; built
@@ -111,10 +125,11 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
 
 ## Runtime topology
 
-- **Workers** (stateless; ADR 0030): the **app Worker** (`Commissary`, `apps/app`): the panel, sign-in and the
-  management API, behind Access on a self-hosted stage; the **API Worker** (`Api`, `apps/api`): the client API of every
-  area (routing, the client gate, request handling, translation, upstream `fetch`, streaming) and the cron jobs, never
-  behind Access (clients send API keys).
+- **Workers** (stateless; ADR 0030): the **app Worker** (`Commissary`, `apps/app`): the panel and the management API,
+  behind Access on a self-hosted stage; the **API Worker** (`Api`, `apps/api`): the client API of every area (routing,
+  the client gate, request handling, translation, upstream `fetch`, streaming) and the cron jobs, never behind Access
+  (clients send API keys); on Commissary Cloud only, the **auth Worker** (`Auth`, `apps/auth`): Better Auth on the auth
+  host and its `SignIn` database (see "Commissary Cloud").
 - **State Worker** (`State`, `apps/state`, ADR 0030): defines the three Durable Objects below and nothing else: no
   routes, no domain, no `workers.dev` URL, and only the bindings their classes read. The app and the API Worker bind
   them by the state Worker's script name, so a deploy uploads the state Worker first, and restarts the Durable Objects
@@ -123,13 +138,13 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
   the namespaces of each invocation's `env` (`retryOnCodeUpdate`, `state/code-update-retry.ts`), and the wrapped stubs
   still send each call when it is made and a pipelined `stub.models().x()` in one round trip; the retry replays the
   chain from a new stub. State RPC changes are expand-then-contract (`docs/DEVELOPMENT.md`). The namespaces moved from
-  the app Worker with every stored object (`transferredFrom`, `docs/DEPLOY.md`). Under `alchemy dev` the app Worker
-  binds a local copy of the classes instead (`apps/app/src/dev.ts`): the dev registry would reach the state Worker's
-  objects by hex id, without the name a ControlPlane learns its org from
-  ([cloudflare/workerd#7286](https://github.com/cloudflare/workerd/issues/7286)). The API Worker's dev entry
-  (`apps/api/src/dev.ts`) reaches those same objects over a service binding to the app's dev-only `DevStateBridge`
-  entrypoint (`state/dev-state-bridge.ts`: a stub's call chain, with the object's name, is sent over the binding and
-  replayed on a real stub there). Neither dev entry is ever deployed. The tests run each Worker's handler and the
+  the app Worker with every stored object (`transferredFrom`, `docs/DEPLOY.md`). Under `alchemy dev` the other Workers
+  do not bind the namespaces: the dev registry would reach the state Worker's objects by hex id, without the name a
+  ControlPlane learns its org from ([cloudflare/workerd#7286](https://github.com/cloudflare/workerd/issues/7286)).
+  Their dev entries (`src/dev.ts` of the app, API and auth Workers) reach the objects over a service binding to the
+  state Worker's dev-only `DevStateBridge` entrypoint (`apps/state/src/dev.ts`, `state/dev-state-bridge.ts`: a stub's
+  call chain, with the object's name, is sent over the binding and replayed on a real stub there). No dev entry is
+  ever deployed. The tests run each Worker's handler and the
   classes in one isolate (`test/worker.ts` of each app).
 - **Hosts** (ADR 0028, ADR 0030; `apps/app/src/http/hosts.ts`, `apps/api/src/http/hosts.ts`): each Worker serves its own
   paths wherever it answers, and neither looks at the request's hostname. The client API paths (`CLIENT_API_PREFIXES`,
@@ -243,10 +258,11 @@ client -> (Cloudflare Access bypass on a single host) -> API Worker
   `META_MINT_URL`, and `CONTROL_PLANE` typed as objects with `models()`, the Models part's methods Models calls); `core` reads none. Code that stays in the
   Worker reads `AppEnv` (`src/worker-env.ts`). `requestContext` provides each from the invocation's `env`, plus auth's
   ports over it: `AuthDirectory` (`state/auth-directory.ts`, the Durable Object stubs) and `SignInSessions`
-  (`src/hosted/session.ts`, Better Auth); the global
+  (`src/hosted/sign-in.ts`, the auth Worker's RPC); the global
   `Env` appears only in the entries (`index.ts`, `dev.ts`, the API Worker's `scheduled.ts`) and tests; the API Worker's
   code reads `ApiBindings` (`apps/api/src/worker-env.ts`); the state Worker's classes read
-  `StateObjectEnv` and their parts' views (`apps/state/src/env.d.ts`).
+  `StateObjectEnv` and their parts' views (`apps/state/src/env.d.ts`); the auth Worker's code reads `AuthWorkerEnv`
+  (`apps/auth/src/worker-env.ts`).
 - Use Effect at boundaries and for orchestration: services (`Context.Service`) + `Layer`s, `Schema` for config,
   credentials and external payloads, tagged errors, `Stream` for upstream/downstream streaming, `HttpClient`
   (`FetchHttpClient`) for upstream calls so tests can swap the transport.
@@ -455,7 +471,7 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
     Where the org setting is off creating one answers `403` (`forbidden` for an account, `private_credentials_unavailable`
     for a key group). The download is the owner's alone (`403 private_credential` for an org admin, a service-token owner
     included); an owner downloads their own with their session, a shared credential keeps ADR 0006.
-  - **Usage and registry**: usage records carry `private` (`migrations/0006_usage_private.sql`), set by the client API handlers
+  - **Usage and registry**: usage records carry `private` (`migrations/usage/0006_usage_private.sql`), set by the client API handlers
     from the credential that served the request; every org-wide read, export and the export queue leave private records
     out, and a member's reads add their own (`UsageFilter.privateOf`), see _Usage accounting and observability_. The model
     registry lists a private credential's models to its owner only (`RegistrySnapshot.visibleTo(member)` for `/v1/models`,
@@ -1604,17 +1620,17 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   `observeTokenEvent(now, isToken)` (streams: first substantive token event, first packet as fallback). Codex streams use
   `isResponsesTokenEvent`; OpenAI-compatible and Claude executors still mark the first response byte (hook the matching
   `is*TokenEvent` into their stream loops to refine it).
-- **Persistence** (`d1.ts`, `d1-sink.ts`, `migrations/0001_usage_records.sql`): table `usage_records` (primary key =
+- **Persistence** (`d1.ts`, `d1-sink.ts`, `migrations/usage/0001_usage_records.sql`): table `usage_records` (primary key =
   attempt `request_id`, `trace_id` = inbound request id, raw token columns plus the `acct_*` breakdown columns,
-  `exported_at` for the queue; `migrations/0002_usage_sessions.sql` adds `session_id`, `parent_session_id` and `base_url`: the
+  `exported_at` for the queue; `migrations/usage/0002_usage_sessions.sql` adds `session_id`, `parent_session_id` and `base_url`: the
   explicit, derived (`derived:ctx:v1:...`) or LCP (`lcp:v1:...`) session identity of the attempt - the LCP one comes back
   from `pick` - and the credential's configured upstream base URL; the queue export projects the session ids to canonical
-  UUIDs like Go's `NormalizeToCanonicalUUID`, the parent only when it differs). `migrations/0003_usage_org.sql` adds
+  UUIDs like Go's `NormalizeToCanonicalUUID`, the parent only when it differs). `migrations/usage/0003_usage_org.sql` adds
   `org_id` (`NOT NULL DEFAULT 'global'`, so records from before orgs are `global`'s) with `(org_id, requested_at)`
   indexes: the writer stores the request's `CurrentOrg`, and every listing, summary, series, export and queue query
-  filters on it. `migrations/0005_usage_member.sql` adds `member_id` (the caller's member id in the org, `NULL` for records
+  filters on it. `migrations/usage/0005_usage_member.sql` adds `member_id` (the caller's member id in the org, `NULL` for records
   from before members and for callers admitted without a member record) with an `(org_id, member_id, requested_at)` index.
-  `migrations/0006_usage_private.sql` adds `private` (`1` when a private credential served the request, `0` for every record
+  `migrations/usage/0006_usage_private.sql` adds `private` (`1` when a private credential served the request, `0` for every record
   written before and for shared credentials): a private record is its owner's alone. Every listing, summary, series, export
   and the export queue filter `private = 0` unless the reader is named (`UsageFilter.privateOf`, the caller's member id,
   which then adds that member's own private records), so an org admin's org-wide views never include a member's private
@@ -1623,9 +1639,9 @@ once; a 401 retry keeps the rejected attempt's failed record, a failed-over cred
   `D1UsageSink` (default in `makeClientApiRoutes`) inserts through `ctx.waitUntil` (awaits when
   `waitUntil` throws), logs failures with request id and message only and never fails the request. The sink reads
   `ModelsEnv`/`WorkerExecutionContext` from the fiber context at publish time (not part of its type, so the conductor's
-  attempt plumbing is unchanged). `migrations/` is applied by Alchemy on every deploy
+  attempt plumbing is unchanged). `migrations/usage/` is applied by Alchemy on every deploy
   (`D1.Database` `migrations` in `alchemy.run.ts`). Failure bodies are truncated to 2 KiB.
-- **Cost** (`pricing.ts`, `pricing-service.ts`, `migrations/0004_usage_cost.sql`; Workers addition, ADR 0024): each record
+- **Cost** (`pricing.ts`, `pricing-service.ts`, `migrations/usage/0004_usage_cost.sql`; Workers addition, ADR 0024): each record
   stores the cost of its attempt in micro-dollars (`cost_micros`, `NULL` on records written before costs, never
   backfilled) and an `unpriced` flag (`1` = no price found), with a partial index on flagged rows. The cost is the
   token breakdown priced at the model's price: a **price override** of the org for the record's provider key and model
@@ -1849,8 +1865,8 @@ ADR 0027: deleting something deletes it at once, and Commissary keeps no content
   others (`ControlPlane.leaveOrg`: removes the member and their data and clears the removal note that blocks a removed
   member from auto-joining again, which only an admin removal keeps), re-syncs the registry index and drops the person's
   index rows. On Commissary Cloud the sign-in account is deleted after the last org step and before the registry forgets the
-  person (`hosted/session.ts` `deleteSignInAccount`: Better Auth's user with its sessions and linked accounts, in one D1
-  batch; the registry's `people` row goes with `removePerson`, so a later sign-in is a new sign-up).
+  person (`hosted/sign-in.ts` `deleteSignInAccount`, which asks the auth Worker: Better Auth's user with its sessions and
+  linked accounts, in one batch on its `SignIn` database; the registry's `people` row goes with `removePerson`, so a later sign-in is a new sign-up).
 
 ## SessionState Durable Object (`state/session-state/`)
 
@@ -2133,7 +2149,7 @@ error codes are in `docs/ACCESS.md` "Members, roles and teams".
   platform admin is an owner without joining. The ControlPlane is asked on every request, so removing a member or lowering
   a role applies on the next one. An unreachable ControlPlane fails the request (500) unless the caller is a platform admin
   or the route is platform-level. `AccessIdentity` carries `role` and `memberId`; client API handlers write the member id into
-  usage records (`member_id`, `migrations/0005_usage_member.sql`).
+  usage records (`member_id`, `migrations/usage/0005_usage_member.sql`).
 - **Policy** (`management/policy.ts` `routeAccess`, the role table the Worker passes to `authenticateManagement` as `needs`; each area hands it its entries, `AccessRule` of `@commissary/auth`, Models' in `models/management/access-rules.ts`): platform-level (no role: `/v9/management/me`, `/v9/management/orgs*`, panel
   pages without an org, `/assets`, `/management.html`), member (the client API endpoints, the org's panel pages, `GET` usage
   records/summary/series, where a plain member is narrowed to their own records: by member id, or by Access principal for
@@ -2333,7 +2349,7 @@ prices each attempt, the ControlPlane counts and decides.
   `AuthDirectory`, a narrow Effect service of the ControlPlane and Platform calls it makes (`auth/directory.ts`, which
   also holds the types crossing it, such as `ApiKeyVerdict`, `Admission` and `Standing`, that the stores import); the
   adapter over the Durable Object stubs is `state/auth-directory.ts`, an in-memory one is
-  `@commissary/auth/testing`. Better Auth's session lookup stays in the Worker behind auth's `SignInSessions` port. Auth
+  `@commissary/auth/testing`. The session lookup is the auth Worker's, reached over its RPC behind auth's `SignInSessions` port. Auth
   imports `@commissary/core`, `@commissary/contract`, `effect` and `jose` only, and tests in Node.js.
 - Clients of the client API send API keys ("API keys" above). Scripts on the management API use Access service
   tokens (`CF-Access-Client-Id`/`CF-Access-Client-Secret` headers, or Access single-header mode via `x-api-key`, set on
@@ -2360,57 +2376,81 @@ Workers addition, no Go counterpart (Go's single `remote-management.secret-key` 
 - **Limits**: the role is at most the issuer's; a key never downloads a credential, registers or re-roles a service
   token, or issues a key (`management_key_forbidden`); on Commissary Cloud a key of a suspended org or issuer is refused.
 
-## Commissary Cloud (`src/hosted/`, `auth/hosted-gate.ts`, `auth/standing.ts`)
+## Commissary Cloud (`apps/auth`, `src/hosted/`, `auth/hosted-gate.ts`, `auth/standing.ts`)
 
-Workers addition, no Go counterpart; ADR 0026. `COMMISSARY_MODE=cloud` (`auth/mode.ts` `isHosted`) replaces Access with
-the Worker's own sign-in; unset, every hosted route answers like an unknown path (`hosted/only.ts`) and the gate is the
-Access one, unchanged. User docs: `docs/ACCESS.md` "Commissary Cloud", `docs/DEPLOY.md` "Commissary Cloud".
+Workers addition, no Go counterpart; ADR 0026, ADR 0030. `COMMISSARY_MODE=cloud` (`auth/mode.ts` `isHosted`) replaces
+Access with Commissary's own sign-in; unset, every hosted route answers like an unknown path (`hosted/only.ts`), the gate
+is the Access one, unchanged, and there is no auth Worker. User docs: `docs/ACCESS.md` "Commissary Cloud",
+`docs/DEPLOY.md` "Commissary Cloud".
 
-- **Sign-in** (`auth.ts`, `routes.ts`, `session.ts`, `turnstile.ts`): Better Auth (core only, social providers GitHub and
-  Google, account linking by verified email) over D1 (`auth_*` tables, migration `0008_hosted_auth.sql`), mounted at
-  `/api/auth/*`, of which the Worker passes only social sign-in, the providers' callbacks, `get-session` and
-  `sign-out` (the rest answers 404). An unverified email is refused; provider tokens, IP and user agent are never stored
-  (database hooks blank them). `POST /api/auth/sign-in/social` needs a Turnstile token (`x-captcha-response`) solved on the deployment's hostname, verified
-  against `TURNSTILE_SECRET_KEY`. `/api/sign-in-options` tells the panel's `/sign-in` page the enabled providers and the
-  Turnstile site key. The session cookie is read on every request, so a session ended by sign-out or suspension stops
-  working at once.
+- **Auth Worker and hosts** (`apps/auth`, ADR 0030, #130, #132, #133): Better Auth runs in its own Worker, on the auth
+  host (`COMMISSARY_AUTH_DOMAIN`, by default `auth.<COMMISSARY_DOMAIN>`; a preview's auth workers.dev URL), which alone
+  binds the `SignIn` D1 database (migrations/sign-in/, Better Auth's default table names). The sign-in page is the
+  panel's, on the app host (`/sign-in`, `src/hosted/routes.ts`); it calls the auth host across origins, which the app
+  Worker names in the page (`<meta name="commissary-auth-origin">`, `AUTH_ORIGIN`, `management/web-panel.ts`) and allows
+  in the page's `connect-src`. The auth Worker answers CORS for the app origin (`APP_ORIGIN`) only, with credentials
+  (`apps/auth/src/http/cors.ts`); Better Auth trusts and returns to that origin alone, and its session cookie is scoped
+  to the app host (`AUTH_COOKIE_DOMAIN`), so the app host receives it. A preview's Workers share the account's
+  workers.dev subdomain, which its cookie is scoped to, so each preview names its cookie apart (`AUTH_COOKIE_PREFIX`). A
+  Cloud preview's app origin is derived before the app Worker exists (`infra/preview-origin.ts`). The app host has none
+  of Better Auth's routes.
+- **RPC** (`SignInService`, `auth/sign-in-service.ts`; `src/hosted/sign-in.ts`): the app Worker binds the auth Worker
+  as a service (`AUTH`, Cloud only) and asks it whose session a cookie is (the gate's `SignInSessions` port), to end
+  people's or a domain's sessions (a suspension, single sign-on becoming required) and to delete a sign-in account.
+  A lookup that fails (no binding, a broken auth Worker) answers 500, never a signed-out 401. Changes are
+  expand-then-contract, like the state RPC. The tests bind a fake of it (`test/worker.ts` `FakeSignIn`). The app Worker
+  runs no Better Auth: it keeps `@better-auth/sso` and `@better-auth/core` only to check an org's OIDC discovery
+  document when an admin saves its identity provider (`sso/idp.ts`).
+- **Sign-in** (`apps/auth/src/sign-in/`: `auth.ts`, `sessions.ts`, `turnstile.ts`; `http/sign-in-routes.ts`): Better
+  Auth (core only, social providers GitHub and Google, account linking by verified email), mounted at `/api/auth/*` on
+  the auth host, of which the auth Worker passes only social sign-in, the providers' callbacks, `get-session`,
+  `sign-out` and its health check `ok` (the rest answers 404). An unverified email is refused; provider tokens, IP and
+  user agent are never stored (database hooks blank them). `POST /api/auth/sign-in/social` needs a Turnstile token
+  (`x-captcha-response`) solved on the app host, where the widget renders, verified against `TURNSTILE_SECRET_KEY`.
+  `/api/sign-in-options` tells the sign-in page the enabled providers and the Turnstile site key. A write from any
+  origin but the app host's and the auth host's own is refused (`crossSiteWrite`). The app Worker asks about the
+  session cookie on every request, so a session ended by sign-out or suspension stops working at once.
 - **Gate** (`auth/hosted-gate.ts`, picked by the entry points when hosted): client API routes take API keys
   only (rate-limited per org, `auth/rate-limit.ts`, `429` with `Retry-After`); the management zone takes a management key,
-  else the Better Auth session cookie (looked up by the Worker, `session.ts`, behind auth's `SignInSessions` port), whose verified email becomes a `user` principal admitted like an Access email
+  else the Better Auth session cookie (looked up by the auth Worker over the RPC, behind auth's `SignInSessions` port), whose verified email becomes a `user` principal admitted like an Access email
   (platform admin when in `PLATFORM_ADMIN_EMAILS`). Access JWTs and service tokens are ignored. A panel page without a
   session redirects to `/sign-in?next=…`; the management API answers `401 Not signed in`. The cross-site checks
   (`auth/csrf.ts`) run first, as on a self-hosted Commissary.
-- **Standing** (`auth/standing.ts`, Platform registry `signIn`/`standing`): the first request of a new person signs them up,
-  creating a Personal org they own unless the person-to-orgs index already lists them (invited); `admitPrincipal` never
+- **Standing** (`auth/standing.ts`, Platform registry `signIn`/`standing`): the auth Worker signs a person up before their
+  first session starts (`ensureSignedUp`, #132), creating a Personal org they own unless the person-to-orgs index
+  already lists them (invited), and starts no session for a suspended person; `admitPrincipal` never
   auto-joins anyone to `global` on Commissary Cloud, whatever its stored setting. The registry records
   `people` (owned-org limit, suspension) and each org's `created_by` (owned orgs are counted by it) and `suspended_at`.
   Every request checks that neither the person nor the org is suspended, cached 30 s per isolate and forgotten at once
-  where a suspension is made; suspending also deletes the person's (or the org members') sessions.
-- **Per-org single sign-on** (`src/sso/`, `@commissary/auth/sso`, `sso-adapter.ts`, `management/sso-routes.ts`; issue #76): each org's one
+  where a suspension is made; suspending also ends the person's (or the org members') sessions, over the RPC.
+- **Per-org single sign-on** (`src/sso/`, `@commissary/auth/sso`, `apps/auth/src/sign-in/sso-adapter.ts`, `management/sso-routes.ts`; issue #76): each org's one
   identity provider (OIDC or SAML, sealed with the org's data key) and its email domains live in its ControlPlane
   (`state/sso/store.ts`); the Platform registry keeps the index of verified domains (`sso_domains`, one org per domain, with
   `require_sso`) that a sign-in looks up. A domain is proved by a DNS TXT record read over DNS over HTTPS (`sso/dns.ts`).
   Better Auth's SSO plugin runs the OIDC (PKCE) and SAML flows, but its `ssoProvider` model is never in D1: the adapter
   wrapper answers it from the org's ControlPlane by provider id (`sso-<org id>`, `auth/sso/provider.ts`), so no migration is
   needed and nothing writes it (the plugin's registration and domain-verification routes are not passed). `POST
-  /api/auth/sign-in/sso {email}` is rewritten by the Worker to the provider of the org holding the email's domain. A
+  /api/auth/sign-in/sso {email}` is rewritten by the auth Worker to the provider of the org holding the email's domain
+  (the providers send people back to the auth host: the settings name its URLs, `AUTH_ORIGIN`). A
   completed SSO sign-in is admitted by `ControlPlane.admitThroughSso` (the email's domain must be one the org verified;
   a removed person is refused until re-added), which joins the person as a `member` instead of creating a Personal org.
   Requiring SSO for a domain makes the social sign-in hook refuse that domain (`sso_required`) and deletes the D1
-  sessions of everyone at it. Refusals redirect to `/sign-in?error=<code>`. Differences from Better Auth's own
+  sessions of everyone at it. Refusals redirect to the app host's `/sign-in?error=<code>`. Differences from Better Auth's own
   organization SSO: providers are not stored by the plugin, domain proof uses our own TXT record, and membership is the
   Commissary's, not the plugin's.
   The plugin's dependencies (samlify, xmldom, xpath) are imported lazily, but every module of the bundle is still
   compiled at Worker startup, which has a CPU time limit: `infra/bundle.ts` aliases `tldts` to a host-name stand-in
-  (`sso/tldts.ts`) and `pnpm-workspace.yaml` keeps one copy of xpath.
+  (`auth/sso/tldts.ts`) and `pnpm-workspace.yaml` keeps one copy of xpath.
 - **Platform-level routes**: `POST /orgs` for everyone signed in, up to the owned-org limit; `PATCH /orgs/<slug>
   {suspended}` and `GET|PATCH /people/<email>` (`people-routes.ts`) for platform admins.
 - **Downloads**: only platform admins download a stored credential (`download_requires_platform_admin`), since no
   service token exists to carry ADR 0006's rule.
-- **Infra**: `alchemy.run.ts` creates no Access application or bypass on Commissary Cloud, mints `BETTER_AUTH_SECRET` as an
-  Alchemy `Random`, and binds the sign-in settings to the app Worker and the `ORG_RATE_LIMIT` rate-limit binding to the
-  API Worker (`infra/settings.ts` validates them). CI deploys a preview as Commissary Cloud while its pull request has the `cloud-preview` label and checks it with
-  `tools/check-cloud-deploy.sh`.
+- **Infra**: `alchemy.run.ts` creates no Access application or bypass on Commissary Cloud; it creates the auth Worker and
+  its `SignIn` database, mints `BETTER_AUTH_SECRET` as an Alchemy `Random`, and binds the sign-in settings to the auth
+  Worker, the auth Worker to the app Worker, and the `ORG_RATE_LIMIT` rate-limit binding to the API Worker
+  (`infra/settings.ts` validates them). Deploy order: state, auth, app, API (a preview: state, API, auth, app). CI deploys
+  a preview as Commissary Cloud while its pull request has the `cloud-preview` label and checks it with
+  `tools/check-cloud-deploy.sh`; `COMMISSARY_MODE=cloud pnpm smoke` runs it under `alchemy dev`.
 
 ## Provider OAuth logins (`models/oauth/`, `models/management/oauth-routes.ts`)
 

@@ -1,5 +1,6 @@
-// The dev-only state bridge (`alchemy dev`, cloudflare/workerd#7286): the API Worker's dev entry records the call
-// chains its callers write on bridged stubs and the app Worker's dev entrypoint replays them on its own stubs. Checked
+// The dev-only state bridge (`alchemy dev`, cloudflare/workerd#7286): the app, API and auth Workers' dev entries record
+// the call chains their callers write on bridged stubs and the state Worker's dev entrypoint replays them on its own
+// stubs. Checked
 // here on the test Worker's real ControlPlane, with a bridge that replays in the same isolate and records each chain
 // it is sent.
 import { env } from "cloudflare:workers";
@@ -7,15 +8,17 @@ import { describe, expect, it } from "vitest";
 import { OrgId } from "@commissary/core";
 import {
   type DevChainStep,
+  devBridgedEnv,
   devBridgedNamespace,
   type DevStateBinding,
   type DevStateBridgeRpc,
   replayDevChain,
 } from "../src/dev-state-bridge.ts";
+import type { StateBindings } from "../src/env.ts";
 
 const freshOrg = () => OrgId.make(`bridge-${crypto.randomUUID().slice(0, 8)}`);
 
-/** A bridge that replays on the test Worker's namespaces, as the app Worker's `DevStateBridge` does, and records. */
+/** A bridge that replays on the test Worker's namespaces, as the state Worker's `DevStateBridge` does, and records. */
 const recordingBridge = () => {
   const sent: Array<{
     binding: DevStateBinding;
@@ -155,6 +158,21 @@ describe("devBridgedNamespace", () => {
     >(bridge, "PLATFORM").getByName(`platform-${crypto.randomUUID()}`);
 
     expect(Array.isArray(await platform.listOrgs())).toBe(true);
+    expect(sent.map(({ binding }) => binding)).toEqual(["PLATFORM"]);
+  });
+});
+
+describe("devBridgedEnv", () => {
+  it("puts the state namespaces over the bridge, keeps the other bindings, and makes one copy per env", async () => {
+    const { bridge, sent } = recordingBridge();
+    const dev = { DEV_STATE_BRIDGE: bridge, OTHER: "kept" };
+    const bridged = devBridgedEnv<StateBindings & { readonly OTHER: string }>(dev);
+
+    expect(bridged.OTHER).toBe("kept");
+    expect(devBridgedEnv<StateBindings & { readonly OTHER: string }>(dev)).toBe(bridged);
+    expect(
+      Array.isArray(await bridged.PLATFORM.getByName(`p-${crypto.randomUUID()}`).listOrgs()),
+    ).toBe(true);
     expect(sent.map(({ binding }) => binding)).toEqual(["PLATFORM"]);
   });
 });

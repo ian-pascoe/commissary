@@ -8,15 +8,19 @@
  * answers the same `index.html`; the panel's router picks the page in the browser. Both pages and files are gated like
  * the management API (Access, `policy.ts`: a page of an org needs a role in it) because the Worker runs before
  * static assets. The page talks to `/v9/management`
- * on its own origin and sends no credentials of its own: Access authenticates those calls.
+ * on its own origin and sends no credentials of its own: Access authenticates those calls. On Commissary Cloud the
+ * sign-in page also calls the auth host (ADR 0030), whose origin the page names in a `<meta>` tag
+ * ({@link AUTH_ORIGIN_META}) and its policy allows ({@link hostedPanelCsp}).
  */
 import { Effect } from "effect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import { addressedSlug } from "./org-address.ts";
 import { AccessPrincipal, AuthConfig, isHosted } from "@commissary/auth";
 import { PANEL_ORG_PREFIX, PANEL_SECTIONS } from "./zones.ts";
+import { AUTH_ORIGIN_META } from "@commissary/contract/sign-in";
 import { jsonReply } from "@commissary/core";
 import { openableOrgs } from "./org-routes.ts";
+import { configuredAuthOrigin } from "../hosted/sign-in.ts";
 import { AppEnv } from "../worker-env.ts";
 
 export const PANEL_NOT_BUILT = "the control panel is not built; run `pnpm build`";
@@ -39,17 +43,36 @@ export const PANEL_CSP = [
   "frame-ancestors 'none'",
 ].join("; ");
 
-/** Where the Turnstile widget of Commissary Cloud's sign-in page (`src/hosted/turnstile.ts`) loads from. */
+/** Where the Turnstile widget of Commissary Cloud's sign-in page loads from (the auth Worker checks its tokens). */
 export const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
 
 /**
  * The panel's policy on Commissary Cloud: {@link PANEL_CSP} plus the Turnstile widget (its script and its frame) on the
- * sign-in page. Every page gets it, since the panel moves between pages without a reload.
+ * sign-in page, and the auth host (`authOrigin`, when configured), which the sign-in page and the sign-out call. Every
+ * page gets it, since the panel moves between pages without a reload.
  */
-export const HOSTED_PANEL_CSP = PANEL_CSP.replace(
-  "script-src 'self'",
-  `script-src 'self' ${TURNSTILE_ORIGIN}`,
-).replace("frame-ancestors 'none'", `frame-src ${TURNSTILE_ORIGIN}; frame-ancestors 'none'`);
+export const hostedPanelCsp = (authOrigin: string | undefined): string =>
+  PANEL_CSP.replace("script-src 'self'", `script-src 'self' ${TURNSTILE_ORIGIN}`)
+    .replace(
+      "connect-src 'self'",
+      `connect-src 'self'${authOrigin === undefined ? "" : ` ${authOrigin}`}`,
+    )
+    .replace("frame-ancestors 'none'", `frame-src ${TURNSTILE_ORIGIN}; frame-ancestors 'none'`);
+
+const escapeAttribute = (value: string): string =>
+  value.replace(/[&"<>]/g, (char) => `&#${char.charCodeAt(0)};`);
+
+/** The panel's page with the auth host's origin in its `<head>`. */
+const withAuthOrigin = (page: Response, authOrigin: string): Response =>
+  new HTMLRewriter()
+    .on("head", {
+      element: (head) => {
+        head.append(`<meta name="${AUTH_ORIGIN_META}" content="${escapeAttribute(authOrigin)}">`, {
+          html: true,
+        });
+      },
+    })
+    .transform(page);
 
 const PAGE_HEADERS = {
   "content-type": "text/html; charset=utf-8",
@@ -135,12 +158,17 @@ export const panelIndex = Effect.gen(function* () {
     return jsonReply(404, { error: PANEL_NOT_BUILT });
   }
 
-  return HttpServerResponse.raw(asset.body, {
-    status: 200,
-    headers: isHosted(auth)
-      ? { ...PAGE_HEADERS, "content-security-policy": HOSTED_PANEL_CSP }
-      : PAGE_HEADERS,
-  });
+  if (!isHosted(auth))
+    return HttpServerResponse.raw(asset.body, { status: 200, headers: PAGE_HEADERS });
+  const authOrigin = yield* configuredAuthOrigin;
+
+  return HttpServerResponse.raw(
+    authOrigin === undefined ? asset.body : withAuthOrigin(asset, authOrigin).body,
+    {
+      status: 200,
+      headers: { ...PAGE_HEADERS, "content-security-policy": hostedPanelCsp(authOrigin) },
+    },
+  );
 });
 
 /**

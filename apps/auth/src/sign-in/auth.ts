@@ -1,7 +1,13 @@
 /**
- * Sign-in on Commissary Cloud (ADR 0026): Better Auth's core with GitHub and Google as social providers, its people and
- * sessions in D1 (`USAGE`, tables `auth_*` from `migrations/0008_hosted_auth.sql`). Orgs, members and teams stay in the
- * org's ControlPlane, and a session only says which verified email signed in. New in the Workers port.
+ * Sign-in on Commissary Cloud (ADR 0026, ADR 0030): Better Auth's core with GitHub and Google as social providers, its
+ * people and sessions in D1 (`SIGN_IN`, the `SignIn` database only this Worker binds, with Better Auth's default table
+ * names from `migrations/sign-in/`). Orgs, members and teams stay in the org's ControlPlane, and a session only says
+ * which verified email signed in. New in the Workers port.
+ *
+ * Better Auth answers on the auth host, and the sign-in page and the panel are on the app host (`APP_ORIGIN`), the one
+ * origin it trusts and returns to. Its session cookie is scoped to the app host (`AUTH_COOKIE_DOMAIN`), which the app
+ * Worker hands back over the RPC (`SignInService.session`), and its name carries a per-preview prefix
+ * (`AUTH_COOKIE_PREFIX`).
  *
  * Only an email the provider reports as verified becomes an identity (`validateUserInfo`); the provider's tokens are
  * not kept (Commissary never calls GitHub or Google on the person's behalf), nor the browser's address or user agent.
@@ -15,7 +21,7 @@
  * Better Auth is imported on first use: a self-hosted Commissary never loads it.
  */
 import type { betterAuth, BetterAuthOptions } from "better-auth";
-import { AUTH_BASE_PATH, SIGN_IN_PAGE_PATH } from "@commissary/contract/sign-in";
+import { AUTH_BASE_PATH, httpOrigin, SIGN_IN_PAGE_PATH } from "@commissary/contract/sign-in";
 import { type ProviderLookup, ssoAwareAdapter } from "./sso-adapter.ts";
 
 /** The social providers Commissary Cloud can offer, in the order the sign-in page lists them. */
@@ -23,21 +29,19 @@ export const SIGN_IN_PROVIDERS = ["github", "google"] as const;
 
 export type SignInProvider = (typeof SIGN_IN_PROVIDERS)[number];
 
-/** Better Auth's tables: prefixed, since they share the `USAGE` database with the usage records. */
-export const AUTH_TABLES = {
-  user: "auth_user",
-  session: "auth_session",
-  account: "auth_account",
-  verification: "auth_verification",
-} as const;
-
 /** The refusal Better Auth reports (`?error=`) when a provider has not verified the email. */
 export const EMAIL_NOT_VERIFIED = "email_not_verified";
 
 /** The bindings and variables Better Auth reads. */
 export interface SignInBindings {
-  /** Better Auth's tables ({@link AUTH_TABLES}) live in the usage database. */
-  readonly USAGE: D1Database;
+  /** Better Auth's tables (`user`, `session`, `account`, `verification`): the `SignIn` database. */
+  readonly SIGN_IN: D1Database;
+  /** The app host's origin: the sign-in page and the panel, the one origin trusted and returned to. */
+  readonly APP_ORIGIN: string;
+  /** The session cookie's `Domain`; empty for a host-only cookie (`alchemy dev`). */
+  readonly AUTH_COOKIE_DOMAIN: string;
+  /** Better Auth's cookie prefix; empty for its default. */
+  readonly AUTH_COOKIE_PREFIX: string;
   readonly BETTER_AUTH_SECRET?: string;
   readonly SIGN_IN_GITHUB_CLIENT_ID?: string;
   readonly SIGN_IN_GITHUB_CLIENT_SECRET?: string;
@@ -75,10 +79,16 @@ const providerClient = (
 /** Shortest accepted `BETTER_AUTH_SECRET`: Better Auth signs cookies and state with it. */
 export const MIN_SECRET_LENGTH = 32;
 
+/** The app host's origin (`APP_ORIGIN`), `undefined` when it is not an http(s) origin. */
+export const appOriginOf = (env: Pick<SignInBindings, "APP_ORIGIN">): string | undefined =>
+  httpOrigin(env.APP_ORIGIN);
+
 /** What the deployment is missing for sign-in, `undefined` when nothing is. */
 export const authConfigurationProblem = (env: SignInBindings): string | undefined => {
   if ((setting(env.BETTER_AUTH_SECRET)?.length ?? 0) < MIN_SECRET_LENGTH)
     return `BETTER_AUTH_SECRET is missing or shorter than ${MIN_SECRET_LENGTH} characters`;
+
+  if (appOriginOf(env) === undefined) return "APP_ORIGIN is missing or not an origin";
 
   return undefined;
 };
@@ -92,10 +102,13 @@ export interface SignInRefusal {
   readonly errorDescription: string;
 }
 
-/** Hooks the hosted gate adds to the sign-in (suspension, `suspension.ts`; single sign-on, `session.ts`). */
+/** Hooks the Worker adds to the sign-in (sign-up and suspension, single sign-on: `sessions.ts`). */
 export interface AuthHooks {
-  /** Whether a session may start for the person with this (verified, lowercased) email. */
-  readonly maySignIn?: (email: string) => Promise<boolean>;
+  /**
+   * Signs up the person with this (verified, lowercased) email before a session starts for them
+   * (`@commissary/auth` `ensureSignedUp`); `false` refuses the session (a suspended person).
+   */
+  readonly signUp?: (email: string) => Promise<boolean>;
   /** The identity provider with this Better Auth provider id (`@commissary/auth/sso` `provider.ts`). */
   readonly ssoProvider?: ProviderLookup;
   /**
@@ -113,16 +126,32 @@ export interface AuthHooks {
 /** Better Auth's methods of a sign-in through an org's identity provider. */
 const SSO_METHODS = new Set(["sso-oidc", "sso-saml"]);
 
-/** Better Auth's options for the deployment at `origin` (`https://<host>`). */
-export const authOptions = (env: SignInBindings, origin: string, hooks: AuthHooks = {}) =>
-  ({
+/** The session cookie's settings: scoped to `AUTH_COOKIE_DOMAIN` when set, named with `AUTH_COOKIE_PREFIX` when set. */
+const cookieOptions = (env: SignInBindings) => {
+  const domain = setting(env.AUTH_COOKIE_DOMAIN);
+  const prefix = setting(env.AUTH_COOKIE_PREFIX);
+
+  return {
+    useSecureCookies: true,
+    ...(domain === undefined ? {} : { crossSubDomainCookies: { enabled: true, domain } }),
+    ...(prefix === undefined ? {} : { cookiePrefix: prefix }),
+  };
+};
+
+/**
+ * Better Auth's options for the auth Worker at `origin` (`https://<auth host>`). `authConfigurationProblem` refuses a
+ * missing secret or app origin before an instance is built.
+ */
+export const authOptions = (env: SignInBindings, origin: string, hooks: AuthHooks = {}) => {
+  const appOrigin = appOriginOf(env) ?? "";
+
+  return {
     appName: "commissary",
     baseURL: origin,
     basePath: AUTH_BASE_PATH,
-    trustedOrigins: [origin],
-    // `authConfigurationProblem` refuses a missing secret before an instance is built.
+    trustedOrigins: [appOrigin],
     secret: setting(env.BETTER_AUTH_SECRET) ?? "",
-    database: env.USAGE,
+    database: env.SIGN_IN,
     socialProviders: Object.fromEntries(
       SIGN_IN_PROVIDERS.flatMap((provider) => {
         const client = providerClient(env, provider);
@@ -131,7 +160,6 @@ export const authOptions = (env: SignInBindings, origin: string, hooks: AuthHook
       }),
     ),
     user: {
-      modelName: AUTH_TABLES.user,
       validateUserInfo: async ({ user, source }) => {
         const email = typeof user.email === "string" ? user.email.toLowerCase() : "";
 
@@ -156,13 +184,10 @@ export const authOptions = (env: SignInBindings, origin: string, hooks: AuthHook
         return undefined;
       },
     },
-    session: { modelName: AUTH_TABLES.session },
     account: {
-      modelName: AUTH_TABLES.account,
       // The same verified email through GitHub and Google is one person.
       accountLinking: { enabled: true, trustedProviders: [...SIGN_IN_PROVIDERS] },
     },
-    verification: { modelName: AUTH_TABLES.verification },
     databaseHooks: {
       user: {
         create: {
@@ -182,11 +207,7 @@ export const authOptions = (env: SignInBindings, origin: string, hooks: AuthHook
           before: async (session, context) => {
             const email = await sessionEmail(context, session.userId);
 
-            if (
-              email !== undefined &&
-              hooks.maySignIn !== undefined &&
-              !(await hooks.maySignIn(email))
-            )
+            if (email !== undefined && hooks.signUp !== undefined && !(await hooks.signUp(email)))
               return false;
 
             return { data: { ...session, ipAddress: null, userAgent: null } };
@@ -196,10 +217,12 @@ export const authOptions = (env: SignInBindings, origin: string, hooks: AuthHook
     },
     // Turnstile (`turnstile.ts`) guards the only way in; Better Auth's own limiter would count per isolate only.
     rateLimit: { enabled: false },
-    advanced: { useSecureCookies: true, ipAddress: { disableIpTracking: true } },
-    onAPIError: { errorURL: SIGN_IN_PAGE_PATH },
+    advanced: { ...cookieOptions(env), ipAddress: { disableIpTracking: true } },
+    // A failed sign-in returns to the sign-in page, on the app host.
+    onAPIError: { errorURL: `${appOrigin}${SIGN_IN_PAGE_PATH}` },
     telemetry: { enabled: false },
-  }) satisfies BetterAuthOptions;
+  } satisfies BetterAuthOptions;
+};
 
 const withoutProviderTokens = <A extends Record<string, unknown>>(account: A): A => ({
   ...account,
@@ -230,7 +253,7 @@ const sessionEmail = async (
   return user?.email.toLowerCase();
 };
 
-/** What the Worker uses of its Better Auth instance. */
+/** What the auth Worker uses of its Better Auth instance. */
 export interface HostedAuth {
   readonly handler: (request: Request) => Promise<Response>;
   readonly api: {

@@ -5,6 +5,7 @@ import { Option, Schema } from "effect";
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
 import { AUTH_ROUTES } from "@commissary/contract/sign-in";
 import { kit } from "../components/Kit.tsx";
+import { onAuthHost } from "../auth-origin.ts";
 import { workEmailProblem, workSignInProblem } from "../lib/sso.ts";
 import styles from "./SignIn.module.css";
 
@@ -48,7 +49,7 @@ export const WorkEmail = ({
     onBusy(true);
 
     try {
-      const response = await fetch(AUTH_ROUTES.signInSso, {
+      const response = await fetch(onAuthHost(AUTH_ROUTES.signInSso), {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json", "x-captcha-response": token },

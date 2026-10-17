@@ -1,6 +1,104 @@
 // The test Worker's entry (vitest.config.ts): the app Worker's handler and the state Worker's Durable Objects in one
 // isolate (#135, ADR 0030). Deployed, the app binds the state Worker's namespaces by script name; here they are the
 // test Worker's own, so `runInDurableObject` and global `fetch` stubs reach them, with no auxiliary Worker.
-export { default } from "../src/index.ts";
+//
+// On Commissary Cloud the app Worker asks the auth Worker (apps/auth) who a session belongs to over its service binding
+// (`AUTH`). Here `AUTH` is {@link FakeSignIn}, an entrypoint of this Worker reached over RPC like the real one
+// (`ctx.exports`), whose sessions the tests start themselves (test/hosted/support.ts `signIn`). Better Auth's own
+// sign-in is the auth Worker's, tested there (apps/auth/test/).
+import { WorkerEntrypoint } from "cloudflare:workers";
+import type { SignedInPerson, SignInService } from "@commissary/auth";
+import app from "../src/index.ts";
 
 export { ControlPlane, Platform, SessionState } from "@commissary/state-worker";
+
+/** The session cookie the fake reads, named like Better Auth's. */
+export const FAKE_SESSION_COOKIE = "__Secure-better-auth.session_token";
+
+/** Where the fake keeps a session (`<prefix><token>`: the person) in the test Worker's KV namespace. */
+export const FAKE_SESSION_PREFIX = "test:sign-in:session:";
+
+/** A session token whose lookup fails, as the auth Worker's does when its database cannot be reached. */
+export const FAILING_SESSION_TOKEN = "lookup-fails";
+
+/** Where the fake keeps a sign-in account (`<prefix><email>`), as Better Auth's `user` row. */
+export const FAKE_ACCOUNT_PREFIX = "test:sign-in:account:";
+
+const tokenOf = (cookie: string): string | undefined =>
+  cookie
+    .split(";")
+    .map((pair) => pair.trim())
+    .find((pair) => pair.startsWith(`${FAKE_SESSION_COOKIE}=`))
+    ?.slice(FAKE_SESSION_COOKIE.length + 1);
+
+/** The auth Worker's RPC (`SignInService`) over sessions the tests start, kept in `CACHE`. */
+export class FakeSignIn extends WorkerEntrypoint<Env> implements SignInService {
+  async session(cookie: string): Promise<SignedInPerson | null> {
+    const token = tokenOf(cookie);
+
+    if (token === undefined || token === "") return null;
+
+    if (token === FAILING_SESSION_TOKEN) throw new Error("the sign-in database is unreachable");
+
+    return await this.env.CACHE.get<SignedInPerson>(`${FAKE_SESSION_PREFIX}${token}`, "json");
+  }
+
+  async endSessions(emails: ReadonlyArray<string>): Promise<number> {
+    const ended = new Set(emails.map((email) => email.toLowerCase()));
+
+    return await this.#end((email) => ended.has(email));
+  }
+
+  async endDomainSessions(domain: string): Promise<number> {
+    return await this.#end((email) => email.endsWith(`@${domain.toLowerCase()}`));
+  }
+
+  async deleteSignInAccount(email: string): Promise<number> {
+    const address = email.toLowerCase();
+    const key = `${FAKE_ACCOUNT_PREFIX}${address}`;
+    const existed = (await this.env.CACHE.get(key)) !== null;
+
+    await this.#end((holder) => holder === address);
+    await this.env.CACHE.delete(key);
+
+    return existed ? 1 : 0;
+  }
+
+  /** Ends the sessions of the people `ends` names; how many. */
+  async #end(ends: (email: string) => boolean): Promise<number> {
+    const { keys } = await this.env.CACHE.list({ prefix: FAKE_SESSION_PREFIX });
+    let ended = 0;
+
+    for (const { name } of keys) {
+      const person = await this.env.CACHE.get<SignedInPerson>(name, "json");
+
+      if (person !== null && ends(person.email)) {
+        await this.env.CACHE.delete(name);
+        ended += 1;
+      }
+    }
+
+    return ended;
+  }
+}
+
+/** The bindings of each `env` with `AUTH` added, kept so that what the Worker caches per `env` object stays cached. */
+const withAuth = new WeakMap<Env, Env>();
+
+export default {
+  fetch: async (request, env, ctx) => {
+    let bound = withAuth.get(env);
+
+    if (bound === undefined) {
+      // SAFETY: `ctx.exports` holds a loopback binding of each entrypoint this module exports, `FakeSignIn` among
+      // them; its RPC stub has `SignInService`'s methods. `Cloudflare.Exports` is typed after the app Worker's own
+      // module (src/env.d.ts), which does not export the fake.
+      const fake = (ctx.exports as unknown as { FakeSignIn: SignInService }).FakeSignIn;
+
+      bound = { ...env, AUTH: fake };
+      withAuth.set(env, bound);
+    }
+
+    return await app.fetch(request, bound, ctx);
+  },
+} satisfies ExportedHandler<Env>;

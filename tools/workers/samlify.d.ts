@@ -1,9 +1,9 @@
 /**
- * The part of samlify's API the Worker program uses, in place of samlify's own declarations (`paths` in
- * tsconfig.json). Those import `@xmldom/xmldom`, whose `/// <reference lib="dom" />` would put the browser's
- * globals into the Worker program and break its Web Crypto and fetch types. samlify is reached through Better Auth's
- * SSO plugin (`src/hosted/auth.ts`, which never names it) and plays a test identity provider in
- * `test/hosted/identity-providers.ts`; nothing else.
+ * The part of samlify's API the Worker programs use, in place of samlify's own declarations (`paths` in
+ * apps/app/tsconfig.json and apps/auth/tsconfig.json). Those import `@xmldom/xmldom`, whose `/// <reference lib="dom" />`
+ * would put the browser's globals into a Worker program and break its Web Crypto and fetch types. samlify is reached
+ * through Better Auth's SSO plugin (apps/auth/src/sign-in/auth.ts and apps/app/src/sso/idp.ts, which never name it)
+ * and plays a test identity provider in apps/auth/test/identity-providers.ts; nothing else.
  */
 
 /** An endpoint of an entity's metadata. */

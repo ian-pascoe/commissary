@@ -53,6 +53,6 @@ export const authenticateManagement = (
 > =>
   Effect.gen(function* () {
     return isHosted(yield* AuthConfig)
-      ? yield* hostedManagementGate(headers, requestUrl, route)
+      ? yield* hostedManagementGate(headers, route)
       : yield* accessGate(headers, requestUrl, route);
   });

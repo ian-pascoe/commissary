@@ -1,13 +1,13 @@
 // Helpers for the usage tests: the D1 schema (the real migration file) and sample records.
 import { env } from "cloudflare:workers";
-import initial from "../../../../migrations/0001_usage_records.sql?raw";
-import sessions from "../../../../migrations/0002_usage_sessions.sql?raw";
-import orgs from "../../../../migrations/0003_usage_org.sql?raw";
-import costs from "../../../../migrations/0004_usage_cost.sql?raw";
-import members from "../../../../migrations/0005_usage_member.sql?raw";
-import privates from "../../../../migrations/0006_usage_private.sql?raw";
-import failures from "../../../../migrations/0007_usage_failure.sql?raw";
-import hostedAuth from "../../../../migrations/0008_hosted_auth.sql?raw";
+import initial from "../../../../migrations/usage/0001_usage_records.sql?raw";
+import sessions from "../../../../migrations/usage/0002_usage_sessions.sql?raw";
+import orgs from "../../../../migrations/usage/0003_usage_org.sql?raw";
+import costs from "../../../../migrations/usage/0004_usage_cost.sql?raw";
+import members from "../../../../migrations/usage/0005_usage_member.sql?raw";
+import privates from "../../../../migrations/usage/0006_usage_private.sql?raw";
+import failures from "../../../../migrations/usage/0007_usage_failure.sql?raw";
+import hostedAuth from "../../../../migrations/usage/0008_hosted_auth.sql?raw";
 import { GLOBAL_ORG } from "@commissary/core";
 import { emptyUsageDetail, type UsageRecord } from "../../src/usage/record.ts";
 
