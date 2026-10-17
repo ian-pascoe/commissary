@@ -6,16 +6,16 @@
  * Org admins read the settings (`policy.ts`); changing them takes the org owner role. A domain becomes the org's
  * when its TXT record is found and the Platform registry gives it to the org, which it refuses while another org holds
  * it (`PlatformStore.claimSsoDomain`); removing a domain or the org frees it there. Requiring single sign-on for a
- * domain is recorded in both, so the sign-in can refuse GitHub and Google for it (`hosted/auth.ts`), and ends the
+ * domain is recorded in both, so the sign-in can refuse GitHub and Google for it (the auth Worker, apps/auth), and ends the
  * sessions of everyone at the domain: they sign in again, through the identity provider.
  */
 import { X509Certificate } from "node:crypto";
 import { Clock, Effect, Schema } from "effect";
-import { HttpRouter, HttpServerRequest, type HttpServerResponse } from "effect/http";
+import { HttpRouter, type HttpServerResponse } from "effect/http";
 import { AccessPrincipal, type Principal, roleAtLeast } from "@commissary/auth";
 import { challengeRecord, serviceProviderOf } from "@commissary/auth/sso";
 import { hostedOnly } from "../hosted/only.ts";
-import { endDomainSessions } from "../hosted/session.ts";
+import { authOriginOf, endDomainSessions } from "../hosted/sign-in.ts";
 import { lookupTxt } from "../sso/dns.ts";
 import { type IdpInput, type IdpProblem, resolveIdp, testIdp } from "../sso/idp.ts";
 import {
@@ -136,17 +136,23 @@ const decoded = <S extends Schema.Top & { readonly DecodingServices: never }>(sc
     ),
   );
 
-const originOf = Effect.gen(function* () {
-  const request = yield* HttpServerRequest.HttpServerRequest;
+/** The auth host's origin, where Better Auth's SSO plugin answers the identity providers (ADR 0030). */
+const authOrigin = Effect.gen(function* () {
+  const origin = authOriginOf(yield* AppEnv);
 
-  return new URL(request.originalUrl, "http://localhost").origin;
+  if (origin !== undefined) return origin;
+  yield* Effect.logError(
+    "hosted sign-in is not configured: AUTH_ORIGIN is missing or not an origin",
+  );
+
+  return yield* replyError(500, "Sign-in is not configured");
 });
 
 const domainParam = Effect.map(HttpRouter.params, (params) => params["domain"] ?? "");
 
 const getSettings = Effect.gen(function* () {
   const identity = yield* AccessPrincipal;
-  const origin = yield* originOf;
+  const origin = yield* authOrigin;
   const state = yield* controlPlane("ssoState", (stub) => stub.ssoState());
   const sp = serviceProviderOf(origin, identity.org);
 
@@ -296,9 +302,7 @@ const updateDomain = Effect.gen(function* () {
 
   // GitHub and Google sessions of the domain's people would outlive the requirement: end them all.
   if (updated.requireSso) {
-    const env = yield* AppEnv;
-
-    const ended = yield* Effect.tryPromise(() => endDomainSessions(env, updated.domain)).pipe(
+    const ended = yield* endDomainSessions(updated.domain).pipe(
       Effect.catch((error) =>
         Effect.logError(`sessions not ended: ${error.message}`).pipe(
           Effect.annotateLogs({ org: identity.org }),

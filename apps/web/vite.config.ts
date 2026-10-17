@@ -1,12 +1,16 @@
 // Vite config of the control panel. `pnpm build` (`vite build`) writes `dist/index.html` and `dist/assets/*`, which the
 // Worker serves at `/` (apps/app/src/management/web-panel.ts). `pnpm --filter @commissary/web dev` serves the panel
-// with hot reload and forwards `/v9` to a running `pnpm dev` Worker.
+// with hot reload and forwards `/v9` to a running `pnpm dev` Worker, and Commissary Cloud's sign-in calls (`/api`) to
+// its auth Worker (ADR 0030).
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { build, defineConfig, type Plugin } from "vite";
 
 /** `pnpm dev` Worker the dev server forwards API calls to. */
 const workerUrl = process.env["COMMISSARY_DEV_URL"] ?? "http://localhost:1337";
+
+/** `pnpm dev` auth Worker (Commissary Cloud only) the dev server forwards sign-in calls to. */
+const authWorkerUrl = process.env["COMMISSARY_AUTH_DEV_URL"] ?? "http://localhost:1340";
 
 const themeBootEntry = fileURLToPath(new URL("src/theme-boot.ts", import.meta.url));
 
@@ -104,6 +108,13 @@ export default defineConfig({
       // Worker's own origin, as the deployed panel does.
       "/v9": {
         target: workerUrl,
+        changeOrigin: true,
+        headers: { origin: workerUrl },
+      },
+      // The dev server's page names no auth host (`src/lib/auth-origin.ts`), so its sign-in calls stay on this origin;
+      // the auth Worker trusts the app Worker's origin only (`APP_ORIGIN`), which they present.
+      "/api": {
+        target: authWorkerUrl,
         changeOrigin: true,
         headers: { origin: workerUrl },
       },

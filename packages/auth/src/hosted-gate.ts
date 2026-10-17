@@ -6,11 +6,12 @@
  *   rate-limited (`rate-limit.ts`).
  * - The management API takes management keys (`management-key.ts`, refused for a suspended org or issuer), like a
  *   self-hosted Commissary.
- * - The management API and the panel take the session cookie of a person signed in with Better Auth, which the Worker
- *   looks up ({@link SignInSessions}): the same verified email Access yields on a self-hosted Commissary, so roles, the
- *   person-to-orgs index and caller scopes work unchanged. A first sign-in signs the person up (`standing.ts`).
- *   Platform admins are the people in `PLATFORM_ADMIN_EMAILS` (a verified email); `PLATFORM_ADMIN_SERVICE_TOKENS`
- *   means nothing here.
+ * - The management API and the panel take the session cookie of a person signed in with Better Auth, which the auth
+ *   Worker looks up ({@link SignInSessions}, over its RPC, ADR 0030): the same verified email Access yields on a
+ *   self-hosted Commissary, so roles, the person-to-orgs index and caller scopes work unchanged. The auth Worker signs
+ *   a person up when their sign-in starts a session (`ensureSignedUp`, `standing.ts`); here the gate only checks their
+ *   standing. Platform admins are the people in `PLATFORM_ADMIN_EMAILS` (a verified email);
+ *   `PLATFORM_ADMIN_SERVICE_TOKENS` means nothing here.
  */
 import { Context, Effect } from "effect";
 import { type CurrentOrg, UnauthorizedError } from "@commissary/core";
@@ -28,7 +29,7 @@ import {
 import { managementKeyIdentity, presentedManagementKey } from "./management-key.ts";
 import type { AccessIdentity, Principal } from "./principal.ts";
 import { limitOrgRate } from "./rate-limit.ts";
-import { ensureSignedUp, requireStanding } from "./standing.ts";
+import { requireActivePerson, requireStanding } from "./standing.ts";
 
 /** The answer to a management request without a live session. */
 export const NOT_SIGNED_IN = "Not signed in";
@@ -41,27 +42,19 @@ export interface SignedInPerson {
 }
 
 /**
- * Who a Better Auth session cookie belongs to, as the Worker that runs Better Auth looks it up (`hosted/session.ts`),
- * on every request, so a session ended by sign-out or suspension stops working at once.
+ * Who a Better Auth session cookie belongs to, as the auth Worker looks it up (its `SignInService.session`, over the
+ * app Worker's service binding), on every request, so a session ended by sign-out or suspension stops working at once.
  */
 export class SignInSessions extends Context.Service<
   SignInSessions,
   {
     /**
-     * The person whose live session `cookie` (the request's `Cookie` header) names at `origin` (`https://<host>`);
-     * `undefined` without one, for an expired or ended session, an unverified email, and when the lookup fails.
+     * The person whose live session `cookie` (the request's `Cookie` header) names; `undefined` without one, for an
+     * expired or ended session, an unverified email, and when the lookup fails.
      */
-    readonly person: (cookie: string, origin: string) => Effect.Effect<SignedInPerson | undefined>;
+    readonly person: (cookie: string) => Effect.Effect<SignedInPerson | undefined>;
   }
 >()("commissary/auth/SignInSessions") {}
-
-const originOf = (requestUrl: string): string => {
-  try {
-    return new URL(requestUrl).origin;
-  } catch {
-    return "";
-  }
-};
 
 /** Authenticates a client API request of Commissary Cloud: an API key of an org and a person in good standing. */
 export const hostedClientGate = (
@@ -89,7 +82,6 @@ export const hostedClientGate = (
 /** Authenticates a management request of Commissary Cloud (`route`: what the Worker's routes say of it). */
 export const hostedManagementGate = (
   headers: Readonly<Record<string, string | undefined>>,
-  requestUrl: string,
   route: ManagementRoute,
 ): Effect.Effect<
   AccessIdentity,
@@ -113,13 +105,9 @@ export const hostedManagementGate = (
 
     const cookie = headers["cookie"] ?? "";
 
-    const person =
-      cookie === ""
-        ? undefined
-        : yield* (yield* SignInSessions).person(cookie, originOf(requestUrl));
+    const person = cookie === "" ? undefined : yield* (yield* SignInSessions).person(cookie);
 
     if (person === undefined) return yield* new UnauthorizedError({ message: NOT_SIGNED_IN });
-    yield* ensureSignedUp(person.email);
 
     const principal: Principal = {
       kind: "user",
@@ -130,8 +118,9 @@ export const hostedManagementGate = (
     const platformAdmin = platformAdminLists(yield* AuthConfig).adminEmails.has(person.email);
     const org = yield* targetOrg(route.slug, platformAdmin);
 
-    // A platform admin still reaches a suspended org, to look at it and unsuspend it.
-    if (!platformAdmin) yield* requireStanding(org, person.email);
+    // A platform admin still reaches a suspended org, to look at it and unsuspend it; a suspended person never.
+    if (platformAdmin) yield* requireActivePerson(person.email);
+    else yield* requireStanding(org, person.email);
 
     return yield* admitted(principal, org, platformAdmin, route.needs, undefined);
   });

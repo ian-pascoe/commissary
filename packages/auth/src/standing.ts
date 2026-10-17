@@ -1,5 +1,6 @@
 /**
- * Sign-up and suspension on Commissary Cloud (ADR 0026), as the gate (`hosted-gate.ts`) checks them on every request.
+ * Sign-up and suspension on Commissary Cloud (ADR 0026): the auth Worker signs a person up when their sign-in starts a
+ * session ({@link ensureSignedUp}), and the gate (`hosted-gate.ts`) checks standing on every request.
  *
  * A person who signs in for the first time without a membership gets a Personal org with them as its org owner; one
  * the index lists in some org was invited and gets none (the Platform registry decides, `PlatformStore.signIn`). A
@@ -8,7 +9,7 @@
  * that made it (`forgetStanding`). New in the Workers port.
  */
 import { Clock, Effect } from "effect";
-import { ForbiddenError, InternalError, type OrgId } from "@commissary/core";
+import { ForbiddenError, GLOBAL_ORG, InternalError, type OrgId } from "@commissary/core";
 import { syncOrgIndex } from "./admission.ts";
 import { AuthDirectory, directoryFailure, type Standing } from "./directory.ts";
 
@@ -58,7 +59,8 @@ export const SUSPENDED = "Suspended";
 
 /**
  * Signs up a person who signed in with a verified email, once: an invited person is signed up as they are, anyone
- * else becomes the org owner of a new Personal org first. A suspended person is refused (403).
+ * else becomes the org owner of a new Personal org first. A suspended person is refused (403). The auth Worker runs it
+ * before a sign-in starts a session (ADR 0030, #132), so no session exists for someone it refused.
  */
 export const ensureSignedUp = (
   email: string,
@@ -97,14 +99,11 @@ export const ensureSignedUp = (
     remember(signedUp, address, now + STANDING_TTL_MS);
   });
 
-/**
- * Where `org` and the person with `email` stand (cached); refuses (403 `Suspended`) a suspended org or person. A
- * missing org is left to the caller.
- */
-export const requireStanding = (
+/** Where `org` and the person with `email` stand, cached for {@link STANDING_TTL_MS}. */
+const cachedStanding = (
   org: OrgId,
   email: string | undefined,
-): Effect.Effect<Standing, ForbiddenError | InternalError, AuthDirectory> =>
+): Effect.Effect<Standing, InternalError, AuthDirectory> =>
   Effect.gen(function* () {
     const key = `${org}\u0000${email?.toLowerCase() ?? ""}`;
     const now = yield* Clock.currentTimeMillis;
@@ -120,8 +119,31 @@ export const requireStanding = (
     if (cached === undefined || now >= cached.until)
       remember(standings, key, { standing, until: now + STANDING_TTL_MS });
 
+    return standing;
+  });
+
+/**
+ * Where `org` and the person with `email` stand (cached); refuses (403 `Suspended`) a suspended org or person. A
+ * missing org is left to the caller.
+ */
+export const requireStanding = (
+  org: OrgId,
+  email: string | undefined,
+): Effect.Effect<Standing, ForbiddenError | InternalError, AuthDirectory> =>
+  Effect.gen(function* () {
+    const standing = yield* cachedStanding(org, email);
+
     if (standing.org === "suspended" || standing.person === "suspended")
       return yield* new ForbiddenError({ message: SUSPENDED });
 
     return standing;
+  });
+
+/** Refuses (403 `Suspended`) a suspended person, whatever their orgs' standing (a platform admin's, cached). */
+export const requireActivePerson = (
+  email: string,
+): Effect.Effect<void, ForbiddenError | InternalError, AuthDirectory> =>
+  Effect.gen(function* () {
+    if ((yield* cachedStanding(GLOBAL_ORG, email)).person === "suspended")
+      return yield* new ForbiddenError({ message: SUSPENDED });
   });

@@ -1,8 +1,10 @@
-// Ends the session of Commissary Cloud and goes to the sign-in page. Rendered only where `me.hosted` is true: a button
+// Ends the session of Commissary Cloud on the auth host (ADR 0030) and goes to the sign-in page. Rendered only where `me.hosted` is true: a button
 // on the org chooser and the People page, an item of the account menu in the shell.
 import { LogOut } from "lucide-react";
 import { type Ref, useState } from "react";
 import { AUTH_ROUTES, SIGN_IN_PAGE_PATH } from "@commissary/contract/sign-in";
+import { authOrigin } from "../auth-origin.ts";
+import { authUrl } from "../lib/auth-origin.ts";
 
 export interface SignOutProps {
   readonly className?: string | undefined;
@@ -20,7 +22,7 @@ export const SignOut = ({ className, role, ref }: SignOutProps) => {
     setFailed(false);
 
     try {
-      const response = await fetch(AUTH_ROUTES.signOut, {
+      const response = await fetch(authUrl(authOrigin(), AUTH_ROUTES.signOut), {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },

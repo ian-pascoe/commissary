@@ -3,21 +3,21 @@
  *
  * Go source: internal/redisqueue/plugin.go (queuedUsageDetail: the export JSON, pipeline.md §8.4) and
  * internal/redisqueue/queue.go (PopOldest). Go keeps records in an in-process queue for 60 s; here they live in D1
- * (`migrations/0001_usage_records.sql`) and the "queue" is the set of records not yet exported.
+ * (`migrations/usage/0001_usage_records.sql`) and the "queue" is the set of records not yet exported.
  *
  * Workers addition (not in Go): `summarizeUsageSeries` (one aggregate query: requests, failures and v2
  * `acct_total_tokens` per key × UTC hour/day bucket) for the control panel's per-account quota-window bars.
  *
- * Every row belongs to one org (`org_id`, `migrations/0003_usage_org.sql`; ADR 0021) and every read takes the org and
+ * Every row belongs to one org (`org_id`, `migrations/usage/0003_usage_org.sql`; ADR 0021) and every read takes the org and
  * filters on it, so one org never sees another org's records. A row names the caller's member id when they had one
- * (`member_id`, `migrations/0005_usage_member.sql`; ADR 0022): reads filter by members (a team is its members) and
+ * (`member_id`, `migrations/usage/0005_usage_member.sql`; ADR 0022): reads filter by members (a team is its members) and
  * group by member, and a plain member's reads are narrowed to their own records (`UsageFilter.own`).
  *
- * A row served by a private credential (`private`, `migrations/0006_usage_private.sql`; ADR 0023) belongs to the
+ * A row served by a private credential (`private`, `migrations/usage/0006_usage_private.sql`; ADR 0023) belongs to the
  * credential's owner: every read leaves it out unless the filter names the reader (`UsageFilter.privateOf`), who then
  * reads their own private records only. The export queue never carries one.
  *
- * Every row carries its cost (`cost_micros`, `unpriced`; `migrations/0004_usage_cost.sql`, `pricing.ts`, ADR 0024), set
+ * Every row carries its cost (`cost_micros`, `unpriced`; `migrations/usage/0004_usage_cost.sql`, `pricing.ts`, ADR 0024), set
  * when the record is written and never recomputed. A record from before that migration, or one whose pricing failed, has no
  * cost (`NULL`, summed as nothing) and is not unpriced; summaries and series add the cost up, and `unpricedModels` lists what to give a price.
  *
@@ -52,9 +52,9 @@ export interface UsageRow {
   endpoint: string;
   principal_id: string;
   org_id: string;
-  /** The caller's member id (`migrations/0005_usage_member.sql`); `null` without a member record. */
+  /** The caller's member id (`migrations/usage/0005_usage_member.sql`); `null` without a member record. */
   member_id: string | null;
-  /** Served by a private credential (`migrations/0006_usage_private.sql`): `1`, else `0`. */
+  /** Served by a private credential (`migrations/usage/0006_usage_private.sql`): `1`, else `0`. */
   private: number;
   auth_id: string;
   auth_type: string;
@@ -63,7 +63,7 @@ export interface UsageRow {
   generate: number;
   failed: number;
   fail_status: number | null;
-  /** The failure's error type and code (`migrations/0007_usage_failure.sql`, ADR 0027); never the upstream body. */
+  /** The failure's error type and code (`migrations/usage/0007_usage_failure.sql`, ADR 0027); never the upstream body. */
   fail_type: string | null;
   fail_code: string | null;
   reasoning_effort: string | null;

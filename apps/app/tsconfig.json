@@ -11,8 +11,8 @@
       "@cloudflare/vitest-plugin/types"
     ],
     "resolveJsonModule": true,
-    // samlify's own declarations put the DOM library into the program (types/samlify.d.ts).
-    "paths": { "samlify": ["./types/samlify.d.ts"] }
+    // samlify's own declarations put the DOM library into the program (tools/workers/samlify.d.ts).
+    "paths": { "samlify": ["../../tools/workers/samlify.d.ts"] }
   },
   "include": ["src", "test", "vitest.config.ts"]
 }

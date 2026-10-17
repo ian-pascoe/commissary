@@ -1,7 +1,7 @@
 /**
  * The deployment mode (ADR 0026): a self-hosted Commissary keeps Cloudflare Access in front of the panel and the
- * management API; Commissary Cloud signs people in itself with Better Auth (the Worker's `hosted/auth.ts`) and lets
- * anyone sign up. New in the Workers port, no Go counterpart.
+ * management API; Commissary Cloud signs people in itself with Better Auth (the auth Worker, apps/auth, ADR 0030) and
+ * lets anyone sign up. New in the Workers port, no Go counterpart.
  */
 
 export type CommissaryMode = "self-hosted" | "cloud";

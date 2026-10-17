@@ -1,6 +1,7 @@
 // The two entry points (`authenticateClient`, `authenticateManagement`) over the in-memory AuthDirectory, on a
 // self-hosted Commissary (Access) and on Commissary Cloud. The gate through the Worker's router and Durable Objects is
-// tested in apps/app (access.test.ts, api-keys.test.ts, management-keys.test.ts, test/hosted/).
+// tested in apps/app (access.test.ts, api-keys.test.ts, management-keys.test.ts, test/hosted/), the sign-up on a
+// session's start in apps/auth (test/sign-up.test.ts).
 import { assert, describe, it } from "@effect/vitest";
 import { CurrentOrg, GLOBAL_ORG, OrgSlug } from "@commissary/core";
 import { Context, Effect, Layer } from "effect";
@@ -13,6 +14,7 @@ import {
   type AuthDirectory,
   authenticateClient,
   authenticateManagement,
+  ensureSignedUp,
   NOT_SIGNED_IN,
   RATE_LIMITED,
   resetApiKeyCaches,
@@ -386,41 +388,72 @@ describe("Commissary Cloud", () => {
     },
   );
 
+  it.effect("signs a person in by their session, and leaves signing up to the auth Worker", () => {
+    const { directory } = staffed();
+    const people = { "session=frank": { userId: "u-frank", email: "frank@example.com" } };
+
+    return run(
+      directory,
+      Effect.gen(function* () {
+        const none = yield* Effect.flip(
+          authenticateManagement({}, MANAGEMENT_URL, route("platform")),
+        );
+
+        assert.strictEqual(none.message, NOT_SIGNED_IN);
+
+        const access = yield* signedIn(userClaims("admin@example.com"));
+
+        assert.strictEqual(
+          (yield* Effect.flip(authenticateManagement(access, MANAGEMENT_URL, route("platform"))))
+            .message,
+          NOT_SIGNED_IN,
+        );
+
+        const frank = yield* authenticateManagement(
+          { cookie: "session=frank" },
+          MANAGEMENT_URL,
+          route("platform"),
+        );
+
+        assert.strictEqual(frank.principalId, "user:frank@example.com");
+        // The auth Worker signed them up when their sign-in started the session (`ensureSignedUp`).
+        assert.isFalse(directory.signedUp.has("frank@example.com"));
+      }),
+      CLOUD,
+      people,
+    );
+  });
+
   it.effect(
-    "signs a person in by their session, and signs them up with a Personal org the first time",
+    "signs a person up once, with a Personal org unless invited, and refuses a suspended person",
     () => {
       const { directory } = staffed();
-      const people = { "session=frank": { userId: "u-frank", email: "frank@example.com" } };
+
+      directory.suspendPerson("erin@example.com");
 
       return run(
         directory,
         Effect.gen(function* () {
-          const none = yield* Effect.flip(
-            authenticateManagement({}, MANAGEMENT_URL, route("platform")),
-          );
-
-          assert.strictEqual(none.message, NOT_SIGNED_IN);
-
-          const access = yield* signedIn(userClaims("admin@example.com"));
-
-          assert.strictEqual(
-            (yield* Effect.flip(authenticateManagement(access, MANAGEMENT_URL, route("platform"))))
-              .message,
-            NOT_SIGNED_IN,
-          );
-
-          const frank = yield* authenticateManagement(
-            { cookie: "session=frank" },
-            MANAGEMENT_URL,
-            route("platform"),
-          );
-
-          assert.strictEqual(frank.principalId, "user:frank@example.com");
+          yield* ensureSignedUp("Frank@example.com");
           assert.isTrue(directory.signedUp.has("frank@example.com"));
           assert.strictEqual(directory.index.get("frank@example.com")?.size, 1);
+
+          // Signed up already: nothing changes.
+          yield* ensureSignedUp("frank@example.com");
+          assert.strictEqual(directory.index.get("frank@example.com")?.size, 1);
+
+          // Invited (a member of acme): no Personal org.
+          yield* ensureSignedUp("dan@example.com");
+          assert.isTrue(directory.signedUp.has("dan@example.com"));
+          assert.strictEqual(directory.index.get("dan@example.com")?.size, 1);
+
+          const refused = yield* Effect.flip(ensureSignedUp("erin@example.com"));
+
+          assert.strictEqual(refused._tag, "ForbiddenError");
+          assert.strictEqual(refused.message, SUSPENDED);
+          assert.isFalse(directory.signedUp.has("erin@example.com"));
         }),
         CLOUD,
-        people,
       );
     },
   );

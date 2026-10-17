@@ -20,7 +20,7 @@ secrets Commissary holds for outside services are **credentials**, and a model p
 - **Zero-trust by default.** People sign in to the control panel and management API through Cloudflare Access with
   your identity provider; tools send an API key each member creates in the panel, stored only as a hash and
   revocable (a revoked key stops working within 30 seconds); scripts use management keys or Access service tokens. The Worker stores no client passwords.
-- **Or run it for others.** With `COMMISSARY_MODE=cloud` the Worker signs people in itself with GitHub or Google, anyone
+- **Or run it for others.** With `COMMISSARY_MODE=cloud` Commissary signs people in itself with GitHub or Google (an auth Worker on its own auth host), anyone
   may sign up and gets a Personal org, and platform admins limit and suspend people and orgs: this is Commissary Cloud
   ([DEPLOY.md](docs/DEPLOY.md#commissary-cloud)).
 - **Control panel.** Connect accounts, manage provider keys, watch quotas and usage, shape model routing and edit the

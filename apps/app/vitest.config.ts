@@ -24,9 +24,10 @@ const SELF_HOSTED_BINDINGS = {
 };
 
 /**
- * Commissary Cloud (`COMMISSARY_MODE=cloud`, ADR 0026, `src/hosted/`): Better Auth signs people in with GitHub and Google (stubbed through the
- * global `fetch` in the tests) and Turnstile guards sign-up. No dev bypass: requests go to `https://commissary.test`.
- * (The per-org rate limit is the client API's: the API Worker's, apps/api/vitest.config.ts.)
+ * Commissary Cloud (`COMMISSARY_MODE=cloud`, ADR 0026, `src/hosted/`): people sign in on the auth host (the auth Worker,
+ * ADR 0030, tested in apps/auth), which the app Worker asks over `AUTH`: here a fake the test Worker binds itself
+ * (test/worker.ts `FakeSignIn`). No dev bypass: requests go to `https://commissary.test`. (The per-org rate limit is the
+ * client API's: the API Worker's, apps/api/vitest.config.ts.)
  */
 const HOSTED_BINDINGS = {
   ...SELF_HOSTED_BINDINGS,
@@ -34,13 +35,7 @@ const HOSTED_BINDINGS = {
   COMMISSARY_MODE: "cloud",
   PLATFORM_ADMIN_EMAILS: "root@example.com",
   PLATFORM_ADMIN_SERVICE_TOKENS: "admin-token.access",
-  BETTER_AUTH_SECRET: "commissary-test-better-auth-secret-0123456789abcdef0123456789abcd",
-  SIGN_IN_GITHUB_CLIENT_ID: "github-client-id",
-  SIGN_IN_GITHUB_CLIENT_SECRET: "github-client-secret",
-  SIGN_IN_GOOGLE_CLIENT_ID: "google-client-id",
-  SIGN_IN_GOOGLE_CLIENT_SECRET: "google-client-secret",
-  TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
-  TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
+  AUTH_ORIGIN: "https://auth.commissary.test",
   OWNED_ORG_LIMIT: "3",
 };
 
@@ -93,8 +88,7 @@ export default defineConfig({
       {
         extends: true,
         plugins: [worker(HOSTED_BINDINGS)],
-        // Each file's `installFakes` loads Better Auth once (slow under a full parallel run), outside the tests.
-        test: { name: "hosted", include: ["test/hosted/**/*.test.ts"], hookTimeout: 120_000 },
+        test: { name: "hosted", include: ["test/hosted/**/*.test.ts"] },
       },
     ],
   },

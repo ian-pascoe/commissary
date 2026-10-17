@@ -3,13 +3,22 @@
 # Workers start and answer: the CI replacement for a deploy dry run. It reads each Worker's ready line (ADR 0030): the
 # app Worker (`Commissary`) serves the panel and the management API, the API Worker (`Api`) the client API and the cron
 # jobs, and the state Worker (`State`), which defines the Durable Objects, serves no requests itself. Under `alchemy dev`
-# the app binds its own copy of the Durable Objects (apps/app/src/dev.ts) and the API Worker reaches them over the app's
-# dev-only bridge (apps/api/src/dev.ts, docs/DEVELOPMENT.md "Infrastructure"). It ends with the self-hosted journey
-# across the Workers: an API key issued on the app Worker is taken by the API Worker, and refused there once revoked.
-# Builds the control panel first so `/` is served.
-# Usage: pnpm smoke
+# the other Workers reach the state Worker's objects over its dev-only bridge (apps/state/src/dev.ts, docs/DEVELOPMENT.md
+# "Infrastructure"). Self-hosted (the default), it ends with the journey across the Workers: an API key issued on the
+# app Worker is taken by the API Worker, and refused there once revoked. With `COMMISSARY_MODE=cloud` (Commissary Cloud,
+# ADR 0026) the auth Worker (`Auth`) starts too, and the checks end with the sign-in across the Workers: the auth host's
+# routes and CORS, and the app Worker asking the auth Worker about a session. Builds the control panel first so `/` is
+# served.
+# Usage: pnpm smoke, or COMMISSARY_MODE=cloud pnpm smoke
 set -eu
 cd "$(dirname "$0")/.."
+mode="${COMMISSARY_MODE:-self-hosted}"
+if [ "$mode" = cloud ]; then
+  # A GitHub client nobody signs in with, so the sign-in options offer a provider (Turnstile defaults to its
+  # always-passing test keys under `alchemy dev`, infra/settings.ts).
+  export SIGN_IN_GITHUB_CLIENT_ID="${SIGN_IN_GITHUB_CLIENT_ID:-smoke-github-client}"
+  export SIGN_IN_GITHUB_CLIENT_SECRET="${SIGN_IN_GITHUB_CLIENT_SECRET:-smoke-github-secret}"
+fi
 pnpm -s exec turbo run build --filter=@commissary/web --output-logs=errors-only
 log=$(mktemp)
 ALCHEMY_STATE=local pnpm exec alchemy dev --stage smoke >"$log" 2>&1 &
@@ -29,15 +38,21 @@ ready() {
 url=""
 api_url=""
 state_url=""
+auth_url=""
+# The auth Worker runs on Commissary Cloud only.
+auth_up() {
+  [ "$mode" != cloud ] || { [ -n "$auth_url" ] && curl -fsS "$auth_url/healthz" >/dev/null 2>&1; }
+}
 up() {
   [ -n "$url" ] && [ -n "$api_url" ] && [ -n "$state_url" ] &&
-    curl -fsS "$url/healthz" >/dev/null 2>&1 && curl -fsS "$api_url/healthz" >/dev/null 2>&1
+    curl -fsS "$url/healthz" >/dev/null 2>&1 && curl -fsS "$api_url/healthz" >/dev/null 2>&1 && auth_up
 }
 i=0
 while [ "$i" -lt 180 ]; do
   url=$(ready Commissary)
   api_url=$(ready Api)
   state_url=$(ready State)
+  auth_url=$(ready Auth)
   if up; then break; fi
   if ! kill -0 "$pid" 2>/dev/null; then cat "$log"; echo "alchemy dev exited" >&2; exit 1; fi
   i=$((i + 1))
@@ -45,7 +60,7 @@ while [ "$i" -lt 180 ]; do
 done
 if ! up; then
   cat "$log"
-  echo "the Workers did not become ready (app: ${url:-no ready line}, API: ${api_url:-no ready line}, state: ${state_url:-no ready line})" >&2
+  echo "the Workers did not become ready (app: ${url:-no ready line}, API: ${api_url:-no ready line}, state: ${state_url:-no ready line}, auth: ${auth_url:-no ready line})" >&2
   exit 1
 fi
 
@@ -61,6 +76,51 @@ check() { expect 200 "$@"; }
 # The state Worker has no routes.
 expect 404 "$state_url/"
 check "$url/healthz"
+
+if [ "$mode" = cloud ]; then
+  url="${url%/}"
+  auth_url="${auth_url%/}"
+  body=$(mktemp)
+  # contains <text> <curl arguments>: a 200 whose body contains <text>.
+  contains() {
+    text=$1
+    shift
+    status=$(curl -s -o "$body" -w '%{http_code}' "$@")
+    echo "$status $* (expecting $text)"
+    [ "$status" = 200 ] && grep -Fq "$text" "$body" || { cat "$body" "$log"; exit 1; }
+  }
+  # preflight <origin>: the status of a CORS preflight of a sign-in on the auth host from <origin>.
+  preflight() {
+    curl -s -o /dev/null -w '%{http_code}' -X OPTIONS -H "Origin: $1" \
+      -H 'Access-Control-Request-Method: POST' "$auth_url/api/auth/sign-in/social"
+  }
+  # The auth host: the sign-in options (the GitHub client above), Better Auth's health check (its secret and the SignIn
+  # database), CORS for the app origin only, and none of the app's routes.
+  check "$auth_url/healthz"
+  contains '"providers":["github"' "$auth_url/api/sign-in-options"
+  contains '"ok":true' "$auth_url/api/auth/ok"
+  status=$(preflight "$url")
+  echo "$status preflight from $url"
+  [ "$status" = 204 ] || { cat "$log"; exit 1; }
+  status=$(preflight "https://elsewhere.invalid")
+  echo "$status preflight from elsewhere"
+  [ "$status" = 403 ] || { cat "$log"; exit 1; }
+  expect 404 "$auth_url/v9/management/me"
+  # The app host: the sign-in page names the auth host, the panel sends a browser there, and a cookie the auth Worker
+  # does not know (asked over the app Worker's service binding) is no session.
+  contains "<meta name=\"commissary-auth-origin\" content=\"$auth_url\">" "$url/sign-in"
+  expect 302 "$url/"
+  expect 404 "$url/api/sign-in-options"
+  status=$(curl -s -o "$body" -w '%{http_code}' -H "Origin: $url" -H 'Sec-Fetch-Site: same-origin' \
+    -H 'Cookie: __Secure-better-auth.session_token=forged' "$url/v9/management/me")
+  echo "$status $url/v9/management/me with a forged session"
+  [ "$status" = 401 ] && grep -q '"Not signed in"' "$body" || { cat "$body" "$log"; exit 1; }
+  # The API Worker takes API keys only.
+  expect 401 "$api_url/v1/models"
+  rm -f "$body"
+  echo "smoke ok (Commissary Cloud): $url (auth Worker at $auth_url, API Worker at $api_url, state Worker at $state_url)"
+  exit 0
+fi
 # An address without an org redirects to the caller's only org.
 check -L "$url/"
 check -L "$url/accounts"

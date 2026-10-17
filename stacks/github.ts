@@ -222,6 +222,8 @@ export default Alchemy.Stack(
               ...variables,
               COMMISSARY_DOMAIN: settings.domain,
               COMMISSARY_API_DOMAIN: settings.apiDomain,
+              // The auth host of Commissary Cloud (ADR 0030), a subdomain of COMMISSARY_DOMAIN, so in its zone.
+              COMMISSARY_AUTH_DOMAIN: settings.hosted?.authDomain ?? "",
               COMMISSARY_MODE: settings.hosted === undefined ? "" : "cloud",
             }
           : variables;
@@ -245,6 +247,7 @@ export default Alchemy.Stack(
         CLOUDFLARE_ACCOUNT_ID: accountId,
         COMMISSARY_DOMAIN: cloudStage.settings.domain,
         COMMISSARY_API_DOMAIN: cloudStage.settings.apiDomain,
+        COMMISSARY_AUTH_DOMAIN: cloudStage.settings.hosted?.authDomain ?? "",
         PLATFORM_ADMIN_EMAILS: cloudStage.settings.adminEmails.join(","),
         COMMISSARY_MODE: "cloud",
       };
@@ -269,6 +272,8 @@ export default Alchemy.Stack(
       zone: zone.name,
       cloudDomain: cloudStage?.settings.domain ?? "(no .env.cloud)",
       cloudApiDomain: cloudStage?.settings.apiDomain ?? "",
+      // Where the `cloud` stage's OAuth callbacks go (docs/DEPLOY.md "The Commissary Cloud stage").
+      cloudAuthDomain: cloudStage?.settings.hosted?.authDomain ?? "",
     };
   }),
 );

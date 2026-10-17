@@ -1,0 +1,33 @@
+{
+  "name": "@commissary/auth-worker",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The auth Worker (ADR 0030), Commissary Cloud only: Better Auth on the auth host, its SignIn database, and the sign-in RPC the app Worker asks; it binds the state Worker's Durable Objects",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@better-auth/core": "1.7.7",
+    "@better-auth/sso": "1.7.7",
+    "@commissary/auth": "workspace:*",
+    "@commissary/contract": "workspace:*",
+    "@commissary/core": "workspace:*",
+    "@commissary/state": "workspace:*",
+    "better-auth": "1.7.7",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "1.4.2",
+    "@commissary/state-worker": "workspace:*",
+    "@types/node": "catalog:",
+    "jose": "catalog:",
+    "samlify": "2.13.1",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

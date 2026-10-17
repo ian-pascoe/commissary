@@ -15,12 +15,12 @@ const MAX_TOKEN_LENGTH = 2048;
 
 export type TurnstileOutcome = "passed" | "failed" | "unavailable";
 
-/**
 /** How long siteverify may take before the sign-in is refused as `unavailable`. */
 const SITEVERIFY_TIMEOUT_MS = 10_000;
 
 /**
- * Asks siteverify whether `token` is a fresh token of the deployment's widget, solved on `hostname` (Commissary's). `failed`
+ * Asks siteverify whether `token` is a fresh token of the deployment's widget, solved on `hostname` (the app host, where
+ * the sign-in page renders the widget, ADR 0030). `failed`
  * for a missing, malformed, used or expired token, or one solved on another site; `unavailable` when siteverify cannot be
  * reached in time (the sign-in is refused either way).
  */

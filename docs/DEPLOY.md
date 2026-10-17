@@ -24,9 +24,11 @@ domain and AUD wired); `/v1/models` and `/v1beta/models` without credentials rea
 `401 Missing API key` itself (the client API is outside Access, behind API keys); `/v1/models` with an Access JWT
 in `cf-access-token` and a dummy `Authorization` key, the way `cloudflared access` clients call it, answers 200 (the
 JWT is the `CF_Authorization` cookie Access set for the service token); and `/` without credentials is stopped by
-Access. A Commissary Cloud deploy is checked by `tools/check-cloud-deploy.sh` instead: `/healthz` answers 200,
-`/api/sign-in-options` offers a provider, `/v9/management/me` answers `401 Not signed in` from the Worker, `/` redirects
-to `/sign-in`, and the client API answers `401 Missing API key`. Both scripts send the client API to the deploy's
+Access. A Commissary Cloud deploy is checked by `tools/check-cloud-deploy.sh` instead: `/healthz` answers 200 on the app
+host and on the auth host (the deploy's `authUrl` output), the auth host's `/api/sign-in-options` offers a provider and
+Better Auth's `/api/auth/ok` answers 200, a CORS preflight from the app origin is allowed and one from elsewhere refused,
+`/v9/management/me` answers `401 Not signed in` from the Worker, `/` redirects to `/sign-in`, and the client API answers
+`401 Missing API key`. Both scripts send the client API to the deploy's
 `apiUrl` output ([The Workers](#the-workers)): with an API host ([API host](#api-host)) or on a preview, where the
 client API has a host of its own, they also check that each host refuses the other's paths with its Worker's `404`.
 The deploy job then shows the URL on the run, and previews get a pull request comment (`tools/preview-comment.sh`),
@@ -52,13 +54,15 @@ Any machine with the deploy settings can deploy a preview by hand: `pnpm run dep
 
 ## The Workers
 
-A stage deploys three Workers (ADR 0030) from the one stack, the state Worker first:
+A stage deploys three Workers (ADR 0030) from the one stack, the state Worker first, and a fourth on Commissary Cloud,
+the auth Worker ([Commissary Cloud](#commissary-cloud)):
 
 1. **`State`** (`apps/state`) defines the Durable Objects `ControlPlane`, `SessionState` and `Platform`: every org's
    state and the Platform registry. It has no routes, no domain and no `workers.dev` URL, and binds only what those
    classes read: the secrets keys, the `auth_index` key, `META_MINT_URL`, the platform admins, the mode and the Access
    settings that mark a deployed stage.
-2. **`Commissary`** (`apps/app`), the app Worker: the control panel, sign-in and the management API, on the stage's
+2. **`Commissary`** (`apps/app`), the app Worker: the control panel (with Commissary Cloud's sign-in page) and the
+   management API, on the stage's
    domain (the app host) or `workers.dev` URL, behind Access on a self-hosted stage. It answers the client API paths
    `404` with the address of the client API. It binds the state Worker's Durable Objects by script name, which is also
    why Alchemy deploys it after the state Worker, and no secrets keys, which only the ControlPlane reads.
@@ -128,7 +132,8 @@ routes. A path on the wrong host answers `404` with the host that serves it (`ap
 - **Self-hosted:** Access covers the app host only; the API host has no Access application and the bypass application
   of the client API paths is not created (an existing one is deleted). Clients that sign in through Access send the app
   application's token (`cloudflared access token -app=https://<app host>`) to the API host in `cf-access-token`.
-- **Commissary Cloud:** register the OAuth callbacks and the Turnstile hostname for the app host, where sign-in happens.
+- **Commissary Cloud:** the Turnstile hostname is the app host, where the sign-in page shows the widget; the OAuth
+  callbacks are on the auth host ([Commissary Cloud](#commissary-cloud)), which an API host does not change.
 - **Moving to an API host** changes the address of every client: point them at the API host when the deploy finishes
   (their old base URL answers `404`). On Commissary Cloud people sign in again: the session cookie belongs to the old
   hostname. Unsetting the variable moves everything back to one host.
@@ -137,47 +142,68 @@ routes. A path on the wrong host answers `404` with the host that serves it (`ap
 
 ## Commissary Cloud
 
-Commissary Cloud (ADR 0029; the mode of ADR 0026, `COMMISSARY_MODE=cloud`) has no Access application: the Worker signs people in with GitHub and/or
-Google (Better Auth), anyone may sign up, and each new person gets a Personal org they own. Platform admins are the
-people in `PLATFORM_ADMIN_EMAILS` signed in with that email verified by the provider; `PLATFORM_ADMIN_SERVICE_TOKENS`
-and every `ACCESS_*` setting are ignored, and scripts use management keys ([ACCESS.md](ACCESS.md#commissary-cloud)).
+Commissary Cloud (ADR 0029; the mode of ADR 0026, `COMMISSARY_MODE=cloud`) has no Access application: people sign in with
+GitHub and/or Google (Better Auth), anyone may sign up, and each new person gets a Personal org they own. Platform admins
+are the people in `PLATFORM_ADMIN_EMAILS` signed in with that email verified by the provider;
+`PLATFORM_ADMIN_SERVICE_TOKENS` and every `ACCESS_*` setting are ignored, and scripts use management keys
+([ACCESS.md](ACCESS.md#commissary-cloud)).
 
-| Setting                                                    | Kind        | Meaning                                                               |
-| ---------------------------------------------------------- | ----------- | --------------------------------------------------------------------- |
-| `COMMISSARY_MODE`                                          | variable    | `cloud`; unset or `self-hosted` for a self-hosted Commissary          |
-| `SIGN_IN_GITHUB_CLIENT_ID`, `SIGN_IN_GITHUB_CLIENT_SECRET` | var, secret | a GitHub OAuth app (or GitHub App); offered when both are set         |
-| `SIGN_IN_GOOGLE_CLIENT_ID`, `SIGN_IN_GOOGLE_CLIENT_SECRET` | var, secret | a Google OAuth client (web application); offered when both are set    |
-| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`               | var, secret | a Cloudflare Turnstile widget for the deploy's hostname (required)    |
-| `OWNED_ORG_LIMIT`                                          | variable    | orgs a person may own unless a platform admin raises it (default 3)   |
-| `ORG_RATE_LIMIT`                                           | variable    | requests per minute each org may send on the client API (default 600) |
-| `ORG_RATE_LIMIT_NAMESPACE_ID`                              | variable    | the Workers rate-limit namespace, a positive integer (default 7201)   |
+Sign-in has a Worker of its own (ADR 0030): **`Auth`** (`apps/auth`), the auth Worker, on the **auth host**
+(`COMMISSARY_AUTH_DOMAIN`, by default `auth.<COMMISSARY_DOMAIN>`), with Better Auth's database `SignIn` (D1, schema in
+`migrations/sign-in/`), which no other Worker binds. The sign-in page stays on the app host and calls the auth host,
+which answers the app host's origin only (CORS); the session cookie is scoped to the app host, so the app host gets it,
+and the app Worker asks the auth Worker over a service binding whose session it is. The auth host must be a subdomain
+of the app host (the deploy refuses another one), in the same zone. A self-hosted Commissary has neither the auth Worker
+nor the `SignIn` database.
+
+| Setting                                                    | Kind        | Meaning                                                                     |
+| ---------------------------------------------------------- | ----------- | --------------------------------------------------------------------------- |
+| `COMMISSARY_MODE`                                          | variable    | `cloud`; unset or `self-hosted` for a self-hosted Commissary                |
+| `COMMISSARY_AUTH_DOMAIN`                                   | variable    | the auth host, a subdomain of `COMMISSARY_DOMAIN` (default `auth.<domain>`) |
+| `SIGN_IN_GITHUB_CLIENT_ID`, `SIGN_IN_GITHUB_CLIENT_SECRET` | var, secret | a GitHub OAuth app (or GitHub App); offered when both are set               |
+| `SIGN_IN_GOOGLE_CLIENT_ID`, `SIGN_IN_GOOGLE_CLIENT_SECRET` | var, secret | a Google OAuth client (web application); offered when both are set          |
+| `TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY`               | var, secret | a Cloudflare Turnstile widget for the app host (required)                   |
+| `OWNED_ORG_LIMIT`                                          | variable    | orgs a person may own unless a platform admin raises it (default 3)         |
+| `ORG_RATE_LIMIT`                                           | variable    | requests per minute each org may send on the client API (default 600)       |
+| `ORG_RATE_LIMIT_NAMESPACE_ID`                              | variable    | the Workers rate-limit namespace, a positive integer (default 7201)         |
 
 At least one provider and the Turnstile keys are required: the deploy refuses a Commissary Cloud stage without them.
 `BETTER_AUTH_SECRET` is minted like the `auth_index` key (an Alchemy `Random`, resource `BetterAuthSecret`); nothing to
 set. Replacing it signs everyone out.
 
-1. **OAuth apps.** Register the callback `https://<host>/api/auth/callback/github` (GitHub) and
-   `https://<host>/api/auth/callback/google` (Google, "Authorized redirect URIs"), where `<host>` is
-   `COMMISSARY_DOMAIN` (the app host when there is an API host). The Worker reads the verified email and stores no provider token. A
-   GitHub OAuth app takes a single callback host, so use one app per hostname; a GitHub App takes up to ten callback
-   URLs and Google any number.
-2. **Turnstile.** Create a widget (Cloudflare dashboard, Turnstile) for the hostname, managed mode.
+1. **OAuth apps.** Register the callback `https://<auth host>/api/auth/callback/github` (GitHub) and
+   `https://<auth host>/api/auth/callback/google` (Google, "Authorized redirect URIs"). The auth Worker reads the
+   verified email and stores no provider token. A GitHub OAuth app takes a single callback host, so use one app per
+   hostname; a GitHub App takes up to ten callback URLs and Google any number.
+2. **Turnstile.** Create a widget (Cloudflare dashboard, Turnstile) for the app host, managed mode.
 3. **Settings.** Put them in `.env` (`.env.example` lists them) for local deploys. For CI, `pnpm ci:setup` writes the
    ones `.env` sets into both GitHub environments (the ids and limits as variables, the client secrets and the
    Turnstile secret as secrets), and `COMMISSARY_MODE=cloud` into `production` when `.env` sets it. Set them by hand in
    the GitHub environments otherwise.
-4. **Deploy.** The D1 migration `0008_hosted_auth.sql` adds Better Auth's tables (`auth_user`, `auth_session`,
-   `auth_account`, `auth_verification`); every deploy applies it, also on a self-hosted Commissary, where they stay empty.
-   The Platform registry and each ControlPlane add their new tables and columns on first use.
+4. **Deploy.** The deploy creates the `SignIn` database and applies its migrations, and the auth Worker on the auth
+   host. The Platform registry and each ControlPlane add their new tables and columns on first use.
+
+**Moving sign-in to the auth host** (the first deploy of a Commissary Cloud stage with the auth Worker): sign-in starts
+fresh. The people, sessions and linked accounts Better Auth kept in the usage database (`auth_*` tables, migration
+`migrations/usage/0008_hosted_auth.sql`) are not moved to `SignIn`, and nothing reads them any more: everyone signs in
+again, and their first sign-in creates their sign-in account anew, under the same verified email. Orgs, memberships, roles, API
+keys, management keys and the Platform registry live in the Durable Objects and stay as they were; a person who
+already signed up gets no second Personal org. Register the auth host's callbacks before the deploy, or sign-in fails
+until they are.
 
 **Single sign-on.** Orgs set up their own identity providers on the panel ([ACCESS.md](ACCESS.md#single-sign-on-for-an-org));
 the deploy needs nothing for it: no setting, binding or D1 migration (the providers and domains live in each org's
-ControlPlane and the domain index in the Platform registry, created on first use). The Worker reaches the identity
-providers and `cloudflare-dns.com` (domain proof) with `fetch`.
+ControlPlane and the domain index in the Platform registry, created on first use). The identity providers send people
+back to the auth host, whose URLs the org's settings show. The app Worker reaches `cloudflare-dns.com` (domain proof) and
+the providers' discovery documents with `fetch`, and the auth Worker the providers themselves.
 
 **Commissary Cloud previews.** A preview with the `cloud-preview` label uses the `preview` environment's sign-in settings and
-serves its `workers.dev` URL, so a sign-in completes only after that URL's callback is registered with the provider
-(and its hostname added to the Turnstile widget). Previews share the rate-limit namespace with each other, and with
+serves `workers.dev` URLs: its auth Worker's (the `authUrl` output, in the pull request comment) and its app Worker's,
+which has the explicit name `commissary-app-<stage>` so the auth Worker knows its origin before it exists
+(`infra/preview-origin.ts`). A sign-in completes only after the auth Worker's callbacks are registered with the provider
+and the app Worker's hostname is added to the Turnstile widget. Every Worker of the account shares its workers.dev
+subdomain, which a preview's session cookie is scoped to; each preview names its cookie apart
+(`commissary-<stage>` prefix), so previews keep separate sessions. Previews share the rate-limit namespace with each other, and with
 production when the environments set the same `ORG_RATE_LIMIT_NAMESPACE_ID`: the org `global` exists on every stage
 under the same id, so give `preview` its own namespace.
 
@@ -193,10 +219,11 @@ and the Commissary Cloud previews'. Set them up once:
 
 1. **Hostname.** Pick one in a zone of the account, other than `COMMISSARY_DOMAIN` of `.env`, and optionally an API
    host (`COMMISSARY_API_DOMAIN`, [API host](#api-host)). The other steps use the app host.
-2. **OAuth apps.** A GitHub OAuth app for that hostname (a GitHub OAuth app takes one callback host, so not the
-   previews' app) with the callback `https://<host>/api/auth/callback/github`; for Google, add
-   `https://<host>/api/auth/callback/google` to the client's redirect URIs.
-3. **Turnstile.** Add the hostname to a widget (or create one) and put its keys in `.env.cloud`.
+2. **OAuth apps.** A GitHub OAuth app for its auth host (`auth.<hostname>` unless `COMMISSARY_AUTH_DOMAIN` names
+   another subdomain; a GitHub OAuth app takes one callback host, so not the previews' app) with the callback
+   `https://<auth host>/api/auth/callback/github`; for Google, add `https://<auth host>/api/auth/callback/google` to
+   the client's redirect URIs.
+3. **Turnstile.** Add the hostname (the app host) to a widget (or create one) and put its keys in `.env.cloud`.
 4. **Rate-limit namespace.** An `ORG_RATE_LIMIT_NAMESPACE_ID` that the previews' environment does not use.
 5. **CI.** `pnpm ci:setup` creates the GitHub environment `cloud` (deployments from `main` only) with the settings of
    `.env.cloud`, and extends the deploy token to the hostname's zone. Until then the `deploy cloud` job of a push to

@@ -1,7 +1,7 @@
 /**
  * An org's identity provider as Better Auth's SSO plugin sees it (issue #76): one provider per org, `sso-<org id>`,
  * built on each use from what the org's ControlPlane stores (`settings.ts`) and never written to Better Auth's database
- * (the Worker's `hosted/auth.ts` answers the plugin's `ssoProvider` reads with it). New in the Workers port.
+ * (the auth Worker's `sign-in/sso-adapter.ts` answers the plugin's `ssoProvider` reads with it). New in the Workers port.
  *
  * Its domains are the org's verified domains; the plugin refuses a provider without one (`domainVerified`). OIDC uses
  * PKCE besides the client secret, and SAML takes only signed assertions for this deployment (its entity id, the audience),
@@ -55,13 +55,15 @@ export interface BetterAuthSsoProvider {
 
 /**
  * The plugin's provider for `org` at `origin`, from its settings and verified domains; `undefined` without a verified
- * domain (nobody could sign in through it).
+ * domain (nobody could sign in through it). A SAML sign-in whose own request no longer says where to return (a replayed
+ * answer) returns to `home`: the panel, on the app host.
  */
 export const betterAuthProvider = (
   origin: string,
   org: OrgId,
   settings: IdpSettings,
   verifiedDomains: ReadonlyArray<string>,
+  home = "/",
 ): BetterAuthSsoProvider | undefined => {
   if (verifiedDomains.length === 0) return undefined;
 
@@ -101,7 +103,7 @@ export const betterAuthProvider = (
       issuer: sp.samlEntityId,
       entryPoint: settings.entryPoint,
       cert: settings.certificate,
-      callbackUrl: "/",
+      callbackUrl: home,
       idpMetadata: { entityID: settings.idpEntityId },
       spMetadata: { entityID: sp.samlEntityId },
       wantAssertionsSigned: true,

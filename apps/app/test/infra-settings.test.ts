@@ -1,8 +1,12 @@
 // Deploy settings (infra/settings.ts): the platform admins (PLATFORM_ADMIN_*), the secrets key generations and
-// Commissary Cloud's settings.
+// Commissary Cloud's settings (its auth host among them).
 import { assert, describe, it } from "@effect/vitest";
 import { ConfigProvider, Effect, Logger, Redacted } from "effect";
-import { readSettings } from "../../../infra/settings.ts";
+import {
+  DEV_TURNSTILE_SECRET_KEY,
+  DEV_TURNSTILE_SITE_KEY,
+  readSettings,
+} from "../../../infra/settings.ts";
 
 const read = (variables: Record<string, string>, deployed?: { readonly stage: string }) => {
   const warnings: Array<string> = [];
@@ -122,18 +126,80 @@ describe("Commissary Cloud settings", () => {
     }),
   );
 
-  it.effect("are not read on a self-hosted Commissary or in `alchemy dev`", () =>
+  it.effect("are not read on a self-hosted Commissary", () =>
     Effect.gen(function* () {
       assert.strictEqual(
         (yield* read({ ...hosted, COMMISSARY_MODE: "" })).settings.hosted,
         undefined,
       );
-      assert.strictEqual((yield* read(hosted)).settings.hosted, undefined);
       assert.include(
         yield* refusal({ ...hosted, COMMISSARY_MODE: "self-hosted" }),
         "ACCESS_TEAM_DOMAIN is required",
       );
     }),
+  );
+
+  it.effect(
+    "run under `alchemy dev` with Turnstile's test keys, no provider and no auth host",
+    () =>
+      Effect.gen(function* () {
+        const { settings } = yield* read({ COMMISSARY_MODE: "cloud" });
+
+        assert.strictEqual(settings.hosted?.turnstileSiteKey, DEV_TURNSTILE_SITE_KEY);
+        assert.strictEqual(
+          Redacted.value(settings.hosted?.turnstileSecretKey ?? Redacted.make("")),
+          DEV_TURNSTILE_SECRET_KEY,
+        );
+        assert.strictEqual(settings.hosted?.githubClientId, "");
+        assert.strictEqual(settings.hosted?.authDomain, "");
+        assert.strictEqual((yield* read(hosted)).settings.hosted?.turnstileSiteKey, "site");
+      }),
+  );
+
+  it.effect(
+    "put the auth host under the app host, auth.<domain> by default, none on a preview",
+    () =>
+      Effect.gen(function* () {
+        assert.strictEqual(
+          (yield* read(hosted, { stage: "prod" })).settings.hosted?.authDomain,
+          "auth.commissary.example.com",
+        );
+        assert.strictEqual(
+          (yield* read(
+            { ...hosted, COMMISSARY_AUTH_DOMAIN: " login.commissary.example.com " },
+            { stage: "prod" },
+          )).settings.hosted?.authDomain,
+          "login.commissary.example.com",
+        );
+        assert.strictEqual(
+          (yield* read({ ...hosted, COMMISSARY_DOMAIN: "" }, { stage: "pr-12" })).settings.hosted
+            ?.authDomain,
+          "",
+        );
+
+        for (const [variables, message] of [
+          [
+            { COMMISSARY_AUTH_DOMAIN: "auth.elsewhere.com" },
+            "COMMISSARY_AUTH_DOMAIN must be a subdomain of COMMISSARY_DOMAIN",
+          ],
+          [
+            { COMMISSARY_AUTH_DOMAIN: "commissary.example.com" },
+            "COMMISSARY_AUTH_DOMAIN must be a subdomain of COMMISSARY_DOMAIN",
+          ],
+          [
+            { COMMISSARY_AUTH_DOMAIN: "https://auth.commissary.example.com" },
+            "COMMISSARY_AUTH_DOMAIN must be a lowercase hostname",
+          ],
+          [
+            {
+              COMMISSARY_AUTH_DOMAIN: "api.commissary.example.com",
+              COMMISSARY_API_DOMAIN: "api.commissary.example.com",
+            },
+            "COMMISSARY_AUTH_DOMAIN must differ from COMMISSARY_API_DOMAIN",
+          ],
+        ] as const)
+          assert.include(yield* refusal({ ...hosted, ...variables }), message);
+      }),
   );
 
   it.effect("are required on the cloud stage, which never deploys a self-hosted Commissary", () =>

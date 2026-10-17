@@ -1,5 +1,6 @@
-// Hosted sign-in (ADR 0026, src/hosted/routes.ts): Better Auth's GitHub flow through the Worker, Turnstile in front of
-// it, only verified emails, secure session cookies, sign-out, and nothing else of Better Auth's API reachable.
+// Sign-in on the auth host (ADR 0026, ADR 0030, src/http/sign-in-routes.ts): Better Auth's GitHub flow through the
+// auth Worker, started from the sign-in page on the app host, Turnstile in front of it, only verified emails, session
+// cookies scoped to the app host, sign-out, and nothing else of Better Auth's API reachable.
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -7,10 +8,11 @@ import {
   clearPeople,
   cookiesOf,
   finishSignIn,
+  fromApp,
   GOOD_TURNSTILE,
   OTHER_SITE_TURNSTILE,
   installFakes,
-  ORIGIN,
+  APP_ORIGIN,
   restoreFetch,
   signIn,
   startSignIn,
@@ -60,13 +62,16 @@ describe("sign-in with GitHub", () => {
 
     const callback = await finishSignIn(start);
     expect(callback.status).toBe(302);
-    expect(callback.headers.get("location")).toBe("/");
+    // Back to the panel, on the app host.
+    expect(callback.headers.get("location")).toBe(`${APP_ORIGIN}/`);
 
     const cookie = callback.headers
       .getSetCookie()
       .find((value) => value.startsWith("__Secure-better-auth.session_token="));
 
     expect(cookie).toBeDefined();
+    // Scoped to the app host, so the app host receives it and hands it back over the RPC.
+    expect(cookie).toMatch(/;\s*Domain=commissary\.test/i);
     expect(cookie).toMatch(/;\s*Secure/i);
     expect(cookie).toMatch(/;\s*HttpOnly/i);
     expect(cookie).toMatch(/;\s*SameSite=Lax/i);
@@ -80,14 +85,14 @@ describe("sign-in with GitHub", () => {
   it("keeps neither the provider's tokens nor the browser's address or user agent", async () => {
     await signIn({ email: "ada@example.com" });
 
-    const account = await env.USAGE.prepare(
-      'SELECT "accessToken", "refreshToken", "idToken" FROM auth_account',
+    const account = await env.SIGN_IN.prepare(
+      'SELECT "accessToken", "refreshToken", "idToken" FROM "account"',
     ).first();
 
     expect(account).toEqual({ accessToken: null, refreshToken: null, idToken: null });
 
-    const stored = await env.USAGE.prepare(
-      'SELECT "ipAddress", "userAgent" FROM auth_session',
+    const stored = await env.SIGN_IN.prepare(
+      'SELECT "ipAddress", "userAgent" FROM "session"',
     ).first();
 
     expect(stored).toEqual({ ipAddress: null, userAgent: null });
@@ -100,11 +105,13 @@ describe("sign-in with GitHub", () => {
       const callback = await finishSignIn(await startSignIn());
 
       expect(callback.status).toBe(302);
-      expect(callback.headers.get("location")).toContain("/sign-in?error=email_not_verified");
+      expect(callback.headers.get("location")).toContain(
+        `${APP_ORIGIN}/sign-in?error=email_not_verified`,
+      );
       expect(cookiesOf(callback)).not.toContain("session_token");
     }
 
-    const people = await env.USAGE.prepare("SELECT count(*) AS n FROM auth_user").first<{
+    const people = await env.SIGN_IN.prepare('SELECT count(*) AS n FROM "user"').first<{
       n: number;
     }>();
 
@@ -117,12 +124,7 @@ describe("sign-in with GitHub", () => {
 
     const out = await call("/api/auth/sign-out", {
       method: "POST",
-      headers: {
-        cookie,
-        origin: ORIGIN,
-        "sec-fetch-site": "same-origin",
-        "content-type": "application/json",
-      },
+      headers: fromApp({ cookie }),
       body: "{}",
     });
 
@@ -161,6 +163,8 @@ describe("cross-site requests", () => {
     for (const [path, headers] of [
       ["/api/auth/sign-in/social", { origin: "https://evil.test" }],
       ["/api/auth/sign-in/social", { "sec-fetch-site": "cross-site" }],
+      ["/api/auth/sign-in/social", { origin: APP_ORIGIN, "sec-fetch-site": "cross-site" }],
+      ["/api/auth/sign-in/social", { "sec-fetch-site": "same-site" }],
       ["/api/auth/sign-out", { origin: "https://evil.test" }],
     ] as const) {
       const response = await call(path, {
@@ -182,7 +186,7 @@ describe("cross-site requests", () => {
 });
 
 describe("the rest of Better Auth's API", () => {
-  it("answers 404 like an unknown path", async () => {
+  it("answers 404 like an unknown path, naming the app host", async () => {
     for (const [method, path] of [
       ["POST", "/api/auth/sign-up/email"],
       ["POST", "/api/auth/sign-in/email"],
@@ -194,12 +198,14 @@ describe("the rest of Better Auth's API", () => {
     ] as const) {
       const response = await call(path, {
         method,
-        headers: { origin: ORIGIN, "content-type": "application/json" },
+        headers: { origin: APP_ORIGIN, "content-type": "application/json" },
         ...(method === "POST" ? { body: "{}" } : {}),
       });
 
       expect(response.status, `${method} ${path}`).toBe(404);
-      expect(await response.text()).toBe("404 page not found");
+      expect(await response.json()).toEqual({
+        error: `Not found: this host serves sign-in only; the control panel is at ${APP_ORIGIN}`,
+      });
     }
   });
 });

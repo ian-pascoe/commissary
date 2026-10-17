@@ -95,9 +95,32 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm smoke
 
+  # The same under Commissary Cloud (ADR 0026, ADR 0030): the auth Worker beside the others, the sign-in on its port.
+  smoke-cloud:
+    name: smoke (alchemy dev, Commissary Cloud)
+    if: >-
+      github.event.action != 'closed' &&
+      (github.event.action != 'labeled' && github.event.action != 'unlabeled' ||
+       github.event.label.name == 'cloud-preview')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    concurrency:
+      group: smoke-cloud-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - run: pnpm smoke
+        env:
+          COMMISSARY_MODE: cloud
+
   deploy:
     name: deploy ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
-    needs: [static, test, smoke]
+    needs: [static, test, smoke, smoke-cloud]
     # Previews only for branches of this repository (fork and Dependabot runs get no deploy secrets).
     # Production only from main (a manual run on another branch must not deploy it).
     if: >-
@@ -127,6 +150,8 @@ jobs:
       # The API host (ADR 0028), served by the API Worker; unset, zone routes send the client API paths on
       # COMMISSARY_DOMAIN to it (ADR 0030). Previews ignore it.
       COMMISSARY_API_DOMAIN: ${{ vars.COMMISSARY_API_DOMAIN }}
+      # Commissary Cloud's auth host (ADR 0030; default auth.<COMMISSARY_DOMAIN>). Previews ignore it.
+      COMMISSARY_AUTH_DOMAIN: ${{ vars.COMMISSARY_AUTH_DOMAIN }}
       ACCESS_TEAM_DOMAIN: ${{ vars.ACCESS_TEAM_DOMAIN }}
       ACCESS_ALLOW_EMAILS: ${{ vars.ACCESS_ALLOW_EMAILS }}
       ACCESS_ALLOW_EMAIL_DOMAINS: ${{ vars.ACCESS_ALLOW_EMAIL_DOMAINS }}
@@ -177,7 +202,8 @@ jobs:
         env:
           URL: ${{ steps.deploy.outputs.url }}
           API_URL: ${{ steps.deploy.outputs.api_url }}
-        run: tools/check-cloud-deploy.sh "$URL" "$API_URL"
+          AUTH_URL: ${{ steps.deploy.outputs.auth_url }}
+        run: tools/check-cloud-deploy.sh "$URL" "$API_URL" "$AUTH_URL"
       - name: Comment the preview URL
         if: github.event_name == 'pull_request'
         env:
@@ -185,16 +211,17 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           URL: ${{ steps.deploy.outputs.url }}
           API_URL: ${{ steps.deploy.outputs.api_url }}
+          AUTH_URL: ${{ steps.deploy.outputs.auth_url }}
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          if [ "$COMMISSARY_MODE" = cloud ]; then how="Commissary Cloud: sign in with GitHub or Google"; else how="sign in with Access"; fi
+          if [ "$COMMISSARY_MODE" = cloud ]; then how="Commissary Cloud: sign in with GitHub or Google (auth host $AUTH_URL)"; else how="sign in with Access"; fi
           tools/preview-comment.sh "$PR" "Preview \`$STAGE\` deployed at $URL (commit ${SHA:0:8}), $how; the client API (API keys) is at $API_URL. Storage starts empty and is destroyed when the pull request closes."
 
   # Commissary Cloud (ADR 0026) deployed from main next to production: stage `cloud`, settings in the `cloud`
   # environment (docs/DEPLOY.md "The Commissary Cloud stage"). Skipped until that environment names a domain.
   deploy-cloud:
     name: deploy cloud
-    needs: [static, test, smoke]
+    needs: [static, test, smoke, smoke-cloud]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -215,6 +242,8 @@ jobs:
       # The API host (ADR 0028), served by the API Worker; unset, zone routes send the client API paths on
       # COMMISSARY_DOMAIN to it (ADR 0030). Previews ignore it.
       COMMISSARY_API_DOMAIN: ${{ vars.COMMISSARY_API_DOMAIN }}
+      # Commissary Cloud's auth host (ADR 0030; default auth.<COMMISSARY_DOMAIN>). Previews ignore it.
+      COMMISSARY_AUTH_DOMAIN: ${{ vars.COMMISSARY_AUTH_DOMAIN }}
       PLATFORM_ADMIN_EMAILS: ${{ vars.PLATFORM_ADMIN_EMAILS }}
       SECRETS_KEY_GENERATION: ${{ vars.SECRETS_KEY_GENERATION }}
       SECRETS_KEY_PREVIOUS_GENERATION: ${{ vars.SECRETS_KEY_PREVIOUS_GENERATION }}
@@ -254,7 +283,8 @@ jobs:
         env:
           URL: ${{ steps.deploy.outputs.url }}
           API_URL: ${{ steps.deploy.outputs.api_url }}
-        run: tools/check-cloud-deploy.sh "$URL" "$API_URL"
+          AUTH_URL: ${{ steps.deploy.outputs.auth_url }}
+        run: tools/check-cloud-deploy.sh "$URL" "$API_URL" "$AUTH_URL"
 
   destroy-preview:
     name: destroy preview

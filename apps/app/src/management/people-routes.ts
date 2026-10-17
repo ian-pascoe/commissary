@@ -9,7 +9,7 @@ import { HttpRouter } from "effect/http";
 import { AccessPrincipal, forgetStanding } from "@commissary/auth";
 import { ownedOrgLimit } from "../hosted/owned-orgs.ts";
 import { hostedOnly } from "../hosted/only.ts";
-import { endSessions } from "../hosted/session.ts";
+import { endSessions } from "../hosted/sign-in.ts";
 import { MAX_ORG_LIMIT, type PersonRecord, bodyObject } from "@commissary/state";
 import type { PersonView } from "@commissary/contract/people";
 import { handled, jsonReply, replyError } from "@commissary/core";
@@ -95,7 +95,7 @@ const update = Effect.gen(function* () {
   forgetStanding({ email });
 
   if (suspended === true) {
-    const ended = yield* endSessions(env, [email]);
+    const ended = yield* endSessions([email]);
 
     yield* Effect.logInfo("person suspended").pipe(Effect.annotateLogs({ sessionsEnded: ended }));
   }

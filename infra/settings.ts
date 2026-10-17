@@ -3,8 +3,9 @@ import * as Effect from "effect/Effect";
 import * as Redacted from "effect/Redacted";
 
 /**
- * Commissary Cloud's settings (ADR 0026, `COMMISSARY_MODE=cloud`): the Worker signs people in itself, so no Access application
- * is created. Secrets come from the shell (CI: the GitHub environment's secrets) and are bound as secret text.
+ * Commissary Cloud's settings (ADR 0026, `COMMISSARY_MODE=cloud`): the auth Worker signs people in on the auth host (ADR
+ * 0030), so no Access application is created. Secrets come from the shell (CI: the GitHub environment's secrets) and
+ * are bound as secret text.
  */
 export interface HostedSettings {
   readonly githubClientId: string;
@@ -19,7 +20,21 @@ export interface HostedSettings {
   readonly orgRateLimit: number;
   /** The rate-limit namespace (`ORG_RATE_LIMIT_NAMESPACE_ID`): a positive integer unique in the account. */
   readonly orgRateLimitNamespaceId: number;
+  /**
+   * The auth host (`COMMISSARY_AUTH_DOMAIN`, ADR 0030), the auth Worker's custom domain: a subdomain of the app host
+   * (`domain`), by default `auth.<domain>`, so the session cookie it sets reaches the app host. Empty on a preview (the
+   * auth Worker's workers.dev URL) and under `alchemy dev` (its dev port).
+   */
+  readonly authDomain: string;
 }
+
+/**
+ * Cloudflare Turnstile's test keys whose check always passes (https://developers.cloudflare.com/turnstile/troubleshooting/testing/):
+ * the default under `alchemy dev`, where Commissary Cloud runs without real keys.
+ */
+export const DEV_TURNSTILE_SITE_KEY = "1x00000000000000000000AA";
+
+export const DEV_TURNSTILE_SECRET_KEY = "1x0000000000000000000000000000000AA";
 
 /**
  * Deploy-time settings of the stack, read from the shell environment and `.env` (see `.env.example`). They
@@ -128,7 +143,8 @@ const TOKEN_NAME = /^[a-z0-9][a-z0-9-]{0,40}$/;
 const HOSTNAME =
   /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/;
 
-const secret = (name: string) => Effect.map(text(name), (value) => Redacted.make(value.trim()));
+const secret = (name: string, fallback = "") =>
+  Effect.map(text(name, fallback), (value) => Redacted.make(value.trim()));
 
 /** A whole number from `min`, or `fallback` when unset; `undefined` when set to something else. */
 const wholeNumber = (value: string, fallback: number, min: number): number | undefined => {
@@ -153,46 +169,78 @@ const commissaryMode = Effect.gen(function* () {
   );
 });
 
-/** The settings of Commissary Cloud, and what is wrong with them. */
-const hostedSettings = Effect.gen(function* () {
-  const problems: Array<string> = [];
-  const limit = wholeNumber(yield* text("OWNED_ORG_LIMIT"), 3, 0);
-  const rate = wholeNumber(yield* text("ORG_RATE_LIMIT"), 600, 1);
-  const namespace = wholeNumber(yield* text("ORG_RATE_LIMIT_NAMESPACE_ID"), 7201, 1);
+/** The auth host: `COMMISSARY_AUTH_DOMAIN` (`configured`), else `auth.<domain>` (empty without a domain). */
+const authHost = (configured: string, domain: string): string => {
+  if (configured !== "") return configured;
 
-  if (limit === undefined) problems.push("OWNED_ORG_LIMIT must be a whole number from 0");
+  return domain === "" ? "" : `auth.${domain.toLowerCase()}`;
+};
 
-  if (rate === undefined)
-    problems.push("ORG_RATE_LIMIT must be a whole number from 1 (requests per minute)");
+/**
+ * The settings of Commissary Cloud, and what is wrong with them. Under `alchemy dev` (`dev`) Turnstile defaults to its
+ * always-passing test keys and no problem is reported: a sign-in provider is optional there.
+ */
+const hostedSettings = (dev: boolean, preview: boolean, domain: string, apiDomain: string) =>
+  Effect.gen(function* () {
+    const problems: Array<string> = [];
+    const limit = wholeNumber(yield* text("OWNED_ORG_LIMIT"), 3, 0);
+    const rate = wholeNumber(yield* text("ORG_RATE_LIMIT"), 600, 1);
+    const namespace = wholeNumber(yield* text("ORG_RATE_LIMIT_NAMESPACE_ID"), 7201, 1);
 
-  if (namespace === undefined)
-    problems.push("ORG_RATE_LIMIT_NAMESPACE_ID must be a positive integer");
+    if (limit === undefined) problems.push("OWNED_ORG_LIMIT must be a whole number from 0");
 
-  const hosted: HostedSettings = {
-    githubClientId: (yield* text("SIGN_IN_GITHUB_CLIENT_ID")).trim(),
-    githubClientSecret: yield* secret("SIGN_IN_GITHUB_CLIENT_SECRET"),
-    googleClientId: (yield* text("SIGN_IN_GOOGLE_CLIENT_ID")).trim(),
-    googleClientSecret: yield* secret("SIGN_IN_GOOGLE_CLIENT_SECRET"),
-    turnstileSiteKey: (yield* text("TURNSTILE_SITE_KEY")).trim(),
-    turnstileSecretKey: yield* secret("TURNSTILE_SECRET_KEY"),
-    ownedOrgLimit: String(limit ?? 3),
-    orgRateLimit: rate ?? 600,
-    orgRateLimitNamespaceId: namespace ?? 7201,
-  };
+    if (rate === undefined)
+      problems.push("ORG_RATE_LIMIT must be a whole number from 1 (requests per minute)");
 
-  const github = hosted.githubClientId !== "" && Redacted.value(hosted.githubClientSecret) !== "";
-  const google = hosted.googleClientId !== "" && Redacted.value(hosted.googleClientSecret) !== "";
+    if (namespace === undefined)
+      problems.push("ORG_RATE_LIMIT_NAMESPACE_ID must be a positive integer");
 
-  if (!github && !google)
-    problems.push(
-      "Commissary Cloud needs a sign-in provider: SIGN_IN_GITHUB_CLIENT_ID and SIGN_IN_GITHUB_CLIENT_SECRET, and/or SIGN_IN_GOOGLE_CLIENT_ID and SIGN_IN_GOOGLE_CLIENT_SECRET",
-    );
+    const hosted: HostedSettings = {
+      githubClientId: (yield* text("SIGN_IN_GITHUB_CLIENT_ID")).trim(),
+      githubClientSecret: yield* secret("SIGN_IN_GITHUB_CLIENT_SECRET"),
+      googleClientId: (yield* text("SIGN_IN_GOOGLE_CLIENT_ID")).trim(),
+      googleClientSecret: yield* secret("SIGN_IN_GOOGLE_CLIENT_SECRET"),
+      turnstileSiteKey: (yield* text(
+        "TURNSTILE_SITE_KEY",
+        dev ? DEV_TURNSTILE_SITE_KEY : "",
+      )).trim(),
+      turnstileSecretKey: yield* secret(
+        "TURNSTILE_SECRET_KEY",
+        dev ? DEV_TURNSTILE_SECRET_KEY : "",
+      ),
+      ownedOrgLimit: String(limit ?? 3),
+      orgRateLimit: rate ?? 600,
+      orgRateLimitNamespaceId: namespace ?? 7201,
+      authDomain:
+        dev || preview ? "" : authHost((yield* text("COMMISSARY_AUTH_DOMAIN")).trim(), domain),
+    };
 
-  if (hosted.turnstileSiteKey === "" || Redacted.value(hosted.turnstileSecretKey) === "")
-    problems.push("Commissary Cloud needs TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY");
+    if (hosted.authDomain !== "") {
+      if (!HOSTNAME.test(hosted.authDomain))
+        problems.push(
+          `COMMISSARY_AUTH_DOMAIN must be a lowercase hostname such as auth.example.com, not "${hosted.authDomain}"`,
+        );
+      else if (!hosted.authDomain.endsWith(`.${domain.toLowerCase()}`))
+        problems.push(
+          `COMMISSARY_AUTH_DOMAIN must be a subdomain of COMMISSARY_DOMAIN (${domain}), so its session cookie reaches the app host`,
+        );
+      else if (hosted.authDomain === apiDomain)
+        problems.push("COMMISSARY_AUTH_DOMAIN must differ from COMMISSARY_API_DOMAIN");
+    }
 
-  return { hosted, problems };
-});
+    const github = hosted.githubClientId !== "" && Redacted.value(hosted.githubClientSecret) !== "";
+    const google = hosted.googleClientId !== "" && Redacted.value(hosted.googleClientSecret) !== "";
+
+    if (!github && !google)
+      problems.push(
+        "Commissary Cloud needs a sign-in provider: SIGN_IN_GITHUB_CLIENT_ID and SIGN_IN_GITHUB_CLIENT_SECRET, and/or SIGN_IN_GOOGLE_CLIENT_ID and SIGN_IN_GOOGLE_CLIENT_SECRET",
+      );
+
+    if (hosted.turnstileSiteKey === "" || Redacted.value(hosted.turnstileSecretKey) === "")
+      problems.push("Commissary Cloud needs TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY");
+
+    return { hosted, problems };
+  });
 
 /** Stage names of pull-request previews (`pr-<number>`, as deployed by .github/workflows/ci.yml). */
 export const PREVIEW_STAGE = /^pr-\d+$/;
@@ -217,15 +265,19 @@ export const readSettings = (dev: boolean, stage: string) =>
         ),
       );
 
-    // `alchemy dev` stays self-hosted: the dev bypass needs it.
-    const hosted = !dev && mode === "cloud" ? yield* hostedSettings : undefined;
+    const domain = (yield* text("COMMISSARY_DOMAIN")).trim();
+    // A preview's Workers serve their workers.dev URLs only.
+    const apiDomain = dev || preview ? "" : (yield* text("COMMISSARY_API_DOMAIN")).trim();
+
+    // Under `alchemy dev` too (`COMMISSARY_MODE=cloud pnpm smoke`): people sign in on the auth Worker's dev port, without the dev bypass.
+    const hosted =
+      mode === "cloud" ? yield* hostedSettings(dev, preview, domain, apiDomain) : undefined;
 
     const settings: Settings = {
       hosted: hosted?.hosted,
       preview,
-      domain: (yield* text("COMMISSARY_DOMAIN")).trim(),
-      // A preview's Workers serve their workers.dev URLs only.
-      apiDomain: dev || preview ? "" : (yield* text("COMMISSARY_API_DOMAIN")).trim(),
+      domain,
+      apiDomain,
       teamDomain: (yield* text("ACCESS_TEAM_DOMAIN")).trim(),
       existingAud: preview ? "" : (yield* text("ACCESS_AUD")).trim(),
       allowEmails: yield* list("ACCESS_ALLOW_EMAILS"),
