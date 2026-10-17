@@ -32,13 +32,13 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
 
 ```
 .                             workspace root and deploy root (Alchemy, no Wrangler config); turbo.json
-  alchemy.run.ts              infrastructure: Worker, DOs, KV, D1 (+ migrations), assets, cron, Access
+  alchemy.run.ts              infrastructure: app and state Workers, DOs, KV, D1 (+ migrations), assets, cron, Access
   infra/                      deploy settings (.env) and Cloudflare Access provisioning
   migrations/                 D1 schema of the usage database
-  apps/app/                   @commissary/app: the one Worker (client API, management API, panel serving)
+  apps/app/                   @commissary/app: the app Worker (client API, management API, panel serving)
     src/
-      index.ts                Worker entry: fetch, scheduled, DO class exports
-      control-plane.ts        the ControlPlane Durable Object: @commissary/state's base composed with the Models part
+      index.ts                Worker entry: fetch, scheduled; state calls retried once on a code-update reset
+      dev.ts                  its `alchemy dev` entry: index.ts plus the state Worker's classes, bound locally
       platform/               org deletion (every area's step, then the state's)
       api/                    what moves to the API Worker: CORS and the cron runner
       http/                   router, hosts, /healthz
@@ -47,7 +47,12 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
                               keys), panel serving, the composition of every area's routes; path zones, role table,
                               org addressing
       hosted/, sso/           Commissary Cloud's sign-in and per-org single sign-on
-    test/                     vitest suites in workerd: what goes through the Worker's router or fetch
+    test/                     vitest suites in workerd: what goes through the Worker's router or fetch; worker.ts,
+                              the test Worker, re-exports the handler and the state Worker's Durable Objects
+  apps/state/                 @commissary/state-worker: the state Worker, no routes (ADR 0030)
+    src/index.ts              exports ControlPlane, SessionState and Platform; answers every request 404
+    src/control-plane.ts      the ControlPlane Durable Object: @commissary/state's base composed with the Models part
+    src/env.d.ts              what the classes read: the state Worker's bindings
   apps/web/                   @commissary/web: control panel served at / (React, Effect Atom, TanStack Router; built
                               into apps/web/dist, the Worker's assets), its tests in Node.js
   packages/auth/              @commissary/auth: request-side authentication (principals, Access JWTs, API and
@@ -97,7 +102,20 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
 
 ## Runtime topology
 
-- **Worker** (stateless): routing, Access verification, request handling, translation, upstream `fetch`, streaming.
+- **Worker** (stateless; the app Worker, `Commissary`): routing, Access verification, request handling, translation,
+  upstream `fetch`, streaming.
+- **State Worker** (`State`, `apps/state`, ADR 0030): defines the three Durable Objects below and nothing else: no
+  routes, no domain, no `workers.dev` URL, and only the bindings their classes read. The app Worker binds them by the
+  state Worker's script name, so a deploy uploads the state Worker first, and restarts the Durable Objects only when
+  their own code changed (Alchemy uploads a Worker again only when its bundle changes). A call cut off by that restart
+  ("Durable Object reset because its code was updated") is sent once more on a new stub: the app Worker wraps the
+  namespaces of each invocation's `env` (`retryOnCodeUpdate`, `state/code-update-retry.ts`), and the wrapped stubs
+  still send each call when it is made and a pipelined `stub.models().x()` in one round trip; the retry replays the
+  chain from a new stub. State RPC changes are expand-then-contract (`docs/DEVELOPMENT.md`). The namespaces moved from
+  the app Worker with every stored object (`transferredFrom`, `docs/DEPLOY.md`). Under `alchemy dev` the app Worker
+  binds a local copy of the classes instead (`src/dev.ts`): the dev registry would reach the state Worker's objects by
+  hex id, without the name a ControlPlane learns its org from. The tests run the app's handler and the classes in one
+  isolate (`test/worker.ts`).
 - **Hosts** (ADR 0028, `src/http/hosts.ts`): with `API_DOMAIN` set (deploy setting `COMMISSARY_API_DOMAIN`), the
   Worker answers on two custom domains and the default export decides by hostname before the router: the API host
   serves the client API (the Access zone `protected` of `classifyPath`) and `/healthz`, every other host (the app host
@@ -120,7 +138,7 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
   `pick`, `report`, `getConfig`). The org `global` keeps the object it always had (`getByName("global")`), so upgrading
   moves no data.
   - **Base and parts** (#134 "How an area's ControlPlane part works", #148, #149): the class `ControlPlane`
-    (`src/control-plane.ts`) is the org-wide base (`state/control-plane.ts`: members, teams, service tokens, the
+    (`apps/state/src/control-plane.ts`) is the org-wide base (`state/control-plane.ts`: members, teams, service tokens, the
     membership index and settings, API keys, management keys, SSO, `SessionState` instances, the org's data key)
     composed (`composeControlPlane`, `state/compose.ts`, which gives each part a method of its name) with the Models part (`models/control-plane-part.ts`: config, credentials, selection, refresh, grants,
     Spend limits, quota, reset grants, OAuth logins). The part is an `RpcTarget` constructed once per object with the
@@ -203,7 +221,8 @@ client -> Cloudflare Access -> Worker
   Worker reads `AppEnv` (`src/worker-env.ts`). `requestContext` provides each from the invocation's `env`, plus auth's
   ports over it: `AuthDirectory` (`state/auth-directory.ts`, the Durable Object stubs) and `SignInSessions`
   (`src/hosted/session.ts`, Better Auth); the global
-  `Env` appears only in the entry (`index.ts`, `api/scheduled.ts`), the Durable Object classes and tests.
+  `Env` appears only in the entry (`index.ts`, `api/scheduled.ts`) and tests; the state Worker's classes read
+  `StateObjectEnv` and their parts' views (`apps/state/src/env.d.ts`).
 - Use Effect at boundaries and for orchestration: services (`Context.Service`) + `Layer`s, `Schema` for config,
   credentials and external payloads, tagged errors, `Stream` for upstream/downstream streaming, `HttpClient`
   (`FetchHttpClient`) for upstream calls so tests can swap the transport.

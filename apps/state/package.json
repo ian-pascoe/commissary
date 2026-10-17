@@ -1,0 +1,21 @@
+{
+  "name": "@commissary/state-worker",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The state Worker (ADR 0030): defines the Durable Objects ControlPlane, SessionState and Platform, which the other Workers bind by script name; no routes",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "@commissary/models": "workspace:*",
+    "@commissary/state": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

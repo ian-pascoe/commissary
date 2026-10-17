@@ -4,13 +4,16 @@
  * `SessionState` instances, the org's data key in `secrets/`) and the helper that composes it with the areas' parts
  * (`composeControlPlane`); the Platform registry and the general-purpose lease store; `SessionState` (the class, its
  * client, protocol and engine); the stub helpers (`controlPlaneOf`, `platformOf`, `currentControlPlane`, the
- * management routes' `controlPlane`); and the one `AuthDirectory` adapter. It reads its bindings through `StateEnv` and
- * its classes' settings from `StateObjectEnv`; it imports `@commissary/auth`, `@commissary/core`,
- * `@commissary/contract` and `effect` only, never an area's code. Test helpers are `@commissary/state/testing`.
+ * management routes' `controlPlane`); the retry of a caller's calls on a code-update reset (`retryOnCodeUpdate`); and
+ * the one `AuthDirectory` adapter. It reads its bindings through `StateEnv` and its classes' settings from
+ * `StateObjectEnv`; it imports `@commissary/auth`, `@commissary/core`, `@commissary/contract` and `effect` only, never
+ * an area's code. Test helpers are `@commissary/state/testing`.
  */
 export * from "./api-keys/store.ts";
 
 export * from "./auth-directory.ts";
+
+export * from "./code-update-retry.ts";
 
 export * from "./compose.ts";
 

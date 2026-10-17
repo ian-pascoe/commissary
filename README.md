@@ -16,7 +16,7 @@ secrets Commissary holds for outside services are **credentials**, and a model p
   and vice versa.
 - **Use the subscriptions you already pay for.** Log in with OAuth (Claude, Codex, Antigravity, xAI, Kimi, Devin, …) or
   add provider keys; credentials rotate round-robin with cooldowns on rate limits and automatic token refresh.
-- **Nothing to run.** A single Worker with Durable Objects, KV and D1. No servers, no containers, and it scales to zero.
+- **Nothing to run.** Two Workers (the app and the state Worker that holds the Durable Objects), KV and D1. No servers, no containers, and it scales to zero.
 - **Zero-trust by default.** People sign in to the control panel and management API through Cloudflare Access with
   your identity provider; tools send an API key each member creates in the panel, stored only as a hash and
   revocable (a revoked key stops working within 30 seconds); scripts use management keys or Access service tokens. The Worker stores no client passwords.

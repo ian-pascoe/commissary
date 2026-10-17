@@ -1,6 +1,7 @@
 /**
- * Infrastructure of the Workers port, deployed with Alchemy (`pnpm deploy`, `pnpm dev`, `pnpm destroy`): the Worker
- * with its Durable Objects, static assets and cron trigger, the KV namespace, the D1 usage database (migrations
+ * Infrastructure of the Workers port, deployed with Alchemy (`pnpm deploy`, `pnpm dev`, `pnpm destroy`): the state
+ * Worker, which defines the Durable Objects (ADR 0030), the app Worker with its static assets and cron trigger, which
+ * binds them by script name, the KV namespace, the D1 usage database (migrations
  * applied on every deploy), the `auth_index` HMAC key and the Cloudflare Access application, policies and service tokens
  * in front of it (except the client API, where clients send API keys). Commissary Cloud (`COMMISSARY_MODE=cloud`, ADR
  * 0026) creates no Access resources: the Worker signs people in itself, and gets its sign-in settings, Better Auth's
@@ -18,8 +19,8 @@ import { DEV_AUTH_INDEX_KEY } from "@commissary/models/auth-index-key";
 import { DEV_SECRETS_KEY, secretsKeyResourceId } from "./packages/state/src/secrets/key.ts";
 
 /**
- * Runtime compatibility of the Worker; keep in sync with apps/app/vitest.config.ts, packages/state/vitest.config.ts and
- * tools/workers/worker-configuration.d.ts.
+ * Runtime compatibility of the Workers; keep in sync with apps/app/vitest.config.ts, packages/state/vitest.config.ts,
+ * packages/models/vitest.config.ts and tools/workers/worker-configuration.d.ts.
  */
 export const COMPATIBILITY = { date: "2026-08-01", flags: ["nodejs_compat"] };
 
@@ -116,8 +117,67 @@ export default Alchemy.Stack(
       ? { name: settings.domain, aliases: [settings.apiDomain] }
       : settings.domain;
 
+    // What the state Worker's classes read besides their namespaces and the mode (`StateObjectEnv`, `ModelsPartEnv`).
+    // The app Worker's own code reads all of it too, except the secrets keys.
+    const stateSettings = {
+      // Platform admins seeded as owners of `global`; the Access settings mark a deployed stage, where the dev secrets
+      // key is refused (@commissary/state's secrets/).
+      ACCESS_TEAM_DOMAIN: dev || hosted !== undefined ? "" : settings.teamDomain,
+      ACCESS_AUD: access.aud,
+      PLATFORM_ADMIN_EMAILS: settings.adminEmails.join(","),
+      PLATFORM_ADMIN_SERVICE_TOKENS: access.adminServiceTokens,
+      META_MINT_URL: settings.metaMintUrl,
+      // Redacted: bound as a secret (`secret_text`), never as a plain variable.
+      AUTH_INDEX_KEY: authIndexKey,
+    };
+
+    // The secrets keys (redacted, like `AUTH_INDEX_KEY`): only the ControlPlane reads them, so only the Worker that
+    // runs it binds them.
+    const secretsKeyBindings = {
+      ...(secretsKey === undefined ? {} : { SECRETS_KEY: secretsKey }),
+      ...(previousSecretsKey === undefined ? {} : { SECRETS_KEY_PREVIOUS: previousSecretsKey }),
+    };
+
+    // The state Worker (apps/state, ADR 0030): defines ControlPlane, SessionState and Platform, and binds only what
+    // their classes read (apps/state/src/env.d.ts). No routes, no domain, no workers.dev URL: the other Workers reach
+    // it through their Durable Object bindings. A deploy restarts the Durable Objects a Worker defines, and Alchemy
+    // uploads a Worker again only when its bundle changes, so they restart only when their own code does.
+    //
+    // The namespaces used to live in the app Worker (`Commissary`). `transferredFrom` moves each one with every stored
+    // object on the first deploy of a stage that still has it there (prod, cloud, a self-hosted stage upgrading); on a
+    // fresh stage, or once moved, it does nothing, so it stays (docs/DEPLOY.md, "The state Worker").
+    const stateWorker = yield* Cloudflare.Worker("State", {
+      main: "./apps/state/src/index.ts",
+      compatibility: COMPATIBILITY,
+      workersDev: false,
+      // Under `alchemy dev` the app Worker keeps the default port 1337, where the panel's dev server sends `/v9`.
+      dev: { port: 1338 },
+      limits: { cpuMs: settings.cpuMs },
+      env: {
+        CONTROL_PLANE: Cloudflare.DurableObject("ControlPlane", { transferredFrom: "Commissary" }),
+        SESSION_STATE: Cloudflare.DurableObject("SessionState", { transferredFrom: "Commissary" }),
+        PLATFORM: Cloudflare.DurableObject("Platform", { transferredFrom: "Commissary" }),
+        ...(hosted === undefined ? {} : { COMMISSARY_MODE: "cloud" }),
+        ...stateSettings,
+        ...secretsKeyBindings,
+      },
+    });
+
+    // The Durable Objects are the state Worker's, bound by its script name; the binding also makes this Worker deploy
+    // after it (ADR 0030: the state Worker deploys before its callers, whose state RPC changes are expand-then-contract,
+    // docs/DEVELOPMENT.md).
+    //
+    // Dev-only guard: under `alchemy dev` the local dev registry reaches another Worker's Durable Object by its hex id
+    // and drops `ctx.id.name`, which tells a ControlPlane its org. There, and only there (`dev`), the app runs its dev
+    // entry (apps/app/src/dev.ts: the handler plus the state Worker's classes) and binds the objects locally; the state
+    // Worker still runs beside it. A deploy always uses apps/app/src/index.ts and the script-name bindings.
+    const stateObject = (className: "ControlPlane" | "SessionState" | "Platform") =>
+      dev
+        ? Cloudflare.DurableObject(className)
+        : Cloudflare.DurableObject(className, { scriptName: stateWorker.workerName });
+
     const worker = yield* Cloudflare.Worker("Commissary", {
-      main: "./apps/app/src/index.ts",
+      main: dev ? "./apps/app/src/dev.ts" : "./apps/app/src/index.ts",
       compatibility: COMPATIBILITY,
       // Production serves only its Access-protected domain; pull-request previews serve their workers.dev URL,
       // protected by enrolling the Worker into the preview's Access application. The client API leaves Access on both
@@ -135,20 +195,14 @@ export default Alchemy.Stack(
       env: {
         CACHE: cache,
         USAGE: usage,
-        CONTROL_PLANE: Cloudflare.DurableObject("ControlPlane"),
-        SESSION_STATE: Cloudflare.DurableObject("SessionState"),
-        PLATFORM: Cloudflare.DurableObject("Platform"),
-        ACCESS_TEAM_DOMAIN: dev || hosted !== undefined ? "" : settings.teamDomain,
-        ACCESS_AUD: access.aud,
-        PLATFORM_ADMIN_EMAILS: settings.adminEmails.join(","),
-        PLATFORM_ADMIN_SERVICE_TOKENS: access.adminServiceTokens,
+        CONTROL_PLANE: stateObject("ControlPlane"),
+        SESSION_STATE: stateObject("SessionState"),
+        PLATFORM: stateObject("Platform"),
+        ...stateSettings,
         ACCESS_DEV_BYPASS: dev ? settings.devBypass : "",
-        META_MINT_URL: settings.metaMintUrl,
         ...(split ? { APP_DOMAIN: settings.domain, API_DOMAIN: settings.apiDomain } : {}),
-        // Redacted: bound as a secret (`secret_text`), never as a plain variable.
-        AUTH_INDEX_KEY: authIndexKey,
-        ...(secretsKey === undefined ? {} : { SECRETS_KEY: secretsKey }),
-        ...(previousSecretsKey === undefined ? {} : { SECRETS_KEY_PREVIOUS: previousSecretsKey }),
+        // Under `alchemy dev` the app runs the ControlPlane itself (the dev-only guard above).
+        ...(dev ? secretsKeyBindings : {}),
         ...hostedEnv,
       },
     });
