@@ -56,7 +56,7 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
   packages/state/             @commissary/state: the org-wide state on Durable Objects (the ControlPlane's org-wide
                               base and its stores, composeControlPlane, Platform registry, leases, SessionState,
                               the stub helpers, the AuthDirectory adapter), tested in workerd
-  packages/models/             @commissary/models: the Models area (#151); no root export, the Workers import it only
+  packages/models/            @commissary/models: the Models area (#151); no root export, the Workers import it only
                               through ./api, ./management and ./state (lint rule boundaries/models-imports)
     src/api.ts                for the API Worker: client API routes, the request trace, cron tasks, ModelsEnv
     src/management.ts         for the app Worker: management routes, OAuth callbacks, role-table entries, org-deletion
@@ -213,9 +213,9 @@ client -> Cloudflare Access -> Worker
   top of each ported module.
 - Payload rules remain the final semantic mutation before the upstream request in every executor path (see AGENTS.md).
 - No wall-clock sleeps in tests; use Effect `TestClock`.
-- Tests: `vitest` + `@effect/vitest`; Worker/Durable Object integration tests with `@cloudflare/vitest-plugin` (successor of `@cloudflare/vitest-pool-workers`). `@commissary/state` tests its Durable Object classes on real SQLite storage in a test Worker of its own (`packages/state/test/worker.ts`: the base composed with two dummy area parts, the Platform registry and SessionState).
+- Tests: `vitest` + `@effect/vitest`; Worker/Durable Object integration tests with `@cloudflare/vitest-plugin` (successor of `@cloudflare/vitest-pool-workers`). `@commissary/state` tests its Durable Object classes on real SQLite storage in a test Worker of its own (`packages/state/test/worker.ts`: the base composed with two dummy area parts, the Platform registry and SessionState). `@commissary/models` has two projects: Node.js (`packages/models/test/unit/`) and workerd, in a test Worker with a test-only ControlPlane (`packages/models/test/worker.ts`).
   Translators and the thinking pipeline are verified against golden fixtures produced by `tools/fixturegen`
-  from the Go implementation (`go run ./tools/fixturegen`), checked in under `test/fixtures/`.
+  from the Go implementation (`go run ./tools/fixturegen`), checked in under the package's `test/fixtures/`.
 - Never log tokens, provider keys or JWTs.
 
 ## JSON values, config and payload rules
@@ -391,7 +391,7 @@ Port of `internal/thinking`, keeping the "canonical `ThinkingConfig` → central
   - **Who a call runs for** (fail closed): every `ControlPlane` method that filters by ownership takes a required `Scope`
     (`viewer`): the caller's `Viewer`, or `FULL_ACCESS` for the system (cron sweeps, the registry's model sources, the
     public OAuth callback, migrations). There is no default, so a member-scoped route cannot forget it: leaving it out is a
-    type error, which `test/credentials-scope.test.ts` pins with `@ts-expect-error` per method next to a runtime test of
+    type error, which `packages/models/test/credentials-scope.test.ts` pins with `@ts-expect-error` per method next to a runtime test of
     what each viewer reaches.
   - **Selection**: `PickRequest.memberId` (the caller's member id, also in the retry query) enters `pick` and `planRetry`;
     a private credential is a candidate only when `credential.owner === memberId` (`servesMember`), so a request of another
@@ -440,7 +440,7 @@ Core contracts every provider slice implements (Go references in each module hea
   golden fixtures come from `go run ./tools/fixturegen/translator` (corpus files under
   `tools/fixturegen/translator/corpus/`, one fixture file per corpus file under translation's `test/fixtures/translator/`,
   picked up automatically by its `test/translator-fixtures.test.ts`; the cases with an executor context, which need the
-  Worker's executor-level rewrites, go to `test/fixtures/translator-executor.json` here; cases may declare `needs` to
+  Worker's executor-level rewrites, go to `packages/models/test/fixtures/translator-executor.json`; cases may declare `needs` to
   be skipped until a capability lands).
 - **Executors (`models/executor/`)**: `ProviderExecutor { execute, executeStream, countTokens }` over
   `ExecutorRequest`/`ExecutorOptions` (Go `Request`/`Options`, typed `ExecutionMetadata`) and an `ExecutionContext`
@@ -452,7 +452,7 @@ Core contracts every provider slice implements (Go references in each module hea
   there). The default implementation (`control-plane-picker.ts`) is a thin adapter over the ControlPlane RPC; it maps the
   DO snapshot to the executor view (`kind`, `header:<Name>` attributes, `base_url`) and turns pick failures into
   `ExecutionError`s (`model_cooldown` keeps its JSON body and `Retry-After`). `static-picker.ts` is a config-only stand-in
-  for tests (`makePipeline` uses it; `test/support/pool.ts` runs the real `CredentialPool` in-process with an injected
+  for tests (`makePipeline` uses it; `packages/models/test/support/pool.ts` runs the real `CredentialPool` in-process with an injected
   clock). The route returned by `pick` (`PickedRoute`: upstream model pool, `originalAlias`, `forceMapping`, `pooled`) is
   computed in the DO; `executor/models.ts` is only used by the static picker.
 - **Handlers (`models/handlers/`)**: `execute.ts` runs resolve (`ModelProviders` service: the model registry;
@@ -528,7 +528,7 @@ Core contracts every provider slice implements (Go references in each module hea
   - Deviations: the Go JSON `Raw` text is replaced by the compact re-serialisation of the parsed body (sampling of >16 KiB JSON
     parts and `original_size` are measured on it), a sparse sample cut inside a multi-byte character decodes to U+FFFD, and
     execution-session (WebSocket) metadata ids are not consulted. Go parity is tested with `tools/fixturegen/session`
-    (`test/fixtures/session.json`: turns, fingerprints, derive ids, matcher scenarios).
+    (`packages/models/test/fixtures/session.json`: turns, fingerprints, derive ids, matcher scenarios).
 
 ## Codex provider and Responses API (`models/executor/codex/`, `translation/translator/codex/`, `models/handlers/responses/`)
 
@@ -852,7 +852,7 @@ evaluated per isolate and cached for 5 s (`ModelRegistry.snapshot`, `RegistrySna
   channel's rules by channel, the `If-Match` value of rule edits, see _Config entries_ below). Contract: `@commissary/contract/routing`.
 - Fixtures: `go run ./tools/fixturegen/registry` drives the real Go handlers (`OpenAIModels`, `ClaudeModels`,
   `GeminiModels`, `GeminiGetHandler`, `WriteModelListResponse` detail mode) against a real `registry.ModelRegistry` and records
-  bodies and registry queries (`test/fixtures/registry.json`).
+  bodies and registry queries (`packages/models/test/fixtures/registry.json`).
 
 Deviations from Go: models are registered under the credential's **executor key** (`kimi.com` -> `kimi`), which is what
 `PickRequest.providers` is matched against; the quota window starts at the model state's observation time; Go's
@@ -866,7 +866,7 @@ models and Home.
 unparseable versions), modalities, priorities, Devin display names, `client.codex.optimize-multi-agent-v2` (`multi_agent_version`),
 `client.codex.enable-apply-patch` (`apply_patch_tool_type: freeform` only when every provider of the exact public model has an
 executor, `supportsApplyPatchProviders`) and `cpa_capabilities.web_search` for `client_version=cpa`. The body is plain `JSON.stringify` output.
-Fixtures: the real Go `OpenAIModels` handler over the registry scenarios (`codexClient` section of `test/fixtures/registry.json`:
+Fixtures: the real Go `OpenAIModels` handler over the registry scenarios (`codexClient` section of `packages/models/test/fixtures/registry.json`:
 per-entry and whole-body hashes of Go's sorted compact bytes, which the test reproduces itself before hashing).
 
 ## Token refresh (`models/credentials/refresh/`)
@@ -1681,7 +1681,7 @@ helpers; `oauth_scope_executor.go` is `executor/helps/oauth-scope.ts`.
   passes through untranslated.
 - **Fixtures**: `go run ./tools/fixturegen/devin` runs the real Go `DevinExecutor` against an `httptest` Connect-RPC
   server (request bytes, Interactions events, aggregates, trailer/model-UID/frame/system-prompt helpers) into
-  `test/fixtures/devin.json`; `test/devin-*.test.ts` compare the TypeScript output with it.
+  `packages/models/test/fixtures/devin.json`; `packages/models/test/devin-*.test.ts` compare the TypeScript output with it.
 - **API-key scoping**: `withApiKeyScope` (registry) gives API-key credentials the config without `oauth.providers.*`
   (Codex, Claude, Meta, Kimi, xAI, OpenAI-compatible; not Devin). Settings imported from aliased `upstream.*` spellings lose their
   OAuth-only origin and stay global (the Go `OAuthOnlyFields` provenance is not kept).
@@ -2007,7 +2007,7 @@ Grok/GPT/recognised checks, Gemini replay, ~500 sanitiser runs over synthetic hi
   downgrades orphan `codex_app` delegation outputs. The Responses handler and WebSocket frames prepare the tools once
   (`handlers/responses/codex-prepare.ts`, model list from `ModelProviders.spawnAgentSource`); executors repeat the idempotent parts
   without the model list. Fixtures: `go run ./tools/fixturegen/multiagent` (896 combinations of client identity, flags and
-  compat over the real Go functions, `test/fixtures/multiagent.json`).
+  compat over the real Go functions, `packages/models/test/fixtures/multiagent.json`).
 - **`is-compat` models** (`translate.ts`): `translateRequestForExecutor` replaces every direct `registry.translateRequest` of the
   executors that Go routes through `helps.Translate*WithAPIKeyModelCompatibility` (Claude, Codex, Gemini/Vertex Interactions, Meta,
   OpenAI-compatibility, xAI; Kimi and Antigravity use it for the multi-agent rewrite only). The registry holds the `*WithCompat`
@@ -2403,6 +2403,6 @@ exchange errors include the (scrubbed) upstream status/body like Go but cap it a
 suffix (`xai-<ms>-<hex>`); Kimi stores the normalised `domain`; Claude's uTLS/ordered-header fingerprint cannot be reproduced (see
 Claude provider). `POST /v9/management/oauth/import?provider=vertex` (`models/management/oauth-import.ts`, Go `ImportVertexCredential`)
 takes a multipart service-account `file` (+ `location`, default `us-central1`), re-encodes the key as an RSA PKCS#1 PEM
-(`normalizePrivateKey`, parity with `NormalizeServiceAccountMap` in `test/fixtures/session.json`; error texts of invalid keys
+(`normalizePrivateKey`, parity with `NormalizeServiceAccountMap` in `packages/models/test/fixtures/session.json`; error texts of invalid keys
 differ) and stores `vertex-<project>.json` merged over an existing file. Not ported: plugin logins and the local callback forwarder (`is_webui`). Credential JSON files from the Go
 server can still be imported through management.

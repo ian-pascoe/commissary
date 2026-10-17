@@ -1,14 +1,11 @@
 // Price overrides (ADR 0024): entries of an org's ControlPlane with revisions, kept across a config import, and
 // created for a ControlPlane that predates their table.
 import { runInDurableObject } from "cloudflare:test";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { OrgId } from "@commissary/core";
-import { controlPlane, makeHarness, resetControlPlane } from "./support/management.ts";
-import { ConfigStore, orgDataKey, type PriceOverrideValue } from "@commissary/models/testing";
-
-const harness = makeHarness();
-
-afterAll(harness.dispose);
+import { controlPlane, resetControlPlane } from "./support/control-plane.ts";
+import { ConfigStore, type PriceOverrideValue } from "../src/config/store.ts";
+import { orgDataKey } from "./support/secrets.ts";
 
 beforeEach(resetControlPlane);
 

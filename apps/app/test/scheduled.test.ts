@@ -8,8 +8,9 @@ import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CurrentOrg, GLOBAL_ORG, OrgId, type ScheduledTask } from "@commissary/core";
 import { platformOf } from "@commissary/state";
+import { alarmOf } from "@commissary/state/testing";
 import { runScheduledTasks, type ScheduledServices, scheduledTasks } from "../src/api/scheduled.ts";
-import worker, { type ControlPlane } from "../src/index.ts";
+import worker from "../src/index.ts";
 import { ModelsEnv, scheduledTasks as modelsTasks } from "@commissary/models/api";
 import { FULL_ACCESS } from "@commissary/models/testing";
 
@@ -160,9 +161,6 @@ describe("the scheduled handler", () => {
   afterAll(() => {
     globalThis.fetch = realFetch;
   });
-
-  const alarmOf = (stub: DurableObjectStub<ControlPlane>) =>
-    runInDurableObject(stub, (_instance, state) => state.storage.getAlarm());
 
   it("sweeps the global ControlPlane", async () => {
     const global = env.CONTROL_PLANE.getByName("global");

@@ -2,22 +2,15 @@
 // ownership (no `owner` columns, no `private_credentials` column, no private key tables), restarts it so its constructor
 // migrates, and checks that everything that existed is shared and still works. A second restart changes nothing.
 import { runInDurableObject } from "cloudflare:test";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { GLOBAL_ORG, OrgId } from "@commissary/core";
-import { controlPlane, makeHarness } from "./support/management.ts";
+import { controlPlane } from "./support/control-plane.ts";
 import { storedText } from "@commissary/state/testing";
-import {
-  CredentialStore,
-  FULL_ACCESS,
-  orgDataKey,
-  restart,
-  SqliteSessionTable,
-  withModelsPart,
-} from "@commissary/models/testing";
-
-const harness = makeHarness();
-
-afterAll(harness.dispose);
+import { CredentialStore } from "../src/credentials/store.ts";
+import { FULL_ACCESS } from "../src/credentials/ownership.ts";
+import { orgDataKey, restart } from "./support/secrets.ts";
+import { SqliteSessionTable } from "../src/oauth/session-store.ts";
+import { withModelsPart } from "./support/models-part.ts";
 
 const freshOrg = () => OrgId.make(`pre-${crypto.randomUUID().slice(0, 8)}`);
 

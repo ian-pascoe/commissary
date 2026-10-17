@@ -1,12 +1,11 @@
 // Claude reset grants: `GET /v9/management/credentials/reset-grants` and `POST .../claim` through the router with the
 // real ControlPlane and mocked Anthropic endpoints, the quota check's tolerated grant read, the contract and the
-// Access/CSRF gates. The pure status parsing, grant choice and claim journal:
-// packages/models/test/unit/reset-grants.test.ts.
+// Access/CSRF gates. A claim Anthropic never answers: packages/models/test/reset-grant-claim.test.ts; the pure status
+// parsing, grant choice and claim journal: packages/models/test/unit/reset-grants.test.ts.
 import { assert, describe, it } from "@effect/vitest";
 import { runInDurableObject } from "cloudflare:test";
 import { env, exports } from "cloudflare:workers";
-import { Effect, Fiber, Layer, Schema } from "effect";
-import { TestClock } from "effect/testing";
+import { Effect, Layer, Schema } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { HttpApiClient } from "effect/http-api";
 import { afterAll, beforeEach, expect } from "vitest";
@@ -27,7 +26,6 @@ import { CurrentOrg, GLOBAL_ORG } from "@commissary/core";
 import { envContext } from "../src/worker-env.ts";
 import {
   authIndexOf,
-  claimResetGrant,
   CLAUDE_PROFILE_URL,
   CLAUDE_USAGE_URL,
   FULL_ACCESS,
@@ -805,46 +803,6 @@ describe("claim races and failures", () => {
       await rename("hidden_reset_grants", "credential_reset_grants");
     }
   });
-
-  it.effect("gives up on an unanswered claim after 25 s and keeps it open for a resend", () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() => seed());
-      yield* TestClock.setTime(NOW);
-
-      const outbound = mockHttp(
-        routes({
-          [`GET ${RESET_GRANT_STATUS_URL}`]: { status: 200, body: usage() },
-          [`GET ${CLAUDE_PROFILE_URL}`]: {
-            status: 200,
-            body: { organization: { uuid: ORGANIZATION } },
-          },
-          // Never answers.
-          [`POST ${CLAIM_URL}`]: () => new Promise<MockReply>(() => undefined),
-        }),
-      );
-
-      const fiber = yield* Effect.forkChild(
-        claimResetGrant({ authIndex: INDEX }, FULL_ACCESS).pipe(
-          Effect.provide(outbound.layer),
-          Effect.provideContext(envContext(env)),
-        ),
-      );
-
-      while (!outbound.requests.some((request) => request.url === CLAIM_URL))
-        yield* Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 5)));
-
-      yield* TestClock.adjust("24 seconds");
-      assert.isUndefined(fiber.pollUnsafe());
-      yield* TestClock.adjust("1 second");
-      const result = yield* Fiber.join(fiber);
-
-      assert.deepInclude(result, { kind: "claimed", outcome: "unknown", retried: false });
-      assert.deepInclude(result.kind === "claimed" ? result.pending : undefined, {
-        grant_id: "g1",
-        in_flight: false,
-      });
-    }).pipe(Effect.provideService(CurrentOrg, GLOBAL_ORG)),
-  );
 });
 
 describe("quota check", () => {

@@ -18,15 +18,9 @@ export { authIndexOf, emptyKeyAuthIndexOf, unkeyedAuthIndexOf } from "./support/
 
 export { documentText, mdModel } from "./support/models-dev.ts";
 
-export { type ModelsPartStub, withModelsPart } from "./support/models-part.ts";
+export { withModelsPart } from "./support/models-part.ts";
 
-export {
-  jsonResponse,
-  loadConfig,
-  makePipeline,
-  type PipelineHarness,
-  postJson,
-} from "./support/pipeline.ts";
+export { jsonResponse, loadConfig, makePipeline, postJson } from "./support/pipeline.ts";
 
 export { makePool, MemoryPoolStore } from "./support/pool.ts";
 
@@ -38,7 +32,7 @@ export {
   routes,
 } from "./support/refresh.ts";
 
-export { asBeforeEncryption, orgDataKey, restart } from "./support/secrets.ts";
+export { asBeforeEncryption } from "./support/secrets.ts";
 
 export { USD } from "./support/spend.ts";
 
@@ -61,7 +55,7 @@ export { managementServicesWith } from "./support/management-services.ts";
 
 // --- what the Worker's tests seed, read or call of Models ------------------------------------------------------------
 
-export { decodeConfig, encodeConfig, parseConfigYaml } from "../src/config/codec.ts";
+export { decodeConfig, encodeConfig } from "../src/config/codec.ts";
 
 export { ConfigStoreError } from "../src/config/errors.ts";
 
@@ -69,7 +63,7 @@ export { ConfigReader, ConfigSource } from "../src/config/reader.ts";
 
 export { Config } from "../src/config/schema.ts";
 
-export { ConfigStore, MIGRATION_PRINCIPAL, type PriceOverrideValue } from "../src/config/store.ts";
+export { MIGRATION_PRINCIPAL } from "../src/config/store.ts";
 
 export { configKeyIds } from "../src/credentials/key-ids.ts";
 
@@ -81,17 +75,11 @@ export { normalizePrivateKey } from "../src/credentials/refresh/vertex.ts";
 
 export { unknownModelBody } from "../src/credentials/selection/failures.ts";
 
-export { CredentialStore } from "../src/credentials/store.ts";
-
 export { makeControlPlanePicker } from "../src/executor/control-plane-picker.ts";
-
-export { DEFAULT_GRANT, type GrantValue } from "../src/grants/grant.ts";
 
 export { loadVideoBinding, saveVideoBinding } from "../src/handlers/openai/video-binding.ts";
 
 export { AuthIndexKeyError, orgAuthIndexer } from "../src/management/auth-index.ts";
-
-export { SqliteSessionTable } from "../src/oauth/session-store.ts";
 
 export { LEASE_RENEW_INTERVAL_MS, runQuotaSweep, sweepQuotas } from "../src/quota/check.ts";
 

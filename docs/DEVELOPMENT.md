@@ -49,10 +49,12 @@ add a binding or variable, change three places together: the Worker's `env` in `
 `apps/app/src/env.d.ts`, and the test bindings in `apps/app/vitest.config.ts` (which mirrors the deployed Worker: entry, compatibility
 settings, Durable Objects, `*.bin` Data modules). One that `@commissary/state`'s Durable Object classes read also goes into
 `StateObjectEnv` (`packages/state/src/env.ts`) and the state test Worker's bindings (`packages/state/vitest.config.ts`;
-its `test/env.d.ts` follows `StateObjectEnv`).
+its `test/env.d.ts` follows `StateObjectEnv`). One Models reads also goes into `ModelsBindings` (`packages/models/src/env.ts`)
+and the Models test Worker's bindings (`packages/models/vitest.config.ts`; its `test/env.d.ts` follows `ModelsBindings`,
+`StateObjectEnv` and `AuthBindings`).
 
 `tools/workers/worker-configuration.d.ts` holds the Workers runtime types for the compatibility date and flags in
-`alchemy.run.ts`, shared by every program that runs in workerd (`apps/app`, `packages/state`; each declares its own
+`alchemy.run.ts`, shared by every program that runs in workerd (`apps/app`, `packages/state`, `packages/models`; each declares its own
 `Env`). Regenerate it when those change (Wrangler is used only as a type generator here):
 
 ```bash
