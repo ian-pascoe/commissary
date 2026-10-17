@@ -1,5 +1,5 @@
 /**
- * Grants (`/v9/management/grants`, `apps/app/src/models/management/grant-routes.ts`): which upstream models of which shared
+ * Grants (`/v9/management/grants`, `packages/models/src/management/grant-routes.ts`): which upstream models of which shared
  * credentials a member, a team or everyone may use (ADR 0023), and `GET /models/mine`, the models the caller may use.
  * Shared with the browser: imports `effect` and `./config.ts`, `./errors.ts` only.
  *

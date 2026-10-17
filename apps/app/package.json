@@ -15,13 +15,11 @@
     "@commissary/contract": "workspace:*",
     "@commissary/core": "workspace:*",
     "@commissary/json": "workspace:*",
+    "@commissary/models": "workspace:*",
     "@commissary/state": "workspace:*",
-    "@commissary/translation": "workspace:*",
     "better-auth": "1.7.7",
     "effect": "catalog:",
-    "fzstd": "^0.1.1",
-    "jose": "catalog:",
-    "yaml": "^2.9.1"
+    "jose": "catalog:"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.4.2",

@@ -29,7 +29,6 @@ import {
   signToken,
   userClaims,
 } from "@commissary/auth/testing";
-import { resetUsageDb } from "./support/usage.ts";
 import {
   ADMIN,
   claudeFile,
@@ -41,6 +40,7 @@ import {
   token,
 } from "./support/management.ts";
 import { type EnvServices, requestContext } from "../src/worker-env.ts";
+import { resetUsageDb } from "@commissary/models/testing";
 
 /** What the stand-in client API route saw of its caller. */
 interface Seen {

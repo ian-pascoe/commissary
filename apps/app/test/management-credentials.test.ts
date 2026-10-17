@@ -1,7 +1,5 @@
 // /v9/management/credentials* and /routing/cooldown/reset through the router with the real ControlPlane.
-import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { authIndexOf } from "./support/auth-index.ts";
 import {
   claudeFile,
   controlPlane,
@@ -14,6 +12,7 @@ import {
   token,
 } from "./support/management.ts";
 import type { Json } from "@commissary/json";
+import { authIndexOf, FULL_ACCESS } from "@commissary/models/testing";
 
 // The ControlPlane runs in the test isolate and refreshes through Effect's FetchHttpClient, which resolves
 // `globalThis.fetch` once: install one stable fetch that delegates to the current test's upstream.

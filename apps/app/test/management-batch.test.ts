@@ -2,7 +2,6 @@
 // /credentials/quota/all`) through the router with the real ControlPlane: per-account results, partial failure, unknown
 // names, the admin gate, cross-site write protection, the sweep lease shared with the cron task (renewal, expiry,
 // release however the sweep ends), and the contract.
-import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { assert, describe, it } from "@effect/vitest";
 import { runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
@@ -14,9 +13,6 @@ import { afterAll, beforeAll, beforeEach, expect } from "vitest";
 import { ManagementApi } from "@commissary/contract/api";
 import { ManagementError } from "@commissary/contract/errors";
 import { WorkerExecutionContext, CurrentOrg, GLOBAL_ORG } from "@commissary/core";
-import { LEASE_RENEW_INTERVAL_MS, runQuotaSweep, sweepQuotas } from "../src/models/quota/check.ts";
-import { CLAUDE_PROFILE_URL, CLAUDE_USAGE_URL } from "../src/models/quota/claude.ts";
-import { RESET_GRANT_STATUS_URL } from "../src/models/quota/reset-grants.ts";
 import type { Json } from "@commissary/json";
 import { LEASE_TTL_MS, type LeaseSource, type TakeLease } from "@commissary/state";
 import {
@@ -28,10 +24,22 @@ import {
   resetControlPlane,
   token,
 } from "./support/management.ts";
-import { emptyState } from "../src/models/credentials/model.ts";
-import { makePool, MemoryPoolStore } from "./support/pool.ts";
-import { type MockReply, mockHttp, routes } from "./support/refresh.ts";
 import { envContext } from "../src/worker-env.ts";
+import {
+  CLAUDE_PROFILE_URL,
+  CLAUDE_USAGE_URL,
+  emptyState,
+  FULL_ACCESS,
+  LEASE_RENEW_INTERVAL_MS,
+  makePool,
+  MemoryPoolStore,
+  mockHttp,
+  type MockReply,
+  RESET_GRANT_STATUS_URL,
+  routes,
+  runQuotaSweep,
+  sweepQuotas,
+} from "@commissary/models/testing";
 
 const BATCH = "/v9/management/credentials/batch";
 

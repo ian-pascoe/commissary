@@ -44,7 +44,7 @@ import { AppEnv } from "../worker-env.ts";
 import {
   exportSection as modelsExportSection,
   orgDeletionStep as modelsOrgDeletionStep,
-} from "../models/management.ts";
+} from "@commissary/models/management";
 
 const BASE = "/v9/management";
 

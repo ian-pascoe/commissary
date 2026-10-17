@@ -470,7 +470,7 @@ func run(sc *scenario) {
 }
 
 func main() {
-	out := flag.String("out", "apps/app/test/fixtures/session.json", "output file")
+	out := flag.String("out", "packages/models/test/fixtures/session.json", "output file")
 	flag.Parse()
 	scs := scenarios()
 	for index := range scs {

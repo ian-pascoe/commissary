@@ -1,6 +1,6 @@
-// Quota windows of an account: from the server's quota check (`quota_report`, apps/app/src/models/quota/) or from the upstream
+// Quota windows of an account: from the server's quota check (`quota_report`, packages/models/src/quota/) or from the upstream
 // rate-limit headers the Worker last observed for it (`quota.signals`,
-// apps/app/src/models/credentials/cooldown/quota-signals.ts), whichever is fresher, and from its cooldowns. Pure: no DOM,
+// packages/models/src/credentials/cooldown/quota-signals.ts), whichever is fresher, and from its cooldowns. Pure: no DOM,
 // tested in test/quota.test.ts.
 import type { CredentialEntry } from "@commissary/contract/credentials";
 
@@ -137,7 +137,7 @@ const devinWindows = (signals: Signals): QuotaWindow[] =>
     ];
   });
 
-/** Providers the server's quota check can ask for figures (apps/app/src/models/quota/). */
+/** Providers the server's quota check can ask for figures (packages/models/src/quota/). */
 const CHECKED_PROVIDERS = new Set([
   "claude",
   "codex",

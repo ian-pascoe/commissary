@@ -1,5 +1,5 @@
 // Command multiagent emits golden fixtures for the TypeScript Codex multi-agent v2 / orphan-delegation rewriting
-// (apps/app/src/models/executor/helps/codex-multi-agent-v2.ts).
+// (packages/models/src/executor/helps/codex-multi-agent-v2.ts).
 //
 // The real internal/client/codex/optimize-multi-agent-v2 functions run over a corpus of Responses requests (agent
 // messages, collaboration namespace tools, additional_tools, orphan delegation outputs) under every combination of
@@ -165,7 +165,7 @@ func restoreCorpus() map[string]string {
 }
 
 func main() {
-	out := flag.String("out", "apps/app/test/fixtures/multiagent.json", "output file")
+	out := flag.String("out", "packages/models/test/fixtures/multiagent.json", "output file")
 	flag.Parse()
 
 	reg := registry.GetGlobalRegistry()

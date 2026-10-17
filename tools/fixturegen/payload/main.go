@@ -1,4 +1,4 @@
-// Command payload emits golden fixtures for the TypeScript payload rules engine (apps/app/src/models/config/payload).
+// Command payload emits golden fixtures for the TypeScript payload rules engine (packages/models/src/config/payload).
 //
 // Every case is executed with the real helps.ApplyPayloadConfigWithTrackedPathsForExecutor so the TypeScript
 // tests can verify behavioural parity. Run from the repository root:
@@ -171,7 +171,7 @@ func canonicalJSON(data []byte) []byte {
 }
 
 func main() {
-	outPath := flag.String("out", "apps/app/test/fixtures/payload-rules.json", "output file")
+	outPath := flag.String("out", "packages/models/test/fixtures/payload-rules.json", "output file")
 	flag.Parse()
 
 	cases := make([]fixtureCase, 0, len(specs))

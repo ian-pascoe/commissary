@@ -14,7 +14,7 @@ import * as Output from "alchemy/Output";
 import { type AccessWiring, provisionAccess, provisionClientApiBypass } from "./infra/access.ts";
 import { BUNDLE_ALIASES } from "./infra/bundle.ts";
 import { readSettings } from "./infra/settings.ts";
-import { DEV_AUTH_INDEX_KEY } from "./apps/app/src/models/management/auth-index-key.ts";
+import { DEV_AUTH_INDEX_KEY } from "@commissary/models/auth-index-key";
 import { DEV_SECRETS_KEY, secretsKeyResourceId } from "./packages/state/src/secrets/key.ts";
 
 /**
@@ -40,7 +40,7 @@ export default Alchemy.Stack(
     const cache = yield* Cloudflare.KV.Namespace("Cache");
     const usage = yield* Cloudflare.D1.Database("Usage", { migrations: "./migrations" });
 
-    // Key of the keyed `auth_index` (apps/app/src/models/management/auth-index.ts): 32 random bytes minted on the first
+    // Key of the keyed `auth_index` (packages/models/src/management/auth-index.ts): 32 random bytes minted on the first
     // deploy of a stage and kept in the (encrypted) stack state, so every later deploy binds the same secret with no
     // manual step. `alchemy dev` (loopback only, no Access) uses a fixed key so local panel links survive a wiped local state.
     const authIndexKey = dev

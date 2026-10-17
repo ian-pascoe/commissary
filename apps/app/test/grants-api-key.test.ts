@@ -6,7 +6,6 @@ import { Effect, Layer } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { afterAll, describe, expect, it } from "vitest";
 import { AccessPrincipal } from "@commissary/auth";
-import { unknownModelBody } from "../src/models/credentials/selection/failures.ts";
 import { GLOBAL_ORG } from "@commissary/core";
 import { controlPlaneOf } from "@commissary/state";
 import {
@@ -17,6 +16,7 @@ import {
   makeHarness,
   token,
 } from "./support/management.ts";
+import { unknownModelBody } from "@commissary/models/testing";
 
 /** Picks the model in `?model=` for the caller the way Commissary handlers do (the identity's org and member). */
 const pickForCaller = Effect.gen(function* () {

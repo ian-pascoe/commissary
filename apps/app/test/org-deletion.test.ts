@@ -6,8 +6,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { deleteOrg, DELETION_BUDGET } from "../src/platform/org-deletion.ts";
 import { type OrgDeletionStep, orgScopedName, OrgId } from "@commissary/core";
 import { addressName } from "@commissary/state";
-import { deleteOrgModels } from "../src/models/org-deletion.ts";
-import { insertUsageRecord } from "../src/models/usage/d1.ts";
 import {
   ADMIN,
   claudeFile,
@@ -19,7 +17,14 @@ import {
   makeHarness,
   token,
 } from "./support/management.ts";
-import { resetUsageDb, sampleRecord } from "./support/usage.ts";
+import { Effect } from "effect";
+import { type ModelsBindings, ModelsEnv } from "@commissary/models/api";
+import { orgDeletionStep } from "@commissary/models/management";
+import { insertUsageRecord, resetUsageDb, sampleRecord } from "@commissary/models/testing";
+
+/** Models' org-deletion step over `bindings`. */
+const modelsStep = (bindings: ModelsBindings) =>
+  Effect.runPromise(Effect.provideService(orgDeletionStep, ModelsEnv, bindings));
 
 const registry = isolatedPlatform();
 
@@ -301,7 +306,7 @@ describe("a deletion that needs more than one call", () => {
     // Too small a budget for one page of cache keys.
     const bindings = { ...env, PLATFORM: registry.bindings.PLATFORM };
 
-    const first = await deleteOrg(bindings, [deleteOrgModels(bindings)], org.id, {
+    const first = await deleteOrg(bindings, [await modelsStep(bindings)], org.id, {
       now: Date.now(),
       budget: 5,
     });
@@ -311,7 +316,7 @@ describe("a deletion that needs more than one call", () => {
     expect(await sessionValue(org)).toMatchObject({ status: "ok", value: "v" });
     expect(await registry.platform.getOrgById(org.id)).toBeDefined();
 
-    const second = await deleteOrg(bindings, [deleteOrgModels(bindings)], org.id, {
+    const second = await deleteOrg(bindings, [await modelsStep(bindings)], org.id, {
       now: Date.now(),
       budget: DELETION_BUDGET,
     });
@@ -326,12 +331,12 @@ describe("a deletion that needs more than one call", () => {
     const bindings = { ...env, PLATFORM: registry.bindings.PLATFORM };
 
     expect(
-      await deleteOrg(bindings, [deleteOrgModels(bindings)], org.id, { now: Date.now() }),
+      await deleteOrg(bindings, [await modelsStep(bindings)], org.id, { now: Date.now() }),
     ).toEqual({
       state: "deleted",
     });
     expect(
-      await deleteOrg(bindings, [deleteOrgModels(bindings)], org.id, { now: Date.now() }),
+      await deleteOrg(bindings, [await modelsStep(bindings)], org.id, { now: Date.now() }),
     ).toEqual({
       state: "deleted",
     });

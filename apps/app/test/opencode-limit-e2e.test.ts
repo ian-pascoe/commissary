@@ -3,9 +3,9 @@
 // whole until the window resets (Retry-After), so later requests go to the other key without asking the first again,
 // on a chat model and on a Messages model (whose key travels as `x-api-key`).
 import { evictDurableObject } from "cloudflare:test";
-import { withModelsPart } from "./support/models-part.ts";
 import { env, exports } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { withModelsPart } from "@commissary/models/testing";
 
 const LIMITED_KEY = "sk-go-limited-0001";
 
@@ -41,7 +41,7 @@ const COMPLETION = {
   usage: { prompt_tokens: 5, completion_tokens: 2, total_tokens: 7 },
 };
 
-// The gateway's answer over a Go window (opencode console handler, see src/models/executor/opencode/usage-limit.ts).
+// The gateway's answer over a Go window (opencode console handler, see packages/models/src/executor/opencode/usage-limit.ts).
 const LIMITED = JSON.stringify({
   type: "error",
   error: {

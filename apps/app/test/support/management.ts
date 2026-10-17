@@ -1,5 +1,4 @@
 // Test harness for the management routes: Access gate with a fake JWKS, real ControlPlane, mocked outbound HTTP.
-import { FULL_ACCESS } from "../../src/models/credentials/ownership.ts";
 import { env } from "cloudflare:workers";
 import { Context, Layer } from "effect";
 import { HttpRouter } from "effect/http";
@@ -8,11 +7,7 @@ import type { AccessPrincipal } from "@commissary/auth";
 import { orgAddressing } from "../../src/management/org-address.ts";
 import { RootRoutes } from "../../src/http/routes.ts";
 import { ManagementRoutes } from "../../src/management/routes.ts";
-import { OAuthCallbackRoutes } from "../../src/models/oauth/public-routes.ts";
 import { CurrentOrg, GLOBAL_ORG, type OrgId } from "@commissary/core";
-import { controlPlaneOf } from "@commissary/state";
-import { CatalogStore } from "../../src/models/registry/catalog-store.ts";
-import { ModelRegistryLive } from "../../src/models/registry/live.ts";
 import {
   AUD,
   fakeJwksLayer,
@@ -22,9 +17,18 @@ import {
   signToken,
   userClaims,
 } from "@commissary/auth/testing";
-import { type MockHandler, mockHttp } from "./refresh.ts";
-import type { Json } from "@commissary/json";
 import { requestContext } from "../../src/worker-env.ts";
+import { OAuthCallbackRoutes } from "@commissary/models/management";
+import { managementServicesWith, type MockHandler, mockHttp } from "@commissary/models/testing";
+
+// The ControlPlane helpers of Models' tests (the stub of an org, a pristine Models part, an auth file, a JSON body).
+export {
+  claudeFile,
+  controlPlane,
+  jsonInit,
+  resetControlPlane,
+  resetOrgControlPlane,
+} from "@commissary/models/testing";
 
 export const key = await makeKey("management-kid");
 
@@ -56,31 +60,6 @@ export const token = async (email: string = ADMIN): Promise<string> =>
 export const serviceToken = async (commonName: string): Promise<string> =>
   await signToken({ key, now: Math.floor(Date.now() / 1000), claims: serviceClaims(commonName) });
 
-/** The ControlPlane of `org` (`global` by default). */
-export const controlPlane = (org: OrgId = GLOBAL_ORG) => controlPlaneOf(env, org);
-
-/** Restores a pristine ControlPlane of `global` (no credentials, default config); usable as a `beforeEach` hook. */
-export const resetControlPlane = async (): Promise<void> => {
-  await resetOrgControlPlane(GLOBAL_ORG);
-};
-
-/** Restores a pristine ControlPlane of `org` (no credentials, default config). */
-export const resetOrgControlPlane = async (org: OrgId): Promise<void> => {
-  const stub = controlPlane(org);
-  const entries = await stub.models().listCredentials(FULL_ACCESS);
-  await stub.models().removeCredentials(
-    entries.map((entry) => entry.id),
-    FULL_ACCESS,
-  );
-  await stub.models().importConfig("", "test");
-
-  // An import leaves the price overrides alone.
-  for (const override of (await stub.models().priceOverrideEntries()).overrides)
-    await stub
-      .models()
-      .writePriceOverride({ id: override.id, revision: override.revision, value: null }, "test");
-};
-
 export interface Harness {
   readonly call: (
     path: string,
@@ -111,9 +90,7 @@ export const makeHarness = (
   const outbound = mockHttp(http);
   const access = makeAccessLayer(fakeJwksLayer(makeFakeJwks([key])));
 
-  const routes = ManagementRoutes.pipe(
-    Layer.provide(Layer.mergeAll(ModelRegistryLive, outbound.layer, CatalogStore.layer)),
-  );
+  const routes = ManagementRoutes.pipe(Layer.provide(managementServicesWith(outbound.layer)));
 
   const web = HttpRouter.toWebHandler(
     Layer.mergeAll(
@@ -167,18 +144,3 @@ export const isolatedPlatform = () => {
 
   return { bindings: bindings satisfies Partial<Env>, platform: stub };
 };
-
-export const jsonInit = (method: string, body: Json): RequestInit => ({
-  method,
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify(body),
-});
-
-export const claudeFile = (extra: Record<string, unknown> = {}) => ({
-  type: "claude",
-  email: "me@x.com",
-  access_token: "sk-ant-oat-secret-access",
-  refresh_token: "secret-refresh",
-  expired: "2999-01-01T00:00:00Z",
-  ...extra,
-});

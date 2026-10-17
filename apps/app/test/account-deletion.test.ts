@@ -14,7 +14,7 @@ import {
   serviceToken,
   token,
 } from "./support/management.ts";
-import { resetUsageDb } from "./support/usage.ts";
+import { resetUsageDb } from "@commissary/models/testing";
 
 const registry = isolatedPlatform();
 

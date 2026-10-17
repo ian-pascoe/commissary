@@ -73,7 +73,6 @@
     ".repos",
     ".worktrees",
     "worker-configuration.d.ts",
-    "apps/app/test/fixtures",
     "packages/*/test/fixtures",
     ".agent/**",
     ".agents/**",

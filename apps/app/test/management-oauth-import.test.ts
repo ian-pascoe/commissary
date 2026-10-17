@@ -1,12 +1,16 @@
 // POST /v9/management/oauth/import?provider=vertex through the router with the real ControlPlane, and the private-key
-// normalisation against the Go `NormalizeServiceAccountMap` (test/fixtures/session.json, tools/fixturegen/session).
-import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
+// normalisation against the Go `NormalizeServiceAccountMap` (`sessionFixtures` of `@commissary/models/testing`,
+// tools/fixturegen/session).
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { normalizePrivateKey } from "../src/models/credentials/refresh/vertex.ts";
-import fixtures from "./fixtures/session.json";
 import { controlPlane, makeHarness, resetControlPlane } from "./support/management.ts";
-import { makeServiceAccount, type TestServiceAccount } from "./support/vertex.ts";
 import type { Json } from "@commissary/json";
+import {
+  FULL_ACCESS,
+  makeServiceAccount,
+  normalizePrivateKey,
+  sessionFixtures,
+  type TestServiceAccount,
+} from "@commissary/models/testing";
 
 const harness = makeHarness();
 
@@ -41,7 +45,7 @@ const upload = (account: Json, fields: Record<string, string> = {}, name = "sa.j
 };
 
 describe("Vertex private key normalisation (Go parity)", () => {
-  for (const entry of fixtures.vertex) {
+  for (const entry of sessionFixtures.vertex) {
     it(entry.name, async () => {
       const result = await normalizePrivateKey(entry.privateKey);
 

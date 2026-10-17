@@ -3,9 +3,8 @@
 // everyone only, so restricting those is what the requests here see. Only the Claude upstream is mocked.
 import { env, exports } from "cloudflare:workers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { unknownModelBody } from "../src/models/credentials/selection/failures.ts";
-import { FULL_ACCESS } from "../src/models/credentials/ownership.ts";
 import { claudeFile } from "./support/management.ts";
+import { FULL_ACCESS, unknownModelBody } from "@commissary/models/testing";
 
 /** A Sonnet and an Opus model of the catalog, found in the list before anything is restricted. */
 let SONNET = "";

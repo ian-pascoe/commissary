@@ -1,4 +1,4 @@
-// Spend limits through the management routes (src/models/management/spend-routes.ts, @commissary/contract/spend): what an org
+// Spend limits through the management routes (packages/models/src/management/spend-routes.ts, @commissary/contract/spend): what an org
 // admin and a plain member see and write, revisions, the calendar and the Access gate. Through the router with real
 // ControlPlanes.
 import { Schema } from "effect";
@@ -6,7 +6,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { SpendView, SpendLimitView } from "@commissary/contract/spend";
 import { OrgId } from "@commissary/core";
 import { ADMIN, isolatedPlatform, jsonInit, makeHarness, token } from "./support/management.ts";
-import { USD } from "./support/spend.ts";
+import { USD } from "@commissary/models/testing";
 
 const registry = isolatedPlatform();
 
