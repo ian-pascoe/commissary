@@ -17,7 +17,7 @@ settings in `.env` (template: `.env.example`):
 
 | Setting                                                  | Creates / sets                                                                                                                        |
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `COMMISSARY_DOMAIN`                                      | A **self-hosted application** on that hostname (empty path: the whole hostname), and the app Worker's custom domain                   |
+| `COMMISSARY_APP_DOMAIN`, by default `COMMISSARY_DOMAIN`  | A **self-hosted application** on the app host (empty path: the whole hostname), and the app Worker's custom domain                    |
 | `COMMISSARY_API_DOMAIN` (optional)                       | The API Worker's custom domain, the API host, which serves the client API and has no Access application (below)                       |
 | (without `COMMISSARY_API_DOMAIN`)                        | Zone routes of the client API paths to the API Worker, and a second application on them with a **Bypass** policy for everyone (below) |
 | `ACCESS_ALLOW_EMAILS`, `ACCESS_ALLOW_EMAIL_DOMAINS`      | A reusable **Allow** policy (interactive login with your identity providers)                                                          |
@@ -39,8 +39,8 @@ Worker serves everything else (the panel, the management API, the OAuth callback
 other's paths are (`apps/app/src/http/hosts.ts`, `apps/api/src/http/hosts.ts`). With an API host
 (`COMMISSARY_API_DOMAIN`, ADR 0028) the API Worker answers there, and no Access application covers that hostname. A
 client that signs in through Access sends the token of the app host's application (`cloudflared access token
--app=https://<COMMISSARY_DOMAIN>`) in `cf-access-token` to the API host; the API Worker checks it against `ACCESS_AUD`
-itself. Without an API host, zone routes send the client API paths of `COMMISSARY_DOMAIN` to the API Worker, and the
+-app=https://<app host>`) in `cf-access-token` to the API host; the API Worker checks it against `ACCESS_AUD`
+itself. Without an API host, zone routes send the client API paths of the app host to the API Worker, and the
 bypass application (`infra/access.ts` `provisionClientApiBypass`) covers `/v1`, `/v1beta`, `/v1internal`, `/openai/v1`,
 `/backend-api/codex`, `/chat/completions`, `/completions` and `/responses` with their sub-paths. Access applies the most
 specific application to a request, so these paths reach the API Worker without a sign-in while every other path stays
@@ -432,9 +432,9 @@ application. Everything in §1-§2 and the service tokens of §3 do not apply; m
 management keys work as above. What changes:
 
 - **Sign-in.** People sign in at `/sign-in` with GitHub or Google (Better Auth, in the auth Worker on the auth host,
-  `auth.<app host>` by default, ADR 0030), behind a Cloudflare Turnstile challenge (a token solved on another hostname
+  `auth.<base domain>` by default, ADR 0030, ADR 0031), behind a Cloudflare Turnstile challenge (a token solved on another hostname
   is refused). The auth Worker keeps the verified email and a session in its own D1 database (`SignIn`), never the
-  provider's tokens; the session cookie is scoped to the app host, which asks the auth Worker whose it is; Better Auth's session cookie is `HttpOnly` and `SameSite=Lax` (and `Secure` over HTTPS). The panel signs out with **Sign out** in the shell's account menu. Without a
+  provider's tokens; the session cookie is scoped to the base domain (`COMMISSARY_DOMAIN`), so the app host under it receives it and asks the auth Worker whose it is (every other host under the base domain receives it too); Better Auth's session cookie is `HttpOnly` and `SameSite=Lax` (and `Secure` over HTTPS). The panel signs out with **Sign out** in the shell's account menu. Without a
   session the management API answers `401 Not signed in` and a panel page redirects to `/sign-in?next=<page>`.
 - **Who is who.** The signed-in email is the principal, like Access's `email` claim, so a member invited by email signs
   in with a provider account whose verified email matches. Access JWTs and Access service tokens are accepted nowhere.

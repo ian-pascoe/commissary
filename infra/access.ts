@@ -229,7 +229,7 @@ export const provisionAccess = (settings: Settings) =>
 
     const app = yield* Cloudflare.Access.Application("Access", {
       type: "self_hosted",
-      ...(settings.preview ? {} : { domain: settings.domain }),
+      ...(settings.preview ? {} : { domain: settings.appDomain }),
       sessionDuration: settings.sessionDuration,
       policies,
     });

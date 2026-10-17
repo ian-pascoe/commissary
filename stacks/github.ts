@@ -6,7 +6,7 @@
  *
  *   pnpm ci:setup        # alchemy deploy --config stacks/github.ts --profile admin --stage ci
  *
- * The deploy settings (COMMISSARY_DOMAIN, ACCESS_*) come from `.env`, like `alchemy.run.ts`, and so do Commissary
+ * The deploy settings (COMMISSARY_DOMAIN, COMMISSARY_APP_DOMAIN, ACCESS_*) come from `.env`, like `alchemy.run.ts`, and so do Commissary
  * Cloud's (SIGN_IN_*, TURNSTILE_*, …), written whenever `.env` sets them: previews labeled `cloud-preview` need them
  * even while production is self-hosted. The `cloud` environment (Commissary Cloud, which CI deploys next to production,
  * stage `cloud`) takes its settings from `.env.cloud` instead, and is left alone while that file does not exist.
@@ -115,11 +115,17 @@ export default Alchemy.Stack(
     )).split("/");
 
     const repo = { owner, repository };
-    const zone = yield* zoneFor(accountId, settings.domain);
+    const zone = yield* zoneFor(accountId, settings.appDomain);
 
-    // Every hostname CI deploys: production's and the `cloud` stage's, each with its API host (ADR 0028) when set.
+    // Every hostname CI deploys: production's and the `cloud` stage's app host, with its API host (ADR 0028) and its
+    // auth host (ADR 0030) when set. Each is looked up on its own: under the base domain (ADR 0031) a host may still be
+    // in a zone of its own.
     const hostnames = [settings, ...(cloudStage === undefined ? [] : [cloudStage.settings])]
-      .flatMap(({ domain, apiDomain }) => [domain, apiDomain])
+      .flatMap(({ appDomain, apiDomain, hosted }) => [
+        appDomain,
+        apiDomain,
+        hosted?.authDomain ?? "",
+      ])
       .filter((name) => name !== "");
 
     const zoneIds = [
@@ -220,9 +226,11 @@ export default Alchemy.Stack(
         label === "Production"
           ? {
               ...variables,
-              COMMISSARY_DOMAIN: settings.domain,
+              COMMISSARY_DOMAIN: settings.baseDomain,
+              // The app host (ADR 0031), written even when it is the base domain, so the variables say where it is.
+              COMMISSARY_APP_DOMAIN: settings.appDomain,
               COMMISSARY_API_DOMAIN: settings.apiDomain,
-              // The auth host of Commissary Cloud (ADR 0030), a subdomain of COMMISSARY_DOMAIN, so in its zone.
+              // The auth host of Commissary Cloud (ADR 0030), a subdomain of COMMISSARY_DOMAIN.
               COMMISSARY_AUTH_DOMAIN: settings.hosted?.authDomain ?? "",
               COMMISSARY_MODE: settings.hosted === undefined ? "" : "cloud",
             }
@@ -245,7 +253,8 @@ export default Alchemy.Stack(
       const scoped = {
         ...cloudStage.config.variables,
         CLOUDFLARE_ACCOUNT_ID: accountId,
-        COMMISSARY_DOMAIN: cloudStage.settings.domain,
+        COMMISSARY_DOMAIN: cloudStage.settings.baseDomain,
+        COMMISSARY_APP_DOMAIN: cloudStage.settings.appDomain,
         COMMISSARY_API_DOMAIN: cloudStage.settings.apiDomain,
         COMMISSARY_AUTH_DOMAIN: cloudStage.settings.hosted?.authDomain ?? "",
         PLATFORM_ADMIN_EMAILS: cloudStage.settings.adminEmails.join(","),
@@ -270,7 +279,8 @@ export default Alchemy.Stack(
       // Put this into ACCESS_ALLOW_SERVICE_TOKEN_IDS in .env too, so local deploys keep the CI token admitted.
       checkServiceTokenId: checkToken.serviceTokenId,
       zone: zone.name,
-      cloudDomain: cloudStage?.settings.domain ?? "(no .env.cloud)",
+      cloudDomain: cloudStage?.settings.baseDomain ?? "(no .env.cloud)",
+      cloudAppDomain: cloudStage?.settings.appDomain ?? "",
       cloudApiDomain: cloudStage?.settings.apiDomain ?? "",
       // Where the `cloud` stage's OAuth callbacks go (docs/DEPLOY.md "The Commissary Cloud stage").
       cloudAuthDomain: cloudStage?.settings.hosted?.authDomain ?? "",

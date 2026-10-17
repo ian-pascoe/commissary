@@ -1,9 +1,13 @@
 // Sign-in on the auth host (ADR 0026, ADR 0030, src/http/sign-in-routes.ts): Better Auth's GitHub flow through the
 // auth Worker, started from the sign-in page on the app host, Turnstile in front of it, only verified emails, session
-// cookies scoped to the app host, sign-out, and nothing else of Better Auth's API reachable.
+// cookies scoped to the base domain and read under their name only, sign-out, and nothing else of Better Auth's API
+// reachable.
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { stateAuthDirectory } from "@commissary/state";
+import { signedInPerson } from "../src/sign-in/sessions.ts";
 import {
+  AUTH_ORIGIN,
   call,
   clearPeople,
   cookiesOf,
@@ -70,8 +74,8 @@ describe("sign-in with GitHub", () => {
       .find((value) => value.startsWith("__Secure-better-auth.session_token="));
 
     expect(cookie).toBeDefined();
-    // Scoped to the app host, so the app host receives it and hands it back over the RPC.
-    expect(cookie).toMatch(/;\s*Domain=commissary\.test/i);
+    // Scoped to the base domain, so the app host under it receives it and hands it back over the RPC.
+    expect(cookie).toMatch(/;\s*Domain=\.?commissary\.test(;|$)/i);
     expect(cookie).toMatch(/;\s*Secure/i);
     expect(cookie).toMatch(/;\s*HttpOnly/i);
     expect(cookie).toMatch(/;\s*SameSite=Lax/i);
@@ -131,6 +135,45 @@ describe("sign-in with GitHub", () => {
     expect(out.status).toBe(200);
 
     expect(await session(cookie)).toBeNull();
+  });
+});
+
+describe("the session cookie's name", () => {
+  // The session cookie's value, whatever its name: Better Auth signs the value alone.
+  const tokenOf = (cookie: string): string =>
+    /__Secure-better-auth\.session_token=([^;]+)/.exec(cookie)?.[1] ?? "";
+
+  const personFor = async (prefix: string, cookie: string) =>
+    await signedInPerson(
+      { ...env, AUTH_COOKIE_PREFIX: prefix },
+      stateAuthDirectory(env),
+      AUTH_ORIGIN,
+      cookie,
+    );
+
+  it("is read under AUTH_COOKIE_PREFIX alone, so a renamed cookie is not shadowed by one of the old name (ADR 0031)", async () => {
+    const token = tokenOf(await signIn({ email: "ada@example.com" }));
+    expect(token).not.toBe("");
+
+    // A browser sends the older of two cookies of one name first, and Better Auth reads the first: a cookie scoped to
+    // the old domain shadows the new one.
+    expect(
+      await personFor(
+        "",
+        `__Secure-better-auth.session_token=stale; __Secure-better-auth.session_token=${token}`,
+      ),
+    ).toBeUndefined();
+
+    // Renamed with its scope, the cookie of the old name is ignored: the person is signed out once, then signs in.
+    expect(await personFor("commissary", `__Secure-better-auth.session_token=${token}`)).toBe(
+      undefined,
+    );
+    expect(
+      await personFor(
+        "commissary",
+        `__Secure-better-auth.session_token=stale; __Secure-commissary.session_token=${token}`,
+      ),
+    ).toMatchObject({ email: "ada@example.com" });
   });
 });
 

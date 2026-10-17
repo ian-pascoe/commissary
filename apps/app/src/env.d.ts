@@ -45,7 +45,7 @@ interface __BaseEnv_Env {
    */
   AUTH?: import("@commissary/auth").SignInService;
   /**
-   * Hosted: the auth host's origin (`https://auth.<COMMISSARY_DOMAIN>`, a preview's auth workers.dev URL, the auth
+   * Hosted: the auth host's origin (`https://<COMMISSARY_AUTH_DOMAIN>`, a preview's auth workers.dev URL, the auth
    * Worker's dev URL), which the sign-in page calls and the orgs' identity providers return to.
    */
   AUTH_ORIGIN?: string;

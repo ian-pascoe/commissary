@@ -1,5 +1,6 @@
 // Helpers for the auth Worker's tests (vitest.config.ts): requests to the auth host `https://auth.commissary.test` as
-// the sign-in page on the app host `https://commissary.test` sends them, a fake GitHub and Turnstile behind the global
+// the sign-in page on the app host `https://app.commissary.test` sends them (both under the base domain
+// `commissary.test`, which scopes the session cookie: ADR 0031), a fake GitHub and Turnstile behind the global
 // `fetch`, a sign-in that walks Better Auth's real GitHub flow, the RPC the app Worker calls, and orgs set up straight
 // through the state Worker's objects (the routes that create them are the app Worker's).
 import { env, exports } from "cloudflare:workers";
@@ -14,7 +15,7 @@ import { SITEVERIFY_URL } from "../src/sign-in/turnstile.ts";
 export const AUTH_ORIGIN = "https://auth.commissary.test";
 
 /** The app host (`APP_ORIGIN`): the sign-in page and the panel, which call the auth host. */
-export const APP_ORIGIN = "https://commissary.test";
+export const APP_ORIGIN = "https://app.commissary.test";
 
 /** The Turnstile token the fake siteverify accepts; any other token fails. */
 export const GOOD_TURNSTILE = "turnstile-ok";

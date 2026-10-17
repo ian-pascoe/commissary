@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: partly superseded by ADR-0031
 ---
 
 # Commissary runs as several Workers
@@ -8,7 +8,7 @@ Commissary runs as several Workers declared in the one root Alchemy stack, with 
 
 - The **app Worker** serves the control panel and the management API on the app host (ADR 0028). It is today's `Commissary` Worker under the same logical id, so it keeps the domain.
 - The **API Worker** serves the client API on the API host. With no API host, zone routes send the client API paths on the app host to it, in front of the app Worker. It also runs the crons.
-- The **auth Worker**, on Commissary Cloud only, holds all of Better Auth (ADR 0026): sign-in with GitHub and Google, Turnstile, single sign-on, issuing and verifying sessions. It answers on its own auth host, `auth.<app host>` by default (`COMMISSARY_AUTH_DOMAIN`; the deploy refuses a host outside the app host), and its session cookie is scoped to the app host. The sign-in page stays on the app host and calls the auth host. The app Worker asks it who a session belongs to over an RPC service binding. `BETTER_AUTH_SECRET` and the sign-in secrets live only there. Better Auth's tables are in a D1 database bound only by the auth Worker, decided in [#130](https://github.com/spiritledsoftware/commissary/issues/130).
+- The **auth Worker**, on Commissary Cloud only, holds all of Better Auth (ADR 0026): sign-in with GitHub and Google, Turnstile, single sign-on, issuing and verifying sessions. It answers on its own auth host, `auth.<app host>` by default (`COMMISSARY_AUTH_DOMAIN`; the deploy refuses a host outside the app host), and its session cookie is scoped to the app host. ADR 0031 moved both to the base domain: the auth host is under it and the cookie is scoped to it. The sign-in page stays on the app host and calls the auth host. The app Worker asks it who a session belongs to over an RPC service binding. `BETTER_AUTH_SECRET` and the sign-in secrets live only there. Better Auth's tables are in a D1 database bound only by the auth Worker, decided in [#130](https://github.com/spiritledsoftware/commissary/issues/130).
 - The **state Worker** has no routes. It defines the Durable Objects (`ControlPlane`, `SessionState` and `Platform`), and the other Workers bind them by `scriptName`. Deploying a Worker restarts the Durable Objects it defines, and Alchemy re-uploads a Worker only when its bundle changes, so the Durable Objects restart only when their own code changes, not on every client API or panel change. ControlPlane's refresh alarm runs here.
 
 The API Worker never sees sessions: it resolves its principal locally from API keys, management keys and Access tokens. Self-hosted Commissary deploys the app, API and state Workers; Access signs people in (ADR 0022).

@@ -4,7 +4,7 @@
  *
  * The cycle: the app Worker binds the auth Worker (`AUTH`), so the auth Worker deploys first, yet the auth Worker must
  * know the app's origin (`APP_ORIGIN`: the one origin it trusts, and where a sign-in returns). On a deployed stage that
- * is `https://<COMMISSARY_DOMAIN>`, known from the settings; a preview serves workers.dev URLs only, so the app's URL is
+ * is `https://<app host>` (`COMMISSARY_APP_DOMAIN`), known from the settings; a preview serves workers.dev URLs only, so the app's URL is
  * an output of a Worker not deployed yet. On a preview the API Worker deploys before both, and every Worker of the
  * account shares its workers.dev subdomain: the app Worker gets an explicit name ({@link previewAppName}) and its origin
  * is that name under the API Worker's subdomain. Anything else fails the deploy rather than guessing.

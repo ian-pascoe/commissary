@@ -86,7 +86,7 @@ Fill in at least these (`.env` is git-ignored; shell variables override it):
 
 | Variable                                          | Example           | Purpose                                                                                                           |
 | ------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `COMMISSARY_DOMAIN`                               | `llm.example.com` | Hostname of Commissary; its zone must be in the account                                                           |
+| `COMMISSARY_DOMAIN`                               | `llm.example.com` | Hostname (base domain) of Commissary; its zone must be in the account                                             |
 | `ACCESS_TEAM_DOMAIN`                              | `myteam`          | Your Zero Trust team name                                                                                         |
 | `ACCESS_ALLOW_EMAILS` / `_EMAIL_DOMAINS`          | `you@example.com` | Who may sign in through the browser                                                                               |
 | `ACCESS_SERVICE_TOKENS`                           | `laptop,ci`       | One Access service token is created per name, for scripts that use the management API                             |
@@ -170,7 +170,8 @@ model aliases, retries, …) are edited in the control panel and stored in the W
 
 | Variable                         | Default    | Purpose                                                                                                           |
 | -------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------- |
-| `COMMISSARY_DOMAIN`              | (required) | Custom hostname of the Worker and of its Access application                                                       |
+| `COMMISSARY_DOMAIN`              | (required) | Base domain, every hostname is under it; the app host unless `COMMISSARY_APP_DOMAIN` is set                       |
+| `COMMISSARY_APP_DOMAIN`          | (base)     | App host: the app Worker's and Access's hostname ([docs/DEPLOY.md](docs/DEPLOY.md#base-domain-and-app-host))      |
 | `COMMISSARY_API_DOMAIN`          |            | A second hostname that alone serves the client API, outside Access ([docs/DEPLOY.md](docs/DEPLOY.md#api-host))    |
 | `ACCESS_TEAM_DOMAIN`             | (required) | Zero Trust team name or `<team>.cloudflareaccess.com`                                                             |
 | `ACCESS_ALLOW_EMAILS`            |            | Emails allowed to sign in (comma separated)                                                                       |
@@ -210,7 +211,7 @@ its own domain (stage `cloud`), and every pull request to its own preview stage 
 
 | Symptom                                     | Fix                                                                                                  |
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Deploy fails on the custom domain           | `COMMISSARY_DOMAIN` must be a hostname on a zone in the same Cloudflare account                      |
+| Deploy fails on the custom domain           | The app host (`COMMISSARY_APP_DOMAIN`, else `COMMISSARY_DOMAIN`) must be on a zone of the account    |
 | Client gets 401 `Missing API key`           | Send an API key (`Authorization: Bearer cms_…`, `x-api-key` or `x-goog-api-key`)                     |
 | Client gets 401 `Invalid API key`           | The API key is wrong, revoked or expired: create a new one on the API keys page                      |
 | Client gets a 302 to `cloudflareaccess.com` | Its path is not part of the client API, or the deploy's bypass application is missing (`ACCESS_AUD`) |
