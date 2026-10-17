@@ -34,13 +34,14 @@ export interface Settings {
    */
   readonly preview: boolean;
   /**
-   * Custom hostname of the Worker (the zone must exist in the account), e.g. `commissary.example.com`. With `apiDomain`, the
-   * app host: the panel, sign-in and the management API.
+   * Custom hostname of the app Worker (the zone must exist in the account), e.g. `commissary.example.com`: the panel,
+   * sign-in and the management API, and, without `apiDomain`, the client API through zone routes to the API Worker.
    */
   readonly domain: string;
   /**
-   * The API host (`COMMISSARY_API_DOMAIN`, ADR 0028), e.g. `api.example.com`: the only host of the client API, which
-   * leave `domain` then. Empty (the default, and always on a preview): `domain` serves everything.
+   * The API host (`COMMISSARY_API_DOMAIN`, ADR 0028), e.g. `api.example.com`: the API Worker's custom domain, the only
+   * host of the client API, which leave `domain` then. Empty (the default, and always on a preview): zone routes on
+   * `domain` (a preview: the API Worker's workers.dev URL).
    */
   readonly apiDomain: string;
   /** Access team name or domain, e.g. `myteam` or `myteam.cloudflareaccess.com`. */
@@ -223,7 +224,7 @@ export const readSettings = (dev: boolean, stage: string) =>
       hosted: hosted?.hosted,
       preview,
       domain: (yield* text("COMMISSARY_DOMAIN")).trim(),
-      // A preview serves its workers.dev URL only (one host).
+      // A preview's Workers serve their workers.dev URLs only.
       apiDomain: dev || preview ? "" : (yield* text("COMMISSARY_API_DOMAIN")).trim(),
       teamDomain: (yield* text("ACCESS_TEAM_DOMAIN")).trim(),
       existingAud: preview ? "" : (yield* text("ACCESS_AUD")).trim(),
@@ -255,7 +256,7 @@ export const readSettings = (dev: boolean, stage: string) =>
         );
       else if (settings.apiDomain === settings.domain.toLowerCase())
         problems.push(
-          "COMMISSARY_API_DOMAIN must differ from COMMISSARY_DOMAIN (unset it to serve everything on one host)",
+          "COMMISSARY_API_DOMAIN must differ from COMMISSARY_DOMAIN (unset it to serve the client API on COMMISSARY_DOMAIN)",
         );
     }
 

@@ -2,12 +2,12 @@
 
 `.github/workflows/ci.yml` checks every pull request and push to `main`, then deploys with Alchemy:
 
-| Event                                    | Stage         | Where                                                        |
-| ---------------------------------------- | ------------- | ------------------------------------------------------------ |
-| Push to `main`                           | `prod`        | `COMMISSARY_DOMAIN`, GitHub environment `production`         |
-| Push to `main`                           | `cloud`       | its own domain, GitHub environment `cloud` (once set up)     |
-| Pull request from a branch of this repo  | `pr-<number>` | the Worker's `workers.dev` URL, GitHub environment `preview` |
-| That pull request closed (merged or not) | `pr-<number>` | destroyed                                                    |
+| Event                                    | Stage         | Where                                                         |
+| ---------------------------------------- | ------------- | ------------------------------------------------------------- |
+| Push to `main`                           | `prod`        | `COMMISSARY_DOMAIN`, GitHub environment `production`          |
+| Push to `main`                           | `cloud`       | its own domain, GitHub environment `cloud` (once set up)      |
+| Pull request from a branch of this repo  | `pr-<number>` | the Workers' `workers.dev` URLs, GitHub environment `preview` |
+| That pull request closed (merged or not) | `pr-<number>` | destroyed                                                     |
 
 A preview is a Commissary Cloud deploy (`COMMISSARY_MODE=cloud`) while its pull request has the label `cloud-preview` (adding or removing the label
 redeploys it in the other mode); production is one when the `production` environment sets `COMMISSARY_MODE=cloud`
@@ -20,53 +20,76 @@ Fork and Dependabot pull requests get the checks but no preview (they receive no
 
 After each deploy, `tools/check-deploy.sh` checks where Access sits (ADR 0022): `/healthz` and `/v9/management/me`
 answer 200 through Access with the CI service token (the second proves that the Worker accepts the Access JWT: team
-domain and AUD wired); `/v1/models` and `/v1beta/models` without credentials reach the Worker, which answers
+domain and AUD wired); `/v1/models` and `/v1beta/models` without credentials reach the API Worker, which answers
 `401 Missing API key` itself (the client API is outside Access, behind API keys); `/v1/models` with an Access JWT
 in `cf-access-token` and a dummy `Authorization` key, the way `cloudflared access` clients call it, answers 200 (the
 JWT is the `CF_Authorization` cookie Access set for the service token); and `/` without credentials is stopped by
 Access. A Commissary Cloud deploy is checked by `tools/check-cloud-deploy.sh` instead: `/healthz` answers 200,
 `/api/sign-in-options` offers a provider, `/v9/management/me` answers `401 Not signed in` from the Worker, `/` redirects
-to `/sign-in`, and the client API answers `401 Missing API key`. With an API host ([API host](#api-host)) both
-scripts send the client API to it and also check that each host refuses the other's paths with the Worker's `404`.
-The deploy job then shows the URL on the run, and previews get a pull request comment (`tools/preview-comment.sh`) that is updated on every push.
+to `/sign-in`, and the client API answers `401 Missing API key`. Both scripts send the client API to the deploy's
+`apiUrl` output ([The Workers](#the-workers)): with an API host ([API host](#api-host)) or on a preview, where the
+client API has a host of its own, they also check that each host refuses the other's paths with its Worker's `404`.
+The deploy job then shows the URL on the run, and previews get a pull request comment (`tools/preview-comment.sh`),
+with the app and the client API URLs, that is updated on every push.
 
 ## Preview stages
 
 A stage named `pr-<number>` is a preview (`infra/settings.ts`):
 
-- Its own app Worker on `workers.dev`, protected by its own Access application, and its own state Worker, which has no
-  URL ([The state Worker](#the-state-worker)). The app Worker enrolls into the Access application (Alchemy's Worker
-  `access` prop), so Access covers the `workers.dev` URL; no custom hostname is needed. The client API paths of that
-  URL get the same bypass application as production ([ACCESS.md](ACCESS.md#1-what-the-deploy-creates)).
+- Its own app Worker on `workers.dev`, protected by its own Access application, its own API Worker on another
+  `workers.dev` URL, outside Access (clients send API keys there), and its own state Worker, which has no URL
+  ([The Workers](#the-workers)). The app Worker enrolls into the Access application (Alchemy's Worker `access` prop),
+  so Access covers its `workers.dev` URL; no custom hostname is needed, and no bypass application either: the client
+  API is on the API Worker's URL, which the panel names (`GET /me` `api_url`).
 - Same policies as production: `ACCESS_ALLOW_*` for people, `ACCESS_ALLOW_SERVICE_TOKEN_IDS` for the CI token. Same
   platform admins (`PLATFORM_ADMIN_EMAILS`).
 - Empty KV, D1 and Durable Objects, and no cron trigger. A preview has no provider credentials, so it serves the panel,
   the management API and the routes but cannot serve real requests. Add credentials through its panel if you need to.
-- `COMMISSARY_DOMAIN`, `COMMISSARY_API_DOMAIN`, `ACCESS_AUD` and `ACCESS_SERVICE_TOKENS` are ignored: one URL serves
-  everything.
+- `COMMISSARY_DOMAIN`, `COMMISSARY_API_DOMAIN`, `ACCESS_AUD` and `ACCESS_SERVICE_TOKENS` are ignored.
 
 Any machine with the deploy settings can deploy a preview by hand: `pnpm run deploy --stage pr-123`, and remove it with
 `pnpm run destroy --stage pr-123`.
 
-## The state Worker
+## The Workers
 
-A stage deploys two Workers (ADR 0030) from the one stack, in this order:
+A stage deploys three Workers (ADR 0030) from the one stack, the state Worker first:
 
 1. **`State`** (`apps/state`) defines the Durable Objects `ControlPlane`, `SessionState` and `Platform`: every org's
    state and the Platform registry. It has no routes, no domain and no `workers.dev` URL, and binds only what those
    classes read: the secrets keys, the `auth_index` key, `META_MINT_URL`, the platform admins, the mode and the Access
    settings that mark a deployed stage.
-2. **`Commissary`** (`apps/app`), the app Worker: everything that answers requests (panel, management API, client API,
-   cron trigger), on the stage's domain or `workers.dev` URL. It binds the state Worker's Durable Objects by script
-   name, which is also why Alchemy deploys it second. It no longer binds the secrets keys, which only the
-   ControlPlane reads.
+2. **`Commissary`** (`apps/app`), the app Worker: the control panel, sign-in and the management API, on the stage's
+   domain (the app host) or `workers.dev` URL, behind Access on a self-hosted stage. It answers the client API paths
+   `404` with the address of the client API. It binds the state Worker's Durable Objects by script name, which is also
+   why Alchemy deploys it after the state Worker, and no secrets keys, which only the ControlPlane reads.
+3. **`Api`** (`apps/api`), the API Worker: the client API (`/v1`, `/v1beta`, `/v1internal`, `/openai/v1`,
+   `/backend-api/codex`, `/chat/completions`, `/completions`, `/responses`), `/healthz` and the cron trigger, under no Access
+   application of its own: clients send API keys. It binds the Durable Objects by script name too, and the per-org rate limit
+   on Commissary Cloud. Where it answers:
+   - on the API host when there is one ([API host](#api-host)), as its custom domain;
+   - else on the app host, through **zone routes** `<COMMISSARY_DOMAIN>/v1*`, `/openai/v1*`, `/backend-api/codex*`,
+     `/chat/completions*`, `/completions*` and `/responses*` (a route runs in front of the app Worker's custom domain on
+     the same hostname); the bypass application of the client API paths takes them out of the app host's Access
+     application ([Operations](#operations));
+   - on a preview, on its own `workers.dev` URL.
+
+   The deploy's `apiUrl` output names where clients send API keys (`tools/deploy-stage.sh` passes it to the checks).
+   It is the same URL as before the API Worker on every stage but a preview, so clients change nothing.
 
 Deploying a Worker restarts the Durable Objects it defines, and Alchemy uploads a Worker again only when its bundle
 changes, so the Durable Objects restart only on a deploy that changes their code, not on every panel or client API
 change. When they restart, the requests in flight fail with "Durable Object reset because its code was updated"; the
-app Worker sends each such call once more (`retryOnCodeUpdate`). Because a deploy can run the new state Worker with the
-old app Worker for a moment, state RPC changes are expand-then-contract (`docs/DEVELOPMENT.md`, "State RPC: expand,
-then contract").
+app and the API Worker send each such call once more (`retryOnCodeUpdate`). Because a deploy can run the new state
+Worker with the old app and API Workers for a moment, state RPC changes are expand-then-contract
+(`docs/DEVELOPMENT.md`, "State RPC: expand, then contract").
+
+**Workers Free.** The split changes nothing that Workers Free limits by request: Durable Object calls by script name
+cost what they cost when the classes lived in the app Worker (no extra request; they count toward the subrequest limits
+as before), and a client request is still one Worker request, on the API Worker. The three Workers count against the
+account's Worker limit and share the daily request quota.
+
+**Revocation and suspension** made on the app Worker reach the API Worker's isolates within the same windows as
+before (30 s for a verified API key, 30 s for a suspension's standing), since the API Worker is another isolate.
 
 **The move.** Until this split, the `Commissary` Worker defined the three classes itself. The state Worker declares
 each with `transferredFrom: "Commissary"`, so the first deploy of a stage that still holds them there moves each
@@ -80,13 +103,13 @@ there or once a stage has moved, so it stays in `alchemy.run.ts`.
 state Worker and the move happens on that deploy, with no setting or manual step. Expect:
 
 - a new Worker, `commissary-state-<stage>-<suffix>` (Alchemy names it from the stack, the logical ID `State` and the
-  stage), with no URL; the account's Worker count grows by one, and a self-hosted Commissary later runs three
-  Workers (app, API and state, ADR 0030), which count against the account's Worker limit and share the daily request
-  quota on Workers Free. Durable Object calls by script name cost what they cost before: no extra request, and they
-  count toward the subrequest limits as before;
+  stage), with no URL, and the API Worker `commissary-api-<stage>-<suffix>` (logical ID `Api`) with the zone routes or
+  the API host ([The Workers](#the-workers)): the account's Worker count grows by two (see "Workers Free" above);
 - the requests in flight during the deploy may fail once while the Durable Objects restart, as on any deploy that
   changed their code;
-- no change to URLs, API keys, management keys, sessions or stored data.
+- no change to URLs, API keys, management keys, sessions or stored data. The client API may answer `404` for a few
+  seconds within the deploy: with an API host, the hostname moves from the app Worker (where it was an alias) to the
+  API Worker; on one host, the new app Worker may refuse the client API paths before the zone routes exist.
 
 **Before merging the split** a person rehearses the move on a throwaway stage `pr-0`, self-hosted and Commissary Cloud
 (#152): deploy `main`, seed an org, a member, a credential and an API key, deploy the split onto the same stage, check
@@ -95,12 +118,12 @@ proves nothing about the move.
 
 ## API host
 
-`COMMISSARY_API_DOMAIN` (optional, ADR 0028) gives a deployment a second hostname, the **API host**, that serves the
-client API (`/v1`, `/v1beta`, `/v1internal`, `/openai/v1`, `/backend-api/codex`, `/chat/completions`, `/completions`,
-`/responses`) and `/healthz`, and nothing else. `COMMISSARY_DOMAIN` becomes the **app host**: the control panel, sign-in
-and the management API, and no client API route. The app Worker answers on both custom domains and decides by hostname
-(`apps/app/src/http/hosts.ts`); a path on the wrong host answers `404` with the host that serves it. The panel's API keys page
-tells clients the API host (`GET /me` `api_url`).
+`COMMISSARY_API_DOMAIN` (optional, ADR 0028) gives a deployment a second hostname, the **API host**: the API Worker's
+custom domain, which serves the client API (`/v1`, `/v1beta`, `/v1internal`, `/openai/v1`, `/backend-api/codex`,
+`/chat/completions`, `/completions`, `/responses`) and `/healthz`, and nothing else. `COMMISSARY_DOMAIN`, the **app
+host**, is the app Worker's: the control panel, sign-in and the management API, and no client API route, with no zone
+routes. A path on the wrong host answers `404` with the host that serves it (`apps/app/src/http/hosts.ts`,
+`apps/api/src/http/hosts.ts`). The panel's API keys page tells clients the API host (`GET /me` `api_url`).
 
 - **Self-hosted:** Access covers the app host only; the API host has no Access application and the bypass application
   of the client API paths is not created (an existing one is deleted). Clients that sign in through Access send the app
@@ -192,7 +215,7 @@ who should stay in it as members first.
 ## Setup
 
 There are two Alchemy stacks. `commissary` (`alchemy.run.ts`) is Commissary itself, with the stages `prod`, `cloud` and
-`pr-<number>`; its Workers' logical IDs are `Commissary` (the app Worker) and `State` ([The state Worker](#the-state-worker)). CI's credentials are code: `commissary-github`
+`pr-<number>`; its Workers' logical IDs are `Commissary` (the app Worker), `Api` (the API Worker) and `State` ([The Workers](#the-workers)). CI's credentials are code: `commissary-github`
 (`stacks/github.ts`, stage `ci`) is the second stack, which creates them and writes them into GitHub.
 It manages:
 
@@ -242,10 +265,11 @@ the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --pro
 
 - **Control panel.** CI builds the control panel from `apps/web` (`pnpm build`, into `apps/web/dist/`) before each
   deploy.
-- **API keys.** The deploy adds, after the Worker (the bypass depends on the Worker's output, so the old Worker
-  never serves the client API without Access in front), an Access application with a Bypass policy on the client API paths (`/v1*`,
-  `/openai/v1*`, `/backend-api/codex*`, `/chat/completions`, `/completions`, `/responses`), so clients reach the
-  Worker with an API key and no Access sign-in ([ACCESS.md](ACCESS.md#api-keys)). From that deploy on, clients that
+- **API keys.** On a stage with one host, the deploy adds, after the API Worker and its zone routes (the bypass depends
+  on the API Worker's output, so the client API never leaves Access while a Worker that only reads the Access edge's
+  JWT serves it), an Access application with a Bypass policy on the client API paths (`/v1*`, `/v1beta*`,
+  `/v1internal*`, `/openai/v1*`, `/backend-api/codex*`, `/chat/completions`, `/completions`, `/responses`), so clients
+  reach the API Worker with an API key and no Access sign-in; an API host or a preview needs none ([ACCESS.md](ACCESS.md#api-keys)). From that deploy on, clients that
   send Access service token headers to those paths are refused: move them to API keys first
   ([MIGRATION.md](MIGRATION.md#5-move-clients-to-api-keys)). `cloudflared access` tokens (`cf-access-token`) keep
   working in `global` while its `access_clients` setting is on. The keys live in each org's ControlPlane (tables

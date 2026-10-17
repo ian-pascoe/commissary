@@ -1,18 +1,21 @@
 #!/usr/bin/env bash
-# Post-deploy check of where Cloudflare Access sits (ADR 0022) and, with an API host (ADR 0028), which host serves
-# what. Retries while a new workers.dev hostname or Access application propagates.
+# Post-deploy check of where Cloudflare Access sits (ADR 0022) and which Worker serves what (ADR 0028, ADR 0030: the app
+# Worker the panel and the management API, the API Worker the client API). Retries while a new workers.dev hostname or
+# Access application propagates.
 # - /healthz answers 200 through Access with a service token;
 # - the management API answers 200 through Access with a service token (which proves the Worker accepts the Access
 #   JWT, i.e. ACCESS_AUD and the team domain are wired);
-# - a client API route without credentials reaches the Worker, which answers 401 `Missing API key` itself (the client API
-#   is out of Access: clients send API keys);
+# - a client API route without credentials reaches the API Worker, which answers 401 `Missing API key` itself (the
+#   client API is out of Access: clients send API keys; on one host, the zone routes reach the API Worker, where the
+#   app Worker would answer 404);
 # - a client the way `cloudflared access` clients (pi) send it, an Access JWT in `cf-access-token` and a dummy key in
 #   `Authorization`, is served on a client API route (200): the first deploy with the bypass must not break them, since
 #   `global` keeps Access sign-ins for clients on by default. The JWT is the `CF_Authorization` cookie Access sets for
 #   the service token, which is issued for the main application, like a `cloudflared access login` token;
 # - the control panel without credentials is stopped by Access (anything but 200);
-# - with an API host: the client API answers 404 on the app host (through Access) and the management API 404 on the
-#   API host, both from the Worker.
+# - when the client API has a host of its own (an API host, or a preview's API Worker workers.dev URL): /healthz answers
+#   200 there, the client API answers 404 on the app host (through Access, from the app Worker) and the management API
+#   404 there (from the API Worker).
 # Usage: CF_ACCESS_CLIENT_ID=… CF_ACCESS_CLIENT_SECRET=… tools/check-deploy.sh <base-url> [<api-url>]
 # `<api-url>` is where the client API is served (default: `<base-url>`).
 set -euo pipefail

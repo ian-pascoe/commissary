@@ -3,7 +3,7 @@
 import { evictDurableObject } from "cloudflare:test";
 import { env, exports } from "cloudflare:workers";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { withModelsPart } from "@commissary/models/testing";
+import { FULL_ACCESS, withModelsPart } from "@commissary/models/testing";
 
 type Upstream = (request: Request) => Response | Promise<Response>;
 
@@ -77,12 +77,15 @@ interface Listed {
   >;
 }
 
-/** Runtime cooldowns of the single key of a family, as `GET /v9/management/provider-keys` shows them. */
+/**
+ * Runtime cooldowns of the single key of a family, as `GET /v9/management/provider-keys` (the app Worker's) shows them
+ * to an org admin: the Models part's `providerKeysView`, which that route answers unchanged.
+ */
 const cooldowns = async (family: string): Promise<ReadonlyArray<Cooldown>> => {
-  const response = await exports.default.fetch("http://localhost/v9/management/provider-keys");
-  expect(response.status).toBe(200);
   // SAFETY: the api-keys list contract (`@commissary/contract/provider-keys` ProviderKeysList).
-  const listed = (await response.json()) as Listed;
+  const listed = (await withModelsPart(controlPlane(), (part) =>
+    part.providerKeysView(FULL_ACCESS),
+  )) as unknown as Listed;
 
   return listed.families[family]?.[0]?.group.keys[0]?.runtime?.cooldowns ?? [];
 };

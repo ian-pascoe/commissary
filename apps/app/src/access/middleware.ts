@@ -1,18 +1,18 @@
-// Router middleware gating Commissary and management routes (mirrors AuthMiddleware in
+// Router middleware gating the panel and the management routes, and refusing the client API (mirrors AuthMiddleware in
 // internal/api/server_middleware.go: flat `{"error": "..."}` bodies).
-import { Effect, Match, Predicate, Result } from "effect";
+import { Effect, Predicate, Result } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { CurrentOrg, type OrgId } from "@commissary/core";
+import { CurrentOrg } from "@commissary/core";
 import { authenticateRequest } from "./authenticate.ts";
 import { crossSiteRejection } from "./csrf.ts";
 import {
   type AccessError,
-  type AccessIdentity,
+  accessErrorResponse,
   AccessJwks,
   AccessPrincipal,
   AuthConfig,
   isHosted,
-  type Principal,
+  PUBLIC_ROUTE_IDENTITY,
 } from "@commissary/auth";
 import {
   classifyPath,
@@ -21,72 +21,16 @@ import {
   normalizedPath,
 } from "../management/zones.ts";
 import { SIGN_IN_PAGE_PATH } from "@commissary/contract/sign-in";
+import { clientApiElsewhere } from "../http/hosts.ts";
+import { AppEnv } from "../worker-env.ts";
 
 const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
-
-const noPrincipal = (): never => {
-  throw new Error("AccessPrincipal is not available on public routes");
-};
-
-/**
- * Identity provided on public routes, which have no caller. The router types every handler as possibly requiring
- * `AccessPrincipal`, but only route layers wrapped with `withAccess` (all under protected prefixes) read it; reading
- * any field here is a defect, like a missing service.
- */
-const PUBLIC_ROUTE_IDENTITY: AccessIdentity = {
-  get principal(): Principal {
-    return noPrincipal();
-  },
-  get principalId(): string {
-    return noPrincipal();
-  },
-  get callerScope(): string {
-    return noPrincipal();
-  },
-  get org(): OrgId {
-    return noPrincipal();
-  },
-  get platformAdmin(): boolean {
-    return noPrincipal();
-  },
-  get role(): undefined {
-    return noPrincipal();
-  },
-  get memberId(): undefined {
-    return noPrincipal();
-  },
-};
 
 const errorResponse = (status: number, message: string) =>
   HttpServerResponse.text(JSON.stringify({ error: message }), {
     status,
     contentType: JSON_CONTENT_TYPE,
   });
-
-/** Maps an authentication failure to a response; server-side failures are logged without details a client could use. */
-export const accessErrorResponse = (
-  error: AccessError,
-): Effect.Effect<HttpServerResponse.HttpServerResponse> => {
-  return Match.value(error).pipe(
-    Match.tag("UnauthorizedError", (denied) => Effect.succeed(errorResponse(401, denied.message))),
-    Match.tag("ForbiddenError", (denied) => Effect.succeed(errorResponse(403, denied.message))),
-    Match.tag("NotFoundError", (missing) => Effect.succeed(errorResponse(404, missing.message))),
-    Match.tag("RateLimitedError", (limited) =>
-      Effect.succeed(
-        HttpServerResponse.setHeader(
-          errorResponse(429, limited.message),
-          "retry-after",
-          String(limited.retryAfterSeconds),
-        ),
-      ),
-    ),
-    Match.orElse((failure) =>
-      Effect.logError(`authentication middleware error: ${failure._tag}: ${failure.message}`).pipe(
-        Effect.as(errorResponse(500, "Authentication service error")),
-      ),
-    ),
-  );
-};
 
 /**
  * On Commissary Cloud, a browser that opens a panel page without a session goes to the sign-in page, which brings it back
@@ -114,17 +58,15 @@ const signInRedirect = (
 };
 
 /**
- * Global middleware: requests under the protected prefixes (`management/zones.ts`) must carry a credential
- * `@commissary/auth` accepts (`authenticate.ts`): an Access JWT, a Commissary Cloud session, an API key on a client
- * API route or a management key on a management route, and come from a member of the request's org with the role the
- * route needs (`management/policy.ts`, ADR 0022): a platform admin (`PLATFORM_ADMIN_*`) is an owner of every org,
- * anyone else has the role their membership gives them. Cross-site requests and cross-origin WebSocket upgrades are
- * refused first (`csrf.ts`). Everything else (`/healthz`, unknown paths) is passed through untouched. On success the
- * principal is available to handlers as `AccessPrincipal`, and `CurrentOrg` is the org of the request: the org
- * addressed by an org-scoped management URL (`management/org-address.ts`), the org an API key names, unchanged
- * otherwise.
- *
- * Register it after `CorsLayer` so that 401/403 responses still carry CORS headers and preflights are not gated.
+ * Global middleware: requests of the management zone (`management/zones.ts`: the management API and the panel) must
+ * carry a credential `@commissary/auth` accepts (`authenticate.ts`): an Access JWT, a Commissary Cloud session or a
+ * management key, and come from a member of the request's org with the role the route needs (`management/policy.ts`,
+ * ADR 0022): a platform admin (`PLATFORM_ADMIN_*`) is an owner of every org, anyone else has the role their membership
+ * gives them. Cross-site requests and cross-origin WebSocket upgrades are refused first (`csrf.ts`). A client API path
+ * is refused with a 404 that says where the client API is (`http/hosts.ts`): the API Worker serves it (ADR 0030).
+ * Everything else (`/healthz`, unknown paths) is passed through untouched. On success the principal is available to
+ * handlers as `AccessPrincipal`, and `CurrentOrg` is the org of the request: the org addressed by an org-scoped
+ * management URL (`management/org-address.ts`), unchanged otherwise.
  */
 export const AccessGate = HttpRouter.middleware<{ provides: AccessPrincipal }>()(
   Effect.gen(function* () {
@@ -143,6 +85,13 @@ export const AccessGate = HttpRouter.middleware<{ provides: AccessPrincipal }>()
           return yield* Effect.provideService(app, AccessPrincipal, PUBLIC_ROUTE_IDENTITY);
         }
 
+        if (zone === "protected")
+          return HttpServerResponse.setHeader(
+            errorResponse(404, clientApiElsewhere(yield* AppEnv)),
+            "cache-control",
+            "no-store",
+          );
+
         const rejection = crossSiteRejection(
           request.method,
           request.headers,
@@ -153,7 +102,7 @@ export const AccessGate = HttpRouter.middleware<{ provides: AccessPrincipal }>()
         if (rejection !== undefined) return errorResponse(rejection.status, rejection.message);
 
         const authenticated = yield* Effect.result(
-          authenticateRequest(request.headers, request.originalUrl, zone, request.method).pipe(
+          authenticateRequest(request.headers, request.originalUrl, request.method).pipe(
             Effect.provideService(AccessJwks, jwks),
           ),
         );

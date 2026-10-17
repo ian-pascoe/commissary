@@ -1,12 +1,13 @@
 // The Access gate of a self-hosted Commissary through the Worker's Durable Objects (`authenticateRequest`: the
-// entry points of @commissary/auth with the Worker's routes), and the path zones. JWT verification, the principal and
+// management entry point of @commissary/auth with the Worker's routes; `authenticateClient`, the API Worker's, for the
+// same people on the client API), and the path zones. JWT verification, the principal and
 // the Access settings are tested in packages/auth.
 import { assert, describe, it } from "@effect/vitest";
 import { Effect } from "effect";
 import { TestClock } from "effect/testing";
 import { expect } from "vitest";
 import { authenticateRequest } from "../src/access/authenticate.ts";
-import { type AccessJwks, callerScope } from "@commissary/auth";
+import { type AccessJwks, authenticateClient, callerScope } from "@commissary/auth";
 import {
   AUD,
   fakeJwksLayer,
@@ -86,7 +87,7 @@ describe("authenticateRequest", () => {
       makeFakeJwks([keyA]),
       Effect.gen(function* () {
         const error = yield* Effect.flip(
-          authenticateRequest({}, "https://commissary.test/v1/models", "protected"),
+          authenticateClient({}, "https://commissary.test/v1/models"),
         );
 
         assert.strictEqual(error._tag, "UnauthorizedError");
@@ -101,14 +102,14 @@ describe("authenticateRequest", () => {
       Effect.gen(function* () {
         const url = "https://commissary.test/v9/management/config";
         const alice = { "cf-access-jwt-assertion": yield* token(keyA) };
-        const identity = yield* authenticateRequest(alice, url, "protected");
+        const identity = yield* authenticateClient(alice, url);
         assert.strictEqual(identity.principalId, "user:alice@example.com");
         assert.strictEqual(
           identity.callerScope,
           "21cd36b03d03c619f37e1df80f5e22b7c4c9319b4e8151ea93327b51520a06e9",
         );
         assert.strictEqual(
-          (yield* Effect.flip(authenticateRequest(alice, url, "management")))._tag,
+          (yield* Effect.flip(authenticateRequest(alice, url)))._tag,
           "ForbiddenError",
         );
 
@@ -118,17 +119,14 @@ describe("authenticateRequest", () => {
           }),
         };
 
-        assert.strictEqual(
-          (yield* authenticateRequest(admin, url, "management")).principal.kind,
-          "user",
-        );
+        assert.strictEqual((yield* authenticateRequest(admin, url)).principal.kind, "user");
 
         const svc = {
           "cf-access-jwt-assertion": yield* token(keyA, { claims: serviceClaims("admin.access") }),
         };
 
         assert.strictEqual(
-          (yield* authenticateRequest(svc, url, "management")).principalId,
+          (yield* authenticateRequest(svc, url)).principalId,
           "service:admin.access",
         );
 
@@ -137,7 +135,7 @@ describe("authenticateRequest", () => {
         };
 
         assert.strictEqual(
-          (yield* Effect.flip(authenticateRequest(other, url, "management")))._tag,
+          (yield* Effect.flip(authenticateRequest(other, url)))._tag,
           "ForbiddenError",
         );
       }),
@@ -160,25 +158,24 @@ describe("authenticateRequest", () => {
           );
 
         const asCarol = yield* as("Carol@Example.com");
-        const identity = yield* authenticateRequest(asCarol, config, "management");
+        const identity = yield* authenticateRequest(asCarol, config);
         assert.strictEqual(identity.role, "admin");
         assert.strictEqual(identity.memberId, carol.id);
         assert.isFalse(identity.platformAdmin);
 
         // A plain member reads usage and uses Commissary, but no admin route.
         const asDan = yield* as("dan@example.com");
-        assert.strictEqual((yield* authenticateRequest(asDan, usage, "management")).role, "member");
+        assert.strictEqual((yield* authenticateRequest(asDan, usage)).role, "member");
         assert.strictEqual(
-          (yield* Effect.flip(authenticateRequest(asDan, usage, "management", "DELETE")))._tag,
+          (yield* Effect.flip(authenticateRequest(asDan, usage, "DELETE")))._tag,
           "ForbiddenError",
         );
         assert.strictEqual(
-          (yield* Effect.flip(authenticateRequest(asDan, config, "management")))._tag,
+          (yield* Effect.flip(authenticateRequest(asDan, config)))._tag,
           "ForbiddenError",
         );
         assert.strictEqual(
-          (yield* authenticateRequest(asDan, "https://commissary.test/v1/models", "protected"))
-            .memberId,
+          (yield* authenticateClient(asDan, "https://commissary.test/v1/models")).memberId,
           dan.id,
         );
 
@@ -188,13 +185,12 @@ describe("authenticateRequest", () => {
 
         try {
           assert.strictEqual(
-            (yield* Effect.flip(authenticateRequest(asCarol, config, "management")))._tag,
+            (yield* Effect.flip(authenticateRequest(asCarol, config)))._tag,
             "ForbiddenError",
           );
           assert.strictEqual(
-            (yield* Effect.flip(
-              authenticateRequest(asCarol, "https://commissary.test/v1/models", "protected"),
-            ))._tag,
+            (yield* Effect.flip(authenticateClient(asCarol, "https://commissary.test/v1/models")))
+              ._tag,
             "ForbiddenError",
           );
         } finally {
@@ -208,7 +204,7 @@ describe("authenticateRequest", () => {
   it.effect("fails closed with a configuration error when Access is not configured", () =>
     withJwks(
       makeFakeJwks([keyA]),
-      authenticateRequest({}, "https://commissary.test/v1/models", "protected").pipe(
+      authenticateClient({}, "https://commissary.test/v1/models").pipe(
         Effect.provideContext(
           requestContext(
             { ...env, ACCESS_TEAM_DOMAIN: "", ACCESS_AUD: "" },
@@ -270,7 +266,6 @@ describe("authenticateRequest and orgs", () => {
         const scoped = yield* authenticateRequest(
           admin,
           "https://commissary.test/v9/management/orgs/acme-access/config",
-          "management",
         );
 
         assert.strictEqual(scoped.org, org.id);
@@ -284,7 +279,6 @@ describe("authenticateRequest and orgs", () => {
         const panel = yield* authenticateRequest(
           admin,
           "https://commissary.test/o/acme-access/accounts",
-          "management",
         );
 
         assert.strictEqual(panel.org, org.id);
@@ -292,7 +286,6 @@ describe("authenticateRequest and orgs", () => {
         const unscoped = yield* authenticateRequest(
           admin,
           "https://commissary.test/v9/management/config",
-          "management",
         );
 
         assert.strictEqual(unscoped.org, GLOBAL_ORG);
@@ -302,7 +295,6 @@ describe("authenticateRequest and orgs", () => {
         const platformLevel = yield* authenticateRequest(
           admin,
           "https://commissary.test/v9/management/orgs/acme-access",
-          "management",
         );
 
         assert.strictEqual(platformLevel.org, GLOBAL_ORG);
@@ -316,26 +308,20 @@ describe("authenticateRequest and orgs", () => {
         const url = "https://commissary.test/v9/management/orgs/nobody-here/config";
 
         assert.strictEqual(
-          (yield* Effect.flip(
-            authenticateRequest(yield* as("admin@example.com"), url, "management"),
-          ))._tag,
+          (yield* Effect.flip(authenticateRequest(yield* as("admin@example.com"), url)))._tag,
           "NotFoundError",
         );
         assert.strictEqual(
-          (yield* Effect.flip(
-            authenticateRequest(yield* as("carol@example.com"), url, "management"),
-          ))._tag,
+          (yield* Effect.flip(authenticateRequest(yield* as("carol@example.com"), url)))._tag,
           "ForbiddenError",
         );
         assert.strictEqual(
-          (yield* Effect.flip(
-            authenticateRequest(yield* as("dave@example.com"), url, "management"),
-          ))._tag,
+          (yield* Effect.flip(authenticateRequest(yield* as("dave@example.com"), url)))._tag,
           "ForbiddenError",
         );
         // Not signed in: 401 before anything is looked up.
         assert.strictEqual(
-          (yield* Effect.flip(authenticateRequest({}, url, "management")))._tag,
+          (yield* Effect.flip(authenticateRequest({}, url)))._tag,
           "UnauthorizedError",
         );
       }),
@@ -352,18 +338,13 @@ describe("authenticateRequest and orgs", () => {
         const own = yield* authenticateRequest(
           carol,
           "https://commissary.test/v9/management/orgs/default/config",
-          "management",
         );
 
         assert.strictEqual(own.org, GLOBAL_ORG);
         assert.isFalse(own.platformAdmin);
 
         assert.strictEqual(
-          (yield* authenticateRequest(
-            carol,
-            "https://commissary.test/v9/management/config",
-            "management",
-          )).org,
+          (yield* authenticateRequest(carol, "https://commissary.test/v9/management/config")).org,
           GLOBAL_ORG,
         );
 
@@ -372,7 +353,7 @@ describe("authenticateRequest and orgs", () => {
           "https://commissary.test/o/acme-limits/accounts",
         ]) {
           assert.strictEqual(
-            (yield* Effect.flip(authenticateRequest(carol, url, "management")))._tag,
+            (yield* Effect.flip(authenticateRequest(carol, url)))._tag,
             "ForbiddenError",
           );
         }
@@ -383,16 +364,14 @@ describe("authenticateRequest and orgs", () => {
   it.effect("marks the platform admins of a protected route without scoping it", () =>
     run(
       Effect.gen(function* () {
-        const alice = yield* authenticateRequest(
+        const alice = yield* authenticateClient(
           yield* as("alice@example.com"),
           "https://commissary.test/v1/models",
-          "protected",
         );
 
-        const admin = yield* authenticateRequest(
+        const admin = yield* authenticateClient(
           yield* as("admin@example.com"),
           "https://commissary.test/v1/models",
-          "protected",
         );
 
         assert.isFalse(alice.platformAdmin);

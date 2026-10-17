@@ -32,16 +32,17 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
 
 ```
 .                             workspace root and deploy root (Alchemy, no Wrangler config); turbo.json
-  alchemy.run.ts              infrastructure: app and state Workers, DOs, KV, D1 (+ migrations), assets, cron, Access
+  alchemy.run.ts              infrastructure: app, API and state Workers, DOs, KV, D1 (+ migrations), assets, cron,
+                              zone routes, Access
   infra/                      deploy settings (.env) and Cloudflare Access provisioning
   migrations/                 D1 schema of the usage database
-  apps/app/                   @commissary/app: the app Worker (client API, management API, panel serving)
+  apps/app/                   @commissary/app: the app Worker (management API, sign-in, panel serving)
     src/
-      index.ts                Worker entry: fetch, scheduled; state calls retried once on a code-update reset
-      dev.ts                  its `alchemy dev` entry: index.ts plus the state Worker's classes, bound locally
+      index.ts                Worker entry: fetch; state calls retried once on a code-update reset
+      dev.ts                  its `alchemy dev` entry: index.ts plus the state Worker's classes, bound locally, and
+                              the dev-only DevStateBridge entrypoint the API Worker's dev entry reaches them through
       platform/               org deletion (every area's step, then the state's)
-      api/                    what moves to the API Worker: CORS and the cron runner
-      http/                   router, hosts, /healthz
+      http/                   router, the 404 of the client API (hosts.ts), plain 404s, /healthz
       access/                 the Access gate middleware: @commissary/auth's entry points with the Worker's routes
       management/             the org-wide /v9/management routes (members, people, orgs, SSO, API and management
                               keys), panel serving, the composition of every area's routes; path zones, role table,
@@ -49,6 +50,14 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
       hosted/, sso/           Commissary Cloud's sign-in and per-org single sign-on
     test/                     vitest suites in workerd: what goes through the Worker's router or fetch; worker.ts,
                               the test Worker, re-exports the handler and the state Worker's Durable Objects
+  apps/api/                   @commissary/api: the API Worker (client API of every area, cron jobs; ADR 0030)
+    src/
+      index.ts                Worker entry: fetch, scheduled; state calls retried once on a code-update reset
+      dev.ts                  its `alchemy dev` entry: index.ts with the state namespaces over the app's dev bridge
+      scheduled.ts            the cron runner: its own job, then each area's ScheduledTasks
+      http/                   router, the client gate, CORS, hosts (404 for every other path), /healthz
+    test/                     vitest suites in workerd (self-hosted and Cloud projects): what goes through the client
+                              API's router or fetch; worker.ts re-exports the handler and the state Worker's objects
   apps/state/                 @commissary/state-worker: the state Worker, no routes (ADR 0030)
     src/index.ts              exports ControlPlane, SessionState and Platform; answers every request 404
     src/control-plane.ts      the ControlPlane Durable Object: @commissary/state's base composed with the Models part
@@ -102,25 +111,39 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
 
 ## Runtime topology
 
-- **Worker** (stateless; the app Worker, `Commissary`): routing, Access verification, request handling, translation,
-  upstream `fetch`, streaming.
+- **Workers** (stateless; ADR 0030): the **app Worker** (`Commissary`, `apps/app`): the panel, sign-in and the
+  management API, behind Access on a self-hosted stage; the **API Worker** (`Api`, `apps/api`): the client API of every
+  area (routing, the client gate, request handling, translation, upstream `fetch`, streaming) and the cron jobs, never
+  behind Access (clients send API keys).
 - **State Worker** (`State`, `apps/state`, ADR 0030): defines the three Durable Objects below and nothing else: no
-  routes, no domain, no `workers.dev` URL, and only the bindings their classes read. The app Worker binds them by the
-  state Worker's script name, so a deploy uploads the state Worker first, and restarts the Durable Objects only when
-  their own code changed (Alchemy uploads a Worker again only when its bundle changes). A call cut off by that restart
-  ("Durable Object reset because its code was updated") is sent once more on a new stub: the app Worker wraps the
-  namespaces of each invocation's `env` (`retryOnCodeUpdate`, `state/code-update-retry.ts`), and the wrapped stubs
+  routes, no domain, no `workers.dev` URL, and only the bindings their classes read. The app and the API Worker bind
+  them by the state Worker's script name, so a deploy uploads the state Worker first, and restarts the Durable Objects
+  only when their own code changed (Alchemy uploads a Worker again only when its bundle changes). A call cut off by
+  that restart ("Durable Object reset because its code was updated") is sent once more on a new stub: both Workers wrap
+  the namespaces of each invocation's `env` (`retryOnCodeUpdate`, `state/code-update-retry.ts`), and the wrapped stubs
   still send each call when it is made and a pipelined `stub.models().x()` in one round trip; the retry replays the
   chain from a new stub. State RPC changes are expand-then-contract (`docs/DEVELOPMENT.md`). The namespaces moved from
   the app Worker with every stored object (`transferredFrom`, `docs/DEPLOY.md`). Under `alchemy dev` the app Worker
-  binds a local copy of the classes instead (`src/dev.ts`): the dev registry would reach the state Worker's objects by
-  hex id, without the name a ControlPlane learns its org from. The tests run the app's handler and the classes in one
-  isolate (`test/worker.ts`).
-- **Hosts** (ADR 0028, `src/http/hosts.ts`): with `API_DOMAIN` set (deploy setting `COMMISSARY_API_DOMAIN`), the
-  Worker answers on two custom domains and the default export decides by hostname before the router: the API host
-  serves the client API (the Access zone `protected` of `classifyPath`) and `/healthz`, every other host (the app host
-  `APP_DOMAIN`) everything else; a request on the wrong host answers `404 {"error": "Not found: …"}` naming the right
-  one. Without `API_DOMAIN` nothing is decided there. `GET /me` reports the API host as `api_url` for the panel.
+  binds a local copy of the classes instead (`apps/app/src/dev.ts`): the dev registry would reach the state Worker's
+  objects by hex id, without the name a ControlPlane learns its org from
+  ([cloudflare/workerd#7286](https://github.com/cloudflare/workerd/issues/7286)). The API Worker's dev entry
+  (`apps/api/src/dev.ts`) reaches those same objects over a service binding to the app's dev-only `DevStateBridge`
+  entrypoint (`state/dev-state-bridge.ts`: a stub's call chain, with the object's name, is sent over the binding and
+  replayed on a real stub there). Neither dev entry is ever deployed. The tests run each Worker's handler and the
+  classes in one isolate (`test/worker.ts` of each app).
+- **Hosts** (ADR 0028, ADR 0030; `apps/app/src/http/hosts.ts`, `apps/api/src/http/hosts.ts`): each Worker serves its own
+  paths wherever it answers, and neither looks at the request's hostname. The client API paths (`CLIENT_API_PREFIXES`,
+  `core/http/client-api.ts`) are the API Worker's: on the API host when the deployment has one (`API_DOMAIN`, deploy
+  setting `COMMISSARY_API_DOMAIN`: the API Worker's custom domain), on its own `workers.dev` URL on a preview, else
+  through zone routes `<domain><prefix>*` on the app host, which run in front of the app Worker's custom domain. The
+  app Worker answers a client API path that reaches it `404 {"error": "Not found: the client API is served at
+  https://<API_DOMAIN>"}` (or "… by the API Worker" without an API host), checked before authentication; the API Worker
+  answers every path but the client API and `/healthz` `404 {"error": "Not found: … serves the client API only; the
+  control panel and the management API are at https://<APP_DOMAIN>"}`. Only the API Worker sends CORS headers (the
+  panel calls the management API same-origin). `GET /me` reports the API host (or a preview's API Worker host) as
+  `api_url` for the panel. Revoking a key, removing a member, deleting an org or suspending a person or org on the app
+  Worker reaches the API Worker's per-isolate caches within their windows (`VERIFIED_KEY_TTL_MS`, `STANDING_TTL_MS`:
+  30 s each), as it always reached the app Worker's other isolates.
 - **Orgs** (ADR 0021, `core/org.ts`; the ControlPlane stubs in `state/org.ts`): one deployment serves many orgs, and every request and scheduled job
   belongs to exactly one. The per-request `CurrentOrg` service carries its id (`OrgId`: lowercase letters, digits and
   inner hyphens); `requestContext` provides it next to the env views as `global`, the org of the
@@ -187,7 +210,7 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
   last refresh, best-effort caches (signature cache) with `expirationTtl`; org data under org-scoped keys.
 - **D1 `USAGE`**: usage records written with `ctx.waitUntil`, each with its `org_id`; every query filters on it.
 - **Static assets** (`apps/web/dist/`, Worker runs first): the control panel (`apps/web` build).
-- **Cron trigger** (every 3 h, production only; the runner `src/api/scheduled.ts`, the future API Worker's, which
+- **Cron trigger** (every 3 h, production only; on the API Worker, the runner `apps/api/src/scheduled.ts`, which
   provides the state's and each area's env view itself): its own job (expired API keys), then each area's tasks
   (`ScheduledTask` of `@commissary/core`; Models' from `models/api.ts`): the model catalog refresh (the one
   models.dev document: every provider's models, OpenCode's included), Antigravity version and model entitlements, xAI client version, usage retention, the Devin user status, a
@@ -200,8 +223,8 @@ cited as `translation/...` (relative to `packages/translation/src/`), core's as 
 Request flow:
 
 ```
-client -> Cloudflare Access -> Worker
-  verify Cf-Access-Jwt-Assertion -> principal (email | service token common_name); CurrentOrg (global for now)
+client -> (Cloudflare Access bypass on a single host) -> API Worker
+  verify the API key (or an Access JWT) -> principal (the key's member | email | service token); CurrentOrg (the key's org)
   handler parses body (entry protocol) -> resolve model/providers (registry + config, suffixes, aliases)
   loop (retry rounds): ControlPlane.pick(...) of the request's org -> credential snapshot + lease
       executor: translate request -> thinking -> provider shaping -> payload rules (final) -> fetch upstream
@@ -221,7 +244,8 @@ client -> Cloudflare Access -> Worker
   Worker reads `AppEnv` (`src/worker-env.ts`). `requestContext` provides each from the invocation's `env`, plus auth's
   ports over it: `AuthDirectory` (`state/auth-directory.ts`, the Durable Object stubs) and `SignInSessions`
   (`src/hosted/session.ts`, Better Auth); the global
-  `Env` appears only in the entry (`index.ts`, `api/scheduled.ts`) and tests; the state Worker's classes read
+  `Env` appears only in the entries (`index.ts`, `dev.ts`, the API Worker's `scheduled.ts`) and tests; the API Worker's
+  code reads `ApiBindings` (`apps/api/src/worker-env.ts`); the state Worker's classes read
   `StateObjectEnv` and their parts' views (`apps/state/src/env.d.ts`).
 - Use Effect at boundaries and for orchestration: services (`Context.Service`) + `Layer`s, `Schema` for config,
   credentials and external payloads, tagged errors, `Stream` for upstream/downstream streaming, `HttpClient`
@@ -487,7 +511,7 @@ Core contracts every provider slice implements (Go references in each module hea
   Deviation: `POST /chat/completions`, `/completions`, `/responses`, `/responses/compact` and the `GET /responses`
   WebSocket are unprefixed aliases of the `/v1` routes (Go serves only `/v1`). A client whose Anthropic models append
   `/v1/messages` and whose OpenAI models append `/chat/completions` to the same base URL (pi's `opencode-go` catalog)
-  then needs a single base URL. The aliases are in `PROTECTED_PREFIXES` (`management/zones.ts`). `GET /models` is not
+  then needs a single base URL. The aliases are in `CLIENT_API_PREFIXES` (`core/http/client-api.ts`). `GET /models` is not
   aliased, because it is a control panel page.
   Request bodies (`handlers/request.ts`, `models/http/body.ts`) decode `Content-Encoding: zstd` with a 32 MiB cap on the
   decoded size (`models/http/zstd.ts`: frame windows/content sizes are checked before fzstd allocates, the streaming decoder stops past the
@@ -2267,12 +2291,13 @@ prices each attempt, the ControlPlane counts and decides.
 
 ## Authentication (Cloudflare Access)
 
-- Access application on the Worker's custom domain, provisioned with the Worker by `alchemy.run.ts`/`infra/access.ts`
+- Access application on the app Worker's custom domain, provisioned with the Workers by `alchemy.run.ts`/`infra/access.ts`
   (Allow policy for people, Service Auth policy for the stack's service tokens, SameSite=Lax cookie; its AUD tag feeds
-  `ACCESS_AUD`); `workersDev: false` so there are no `workers.dev`/preview URLs and Access cannot be bypassed. The client
-  API are outside it ("API keys" above): there the Worker is the only gate. With an API host ("Runtime topology")
-  the application covers the app host only and the API host has none; otherwise a bypass application takes the client API
-  paths of the one host out of Access.
+  `ACCESS_AUD`); no `workers.dev`/preview URLs outside previews, so Access cannot be bypassed. The client API is outside
+  it ("API keys" above): there the API Worker is the only gate, and no Access application protects it. With an API host
+  ("Runtime topology") the application covers the app host only and the API host has none; on a stage with one host a
+  bypass application takes the client API paths, which zone routes send to the API Worker, out of Access; a preview's
+  API Worker answers on its own `workers.dev` URL, outside the preview's application.
 - The Worker verifies `Cf-Access-Jwt-Assertion` (RS256, JWKS from `https://<team>.cloudflareaccess.com/cdn-cgi/access/certs`,
   `iss` = team domain, `aud` contains the application AUD tag, `exp`/`nbf`). JWKS is cached per isolate.
 - Principal: `email` for users, `common_name` (service token client id) for service tokens. The principal replaces the
@@ -2286,20 +2311,23 @@ prices each attempt, the ControlPlane counts and decides.
   `cross-site`/`same-site` or `Origin` is another host; management requests of any method with a foreign `Origin` (or a
   cross-site `Sec-Fetch-Site`, unless a `GET`/`HEAD` with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document` to a
   panel page or `/management.html`: `management/zones.ts` `isPanelPagePath`; frames, `/assets` and `/v9/management*` never) too; WebSocket upgrades with a foreign `Origin`; management writes need
-  JSON (multipart for `POST /credentials`, YAML for `POST /settings/import`) or no body (415). The CORS middleware adds no headers in
-  the management zone (deviation from Go's `*`).
-- Implementation notes (`src/access/`, `packages/auth`): the gate is a _global_ router middleware that matches protected path
-  prefixes (default-deny for `/v1*`, `/openai/v1*`, `/backend-api/codex*`, the unprefixed `/chat/completions`,
-  `/completions`, `/responses`, `/v9/management*`, normalising case, duplicate
-  slashes and percent-encoding) and provides `AccessPrincipal`; route layers that read it use `withAccess(...)` for typing.
+  JSON (multipart for `POST /credentials`, YAML for `POST /settings/import`) or no body (415). Only the API Worker has a
+  CORS middleware (`apps/api/src/http/cors.ts`); the app Worker sends no CORS headers (deviation from Go's `*` on the
+  management API).
+- Implementation notes (`src/access/` of the app Worker, `apps/api/src/http/gate.ts`, `packages/auth`): each gate is a
+  _global_ router middleware that matches path prefixes, normalising case, duplicate slashes and percent-encoding: the
+  API Worker's default-denies the client API (`/v1*`, `/openai/v1*`, `/backend-api/codex*`, the unprefixed
+  `/chat/completions`, `/completions`, `/responses`), the app Worker's `/v9/management*` and the panel (and answers a
+  client API path 404 before authenticating anything); each provides `AccessPrincipal`; route layers that read it use `withAccess(...)` (the app Worker) or `behindGate(...)`
+  (the API Worker) for typing.
   JWKS keys are cached per isolate and refreshed on unknown `kid` at most once per 30 s (no cross-request locks, which
   workerd forbids). `ACCESS_DEV_BYPASS` only applies when the request host is loopback (i.e. `alchemy dev`) and is refused (warning logged once
   per isolate) whenever `ACCESS_TEAM_DOMAIN` or `ACCESS_AUD` is set.
 - **`@commissary/auth`** (`packages/auth`, #132): request-side authentication with two entry points,
   `authenticateClient(headers, url)` (the client API) and `authenticateManagement(headers, url, {needs, slug})` (the
   management API and the panel), each picking the Access gate (`auth/access-gate.ts`) or Commissary Cloud's
-  (`auth/hosted-gate.ts`). The Worker owns the routes and passes in what a path needs: the zone (`management/zones.ts`
-  `classifyPath`, which entry point), the role (`management/policy.ts`), the addressed org's slug and, for the cross-site
+  (`auth/hosted-gate.ts`); the API Worker calls the first, the app Worker the second. Each Worker owns its routes and passes in what a path needs: the app Worker the zone (`management/zones.ts`
+  `classifyPath`: public, management, or the client API it refuses), the role (`management/policy.ts`), the addressed org's slug and, for the cross-site
   checks, whether a path is a panel page and which body types its route takes (`src/access/csrf.ts`); `src/access/`
   keeps the router middleware. Auth reads `AuthConfig` (raw variables, parsed per request) and reaches state only through
   `AuthDirectory`, a narrow Effect service of the ControlPlane and Platform calls it makes (`auth/directory.ts`, which
@@ -2380,8 +2408,8 @@ Access one, unchanged. User docs: `docs/ACCESS.md` "Commissary Cloud", `docs/DEP
 - **Downloads**: only platform admins download a stored credential (`download_requires_platform_admin`), since no
   service token exists to carry ADR 0006's rule.
 - **Infra**: `alchemy.run.ts` creates no Access application or bypass on Commissary Cloud, mints `BETTER_AUTH_SECRET` as an
-  Alchemy `Random`, and binds the sign-in settings and the `ORG_RATE_LIMIT` rate-limit binding (`infra/settings.ts`
-  validates them). CI deploys a preview as Commissary Cloud while its pull request has the `cloud-preview` label and checks it with
+  Alchemy `Random`, and binds the sign-in settings to the app Worker and the `ORG_RATE_LIMIT` rate-limit binding to the
+  API Worker (`infra/settings.ts` validates them). CI deploys a preview as Commissary Cloud while its pull request has the `cloud-preview` label and checks it with
   `tools/check-cloud-deploy.sh`.
 
 ## Provider OAuth logins (`models/oauth/`, `models/management/oauth-routes.ts`)

@@ -1,0 +1,59 @@
+// Bindings and variables of the API Worker (ADR 0030). Deployed values come from the `Api` Worker's `env` in
+// `alchemy.run.ts`; keep both in sync. Tests bind the same names in `vitest.config.ts`. The Durable Object namespaces
+// are the state Worker's (apps/state), bound by script name; under `alchemy dev` they come over the app Worker's
+// dev-only bridge instead (src/dev.ts). `Env` is read only by the entries (`index.ts`, `dev.ts`, `scheduled.ts`) and
+// tests; other code reads its package's view (`AuthConfig`, `StateEnv`, `ModelsEnv`, `ApiBindings`: `worker-env.ts`),
+// which `Env` must satisfy.
+interface __ApiWorkerEnv {
+  /** Model catalogs, signature cache, Antigravity state (Workers KV). */
+  CACHE: KVNamespace;
+  /** Usage records (D1); schema in migrations/. */
+  USAGE: D1Database;
+  /** Access team name or domain (`myteam`, `myteam.cloudflareaccess.com`); empty fails closed. */
+  ACCESS_TEAM_DOMAIN: string;
+  /** Comma separated Access application AUD tags; empty fails closed. */
+  ACCESS_AUD: string;
+  /** Comma separated platform admin emails: manage every org and the Platform registry (ADR 0022). */
+  PLATFORM_ADMIN_EMAILS: string;
+  /** Comma separated platform admin service token Client IDs. */
+  PLATFORM_ADMIN_SERVICE_TOKENS: string;
+  /** Local development only: treats loopback requests as this admin. Never set when deployed. */
+  ACCESS_DEV_BYPASS: string;
+  /** The app host (`COMMISSARY_DOMAIN`), named when another path is asked for (src/http/hosts.ts). */
+  APP_DOMAIN?: string;
+  /** The API host (`COMMISSARY_API_DOMAIN`). Unset: zone routes or a workers.dev URL (src/http/hosts.ts). */
+  API_DOMAIN?: string;
+  /** Overrides the Meta key-mint endpoint (empty: default). */
+  META_MINT_URL: string;
+  /**
+   * Secret HMAC key of `auth_index` (packages/models/src/management/auth-index.ts). Deployed: an Alchemy `Random`
+   * (alchemy.run.ts); tests and `alchemy dev` use their own. Empty fails closed.
+   */
+  AUTH_INDEX_KEY: string;
+  /** `cloud`: Commissary Cloud (ADR 0026): API keys only, under the per-org rate limit; unset: self-hosted. */
+  COMMISSARY_MODE?: string;
+  /** Hosted: the per-org request rate limit of the client API (Workers rate limiting, keyed by org id). */
+  ORG_RATE_LIMIT?: RateLimit;
+  CONTROL_PLANE: DurableObjectNamespace<import("@commissary/state-worker").ControlPlane>;
+  SESSION_STATE: DurableObjectNamespace<import("@commissary/state-worker").SessionState>;
+  /** The Platform registry: one object per deployment (`platformOf`, `@commissary/state`). */
+  PLATFORM: DurableObjectNamespace<import("@commissary/state-worker").Platform>;
+  // Not here on purpose: `DEV_STATE_BRIDGE`, bound under `alchemy dev` only (alchemy.run.ts) and typed by the dev entry
+  // alone (`DevBridgedEnv`, src/dev.ts), so no deployed code can name it; the tests bind the objects instead.
+}
+
+declare namespace Cloudflare {
+  interface GlobalProps {
+    mainModule: typeof import("./index");
+  }
+
+  interface Env extends __ApiWorkerEnv {}
+}
+
+interface Env extends __ApiWorkerEnv {}
+
+// @commissary/translation's tokenizer ranks: `Data` modules (alchemy.run.ts and vitest.config.ts `modulesRules`).
+declare module "*.bin" {
+  const data: ArrayBuffer;
+  export default data;
+}

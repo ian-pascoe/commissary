@@ -1,6 +1,7 @@
-// The gate of Commissary Cloud (ADR 0026, packages/auth/src/hosted-gate.ts): session cookies for the panel and the management API,
-// API keys for the client API, no Access credentials anywhere, sign-up with a Personal org, the owned-org limit, and
-// suspension of people and orgs by platform admins.
+// The gate of Commissary Cloud (ADR 0026, packages/auth/src/hosted-gate.ts) on the app Worker: session cookies for the
+// panel and the management API, no Access credentials anywhere, sign-up with a Personal org, the owned-org limit, and
+// suspension of people and orgs by platform admins. The client API, which takes API keys only, is the API Worker's
+// (apps/api/test/hosted/gate.test.ts, suspension included): the app Worker refuses it with a 404.
 import { env } from "cloudflare:workers";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { resetStandingCaches } from "@commissary/auth";
@@ -65,8 +66,6 @@ const apiKey = async (cookie: string, org: string): Promise<string> => {
 
   return (await response.json<{ key: string }>()).key;
 };
-
-const models = (key: string) => call("/v1/models", { headers: { authorization: `Bearer ${key}` } });
 
 describe("signing up", () => {
   it("gives a person signing in for the first time a Personal org they own", async () => {
@@ -180,15 +179,19 @@ describe("authentication", () => {
     }
   });
 
-  it("takes only API keys on the client API", async () => {
-    expect((await call("/v1/models")).status).toBe(401);
-
+  it("refuses the client API, with or without a session or an API key: the API Worker serves it", async () => {
     const cookie = await signIn({ email: "ada@example.com" });
-    const proxied = await call("/v1/models", { headers: { cookie } });
-    expect(proxied.status).toBe(401);
-
     const org = (await me(cookie)).orgs[0]?.slug ?? "";
-    expect((await models(await apiKey(cookie, org))).status).toBe(200);
+    const key = await apiKey(cookie, org);
+
+    for (const headers of [{}, { cookie }, { authorization: `Bearer ${key}` }]) {
+      const response = await call("/v1/models", { headers });
+
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({
+        error: "Not found: the client API is served by the API Worker",
+      });
+    }
   });
 
   it("refuses cross-site management requests and form posts", async () => {
@@ -280,10 +283,8 @@ describe("the owned-org limit", () => {
 });
 
 describe("suspension", () => {
-  it("signs a suspended person out and refuses their sessions and API keys until it is lifted", async () => {
+  it("signs a suspended person out and refuses their sessions until it is lifted", async () => {
     const cookie = await signIn({ email: "mallory@example.com" });
-    const org = (await me(cookie)).orgs[0]?.slug ?? "";
-    const key = await apiKey(cookie, org);
     const root = await signIn({ email: ROOT });
 
     const suspended = await call(
@@ -295,7 +296,6 @@ describe("suspension", () => {
     expect(await suspended.json()).toMatchObject({ suspended: true });
 
     expect((await call("/v9/management/me", { headers: panelHeaders(cookie) })).status).toBe(401);
-    expect((await models(key)).status).toBe(403);
 
     // A new sign-in is refused too.
     upstreams.person = { email: "mallory@example.com" };
@@ -307,14 +307,12 @@ describe("suspension", () => {
     );
 
     expect(lifted.status).toBe(200);
-    expect((await models(key)).status).toBe(200);
     expect((await me(await signIn({ email: "mallory@example.com" }))).orgs).toHaveLength(1);
   });
 
   it("refuses everyone in a suspended org, signs its members out, and lets platform admins unsuspend it", async () => {
     const owner = await signIn({ email: "owner@example.com" });
     expect((await createOrg(owner, "shady")).status).toBe(201);
-    const key = await apiKey(owner, "shady");
     const root = await signIn({ email: ROOT });
 
     const suspended = await call(
@@ -326,7 +324,6 @@ describe("suspension", () => {
     expect(await suspended.json()).toMatchObject({ slug: "shady", suspended: true });
 
     expect((await call("/v9/management/me", { headers: panelHeaders(owner) })).status).toBe(401);
-    expect((await models(key)).status).toBe(403);
 
     const again = await signIn({ email: "owner@example.com" });
 
@@ -349,7 +346,6 @@ describe("suspension", () => {
 
     expect(lifted.status).toBe(200);
     expect(await lifted.json()).not.toHaveProperty("suspended");
-    expect((await models(key)).status).toBe(200);
   });
 
   it("is for platform admins only", async () => {

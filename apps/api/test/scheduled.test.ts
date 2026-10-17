@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CurrentOrg, GLOBAL_ORG, OrgId, type ScheduledTask } from "@commissary/core";
 import { platformOf } from "@commissary/state";
 import { alarmOf } from "@commissary/state/testing";
-import { runScheduledTasks, type ScheduledServices, scheduledTasks } from "../src/api/scheduled.ts";
+import { runScheduledTasks, type ScheduledServices, scheduledTasks } from "../src/scheduled.ts";
 import worker from "../src/index.ts";
 import { ModelsEnv, scheduledTasks as modelsTasks } from "@commissary/models/api";
 import { FULL_ACCESS } from "@commissary/models/testing";
@@ -26,6 +26,8 @@ describe("scheduled dispatch", () => {
       "api-key-expiry",
       ...modelsTasks.map((task) => task.name),
     ]);
+    // The API key sweep (apps/app/test/api-keys.test.ts) covers every org, also one nobody opens.
+    expect(scheduledTasks.find((task) => task.name === "api-key-expiry")?.scope).toBe("org");
   });
 
   it("runs every task in order, gives them the invocation's bindings and isolates failures", async () => {

@@ -3,7 +3,7 @@ import { it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
 import { HttpRouter, HttpServerResponse } from "effect/http";
 import { expect } from "vitest";
-import { makeCorsLayer } from "../src/api/cors.ts";
+import { NotFoundLayer } from "../src/http/not-found.ts";
 import { WorkerExecutionContext } from "@commissary/core";
 import { AuthConfig } from "@commissary/auth";
 import { ModelsEnv } from "@commissary/models/api";
@@ -41,15 +41,9 @@ it.effect("web handler routes see per-request env/ctx services", () =>
       }),
     );
 
-    const { handler, dispose } = HttpRouter.toWebHandler(
-      Layer.mergeAll(
-        Route,
-        makeCorsLayer(() => false),
-      ),
-      {
-        disableLogger: true,
-      },
-    );
+    const { handler, dispose } = HttpRouter.toWebHandler(Layer.mergeAll(Route, NotFoundLayer), {
+      disableLogger: true,
+    });
 
     const response = yield* Effect.promise(() =>
       handler(

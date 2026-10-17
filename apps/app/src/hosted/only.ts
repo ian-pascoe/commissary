@@ -1,6 +1,6 @@
 /**
  * Routes that exist on Commissary Cloud only (ADR 0026): a self-hosted Commissary answers them like any path the router does
- * not know (`api/cors.ts` turns that into the plain 404), so nothing of them is reachable there.
+ * not know (`http/not-found.ts` turns that into the plain 404), so nothing of them is reachable there.
  */
 import { Effect } from "effect";
 import { HttpServerError, HttpServerRequest } from "effect/http";

@@ -1,6 +1,8 @@
 // Keyed `auth_index` (`@commissary/models`; the indexer itself: packages/models/test/auth-index.test.ts): no raw config
-// credential id or unkeyed hash of key material in any management or client API response. End to end through `exports.default.fetch`
+// credential id or unkeyed hash of key material in any management response. End to end through `exports.default.fetch`
 // (dev bypass on localhost, see vitest.config.ts); only the upstream provider is mocked, through the global `fetch`.
+// The usage the views read is written straight to D1 as the client API records it: the client API, and that its
+// responses and logs keep the index keyed too, are the API Worker's (apps/api/test/auth-index-keyed.test.ts).
 import { runInDurableObject } from "cloudflare:test";
 import { env, exports } from "cloudflare:workers";
 import { Layer, Logger, References } from "effect";
@@ -15,6 +17,7 @@ import {
   CLAUDE_USAGE_URL,
   emptyKeyAuthIndexOf,
   FULL_ACCESS,
+  insertUsageRecord,
   jsonResponse,
   loadConfig,
   makePipeline,
@@ -22,6 +25,7 @@ import {
   RESET_GRANT_STATUS_URL,
   resetGrantClaimUrl,
   resetUsageDb,
+  sampleRecord,
   unkeyedAuthIndexOf,
 } from "@commissary/models/testing";
 
@@ -134,28 +138,6 @@ api-keys:
         - api-key: "${KEYS.compat}"
 `;
 
-/** OpenAI chat completion chunks, for `stream: true`. */
-const STREAM = [
-  {
-    id: "chatcmpl-1",
-    object: "chat.completion.chunk",
-    created: 1700000000,
-    model: "upstream-model",
-    choices: [{ index: 0, delta: { role: "assistant", content: "hello" }, finish_reason: null }],
-  },
-  {
-    id: "chatcmpl-1",
-    object: "chat.completion.chunk",
-    created: 1700000000,
-    model: "upstream-model",
-    choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-    usage: { prompt_tokens: 5, completion_tokens: 2, total_tokens: 7 },
-  },
-]
-  .map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`)
-  .concat("data: [DONE]\n\n")
-  .join("");
-
 const ORGANIZATION = "abcdef01-2345-6789-abcd-ef0123456789";
 
 /** Anthropic's account endpoints (quota, reset grants), for the auth file `claude-leak.json`. */
@@ -190,30 +172,12 @@ const ANTHROPIC = {
   [CLAUDE_USAGE_URL]: { five_hour: { utilization: 0 } },
 } satisfies Record<string, Record<string, unknown>>;
 
-const COMPLETION = {
-  id: "chatcmpl-1",
-  object: "chat.completion",
-  created: 1700000000,
-  model: "upstream-model",
-  choices: [{ index: 0, message: { role: "assistant", content: "hello" }, finish_reason: "stop" }],
-  usage: { prompt_tokens: 5, completion_tokens: 2, total_tokens: 7 },
-};
-
 const realFetch = globalThis.fetch;
-
-let upstreamStatus = 200;
 
 const controlPlane = () => env.CONTROL_PLANE.getByName("global");
 
 const call = async (path: string, init?: RequestInit) =>
   await exports.default.fetch(new Request(`http://localhost${path}`, init));
-
-const chat = (model: string, stream = false) =>
-  call("/v1/chat/completions", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ model, stream, messages: [{ role: "user", content: "hi" }] }),
-  });
 
 const post = (
   path: string,
@@ -283,18 +247,11 @@ let configIds: ReadonlyArray<string> = [];
 beforeAll(async () => {
   // Effect's FetchHttpClient resolves `globalThis.fetch` once: one stable fetch for every upstream call.
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    if (upstreamStatus !== 200)
-      return Response.json({ error: { message: "upstream exploded" } }, { status: upstreamStatus });
+    const account = ANTHROPIC[new Request(input, init).url];
 
-    const request = new Request(input, init);
-    const account = ANTHROPIC[request.url];
-
-    if (account !== undefined) return Response.json(account);
-    const body = await request.text();
-
-    return body.includes('"stream":true')
-      ? new Response(STREAM, { headers: { "content-type": "text/event-stream" } })
-      : Response.json(COMPLETION);
+    return account === undefined
+      ? Response.json({ error: { message: "not mocked" } }, { status: 404 })
+      : Response.json(account);
   };
 
   await resetUsageDb();
@@ -304,6 +261,26 @@ beforeAll(async () => {
     .filter((entry) => entry.source === "config")
     .map((entry) => entry.id);
   expect(configIds).toHaveLength(3);
+
+  // Two requests the client API served through the OpenAI-compatible key, one of them failed, as its usage sink
+  // records them (the rows keep the credential id).
+  const compatId = configIds.find((id) => id.startsWith("openai-compat")) ?? "";
+
+  for (const failed of [false, true])
+    await insertUsageRecord(
+      env.USAGE,
+      sampleRecord({
+        authId: compatId,
+        authType: "apikey",
+        provider: "openai-compatibility",
+        executorType: "openai-compatibility",
+        model: "upstream-model",
+        alias: "leak-model",
+        endpoint: "POST /v1/chat/completions",
+        requestedAt: Date.now(),
+        failed,
+      }),
+    );
 
   const upload = await call(`${BASE}/credentials?name=claude-leak.json`, {
     method: "POST",
@@ -331,36 +308,13 @@ describe("no raw config id or unkeyed hash in any response", () => {
       .concat(configIds.flatMap((id) => [id, id.slice(id.lastIndexOf(":") + 1)]))
       .concat([KEYS.claude, KEYS.codex]);
 
-  it("client API responses (success, streaming, upstream failure, unknown model), every management read and the logs", async () => {
+  it("every management read and the logs", async () => {
     const seen: Array<{ readonly what: string; readonly text: string }> = [];
 
     const record = async (what: string, response: Promise<Response>) =>
       seen.push({ what, text: await visible(await response) });
 
     const logs = await captureConsole(async () => {
-      upstreamStatus = 200;
-      await record("chat ok", chat("leak-model"));
-      await record("chat stream", chat("leak-model", true));
-      upstreamStatus = 500;
-      await record("chat upstream 500", chat("leak-model"));
-      upstreamStatus = 200;
-      await record("chat unknown model", chat("no-such-model"));
-      await record("models", call("/v1/models"));
-      // Commissary really served (streamed, and failed) through the config credential.
-      expect(seen.map(({ text }) => text.slice(0, 3))).toEqual(["200", "200", "500", "400", "200"]);
-      expect(seen[1]?.text).toContain("data: [DONE]");
-
-      await vi.waitFor(
-        async () => {
-          const rows = await env.USAGE.prepare("SELECT COUNT(*) AS n FROM usage_records").first<{
-            n: number;
-          }>();
-
-          expect(rows?.n).toBeGreaterThanOrEqual(2);
-        },
-        { timeout: 5_000 },
-      );
-
       const since = Date.now() - 86_400_000;
 
       for (const path of [
@@ -452,15 +406,11 @@ describe("no raw config id or unkeyed hash in any response", () => {
       for (const secret of forbidden())
         expect(text, `${what} leaks ${secret}`).not.toContain(secret);
 
-    // Logs carry keyed indexes only (and saw the proxied requests: the capture works).
+    // Logs carry keyed indexes only.
     const keyed = new Set([...configIds, "claude-leak.json"].map(authIndexOf));
 
     const logged = logs.flatMap((line) =>
       [...line.matchAll(/\\?"authIndex\\?":\\?"([^"\\]*)/g)].map((m) => m[1]),
-    );
-
-    expect(logged).toContain(
-      authIndexOf(configIds.find((id) => id.startsWith("openai-compat")) ?? ""),
     );
 
     for (const index of logged) expect(keyed.has(index ?? ""), `log authIndex ${index}`).toBe(true);

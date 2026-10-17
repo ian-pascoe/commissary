@@ -5,9 +5,10 @@
 # - /api/sign-in-options answers 200 and offers at least one provider (the sign-in settings reached the Worker);
 # - the management API without a session answers 401 from the Worker (not an Access sign-in page);
 # - the control panel without a session redirects to /sign-in;
-# - a client API route without credentials answers 401 `Missing API key` from the Worker;
-# - with an API host (ADR 0028): the client API answers 404 on the app host and the management API 404 on the API
-#   host, both from the Worker.
+# - a client API route without credentials answers 401 `Missing API key` from the API Worker (ADR 0030);
+# - when the client API has a host of its own (an API host, ADR 0028, or a preview's API Worker workers.dev URL): the
+#   client API answers 404 on the app host (from the app Worker) and the management API 404 there (from the API
+#   Worker).
 # Usage: tools/check-cloud-deploy.sh <base-url> [<api-url>]
 # `<api-url>` is where the client API is served (default: `<base-url>`).
 set -euo pipefail
