@@ -114,7 +114,7 @@ describe("migration 0009 (drop hosted auth)", () => {
         .all<{ readonly type: string; readonly name: string }>()
     ).results;
 
-  it("leaves the usage database without the auth_ tables, their indexes and their rows", async () => {
+  it("drops the auth_ tables and their indexes, keeps the usage records", async () => {
     expect(await authObjects()).toEqual([]);
 
     for (const statement of statementsOf(hostedAuthMigration)) await db.prepare(statement).run();

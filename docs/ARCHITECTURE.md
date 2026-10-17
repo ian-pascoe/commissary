@@ -2386,9 +2386,8 @@ is the Access one, unchanged, and there is no auth Worker. User docs: `docs/ACCE
 
 - **Auth Worker and hosts** (`apps/auth`, ADR 0030, #130, #132, #133): Better Auth runs in its own Worker, on the auth
   host (`COMMISSARY_AUTH_DOMAIN`, by default `auth.<COMMISSARY_DOMAIN>`; a preview's auth workers.dev URL), which alone
-  binds the `SignIn` D1 database (migrations/sign-in/, Better Auth's default table names; the usage database holds usage
-  records only: `migrations/usage/0009_drop_hosted_auth.sql` dropped the `auth_*` tables it once kept, #155). The sign-in page is the
-  panel's, on the app host (`/sign-in`, `src/hosted/routes.ts`); it calls the auth host across origins, which the app
+  binds the `SignIn` D1 database (migrations/sign-in/, Better Auth's default table names; the usage database holds
+  usage records only). The sign-in page is the panel's, on the app host (`/sign-in`, `src/hosted/routes.ts`); it calls the auth host across origins, which the app
   Worker names in the page (`<meta name="commissary-auth-origin">`, `AUTH_ORIGIN`, `management/web-panel.ts`) and allows
   in the page's `connect-src`. The auth Worker answers CORS for the app origin (`APP_ORIGIN`) only, with credentials
   (`apps/auth/src/http/cors.ts`); Better Auth trusts and returns to that origin alone, and its session cookie is scoped

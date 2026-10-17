@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: accepted, storage amended by ADR-0030
 ---
 
 # A hosted proxy signs people in itself, with Better Auth
@@ -17,7 +17,7 @@ Every person who signs in through Access takes a Zero Trust seat until an admin 
 
 ## Consequences
 
-- Better Auth stores people and sessions in D1 (in the usage database at first, with an `auth_` prefix; since ADR 0030 in the auth Worker's own `SignIn` database, and `migrations/usage/0009_drop_hosted_auth.sql` dropped the old tables, #155). Only its core and SSO plugin are used: its organization plugin would duplicate the org's members and teams, which stay in the org's ControlPlane.
+- Better Auth stores people and sessions in D1. Only its core and SSO plugin are used: its organization plugin would duplicate the org's members and teams, which stay in the org's ControlPlane.
 - Hosted proxies have no Access service tokens. Scripts use management keys instead, which never grant the sensitive powers, so on a hosted proxy only platform admins can download a stored credential (ADR 0006's rule, per ADR 0022).
 - Platform admins of a hosted proxy are the people in the deployment's list who signed in with that email verified by GitHub or Google.
 - Keeping Better Auth patched is our job, and the Worker's sign-in, session and CSRF handling become security-critical code.

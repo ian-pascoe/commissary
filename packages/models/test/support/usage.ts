@@ -20,8 +20,10 @@ export const statementsOf = (sql: string): string[] =>
     .filter((statement) => statement !== "");
 
 /**
- * Applies the checked-in migrations to the test D1 database (idempotent) and empties the table. `ALTER TABLE ... ADD
- * COLUMN` has no IF NOT EXISTS, so a duplicate-column failure of an already migrated database is ignored.
+ * Applies the checked-in migrations of the usage records (0001 to 0007) to the test D1 database (idempotent) and
+ * empties the table. Better Auth's old `auth_` tables (0008, dropped by 0009) are not part of the test schema. `ALTER
+ * TABLE ... ADD COLUMN` has no IF NOT EXISTS, so a duplicate-column failure of an already migrated database is
+ * ignored.
  */
 export const resetUsageDb = async (db: D1Database = env.USAGE): Promise<D1Database> => {
   for (const statement of [
