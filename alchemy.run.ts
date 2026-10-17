@@ -129,6 +129,8 @@ export default Alchemy.Stack(
       main: "./apps/state/src/index.ts",
       compatibility: COMPATIBILITY,
       workersDev: false,
+      // Under `alchemy dev` the app Worker keeps the default port 1337, where the panel's dev server sends `/v9`.
+      dev: { port: 1338 },
       limits: { cpuMs: settings.cpuMs },
       env: {
         CONTROL_PLANE: Cloudflare.DurableObject("ControlPlane", { transferredFrom: "Commissary" }),

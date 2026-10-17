@@ -34,8 +34,9 @@ The deploy job then shows the URL on the run, and previews get a pull request co
 
 A stage named `pr-<number>` is a preview (`infra/settings.ts`):
 
-- Its own Worker on `workers.dev`, protected by its own Access application. The Worker enrolls into it (Alchemy's
-  Worker `access` prop), so Access covers the `workers.dev` URL; no custom hostname is needed. The client API paths of that
+- Its own app Worker on `workers.dev`, protected by its own Access application, and its own state Worker, which has no
+  URL ([The state Worker](#the-state-worker)). The app Worker enrolls into the Access application (Alchemy's Worker
+  `access` prop), so Access covers the `workers.dev` URL; no custom hostname is needed. The client API paths of that
   URL get the same bypass application as production ([ACCESS.md](ACCESS.md#1-what-the-deploy-creates)).
 - Same policies as production: `ACCESS_ALLOW_*` for people, `ACCESS_ALLOW_SERVICE_TOKEN_IDS` for the CI token. Same
   platform admins (`PLATFORM_ADMIN_EMAILS`).
@@ -47,12 +48,56 @@ A stage named `pr-<number>` is a preview (`infra/settings.ts`):
 Any machine with the deploy settings can deploy a preview by hand: `pnpm run deploy --stage pr-123`, and remove it with
 `pnpm run destroy --stage pr-123`.
 
+## The state Worker
+
+A stage deploys two Workers (ADR 0030) from the one stack, in this order:
+
+1. **`State`** (`apps/state`) defines the Durable Objects `ControlPlane`, `SessionState` and `Platform`: every org's
+   state and the Platform registry. It has no routes, no domain and no `workers.dev` URL, and binds only what those
+   classes read: the secrets keys, the `auth_index` key, `META_MINT_URL`, the platform admins, the mode and the Access
+   settings that mark a deployed stage.
+2. **`Commissary`** (`apps/app`), the app Worker: everything that answers requests (panel, management API, client API,
+   cron trigger), on the stage's domain or `workers.dev` URL. It binds the state Worker's Durable Objects by script
+   name, which is also why Alchemy deploys it second.
+
+Deploying a Worker restarts the Durable Objects it defines, and Alchemy uploads a Worker again only when its bundle
+changes, so the Durable Objects restart only on a deploy that changes their code, not on every panel or client API
+change. When they restart, the requests in flight fail with "Durable Object reset because its code was updated"; the
+app Worker sends each such call once more (`retryOnCodeUpdate`). Because a deploy can run the new state Worker with the
+old app Worker for a moment, state RPC changes are expand-then-contract (`docs/DEVELOPMENT.md`, "State RPC: expand,
+then contract").
+
+**The move.** Until this split, the `Commissary` Worker defined the three classes itself. The state Worker declares
+each with `transferredFrom: "Commissary"`, so the first deploy of a stage that still holds them there moves each
+namespace, with every stored object (all orgs, members, credentials, API keys, config, the Platform registry), to the
+state Worker: Cloudflare's data-preserving transfer, not a copy. In the same deploy the app Worker drops the classes and
+binds them on the state Worker instead; nothing is deleted. Production and `cloud` move on their first deploy after the
+merge; a new stage (every preview) creates the classes on the state Worker directly, and the setting does nothing
+there or once a stage has moved, so it stays in `alchemy.run.ts`.
+
+**Upgrading a self-hosted Commissary.** Deploy as usual (`pnpm run deploy --stage <stage>`, or CI): the stack gains the
+state Worker and the move happens on that deploy, with no setting or manual step. Expect:
+
+- a new Worker, `commissary-state-<stage>-<suffix>` (Alchemy names it from the stack, the logical ID `State` and the
+  stage), with no URL; the account's Worker count grows by one, and a self-hosted Commissary later runs three
+  Workers (app, API and state, ADR 0030), which count against the account's Worker limit and share the daily request
+  quota on Workers Free. Durable Object calls by script name cost what they cost before: no extra request, and they
+  count toward the subrequest limits as before;
+- the requests in flight during the deploy may fail once while the Durable Objects restart, as on any deploy that
+  changed their code;
+- no change to URLs, API keys, management keys, sessions or stored data.
+
+**Before merging the split** a person rehearses the move on a throwaway stage `pr-0`, self-hosted and Commissary Cloud
+(#152): deploy `main`, seed an org, a member, a credential and an API key, deploy the split onto the same stage, check
+that everything survived and the API key works, destroy the stage. A pull request's own preview starts empty and
+proves nothing about the move.
+
 ## API host
 
 `COMMISSARY_API_DOMAIN` (optional, ADR 0028) gives a deployment a second hostname, the **API host**, that serves the
 client API (`/v1`, `/v1beta`, `/v1internal`, `/openai/v1`, `/backend-api/codex`, `/chat/completions`, `/completions`,
 `/responses`) and `/healthz`, and nothing else. `COMMISSARY_DOMAIN` becomes the **app host**: the control panel, sign-in
-and the management API, and no client API route. One Worker answers on both custom domains and decides by hostname
+and the management API, and no client API route. The app Worker answers on both custom domains and decides by hostname
 (`apps/app/src/http/hosts.ts`); a path on the wrong host answers `404` with the host that serves it. The panel's API keys page
 tells clients the API host (`GET /me` `api_url`).
 
@@ -146,7 +191,7 @@ who should stay in it as members first.
 ## Setup
 
 There are two Alchemy stacks. `commissary` (`alchemy.run.ts`) is Commissary itself, with the stages `prod`, `cloud` and
-`pr-<number>`; its Worker's logical ID is `Commissary`. CI's credentials are code: `commissary-github`
+`pr-<number>`; its Workers' logical IDs are `Commissary` (the app Worker) and `State` ([The state Worker](#the-state-worker)). CI's credentials are code: `commissary-github`
 (`stacks/github.ts`, stage `ci`) is the second stack, which creates them and writes them into GitHub.
 It manages:
 
@@ -217,14 +262,14 @@ the stack (`pnpm exec alchemy destroy --config stacks/github.ts --stage ci --pro
 - **Stale previews.** If a destroy fails, rerun the job, or run `pnpm run destroy --stage pr-<number>` locally.
 - **`auth_index` key.** `AUTH_INDEX_KEY` (the HMAC key of the credential handle `auth_index`,
   `packages/models/src/management/auth-index.ts`) is an Alchemy `Random` in `alchemy.run.ts`: minted on a stage's first deploy, kept in
-  the (encrypted) state store and bound as a Worker secret on every deploy. No GitHub secret or manual step is needed.
+  the (encrypted) state store and bound as a secret of both Workers on every deploy. No GitHub secret or manual step is needed.
   `alchemy dev` uses a fixed key (`DEV_AUTH_INDEX_KEY`), the tests the one in `apps/app/vitest.config.ts`. A Worker with Access
   configured refuses that dev key and any key shorter than 64 characters, and logs the refusal: management calls that
   need an index fail (500), while serving requests keeps working (its request log lines then carry no `authIndex`).
 - **Secrets key.** Every org's stored secrets (auth files and config entries, see ARCHITECTURE.md _Stored secrets_) are
   encrypted with the org's data key, which is stored wrapped by the stage's `SECRETS_KEY`. Like the `auth_index` key it
   is an Alchemy `Random` in `alchemy.run.ts` (resource `SecretsKey`, one per generation), minted on the stage's first
-  deploy and bound as a Worker secret; no GitHub secret or manual step is needed. `alchemy dev` uses
+  deploy and bound as a secret of both Workers; no GitHub secret or manual step is needed. `alchemy dev` uses
   `DEV_SECRETS_KEY`, the tests the keys in `apps/app/vitest.config.ts`; a Worker with Access configured refuses that dev key and
   any key shorter than 64 characters. Without a working key no ControlPlane starts: model traffic and management calls of
   every org fail (500) and the Worker logs `the ControlPlane cannot open the org's data key` with the reason, until a
